@@ -378,10 +378,34 @@ fn round_off_line_is_accepted_when_it_matches_the_engine() {
 }
 
 #[test]
-fn missing_round_off_is_blocked_on_the_debit_total() {
+fn downward_round_off_line_on_the_party_side_is_accepted() {
+    // provenance: derived — taxable ₹1,000.20 = 100,020 paise. CGST 9% = 9,001.8 paise, rounded
+    // half away from zero = 9,002; SGST the same. Before round-off: 100,020 + 9,002 + 9,002 =
+    // 118,024 paise = ₹1,180.24, which rounds to ₹1,180.00 = 118,000 paise (policy: card G4, CGST
+    // Act s.170). Round-off = 118,000 - 118,024 = -24 paise, a debit of 24 paise next to the
+    // party's debit of 118,000. Debits 118,000 + 24 = 118,024 = credits 100,020 + 9,002 + 9,002.
+    let b = books();
+    let d = VoucherDraft {
+        document_total: Some(t(Paise::new(118_000), HIGH)),
+        document_tax: Some(t(Paise::new(18_004), HIGH)),
+        lines: vec![
+            line("Acme Traders", Some(PARTY), DrCr::Dr, 118_000),
+            line("Round off", Some(ROUND_OFF), DrCr::Dr, 24),
+            line("Sales", Some(SALES_LEDGER), DrCr::Cr, 100_020),
+            line("CGST", Some(CGST), DrCr::Cr, 9_002),
+            line("SGST", Some(SGST), DrCr::Cr, 9_002),
+        ],
+        ..sales_draft()
+    };
+    let v = ok(check_in(&d, &b, Some(KARNATAKA)));
+    assert_eq!(v.ledger_lines.len(), 5);
+}
+
+#[test]
+fn missing_round_off_is_blocked_on_the_party_total() {
     // provenance: derived — as above the engine's invoice value is 118,100 paise. This draft
     // leaves the round-off out, so its party line is 118,060 and the lines still balance, but the
-    // debit total is 40 paise short of the engine's invoice value.
+    // party's total is 40 paise short of the engine's invoice value.
     let b = books();
     let d = VoucherDraft {
         document_total: None,
@@ -535,13 +559,15 @@ fn payment_draft_with_matching_total_becomes_a_voucher() {
 
 #[test]
 fn payment_document_total_different_from_the_debit_total_is_blocked() {
-    // provenance: derived — Σ Dr = ₹25,000.00; the document says ₹25,001.00.
+    // provenance: derived — Σ Dr = ₹25,000.00; the document says ₹25,001.00. Goes through the
+    // frozen `validate_draft` (a payment needs no place of supply).
     let b = books();
     let d = VoucherDraft {
         document_total: Some(t(Paise::new(2_500_100), HIGH)),
         ..payment_draft()
     };
-    assert_eq!(blocked_field(check_in(&d, &b, None)), "document_total");
+    let r = validate_draft(&d, &b, &rules_on(VOUCHER_DATE), THRESHOLD).unwrap();
+    assert_eq!(blocked_field(r), "document_total");
 }
 
 #[test]
@@ -601,6 +627,7 @@ fn negative_line_amount_is_blocked_on_that_line() {
 
 #[test]
 fn required_date_below_threshold_is_blank_and_blocks() {
+    // provenance: derived — spec 6.8 (below threshold means blank) and this card's rule that >= keeps.
     // threshold 700: 699 is blank, 700 is kept.
     let b = books();
     let low = VoucherDraft {
@@ -618,6 +645,7 @@ fn required_date_below_threshold_is_blank_and_blocks() {
 
 #[test]
 fn missing_date_blocks() {
+    // provenance: derived — a voucher needs a date; the validator never invents one.
     let b = books();
     let d = VoucherDraft {
         date: None,
@@ -629,6 +657,7 @@ fn missing_date_blocks() {
 
 #[test]
 fn invoice_number_below_threshold_is_left_blank() {
+    // provenance: derived — spec 6.8 (below threshold means blank); 699 < 700 <= 700.
     let b = books();
     let low = VoucherDraft {
         invoice_number: Some(t("INV-7".to_owned(), THRESHOLD - 1)),
@@ -647,6 +676,7 @@ fn invoice_number_below_threshold_is_left_blank() {
 
 #[test]
 fn blank_document_total_is_not_compared() {
+    // provenance: derived — spec 6.8: a value below threshold is blank, so it is not compared.
     // A wrong total read with confidence below the threshold is blank: it is not compared and does
     // not block (the lines themselves are right).
     let b = books();
@@ -660,6 +690,7 @@ fn blank_document_total_is_not_compared() {
 
 #[test]
 fn line_ledger_name_below_threshold_blocks_that_line() {
+    // provenance: derived — spec 6.8 (blank) and rule A10; confidence 100 < 700.
     let b = books();
     let mut d = sales_draft();
     d.lines.get_mut(1).unwrap().ledger_name = t("Sales".to_owned(), 100);
@@ -671,6 +702,7 @@ fn line_ledger_name_below_threshold_blocks_that_line() {
 
 #[test]
 fn line_amount_below_threshold_blocks_that_line() {
+    // provenance: derived — spec 6.8 (blank); a line amount is required.
     let b = books();
     let mut d = sales_draft();
     d.lines.get_mut(2).unwrap().amount = t(Paise::new(90_000), 100);
@@ -682,6 +714,7 @@ fn line_amount_below_threshold_blocks_that_line() {
 
 #[test]
 fn party_name_below_threshold_drops_the_party_and_blocks_a_sale() {
+    // provenance: derived — spec 6.8 (blank); a sales voucher needs a party (model invariant).
     let b = books();
     let d = VoucherDraft {
         party_name: Some(t("Acme Traders".to_owned(), 100)),
@@ -692,6 +725,7 @@ fn party_name_below_threshold_drops_the_party_and_blocks_a_sale() {
 
 #[test]
 fn confidence_above_1000_is_malformed_and_blocks() {
+    // provenance: derived — confidence is per-mille, 0..=1000 (proposal.rs).
     let b = books();
     let d = VoucherDraft {
         date: Some(t(VOUCHER_DATE, 1001)),
@@ -704,6 +738,7 @@ fn confidence_above_1000_is_malformed_and_blocks() {
 
 #[test]
 fn line_without_a_resolved_ledger_blocks_and_no_id_is_invented() {
+    // provenance: derived — rule A10 and proposal.rs: ids are never invented.
     let b = books();
     let mut d = payment_draft();
     d.lines.get_mut(0).unwrap().ledger = None;
@@ -712,6 +747,7 @@ fn line_without_a_resolved_ledger_blocks_and_no_id_is_invented() {
 
 #[test]
 fn line_naming_a_ledger_that_does_not_exist_blocks() {
+    // provenance: derived — a line must name a ledger of this company.
     let b = books();
     let mut d = payment_draft();
     d.lines.get_mut(1).unwrap().ledger = Some(LedgerId(999));
@@ -720,6 +756,7 @@ fn line_naming_a_ledger_that_does_not_exist_blocks() {
 
 #[test]
 fn ledgers_the_user_would_need_to_create_block_the_draft() {
+    // provenance: derived — proposal.rs: ledgers to create are the user's to create first.
     let b = books();
     let d = VoucherDraft {
         create_ledgers: vec!["Sharma Properties".to_owned()],
@@ -730,6 +767,7 @@ fn ledgers_the_user_would_need_to_create_block_the_draft() {
 
 #[test]
 fn party_that_does_not_exist_blocks() {
+    // provenance: derived — a party must be a ledger of this company.
     let b = books();
     let d = VoucherDraft {
         party: Some(LedgerId(999)),
@@ -740,6 +778,7 @@ fn party_that_does_not_exist_blocks() {
 
 #[test]
 fn missing_voucher_type_blocks_on_kind() {
+    // provenance: derived — the voucher needs a type of the drafted kind.
     let mut b = books();
     b.masters.voucher_types.remove(&PAYMENT_TYPE);
     assert_eq!(blocked_field(check_in(&payment_draft(), &b, None)), "kind");
@@ -747,6 +786,7 @@ fn missing_voucher_type_blocks_on_kind() {
 
 #[test]
 fn several_active_voucher_types_of_the_kind_block_on_kind() {
+    // provenance: derived — the type is never guessed among several.
     let mut b = books();
     let second = voucher_type(VoucherTypeId(9), "Payment 2", BaseVoucherKind::Payment);
     b.masters.voucher_types.insert(second.id, second);
@@ -755,6 +795,7 @@ fn several_active_voucher_types_of_the_kind_block_on_kind() {
 
 #[test]
 fn inactive_voucher_type_is_not_chosen() {
+    // provenance: derived — only active types can be used.
     let mut b = books();
     let mut second = voucher_type(VoucherTypeId(9), "Old payment", BaseVoucherKind::Payment);
     second.active = false;
@@ -765,6 +806,7 @@ fn inactive_voucher_type_is_not_chosen() {
 
 #[test]
 fn new_voucher_id_follows_the_highest_existing_id() {
+    // provenance: derived — this card's rule: highest id + 1 (41 + 1 = 42); the store may reassign.
     let mut b = books();
     let first = ok(check_in(&payment_draft(), &b, None));
     let mut existing = first.clone();
@@ -776,6 +818,7 @@ fn new_voucher_id_follows_the_highest_existing_id() {
 
 #[test]
 fn draft_with_item_lines_is_unsupported() {
+    // provenance: derived — this card: item names are not resolved to stock items, so Unsupported.
     let b = books();
     let d = VoucherDraft {
         items: vec![DraftItem {
@@ -792,6 +835,7 @@ fn draft_with_item_lines_is_unsupported() {
 
 #[test]
 fn kinds_the_assistant_does_not_draft_are_unsupported() {
+    // provenance: derived — this card drafts sales, purchase, credit/debit note, payment, receipt, contra, journal only.
     let b = books();
     let d = VoucherDraft {
         kind: BaseVoucherKind::StockJournal,
@@ -876,6 +920,7 @@ fn malformed_supplier_gstin_blocks_when_confident_and_is_ignored_when_blank() {
 
 #[test]
 fn bill_wise_party_line_is_blocked_because_drafts_carry_no_bill_references() {
+    // provenance: derived — model invariant 2: bill-wise lines need allocations summing to the line; drafts propose none.
     let mut b = books();
     b.masters.ledgers.get_mut(&PARTY).unwrap().bill_wise = Some(ledgerly_model::BillWiseConfig {
         default_credit_days: Some(30),

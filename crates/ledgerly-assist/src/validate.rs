@@ -29,8 +29,8 @@
 //! - The voucher must pass the store-free invariants of `ledgerly_model::validate`.
 //! - For a sales, purchase, credit-note or debit-note voucher in a GST company, the tax comes from
 //!   `ledgerly_gst::compute::compute_voucher_tax`. The tax-ledger lines of the draft must equal
-//!   each computed head exactly, sit on the side opposite the party line, and the debit total must
-//!   equal the computed invoice value (taxable value plus tax plus the explicit round-off).
+//!   each computed head exactly, sit on the side opposite the party line, and the party's lines
+//!   must total the computed invoice value (taxable value plus tax plus the explicit round-off).
 //! - For any other voucher the engine total is the debit total and the engine tax is nil.
 //! - The document total and document tax, when read with enough confidence, must equal the engine's
 //!   figures. A mismatch is [`DraftCheck::Blocked`], never a silent correction.
@@ -618,40 +618,49 @@ fn check_figures(v: &Voucher, books: &Books, expected: &Expected) -> Step<()> {
     if !expected.gst {
         return Ok(());
     }
-    check_tax_sides(v, &tax_sides)?;
-    let debits = debit_total(v)?;
-    if debits != expected.total {
-        let (debits, total) = (debits.to_rupees(), expected.total.to_rupees());
+    let (party_side, party_total) = party_lines(v)?;
+    if tax_sides.contains(&party_side) {
+        return Err(Halt::blocked(
+            "lines",
+            "a tax line is on the same side as the party line; tax goes on the opposite side",
+        ));
+    }
+    if party_total != expected.total {
+        let (party_total, total) = (party_total.to_rupees(), expected.total.to_rupees());
         return Err(Halt::blocked(
             "lines",
             format!(
-                "the debit lines total {debits} but the engine computes an invoice value of {total} \
-                 (taxable value plus tax plus round-off)"
+                "the party's lines total {party_total} but the engine computes an invoice value \
+                 of {total} (taxable value plus tax plus round-off)"
             ),
         ));
     }
     Ok(())
 }
 
-/// Tax lines sit on the side opposite the party line (sales: party Dr, tax Cr; purchase: party Cr,
-/// tax Dr; credit and debit notes mirror those).
-fn check_tax_sides(v: &Voucher, tax_sides: &[DrCr]) -> Step<()> {
+/// The side of the party's first line and the total of the party's lines on that side. The party
+/// carries the invoice value whichever way the round-off falls (the round-off line is a separate
+/// line on the party's side when the value rounds down).
+fn party_lines(v: &Voucher) -> Step<(DrCr, Paise)> {
     let Some(party) = v.party else {
         return Err(Halt::blocked("party", "a taxed voucher needs a party"));
     };
-    let Some(party_line) = v.ledger_lines.iter().find(|l| l.ledger == party) else {
+    let Some(first) = v.ledger_lines.iter().find(|l| l.ledger == party) else {
         return Err(Halt::blocked(
             "lines",
             "no line posts to the party ledger; add the party's line",
         ));
     };
-    if tax_sides.contains(&party_line.amount.side) {
-        return Err(Halt::blocked(
-            "lines",
-            "a tax line is on the same side as the party line; tax goes on the opposite side",
-        ));
+    let side = first.amount.side;
+    let mut total = Paise::ZERO;
+    for line in v
+        .ledger_lines
+        .iter()
+        .filter(|l| l.ledger == party && l.amount.side == side)
+    {
+        total = total.checked_add(line.amount.amount)?;
     }
-    Ok(())
+    Ok((side, total))
 }
 
 /// The document's own totals against the engine's. Blank (low-confidence) figures are skipped.
