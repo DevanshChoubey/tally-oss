@@ -6,14 +6,28 @@
 //! pub fn fifo(item: &StockItem, moves: &[StockMove], period: Period) -> Result<StockValuation, StockError>;
 //! ```
 //!
-//! # Method
+//! # Method (annual FIFO)
 //!
 //! Cost layers are built from the item's opening stock, then from every receipt (`qty_in`) dated
 //! on or before the end of the period, oldest first. Every issue (`qty_out`) consumes the oldest
 //! layer first (AS 2: cost of items sold is taken from the earliest layers). Closing stock is what
-//! is left. A year's closing layers are exactly the next year's opening layers, because the
-//! valuation is always rebuilt from the whole movement history up to the period end.
+//! is left, each lot at its own cost.
 //!
+//! **Year-end collapse (the "annual" in annual FIFO).** At each financial-year boundary (1 April)
+//! the remaining layers are merged into one layer worth the total closing value for the total
+//! closing quantity, so the next year's opening rate is `closing value / closing quantity`
+//! (`docs/research/03-inventory.md` section 4; the vendor behaviour is `unconfirmed` against a real
+//! build, the rule here is the card's). Lot identity therefore never crosses a year boundary. This
+//! is deliberately not FIFO-perpetual: with year-1 closing lots 10 @ 50 and 10 @ 60, year 2 opens
+//! as 20 @ 55 and a year-2 sale of 10 costs 550, not 500.
+//!
+//! * The collapse keeps the exact total value in paise and the exact total quantity; the unit
+//!   rate `value / qty` is never rounded to a paisa. Rounding happens only when part of a layer is
+//!   issued (below), so the collapse itself creates or loses no paisa.
+//! * Financial years are April to March (`FinancialYear::containing`). The books-begin date is
+//!   not known here, so the opening stock is treated as the opening of the financial year of the
+//!   first movement dated on or before the period end; it is first collapsed when a movement in a
+//!   later financial year is reached.
 //! * Moves are taken in slice order after a stable sort by date. The caller supplies them sorted by
 //!   `(date, voucher)` (see `Books`), which fixes the order of same-day moves.
 //! * Godowns and batches are not distinguished: FIFO runs per item.
@@ -23,17 +37,24 @@
 //! * Negative stock: an issue larger than the layers leaves a shortfall. Later receipts first
 //!   cover the shortfall (those units were issued at an unknown cost). The result is then
 //!   `Provisional { NegativeStock }` with the first date the quantity went negative, and a
-//!   negative closing quantity carries no value and no rate.
+//!   negative closing quantity carries no value and no rate. The history is always replayed from
+//!   the start, so that first date may fall in an earlier year than the period, and every later
+//!   period stays Provisional (never silently final).
+//! * Moves dated after the period end are dropped before validation, so a malformed later move is
+//!   not reported by this period's valuation.
 //!
 //! Not supported, returned as [`StockError::Invalid`] instead of a number: an item whose valuation
 //! method is not FIFO, a move of another item, negative quantities or values, a move that both
 //! receives and issues, a movement with a value but no quantity, and a voucher that both receives
 //! and issues the item (godown transfer, stock journal), whose cost basis FIFO cannot know here.
+//! A dedicated `StockError::Unsupported` variant is requested in `docs/interface-requests.md`
+//! (T4); until the wave reviewer adds it these cases use `Invalid`.
 
 use std::collections::{BTreeSet, VecDeque};
 
 use ledgerly_core::{
-    Decimal, MoneyError, Paise, Period, Qty, Rate, RoundingRule, VoucherId, round_rupees_to_paise,
+    Date, Decimal, FinancialYear, MoneyError, Paise, Period, Qty, Rate, RoundingRule, VoucherId,
+    round_rupees_to_paise,
 };
 use ledgerly_model::{OpeningStock, StockItem, StockMove, ValuationMethod};
 
@@ -151,6 +172,72 @@ fn validate(item: &StockItem, m: &StockMove) -> Result<bool, StockError> {
     Ok(true)
 }
 
+/// Running state of one item's FIFO replay.
+struct Book {
+    layers: VecDeque<Layer>,
+    shortfall: Decimal,
+    first_negative: Option<Date>,
+    year: Option<FinancialYear>,
+}
+
+impl Book {
+    /// Total quantity and value of the layers.
+    fn totals(&self) -> Result<(Decimal, Paise), StockError> {
+        let mut qty = Decimal::ZERO;
+        let mut value = Paise::ZERO;
+        for layer in &self.layers {
+            qty = dec_add(qty, layer.qty)?;
+            value = value.checked_add(layer.value)?;
+        }
+        Ok((qty, value))
+    }
+
+    /// Merges all layers into one at `value / qty` (year-end collapse of annual FIFO).
+    fn collapse(&mut self) -> Result<(), StockError> {
+        if self.layers.len() < 2 {
+            return Ok(());
+        }
+        let (qty, value) = self.totals()?;
+        self.layers.clear();
+        self.layers.push_back(Layer { qty, value });
+        Ok(())
+    }
+
+    /// Collapses the layers when `date` is in a later financial year than the previous move.
+    fn enter_year(&mut self, date: Date) -> Result<(), StockError> {
+        let fy = FinancialYear::containing(date)
+            .map_err(|e| invalid("moves", format!("movement date {date}: {e}")))?;
+        if self.year.is_some_and(|prev| fy > prev) {
+            self.collapse()?;
+        }
+        self.year = Some(fy);
+        Ok(())
+    }
+
+    /// Applies one validated movement.
+    fn apply(&mut self, m: &StockMove) -> Result<(), StockError> {
+        self.enter_year(m.date)?;
+        if m.qty_out.0.is_zero() {
+            self.layers.push_back(Layer {
+                qty: m.qty_in.0,
+                value: m.value,
+            });
+            if self.shortfall > Decimal::ZERO {
+                let cover = self.shortfall.min(m.qty_in.0);
+                consume(&mut self.layers, cover)?;
+                self.shortfall = dec_sub(self.shortfall, cover)?;
+            }
+        } else {
+            let unmet = consume(&mut self.layers, m.qty_out.0)?;
+            if unmet > Decimal::ZERO {
+                self.shortfall = dec_add(self.shortfall, unmet)?;
+                self.first_negative.get_or_insert(m.date);
+            }
+        }
+        Ok(())
+    }
+}
+
 /// Rejects a voucher that both receives and issues the item.
 fn reject_in_out_vouchers(moves: &[&StockMove]) -> Result<(), StockError> {
     let receiving: BTreeSet<VoucherId> = moves
@@ -172,8 +259,9 @@ fn reject_in_out_vouchers(moves: &[&StockMove]) -> Result<(), StockError> {
 
 /// Values the closing stock of `item` at the end of `period` by FIFO.
 ///
-/// Uses every movement dated on or before `period.to()`, so a year's closing layers are the next
-/// year's opening layers. See the module documentation for the rounding and negative-stock rules.
+/// Uses every movement dated on or before `period.to()`, collapsing the layers to one at
+/// `value / qty` at each financial-year boundary. See the module documentation for the collapse,
+/// rounding and negative-stock rules.
 ///
 /// # Errors
 /// [`StockError::Invalid`] for input FIFO cannot value (see the module documentation) and
@@ -205,42 +293,23 @@ pub fn fifo(
     }
     reject_in_out_vouchers(&live)?;
 
-    let mut layers: VecDeque<Layer> = VecDeque::new();
+    let mut book = Book {
+        layers: VecDeque::new(),
+        shortfall: Decimal::ZERO,
+        first_negative: None,
+        year: None,
+    };
     for o in &item.opening {
         if let Some(layer) = opening_layer(o)? {
-            layers.push_back(layer);
+            book.layers.push_back(layer);
         }
     }
-
-    let mut shortfall = Decimal::ZERO;
-    let mut first_negative = None;
     for m in live {
-        if m.qty_out.0.is_zero() {
-            layers.push_back(Layer {
-                qty: m.qty_in.0,
-                value: m.value,
-            });
-            if shortfall > Decimal::ZERO {
-                let cover = shortfall.min(m.qty_in.0);
-                consume(&mut layers, cover)?;
-                shortfall = dec_sub(shortfall, cover)?;
-            }
-        } else {
-            let unmet = consume(&mut layers, m.qty_out.0)?;
-            if unmet > Decimal::ZERO {
-                shortfall = dec_add(shortfall, unmet)?;
-                first_negative.get_or_insert(m.date);
-            }
-        }
+        book.apply(m)?;
     }
 
-    let mut qty = Decimal::ZERO;
-    let mut value = Paise::ZERO;
-    for layer in &layers {
-        qty = dec_add(qty, layer.qty)?;
-        value = value.checked_add(layer.value)?;
-    }
-    let qty = dec_sub(qty, shortfall)?;
+    let (layer_qty, value) = book.totals()?;
+    let qty = dec_sub(layer_qty, book.shortfall)?;
 
     let rate = if qty > Decimal::ZERO {
         Some(Rate(
@@ -252,7 +321,7 @@ pub fn fifo(
     } else {
         None
     };
-    let status = match first_negative {
+    let status = match book.first_negative {
         Some(date) => ValuationStatus::Provisional(ProvisionalReason::NegativeStock {
             item: item.id,
             date,

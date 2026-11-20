@@ -140,6 +140,118 @@ fn year_two_consumes_carried_layer_before_new_purchase() {
 }
 
 #[test]
+fn closing_is_600_00_on_the_research_dataset() {
+    // provenance: derived (AS 2 para 23, oldest lots first, lot by lot). The card's 600.00 case.
+    // Lots: 01-Apr 100 @ 10.00 = 1000.00; 10-Apr 50 @ 13.00 = 650.00; 20-May 40 @ 15.00 = 600.00.
+    // Sale 15-Apr of 120: all 100 of the first lot (1000.00), then 20 of the 50 @ 13.00
+    // (650.00 x 20/50 = 260.00); 30 @ 13.00 = 390.00 stay.
+    // Sale 31-May of 30: exactly the 30 @ 13.00 left; the 40 @ 15.00 lot is untouched.
+    // Closing: 40 @ 15.00 = 600.00. Check: 1000 + 650 + 600 - 1000 - 260 - 390 = 600.
+    let it = item(ValuationMethod::Fifo, vec![]);
+    let moves = vec![
+        buy(1, date!(2025 - 04 - 01), 100, 100_000),
+        buy(2, date!(2025 - 04 - 10), 50, 65_000),
+        sell(3, date!(2025 - 04 - 15), 120, 0),
+        buy(4, date!(2025 - 05 - 20), 40, 60_000),
+        sell(5, date!(2025 - 05 - 31), 30, 0),
+    ];
+    let v = fifo(&it, &moves, fy1()).unwrap();
+    assert_eq!(v.qty, q(40));
+    assert_eq!(v.value, Paise::new(60_000));
+    assert_eq!(v.rate, Some(Rate(Decimal::from(15))));
+    assert_eq!(v.status, ValuationStatus::Final);
+
+    // Closing on 30-Apr (before the May moves): the 30 @ 13.00 left after the 15-Apr sale = 390.00.
+    let april = Period::new(date!(2025 - 04 - 01), date!(2025 - 04 - 30)).unwrap();
+    let a = fifo(&it, &moves, april).unwrap();
+    assert_eq!(a.qty, q(30));
+    assert_eq!(a.value, Paise::new(39_000));
+    assert_eq!(a.rate, Some(Rate(Decimal::from(13))));
+}
+
+#[test]
+fn year_end_collapses_lots_into_one_at_closing_value_over_qty() {
+    // provenance: derived (card T4: next-year opening rate = closing value / qty; research note
+    // 03-inventory section 4: lot identity is collapsed at the year boundary).
+    // Year 1 (FY 2025-26): buy 10 @ 50.00 = 500.00 and 10 @ 60.00 = 600.00, no sales.
+    // Closing 20 units, 1100.00; year-2 opening rate = 1100.00 / 20 = 55.00, one lot of 20 @ 55.
+    // Year 2: sell 10: cost = 10 x 55.00 = 550.00 (a lot-preserving FIFO would take 10 @ 50 = 500).
+    // Closing 10 @ 55.00 = 550.00 (lot-preserving would give 600.00).
+    let it = item(ValuationMethod::Fifo, vec![]);
+    let mut moves = vec![
+        buy(1, date!(2025 - 05 - 01), 10, 50_000),
+        buy(2, date!(2025 - 06 - 01), 10, 60_000),
+    ];
+    let y1 = fifo(&it, &moves, fy1()).unwrap();
+    assert_eq!(y1.qty, q(20));
+    assert_eq!(y1.value, Paise::new(110_000));
+    assert_eq!(y1.rate, Some(Rate(Decimal::from(55))));
+
+    moves.push(sell(3, date!(2026 - 05 - 01), 10, 0));
+    let y2 = fifo(&it, &moves, fy2()).unwrap();
+    assert_eq!(y2.qty, q(10));
+    assert_eq!(y2.value, Paise::new(55_000));
+    assert_eq!(y2.rate, Some(Rate(Decimal::from(55))));
+    assert_eq!(y2.status, ValuationStatus::Final);
+}
+
+#[test]
+fn collapse_applies_across_a_year_with_no_movements() {
+    // provenance: derived. Same lots as the collapse test above (closing FY 2025-26: 20 @ 55.00,
+    // 1100.00). FY 2026-27 has no movements; the sale of 10 is in FY 2027-28 (2027-05-01).
+    // Collapsing is idempotent, so the cost is 10 x 55.00 = 550.00 and 10 @ 55.00 = 550.00 stay.
+    let it = item(ValuationMethod::Fifo, vec![]);
+    let moves = vec![
+        buy(1, date!(2025 - 05 - 01), 10, 50_000),
+        buy(2, date!(2025 - 06 - 01), 10, 60_000),
+        sell(3, date!(2027 - 05 - 01), 10, 0),
+    ];
+    let fy3 = Period::new(date!(2027 - 04 - 01), date!(2028 - 03 - 31)).unwrap();
+    let v = fifo(&it, &moves, fy3).unwrap();
+    assert_eq!(v.qty, q(10));
+    assert_eq!(v.value, Paise::new(55_000));
+}
+
+#[test]
+fn lots_within_one_year_are_not_collapsed() {
+    // provenance: derived. Same lots, but the sale of 10 is in the same year (2025-07-01):
+    // it takes the whole first lot, 10 @ 50.00 = 500.00; closing 10 @ 60.00 = 600.00.
+    let it = item(ValuationMethod::Fifo, vec![]);
+    let moves = vec![
+        buy(1, date!(2025 - 05 - 01), 10, 50_000),
+        buy(2, date!(2025 - 06 - 01), 10, 60_000),
+        sell(3, date!(2025 - 07 - 01), 10, 0),
+    ];
+    let v = fifo(&it, &moves, fy1()).unwrap();
+    assert_eq!(v.qty, q(10));
+    assert_eq!(v.value, Paise::new(60_000));
+}
+
+#[test]
+fn negative_stock_in_an_earlier_year_keeps_later_years_provisional() {
+    // provenance: derived. FY 2025-26: buy 5 @ 10.00, sell 8 on 2025-06-10 (goes to -3).
+    // FY 2026-27: buy 10 @ 20.00 = 200.00 on 2026-05-01; its first 3 units cover the shortfall
+    // (cost 200.00 x 3/10 = 60.00), leaving 7 @ 20.00 = 140.00. Quantity is 5 - 8 + 10 = 7.
+    // The first negative date is still 2025-06-10, so year 2 is Provisional too.
+    let it = item(ValuationMethod::Fifo, vec![]);
+    let moves = vec![
+        buy(1, date!(2025 - 05 - 01), 5, 5_000),
+        sell(2, date!(2025 - 06 - 10), 8, 0),
+        buy(3, date!(2026 - 05 - 01), 10, 20_000),
+    ];
+    let v = fifo(&it, &moves, fy2()).unwrap();
+    assert_eq!(v.qty, q(7));
+    assert_eq!(v.value, Paise::new(14_000));
+    assert_eq!(
+        v.status,
+        ValuationStatus::Provisional(ProvisionalReason::NegativeStock {
+            item: ITEM,
+            date: date!(2025 - 06 - 10)
+        })
+    );
+}
+
+#[test]
 fn moves_after_period_end_are_ignored() {
     // provenance: derived. The sale on 2026-04-02 is outside FY 2025-26, so closing at
     // 2026-03-31 is the purchase alone: 20 @ 50.00 = 1000.00.
