@@ -878,6 +878,11 @@ fn stock_vouchers() -> Vec<Voucher> {
 }
 
 /// V7 (intra-state) and V8 (inter-state): Widget A, 100 pcs at 100, taxable value 10,000 at 18%.
+///
+/// V8 is booked to a party registered in state 27 but its place of supply is forced to 29 (ship-to
+/// in Karnataka, IGST Act s.10(1)(a): supply involving movement of goods is placed where the
+/// movement ends). An engine that derives place of supply from the party master alone would give
+/// CGST+SGST here; G-card reviewers must treat the voucher's own `place_of_supply` as authoritative.
 fn gst_sales() -> Result<Vec<Voucher>, FixtureError> {
     // CGST Act s.9 / IGST Act s.5 at 18%: 10,000 x 18% = 1,800, split 900 + 900 within the state.
     let intra = gst_sale(

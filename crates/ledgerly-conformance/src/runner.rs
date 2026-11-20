@@ -147,8 +147,11 @@ impl RunReport {
         self.results
             .iter()
             .filter(|r| r.status == CaseStatus::Passed)
-            .map(|r| format!("{}\n", r.id))
-            .collect()
+            .fold(String::new(), |mut out, r| {
+                out.push_str(&r.id);
+                out.push('\n');
+                out
+            })
     }
 }
 

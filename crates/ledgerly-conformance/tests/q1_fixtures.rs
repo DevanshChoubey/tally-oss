@@ -2,12 +2,18 @@
 //!
 //! Counts and dates come from `fixtures/README.md`. Amounts are hand arithmetic written next to
 //! each assertion; nothing is copied from engine output (rule A4).
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::indexing_slicing,
+    reason = "test helpers outside #[test] fns are not covered by clippy.toml allow-*-in-tests"
+)]
 
 use std::collections::BTreeMap;
 
 use ledgerly_conformance::fixtures::{books_small, ids, try_books_small};
 use ledgerly_core::{
-    Date, Decimal, DrCr, Gstin, LedgerId, Month, Paise, StockItemId, VoucherId,
+    Date, Decimal, DrCr, Gstin, LedgerId, Month, Paise, StateCode, StockItemId, VoucherId,
     gstin_check_character,
 };
 use ledgerly_model::{BillRefKind, Books, VoucherStatus};
@@ -211,7 +217,7 @@ fn intra_and_inter_state_sales_of_10000_at_18_percent() {
     assert_eq!(net_of(&b, ids::LEDGER_SALES_INTERSTATE, 8), -1_000_000);
     assert_eq!(net_of(&b, ids::LEDGER_SHREE_GANESH, 8), 1_180_000);
     let inter = &b.vouchers[&VoucherId(8)];
-    assert_eq!(inter.place_of_supply.map(|s| s.get()), Some(29));
+    assert_eq!(inter.place_of_supply.map(StateCode::get), Some(29));
 }
 
 #[test]

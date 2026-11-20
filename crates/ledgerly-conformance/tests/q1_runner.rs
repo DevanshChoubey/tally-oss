@@ -2,6 +2,12 @@
 //!
 //! Provenance of every expected value is written next to it. Cases here are written to a
 //! temporary directory because the card does not own a `cases/` directory.
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::indexing_slicing,
+    reason = "test helpers outside #[test] fns are not covered by clippy.toml allow-*-in-tests"
+)]
 
 use std::fs;
 use std::path::Path;

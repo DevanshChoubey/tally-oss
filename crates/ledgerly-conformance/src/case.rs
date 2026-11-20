@@ -24,7 +24,8 @@
 //!
 //! A case with no `provenance` table is [`Provenance::Pending`] (engineering rule A5). Unknown
 //! keys and unknown check kinds are parse errors, so a misspelt key can never turn into a silent
-//! default.
+//! default. One exception: serde ignores extra keys inside `kind = "pending"` (a unit variant), so
+//! such a table still parses as pending. That is safe, since pending never asserts a value.
 
 use ledgerly_core::{Date, Decimal, Paise};
 use serde::{Deserialize, Serialize};
