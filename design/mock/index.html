@@ -1,0 +1,1095 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ledgerly mock</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ---------- tokens ---------- */
+:root{
+  --paper:#F2F4F7;      /* app chrome: cool ledger paper */
+  --sheet:#FFFFFF;      /* working surfaces */
+  --ink:#172033;        /* body text, blue-black register ink */
+  --ink-2:#47536A;
+  --ink-3:#77839A;
+  --line:#DCE1E9;       /* structural borders */
+  --ruling:#CBD6EC;     /* ledger ruling (blue lines) */
+  --margin:#C23B35;     /* red margin rule; also errors and credit-negative */
+  --accent:#3541A8;     /* neel (indigo) ink: focus, selection, primary */
+  --accent-ink:#FFFFFF;
+  --accent-soft:#E5E8FA;
+  --haldi:#9A6410;      /* turmeric: pending / attention */
+  --haldi-soft:#FBF0D8;
+  --leaf:#2C7A4B;       /* matched / ok */
+  --leaf-soft:#DDF0E4;
+  --focus-band:#FFF7D6; /* active field band on the voucher sheet */
+  --shadow:0 1px 0 rgba(23,32,51,.04),0 10px 28px -18px rgba(23,32,51,.35);
+  --r-s:3px; --r-m:6px; --r-l:10px;
+  font-family:"Public Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-size:13px; line-height:1.45; color:var(--ink);
+  font-variant-numeric:tabular-nums lining-nums;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#0E1320; --sheet:#151B2A; --ink:#E5E9F2; --ink-2:#A9B3C6; --ink-3:#7D889D;
+    --line:#263049; --ruling:#25345A; --margin:#E46A5F; --accent:#97A0F7; --accent-ink:#0E1320;
+    --accent-soft:#232A5C; --haldi:#E6AE4E; --haldi-soft:#3A2C12; --leaf:#62C08A; --leaf-soft:#173726;
+    --focus-band:#2C2A17; --shadow:0 10px 28px -18px rgba(0,0,0,.8); color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0E1320; --sheet:#151B2A; --ink:#E5E9F2; --ink-2:#A9B3C6; --ink-3:#7D889D;
+  --line:#263049; --ruling:#25345A; --margin:#E46A5F; --accent:#97A0F7; --accent-ink:#0E1320;
+  --accent-soft:#232A5C; --haldi:#E6AE4E; --haldi-soft:#3A2C12; --leaf:#62C08A; --leaf-soft:#173726;
+  --focus-band:#2C2A17; --shadow:0 10px 28px -18px rgba(0,0,0,.8); color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--paper);color:var(--ink)}
+button,input,select,textarea{font:inherit;color:inherit}
+button{background:none;border:0;cursor:pointer;padding:0}
+:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+kbd{font:inherit;font-size:11px;font-weight:600;min-width:18px;display:inline-block;text-align:center;padding:0 5px;border-radius:var(--r-s);
+  border:1px solid var(--line);border-bottom-width:2px;background:var(--sheet);color:var(--ink-2);line-height:16px}
+.num{text-align:right;white-space:nowrap}
+.muted{color:var(--ink-3)}
+h1,h2,h3{margin:0;font-weight:600;letter-spacing:-.01em}
+h1{font-size:20px} h2{font-size:15px} h3{font-size:13px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* ---------- shell ---------- */
+.app{display:grid;height:100vh;grid-template-columns:200px 1fr auto;grid-template-rows:48px 1fr 30px;
+  grid-template-areas:"top top top" "nav stage ai" "keys keys keys"}
+.top{grid-area:top;display:flex;align-items:center;gap:10px;padding:0 12px;background:var(--sheet);border-bottom:1px solid var(--line)}
+.mark{display:flex;align-items:center;gap:8px;font-weight:700;font-size:14px;letter-spacing:-.01em;padding-right:8px}
+.mark svg{width:22px;height:22px}
+.mark small{font-weight:400;color:var(--ink-3);font-size:11px}
+.pill{display:flex;align-items:center;gap:8px;height:32px;padding:0 10px;border:1px solid var(--line);border-radius:var(--r-m);background:var(--sheet);white-space:nowrap}
+.pill:hover{border-color:var(--ink-3)}
+.pill .sub{color:var(--ink-3);font-size:12px}
+.pill svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.8}
+.goto{flex:1;max-width:460px;justify-content:space-between;color:var(--ink-3)}
+.top .spacer{flex:1}
+.iconbtn{width:32px;height:32px;display:grid;place-items:center;border-radius:var(--r-m);color:var(--ink-2)}
+.iconbtn:hover{background:var(--paper)}
+.iconbtn svg{width:17px;height:17px;stroke:currentColor;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.iconbtn[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent)}
+.co-menu{position:absolute;top:44px;left:150px;z-index:40;width:340px;background:var(--sheet);border:1px solid var(--line);border-radius:var(--r-m);box-shadow:var(--shadow);padding:6px;display:none}
+.co-menu.open{display:block}
+.co-menu button{display:block;width:100%;text-align:left;padding:8px 10px;border-radius:var(--r-s)}
+.co-menu button:hover,.co-menu button.on{background:var(--accent-soft)}
+.co-menu .g{color:var(--ink-3);font-size:12px}
+
+nav.side{grid-area:nav;background:var(--sheet);border-right:1px solid var(--line);padding:10px 8px;overflow:auto}
+nav.side .grp{color:var(--ink-3);font-size:12px;padding:12px 8px 4px}
+nav.side button{display:flex;width:100%;align-items:center;justify-content:space-between;padding:6px 8px;border-radius:var(--r-s);color:var(--ink-2)}
+nav.side button:hover{background:var(--paper);color:var(--ink)}
+nav.side button[aria-current="page"]{background:var(--accent-soft);color:var(--accent);font-weight:600}
+nav.side kbd{background:transparent}
+
+.stage{grid-area:stage;overflow:auto;min-width:0}
+.screen{display:none;padding:20px 24px 40px;max-width:1240px}
+.screen.on{display:block}
+.head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-bottom:14px}
+.head p{margin:2px 0 0;color:var(--ink-2)}
+
+.keys{grid-area:keys;display:flex;align-items:center;gap:16px;padding:0 12px;background:var(--sheet);border-top:1px solid var(--line);color:var(--ink-2);font-size:12px;overflow:hidden;white-space:nowrap}
+.keys span{display:inline-flex;gap:5px;align-items:center}
+.keys .ctx{color:var(--ink);font-weight:600}
+.keys .right{margin-left:auto;color:var(--ink-3)}
+
+/* ---------- home ---------- */
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:18px}
+.kpi{background:var(--sheet);border:1px solid var(--line);border-radius:var(--r-m);padding:12px 14px;text-align:left}
+.kpi:hover{border-color:var(--accent)}
+.kpi .lbl{color:var(--ink-2);display:flex;justify-content:space-between}
+.kpi .val{font-size:22px;font-weight:600;letter-spacing:-.02em;margin:4px 0 2px}
+.kpi .val .r{font-weight:400;color:var(--ink-3);margin-right:2px}
+.kpi .foot{color:var(--ink-3);font-size:12px}
+.home-grid{display:grid;grid-template-columns:1.1fr 1fr 1fr;gap:12px}
+.box{background:var(--sheet);border:1px solid var(--line);border-radius:var(--r-m);padding:12px 14px}
+.box h2{margin-bottom:8px}
+.entry{display:flex;width:100%;justify-content:space-between;align-items:center;padding:6px 6px;border-radius:var(--r-s);text-align:left}
+.entry:hover,.entry:focus-visible{background:var(--accent-soft)}
+.entry .d{color:var(--ink-3);font-size:12px;display:block}
+.attn{list-style:none;margin:0;padding:0}
+.attn li{display:flex;gap:10px;padding:8px 0;border-top:1px solid var(--line)}
+.attn li:first-child{border-top:0}
+.dot{width:8px;height:8px;border-radius:50%;margin-top:5px;flex:none}
+.dot.h{background:var(--haldi)}.dot.r{background:var(--margin)}.dot.g{background:var(--leaf)}
+
+/* ---------- voucher sheet: the signature element ---------- */
+.vtabs{display:flex;gap:4px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:var(--r-m);overflow:hidden;background:var(--sheet)}
+.seg button{padding:5px 10px;color:var(--ink-2);display:flex;gap:6px;align-items:center}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+.seg button[aria-pressed="true"] kbd{background:transparent;color:inherit;border-color:currentColor}
+.sheet{position:relative;background:var(--sheet);border:1px solid var(--line);border-radius:var(--r-m);box-shadow:var(--shadow);padding:16px 18px 16px 58px}
+.sheet::before{content:"";position:absolute;top:0;bottom:0;left:40px;border-left:1px solid var(--margin);box-shadow:-3px 0 0 -2px var(--margin);opacity:.7}
+.sheet .gutter{position:absolute;left:0;width:40px;text-align:center;color:var(--ink-3);font-size:11px}
+.vhead{display:grid;grid-template-columns:150px 140px 1fr 230px;gap:0 14px;padding-bottom:10px;border-bottom:1px solid var(--ruling)}
+.field{display:flex;flex-direction:column;gap:2px;position:relative;padding:4px 6px;border-radius:var(--r-s)}
+.field label{color:var(--ink-3);font-size:12px}
+.field input,.field textarea{border:0;background:transparent;padding:2px 0;outline:none;font-size:14px;font-weight:500;width:100%;border-bottom:1px dashed transparent}
+.field.ro input{color:var(--ink-2)}
+.field:focus-within{background:var(--focus-band);box-shadow:inset 0 -2px 0 var(--accent)}
+.field .hint{font-size:12px;color:var(--ink-3);min-height:18px}
+.field .hint b{color:var(--ink-2);font-weight:500}
+.lines{width:100%;border-collapse:collapse;margin-top:6px}
+.lines th{font-weight:500;color:var(--ink-3);font-size:12px;text-align:left;padding:6px;border-bottom:1px solid var(--ruling)}
+.lines th.num{text-align:right}
+.lines td{padding:0 6px;border-bottom:1px solid var(--ruling);height:34px;vertical-align:middle}
+.lines td.sn{color:var(--ink-3);width:28px;font-size:12px}
+.lines input{border:0;background:transparent;outline:none;width:100%;height:32px;font-size:14px;font-weight:500;padding:0}
+.lines input.num{text-align:right}
+.lines td:focus-within{background:var(--focus-band);box-shadow:inset 0 -2px 0 var(--accent)}
+.lines .meta{color:var(--ink-3);font-size:12px}
+.lines tr.empty td{color:var(--ink-3)}
+.vfoot{display:grid;grid-template-columns:1fr 360px;gap:24px;margin-top:14px}
+.taxbox{border-top:2px solid var(--ink);padding-top:8px}
+.taxrow{display:flex;justify-content:space-between;padding:3px 0}
+.taxrow.sub{color:var(--ink-2)}
+.taxrow.total{border-top:1px solid var(--ruling);border-bottom:3px double var(--ink);margin-top:6px;padding:8px 0;font-size:18px;font-weight:700}
+.taxrow .tag{font-size:11px;color:var(--ink-3);margin-left:6px}
+.pos-note{display:flex;gap:8px;align-items:center;padding:8px 10px;border-radius:var(--r-m);background:var(--accent-soft);color:var(--accent);margin-bottom:8px;font-size:12.5px}
+.pos-note.inter{background:var(--haldi-soft);color:var(--haldi)}
+.words{color:var(--ink-2);font-size:12px;margin-top:8px}
+.ratetbl{width:100%;border-collapse:collapse;font-size:12px;margin-top:10px;color:var(--ink-2)}
+.ratetbl th,.ratetbl td{padding:3px 4px;border-bottom:1px solid var(--line)}
+.ratetbl th{font-weight:500;text-align:right;color:var(--ink-3)} .ratetbl th:first-child{text-align:left}
+.confirm{display:none;align-items:center;gap:12px;margin-top:14px;padding:10px 14px;border:1px solid var(--accent);background:var(--accent-soft);border-radius:var(--r-m)}
+.confirm.on{display:flex}
+.btn{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 12px;border-radius:var(--r-m);border:1px solid var(--line);background:var(--sheet);white-space:nowrap}
+.btn:hover{border-color:var(--ink-3)}
+.btn.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.btn.primary kbd{background:transparent;color:inherit;border-color:currentColor;opacity:.85}
+.btn.small{height:24px;padding:0 8px;font-size:12px}
+
+/* type-ahead list */
+.ta{position:fixed;z-index:60;min-width:320px;max-height:300px;overflow:auto;background:var(--sheet);border:1px solid var(--ink-3);border-radius:var(--r-m);box-shadow:var(--shadow);display:none;padding:4px}
+.ta.open{display:block}
+.ta .opt{display:flex;justify-content:space-between;gap:16px;padding:5px 8px;border-radius:var(--r-s);cursor:pointer}
+.ta .opt .s{color:var(--ink-3);font-size:12px}
+.ta .opt.hi{background:var(--accent);color:var(--accent-ink)}
+.ta .opt.hi .s{color:inherit;opacity:.8}
+.ta .cap{padding:4px 8px;color:var(--ink-3);font-size:12px;border-bottom:1px solid var(--line);margin-bottom:3px;display:flex;justify-content:space-between}
+.ta mark{background:none;color:inherit;text-decoration:underline;text-underline-offset:2px;font-weight:700}
+
+/* ---------- reports ---------- */
+.toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+.crumbs{display:flex;gap:4px;align-items:center;flex-wrap:wrap;margin-bottom:10px;color:var(--ink-3)}
+.crumbs button{color:var(--accent);padding:2px 4px;border-radius:var(--r-s)}
+.crumbs button:hover{background:var(--accent-soft)}
+.crumbs .cur{color:var(--ink);font-weight:600;padding:2px 4px}
+.rep{width:100%;border-collapse:collapse;background:var(--sheet);border:1px solid var(--line);border-radius:var(--r-m)}
+.rep th{font-weight:500;font-size:12px;color:var(--ink-3);text-align:left;padding:7px 10px;border-bottom:1px solid var(--line);background:var(--sheet);position:sticky;top:0}
+.rep th.num{text-align:right}
+.rep td{padding:5px 10px;border-bottom:1px solid var(--line)}
+.rep tr.sect td{font-weight:700;padding-top:12px;border-bottom:1px solid var(--ink-3)}
+.rep tr.go{cursor:pointer}
+.rep tr.go:hover td{background:var(--paper)}
+.rep tr.go:focus{outline:none}
+.rep tr.go:focus td{background:var(--accent-soft)}
+.rep tr.go:focus td:first-child{box-shadow:inset 3px 0 0 var(--accent)}
+.rep tr.l1 td:first-child{padding-left:26px}
+.rep tr.l2 td:first-child{padding-left:44px;color:var(--ink-2)}
+.rep tr.tot td{font-weight:700;border-top:1px solid var(--ink);border-bottom:3px double var(--ink)}
+.rep .drill{color:var(--ink-3);font-size:11px;margin-left:6px;visibility:hidden}
+.rep tr.go:focus .drill,.rep tr.go:hover .drill{visibility:visible}
+.balanced{display:inline-flex;gap:6px;align-items:center;color:var(--leaf);font-size:12px}
+.vdetail{background:var(--sheet);border:1px solid var(--line);border-radius:var(--r-m);padding:14px 16px}
+.vdetail dl{display:grid;grid-template-columns:repeat(4,auto);gap:4px 20px;margin:0 0 12px;justify-content:start}
+.vdetail dt{color:var(--ink-3);font-size:12px} .vdetail dd{margin:0;font-weight:500}
+
+/* ---------- GST ---------- */
+.tabs{display:flex;gap:2px;border-bottom:1px solid var(--line);margin-bottom:14px}
+.tabs button{padding:8px 12px;color:var(--ink-2);border-bottom:2px solid transparent;margin-bottom:-1px;display:flex;gap:6px;align-items:center}
+.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent);font-weight:600}
+.tabpane{display:none}.tabpane.on{display:block}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{padding:3px 10px;border-radius:999px;border:1px solid var(--line);background:var(--sheet);color:var(--ink-2);font-size:12px}
+.chip[aria-pressed="true"]{border-color:var(--accent);color:var(--accent);background:var(--accent-soft)}
+.st{display:inline-flex;align-items:center;gap:5px;font-size:12px;padding:1px 8px;border-radius:999px;white-space:nowrap}
+.st.ok{background:var(--leaf-soft);color:var(--leaf)}
+.st.warn{background:var(--haldi-soft);color:var(--haldi)}
+.st.bad{background:color-mix(in srgb,var(--margin) 14%,transparent);color:var(--margin)}
+.st.info{background:var(--accent-soft);color:var(--accent)}
+.ims{display:inline-flex;border:1px solid var(--line);border-radius:var(--r-m);overflow:hidden}
+.ims button{padding:2px 8px;font-size:12px;color:var(--ink-2)}
+.ims button+button{border-left:1px solid var(--line)}
+.ims button.on.a{background:var(--leaf);color:#fff}
+.ims button.on.r{background:var(--margin);color:#fff}
+.ims button.on.p{background:var(--haldi);color:#fff}
+.diff{color:var(--margin);font-weight:600}
+.cols2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.due{display:flex;gap:12px;margin-bottom:12px}
+.due .box{flex:1}
+
+/* ---------- AI panel ---------- */
+.ai{grid-area:ai;width:0;overflow:hidden;background:var(--sheet);border-left:1px solid var(--line);transition:width .18s ease}
+.ai.open{width:400px}
+.ai-in{width:400px;height:100%;display:flex;flex-direction:column}
+.ai-h{padding:12px 14px 0}
+.ai-h h2{display:flex;align-items:center;justify-content:space-between}
+.contract{margin:8px 0 10px;padding:8px 10px;border-radius:var(--r-m);background:var(--paper);color:var(--ink-2);font-size:12px;display:grid;grid-template-columns:auto 1fr;gap:3px 8px}
+.contract b{color:var(--ink);font-weight:600}
+.ai-body{flex:1;overflow:auto;padding:0 14px 14px}
+.badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:0 6px;border-radius:var(--r-s);line-height:17px;white-space:nowrap}
+.badge.asst{background:var(--haldi-soft);color:var(--haldi)}
+.badge.eng{background:var(--leaf-soft);color:var(--leaf)}
+.badge svg{width:10px;height:10px;fill:currentColor}
+.bill{position:relative;margin:4px 0 10px;padding:14px 16px;background:#FBFAF6;color:#2A2A2A;border:1px solid #E2DED2;border-radius:2px;transform:rotate(-1.2deg);box-shadow:0 6px 16px -10px rgba(0,0,0,.4);font-size:11.5px;line-height:1.35}
+.bill .bt{font-weight:700;font-size:13px}
+.bill table{width:100%;border-collapse:collapse;margin-top:6px}
+.bill td{padding:2px 0;border-bottom:1px dotted #BDB7A6}
+.bill .stamp{position:absolute;right:14px;bottom:12px;border:2px solid #3A55A5;color:#3A55A5;padding:2px 6px;transform:rotate(-8deg);font-weight:700;font-size:10px;opacity:.75}
+.prop{border:1px solid var(--line);border-radius:var(--r-m);margin-top:10px;overflow:hidden}
+.prop .ph{display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:var(--paper);border-bottom:1px solid var(--line)}
+.prop .pb{padding:8px 10px}
+.prop table{width:100%;border-collapse:collapse}
+.prop td{padding:3px 0;border-bottom:1px solid var(--line);vertical-align:top}
+.prop tr:last-child td{border-bottom:0}
+.prop .ok{color:var(--leaf)}
+.prop .pf{display:flex;gap:6px;flex-wrap:wrap;padding:8px 10px;border-top:1px solid var(--line);background:var(--paper)}
+.why{font-size:12px;color:var(--ink-2);margin:6px 0}
+.ask{display:flex;gap:6px;margin:8px 0}
+.ask input{flex:1;height:34px;padding:0 10px;border:1px solid var(--line);border-radius:var(--r-m);background:var(--sheet);outline:none}
+.ask input:focus{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft)}
+.sugg{display:flex;flex-wrap:wrap;gap:4px}
+.sugg button{font-size:12px;color:var(--accent);padding:2px 6px;border-radius:var(--r-s);background:var(--accent-soft)}
+.bankline{border:1px solid var(--line);border-radius:var(--r-m);padding:8px 10px;margin-bottom:8px}
+.bankline .top2{display:flex;justify-content:space-between;gap:8px}
+.bankline .desc{font-size:12px;color:var(--ink-2);word-break:break-all}
+.bankline .sg{margin-top:6px;padding-top:6px;border-top:1px dashed var(--line);display:flex;justify-content:space-between;gap:8px;align-items:center}
+.bankline.done{opacity:.55}
+.thinking{display:flex;gap:8px;align-items:center;color:var(--ink-2);padding:10px 0}
+.thinking i{width:6px;height:6px;border-radius:50%;background:var(--accent);animation:bl 1s infinite}
+.thinking i:nth-child(2){animation-delay:.15s}.thinking i:nth-child(3){animation-delay:.3s}
+@keyframes bl{50%{opacity:.2}}
+
+/* ---------- overlays ---------- */
+.scrim{position:fixed;inset:0;background:rgba(14,19,32,.45);display:none;z-index:80;align-items:flex-start;justify-content:center;padding-top:10vh}
+.scrim.open{display:flex}
+.palette{width:min(640px,92vw);background:var(--sheet);border:1px solid var(--line);border-radius:var(--r-l);box-shadow:0 24px 60px -20px rgba(0,0,0,.5);overflow:hidden}
+.palette input{width:100%;border:0;border-bottom:1px solid var(--line);background:transparent;padding:14px 16px;font-size:16px;outline:none}
+.palette .res{max-height:360px;overflow:auto;padding:6px}
+.palette .grp{color:var(--ink-3);font-size:12px;padding:8px 10px 2px}
+.palette .it{display:flex;justify-content:space-between;align-items:center;padding:7px 10px;border-radius:var(--r-s);cursor:pointer}
+.palette .it .s{color:var(--ink-3);font-size:12px}
+.palette .it.hi{background:var(--accent);color:var(--accent-ink)}
+.palette .it.hi .s{color:inherit;opacity:.8}
+.palette .it.hi kbd{background:transparent;color:inherit;border-color:currentColor}
+.palette .pf{display:flex;gap:14px;padding:8px 14px;border-top:1px solid var(--line);color:var(--ink-3);font-size:12px}
+.help{width:min(900px,94vw);max-height:80vh;overflow:auto;background:var(--sheet);border:1px solid var(--line);border-radius:var(--r-l);padding:18px 22px;box-shadow:0 24px 60px -20px rgba(0,0,0,.5)}
+.help .cols{display:grid;grid-template-columns:repeat(3,1fr);gap:8px 28px;margin-top:12px}
+.help h3{margin:10px 0 4px;color:var(--accent)}
+.help .k{display:flex;justify-content:space-between;gap:10px;padding:3px 0;border-bottom:1px solid var(--line)}
+.toast{position:fixed;bottom:44px;left:50%;transform:translateX(-50%) translateY(20px);opacity:0;background:var(--ink);color:var(--sheet);padding:9px 16px;border-radius:var(--r-m);z-index:90;transition:.2s;pointer-events:none}
+.toast.on{opacity:1;transform:translateX(-50%)}
+
+@media (max-width:1100px){.home-grid{grid-template-columns:1fr 1fr}.kpis{grid-template-columns:1fr 1fr}.vhead{grid-template-columns:1fr 1fr}.vfoot{grid-template-columns:1fr}}
+@media (max-width:760px){.kpis{grid-template-columns:minmax(0,1fr)}.head{flex-wrap:wrap}.sheet{overflow-x:auto}.rep{display:block;overflow-x:auto}.due{flex-direction:column}.help .cols{grid-template-columns:1fr}.top{overflow:hidden;gap:6px}.top .muted,#fyBtn .sub,#coGst,.goto>span:first-child,.mark small{display:none}.goto{flex:0 0 auto}.app{grid-template-columns:minmax(0,1fr);grid-template-areas:"top" "stage" "keys"}nav.side{display:none}.ai{position:fixed;right:0;top:48px;bottom:30px;z-index:50}.ai.open{width:100vw}.ai-in{width:100%}.home-grid,.cols2{grid-template-columns:1fr}.goto .sub,.mark small{display:none}.screen{padding:16px}.sheet{padding-left:16px}.sheet::before{display:none}}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- top bar -->
+  <header class="top">
+    <div class="mark" aria-label="Ledgerly, working name">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="3" fill="var(--accent)"/><path d="M7 8h10M7 12h10M7 16h6" stroke="var(--accent-ink)" stroke-width="1.6"/><path d="M9.5 3v18" stroke="var(--margin)" stroke-width="1.4"/></svg>
+      Ledgerly <small>working name</small>
+    </div>
+    <button class="pill" id="coBtn" aria-haspopup="true" aria-expanded="false" title="Switch company (Alt+F3)">
+      <span id="coName">Vasundhara Agro Tools LLP</span><span class="sub" id="coGst">27AAQFV5532K1Z8</span>
+      <svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
+    </button>
+    <button class="pill" id="fyBtn" title="Change period (Alt+F2)"><span>FY 2026-27</span><span class="sub" id="periodLbl">1 Apr to 20 Nov 2026</span></button>
+    <button class="pill goto" id="gotoBtn"><span>Go to ledger, voucher, report, command</span><span><kbd>Ctrl</kbd> <kbd>K</kbd></span></button>
+    <div class="spacer"></div>
+    <span class="muted" style="font-size:12px" title="All data is on this machine">Saved locally 20 Nov, 16:42</span>
+    <button class="iconbtn" id="themeBtn" title="Toggle theme (Ctrl+Shift+L)" aria-label="Toggle theme"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg></button>
+    <button class="iconbtn" id="helpBtn" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts"><svg viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></svg></button>
+    <button class="iconbtn" id="aiBtn" aria-pressed="false" title="Assistant panel (Ctrl+J)" aria-label="Assistant panel"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg></button>
+  </header>
+  <div class="co-menu" id="coMenu" role="menu">
+    <button class="on" data-co="0"><b>Vasundhara Agro Tools LLP</b><br><span class="g">Pune, Maharashtra  27AAQFV5532K1Z8  FY 2026-27</span></button>
+    <button data-co="1"><b>Kaveri Home Foods Pvt Ltd</b><br><span class="g">Mysuru, Karnataka  29AAICK8810F1Z2  FY 2026-27</span></button>
+    <button data-co="2"><b>Deshpande and Co (proprietor)</b><br><span class="g">Kolhapur, Maharashtra  27BXKPD4471A1ZV  FY 2026-27</span></button>
+  </div>
+
+  <!-- side navigation -->
+  <nav class="side" aria-label="Main">
+    <button data-go="home" aria-current="page">Home <kbd>H</kbd></button>
+    <div class="grp">Enter vouchers</div>
+    <button data-go="sales">Sales invoice <kbd>F8</kbd></button>
+    <button data-go="payment" data-vt="payment">Payment <kbd>F5</kbd></button>
+    <button data-go="payment" data-vt="receipt">Receipt <kbd>F6</kbd></button>
+    <button data-go="ai-bill">Purchase from bill <kbd>F9</kbd></button>
+    <div class="grp">Reports</div>
+    <button data-go="bs">Balance sheet <kbd>B</kbd></button>
+    <button data-go="daybook">Day book <kbd>D</kbd></button>
+    <div class="grp">Compliance</div>
+    <button data-go="gst">GST returns <kbd>G</kbd></button>
+    <div class="grp">Masters</div>
+    <button data-go="masters">Ledgers and items <kbd>M</kbd></button>
+  </nav>
+
+  <main class="stage" id="stage">
+    <!-- HOME -->
+    <section class="screen on" id="s-home" aria-label="Home">
+      <div class="head"><div><h1>Vasundhara Agro Tools LLP</h1><p>Friday, 20 November 2026. Books are open to voucher Sales 2026-27/0417.</p></div>
+        <button class="btn primary" data-go="sales">New sales invoice <kbd>F8</kbd></button></div>
+      <div class="kpis" id="kpis"></div>
+      <div class="home-grid">
+        <div class="box"><h2>Enter</h2>
+          <button class="entry" data-go="sales"><span>Sales invoice<span class="d">Item invoice with GST, e-invoice ready</span></span><kbd>F8</kbd></button>
+          <button class="entry" data-go="payment" data-vt="receipt"><span>Receipt<span class="d">Money in, against bills</span></span><kbd>F6</kbd></button>
+          <button class="entry" data-go="payment" data-vt="payment"><span>Payment<span class="d">Money out, cash or bank</span></span><kbd>F5</kbd></button>
+          <button class="entry" data-go="ai-bill"><span>Purchase from a photo of a bill<span class="d">Assistant reads it, you confirm</span></span><kbd>F9</kbd></button>
+          <button class="entry" data-go="ai-ask"><span>Describe a transaction<span class="d">"paid rent 25k to Sharma Properties by HDFC"</span></span><kbd>Ctrl</kbd></button>
+        </div>
+        <div class="box"><h2>Look up</h2>
+          <button class="entry" data-go="bs"><span>Balance sheet<span class="d">Drill from any figure to the voucher</span></span><kbd>B</kbd></button>
+          <button class="entry" data-go="daybook"><span>Day book<span class="d">Every voucher, by date</span></span><kbd>D</kbd></button>
+          <button class="entry" data-go="gst"><span>GST returns<span class="d">GSTR-1, GSTR-3B, 2B and IMS</span></span><kbd>G</kbd></button>
+          <button class="entry" data-go="masters"><span>Ledgers and items<span class="d">Parties, stock items, HSN and rates</span></span><kbd>M</kbd></button>
+          <button class="entry" data-go="palette"><span>Anything else<span class="d">Search every ledger, voucher and report</span></span><span><kbd>Ctrl</kbd> <kbd>K</kbd></span></button>
+        </div>
+        <div class="box"><h2>Needs attention</h2>
+          <ul class="attn">
+            <li><span class="dot h"></span><div><button class="entry" style="padding:0" data-go="gst-ims">4 invoices in IMS are pending</button><span class="muted">Pending invoices stay out of this month's ITC until you accept them.</span></div></li>
+            <li><span class="dot h"></span><div><button class="entry" style="padding:0" data-go="ai-bank">5 HDFC Bank lines are not matched</button><span class="muted">Statement imported 20 Nov, 09:15.</span></div></li>
+            <li><span class="dot r"></span><div><b>GSTR-1 for November is due 11 Dec</b><br><span class="muted">14 B2B invoices ready, 0 with errors.</span></div></li>
+            <li><span class="dot g"></span><div><b>GSTR-3B for October filed</b><br><span class="muted">ARN on 19 Nov 2026.</span></div></li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- SALES VOUCHER -->
+    <section class="screen" id="s-sales" aria-label="Sales invoice">
+      <div class="head"><div><h1>Sales invoice</h1><p>Item invoice. Enter moves to the next field; the list under a field accepts only existing masters.</p></div>
+        <div class="vtabs"><div class="seg" role="group" aria-label="Voucher type">
+          <button aria-pressed="true">Sales <kbd>F8</kbd></button>
+          <button data-go="payment" data-vt="receipt">Receipt <kbd>F6</kbd></button>
+          <button data-go="payment" data-vt="payment">Payment <kbd>F5</kbd></button>
+        </div></div></div>
+      <div class="sheet" id="salesSheet">
+        <div class="vhead">
+          <div class="field ro"><label>Invoice no.</label><input id="v-no" value="2026-27/0418" readonly tabindex="-1"><span class="hint">Auto, series S</span></div>
+          <div class="field"><label for="v-date">Date</label><input id="v-date" class="flow" value="20-11-2026"><span class="hint">Fri</span></div>
+          <div class="field"><label for="v-party">Party</label><input id="v-party" class="flow" data-ta="party" autocomplete="off"><span class="hint" id="v-party-hint"></span></div>
+          <div class="field"><label for="v-pos">Place of supply</label><input id="v-pos" class="flow" data-ta="state" autocomplete="off"><span class="hint" id="v-pos-hint"></span></div>
+        </div>
+        <table class="lines" id="lines">
+          <thead><tr><th></th><th style="width:38%">Item</th><th>HSN</th><th class="num">GST</th><th class="num" style="width:90px">Qty</th><th class="num" style="width:110px">Rate</th><th class="num" style="width:130px">Taxable value</th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <div class="vfoot">
+          <div>
+            <div class="field"><label for="v-narr">Narration</label><input id="v-narr" class="flow" value="" placeholder="Optional. Enter here asks to save."><span class="hint">Ctrl+Enter saves from any field</span></div>
+            <table class="ratetbl" id="rateTbl"></table>
+          </div>
+          <div class="taxbox" id="taxbox"></div>
+        </div>
+        <div class="confirm" id="saveBar" role="alertdialog" aria-label="Save voucher">
+          <b>Save Sales 2026-27/0418?</b><span class="muted" id="saveSum"></span><span style="flex:1"></span>
+          <button class="btn primary" id="saveYes">Save <kbd>Enter</kbd></button><button class="btn" id="saveNo">Keep editing <kbd>Esc</kbd></button>
+        </div>
+      </div>
+    </section>
+
+    <!-- PAYMENT / RECEIPT -->
+    <section class="screen" id="s-payment" aria-label="Payment or receipt">
+      <div class="head"><div><h1 id="p-title">Payment</h1><p>Single-entry mode: pick the cash or bank account once, then the ledgers it pays.</p></div>
+        <div class="seg" role="group" aria-label="Voucher type">
+          <button data-go="sales">Sales <kbd>F8</kbd></button>
+          <button id="vtR" data-vt="receipt">Receipt <kbd>F6</kbd></button>
+          <button id="vtP" data-vt="payment" aria-pressed="true">Payment <kbd>F5</kbd></button>
+        </div></div>
+      <div class="sheet" style="max-width:900px">
+        <div class="vhead" style="grid-template-columns:150px 140px 1fr">
+          <div class="field ro"><label>Voucher no.</label><input id="p-no" value="2026-27/0319" readonly tabindex="-1"><span class="hint">Auto</span></div>
+          <div class="field"><label for="p-date">Date</label><input id="p-date" class="pflow" value="20-11-2026"><span class="hint">Fri</span></div>
+          <div class="field"><label for="p-acct" id="p-acct-l">Paid from</label><input id="p-acct" class="pflow" data-ta="bank" autocomplete="off" value="HDFC Bank A/c"><span class="hint" id="p-acct-hint"></span></div>
+        </div>
+        <table class="lines" id="plines">
+          <thead><tr><th></th><th style="width:55%" id="p-col">Paid to (ledger)</th><th>Reference</th><th class="num" style="width:150px">Amount</th></tr></thead>
+          <tbody></tbody>
+        </table>
+        <div class="vfoot" style="grid-template-columns:1fr 300px">
+          <div class="field"><label for="p-narr">Narration</label><input id="p-narr" class="pflow" placeholder="Optional. Enter here asks to save."><span class="hint">Ctrl+Enter saves</span></div>
+          <div class="taxbox" id="ptot"></div>
+        </div>
+        <div class="confirm" id="psaveBar"><b id="psaveT">Save payment?</b><span class="muted" id="psaveSum"></span><span style="flex:1"></span>
+          <button class="btn primary" id="psaveYes">Save <kbd>Enter</kbd></button><button class="btn" id="psaveNo">Keep editing <kbd>Esc</kbd></button></div>
+      </div>
+    </section>
+
+    <!-- REPORTS -->
+    <section class="screen" id="s-report" aria-label="Reports">
+      <div class="head"><div><h1 id="r-title">Balance sheet</h1><p id="r-sub">As at 20 Nov 2026</p></div>
+        <div class="toolbar" style="margin:0">
+          <div class="seg" role="group" aria-label="Report"><button id="rBS" aria-pressed="true">Balance sheet <kbd>B</kbd></button><button id="rDB">Day book <kbd>D</kbd></button></div>
+          <div class="seg" role="group" aria-label="Period" id="periodSeg"><button data-p="m">This month</button><button data-p="q">Q3</button><button data-p="y" aria-pressed="true">FY to date</button></div>
+          <div class="seg" role="group" aria-label="Detail"><button id="condBtn" aria-pressed="true">Condensed</button><button id="detBtn">Detailed <kbd>Alt+D</kbd></button></div>
+        </div></div>
+      <div class="crumbs" id="crumbs"></div>
+      <div id="repBody"></div>
+      <p class="muted" style="margin-top:10px;font-size:12px" id="repNote"></p>
+    </section>
+
+    <!-- GST -->
+    <section class="screen" id="s-gst" aria-label="GST returns">
+      <div class="head"><div><h1>GST returns</h1><p>Return period November 2026. GSTIN 27AAQFV5532K1Z8, regular, monthly filer.</p></div>
+        <div class="seg"><button>Oct 2026</button><button aria-pressed="true">Nov 2026</button><button>Dec 2026</button></div></div>
+      <div class="tabs" role="tablist">
+        <button role="tab" aria-selected="false" data-tab="g1">GSTR-1 <kbd>1</kbd></button>
+        <button role="tab" aria-selected="false" data-tab="g3">GSTR-3B <kbd>3</kbd></button>
+        <button role="tab" aria-selected="true" data-tab="g2">2B and IMS reconciliation <kbd>2</kbd></button>
+      </div>
+      <div class="tabpane" id="t-g1"></div>
+      <div class="tabpane" id="t-g3"></div>
+      <div class="tabpane on" id="t-g2">
+        <div class="toolbar">
+          <div class="chips" id="reconChips"></div><span style="flex:1"></span>
+          <span class="muted" style="font-size:12px">Row: <kbd>J</kbd> <kbd>K</kbd> move, <kbd>A</kbd> accept, <kbd>R</kbd> reject, <kbd>P</kbd> pending, <kbd>Enter</kbd> open</span>
+        </div>
+        <table class="rep" id="recon"></table>
+        <p class="muted" style="font-size:12px;margin-top:8px">Matching runs on supplier GSTIN, invoice number (normalised) and date. Tax heads come from the 2B file; books values come from purchase vouchers. Actions are saved locally and uploaded to IMS only when you choose Upload.</p>
+      </div>
+    </section>
+
+    <!-- MASTERS (stub) -->
+    <section class="screen" id="s-masters" aria-label="Masters">
+      <div class="head"><div><h1>Ledgers and items</h1><p>Masters used by the sample vouchers. Type to filter.</p></div></div>
+      <div class="cols2"><div class="box"><h2>Parties</h2><table class="rep" id="mParties"></table></div><div class="box"><h2>Stock items</h2><table class="rep" id="mItems"></table></div></div>
+    </section>
+  </main>
+
+  <!-- AI PANEL -->
+  <aside class="ai" id="ai" aria-label="Assistant">
+    <div class="ai-in">
+      <div class="ai-h">
+        <h2>Assistant <button class="iconbtn" id="aiClose" aria-label="Close assistant"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></h2>
+        <div class="contract">
+          <span class="badge asst">Assistant</span><span>reads bills and your words, and <b>proposes</b> ledgers and items.</span>
+          <span class="badge eng">Engine</span><span><b>computes every amount</b> and tax from masters. Nothing posts until you confirm.</span>
+        </div>
+        <div class="tabs" role="tablist" style="margin-bottom:10px">
+          <button role="tab" aria-selected="true" data-ai="bill">Bill photo</button>
+          <button role="tab" aria-selected="false" data-ai="ask">Describe</button>
+          <button role="tab" aria-selected="false" data-ai="bank">Bank matching</button>
+        </div>
+      </div>
+      <div class="ai-body">
+        <div class="tabpane on" id="ai-bill"></div>
+        <div class="tabpane" id="ai-ask">
+          <div class="ask"><input id="askIn" value="paid rent 25k to Sharma Properties by HDFC" aria-label="Describe a transaction"><button class="btn primary" id="askGo">Propose <kbd>Enter</kbd></button></div>
+          <div class="sugg"><button>received 1.2 lakh from Mehta Agro in HDFC</button><button>paid 4,800 to Vardhaman Logistics cash</button><button>paid 9000 to Ramesh for repairs</button></div>
+          <div id="askOut"></div>
+        </div>
+        <div class="tabpane" id="ai-bank"></div>
+      </div>
+    </div>
+  </aside>
+
+  <footer class="keys" id="keys"></footer>
+</div>
+
+<div class="ta" id="ta" role="listbox"></div>
+<div class="scrim" id="palScrim"><div class="palette" role="dialog" aria-label="Go to">
+  <input id="palIn" placeholder="Go to ledger, voucher, report or command" autocomplete="off">
+  <div class="res" id="palRes"></div>
+  <div class="pf"><span><kbd>↑</kbd> <kbd>↓</kbd> move</span><span><kbd>Enter</kbd> open</span><span><kbd>Esc</kbd> close</span><span style="margin-left:auto">Prefix <b>&gt;</b> for commands, <b>#</b> for voucher numbers</span></div>
+</div></div>
+<div class="scrim" id="helpScrim"><div class="help" role="dialog" aria-label="Keyboard shortcuts">
+  <div style="display:flex;justify-content:space-between;align-items:center"><h2>Keyboard map</h2><span class="muted">Press <kbd>?</kbd> or <kbd>Esc</kbd> to close</span></div>
+  <div class="cols" id="helpCols"></div>
+</div></div>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+"use strict";
+/* ================= data (fictional) ================= */
+const CO_STATE='27';
+const STATES={'27':'Maharashtra','24':'Gujarat','33':'Tamil Nadu','23':'Madhya Pradesh','29':'Karnataka','07':'Delhi','09':'Uttar Pradesh','32':'Kerala','36':'Telangana','30':'Goa'};
+const PARTIES=[
+ {name:'Shree Ganesh Traders',city:'Nashik',gstin:'27AAKFS4821M1Z6',st:'27'},
+ {name:'Mehta Agro Industries',city:'Rajkot',gstin:'24AADCM9142P1Z3',st:'24'},
+ {name:'Lakshmi Farm Supplies',city:'Coimbatore',gstin:'33AAHFL3307Q1ZB',st:'33'},
+ {name:'Patil Hardware Stores',city:'Satara',gstin:'27ABHPP6620J1ZN',st:'27'},
+ {name:'Kisan Seva Kendra',city:'Indore',gstin:'23AAJFK1189E1Z5',st:'23'},
+ {name:'Cash sale (unregistered)',city:'Pune',gstin:'',st:'27'}];
+const ITEMS=[
+ {name:'Drip lateral 16 mm, 400 m roll',hsn:'3917',gst:18,rate:3850,unit:'roll',stock:212},
+ {name:'Brass nozzle set (6 pc)',hsn:'7419',gst:18,rate:505,unit:'set',stock:640},
+ {name:'Hand sprayer 16 L',hsn:'8424',gst:5,rate:1450,unit:'nos',stock:96},
+ {name:'PVC ball valve 50 mm',hsn:'8481',gst:18,rate:312.5,unit:'nos',stock:1180},
+ {name:'Steel pickaxe 2.5 kg',hsn:'8201',gst:5,rate:640,unit:'nos',stock:150},
+ {name:'HDPE pipe coil 32 mm',hsn:'3917',gst:18,rate:2500,unit:'coil',stock:58},
+ {name:'Monoblock pump 1 HP',hsn:'8413',gst:18,rate:8900,unit:'nos',stock:22}];
+
+/* Balance sheet tree. Totals are summed, never typed. */
+const L=(name,amt,extra)=>Object.assign({name,amt},extra||{});
+const BS=[
+ {name:'Equity and liabilities',side:true,children:[
+  {name:"Partners' capital",children:[L('Ananya Kulkarni, capital',1500000),L('Rohan Deshpande, capital',1000000)]},
+  {name:'Loans (liability)',children:[{name:'Secured loans',children:[L('Sahyadri Co-op Bank term loan',840000)]}]},
+  {name:'Current liabilities',children:[
+    {name:'Sundry creditors',children:[L('Kaveri Packaging Pvt Ltd',214300),L('Nilgiri Steel Traders',318150),L('Vardhaman Logistics',150000)]},
+    {name:'Duties and taxes',children:[L('CGST payable',41227),L('SGST payable',41227),L('IGST payable',18540),L('TDS payable',12500)]},
+    {name:'Provisions',children:[L('Audit fee payable',45000),L('Salary payable',286000)]}]},
+  {name:'Profit and loss account',children:[L('Profit, 1 Apr to 20 Nov 2026',876526)]}]},
+ {name:'Assets',side:true,children:[
+  {name:'Fixed assets',children:[L('Plant and machinery',1840000),L('Furniture and fixtures',235000),L('Computers',162500)]},
+  {name:'Current assets',children:[
+    {name:'Closing stock',children:[L('Stock in hand (FIFO)',986420)]},
+    {name:'Sundry debtors',children:[L('Shree Ganesh Traders',342180,{led:'sgt'}),L('Mehta Agro Industries',285600,{led:'mai'}),L('Lakshmi Farm Supplies',196250,{led:'lfs'}),L('Patil Hardware Stores',88420,{led:'phs'})]},
+    {name:'Cash-in-hand',children:[L('Cash',48215.5)]},
+    {name:'Bank accounts',children:[L('HDFC Bank A/c',762384.5,{led:'hdfc'}),L('Sahyadri Co-op Bank current A/c',214000)]},
+    {name:'Loans and advances',children:[L('Rent deposit, Sharma Properties',150000),L('TDS receivable',32500)]}]}]}];
+
+const VCH={
+ 'Sales/0412':{type:'Sales',no:'2026-27/0412',date:'14-11-2026',party:'Shree Ganesh Traders',items:[[0,25],[1,67]],narr:'Against PO SGT/PO/1123'},
+ 'Sales/0398':{type:'Sales',no:'2026-27/0398',date:'12-10-2026',party:'Shree Ganesh Traders',dr:[['Shree Ganesh Traders',148680]],cr:[['Sales, GST 18%',126000],['CGST output',11340],['SGST output',11340]]},
+ 'Sales/0401':{type:'Sales',no:'2026-27/0401',date:'02-11-2026',party:'Mehta Agro Industries',dr:[['Mehta Agro Industries',285600]],cr:[['Sales, interstate 18%',242033.9],['IGST output',43566.1]]},
+ 'Sales/0405':{type:'Sales',no:'2026-27/0405',date:'06-11-2026',party:'Lakshmi Farm Supplies',dr:[['Lakshmi Farm Supplies',100000]],cr:[['Sales, interstate 5%',95238.1],['IGST output',4761.9]]},
+ 'Receipt/0211':{type:'Receipt',no:'2026-27/0211',date:'28-10-2026',party:'Shree Ganesh Traders',dr:[['HDFC Bank A/c',80000]],cr:[['Shree Ganesh Traders',80000]],narr:'NEFT, against Sales/0398'},
+ 'Receipt/0219':{type:'Receipt',no:'2026-27/0219',date:'20-11-2026',party:'Kisan Seva Kendra',dr:[['HDFC Bank A/c',147384.5]],cr:[['Kisan Seva Kendra',147384.5]],narr:'NEFT, full settlement'},
+ 'Payment/0315':{type:'Payment',no:'2026-27/0315',date:'05-11-2026',party:'Rent',dr:[['Rent',25000]],cr:[['HDFC Bank A/c',25000]],narr:'Office rent, November 2026, Sharma Properties'},
+ 'Payment/0318':{type:'Payment',no:'2026-27/0318',date:'20-11-2026',party:'Kaveri Packaging Pvt Ltd',dr:[['Kaveri Packaging Pvt Ltd',50000]],cr:[['HDFC Bank A/c',50000]],narr:'Cheque 004512, on account'},
+ 'Purchase/0144':{type:'Purchase',no:'2026-27/0144',date:'20-11-2026',party:'Nilgiri Steel Traders',dr:[['Purchase, interstate 18%',100000],['IGST input',18000]],cr:[['Nilgiri Steel Traders',118000]],narr:'Bill NST/1145'},
+ 'Journal/0032':{type:'Journal',no:'2026-27/0032',date:'20-11-2026',party:'Depreciation',dr:[['Depreciation',15333]],cr:[['Plant and machinery',15333]],narr:'Monthly depreciation, November'}};
+/* ledger postings: [date, vch key, dr, cr] */
+const LEDGER={
+ sgt:{name:'Shree Ganesh Traders',open:120000,rows:[['12-10-2026','Sales/0398',148680,0],['28-10-2026','Receipt/0211',0,80000],['14-11-2026','Sales/0412',153500,0]]},
+ mai:{name:'Mehta Agro Industries',open:0,rows:[['02-11-2026','Sales/0401',285600,0]]},
+ lfs:{name:'Lakshmi Farm Supplies',open:96250,rows:[['06-11-2026','Sales/0405',100000,0]]},
+ phs:{name:'Patil Hardware Stores',open:88420,rows:[]},
+ hdfc:{name:'HDFC Bank A/c',open:610000,rows:[['28-10-2026','Receipt/0211',80000,0],['05-11-2026','Payment/0315',0,25000],['20-11-2026','Payment/0318',0,50000],['20-11-2026','Receipt/0219',147384.5,0]]}};
+const DAYBOOK=['Receipt/0219','Payment/0318','Purchase/0144','Journal/0032'];
+
+/* ================= helpers ================= */
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const NF=new Intl.NumberFormat('en-IN',{minimumFractionDigits:2,maximumFractionDigits:2});
+const inr=n=>NF.format(n);
+const r2=n=>Math.round((n+Number.EPSILON)*100)/100;
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function words(n){ // Indian system: crore, lakh, thousand
+  const a=['','one','two','three','four','five','six','seven','eight','nine','ten','eleven','twelve','thirteen','fourteen','fifteen','sixteen','seventeen','eighteen','nineteen'];
+  const b=['','','twenty','thirty','forty','fifty','sixty','seventy','eighty','ninety'];
+  const two=x=>x<20?a[x]:b[Math.floor(x/10)]+(x%10?'-'+a[x%10]:'');
+  const three=x=>(x>=100?a[Math.floor(x/100)]+' hundred'+(x%100?' ':''):'')+(x%100?two(x%100):'');
+  let r=Math.floor(n),p=Math.round((n-r)*100),out=[];
+  const cr=Math.floor(r/1e7);r%=1e7;const lk=Math.floor(r/1e5);r%=1e5;const th=Math.floor(r/1e3);r%=1e3;
+  if(cr)out.push(three(cr)+' crore');if(lk)out.push(two(lk)+' lakh');if(th)out.push(two(th)+' thousand');if(r)out.push(three(r));
+  let s='Rupees '+(out.join(' ')||'zero');if(p)s+=' and '+two(p)+' paise';return s+' only';
+}
+const sum=node=>node.children?node.children.reduce((s,c)=>s+sum(c),0):node.amt;
+function toast(msg){const t=$('#toast');t.textContent=msg;t.classList.add('on');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('on'),2600)}
+const isTyping=()=>{const e=document.activeElement;return e&&(e.tagName==='INPUT'||e.tagName==='TEXTAREA')};
+
+/* ================= tax engine (mock of the Rust engine) ================= */
+function computeInvoice(lines,posState){
+  const inter=posState!==CO_STATE;
+  const byRate={};let taxable=0;
+  lines.forEach(l=>{const it=ITEMS[l.item];if(it==null||!(l.qty>0))return;const v=r2(l.qty*l.rate);taxable+=v;
+    const g=byRate[it.gst]||(byRate[it.gst]={rate:it.gst,taxable:0});g.taxable=r2(g.taxable+v)});
+  let cgst=0,sgst=0,igst=0;const rows=Object.values(byRate).sort((x,y)=>x.rate-y.rate).map(g=>{
+    if(inter){g.igst=r2(g.taxable*g.rate/100);igst+=g.igst}else{g.cgst=r2(g.taxable*g.rate/200);g.sgst=g.cgst;cgst+=g.cgst;sgst+=g.sgst}return g});
+  taxable=r2(taxable);cgst=r2(cgst);sgst=r2(sgst);igst=r2(igst);
+  const gross=r2(taxable+cgst+sgst+igst);const total=Math.round(gross);const ro=r2(total-gross);
+  return {inter,rows,taxable,cgst,sgst,igst,ro,total};
+}
+
+/* ================= navigation ================= */
+const SCREENS={home:'s-home',sales:'s-sales',payment:'s-payment',bs:'s-report',daybook:'s-report',gst:'s-gst',masters:'s-masters'};
+let cur='home';
+function go(name,opt){
+  opt=opt||{};
+  if(name==='palette')return openPalette();
+  if(name.startsWith('ai-')){openAI(name.slice(3));return}
+  if(name==='gst-ims'){name='gst';opt.tab='g2'}
+  const id=SCREENS[name];if(!id)return;
+  $$('.screen').forEach(s=>s.classList.toggle('on',s.id===id));
+  cur=name;
+  $$('nav.side button').forEach(b=>{const m=b.dataset.go===name&&(!b.dataset.vt||b.dataset.vt===pType);b.toggleAttribute('aria-current',false);if(m)b.setAttribute('aria-current','page')});
+  if(name==='sales'){setTimeout(()=>focusFirstEmpty(),0)}
+  if(name==='payment'){setPType(opt.vt||pType);setTimeout(()=>$('#plines input').focus(),0)}
+  if(name==='bs'){rep.kind='bs';rep.path=[];renderReport()}
+  if(name==='daybook'){rep.kind='db';rep.path=[];renderReport()}
+  if(name==='gst'){gstTab(opt.tab||gTab)}
+  renderKeys();$('#stage').scrollTop=0;
+}
+document.addEventListener('click',e=>{const b=e.target.closest('[data-go]');if(!b)return;go(b.dataset.go,{vt:b.dataset.vt})});
+
+/* ================= KPIs ================= */
+function findNode(name,nodes=BS){for(const n of nodes){if(n.name===name)return n;if(n.children){const f=findNode(name,n.children);if(f)return f}}return null}
+function renderKPIs(){
+  const cash=sum(findNode('Cash-in-hand'))+sum(findNode('Bank accounts'));
+  const rec=sum(findNode('Sundry debtors')),pay=sum(findNode('Sundry creditors'));
+  const gst=['CGST payable','SGST payable','IGST payable'].reduce((s,n)=>s+findNode(n).amt,0);
+  const k=[['Cash and bank',cash,'2 bank accounts, 1 cash','bs','Cash-in-hand'],['Receivables',rec,'4 parties, oldest 38 days','bs','Sundry debtors'],['Payables',pay,'3 suppliers, 1 bill overdue','bs','Sundry creditors'],['GST payable, November',gst,'After ITC from accepted 2B','gst','']];
+  $('#kpis').innerHTML=k.map(([l,v,f,g,n])=>`<button class="kpi" data-kgo="${g}" data-node="${esc(n)}"><div class="lbl">${l}<span class="badge eng" title="Computed by the engine from posted vouchers">engine</span></div><div class="val"><span class="r">₹</span>${inr(v)}</div><div class="foot">${f}</div></button>`).join('');
+  $$('.kpi').forEach(b=>b.onclick=()=>{if(b.dataset.kgo==='gst'){go('gst',{tab:'g3'});return}go('bs');const n=b.dataset.node;const path=pathTo(n);if(path){rep.path=path;renderReport()}});
+}
+function pathTo(name,nodes=BS,acc=[]){for(const n of nodes){const p=[...acc,n];if(n.name===name)return p.filter(x=>!x.side);if(n.children){const f=pathTo(name,n.children,p);if(f)return f}}return null}
+
+/* ================= type-ahead ================= */
+const ta=$('#ta');let taState=null;
+function sources(kind){
+  if(kind==='party')return PARTIES.map((p,i)=>({v:p.name,s:p.gstin?p.city+'  '+p.gstin:p.city+'  unregistered',i}));
+  if(kind==='item')return [{v:'End of list',s:'go to narration',end:true}].concat(ITEMS.map((t,i)=>({v:t.name,s:`HSN ${t.hsn}  ${t.gst}%  stock ${t.stock} ${t.unit}`,i})));
+  if(kind==='state')return Object.entries(STATES).map(([c,n])=>({v:c+' '+n,s:c===CO_STATE?'home state':'interstate',i:c}));
+  if(kind==='bank')return [{v:'HDFC Bank A/c',s:'₹'+inr(LEDGER.hdfc.open+LEDGER.hdfc.rows.reduce((s,r)=>s+r[2]-r[3],0))+' Dr'},{v:'Sahyadri Co-op Bank current A/c',s:'₹'+inr(214000)+' Dr'},{v:'Cash',s:'₹'+inr(48215.5)+' Dr'}];
+  if(kind==='ledger')return ['Rent','Electricity charges','Bank charges','Repairs and maintenance','Freight outward','Salary payable','Kaveri Packaging Pvt Ltd','Nilgiri Steel Traders','Vardhaman Logistics','Shree Ganesh Traders','Mehta Agro Industries','Lakshmi Farm Supplies','Patil Hardware Stores','Kisan Seva Kendra','TDS payable'].map(v=>({v,s:/Traders|Industries|Supplies|Stores|Kendra/.test(v)?'Sundry debtors':/Pvt|Logistics|Steel/.test(v)?'Sundry creditors':/payable/.test(v)?'Current liabilities':'Indirect expenses'}));
+  return [];
+}
+function hl(v,q){if(!q)return esc(v);const i=v.toLowerCase().indexOf(q.toLowerCase());return i<0?esc(v):esc(v.slice(0,i))+'<mark>'+esc(v.slice(i,i+q.length))+'</mark>'+esc(v.slice(i+q.length))}
+function taOpen(inp){
+  const kind=inp.dataset.ta;const q=inp.value.trim();
+  let list=sources(kind);const exact=list.find(o=>o.v===q);
+  const fl=exact?list:list.filter(o=>o.end||o.v.toLowerCase().includes(q.toLowerCase())||(o.s||'').toLowerCase().includes(q.toLowerCase()));
+  taState={inp,kind,list:fl,hi:Math.max(0,exact?fl.indexOf(exact):(fl.length>1&&fl[0].end&&q?1:0))};
+  const cap={party:'List of parties',item:'List of stock items',state:'Place of supply',bank:'Cash and bank accounts',ledger:'List of ledgers'}[kind];
+  ta.innerHTML=`<div class="cap"><span>${cap}</span><span>${fl.filter(o=>!o.end).length} shown</span></div>`+(fl.length?fl.map((o,j)=>`<div class="opt${j===taState.hi?' hi':''}" data-j="${j}"><span>${hl(o.v,q)}</span><span class="s">${esc(o.s||'')}</span></div>`).join(''):`<div class="opt" style="cursor:default"><span>No master named "${esc(q)}"</span><span class="s">Alt+C creates one</span></div>`);
+  const r=inp.getBoundingClientRect();ta.style.left=Math.min(r.left,innerWidth-340)+'px';ta.style.top=(r.bottom+4)+'px';ta.style.minWidth=Math.max(320,r.width)+'px';
+  ta.classList.add('open');
+  const h=ta.querySelector('.hi');if(h)h.scrollIntoView({block:'nearest'});
+}
+function taClose(){ta.classList.remove('open');taState=null}
+ta.addEventListener('mousedown',e=>{const o=e.target.closest('.opt[data-j]');if(!o||!taState)return;e.preventDefault();taState.hi=+o.dataset.j;taPick(true)});
+function taPick(advance){
+  const {inp,list,hi,kind}=taState;const o=list[hi];if(!o){return false}
+  taClose();
+  if(o.end){inp.value='';onPicked(inp,kind,o);return true}
+  inp.value=o.v;onPicked(inp,kind,o);
+  if(advance)advanceFrom(inp);return true;
+}
+document.addEventListener('focusin',e=>{if(e.target.dataset&&e.target.dataset.ta)taOpen(e.target);else if(!e.target.closest||!e.target.closest('#ta'))taClose()});
+document.addEventListener('input',e=>{if(e.target.dataset&&e.target.dataset.ta)taOpen(e.target)});
+
+/* ================= sales voucher ================= */
+const sv={party:0,pos:'27',lines:[{item:0,qty:25,rate:3850},{item:1,qty:67,rate:505},{item:2,qty:40,rate:1450}]};
+function buildLines(){
+  const tb=$('#lines tbody');tb.innerHTML='';
+  sv.lines.forEach((l,i)=>tb.appendChild(lineRow(l,i)));
+  sv.lines.push({item:null,qty:0,rate:0});tb.appendChild(lineRow(sv.lines[sv.lines.length-1],sv.lines.length-1));
+}
+function lineRow(l,i){
+  const tr=document.createElement('tr');const it=l.item!=null?ITEMS[l.item]:null;tr.dataset.i=i;
+  tr.innerHTML=`<td class="sn">${i+1}</td><td><input class="flow li-item" data-ta="item" autocomplete="off" value="${it?esc(it.name):''}" aria-label="Item ${i+1}"></td>
+   <td class="meta li-hsn">${it?it.hsn:''}</td><td class="meta num li-gst">${it?it.gst+'%':''}</td>
+   <td><input class="flow num li-qty" inputmode="decimal" value="${l.qty||''}" aria-label="Quantity ${i+1}"></td>
+   <td><input class="flow num li-rate" inputmode="decimal" value="${l.rate?inr(l.rate):''}" aria-label="Rate ${i+1}"></td>
+   <td class="num li-amt"></td>`;
+  tr.querySelector('.li-qty').addEventListener('input',e=>{l.qty=parseFloat(e.target.value.replace(/,/g,''))||0;recalc()});
+  tr.querySelector('.li-rate').addEventListener('input',e=>{l.rate=parseFloat(e.target.value.replace(/,/g,''))||0;recalc()});
+  tr.querySelector('.li-item').addEventListener('input',e=>{if(!e.target.value){l.item=null;recalc()}});
+  return tr;
+}
+function onPicked(inp,kind,o){
+  if(kind==='party'){sv.party=o.i;const p=PARTIES[o.i];sv.pos=p.st;$('#v-pos').value=p.st+' '+STATES[p.st];partyHint();recalc()}
+  if(kind==='state'){sv.pos=o.i;recalc()}
+  if(kind==='item'){const tr=inp.closest('tr');const l=sv.lines[+tr.dataset.i];
+    if(o.end){$('#v-narr').focus();return}
+    const it=ITEMS[o.i];l.item=o.i;if(!l.rate)l.rate=it.rate;tr.querySelector('.li-hsn').textContent=it.hsn;tr.querySelector('.li-gst').textContent=it.gst+'%';
+    tr.querySelector('.li-rate').value=inr(l.rate);
+    if(+tr.dataset.i===sv.lines.length-1){sv.lines.push({item:null,qty:0,rate:0});$('#lines tbody').appendChild(lineRow(sv.lines[sv.lines.length-1],sv.lines.length-1))}
+    recalc()}
+  if(kind==='bank'||kind==='ledger')precalc();
+}
+function partyHint(){const p=PARTIES[sv.party];const bal=p.name==='Shree Ganesh Traders'?'Balance ₹'+inr(342180)+' Dr, credit limit ₹5,00,000.00':(p.gstin?'GSTIN '+p.gstin:'Unregistered, B2C');$('#v-party-hint').innerHTML='<b>'+esc(bal)+'</b>'}
+function recalc(){
+  const res=computeInvoice(sv.lines,sv.pos);
+  $$('#lines tbody tr').forEach(tr=>{const l=sv.lines[+tr.dataset.i];tr.querySelector('.li-amt').textContent=l.item!=null&&l.qty>0?inr(r2(l.qty*l.rate)):''});
+  $('#v-pos-hint').innerHTML=res.inter?'<b>Interstate: IGST</b>':'<b>Intrastate: CGST and SGST</b>';
+  const pn=`<div class="pos-note ${res.inter?'inter':''}">${res.inter?`Party in ${STATES[sv.pos]}, you are in Maharashtra. IGST applies.`:'Party and you are both in Maharashtra. Tax splits into CGST and SGST.'}</div>`;
+  const t=(lbl,v,cls,tag)=>`<div class="taxrow ${cls||''}"><span>${lbl}${tag?`<span class="tag">${tag}</span>`:''}</span><span>${inr(v)}</span></div>`;
+  $('#taxbox').innerHTML=pn+t('Taxable value',res.taxable)+(res.inter?t('IGST',res.igst,'sub'):t('CGST',res.cgst,'sub')+t('SGST',res.sgst,'sub'))+t('Round off',res.ro,'sub')+
+   `<div class="taxrow total"><span>Invoice total</span><span>₹ ${inr(res.total)}</span></div><div class="words">${words(res.total)}</div><div class="words"><span class="badge eng">engine</span> Recomputed on every keystroke from item masters.</div>`;
+  $('#rateTbl').innerHTML=`<tr><th>GST rate</th><th>Taxable</th>${res.inter?'<th>IGST</th>':'<th>CGST</th><th>SGST</th>'}</tr>`+res.rows.map(g=>`<tr><td>${g.rate}%</td><td class="num">${inr(g.taxable)}</td>${res.inter?`<td class="num">${inr(g.igst)}</td>`:`<td class="num">${inr(g.cgst)}</td><td class="num">${inr(g.sgst)}</td>`}</tr>`).join('');
+  $('#saveSum').textContent=`${PARTIES[sv.party].name}, ₹${inr(res.total)}`;
+  return res;
+}
+function flowList(){return $$('#s-sales .flow')}
+function advanceFrom(inp){
+  if(inp.closest('#s-payment')){return padvance(inp)}
+  const f=flowList();const i=f.indexOf(inp);
+  if(inp.id==='v-narr'){askSave();return}
+  if(inp.classList.contains('li-item')&&!inp.value.trim()){$('#v-narr').focus();return}
+  if(i>=0&&i<f.length-1){f[i+1].focus();f[i+1].select&&f[i+1].select()}
+}
+function focusFirstEmpty(){const e=$$('#lines .li-item').find(x=>!x.value);(e||$('#v-party')).focus()}
+function askSave(){$('#saveBar').classList.add('on');$('#saveYes').focus();renderKeys('save')}
+function doSave(){const res=recalc();$('#saveBar').classList.remove('on');toast(`Saved Sales 2026-27/0418, ${PARTIES[sv.party].name}, ₹${inr(res.total)}`);
+  $('#v-no').value='2026-27/0419';sv.lines=[];buildLines();$('#v-narr').value='';recalc();$('#v-party').focus()}
+$('#saveYes').onclick=doSave;$('#saveNo').onclick=()=>{$('#saveBar').classList.remove('on');$('#v-narr').focus()};
+
+document.addEventListener('focusout',e=>{const t=e.target;if(!t.classList||!(t.classList.contains('li-rate')||t.classList.contains('pl-amt')))return;const v=parseFloat(t.value.replace(/,/g,''));if(v>0)t.value=inr(v)});
+document.addEventListener('focusin',e=>{const t=e.target;if(t.classList&&(t.classList.contains('li-rate')||t.classList.contains('pl-amt'))&&t.value)t.value=t.value.replace(/,/g,'')});
+/* ================= payment / receipt ================= */
+let pType='payment';const pv={lines:[{l:'Rent',ref:'Nov 2026',amt:25000}]};
+function setPType(t){pType=t;const P=t==='payment';$('#p-title').textContent=P?'Payment':'Receipt';$('#p-acct-l').textContent=P?'Paid from':'Received into';
+  $('#p-col').textContent=P?'Paid to (ledger)':'Received from (ledger)';$('#p-no').value=P?'2026-27/0319':'2026-27/0220';
+  $('#vtP').setAttribute('aria-pressed',P);$('#vtR').setAttribute('aria-pressed',!P);
+  pv.lines=P?[{l:'Rent',ref:'Nov 2026',amt:25000}]:[{l:'Mehta Agro Industries',ref:'Sales/0401',amt:120000}];buildP();
+  $$('nav.side button').forEach(b=>{b.removeAttribute('aria-current');if(b.dataset.go==='payment'&&b.dataset.vt===t)b.setAttribute('aria-current','page')});}
+$('#vtP').onclick=()=>setPType('payment');$('#vtR').onclick=()=>setPType('receipt');
+function buildP(){const tb=$('#plines tbody');tb.innerHTML='';pv.lines.forEach((l,i)=>tb.appendChild(pRow(l,i)));pv.lines.push({l:'',ref:'',amt:0});tb.appendChild(pRow(pv.lines[pv.lines.length-1],pv.lines.length-1));precalc()}
+function pRow(l,i){const tr=document.createElement('tr');tr.dataset.i=i;
+  tr.innerHTML=`<td class="sn">${i+1}</td><td><input class="pflow pl-l" data-ta="ledger" autocomplete="off" value="${esc(l.l)}" aria-label="Ledger ${i+1}"></td><td><input class="pflow pl-ref" value="${esc(l.ref)}" aria-label="Reference ${i+1}"></td><td><input class="pflow num pl-amt" value="${l.amt?inr(l.amt):''}" aria-label="Amount ${i+1}"></td>`;
+  tr.querySelector('.pl-l').addEventListener('change',e=>{l.l=e.target.value});
+  tr.querySelector('.pl-ref').addEventListener('input',e=>{l.ref=e.target.value});
+  tr.querySelector('.pl-amt').addEventListener('input',e=>{l.amt=parseFloat(e.target.value.replace(/,/g,''))||0;precalc()});return tr}
+function precalc(){
+  $$('#plines .pl-l').forEach((x,i)=>{pv.lines[i].l=x.value});
+  const tot=r2(pv.lines.reduce((s,l)=>s+(l.l&&l.amt>0?l.amt:0),0));const acct=$('#p-acct').value;
+  const bal=acct==='HDFC Bank A/c'?762384.5:acct==='Cash'?48215.5:214000;const after=pType==='payment'?bal-tot:bal+tot;
+  $('#p-acct-hint').innerHTML=`<b>Balance ₹${inr(bal)} Dr</b>`;
+  $('#ptot').innerHTML=`<div class="taxrow sub"><span>${esc(acct)} now</span><span>${inr(bal)}</span></div><div class="taxrow total"><span>Total</span><span>₹ ${inr(tot)}</span></div><div class="taxrow sub"><span>Balance after saving</span><span>${inr(after)}${after<0?' <span class="diff">Cr, overdrawn</span>':' Dr'}</span></div><div class="words">${words(tot)}</div>`;
+  $('#psaveT').textContent=`Save ${pType} ${$('#p-no').value}?`;$('#psaveSum').textContent=`₹${inr(tot)} ${pType==='payment'?'from':'into'} ${acct}`;return tot}
+function padvance(inp){const f=$$('#s-payment .pflow');const i=f.indexOf(inp);
+  if(inp.id==='p-narr'){$('#psaveBar').classList.add('on');$('#psaveYes').focus();renderKeys('save');return}
+  if(inp.classList.contains('pl-l')&&!inp.value.trim()){$('#p-narr').focus();return}
+  if(inp.classList.contains('pl-amt')){const tr=inp.closest('tr');if(+tr.dataset.i===pv.lines.length-1&&pv.lines[tr.dataset.i].l){pv.lines.push({l:'',ref:'',amt:0});$('#plines tbody').appendChild(pRow(pv.lines[pv.lines.length-1],pv.lines.length-1))}}
+  const g=$$('#s-payment .pflow');const j=g.indexOf(inp);if(j<g.length-1){g[j+1].focus();g[j+1].select&&g[j+1].select()}}
+$('#psaveYes').onclick=()=>{const t=precalc();$('#psaveBar').classList.remove('on');toast(`Saved ${pType==='payment'?'Payment':'Receipt'} ${$('#p-no').value}, ₹${inr(t)}`);setPType(pType)};
+$('#psaveNo').onclick=()=>{$('#psaveBar').classList.remove('on');$('#p-narr').focus()};
+
+/* ================= reports ================= */
+const rep={kind:'bs',path:[],detailed:false,period:'y'};
+function renderReport(){
+  const isBS=rep.kind==='bs';$('#rBS').setAttribute('aria-pressed',isBS);$('#rDB').setAttribute('aria-pressed',!isBS);
+  $('#r-title').textContent=isBS?'Balance sheet':'Day book';
+  const per={m:'1 to 20 Nov 2026',q:'1 Oct to 20 Nov 2026',y:'1 Apr to 20 Nov 2026'}[rep.period];
+  $('#r-sub').textContent=isBS?'As at 20 Nov 2026':'Friday, 20 Nov 2026';
+  $('#periodSeg').style.display=isBS?'':'none';
+  const root={name:isBS?'Balance sheet':'Day book',root:true};
+  const crumbs=[root,...rep.path];
+  $('#crumbs').innerHTML=crumbs.map((c,i)=>i<crumbs.length-1?`<button data-c="${i}">${esc(c.name)}</button><span>/</span>`:`<span class="cur">${esc(c.name)}</span>`).join('')+(crumbs.length>1?`<span class="muted" style="margin-left:8px"><kbd>Esc</kbd> up one level</span>`:'');
+  $$('#crumbs button').forEach(b=>b.onclick=()=>{rep.path=rep.path.slice(0,+b.dataset.c);renderReport()});
+  const top=rep.path[rep.path.length-1];let html='';
+  $('#repNote').textContent='';
+  if(top&&top.vch){html=voucherDetail(top.vch)}
+  else if(top&&(top.led||top.amt!=null)&&!top.children){html=ledgerView(top)}
+  else if(top){html=groupView(top)}
+  else if(isBS){html=bsView();$('#repNote').textContent=rep.period==='y'?'':'Sample data holds FY-to-date balances only. In the product, figures recompute for '+per+'.'}
+  else html=dayBookView();
+  $('#repBody').innerHTML=html;
+  $$('#repBody tr.go').forEach(tr=>{tr.onclick=()=>drill(tr);});
+  const f=$('#repBody tr.go');if(f&&cur!=='home')f.focus({preventScroll:true});
+}
+function row(n,lvl,ref){return `<tr class="go l${lvl}" tabindex="0" data-ref="${ref}"><td>${esc(n.name)}<span class="drill">Enter to open</span></td><td class="num">${inr(sum(n))}</td></tr>`}
+let REFS=[];
+function reg(o){REFS.push(o);return REFS.length-1}
+function bsView(){REFS=[];let h='<table class="rep"><thead><tr><th>Particulars</th><th class="num">Amount (₹)</th></tr></thead><tbody>';
+  const tots=[];
+  BS.forEach(side=>{h+=`<tr class="sect"><td>${side.name}</td><td></td></tr>`;
+    side.children.forEach(g=>{h+=row(g,0,reg(g));if(rep.detailed)(g.children||[]).forEach(c=>{h+=row(c,1,reg(c));if(c.children&&c.children.some(x=>x.children))c.children.forEach(cc=>{h+=row(cc,2,reg(cc))})})});
+    const t=sum(side);tots.push(t);h+=`<tr class="tot"><td>Total ${side.name.toLowerCase()}</td><td class="num">${inr(t)}</td></tr>`});
+  h+='</tbody></table>';
+  const d=r2(tots[0]-tots[1]);
+  h+=d===0?'<p class="balanced">Both sides agree to the paisa. <span class="badge eng">engine</span></p>':`<p class="diff">Difference in balance sheet: ₹${inr(Math.abs(d))}. Check opening balances.</p>`;
+  return h}
+function groupView(g){REFS=[];let h='<table class="rep"><thead><tr><th>Particulars</th><th class="num">Amount (₹)</th></tr></thead><tbody>';
+  g.children.forEach(c=>{h+=row(c,0,reg(c));if(c.children&&rep.detailed)c.children.forEach(cc=>h+=row(cc,1,reg(cc)))});
+  return h+`<tr class="tot"><td>Total ${esc(g.name.toLowerCase())}</td><td class="num">${inr(sum(g))}</td></tr></tbody></table>`}
+function ledgerView(n){REFS=[];const lg=n.led&&LEDGER[n.led];
+  if(!lg){$('#repNote').textContent='Sample data carries only the closing balance for this ledger.';return `<table class="rep"><thead><tr><th>Date</th><th>Particulars</th><th class="num">Debit</th><th class="num">Credit</th></tr></thead><tbody><tr><td>01-04-2026</td><td>Opening balance</td><td class="num">${inr(n.amt)}</td><td></td></tr><tr class="tot"><td></td><td>Closing balance</td><td class="num">${inr(n.amt)}</td><td></td></tr></tbody></table>`}
+  let bal=lg.open,dr=0,cr=0;let h=`<table class="rep"><thead><tr><th>Date</th><th>Particulars</th><th>Voucher</th><th class="num">Debit</th><th class="num">Credit</th><th class="num">Balance</th></tr></thead><tbody><tr><td>01-04-2026</td><td>Opening balance</td><td></td><td class="num">${lg.open?inr(lg.open):''}</td><td></td><td class="num">${inr(bal)} Dr</td></tr>`;
+  lg.rows.forEach(([d,k,a,b])=>{bal=r2(bal+a-b);dr+=a;cr+=b;const v=VCH[k];const other=v.items?(a?'Sales, GST 18%':v.party):((a?v.cr:v.dr).map(x=>x[0]).find(x=>x!==lg.name)||'');
+    h+=`<tr class="go" tabindex="0" data-ref="${reg({name:k.replace('/',' '),vch:k})}"><td>${d}</td><td>${esc(other)}<span class="drill">Enter to open voucher</span></td><td>${k.replace('/',' ')}</td><td class="num">${a?inr(a):''}</td><td class="num">${b?inr(b):''}</td><td class="num">${inr(bal)} Dr</td></tr>`});
+  const ok=r2(bal)===r2(n.amt);
+  return h+`<tr class="tot"><td></td><td>Closing balance</td><td></td><td class="num">${inr(dr+lg.open)}</td><td class="num">${inr(cr)}</td><td class="num">${inr(bal)} Dr</td></tr></tbody></table>`+(ok?'':'<p class="diff">Ledger does not agree with group total.</p>')}
+function dayBookView(){REFS=[];let h='<table class="rep"><thead><tr><th>Date</th><th>Particulars</th><th>Voucher type</th><th>No.</th><th class="num">Debit</th><th class="num">Credit</th></tr></thead><tbody>';
+  DAYBOOK.forEach(k=>{const v=VCH[k];const amt=v.dr.reduce((s,x)=>s+x[1],0);h+=`<tr class="go" tabindex="0" data-ref="${reg({name:k.replace('/',' '),vch:k})}"><td>${v.date}</td><td>${esc(v.party)}<span class="drill">Enter to open</span></td><td>${v.type}</td><td>${v.no}</td><td class="num">${v.type==='Payment'||v.type==='Journal'||v.type==='Purchase'?inr(amt):''}</td><td class="num">${v.type==='Receipt'?inr(amt):''}</td></tr>`});
+  return h+'</tbody></table>'}
+function voucherDetail(k){const v=VCH[k];let lines='';
+  if(v.items){const ls=v.items.map(([i,q])=>({item:i,qty:q,rate:ITEMS[i].rate}));const p=PARTIES.find(x=>x.name===v.party);const res=computeInvoice(ls,p.st);
+    lines=`<table class="rep"><thead><tr><th>Item</th><th>HSN</th><th class="num">Qty</th><th class="num">Rate</th><th class="num">Taxable value</th></tr></thead><tbody>${ls.map(l=>`<tr><td>${esc(ITEMS[l.item].name)}</td><td>${ITEMS[l.item].hsn}</td><td class="num">${l.qty}</td><td class="num">${inr(l.rate)}</td><td class="num">${inr(l.qty*l.rate)}</td></tr>`).join('')}
+    <tr><td colspan="4">CGST</td><td class="num">${inr(res.cgst)}</td></tr><tr><td colspan="4">SGST</td><td class="num">${inr(res.sgst)}</td></tr><tr><td colspan="4">Round off</td><td class="num">${inr(res.ro)}</td></tr><tr class="tot"><td colspan="4">Invoice total</td><td class="num">${inr(res.total)}</td></tr></tbody></table>`}
+  else{lines=`<table class="rep"><thead><tr><th>Ledger</th><th class="num">Debit</th><th class="num">Credit</th></tr></thead><tbody>${v.dr.map(x=>`<tr><td>Dr ${esc(x[0])}</td><td class="num">${inr(x[1])}</td><td></td></tr>`).join('')}${v.cr.map(x=>`<tr><td style="padding-left:28px">Cr ${esc(x[0])}</td><td></td><td class="num">${inr(x[1])}</td></tr>`).join('')}<tr class="tot"><td>Total</td><td class="num">${inr(v.dr.reduce((s,x)=>s+x[1],0))}</td><td class="num">${inr(v.cr.reduce((s,x)=>s+x[1],0))}</td></tr></tbody></table>`}
+  return `<div class="vdetail"><dl><dt>Voucher</dt><dt>Date</dt><dt>Party</dt><dt>Narration</dt><dd>${v.type} ${v.no}</dd><dd>${v.date}</dd><dd>${esc(v.party)}</dd><dd>${esc(v.narr||'')}</dd></dl>${lines}<p class="muted" style="font-size:12px;margin:10px 0 0">Read-only view. <kbd>Alt+E</kbd> edits, <kbd>Alt+X</kbd> cancels the voucher with a reversal.</p></div>`}
+function drill(tr){const o=REFS[+tr.dataset.ref];if(!o)return;rep.path=[...rep.path,o];renderReport()}
+$('#rBS').onclick=()=>go('bs');$('#rDB').onclick=()=>go('daybook');
+$('#condBtn').onclick=()=>setDetail(false);$('#detBtn').onclick=()=>setDetail(true);
+function setDetail(d){rep.detailed=d;$('#condBtn').setAttribute('aria-pressed',!d);$('#detBtn').setAttribute('aria-pressed',d);renderReport()}
+$$('#periodSeg button').forEach(b=>b.onclick=()=>{rep.period=b.dataset.p;$$('#periodSeg button').forEach(x=>x.setAttribute('aria-pressed',x===b));
+  $('#periodLbl').textContent={m:'1 to 20 Nov 2026',q:'1 Oct to 20 Nov 2026',y:'1 Apr to 20 Nov 2026'}[rep.period];renderReport()});
+
+/* ================= GST ================= */
+let gTab='g2';
+function gstTab(t){gTab=t;$$('#s-gst .tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.tab===t));$$('#s-gst .tabpane').forEach(p=>p.classList.toggle('on',p.id==='t-'+t));
+  if(t==='g1')renderG1();if(t==='g3')renderG3();if(t==='g2'){renderRecon();setTimeout(()=>{const r=$('#recon tr.go');r&&r.focus()},0)}renderKeys()}
+$$('#s-gst .tabs button').forEach(b=>b.onclick=()=>gstTab(b.dataset.tab));
+const G1=[
+ ['B2B invoices (4A)',14,1248300,102600,58270.5,58270.5],
+ ['B2C small (7)',38,184200,0,4605,4605],
+ ['Credit notes, registered (9B)',1,-12000,0,-1080,-1080],
+ ['Exports (6A)',0,0,0,0,0],
+ ['Nil rated and exempt (8)',3,22400,0,0,0]];
+const HSN=[['3917','Plastic tubes and pipes',612,'roll / coil',748200],['7419','Brass articles',1840,'set',312400],['8424','Sprayers',418,'nos',268300],['8481','Valves',1620,'nos',101400],['8201','Hand tools',290,'nos',22200]];
+function renderG1(){
+  $('#t-g1').innerHTML=`<div class="due"><div class="box"><h3>Status</h3><p style="margin:4px 0 0">Ready to file. 0 errors, 1 warning (B2C invoice above ₹1 lakh missing customer state).</p></div><div class="box"><h3>Due date</h3><p style="margin:4px 0 0">11 Dec 2026, 21 days left</p></div><div class="box"><h3>E-invoices</h3><p style="margin:4px 0 0">14 of 14 B2B invoices have IRN</p></div></div>
+  <table class="rep"><thead><tr><th>Section</th><th class="num">Documents</th><th class="num">Taxable value</th><th class="num">IGST</th><th class="num">CGST</th><th class="num">SGST</th></tr></thead><tbody>${G1.map(r=>`<tr class="go" tabindex="0"><td>${r[0]}</td><td class="num">${r[1]}</td>${r.slice(2).map(x=>`<td class="num">${inr(x)}</td>`).join('')}</tr>`).join('')}
+  <tr class="tot"><td>Total</td><td class="num">${G1.reduce((s,r)=>s+r[1],0)}</td>${[2,3,4,5].map(i=>`<td class="num">${inr(G1.reduce((s,r)=>s+r[i],0))}</td>`).join('')}</tr></tbody></table>
+  <h2 style="margin:18px 0 8px">HSN summary (12), B2B</h2><table class="rep"><thead><tr><th>HSN</th><th>Description</th><th class="num">Quantity</th><th>UQC</th><th class="num">Taxable value</th></tr></thead><tbody>${HSN.map(h=>`<tr><td>${h[0]}</td><td>${h[1]}</td><td class="num">${h[2]}</td><td>${h[3]}</td><td class="num">${inr(h[4])}</td></tr>`).join('')}</tbody></table>
+  <div class="toolbar" style="margin-top:12px"><button class="btn primary">Export JSON for portal <kbd>Ctrl+E</kbd></button><button class="btn">Show invoices with warnings</button></div>`}
+const OTHER_ITC={igst:84060-18000-11880,cgst:20568.5-11160,sgst:20568.5-11160}; // ITC from invoices not listed in the table (all matched, accepted)
+function renderG3(){const out={igst:G1.reduce((s,r)=>s+r[3],0),cgst:G1.reduce((s,r)=>s+r[4],0),sgst:G1.reduce((s,r)=>s+r[5],0)};
+  const itc={igst:OTHER_ITC.igst,cgst:OTHER_ITC.cgst,sgst:OTHER_ITC.sgst};RECON.filter(r=>r.act==='a'&&r.in2b).forEach(r=>{itc.igst+=r.t2[0];itc.cgst+=r.t2[1];itc.sgst+=r.t2[2]});
+  Object.keys(itc).forEach(k=>itc[k]=r2(itc[k]));const net={};Object.keys(out).forEach(k=>net[k]=r2(Math.max(0,out[k]-itc[k])));const nt=r2(net.igst+net.cgst+net.sgst);
+  const pend=RECON.filter(r=>r.act==='p'&&r.in2b).length;
+  const tr=(l,o)=>`<tr><td>${l}</td><td class="num">${inr(o.igst)}</td><td class="num">${inr(o.cgst)}</td><td class="num">${inr(o.sgst)}</td><td class="num">0.00</td></tr>`;
+  $('#t-g3').innerHTML=`<div class="due"><div class="box"><h3>Net tax payable in cash</h3><p style="font-size:22px;font-weight:600;margin:4px 0">₹${inr(nt)}</p><span class="badge eng">engine</span> <span class="muted">from GSTR-1 and accepted IMS actions</span></div>
+   <div class="box"><h3>IMS actions still open</h3><p style="font-size:22px;font-weight:600;margin:4px 0">${pend}</p><button class="btn small" data-go="gst-ims">Review in 2B and IMS</button></div><div class="box"><h3>Due date</h3><p style="margin:4px 0 0">20 Dec 2026</p></div></div>
+   <table class="rep"><thead><tr><th>Table</th><th class="num">IGST</th><th class="num">CGST</th><th class="num">SGST</th><th class="num">Cess</th></tr></thead><tbody>
+   ${tr('3.1(a) Outward taxable supplies, tax',out)}${tr('4(A)(5) ITC available, all other',itc)}<tr class="tot"><td>6.1 Tax payable in cash, after set-off</td><td class="num">${inr(net.igst)}</td><td class="num">${inr(net.cgst)}</td><td class="num">${inr(net.sgst)}</td><td class="num">0.00</td></tr></tbody></table>
+   <p class="muted" style="font-size:12px">Set-off follows the order in section 49 and rule 88A. Change an IMS action and this page recomputes.</p>`}
+const RECON=[
+ {sup:'Kaveri Packaging Pvt Ltd',g:'27AABCK7314R1Z2',inv:'KP/2611/0087',d:'03-11-2026',tb:124000,t1:[0,11160,11160],t2:[0,11160,11160],in2b:true,inb:true,st:'ok',act:'a'},
+ {sup:'Nilgiri Steel Traders',g:'33AAGFN2290L1ZK',inv:'NST/1145',d:'08-11-2026',tb:100000,t1:[18000,0,0],t2:[18000,0,0],in2b:true,inb:true,st:'ok',act:'a'},
+ {sup:'Bharat Seals and Gaskets',g:'24AAKCB9051H1Z4',inv:'BSG/26-27/219',d:'10-11-2026',tb:66000,t1:[11880,0,0],t2:[11880,0,0],in2b:true,inb:true,st:'ok',act:'a'},
+ {sup:'Vardhaman Logistics',g:'27AAJFV6612C1Z9',inv:'VL-3381',d:'01-11-2026',tb:42500,tb2:45200,t1:[0,3825,3825],t2:[0,4068,4068],in2b:true,inb:true,st:'val',act:'p'},
+ {sup:'Omkar Printers',g:'27AAMPO4471D1ZX',inv:'OP-0912',d:'12-11-2026',d2:'21-11-2026',tb:18400,t1:[0,1656,1656],t2:[0,1656,1656],in2b:true,inb:true,st:'date',act:'p'},
+ {sup:'Sahyadri Electricals',g:'27ABUPS3307K1ZQ',inv:'SE/774',d:'15-11-2026',tb:0,tb2:9600,t1:[0,0,0],t2:[0,864,864],in2b:true,inb:false,st:'nobooks',act:'p'},
+ {sup:'Kaveri Packaging Pvt Ltd',g:'27AABCK7314R1Z2',inv:'KP/2611/0102',d:'16-11-2026',tb:0,tb2:31000,t1:[0,0,0],t2:[0,2790,2790],in2b:true,inb:false,st:'dup',act:'r'},
+ {sup:'Shivneri Couriers',g:'27AAQFS1182M1Z0',inv:'SC/11/448',d:'17-11-2026',tb:5200,t1:[0,468,468],t2:null,in2b:false,inb:true,st:'no2b',act:null},
+ {sup:'Annapurna Stationers',g:'27ACZPA6619N1Z3',inv:'AS-2207',d:'18-11-2026',tb:3400,t1:[0,306,306],t2:[0,306,306],in2b:true,inb:true,st:'ok',act:'p'}];
+const STL={ok:['ok','Matched'],val:['warn','Value differs'],date:['warn','Date differs'],nobooks:['bad','Not in books'],dup:['bad','Possible duplicate'],no2b:['info','Not in 2B yet']};
+let reconFilter='all',reconFocus=0;
+function renderRecon(){
+  const cnt=k=>RECON.filter(r=>k==='all'||(k==='pend'?r.act==='p':r.st===k||(k==='mis'&&r.st!=='ok'))).length;
+  $('#reconChips').innerHTML=[['all','All'],['ok','Matched'],['mis','Mismatched'],['pend','Pending action']].map(([k,l])=>`<button class="chip" data-f="${k}" aria-pressed="${reconFilter===k}">${l} ${cnt(k)}</button>`).join('');
+  $$('#reconChips .chip').forEach(c=>c.onclick=()=>{reconFilter=c.dataset.f;renderRecon()});
+  const rows=RECON.map((r,i)=>({r,i})).filter(({r})=>reconFilter==='all'||(reconFilter==='pend'?r.act==='p':reconFilter==='mis'?r.st!=='ok':r.st===reconFilter));
+  const tax=t=>t?inr(t[0]+t[1]+t[2]):'';
+  $('#recon').innerHTML=`<thead><tr><th>Match</th><th>Supplier</th><th>Invoice</th><th class="num">Taxable, books</th><th class="num">Taxable, 2B</th><th class="num">Tax, books</th><th class="num">Tax, 2B</th><th class="num">Difference</th><th>IMS action</th></tr></thead><tbody>`+
+   rows.map(({r,i})=>{const [c,l]=STL[r.st];const tb2=r.in2b?(r.tb2!=null?r.tb2:r.tb):null;const d=r2((r.t2?r.t2[0]+r.t2[1]+r.t2[2]:0)-(r.t1[0]+r.t1[1]+r.t1[2]));
+    return `<tr class="go" tabindex="0" data-i="${i}"><td><span class="st ${c}">${l}</span></td><td>${esc(r.sup)}<br><span class="muted" style="font-size:12px">${r.g}</span></td><td>${r.inv}<br><span class="muted" style="font-size:12px">${r.d}${r.d2?' in 2B: '+r.d2:''}</span></td>
+    <td class="num">${r.inb?inr(r.tb):'<span class="muted">none</span>'}</td><td class="num">${tb2!=null?inr(tb2):'<span class="muted">none</span>'}</td><td class="num">${r.inb?tax(r.t1):''}</td><td class="num">${tax(r.t2)}</td><td class="num ${d?'diff':''}">${d?inr(d):''}</td>
+    <td>${r.in2b?`<span class="ims">${[['a','Accept'],['r','Reject'],['p','Pending']].map(([k,t])=>`<button class="${k}${r.act===k?' on':''}" data-act="${k}" data-i="${i}" tabindex="-1">${t}</button>`).join('')}</span>`:'<span class="muted" style="font-size:12px">Ask supplier to file</span>'}</td></tr>`}).join('')+'</tbody>';
+  $$('#recon .ims button').forEach(b=>b.onclick=e=>{e.stopPropagation();setAct(+b.dataset.i,b.dataset.act)});
+  $$('#recon tr.go').forEach(tr=>{tr.onfocus=()=>reconFocus=+tr.dataset.i;tr.onclick=()=>tr.focus()});
+}
+function setAct(i,a){const r=RECON[i];if(!r.in2b){toast('Not in 2B yet, so there is nothing to act on in IMS');return}r.act=a;renderRecon();const tr=$(`#recon tr[data-i="${i}"]`);tr&&tr.focus();
+  toast(`${r.inv}: marked ${({a:'Accepted',r:'Rejected',p:'Pending'})[a]}. GSTR-3B recomputed.`)}
+
+/* ================= masters ================= */
+function renderMasters(){$('#mParties').innerHTML='<thead><tr><th>Name</th><th>GSTIN</th><th>State</th></tr></thead><tbody>'+PARTIES.map(p=>`<tr><td>${esc(p.name)}</td><td>${p.gstin||'<span class="muted">unregistered</span>'}</td><td>${STATES[p.st]}</td></tr>`).join('')+'</tbody>';
+  $('#mItems').innerHTML='<thead><tr><th>Item</th><th>HSN</th><th class="num">GST</th><th class="num">Rate</th></tr></thead><tbody>'+ITEMS.map(t=>`<tr><td>${esc(t.name)}</td><td>${t.hsn}</td><td class="num">${t.gst}%</td><td class="num">${inr(t.rate)}</td></tr>`).join('')+'</tbody>'}
+
+/* ================= AI panel ================= */
+let aiTab='bill';
+function openAI(tab){$('#ai').classList.add('open');$('#aiBtn').setAttribute('aria-pressed','true');if(tab)aiSel(tab);renderKeys();
+  setTimeout(()=>{if(aiTab==='ask')$('#askIn').focus();else{const b=$('#ai-'+aiTab+' .btn.primary');b&&b.focus()}},200)}
+function closeAI(){$('#ai').classList.remove('open');$('#aiBtn').setAttribute('aria-pressed','false');renderKeys()}
+$('#aiBtn').onclick=()=>$('#ai').classList.contains('open')?closeAI():openAI();$('#aiClose').onclick=closeAI;
+function aiSel(t){aiTab=t;$$('.ai .tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.ai===t));$$('.ai-body .tabpane').forEach(p=>p.classList.toggle('on',p.id==='ai-'+t))}
+$$('.ai .tabs button').forEach(b=>b.onclick=()=>{aiSel(b.dataset.ai);openAI()});
+const ENG='<span class="badge eng" title="Computed by the engine"><svg viewBox="0 0 10 10"><circle cx="5" cy="5" r="4"/></svg>engine</span>';
+const AST='<span class="badge asst" title="Proposed by the assistant"><svg viewBox="0 0 10 10"><path d="M5 0l1.2 3.8L10 5 6.2 6.2 5 10 3.8 6.2 0 5l3.8-1.2z"/></svg>assistant</span>';
+function billInit(){
+  $('#ai-bill').innerHTML=`<div class="bill" aria-label="Photo of a supplier bill">
+   <div class="bt">SHIVAM PIPES &amp; FITTINGS</div><div>Bhosari MIDC, Pune 411026<br>GSTIN 27AAXFS5530B1Z7</div>
+   <div style="display:flex;justify-content:space-between;margin-top:6px"><span>Tax invoice SPF/2026/1187</span><span>18/11/2026</span></div>
+   <table><tr><td>PVC ball valve 50mm (8481)</td><td style="text-align:right">80 x 312.50</td><td style="text-align:right">25,000.00</td></tr>
+   <tr><td>HDPE pipe coil 32mm (3917)</td><td style="text-align:right">10 x 2,500</td><td style="text-align:right">25,000.00</td></tr>
+   <tr><td>CGST 9% + SGST 9%</td><td></td><td style="text-align:right">9,000.00</td></tr>
+   <tr><td><b>Total</b></td><td></td><td style="text-align:right"><b>59,000.00</b></td></tr></table><div class="stamp">RECEIVED</div></div>
+   <div class="toolbar"><button class="btn primary" id="readBill">Read this bill <kbd>Enter</kbd></button><button class="btn">Choose another photo</button></div>
+   <p class="muted" style="font-size:12px;margin:0">Drop a photo or PDF here, or paste with Ctrl+V. The image stays on this computer unless you turn on cloud reading.</p><div id="billOut"></div>`;
+  $('#readBill').onclick=readBill;
+}
+function readBill(){const o=$('#billOut');o.innerHTML='<div class="thinking"><i></i><i></i><i></i> Reading the bill and matching masters</div>';
+  setTimeout(()=>{const ls=[{item:3,qty:80,rate:312.5},{item:5,qty:10,rate:2500}];const res=computeInvoice(ls,'27');const printed=59000;const match=res.total===printed;
+   o.innerHTML=`<div class="prop"><div class="ph"><b>Read from the bill</b>${AST}</div><div class="pb"><table>
+    <tr><td class="muted">Supplier</td><td>Shivam Pipes and Fittings <span class="muted">matched by GSTIN, existing ledger</span></td></tr>
+    <tr><td class="muted">Bill no. and date</td><td>SPF/2026/1187, 18-11-2026 <span class="muted">not booked before</span></td></tr>
+    <tr><td class="muted">Line 1</td><td>PVC ball valve 50 mm, 80 nos at 312.50 <span class="muted">item master, 99%</span></td></tr>
+    <tr><td class="muted">Line 2</td><td>HDPE pipe coil 32 mm, 10 coil at 2,500.00 <span class="muted">item master, 97%</span></td></tr>
+    <tr><td class="muted">Printed total</td><td>59,000.00</td></tr></table></div></div>
+    <div class="prop"><div class="ph"><b>Proposed purchase voucher</b>${ENG}</div><div class="pb"><table>
+    <tr><td>Dr Purchase, GST 18%</td><td class="num">${inr(res.taxable)}</td></tr><tr><td>Dr CGST input</td><td class="num">${inr(res.cgst)}</td></tr><tr><td>Dr SGST input</td><td class="num">${inr(res.sgst)}</td></tr>
+    <tr><td>Cr Shivam Pipes and Fittings</td><td class="num"><b>${inr(res.total)}</b></td></tr>
+    <tr><td colspan="2" class="${match?'ok':'diff'}">${match?'Engine total agrees with the printed total.':'Engine total differs from the printed total by ₹'+inr(Math.abs(res.total-printed))+'. Check the lines before posting.'}</td></tr></table>
+    <p class="why">Intrastate (both in Maharashtra), so CGST and SGST. Stock goes to Main godown. ITC will be checked against GSTR-2B when it arrives.</p></div>
+    <div class="pf"><button class="btn primary" id="billPost">Post purchase <kbd>Ctrl+Enter</kbd></button><button class="btn" id="billEdit">Open in voucher <kbd>Ctrl+E</kbd></button><button class="btn" id="billDrop">Discard <kbd>Esc</kbd></button></div></div>`;
+   $('#billPost').onclick=()=>{toast('Posted Purchase 2026-27/0145, Shivam Pipes and Fittings, ₹'+inr(res.total));billInit()};
+   $('#billEdit').onclick=()=>toast('Opens the purchase voucher pre-filled; every field stays editable');
+   $('#billDrop').onclick=billInit;$('#billPost').focus();},700)}
+/* natural-language: the assistant maps words to masters; the engine builds the voucher */
+const NL_LEDGERS=[['sharma properties','Rent','Sharma Properties'],['rent','Rent',null],['mehta','Mehta Agro Industries',null],['vardhaman','Vardhaman Logistics',null],['kaveri','Kaveri Packaging Pvt Ltd',null],['ganesh','Shree Ganesh Traders',null],['electric','Electricity charges',null]];
+function parseAmt(s){const m=s.toLowerCase().replace(/,/g,'').match(/(\d+(?:\.\d+)?)\s*(k|thousand|lakh|lakhs|l|cr|crore)?\b/);if(!m)return null;let v=parseFloat(m[1]);const u=m[2];
+  if(u==='k'||u==='thousand')v*=1e3;else if(u&&u.startsWith('l'))v*=1e5;else if(u&&u.startsWith('cr'))v*=1e7;return {v,txt:m[0]}}
+function propose(){const s=$('#askIn').value.trim();const lo=s.toLowerCase();const out=$('#askOut');
+  const recv=/receiv|got|collected/.test(lo);const amt=parseAmt(lo);
+  const bank=/hdfc/.test(lo)?'HDFC Bank A/c':/sahyadri/.test(lo)?'Sahyadri Co-op Bank current A/c':/cash/.test(lo)?'Cash':null;
+  const led=NL_LEDGERS.find(x=>lo.includes(x[0]));
+  out.innerHTML='<div class="thinking"><i></i><i></i><i></i> Mapping words to ledgers</div>';
+  setTimeout(()=>{
+   const issues=[];if(!amt)issues.push('No amount found. Write it as 25000, 25k or 1.2 lakh.');if(!bank)issues.push('No cash or bank account named. Say "by HDFC", "in Sahyadri" or "cash".');
+   const unknown=!led;if(unknown){const w=(lo.match(/(?:to|from)\s+([a-z]+)/)||[])[1];issues.push(`"${w||'the party'}" does not match any ledger. Pick one or create it with Alt+C; the assistant will not invent a ledger.`)}
+   if(issues.length){out.innerHTML=`<div class="prop"><div class="ph"><b>Cannot propose a voucher yet</b>${AST}</div><div class="pb">${issues.map(i=>`<p class="why">${esc(i)}</p>`).join('')}</div></div>`;return}
+   const bal={'HDFC Bank A/c':762384.5,'Cash':48215.5,'Sahyadri Co-op Bank current A/c':214000}[bank];const v=r2(amt.v);const after=recv?bal+v:bal-v;
+   const type=recv?'Receipt':'Payment';
+   out.innerHTML=`<div class="prop"><div class="ph"><b>How the assistant read it</b>${AST}</div><div class="pb"><table>
+    <tr><td class="muted">Type</td><td>${type} <span class="muted">from "${recv?'received':'paid'}"</span></td></tr>
+    <tr><td class="muted">Amount</td><td>"${esc(amt.txt)}" read as ${inr(v)}</td></tr>
+    <tr><td class="muted">${recv?'From':'Ledger'}</td><td>${esc(led[1])}${led[2]?` <span class="muted">payee ${esc(led[2])}</span>`:''}</td></tr>
+    <tr><td class="muted">${recv?'Into':'From'}</td><td>${bank}</td></tr></table>
+    ${led[1]==='Rent'?'<p class="why">Debited Rent rather than Sharma Properties because no unpaid rent bill exists for them this month. <button class="btn small">Use Sharma Properties instead <kbd>Alt+2</kbd></button></p>':''}</div></div>
+    <div class="prop"><div class="ph"><b>Proposed ${type.toLowerCase()} voucher</b>${ENG}</div><div class="pb"><table>
+    <tr><td>Dr ${esc(recv?bank:led[1])}</td><td class="num">${inr(v)}</td></tr><tr><td>Cr ${esc(recv?led[1]:bank)}</td><td class="num">${inr(v)}</td></tr>
+    <tr><td class="muted">Date</td><td class="num">20-11-2026</td></tr><tr><td class="muted">${bank} after posting</td><td class="num">${inr(after)} ${after<0?'Cr':'Dr'}</td></tr>
+    ${led[1]==='Rent'?'<tr><td colspan="2" class="ok">TDS rule checked: no deduction under the TDS profile on Sharma Properties.</td></tr>':''}
+    ${led[1]==='Mehta Agro Industries'?`<tr><td colspan="2" class="ok">Adjusted against Sales/0401. Bill balance after: ${inr(285600-v)}</td></tr>`:''}</table></div>
+    <div class="pf"><button class="btn primary" id="nlPost">Post ${type.toLowerCase()} <kbd>Ctrl+Enter</kbd></button><button class="btn" id="nlEdit">Open in voucher <kbd>Ctrl+E</kbd></button><button class="btn" id="nlDrop">Discard <kbd>Esc</kbd></button></div></div>`;
+   $('#nlPost').onclick=()=>{toast(`Posted ${type} ${recv?'2026-27/0220':'2026-27/0319'}, ₹${inr(v)}`);out.innerHTML='';$('#askIn').focus()};
+   $('#nlEdit').onclick=()=>{pv.lines=[];go('payment',{vt:recv?'receipt':'payment'});pv.lines=[{l:led[1],ref:'',amt:v}];$('#p-acct').value=bank;buildP()};
+   $('#nlDrop').onclick=()=>{out.innerHTML='';$('#askIn').focus()};
+  },500)}
+$('#askGo').onclick=propose;$('#askIn').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();e.stopPropagation();propose()}});
+$$('#ai-ask .sugg button').forEach(b=>b.onclick=()=>{$('#askIn').value=b.textContent;propose()});
+const BANK=[
+ {d:'20-11-2026',desc:'NEFT CR-SBIN0004417-KISAN SEVA KENDRA-INV 0388',amt:147384.5,cr:true,sug:'Receipt/0219, Kisan Seva Kendra',why:'Same amount, name in narration, same day',conf:'High'},
+ {d:'20-11-2026',desc:'CHQ PAID-004512-KAVERI PACKAGING',amt:50000,cr:false,sug:'Payment/0318, Kaveri Packaging Pvt Ltd',why:'Cheque number 004512 on the voucher',conf:'High'},
+ {d:'19-11-2026',desc:'NEFT CR-ICIC0002231-MEHTA AGRO INDUSTRIES',amt:200000,cr:true,sug:'New receipt against Sales/0401',why:'No receipt booked. Bill Sales/0401 has ₹2,85,600.00 open; ₹85,600.00 would remain',conf:'Medium',isNew:true},
+ {d:'18-11-2026',desc:'UPI/6123998812/SHARMAPROP@OKBANK/RENT',amt:25000,cr:false,sug:'Payment/0315, Rent',why:'Amount and payee match, but voucher is dated 05-11. Possibly a second payment',conf:'Low'},
+ {d:'18-11-2026',desc:'CHGS-IMPS-NOV26 INCL GST',amt:354,cr:false,sug:'New payment: Bank charges 300.00, input GST 54.00',why:'Monthly charge pattern from Oct and Sep; engine splits GST at 18%',conf:'Medium',isNew:true}];
+function bankInit(){$('#ai-bank').innerHTML=`<p class="muted" style="margin:0 0 8px;font-size:12px">HDFC Bank A/c statement, 18 to 20 Nov. <kbd>Enter</kbd> accepts the focused suggestion, <kbd>S</kbd> skips.</p>`+BANK.map((b,i)=>`<div class="bankline" data-b="${i}"><div class="top2"><span>${b.d}</span><b class="num" style="color:${b.cr?'var(--leaf)':'var(--ink)'}">${b.cr?'+':'−'} ${inr(b.amt)}</b></div><div class="desc">${b.desc}</div>
+   <div class="sg"><div><div>${b.isNew?'Create: ':'Match: '}${b.sug} ${b.isNew?ENG:''}</div><div class="muted" style="font-size:12px">${b.why}. Confidence ${b.conf.toLowerCase()}.</div></div><div style="display:flex;gap:4px"><button class="btn small primary" data-acc="${i}">${b.isNew?'Create':'Match'}</button><button class="btn small" data-skip="${i}">Skip</button></div></div></div>`).join('');
+  $$('#ai-bank [data-acc]').forEach(x=>x.onclick=()=>{const b=BANK[+x.dataset.acc];x.closest('.bankline').classList.add('done');x.closest('.sg').innerHTML=`<span class="ok" style="color:var(--leaf)">${b.isNew?'Created and reconciled':'Reconciled'}</span>`;toast(b.isNew?'Voucher created and reconciled with bank line':'Bank line reconciled');const n=$('#ai-bank .bankline:not(.done) .btn.primary');n&&n.focus()});
+  $$('#ai-bank [data-skip]').forEach(x=>x.onclick=()=>{const l=x.closest('.bankline');l.classList.add('done');const n=$('#ai-bank .bankline:not(.done) .btn.primary');n&&n.focus()});}
+
+/* ================= command palette ================= */
+const CMDS=[
+ ['Screens','Home','h',()=>go('home')],['Screens','Sales invoice','F8',()=>go('sales')],['Screens','Payment','F5',()=>go('payment',{vt:'payment'})],['Screens','Receipt','F6',()=>go('payment',{vt:'receipt'})],
+ ['Reports','Balance sheet','B',()=>go('bs')],['Reports','Day book','D',()=>go('daybook')],['Reports','GSTR-1, November 2026','',()=>go('gst',{tab:'g1'})],['Reports','GSTR-3B, November 2026','',()=>go('gst',{tab:'g3'})],['Reports','2B and IMS reconciliation','',()=>go('gst',{tab:'g2'})],
+ ...Object.entries(LEDGER).map(([k,l])=>['Ledgers',l.name,'',()=>{go('bs');const p=pathTo(l.name);if(p){rep.path=p;renderReport()}}]),
+ ...['Sundry debtors','Sundry creditors','Duties and taxes','Bank accounts'].map(n=>['Groups',n,'',()=>{go('bs');rep.path=pathTo(n);renderReport()}]),
+ ...Object.keys(VCH).map(k=>['Vouchers','#'+k.replace('/',' '),VCH[k].date,()=>{go('daybook');rep.path=[{name:k.replace('/',' '),vch:k}];renderReport()}]),
+ ['Commands','> Snap a bill (purchase from photo)','F9',()=>openAI('bill')],['Commands','> Describe a transaction','',()=>openAI('ask')],['Commands','> Match bank statement lines','',()=>openAI('bank')],
+ ['Commands','> Toggle light and dark theme','Ctrl+Shift+L',()=>toggleTheme()],['Commands','> Show keyboard map','?',()=>openHelp()],['Commands','> Switch company','Alt+F3',()=>openCo()]];
+let palList=[],palHi=0;
+function openPalette(){$('#palScrim').classList.add('open');$('#palIn').value='';palRender();$('#palIn').focus()}
+function closePalette(){$('#palScrim').classList.remove('open')}
+function palRender(){const q=$('#palIn').value.trim().toLowerCase();
+  let pool=CMDS;if(q.startsWith('>'))pool=CMDS.filter(c=>c[0]==='Commands');else if(q.startsWith('#'))pool=CMDS.filter(c=>c[0]==='Vouchers');
+  const qq=q.replace(/^[>#]\s*/,'');const words=qq.split(/\s+/).filter(Boolean);
+  palList=pool.filter(c=>words.every(w=>(c[1]+' '+c[0]).toLowerCase().includes(w)));palHi=0;
+  let g='',h='';palList.forEach((c,i)=>{if(c[0]!==g){g=c[0];h+=`<div class="grp">${g}</div>`}h+=`<div class="it${i===0?' hi':''}" data-i="${i}"><span>${esc(c[1])}</span><span class="s">${c[2]&&c[2].length<14?`<kbd>${esc(c[2])}</kbd>`:esc(c[2]||'')}</span></div>`});
+  $('#palRes').innerHTML=h||`<div class="grp">Nothing called "${esc(qq)}". Try a ledger name, a voucher number like #0412, or &gt; for commands.</div>`;
+  $$('#palRes .it').forEach(el=>el.onmousedown=e=>{e.preventDefault();palHi=+el.dataset.i;palRun()})}
+function palMove(d){if(!palList.length)return;palHi=(palHi+d+palList.length)%palList.length;$$('#palRes .it').forEach(el=>el.classList.toggle('hi',+el.dataset.i===palHi));const h=$('#palRes .hi');h&&h.scrollIntoView({block:'nearest'})}
+function palRun(){const c=palList[palHi];closePalette();if(c)c[3]()}
+$('#palIn').addEventListener('input',palRender);$('#gotoBtn').onclick=openPalette;
+$('#palScrim').addEventListener('mousedown',e=>{if(e.target.id==='palScrim')closePalette()});
+
+/* ================= help overlay ================= */
+const HELP=[
+ ['Anywhere',[['Go to anything','Ctrl K  or  Alt G'],['Keyboard map','?'],['Assistant panel','Ctrl J'],['Theme','Ctrl Shift L'],['Switch company','Alt F3'],['Change period','Alt F2'],['Back / close','Esc']]],
+ ['Open (when not typing)',[['Home','H'],['Sales invoice','F8'],['Payment','F5'],['Receipt','F6'],['Purchase from bill','F9'],['Balance sheet','B'],['Day book','D'],['GST returns','G'],['Masters','M']]],
+ ['Voucher entry',[['Next field','Enter'],['Previous field','Shift Enter'],['Pick from list','↑ ↓ then Enter'],['End item list','Enter on empty item'],['Save','Ctrl Enter'],['Delete line','Ctrl D'],['Create master inline','Alt C'],['Discard','Esc, then Y']]],
+ ['Reports',[['Move between rows','↑ ↓'],['Drill into figure','Enter'],['Up one level','Esc or Backspace'],['Detailed / condensed','Alt D'],['Balance sheet / Day book','B / D']]],
+ ['GST reconciliation',[['Next / previous row','J / K'],['Accept','A'],['Reject','R'],['Pending','P'],['Switch return','1 / 2 / 3']]],
+ ['Assistant',[['Post proposal','Ctrl Enter'],['Open in voucher','Ctrl E'],['Discard proposal','Esc'],['Read the bill','Enter'],['Accept bank match','Enter'],['Skip bank line','S']]]];
+function openHelp(){$('#helpCols').innerHTML=HELP.map(([t,ks])=>`<div><h3>${t}</h3>${ks.map(([a,k])=>`<div class="k"><span>${a}</span><span>${k.split('  or  ').map(x=>x.split(' ').map(y=>`<kbd>${y}</kbd>`).join(' ')).join(' or ')}</span></div>`).join('')}</div>`).join('');$('#helpScrim').classList.add('open')}
+$('#helpBtn').onclick=openHelp;$('#helpScrim').addEventListener('mousedown',e=>{if(e.target.id==='helpScrim')$('#helpScrim').classList.remove('open')});
+
+/* ================= theme / company ================= */
+function toggleTheme(){const r=document.documentElement;const dark=r.dataset.theme?r.dataset.theme==='dark':matchMedia('(prefers-color-scheme: dark)').matches;r.dataset.theme=dark?'light':'dark';try{localStorage.setItem('ledgerly-theme',r.dataset.theme)}catch(e){}}
+try{const t=localStorage.getItem('ledgerly-theme');if(t)document.documentElement.dataset.theme=t}catch(e){}
+$('#themeBtn').onclick=toggleTheme;
+function openCo(){$('#coMenu').classList.add('open');$('#coBtn').setAttribute('aria-expanded','true');$('#coMenu button.on').focus()}
+$('#coBtn').onclick=()=>$('#coMenu').classList.contains('open')?$('#coMenu').classList.remove('open'):openCo();
+$$('#coMenu button').forEach(b=>b.onclick=()=>{$('#coMenu').classList.remove('open');if(b.dataset.co!=='0')toast('Sample data exists only for Vasundhara Agro Tools LLP')});
+$('#fyBtn').onclick=()=>{go('bs');const b=$('#periodSeg button[aria-pressed="true"]');b&&b.focus()};
+
+/* ================= key hint bar ================= */
+function renderKeys(mode){const k=(a,b)=>`<span>${b.split(' ').map(x=>`<kbd>${x}</kbd>`).join(' ')} ${a}</span>`;let ctx,ks;
+  if(mode==='save'){ctx='Confirm';ks=[k('save','Enter'),k('keep editing','Esc')]}
+  else if(cur==='sales'||cur==='payment'){ctx=cur==='sales'?'Sales invoice':pType==='payment'?'Payment':'Receipt';ks=[k('next field','Enter'),k('back','Shift Enter'),k('choose','↑ ↓'),k('save','Ctrl Enter'),k('delete line','Ctrl D'),k('new master','Alt C'),k('home','Esc')]}
+  else if(cur==='bs'||cur==='daybook'){ctx=cur==='bs'?'Balance sheet':'Day book';ks=[k('move','↑ ↓'),k('drill in','Enter'),k('up a level','Esc'),k('detailed','Alt D'),k('balance sheet','B'),k('day book','D')]}
+  else if(cur==='gst'){ctx='GST';ks=[k('rows','J K'),k('accept','A'),k('reject','R'),k('pending','P'),k('switch return','1 2 3')]}
+  else{ctx='Home';ks=[k('go to','Ctrl K'),k('sales','F8'),k('payment','F5'),k('receipt','F6'),k('balance sheet','B'),k('GST','G'),k('assistant','Ctrl J')]}
+  $('#keys').innerHTML=`<span class="ctx">${ctx}</span>${ks.join('')}<span class="right">${k('all shortcuts','?')}</span>`}
+
+/* ================= global keyboard ================= */
+document.addEventListener('keydown',e=>{
+  const k=e.key,ctrl=e.ctrlKey||e.metaKey;
+  // palette
+  if($('#palScrim').classList.contains('open')){if(k==='Escape'){closePalette();e.preventDefault()}else if(k==='ArrowDown'){palMove(1);e.preventDefault()}else if(k==='ArrowUp'){palMove(-1);e.preventDefault()}else if(k==='Enter'){palRun();e.preventDefault()}return}
+  if($('#helpScrim').classList.contains('open')){if(k==='Escape'||k==='?'){$('#helpScrim').classList.remove('open');e.preventDefault()}return}
+  if($('#coMenu').classList.contains('open')&&k==='Escape'){$('#coMenu').classList.remove('open');$('#coBtn').focus();return}
+  if((ctrl&&k.toLowerCase()==='k')||(e.altKey&&k.toLowerCase()==='g')){e.preventDefault();openPalette();return}
+  if(ctrl&&e.shiftKey&&k.toLowerCase()==='l'){e.preventDefault();toggleTheme();return}
+  if(ctrl&&k.toLowerCase()==='j'){e.preventDefault();$('#ai').classList.contains('open')?closeAI():openAI();return}
+  if(e.altKey&&k==='F3'){e.preventDefault();openCo();return}
+  if(e.altKey&&k==='F2'){e.preventDefault();$('#fyBtn').click();return}
+  if(ctrl&&k==='/'){e.preventDefault();openHelp();return}
+  if(k==='F8'){e.preventDefault();go('sales');return} if(k==='F5'){e.preventDefault();go('payment',{vt:'payment'});return}
+  if(k==='F6'){e.preventDefault();go('payment',{vt:'receipt'});return} if(k==='F9'){e.preventDefault();openAI('bill');return}
+  // type-ahead list
+  if(taState&&document.activeElement===taState.inp){
+    if(k==='ArrowDown'||k==='ArrowUp'){e.preventDefault();const n=taState.list.length;if(!n)return;taState.hi=(taState.hi+(k==='ArrowDown'?1:-1)+n)%n;$$('#ta .opt[data-j]').forEach(o=>o.classList.toggle('hi',+o.dataset.j===taState.hi));const h=$('#ta .hi');h&&h.scrollIntoView({block:'nearest'});return}
+    if(k==='Enter'&&!ctrl){e.preventDefault();if(!taState.list.length){toast('Pick an existing master or press Alt+C to create one');return}const inp=taState.inp;const wasEmpty=!inp.value.trim()&&inp.classList.contains('li-item');
+      if(wasEmpty&&!taState.list[taState.hi].end){/* empty item: Enter ends the list */taClose();$('#v-narr').focus();return}
+      if(inp.classList.contains('pl-l')&&!inp.value.trim()){taClose();$('#p-narr').focus();return}
+      taPick(true);return}
+    if(k==='Escape'){taClose();e.preventDefault();return}
+    if(e.altKey&&k.toLowerCase()==='c'){e.preventDefault();toast('Inline master creation opens here: name, group, GSTIN, state');return}
+  }
+  // save bars
+  if($('#saveBar').classList.contains('on')){if(k==='Enter'){e.preventDefault();doSave()}else if(k==='Escape'){e.preventDefault();$('#saveNo').click();renderKeys()}return}
+  if($('#psaveBar').classList.contains('on')){if(k==='Enter'){e.preventDefault();$('#psaveYes').click();renderKeys()}else if(k==='Escape'){e.preventDefault();$('#psaveNo').click();renderKeys()}return}
+  // voucher flow
+  const a=document.activeElement;
+  if(a&&(a.classList.contains('flow')||a.classList.contains('pflow'))){
+    if(ctrl&&k==='Enter'){e.preventDefault();a.classList.contains('flow')?askSave():($('#psaveBar').classList.add('on'),$('#psaveYes').focus(),renderKeys('save'));return}
+    if(k==='Enter'&&e.shiftKey){e.preventDefault();const f=a.classList.contains('flow')?flowList():$$('#s-payment .pflow');const i=f.indexOf(a);if(i>0)f[i-1].focus();return}
+    if(k==='Enter'){e.preventDefault();advanceFrom(a);return}
+    if(ctrl&&k.toLowerCase()==='d'&&a.closest('#lines')){e.preventDefault();const tr=a.closest('tr');const i=+tr.dataset.i;if(i<sv.lines.length-1){sv.lines.splice(i,1);sv.lines.pop();buildLines();recalc();toast('Line removed')}return}
+    if(k==='Escape'){e.preventDefault();a.blur();go('home');return}
+    return;
+  }
+  // AI panel
+  if(a&&a.closest&&a.closest('#ai')){
+    if(ctrl&&k==='Enter'){const p=$('#ai-'+aiTab+' .pf .btn.primary');if(p){e.preventDefault();p.click()}return}
+    if(ctrl&&k.toLowerCase()==='e'){const p=$('#ai-'+aiTab+' .pf .btn:nth-child(2)');if(p){e.preventDefault();p.click()}return}
+    if(k==='Escape'){e.preventDefault();const d=$('#ai-'+aiTab+' .pf .btn:nth-child(3)');if(d)d.click();else closeAI();return}
+    if(k.toLowerCase()==='s'&&aiTab==='bank'&&!isTyping()){const l=a.closest('.bankline');if(l){l.querySelector('[data-skip]').click();e.preventDefault()}return}
+    if(isTyping())return;
+  }
+  if(isTyping())return;
+  // reports
+  if(cur==='bs'||cur==='daybook'){
+    const rows=$$('#repBody tr.go');const i=rows.indexOf(a);
+    if(k==='ArrowDown'||k==='ArrowUp'){e.preventDefault();const n=rows[Math.max(0,Math.min(rows.length-1,(i<0?-1:i)+(k==='ArrowDown'?1:-1)))];n&&n.focus();return}
+    if(k==='Enter'&&i>=0){e.preventDefault();drill(a);return}
+    if((k==='Escape'||k==='Backspace')&&rep.path.length){e.preventDefault();rep.path.pop();renderReport();return}
+    if(e.altKey&&k.toLowerCase()==='d'){e.preventDefault();setDetail(!rep.detailed);return}
+  }
+  if(cur==='gst'){
+    if(k==='1'){gstTab('g1');return}if(k==='2'){gstTab('g2');return}if(k==='3'){gstTab('g3');return}
+    if(gTab==='g2'){const rows=$$('#recon tr.go');const i=rows.indexOf(a);
+      if(k==='j'||k==='ArrowDown'||k==='k'||k==='ArrowUp'){e.preventDefault();const d=(k==='j'||k==='ArrowDown')?1:-1;const n=rows[Math.max(0,Math.min(rows.length-1,(i<0?0:i+d)))];n&&n.focus();return}
+      if(i>=0&&['a','r','p'].includes(k)){e.preventDefault();setAct(+a.dataset.i,k);return}
+      if(i>=0&&k==='Enter'){toast('Opens the purchase voucher and the 2B line side by side');return}}
+  }
+  if(k==='?'){e.preventDefault();openHelp();return}
+  if(k==='Escape'){if($('#ai').classList.contains('open')&&a&&a.closest&&a.closest('#ai')){closeAI();return}if(cur!=='home')go('home');return}
+  if(ctrl||e.altKey)return;
+  const map={h:'home',b:'bs',d:'daybook',g:'gst',m:'masters',s:'sales'};const t=map[k.toLowerCase()];if(t){e.preventDefault();go(t)}
+});
+
+/* ================= init ================= */
+renderKPIs();buildLines();$('#v-party').value=PARTIES[0].name;$('#v-pos').value='27 Maharashtra';partyHint();recalc();buildP();renderMasters();billInit();bankInit();renderKeys();renderG1();renderG3();renderRecon();
+</script>
+</body>
+</html>

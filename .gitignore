@@ -1,0 +1,10 @@
+/target
+**/*.rs.bk
+/fuzz/target
+/fuzz/corpus
+/fuzz/artifacts
+*.ledgerly
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+.DS_Store
