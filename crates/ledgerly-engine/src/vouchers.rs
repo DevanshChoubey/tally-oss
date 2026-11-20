@@ -27,8 +27,9 @@
 //!   their type, series and numbering period; GST sales invoices obey CGST Rules 2017, rule 46(b)).
 //! - **alter**: the voucher exists, is not cancelled and keeps its type; both the stored date and
 //!   the new date are unlocked; the same validation as post; a number or series change is refused
-//!   for sales-side and `prevent_renumbering` types, allowed for others only if still unique;
-//!   other vouchers that settle a bill this one opens must stay valid.
+//!   for sales-side and `prevent_renumbering` types, allowed for others only if still unique; a
+//!   new date with the same number must keep the number unique in its new numbering period
+//!   (invariant 7); other vouchers that settle a bill this one opens must stay valid.
 //! - **cancel**: the voucher exists, is not already cancelled and its date is unlocked. The number
 //!   and series stay; lines and GST are dropped (see [`cancelled_form`]). A bill that other
 //!   vouchers settle blocks the cancel.
@@ -36,6 +37,10 @@
 //!   `CreditNote`/`DebitNote` of a GST company) and any type with `prevent_renumbering` are never
 //!   deleted: [`EngineError::SalesSeriesNoDelete`], cancel instead (invariant 7). A bill that
 //!   other vouchers settle blocks the delete.
+//!
+//! The 16-character GST number check applies to `Sales` only; credit and debit notes of a GST
+//! company are sales-side for renumbering and delete, but are deliberately exempt from the check.
+//! Posting a voucher whose status is already `Cancelled` is refused: use `cancel`.
 //!
 //! Not checked here, because other cards own them: GST tax recomputation (invariant 9), negative
 //! stock and godown quantity sums, bank-reconciled instruments.
@@ -161,6 +166,10 @@ fn check_series(vt: &VoucherType, series: Option<&str>) -> Result<(), EngineErro
 }
 
 /// CGST Rules 2017, rule 46(b): at most 16 characters of letters, digits, hyphen and slash.
+///
+/// This must match the private `check_gst_number` in `numbering.rs` (card E4); it is copied because
+/// that one is private (interface request: make it `pub(crate)`). Only `Sales` invoices are
+/// checked: credit and debit notes are numbered by their own series and are exempt here by choice.
 fn check_gst_number(number: &str) -> Result<(), EngineError> {
     if !number
         .chars()
@@ -415,7 +424,8 @@ pub fn post_voucher(v: Voucher, books: &Books) -> Result<Outcome<Vec<Event>>, En
 /// - [`EngineError::PeriodLocked`] when the date is on or before `lock`.
 /// - [`EngineError::Duplicate`] when the id or the number is already used.
 /// - [`EngineError::Voucher`] for a model invariant (unbalanced, unknown ledger, ...).
-/// - [`EngineError::Invalid`] for an inactive type, or a missing, unexpected or malformed number.
+/// - [`EngineError::Invalid`] for a voucher already marked cancelled, an inactive type, or a
+///   missing, unexpected or malformed number.
 /// - [`EngineError::NumberTooLong`] for a GST sales invoice number over 16 characters.
 /// - Any error of bill reference validation ([`validate_bill_refs`]) or number allocation.
 pub fn post_voucher_with_lock(
@@ -429,6 +439,15 @@ pub fn post_voucher_with_lock(
         });
     }
     check_dates(&[v.date], lock)?;
+    match v.status {
+        VoucherStatus::Cancelled => {
+            return Err(invalid(
+                "status",
+                "a voucher is cancelled with cancel, not posted as cancelled",
+            ));
+        }
+        VoucherStatus::Regular | VoucherStatus::Optional | VoucherStatus::PostDated => {}
+    }
     validate_voucher(&v, &books.masters, &books.company)?;
     let vt = type_of(books, &v)?;
     if !vt.active {
@@ -462,6 +481,14 @@ fn check_renumbering(
     books: &Books,
 ) -> Result<(), EngineError> {
     if before.number == v.number && before.series == v.series {
+        // Same number, but a new date can move the voucher into a numbering period (Monthly or
+        // Yearly restart) that already uses it (spec section 5, invariant 7). A redate is allowed
+        // for every type, sales-side included, when the number is still unique there.
+        if before.date != v.date
+            && let Some(number) = v.number.as_deref()
+        {
+            return check_unique(v, number, vt, books);
+        }
         return Ok(());
     }
     if never_renumbered(vt, books) {

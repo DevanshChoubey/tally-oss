@@ -355,8 +355,8 @@ fn unbalanced_voucher_errors_with_totals() {
 
 #[test]
 fn posting_an_existing_id_errors_duplicate() {
-    // provenance: derived — a voucher id names one voucher; a second post of the same id would
-    // overwrite history (spec section 5: events are append-only).
+    // provenance: derived — spec section 5 (events are append-only, one voucher per id); a second
+    // post of the same id would overwrite history (spec section 5: events are append-only).
     let books = with(
         empty_books(false),
         vec![payment(1, date!(2026 - 05 - 10), Some("PAY-001"), 500)],
@@ -367,7 +367,8 @@ fn posting_an_existing_id_errors_duplicate() {
 
 #[test]
 fn manual_type_without_number_errors() {
-    // provenance: derived — a manual type's number is "typed by the user" (NumberingMethod docs);
+    // provenance: derived — a manual type's number is "typed by the user" (spec section 5, invariant 7:
+    // manual numbers are typed and checked for uniqueness);
     // none given means nothing to store.
     let mut v = invoice(1, date!(2026 - 05 - 10), "INV-1", 1000);
     v.number = None;
@@ -773,4 +774,187 @@ fn deleting_the_settling_receipt_is_allowed() {
     let books = with(empty_books(false), vec![j, r.clone()]);
     let out = events(delete_voucher(VoucherId(2), &books).unwrap());
     assert_eq!(out, vec![Event::VoucherDeleted { before: r }]);
+}
+
+// ------------------------------------------------ review fixes: invariant 7 and status
+
+/// Payment type with the given restart period and renumbering policy.
+fn books_with_payment_numbering(restart: RestartPeriod, prevent_renumbering: bool) -> Books {
+    let mut books = empty_books(false);
+    let t = books.masters.voucher_types.get_mut(&T_PAYMENT).unwrap();
+    t.numbering.restart = restart;
+    t.numbering.prevent_renumbering = prevent_renumbering;
+    books
+}
+
+#[test]
+fn redating_into_a_month_that_already_uses_the_number_errors_duplicate() {
+    // provenance: derived — spec section 5 invariant 7: a number is unique per type, series and
+    // numbering period. Fixture: Payment restarts Monthly; PAY-001 is used in May (id 1) and in
+    // June (id 2). Moving id 1 to 15 June puts two PAY-001 in the June period.
+    let books = with(
+        books_with_payment_numbering(RestartPeriod::Monthly, false),
+        vec![
+            payment(1, date!(2026 - 05 - 10), Some("PAY-001"), 500),
+            payment(2, date!(2026 - 06 - 10), Some("PAY-001"), 700),
+        ],
+    );
+    let moved = payment(1, date!(2026 - 06 - 15), Some("PAY-001"), 500);
+    let e = alter_voucher(moved, &books).unwrap_err();
+    assert!(matches!(e, EngineError::Duplicate { .. }), "{e:?}");
+}
+
+#[test]
+fn redating_into_a_month_that_is_free_is_allowed() {
+    // provenance: derived — spec section 5 invariant 7. Same fixture as above; July holds no
+    // PAY-001, so moving id 2 to 5 July keeps the number unique in its period.
+    let books = with(
+        books_with_payment_numbering(RestartPeriod::Monthly, false),
+        vec![
+            payment(1, date!(2026 - 05 - 10), Some("PAY-001"), 500),
+            payment(2, date!(2026 - 06 - 10), Some("PAY-001"), 700),
+        ],
+    );
+    let moved = payment(2, date!(2026 - 07 - 05), Some("PAY-001"), 700);
+    let out = events(alter_voucher(moved.clone(), &books).unwrap());
+    assert_eq!(out.len(), 1);
+    let Event::VoucherAltered { after, .. } = &out[0] else {
+        panic!("expected VoucherAltered");
+    };
+    assert_eq!(*after, moved);
+}
+
+#[test]
+fn redating_a_never_renumbered_type_still_checks_uniqueness() {
+    // provenance: derived — spec section 5 invariant 7: a prevent_renumbering type keeps its
+    // number, but a redate is not a renumbering, so it is allowed to a free period and refused
+    // to a period that already uses the number. Payment: Monthly, prevent_renumbering.
+    let books = with(
+        books_with_payment_numbering(RestartPeriod::Monthly, true),
+        vec![
+            payment(1, date!(2026 - 05 - 10), Some("PAY-001"), 500),
+            payment(2, date!(2026 - 06 - 10), Some("PAY-001"), 700),
+        ],
+    );
+    let into_used = payment(1, date!(2026 - 06 - 20), Some("PAY-001"), 500);
+    let e = alter_voucher(into_used, &books).unwrap_err();
+    assert!(matches!(e, EngineError::Duplicate { .. }), "{e:?}");
+    let into_free = payment(1, date!(2026 - 08 - 20), Some("PAY-001"), 500);
+    assert!(alter_voucher(into_free, &books).is_ok());
+}
+
+#[test]
+fn yearly_restart_redate_across_financial_years_checks_uniqueness() {
+    // provenance: derived — spec section 5 invariant 7 with a Yearly restart and the April
+    // financial year (fixture fy_start 1 April 2026): 20 Mar 2027 is in FY 2026-27, 10 and 15
+    // Jun 2027 are in FY 2027-28. PAY-001 is used once in each year.
+    let books = with(
+        books_with_payment_numbering(RestartPeriod::Yearly, false),
+        vec![
+            payment(1, date!(2027 - 03 - 20), Some("PAY-001"), 500),
+            payment(2, date!(2027 - 06 - 10), Some("PAY-001"), 700),
+        ],
+    );
+    // Moving id 1 into FY 2027-28 collides with id 2.
+    let e = alter_voucher(payment(1, date!(2027 - 06 - 15), Some("PAY-001"), 500), &books)
+        .unwrap_err();
+    assert!(matches!(e, EngineError::Duplicate { .. }), "{e:?}");
+    // Moving id 1 within its own financial year stays unique.
+    assert!(alter_voucher(payment(1, date!(2027 - 01 - 15), Some("PAY-001"), 500), &books).is_ok());
+}
+
+#[test]
+fn yearly_restart_with_non_april_year_start_is_invalid() {
+    // provenance: derived — the fixture sets fy_start to 1 January, which the Yearly restart
+    // period does not support (the engine refuses rather than guess a period). Two vouchers of
+    // the same number force the period comparison.
+    let mut books = books_with_payment_numbering(RestartPeriod::Yearly, false);
+    books.company.fy_start = date!(2026 - 01 - 01);
+    let books = with(
+        books,
+        vec![payment(1, date!(2026 - 05 - 10), Some("PAY-001"), 500)],
+    );
+    let e = post_voucher(payment(2, date!(2026 - 06 - 10), Some("PAY-001"), 100), &books)
+        .unwrap_err();
+    assert!(
+        matches!(&e, EngineError::Invalid { field, .. } if field == "numbering"),
+        "{e:?}"
+    );
+}
+
+#[test]
+fn posting_a_voucher_already_marked_cancelled_errors() {
+    // provenance: derived — spec section 5: a cancelled voucher is reached by cancelling a posted
+    // one (number kept, lines dropped); posting one directly would skip that path.
+    let books = empty_books(false);
+    let mut v = payment(1, date!(2026 - 05 - 10), None, 500);
+    v.status = VoucherStatus::Cancelled;
+    let e = post_voucher(v, &books).unwrap_err();
+    assert!(
+        matches!(&e, EngineError::Invalid { field, .. } if field == "status"),
+        "{e:?}"
+    );
+}
+
+#[test]
+fn post_dated_and_optional_vouchers_post() {
+    // provenance: derived — PostDated and Optional are live statuses (only Cancelled is
+    // refused on post); each gets its automatic number like a Regular voucher.
+    let books = empty_books(false);
+    for status in [VoucherStatus::PostDated, VoucherStatus::Optional] {
+        let mut v = payment(1, date!(2026 - 05 - 10), None, 500);
+        v.status = status;
+        let out = events(post_voucher(v, &books).unwrap());
+        let Event::VoucherPosted(p) = &out[0] else {
+            panic!("expected VoucherPosted");
+        };
+        assert_eq!(p.status, status);
+        assert_eq!(p.number.as_deref(), Some("PAY-001"));
+    }
+}
+
+#[test]
+fn unknown_series_errors_not_found_and_missing_series_errors_invalid() {
+    // provenance: derived — fixture: Payment is manual with series "A" and "B". Spec section 5
+    // invariant 7 scopes numbers by series, so a series the type does not define is unknown
+    // ("C"), and a type with several series needs one chosen (none given).
+    let mut books = empty_books(false);
+    let t = books.masters.voucher_types.get_mut(&T_PAYMENT).unwrap();
+    t.numbering.method = NumberingMethod::Manual;
+    t.numbering.series = vec!["A".to_string(), "B".to_string()];
+    let mut unknown = payment(1, date!(2026 - 05 - 10), Some("X1"), 500);
+    unknown.series = Some("C".to_string());
+    let e = post_voucher(unknown, &books).unwrap_err();
+    assert!(matches!(e, EngineError::NotFound { .. }), "{e:?}");
+    let missing = payment(1, date!(2026 - 05 - 10), Some("X1"), 500);
+    let e = post_voucher(missing, &books).unwrap_err();
+    assert!(
+        matches!(&e, EngineError::Invalid { field, .. } if field == "series"),
+        "{e:?}"
+    );
+    let mut ok = payment(1, date!(2026 - 05 - 10), Some("X1"), 500);
+    ok.series = Some("A".to_string());
+    assert!(post_voucher(ok, &books).is_ok());
+}
+
+#[test]
+fn a_type_without_numbering_refuses_a_supplied_number() {
+    // provenance: derived — fixture: Journal has NumberingMethod::None ("No number"), so a
+    // voucher of that type carries none.
+    let books = empty_books(false);
+    let v = voucher(
+        1,
+        T_JOURNAL,
+        date!(2026 - 05 - 10),
+        Some("J-1"),
+        vec![
+            line(RENT, SignedAmount::dr(rs(100)), Vec::new()),
+            line(CASH, SignedAmount::cr(rs(100)), Vec::new()),
+        ],
+    );
+    let e = post_voucher(v, &books).unwrap_err();
+    assert!(
+        matches!(&e, EngineError::Invalid { field, .. } if field == "number"),
+        "{e:?}"
+    );
 }
