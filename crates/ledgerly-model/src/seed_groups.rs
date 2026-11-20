@@ -6,7 +6,7 @@
 //! pub fn reserved_groups() -> Vec<Group>;   // 28 groups, ids 1..=28, one per ReservedGroup variant
 //! ```
 //!
-//! Ids follow the order of [`ALL`] (1-based), so the seed is deterministic. Names, parents,
+//! Ids follow the order of `ALL` (1-based), so the seed is deterministic. Names, parents,
 //! natures and the gross-profit flag come from R1 section "Reserved groups (28)".
 //!
 //! Two primary groups, `Suspense` and `BranchDivisions`, have a nature that R1 marks
@@ -111,7 +111,7 @@ const fn spec(group: ReservedGroup) -> Spec {
     }
 }
 
-/// The id of `group`: its 1-based position in [`ALL`].
+/// The id of `group`: its 1-based position in `ALL`.
 fn id_of(group: ReservedGroup) -> Option<GroupId> {
     let pos = ALL.iter().position(|g| *g == group)?;
     u64::try_from(pos).ok()?.checked_add(1).map(GroupId)

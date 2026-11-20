@@ -213,7 +213,7 @@ fn node_from_start(
 
 /// Parses every `VOUCHER` element in a decoded Tally XML document.
 ///
-/// The document is the text returned by [`crate::envelope::decode`]. Only one voucher is held as
+/// The document is the text returned by `crate::envelope::decode` (card X1). Only one voucher is held as
 /// a tree at a time. `VOUCHER` elements are found wherever they sit (`TALLYMESSAGE`, `COLLECTION`).
 ///
 /// # Errors
