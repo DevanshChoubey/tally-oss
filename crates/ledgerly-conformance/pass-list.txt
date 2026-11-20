@@ -1,0 +1,2 @@
+# Ratchet pass-list (engineering rule A6): one passing case id per line.
+# A listed case that no longer passes fails CI. Remove a line only by a reviewed change.
