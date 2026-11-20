@@ -1,3 +1,6 @@
-//! Ledgerly desktop app entry point. **Card U1** replaces `main` with a call to `shell::run()`.
+//! Ledgerly desktop app entry point.
 
-fn main() {}
+fn main() -> eframe::Result<()> {
+    tracing_subscriber::fmt::init();
+    ledgerly_app::shell::run()
+}
