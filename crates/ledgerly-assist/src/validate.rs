@@ -27,6 +27,9 @@
 //! # What is recomputed
 //!
 //! - The voucher must pass the store-free invariants of `ledgerly_model::validate`.
+//! - A purchase or debit note is supplied by the party. The engine takes the company's registration
+//!   state as the supplying state, so such a draft is `Unsupported` unless the party's state (its
+//!   state field, else its GSTIN's) is known and equal to every registration state of the company.
 //! - For a sales, purchase, credit-note or debit-note voucher in a GST company, the tax comes from
 //!   `ledgerly_gst::compute::compute_voucher_tax`. The tax-ledger lines of the draft must equal
 //!   each computed head exactly, sit on the side opposite the party line, and the party's lines
@@ -336,7 +339,7 @@ fn resolve_party(d: &VoucherDraft, books: &Books, threshold: u16) -> Step<Option
 
 /// Whose GSTIN the supplier GSTIN on a document should be.
 enum SupplierIs {
-    /// The party ledger (a purchase: the party is the supplier).
+    /// The party ledger (a purchase or a debit note: the party is the supplier).
     Party,
     /// The company itself (a sale: the company is the supplier).
     Company,
@@ -346,10 +349,9 @@ enum SupplierIs {
 
 fn supplier_is(kind: BaseVoucherKind) -> SupplierIs {
     match kind {
-        BaseVoucherKind::Purchase => SupplierIs::Party,
+        BaseVoucherKind::Purchase | BaseVoucherKind::DebitNote => SupplierIs::Party,
         BaseVoucherKind::Sales => SupplierIs::Company,
         BaseVoucherKind::CreditNote
-        | BaseVoucherKind::DebitNote
         | BaseVoucherKind::Contra
         | BaseVoucherKind::Payment
         | BaseVoucherKind::Receipt
@@ -535,6 +537,58 @@ fn debit_total(v: &Voucher) -> Result<Paise, MoneyError> {
     Ok(total)
 }
 
+/// Card G4 takes the company's registration state as the supplier's state whatever the voucher
+/// kind. That is right when the company supplies (sales) and wrong when the party supplies
+/// (purchase, debit note), unless the party is in the company's own state. Anything else would be
+/// a guess about CGST+SGST against IGST, so it is `Unsupported` (rule A1).
+fn check_supplier_state(v: &Voucher, kind: BaseVoucherKind, books: &Books) -> Step<()> {
+    if !matches!(supplier_is(kind), SupplierIs::Party) {
+        return Ok(());
+    }
+    let Some(party) = v.party else {
+        return Err(Halt::blocked("party", "a taxed voucher needs a party"));
+    };
+    let details = books
+        .masters
+        .ledgers
+        .get(&party)
+        .and_then(|l| l.party.as_ref());
+    let from_state = details.and_then(|p| p.state);
+    let from_gstin = details
+        .and_then(|p| p.gstin.as_ref())
+        .and_then(Gstin::state);
+    let party_state = match (from_state, from_gstin) {
+        (Some(a), Some(b)) if a != b => {
+            return Err(Halt::unsupported(
+                "GST on a supply from a party whose state is ambiguous",
+                "the party ledger's state and its GSTIN's state differ; correct the party ledger",
+            ));
+        }
+        (Some(a), _) | (None, Some(a)) => a,
+        (None, None) => {
+            return Err(Halt::unsupported(
+                "GST on a supply from a party of unknown state",
+                "the party ledger has neither a state nor a GSTIN; set the supplier's state on the \
+                 party ledger or enter this voucher in the voucher form",
+            ));
+        }
+    };
+    if books
+        .company
+        .registrations
+        .iter()
+        .all(|r| r.state == party_state)
+    {
+        return Ok(());
+    }
+    Err(Halt::unsupported(
+        "GST on a supply from a supplier outside the company's registration state",
+        "the engine takes the company's registration state as the supplier's state, which is \
+         wrong when the party supplies from another state (the tax would be IGST); enter this \
+         voucher in the voucher form",
+    ))
+}
+
 /// What the engine says the voucher's total and tax are.
 fn recompute(v: &Voucher, kind: BaseVoucherKind, books: &Books, rules: &RuleSet) -> Step<Expected> {
     if !(is_taxed_kind(kind) && books.company.features.gst) {
@@ -544,6 +598,7 @@ fn recompute(v: &Voucher, kind: BaseVoucherKind, books: &Books, rules: &RuleSet)
             gst: false,
         });
     }
+    check_supplier_state(v, kind, books)?;
     let breakup = match compute_voucher_tax(v, &books.masters, rules, &books.company) {
         Ok(Outcome::Value(b)) => b,
         Ok(Outcome::Unsupported(u)) => return Err(Halt::Unsupported(u)),

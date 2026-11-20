@@ -12,3 +12,20 @@ Template:
 - Requested change:
 - Why (test or spec section that needs it):
 ```
+
+## A1: place of supply on VoucherDraft
+- Crate/file: `ledgerly-assist/src/proposal.rs` (`VoucherDraft`)
+- Current interface: `VoucherDraft` has no place of supply; `validate_draft` (frozen) takes none, so every GST draft is `Unsupported` through it. A1 added `validate_draft_with_place(.., Option<StateCode>)` beside it.
+- Requested change: add `place_of_supply: Option<Transcribed<StateCode>>` to `VoucherDraft` so the proposal carries it, and have `validate_draft` read it. The wave reviewer to accept `validate_draft_with_place` (public addition) meanwhile.
+- Why (test or spec section that needs it): spec 6.8; every taxed case in `tests/a1_validate.rs`.
+
+## A1: AssistError variants for engine and GST errors
+- Crate/file: `ledgerly-assist/src/seam.rs` (`AssistError`)
+- Current interface: only `Unsupported` is usable for the validator; GST and engine errors are reported as `DraftCheck::Blocked { field: "gst", .. }`.
+- Requested change: add a variant carrying `ledgerly_gst::GstError` (and the engine's error type) so a failure of the engine itself is not shown as a problem with the draft.
+- Why (test or spec section that needs it): rule A1 (typed errors, no silent defaults).
+
+## A1: acceptance of two public additions
+- Crate/file: `ledgerly-assist/src/proposal.rs`, `src/validate.rs`
+- Requested change: reviewer to accept `Transcribed::is_confident` and `validate_draft_with_place` as public additions beyond the frozen interface. Integrator: once clippy has run, change `#[allow(clippy::large_enum_variant, ..)]` on `DraftCheck` to `#[expect(..)]`, or remove it if the lint does not fire (the allow rests on a size guess, nothing was compiled).
+- Why (test or spec section that needs it): rule B5.

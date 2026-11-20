@@ -40,6 +40,10 @@ const HIGH: u16 = 950;
 
 const SALES_LEDGER: LedgerId = LedgerId(10);
 const PARTY: LedgerId = LedgerId(11);
+/// A supplier in the company's own state (Karnataka), for purchases.
+const SUPPLIER_KA: LedgerId = LedgerId(13);
+/// A party whose state is on file nowhere (no state, no GSTIN).
+const PARTY_NO_STATE: LedgerId = LedgerId(14);
 const PURCHASE_LEDGER: LedgerId = LedgerId(12);
 const CGST: LedgerId = LedgerId(20);
 const SGST: LedgerId = LedgerId(21);
@@ -51,6 +55,7 @@ const RENT: LedgerId = LedgerId(31);
 const SALES_TYPE: VoucherTypeId = VoucherTypeId(1);
 const PAYMENT_TYPE: VoucherTypeId = VoucherTypeId(2);
 const PURCHASE_TYPE: VoucherTypeId = VoucherTypeId(4);
+const DEBIT_NOTE_TYPE: VoucherTypeId = VoucherTypeId(5);
 
 const KARNATAKA: u8 = 29;
 const MAHARASHTRA: u8 = 27;
@@ -149,6 +154,28 @@ fn party_details() -> PartyDetails {
     }
 }
 
+/// A registered supplier in Karnataka. Its GSTIN is the company's own test vector, the only
+/// Karnataka GSTIN with a hand-derived check character in `ledgerly-core`.
+fn karnataka_supplier_details() -> PartyDetails {
+    PartyDetails {
+        registration: RegistrationType::Regular,
+        gstin: Some(Gstin::parse("29ABCDE1234F1ZW").unwrap()),
+        pan: None,
+        state: Some(state(KARNATAKA)),
+        address: Address::default(),
+    }
+}
+
+fn unplaced_party_details() -> PartyDetails {
+    PartyDetails {
+        registration: RegistrationType::Unregistered,
+        gstin: None,
+        pan: None,
+        state: None,
+        address: Address::default(),
+    }
+}
+
 fn books() -> Books {
     let company = Company {
         id: CompanyId(1),
@@ -177,6 +204,7 @@ fn books() -> Books {
         voucher_type(SALES_TYPE, "Sales", BaseVoucherKind::Sales),
         voucher_type(PAYMENT_TYPE, "Payment", BaseVoucherKind::Payment),
         voucher_type(PURCHASE_TYPE, "Purchase", BaseVoucherKind::Purchase),
+        voucher_type(DEBIT_NOTE_TYPE, "Debit Note", BaseVoucherKind::DebitNote),
     ] {
         m.voucher_types.insert(t.id, t);
     }
@@ -190,6 +218,20 @@ fn books() -> Books {
             Some(eighteen_percent()),
         ),
         ledger(PARTY, "Acme Traders", Some(party_details()), None, None),
+        ledger(
+            SUPPLIER_KA,
+            "Kaveri Supplies",
+            Some(karnataka_supplier_details()),
+            None,
+            None,
+        ),
+        ledger(
+            PARTY_NO_STATE,
+            "Walk-in Vendor",
+            Some(unplaced_party_details()),
+            None,
+            None,
+        ),
         tax_ledger(CGST, "CGST", TaxLedgerKind::Cgst),
         tax_ledger(SGST, "SGST", TaxLedgerKind::Sgst),
         tax_ledger(IGST, "IGST", TaxLedgerKind::Igst),
@@ -346,8 +388,10 @@ fn clean_inter_state_sales_draft_with_igst_becomes_a_voucher() {
 fn clean_purchase_draft_has_tax_on_the_side_opposite_the_party() {
     // provenance: derived — same arithmetic as the sales case: taxable ₹10,000.00, CGST and SGST
     // ₹900.00 each, supplier payable ₹11,800.00. A purchase debits purchases and tax and credits
-    // the supplier. (Card G4 takes the company's registration state as the supplying state, so
-    // this intra-state case is the one it computes for a purchase.)
+    // the supplier. The supplier is in Karnataka, the company's own state, and the place of supply
+    // is Karnataka, so supplier and place agree: intra-state, CGST + SGST (CGST Act s.9). (Card G4
+    // takes the company's registration state as the supplying state, which is right only because
+    // the supplier is in that state; see the Unsupported tests below.)
     let b = books();
     let d = purchase_draft();
     let v = ok(check_in(&d, &b, Some(KARNATAKA)));
@@ -356,20 +400,21 @@ fn clean_purchase_draft_has_tax_on_the_side_opposite_the_party() {
 
 #[test]
 fn round_off_line_is_accepted_when_it_matches_the_engine() {
-    // provenance: derived — taxable ₹1,000.50 = 100,050 paise. CGST 9% = 9,004.5 paise, half away
-    // from zero = 9,005; SGST the same. Before round-off: 100,050 + 9,005 + 9,005 = 118,060 paise
-    // = ₹1,180.60, which rounds to ₹1,181.00 = 118,100 paise (policy: card G4, CGST Act s.170).
-    // Round-off = 118,100 - 118,060 = 40 paise. Credits: 100,050 + 9,005 + 9,005 + 40 = 118,100.
+    // provenance: derived — taxable ₹1,000.60 = 100,060 paise. CGST 9% = 9,005.4 paise, which is
+    // not a tie and rounds to 9,005 under any nearest-paisa rule; SGST the same. Before round-off:
+    // 100,060 + 9,005 + 9,005 = 118,070 paise = ₹1,180.70, which rounds to ₹1,181.00 = 118,100
+    // paise (rupee rounding: card G4 policy, unverified; CGST Act s.170 covers the rupee only).
+    // Round-off = 118,100 - 118,070 = 30 paise. Credits: 100,060 + 9,005 + 9,005 + 30 = 118,100.
     let b = books();
     let d = VoucherDraft {
         document_total: Some(t(Paise::new(118_100), HIGH)),
         document_tax: Some(t(Paise::new(18_010), HIGH)),
         lines: vec![
             line("Acme Traders", Some(PARTY), DrCr::Dr, 118_100),
-            line("Sales", Some(SALES_LEDGER), DrCr::Cr, 100_050),
+            line("Sales", Some(SALES_LEDGER), DrCr::Cr, 100_060),
             line("CGST", Some(CGST), DrCr::Cr, 9_005),
             line("SGST", Some(SGST), DrCr::Cr, 9_005),
-            line("Round off", Some(ROUND_OFF), DrCr::Cr, 40),
+            line("Round off", Some(ROUND_OFF), DrCr::Cr, 30),
         ],
         ..sales_draft()
     };
@@ -404,15 +449,15 @@ fn downward_round_off_line_on_the_party_side_is_accepted() {
 #[test]
 fn missing_round_off_is_blocked_on_the_party_total() {
     // provenance: derived — as above the engine's invoice value is 118,100 paise. This draft
-    // leaves the round-off out, so its party line is 118,060 and the lines still balance, but the
-    // party's total is 40 paise short of the engine's invoice value.
+    // leaves the round-off out, so its party line is 118,070 and the lines still balance, but the
+    // party's total is 30 paise short of the engine's invoice value.
     let b = books();
     let d = VoucherDraft {
         document_total: None,
         document_tax: None,
         lines: vec![
-            line("Acme Traders", Some(PARTY), DrCr::Dr, 118_060),
-            line("Sales", Some(SALES_LEDGER), DrCr::Cr, 100_050),
+            line("Acme Traders", Some(PARTY), DrCr::Dr, 118_070),
+            line("Sales", Some(SALES_LEDGER), DrCr::Cr, 100_060),
             line("CGST", Some(CGST), DrCr::Cr, 9_005),
             line("SGST", Some(SGST), DrCr::Cr, 9_005),
         ],
@@ -850,8 +895,10 @@ fn kinds_the_assistant_does_not_draft_are_unsupported() {
 fn purchase_draft() -> VoucherDraft {
     VoucherDraft {
         kind: BaseVoucherKind::Purchase,
+        party_name: Some(t("Kaveri Supplies".to_owned(), HIGH)),
+        party: Some(SUPPLIER_KA),
         lines: vec![
-            line("Acme Traders", Some(PARTY), DrCr::Cr, 1_180_000),
+            line("Kaveri Supplies", Some(SUPPLIER_KA), DrCr::Cr, 1_180_000),
             line("Purchases", Some(PURCHASE_LEDGER), DrCr::Dr, 1_000_000),
             line("CGST", Some(CGST), DrCr::Dr, 90_000),
             line("SGST", Some(SGST), DrCr::Dr, 90_000),
@@ -862,16 +909,16 @@ fn purchase_draft() -> VoucherDraft {
 
 #[test]
 fn purchase_supplier_gstin_must_match_the_party_ledger() {
-    // The party ledger in the fixture holds 07AAACL0000A1ZP; on a purchase the party is the
+    // The supplier ledger in the fixture holds 29ABCDE1234F1ZW; on a purchase the party is the
     // supplier. Both strings are hand-derived valid test vectors in ledgerly-core.
     let b = books();
     let same = VoucherDraft {
-        supplier_gstin: Some(t("07AAACL0000A1ZP".to_owned(), HIGH)),
+        supplier_gstin: Some(t("29ABCDE1234F1ZW".to_owned(), HIGH)),
         ..purchase_draft()
     };
     ok(check_in(&same, &b, Some(KARNATAKA)));
     let other = VoucherDraft {
-        supplier_gstin: Some(t("29ABCDE1234F1ZW".to_owned(), HIGH)),
+        supplier_gstin: Some(t("07AAACL0000A1ZP".to_owned(), HIGH)),
         ..purchase_draft()
     };
     assert_eq!(
@@ -927,4 +974,145 @@ fn bill_wise_party_line_is_blocked_because_drafts_carry_no_bill_references() {
     });
     let r = check_in(&sales_draft(), &b, Some(KARNATAKA));
     assert_eq!(blocked_field(r), "lines[0].bills");
+}
+
+// ---- the party supplies: the engine cannot place the supplier --------------------------------
+
+fn is_unsupported(r: &Result<DraftCheck, AssistError>) -> bool {
+    matches!(r, Err(AssistError::Unsupported(_)))
+}
+
+#[test]
+fn inter_state_purchase_is_unsupported_whichever_head_the_draft_carries() {
+    // provenance: derived — IGST Act s.5: a supply from another state is inter-state and taxed
+    // IGST. The party's GSTIN 07AAACL0000A1ZP begins 07 (Delhi), the company is in Karnataka, and
+    // the goods are delivered in Karnataka. The correct tax is IGST ₹1,800.00, but the engine
+    // (card G4) takes the company's own state as the supplier, so it would compute CGST + SGST.
+    // The validator must therefore neither accept the CGST + SGST draft nor block the IGST one on
+    // the engine's say-so: both are Unsupported.
+    let b = books();
+    let cgst_sgst = VoucherDraft {
+        party_name: Some(t("Acme Traders".to_owned(), HIGH)),
+        party: Some(PARTY),
+        lines: vec![
+            line("Acme Traders", Some(PARTY), DrCr::Cr, 1_180_000),
+            line("Purchases", Some(PURCHASE_LEDGER), DrCr::Dr, 1_000_000),
+            line("CGST", Some(CGST), DrCr::Dr, 90_000),
+            line("SGST", Some(SGST), DrCr::Dr, 90_000),
+        ],
+        ..purchase_draft()
+    };
+    let r = validate_draft_with_place(
+        &cgst_sgst,
+        &b,
+        &rules_on(VOUCHER_DATE),
+        THRESHOLD,
+        Some(state(KARNATAKA)),
+    );
+    assert!(is_unsupported(&r), "got {r:?}");
+    let igst = VoucherDraft {
+        lines: vec![
+            line("Acme Traders", Some(PARTY), DrCr::Cr, 1_180_000),
+            line("Purchases", Some(PURCHASE_LEDGER), DrCr::Dr, 1_000_000),
+            line("IGST", Some(IGST), DrCr::Dr, 180_000),
+        ],
+        ..cgst_sgst
+    };
+    let r = validate_draft_with_place(
+        &igst,
+        &b,
+        &rules_on(VOUCHER_DATE),
+        THRESHOLD,
+        Some(state(KARNATAKA)),
+    );
+    assert!(is_unsupported(&r), "got {r:?}");
+}
+
+#[test]
+fn purchase_from_a_party_of_unknown_state_is_unsupported() {
+    // provenance: derived — the supplier's state decides CGST + SGST against IGST (IGST Act s.5);
+    // a party ledger with neither a state nor a GSTIN does not say, and the state is not guessed.
+    let b = books();
+    let d = VoucherDraft {
+        party_name: Some(t("Walk-in Vendor".to_owned(), HIGH)),
+        party: Some(PARTY_NO_STATE),
+        lines: vec![
+            line("Walk-in Vendor", Some(PARTY_NO_STATE), DrCr::Cr, 1_180_000),
+            line("Purchases", Some(PURCHASE_LEDGER), DrCr::Dr, 1_000_000),
+            line("CGST", Some(CGST), DrCr::Dr, 90_000),
+            line("SGST", Some(SGST), DrCr::Dr, 90_000),
+        ],
+        ..purchase_draft()
+    };
+    let r = validate_draft_with_place(
+        &d,
+        &b,
+        &rules_on(VOUCHER_DATE),
+        THRESHOLD,
+        Some(state(KARNATAKA)),
+    );
+    assert!(is_unsupported(&r), "got {r:?}");
+}
+
+#[test]
+fn debit_note_from_another_state_is_unsupported_and_from_the_same_state_is_accepted() {
+    // provenance: derived — as for a purchase, the party supplies a debit note's goods. From a
+    // Delhi party (GSTIN 07...) the tax is IGST, which the engine cannot place: Unsupported. From
+    // the Karnataka supplier, delivered in Karnataka, CGST 900.00 + SGST 900.00 on 10,000.00 as in
+    // the purchase case (CGST Act s.9), and the same sides apply.
+    let b = books();
+    let from_ka = VoucherDraft {
+        kind: BaseVoucherKind::DebitNote,
+        ..purchase_draft()
+    };
+    let v = ok(check_in(&from_ka, &b, Some(KARNATAKA)));
+    assert_eq!(v.type_id, DEBIT_NOTE_TYPE);
+    let from_delhi = VoucherDraft {
+        party_name: Some(t("Acme Traders".to_owned(), HIGH)),
+        party: Some(PARTY),
+        lines: vec![
+            line("Acme Traders", Some(PARTY), DrCr::Cr, 1_180_000),
+            line("Purchases", Some(PURCHASE_LEDGER), DrCr::Dr, 1_000_000),
+            line("CGST", Some(CGST), DrCr::Dr, 90_000),
+            line("SGST", Some(SGST), DrCr::Dr, 90_000),
+        ],
+        ..from_ka
+    };
+    let r = validate_draft_with_place(
+        &from_delhi,
+        &b,
+        &rules_on(VOUCHER_DATE),
+        THRESHOLD,
+        Some(state(KARNATAKA)),
+    );
+    assert!(is_unsupported(&r), "got {r:?}");
+}
+
+#[test]
+fn tax_line_on_the_party_side_is_blocked_even_when_the_heads_add_up() {
+    // provenance: derived — the engine's heads are CGST 90,000 and SGST 90,000 paise on a
+    // ₹10,000.00 sale. The draft splits CGST into a credit of 80,000 and a debit of 10,000, which
+    // still sums to 90,000, so the head check passes. The party then debits 1,160,000 so that the
+    // lines balance: debits 1,160,000 + 10,000 = credits 1,000,000 + 80,000 + 90,000 = 1,170,000.
+    // A debit tax line sits on the party's side; tax belongs on the opposite side.
+    let b = books();
+    let d = VoucherDraft {
+        document_total: None,
+        document_tax: None,
+        lines: vec![
+            line("Acme Traders", Some(PARTY), DrCr::Dr, 1_160_000),
+            line("CGST", Some(CGST), DrCr::Dr, 10_000),
+            line("Sales", Some(SALES_LEDGER), DrCr::Cr, 1_000_000),
+            line("CGST", Some(CGST), DrCr::Cr, 80_000),
+            line("SGST", Some(SGST), DrCr::Cr, 90_000),
+        ],
+        ..sales_draft()
+    };
+    match check_in(&d, &b, Some(KARNATAKA)) {
+        DraftCheck::Blocked { field, reason } => {
+            assert_eq!(field, "lines");
+            assert!(reason.contains("same side"), "reason was: {reason}");
+        }
+        DraftCheck::Ok(v) => panic!("expected Blocked, got a voucher: {v:?}"),
+    }
 }
