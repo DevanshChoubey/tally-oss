@@ -9,25 +9,31 @@
 //!
 //! # What is computed
 //!
-//! Tax is computed for sales, purchase, credit-note and debit-note vouchers entered as item
-//! invoices (one taxable base per inventory line) or accounting invoices (one taxable base per
+//! Tax is computed for sales and credit-note vouchers (the company is the supplier) entered as
+//! item invoices (one taxable base per inventory line) or accounting invoices (one taxable base per
 //! ledger line whose ledger carries a GST classification). The rate comes from the item's or the
 //! ledger's effective-dated rate, selected by the time of supply, and is then confirmed against a
 //! **verified** slab entry of the rule pack in force: the CGST, SGST/UTGST and IGST percentages
 //! are taken from the pack, never recomputed from the rate.
 //!
-//! # Rounding policy (spec 6.3, CGST Act s.170)
+//! # Rounding policy (spec 6.3)
 //!
 //! * Line tax is kept **unrounded** (exact decimal rupees) on every [`LineTax`].
 //! * Each tax head is summed over the voucher and rounded once, half away from zero, to the paisa
 //!   ([`RoundingPolicy::HeadTotalsToPaiseInvoiceToRupee`]).
-//! * The invoice value (taxable value plus the rounded heads) is rounded to the whole rupee
-//!   (s.170 rounds amounts payable to the nearest rupee) and the difference is stored as the
-//!   explicit [`GstBreakup::round_off`] line.
+//! * The invoice value (taxable value plus the rounded heads) is rounded to the nearest whole
+//!   rupee and the difference is stored as the explicit [`GstBreakup::round_off`] line. An exact
+//!   half rupee (50 paise) goes up: that is a **product policy**, `pending` verification. CGST
+//!   Act s.170 covers amounts payable to the government, not an invoice total, and its treatment
+//!   of exactly 50 paise has not been checked against the Act text by this project. Amounts away
+//!   from the half rupee round the same under every nearest-rupee convention.
 //!
 //! # Not computed (returns `Unsupported`)
 //!
-//! Reverse charge, cancelled vouchers, plain Dr/Cr vouchers, composition suppliers, registrations
+//! Purchase and debit-note vouchers (the supplier is the party, so the intra/inter decision and
+//! whether tax is charged at all depend on the supplier's state and registration, and
+//! composition or unregistered suppliers raise reverse-charge and no-ITC questions), reverse
+//! charge, cancelled vouchers, plain Dr/Cr vouchers, composition suppliers, registrations
 //! in several states, SEZ/overseas/UIN recipients (zero-rated supplies belong to place-of-supply
 //! card G3), a missing place of supply, a payment dated before the invoice (time of supply,
 //! card G12), vouchers posting to a cess ledger (no verified cess rate exists yet), taxable lines
@@ -40,14 +46,18 @@ use ledgerly_core::{
     round_rupees_to_paise,
 };
 use ledgerly_model::{
-    BaseVoucherKind, Company, GstClassification, GstRegistration, LedgerLine, Masters,
-    RegistrationType, TaxLedgerKind, Taxability, Voucher, VoucherMode, VoucherStatus,
+    BaseVoucherKind, Company, GstClassification, GstHistory, GstRegistration, LedgerLine, Masters,
+    RegistrationType, StockItem, TaxLedgerKind, Taxability, Voucher, VoucherMode, VoucherStatus,
 };
 
 use crate::GstError;
 use crate::pack::{PackEntry, RuleSet};
 
 /// Pack entry ids that hold a rate slab (`igst_percent`, `cgst_percent`, `sgst_percent` params).
+///
+/// A slab added to a pack under another id is not found here and its vouchers are `Unsupported`;
+/// the `every_verified_slab_in_the_pack_is_found` test in `tests/g4_compute.rs` catches that, and
+/// `docs/interface-requests.md` asks for a `RuleSet` prefix lookup to remove the coupling.
 const SLAB_IDS: [&str; 8] = [
     "slab.zero",
     "slab.five",
@@ -74,8 +84,8 @@ pub enum TaxHeads {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RoundingPolicy {
     /// Line tax stays unrounded; each head's voucher total is rounded half away from zero to the
-    /// paisa; the invoice value is rounded half away from zero to the rupee (s.170) and the
-    /// difference is the round-off line.
+    /// paisa; the invoice value is rounded half away from zero to the rupee (a product policy,
+    /// see the module docs) and the difference is the round-off line.
     HeadTotalsToPaiseInvoiceToRupee,
 }
 
@@ -197,7 +207,8 @@ fn invalid(field: &str, reason: String) -> GstError {
     }
 }
 
-/// Computes the GST on a sales, purchase, credit-note or debit-note voucher.
+/// Computes the GST on a sales or credit-note voucher (purchase and debit-note vouchers are
+/// `Unsupported`, see the module docs).
 ///
 /// `rules` must be the rule set selected for this voucher's time of supply (`supply_date` when
 /// set, otherwise the voucher date), see [`crate::pack::RulePack::for_time_of_supply`].
@@ -264,10 +275,13 @@ fn check_scope(v: &Voucher, masters: &Masters, company: &Company) -> Result<Outc
         .get(&v.type_id)
         .ok_or_else(|| not_found(format!("voucher type {}", v.type_id.0)))?;
     match voucher_type.base {
-        BaseVoucherKind::Sales
-        | BaseVoucherKind::Purchase
-        | BaseVoucherKind::CreditNote
-        | BaseVoucherKind::DebitNote => {}
+        BaseVoucherKind::Sales | BaseVoucherKind::CreditNote => {}
+        BaseVoucherKind::Purchase | BaseVoucherKind::DebitNote => {
+            return unsupported(
+                format!("GST on a {:?} voucher", voucher_type.base),
+                "the supplier is the party: the supplier's state and registration type are not applied here, so purchase tax is not computed",
+            );
+        }
         BaseVoucherKind::Contra
         | BaseVoucherKind::Payment
         | BaseVoucherKind::Receipt
@@ -284,7 +298,7 @@ fn check_scope(v: &Voucher, masters: &Masters, company: &Company) -> Result<Outc
         | BaseVoucherKind::PurchaseOrder => {
             return unsupported(
                 format!("GST on a {:?} voucher", voucher_type.base),
-                "only sales, purchase, credit-note and debit-note vouchers are taxed",
+                "only sales and credit-note vouchers are taxed",
             );
         }
     }
@@ -338,7 +352,8 @@ fn supplier_state(company: &Company, tos: Date) -> Outcome<StateCode> {
     Outcome::Value(first.state)
 }
 
-/// `Unsupported` when the party is a kind of recipient that this module does not tax.
+/// `Unsupported` when the party (the recipient of a sales or credit-note voucher) is a kind of
+/// recipient that this module does not tax.
 fn party_supported(v: &Voucher, masters: &Masters) -> Result<Outcome<()>, GstError> {
     let Some(party_id) = v.party else {
         return Ok(Outcome::Value(()));
@@ -498,17 +513,7 @@ fn item_bases(v: &Voucher, masters: &Masters, tos: Date) -> Result<Outcome<Vec<B
             .stock_items
             .get(&line.item)
             .ok_or_else(|| not_found(format!("stock item {}", line.item.0)))?;
-        let Some(history) = item
-            .gst_history
-            .iter()
-            .filter(|h| h.effective_from <= tos)
-            .max_by_key(|h| h.effective_from)
-        else {
-            return unsupported(
-                format!("GST rate of item `{}` on {tos}", item.name),
-                "the item has no GST details effective on the time of supply; add them to the item",
-            );
-        };
+        let history = supported!(item_history(item, tos)?);
         if line.amount.is_negative() {
             return Err(invalid(
                 "inventory line amount",
@@ -523,6 +528,36 @@ fn item_bases(v: &Voucher, masters: &Masters, tos: Date) -> Result<Outcome<Vec<B
         });
     }
     Ok(Outcome::Value(bases))
+}
+
+/// The item's GST details in force on `tos`: the entry with the latest `effective_from` not after
+/// it. Two entries with that same date are ambiguous master data and an error.
+fn item_history(item: &StockItem, tos: Date) -> Result<Outcome<&GstHistory>, GstError> {
+    let latest = item
+        .gst_history
+        .iter()
+        .filter(|h| h.effective_from <= tos)
+        .map(|h| h.effective_from)
+        .max();
+    let winners: Vec<&GstHistory> = item
+        .gst_history
+        .iter()
+        .filter(|h| Some(h.effective_from) == latest)
+        .collect();
+    match winners.as_slice() {
+        [] => unsupported(
+            format!("GST rate of item `{}` on {tos}", item.name),
+            "the item has no GST details effective on the time of supply; add them to the item",
+        ),
+        [one] => Ok(Outcome::Value(*one)),
+        [..] => Err(invalid(
+            "stock item GST history",
+            format!(
+                "item `{}` has several GST detail entries effective from the same date; keep one",
+                item.name
+            ),
+        )),
+    }
 }
 
 fn price_line(base: &Base, heads: TaxHeads, rules: &RuleSet) -> Result<Outcome<LineTax>, GstError> {
@@ -586,21 +621,27 @@ fn find_slab(rules: &RuleSet, rate: Decimal) -> Result<Outcome<Slab>, GstError> 
         let Outcome::Value(entry) = rules.get(id) else {
             continue;
         };
-        let igst = param(entry, "igst_percent")?;
-        if igst != rate {
+        let total_pct = param(entry, "igst_percent")?;
+        if total_pct != rate {
             continue;
         }
-        let cgst = param(entry, "cgst_percent")?;
-        let sgst = param(entry, "sgst_percent")?;
-        let split = cgst.checked_add(sgst).ok_or(MoneyError::Overflow)?;
-        if split != igst {
+        let central_pct = param(entry, "cgst_percent")?;
+        let state_pct = param(entry, "sgst_percent")?;
+        let split = central_pct
+            .checked_add(state_pct)
+            .ok_or(MoneyError::Overflow)?;
+        if split != total_pct {
             return Err(GstError::Pack {
                 reason: format!(
-                    "entry `{id}`: cgst_percent {cgst} + sgst_percent {sgst} is not igst_percent {igst}"
+                    "entry `{id}`: cgst_percent {central_pct} + sgst_percent {state_pct} is not igst_percent {total_pct}"
                 ),
             });
         }
-        return Ok(Outcome::Value(Slab { igst, cgst, sgst }));
+        return Ok(Outcome::Value(Slab {
+            igst: total_pct,
+            cgst: central_pct,
+            sgst: state_pct,
+        }));
     }
     unsupported(
         format!("GST rate {rate}% on {}", rules.date()),

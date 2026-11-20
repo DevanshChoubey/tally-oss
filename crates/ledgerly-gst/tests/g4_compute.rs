@@ -1,12 +1,14 @@
 //! Card G4 tests: voucher tax computation and rounding (spec 6.3; CGST Act s.9, IGST Act s.5,
-//! CGST Act s.170).
+//! product rounding policy).
 //!
 //! Provenance. Slab percentages (5, 18 with CGST/SGST halves) come from `packs/rates-slabs.toml`,
 //! which rests on `docs/research/04-gst.md` 2.2 row "GST 2.0 slabs" `[V]` (N.9/2025-CT(R) and
 //! N.15/2025-CT(R), 17 Sep 2025, effective 22 Sep 2025). Intra-state supply is taxed CGST + SGST
-//! (CGST Act s.9) and inter-state supply IGST (IGST Act s.5). Rounding: CGST Act s.170 rounds an
-//! amount payable to the nearest rupee, 50 paise or more going up. Every expected figure below is
-//! hand arithmetic written next to it; none is copied from the engine.
+//! (CGST Act s.9) and inter-state supply IGST (IGST Act s.5). Rounding: the invoice value is
+//! rounded to the nearest rupee. That is a product policy; CGST Act s.170 is about amounts payable
+//! to the government and is not cited for the invoice, and the exact-50-paise case is `pending`
+//! (see its test). Every expected figure below is hand arithmetic written next to it; none is
+//! copied from the engine.
 
 #![allow(
     clippy::unwrap_used,
@@ -342,11 +344,12 @@ fn five_percent_history() -> Vec<GstHistory> {
 #[test]
 fn three_lines_of_333_33_at_5_percent_intra_keep_line_tax_unrounded_and_add_round_off() {
     // provenance: derived — slab.five = CGST 2.5% + SGST 2.5% (N.9/2025-CT(R) via research [V]);
-    // CGST Act s.170 for the round-off.
+    // the round-off is to the nearest rupee, and the fractions here (.99 and .01 of a rupee) are
+    // far from the half rupee, so every nearest-rupee convention gives the same answer.
     // Each line: 333.33 x 2.5% = 8.33325 (unrounded, kept as 8.33325). Three lines: 24.99975,
     // rounded to the paisa = 25.00; SGST likewise.
     // Taxable total = 3 x 333.33 = 999.99. Invoice value = 999.99 + 25.00 + 25.00 = 1,049.99.
-    // s.170: 99 paise >= 50 paise rounds up, so the value becomes 1,050.00 and round-off = +0.01.
+    // nearest rupee: 99 paise is far above the half rupee, so it rounds up under every convention, so the value becomes 1,050.00 and round-off = +0.01.
     let m = masters(BaseVoucherKind::Sales, five_percent_history());
     let b = value(
         &item_voucher(Some(KARNATAKA), &[33_333, 33_333, 33_333]),
@@ -367,7 +370,7 @@ fn three_lines_of_333_33_at_5_percent_intra_keep_line_tax_unrounded_and_add_roun
 
 #[test]
 fn three_lines_of_333_33_at_5_percent_inter_keep_line_tax_unrounded_and_add_round_off() {
-    // provenance: derived — slab.five igst_percent = 5; CGST Act s.170 (applied by IGST Act s.20).
+    // provenance: derived — slab.five igst_percent = 5; nearest-rupee round-off (fractions far from the half rupee).
     // Each line: 333.33 x 5% = 16.6665 unrounded. Three lines: 49.9995, rounded to the paisa
     // = 50.00. Invoice value = 999.99 + 50.00 = 1,049.99 -> 1,050.00, round-off +0.01.
     let m = masters(BaseVoucherKind::Sales, five_percent_history());
@@ -386,9 +389,10 @@ fn three_lines_of_333_33_at_5_percent_inter_keep_line_tax_unrounded_and_add_roun
 
 #[test]
 fn round_off_can_be_negative() {
-    // provenance: derived — slab.eighteen 9% + 9%; CGST Act s.170 (less than 50 paise ignored).
+    // provenance: derived — slab.eighteen 9% + 9%; nearest rupee (1 paisa is far below the half
+    // rupee, so every nearest-rupee convention drops it).
     // Taxable 100.01. CGST = 100.01 x 9% = 9.0009 -> 9.00; SGST 9.00. Invoice value
-    // = 100.01 + 9.00 + 9.00 = 118.01; 1 paisa < 50 paise is dropped: 118.00, round-off -0.01.
+    // = 100.01 + 9.00 + 9.00 = 118.01; nearest rupee is 118.00, round-off -0.01.
     let m = masters(BaseVoucherKind::Sales, eighteen_from_gst2());
     let b = value(
         &item_voucher(Some(KARNATAKA), &[10_001]),
@@ -403,9 +407,14 @@ fn round_off_can_be_negative() {
 
 #[test]
 fn exactly_fifty_paise_rounds_up() {
-    // provenance: derived — CGST Act s.170(b): 50 paise or more rounds to the next higher rupee.
-    // Taxable 100.50 at 0% (slab.zero: igst/cgst/sgst all 0): tax 0, value 100.50 -> 101.00,
-    // round-off = +0.50 = 50 paise.
+    // provenance: pending — no verified source for how an invoice total of exactly 50 paise is
+    // rounded. The research note (04-gst 2.x, tagged [K]) says "50 paise or more rounds up" for
+    // CGST s.170, but s.170 covers amounts payable to the government, and its wording for exactly
+    // 50 paise was not checked. This test pins the stated product policy (half away from zero),
+    // not a legal fact; the feature stays unverified in the conformance report until an
+    // observed invoice from an accounting tool or the Act text is recorded.
+    // Taxable 100.50 at 0% (slab.zero: igst/cgst/sgst all 0): tax 0, value 100.50 -> 101.00 under
+    // the policy, round-off = +0.50 = 50 paise.
     let zero = vec![history(date!(2025 - 09 - 22), Taxability::Taxable, Some(0))];
     let m = masters(BaseVoucherKind::Sales, zero);
     let b = value(
@@ -657,6 +666,245 @@ fn unsupported_situations_are_reported_not_guessed() {
     assert_unsupported(&with_cess, &m, &company);
 }
 
+fn history_at(from: Date, percent: &str) -> GstHistory {
+    GstHistory {
+        effective_from: from,
+        taxability: Taxability::Taxable,
+        rate_percent: Some(Rate(percent.parse::<Decimal>().unwrap())),
+    }
+}
+
+fn classified_line(ledger: LedgerId, amount: SignedAmount) -> LedgerLine {
+    LedgerLine {
+        ledger,
+        amount,
+        bills: vec![],
+        cost: vec![],
+        bank: None,
+    }
+}
+
+#[test]
+fn purchase_and_debit_note_are_unsupported_not_taxed_with_the_company_state() {
+    // provenance: derived — CGST Act s.9 / IGST Act s.5: the tax heads depend on the supplier's
+    // location against the place of supply. On a purchase the supplier is the party, not the
+    // company, so comparing the place of supply with the company's state would be wrong (an
+    // out-of-state vendor delivering to the company's state is IGST, not CGST + SGST). The
+    // supplier's state and registration are not applied here, so the answer is Unsupported
+    // (engineering rule A1), never a figure.
+    for base in [BaseVoucherKind::Purchase, BaseVoucherKind::DebitNote] {
+        let m = masters(base, eighteen_from_gst2());
+        let v = item_voucher(Some(KARNATAKA), &[1_000_000]);
+        assert_unsupported(&v, &m, &company_in(KARNATAKA));
+        assert_unsupported(&v, &m, &company_in(MAHARASHTRA));
+    }
+}
+
+#[test]
+fn credit_note_is_taxed_like_the_sale_it_corrects() {
+    // provenance: derived — CGST Act s.9 (intra-state: CGST + SGST); slab.five = 2.5% + 2.5%
+    // (N.9/2025-CT(R) via research [V]). The company is the supplier on a credit note.
+    // Intra, taxable ₹1,000.00 = 100,000 paise: CGST = 1,000.00 x 2.5% = 25.00 = 2,500 paise;
+    // SGST the same; value 1,050.00, already whole rupees, round-off 0.
+    // Inter (place Maharashtra, supplier Karnataka): IGST 5% = 50.00 = 5,000 paise.
+    let m = masters(BaseVoucherKind::CreditNote, five_percent_history());
+    let intra = value(
+        &item_voucher(Some(KARNATAKA), &[100_000]),
+        &m,
+        &company_in(KARNATAKA),
+    );
+    assert_eq!(intra.heads, TaxHeads::CgstSgst);
+    assert_eq!(intra.totals.cgst, Paise::new(2_500));
+    assert_eq!(intra.totals.sgst, Paise::new(2_500));
+    assert_eq!(intra.total_before_round_off, Paise::new(105_000));
+    assert_eq!(intra.round_off, Paise::ZERO);
+    let inter = value(
+        &item_voucher(Some(MAHARASHTRA), &[100_000]),
+        &m,
+        &company_in(KARNATAKA),
+    );
+    assert_eq!(inter.heads, TaxHeads::Igst);
+    assert_eq!(inter.totals.igst, Paise::new(5_000));
+}
+
+#[test]
+fn forty_percent_slab_splits_twenty_and_twenty() {
+    // provenance: derived — slab.forty = CGST 20% + SGST 20% (N.9/2025-CT(R) via research [V]).
+    // Taxable ₹1,000.00 = 100,000 paise intra: CGST = 1,000.00 x 20% = 200.00 = 20,000 paise;
+    // SGST 200.00. Value = 1,000.00 + 200.00 + 200.00 = 1,400.00, round-off 0.
+    let m = masters(
+        BaseVoucherKind::Sales,
+        vec![history(
+            date!(2025 - 09 - 22),
+            Taxability::Taxable,
+            Some(40),
+        )],
+    );
+    let b = value(
+        &item_voucher(Some(KARNATAKA), &[100_000]),
+        &m,
+        &company_in(KARNATAKA),
+    );
+    assert_eq!(b.totals.cgst, Paise::new(20_000));
+    assert_eq!(b.totals.sgst, Paise::new(20_000));
+    assert_eq!(b.total_before_round_off, Paise::new(140_000));
+    assert_eq!(b.round_off, Paise::ZERO);
+    assert_eq!(b.lines.first().unwrap().rate_percent, Decimal::new(40, 0));
+}
+
+#[test]
+fn gold_jewellery_three_percent_splits_one_and_a_half_each() {
+    // provenance: derived — special.gold_jewellery = IGST 3% = CGST 1.5% + SGST 1.5%
+    // (N.9/2025-CT(R) via research [V]). Taxable ₹1,00,000.00 = 10,000,000 paise intra:
+    // CGST = 100,000.00 x 1.5% = 1,500.00 = 150,000 paise; SGST 1,500.00.
+    // Value = 100,000.00 + 1,500.00 + 1,500.00 = 103,000.00, round-off 0.
+    let m = masters(
+        BaseVoucherKind::Sales,
+        vec![history(date!(2025 - 09 - 22), Taxability::Taxable, Some(3))],
+    );
+    let b = value(
+        &item_voucher(Some(KARNATAKA), &[10_000_000]),
+        &m,
+        &company_in(KARNATAKA),
+    );
+    assert_eq!(b.totals.cgst, Paise::new(150_000));
+    assert_eq!(b.totals.sgst, Paise::new(150_000));
+    assert_eq!(b.total_before_round_off, Paise::new(10_300_000));
+    assert_eq!(b.round_off, Paise::ZERO);
+}
+
+#[test]
+fn rough_diamonds_quarter_percent_splits_into_eighths() {
+    // provenance: derived — special.rough_diamonds = IGST 0.25% = CGST 0.125% + SGST 0.125%
+    // (N.9/2025-CT(R) via research [V]). Taxable ₹1,00,000.00 = 10,000,000 paise intra:
+    // CGST = 100,000.00 x 0.125% = 125.00 = 12,500 paise; SGST 125.00. Value = 100,250.00.
+    // Inter: IGST = 100,000.00 x 0.25% = 250.00 = 25,000 paise.
+    let m = masters(
+        BaseVoucherKind::Sales,
+        vec![history_at(date!(2025 - 09 - 22), "0.25")],
+    );
+    let intra = value(
+        &item_voucher(Some(KARNATAKA), &[10_000_000]),
+        &m,
+        &company_in(KARNATAKA),
+    );
+    assert_eq!(intra.totals.cgst, Paise::new(12_500));
+    assert_eq!(intra.totals.sgst, Paise::new(12_500));
+    assert_eq!(intra.total_before_round_off, Paise::new(10_025_000));
+    assert_eq!(intra.round_off, Paise::ZERO);
+    let inter = value(
+        &item_voucher(Some(MAHARASHTRA), &[10_000_000]),
+        &m,
+        &company_in(KARNATAKA),
+    );
+    assert_eq!(inter.totals.igst, Paise::new(25_000));
+}
+
+#[test]
+fn place_of_supply_decides_not_the_party_state() {
+    // provenance: derived — IGST Act s.10(1)(a): for goods the place of supply is where the
+    // movement ends; CGST s.9 / IGST s.5 compare it with the supplier's location. A buyer whose
+    // registered state is Maharashtra but who takes delivery in Karnataka from a Karnataka
+    // supplier is an intra-state supply (CGST + SGST); delivery in Maharashtra is inter-state.
+    let mut m = masters(BaseVoucherKind::Sales, eighteen_from_gst2());
+    if let Some(p) = m.ledgers.get_mut(&PARTY).and_then(|l| l.party.as_mut()) {
+        p.state = Some(state(MAHARASHTRA));
+    }
+    let company = company_in(KARNATAKA);
+    let delivered_in_karnataka = value(&item_voucher(Some(KARNATAKA), &[1_000_000]), &m, &company);
+    assert_eq!(delivered_in_karnataka.heads, TaxHeads::CgstSgst);
+    let delivered_in_maharashtra =
+        value(&item_voucher(Some(MAHARASHTRA), &[1_000_000]), &m, &company);
+    assert_eq!(delivered_in_maharashtra.heads, TaxHeads::Igst);
+}
+
+#[test]
+fn more_unsupported_branches_are_reported_not_guessed() {
+    // provenance: derived — engineering rule A1; each case is outside the module's scope.
+    let m = masters(BaseVoucherKind::Sales, eighteen_from_gst2());
+    let company = company_in(KARNATAKA);
+
+    // Centre jurisdiction (99) is not a state to charge CGST/SGST or IGST for.
+    assert_unsupported(&item_voucher(Some(99), &[1_000_000]), &m, &company);
+
+    // Taxable lines on both sides of one accounting invoice are not netted.
+    let both_sides = Voucher {
+        ledger_lines: vec![
+            classified_line(SALES_LEDGER, SignedAmount::cr(Paise::new(100_000))),
+            classified_line(SALES_LEDGER, SignedAmount::dr(Paise::new(50_000))),
+        ],
+        ..base_voucher(VoucherMode::AccountingInvoice, Some(KARNATAKA))
+    };
+    assert_unsupported(&both_sides, &m, &company);
+
+    // An item invoice whose classified ledger lines (freight 500.00) differ from the inventory
+    // sum (10,000.00) is not guessed.
+    let freight = Voucher {
+        ledger_lines: vec![classified_line(
+            SALES_LEDGER,
+            SignedAmount::cr(Paise::new(50_000)),
+        )],
+        ..item_voucher(Some(KARNATAKA), &[1_000_000])
+    };
+    assert_unsupported(&freight, &m, &company);
+}
+
+#[test]
+fn two_item_gst_entries_from_the_same_date_are_an_error() {
+    // provenance: derived — engineering rule A1: ambiguous master data (two rates effective
+    // from the same date) must not be resolved by vector order.
+    let both = vec![
+        history(date!(2025 - 09 - 22), Taxability::Taxable, Some(5)),
+        history(date!(2025 - 09 - 22), Taxability::Taxable, Some(18)),
+    ];
+    let m = masters(BaseVoucherKind::Sales, both);
+    let r = compute(
+        &item_voucher(Some(KARNATAKA), &[1_000_000]),
+        &m,
+        &company_in(KARNATAKA),
+    );
+    assert!(matches!(r, Err(GstError::Invalid { .. })), "{r:?}");
+}
+
+#[test]
+fn every_verified_slab_in_the_pack_is_found() {
+    // provenance: derived — rule A8: every verified rate slab in force on 2025-09-22 must price a
+    // taxable line. A slab id missing from the module's lookup list would make its vouchers
+    // Unsupported; this guards the coupling (see docs/interface-requests.md, G4).
+    let d = date!(2025 - 09 - 22);
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("packs")
+        .join("rates-slabs.toml");
+    let pack = load_pack(&fs::read_to_string(path).unwrap()).unwrap();
+    let mut checked = 0;
+    for entry in pack.entries() {
+        let in_force = entry.effective_from() <= d && entry.effective_to().is_none_or(|t| d <= t);
+        let Some(percent) = entry.params().get("igst_percent") else {
+            continue;
+        };
+        if entry.is_pending() || !in_force {
+            continue;
+        }
+        let m = masters(BaseVoucherKind::Sales, vec![history_at(d, percent)]);
+        let b = value(
+            &item_voucher(Some(KARNATAKA), &[1_000_000]),
+            &m,
+            &company_in(KARNATAKA),
+        );
+        assert_eq!(
+            b.lines.first().unwrap().rate_percent,
+            percent.parse::<Decimal>().unwrap(),
+            "slab {}",
+            entry.id()
+        );
+        checked += 1;
+    }
+    assert!(
+        checked >= 6,
+        "expected the six verified slab entries, saw {checked}"
+    );
+}
+
 #[test]
 fn payment_after_invoice_does_not_change_time_of_supply() {
     // provenance: derived — a payment dated after the invoice cannot make the supply earlier
@@ -710,8 +958,9 @@ proptest! {
         amounts in proptest::collection::vec(1_i64..=1_000_000_000, 1..=4),
         inter in any::<bool>(),
     ) {
-        // provenance: derived — CGST Act s.170: the payable amount is rounded to the nearest
-        // rupee, so value + round-off is a multiple of 100 paise and |round-off| <= 50 paise.
+        // provenance: derived — the invoice value is rounded to the nearest rupee, so value +
+        // round-off is a multiple of 100 paise and |round-off| <= 50 paise (true under every
+        // nearest-rupee convention).
         // Also value = taxable + the five rounded heads by definition.
         let m = masters(BaseVoucherKind::Sales, eighteen_from_gst2());
         let place = if inter { MAHARASHTRA } else { KARNATAKA };
