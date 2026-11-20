@@ -856,11 +856,20 @@ fn yearly_restart_redate_across_financial_years_checks_uniqueness() {
         ],
     );
     // Moving id 1 into FY 2027-28 collides with id 2.
-    let e = alter_voucher(payment(1, date!(2027 - 06 - 15), Some("PAY-001"), 500), &books)
-        .unwrap_err();
+    let e = alter_voucher(
+        payment(1, date!(2027 - 06 - 15), Some("PAY-001"), 500),
+        &books,
+    )
+    .unwrap_err();
     assert!(matches!(e, EngineError::Duplicate { .. }), "{e:?}");
     // Moving id 1 within its own financial year stays unique.
-    assert!(alter_voucher(payment(1, date!(2027 - 01 - 15), Some("PAY-001"), 500), &books).is_ok());
+    assert!(
+        alter_voucher(
+            payment(1, date!(2027 - 01 - 15), Some("PAY-001"), 500),
+            &books
+        )
+        .is_ok()
+    );
 }
 
 #[test]
@@ -874,8 +883,11 @@ fn yearly_restart_with_non_april_year_start_is_invalid() {
         books,
         vec![payment(1, date!(2026 - 05 - 10), Some("PAY-001"), 500)],
     );
-    let e = post_voucher(payment(2, date!(2026 - 06 - 10), Some("PAY-001"), 100), &books)
-        .unwrap_err();
+    let e = post_voucher(
+        payment(2, date!(2026 - 06 - 10), Some("PAY-001"), 100),
+        &books,
+    )
+    .unwrap_err();
     assert!(
         matches!(&e, EngineError::Invalid { field, .. } if field == "numbering"),
         "{e:?}"
