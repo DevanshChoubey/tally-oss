@@ -974,3 +974,148 @@ proptest! {
         prop_assert!(b.round_off.get().abs() <= 50);
     }
 }
+
+// ---- purchases and debit notes: the party supplies -------------------------------------------
+
+/// Makes `PARTY` the supplier with this registration, state and GSTIN.
+fn supplier(m: &mut Masters, registration: RegistrationType, st: Option<u8>, gstin: Option<&str>) {
+    let p = m
+        .ledgers
+        .get_mut(&PARTY)
+        .and_then(|l| l.party.as_mut())
+        .unwrap();
+    p.registration = registration;
+    p.state = st.map(state);
+    p.gstin = gstin.map(|g| Gstin::parse(g).unwrap());
+}
+
+#[test]
+fn purchase_from_a_supplier_in_the_place_of_supply_state_is_cgst_plus_sgst() {
+    // provenance: derived — CGST Act s.9 / IGST Act s.8(1): a supply whose supplier's location
+    // and place of supply are in the same state is intra-state, CGST + SGST. On a purchase the
+    // supplier is the party. Karnataka supplier, delivered in Karnataka: slab.eighteen 9% + 9%.
+    // ₹10,000.00 x 9% = ₹900.00 = 90,000 paise CGST, the same SGST; invoice 11,800.00, round-off 0.
+    for base in [BaseVoucherKind::Purchase, BaseVoucherKind::DebitNote] {
+        let mut m = masters(base, eighteen_from_gst2());
+        supplier(&mut m, RegistrationType::Regular, Some(KARNATAKA), None);
+        let b = value(
+            &item_voucher(Some(KARNATAKA), &[1_000_000]),
+            &m,
+            &company_in(KARNATAKA),
+        );
+        assert_eq!(b.heads, TaxHeads::CgstSgst, "{base:?}");
+        assert_eq!(b.totals.cgst, Paise::new(90_000));
+        assert_eq!(b.totals.sgst, Paise::new(90_000));
+        assert_eq!(b.totals.igst, Paise::ZERO);
+        assert_eq!(b.total_before_round_off, Paise::new(1_180_000));
+        assert_eq!(b.round_off, Paise::ZERO);
+    }
+}
+
+#[test]
+fn purchase_from_another_state_is_igst_whatever_the_company_state() {
+    // provenance: derived — IGST Act s.7(1): supplier's location and place of supply in different
+    // states is inter-state, IGST (IGST Act s.5). A Maharashtra supplier delivering in Karnataka
+    // to a Karnataka company is IGST although the place of supply equals the company's state; the
+    // company's state is not the supplier's. IGST = ₹10,000.00 x 18% = ₹1,800.00 = 180,000 paise.
+    for base in [BaseVoucherKind::Purchase, BaseVoucherKind::DebitNote] {
+        let mut m = masters(base, eighteen_from_gst2());
+        supplier(&mut m, RegistrationType::Regular, Some(MAHARASHTRA), None);
+        let b = value(
+            &item_voucher(Some(KARNATAKA), &[1_000_000]),
+            &m,
+            &company_in(KARNATAKA),
+        );
+        assert_eq!(b.heads, TaxHeads::Igst, "{base:?}");
+        assert_eq!(b.totals.igst, Paise::new(180_000));
+        assert_eq!(b.totals.cgst, Paise::ZERO);
+        assert_eq!(b.totals.sgst, Paise::ZERO);
+        assert_eq!(b.total_before_round_off, Paise::new(1_180_000));
+    }
+}
+
+#[test]
+fn supplier_state_is_read_from_its_gstin_when_the_ledger_has_none() {
+    // provenance: derived — a GSTIN's first two digits are the registration's state code; the
+    // ledgerly-core test vector 07AAACL0000A1ZP is a Delhi (07) registration. Delhi supplier,
+    // delivered in Karnataka: inter-state, IGST 180,000 paise on ₹10,000.00 at 18%.
+    let mut m = masters(BaseVoucherKind::Purchase, eighteen_from_gst2());
+    supplier(
+        &mut m,
+        RegistrationType::Regular,
+        None,
+        Some("07AAACL0000A1ZP"),
+    );
+    let b = value(
+        &item_voucher(Some(KARNATAKA), &[1_000_000]),
+        &m,
+        &company_in(KARNATAKA),
+    );
+    assert_eq!(b.heads, TaxHeads::Igst);
+    assert_eq!(b.totals.igst, Paise::new(180_000));
+}
+
+#[test]
+fn purchase_supplier_whose_state_and_gstin_disagree_is_unsupported() {
+    // provenance: derived — the ledger says Karnataka and the GSTIN says Delhi (07); which state
+    // supplies decides CGST + SGST against IGST, so neither is guessed (rule A1).
+    let mut m = masters(BaseVoucherKind::Purchase, eighteen_from_gst2());
+    supplier(
+        &mut m,
+        RegistrationType::Regular,
+        Some(KARNATAKA),
+        Some("07AAACL0000A1ZP"),
+    );
+    assert_unsupported(
+        &item_voucher(Some(KARNATAKA), &[1_000_000]),
+        &m,
+        &company_in(KARNATAKA),
+    );
+}
+
+#[test]
+fn purchase_from_a_supplier_that_is_not_a_regular_taxpayer_is_unsupported() {
+    // provenance: derived — a composition supplier issues a bill of supply without tax (CGST Act
+    // s.10, s.31(3)(c)); an unregistered supplier charges no GST and may bring reverse charge
+    // (s.9(4)); an overseas or SEZ supplier is an import, taxed IGST under the Customs Tariff Act
+    // (IGST Act s.5(1) proviso), not by this module. None of these is a CGST/SGST/IGST invoice
+    // that this module can price, so all are Unsupported, never a figure.
+    for registration in [
+        RegistrationType::Composition,
+        RegistrationType::Unregistered,
+        RegistrationType::Consumer,
+        RegistrationType::Sez,
+        RegistrationType::Overseas,
+        RegistrationType::Uin,
+    ] {
+        let mut m = masters(BaseVoucherKind::Purchase, eighteen_from_gst2());
+        supplier(&mut m, registration, Some(KARNATAKA), None);
+        match compute(
+            &item_voucher(Some(KARNATAKA), &[1_000_000]),
+            &m,
+            &company_in(KARNATAKA),
+        )
+        .unwrap()
+        {
+            Outcome::Unsupported(_) => {}
+            Outcome::Value(b) => panic!("{registration:?}: expected Unsupported, got {b:?}"),
+        }
+    }
+}
+
+#[test]
+fn purchase_without_a_party_or_party_details_is_unsupported() {
+    // provenance: derived — without the supplier's ledger details its state is unknown, and the
+    // tax heads depend on it (IGST Act s.7, s.8); the state is not guessed (rule A1).
+    let m = masters(BaseVoucherKind::Purchase, eighteen_from_gst2());
+    let no_party = Voucher {
+        party: None,
+        ..item_voucher(Some(KARNATAKA), &[1_000_000])
+    };
+    assert_unsupported(&no_party, &m, &company_in(KARNATAKA));
+    let not_a_party = Voucher {
+        party: Some(SALES_LEDGER),
+        ..item_voucher(Some(KARNATAKA), &[1_000_000])
+    };
+    assert_unsupported(&not_a_party, &m, &company_in(KARNATAKA));
+}

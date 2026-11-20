@@ -9,12 +9,18 @@
 //!
 //! # What is computed
 //!
-//! Tax is computed for sales and credit-note vouchers (the company is the supplier) entered as
-//! item invoices (one taxable base per inventory line) or accounting invoices (one taxable base per
+//! Tax is computed for sales and credit-note vouchers (the company is the supplier) and for
+//! purchase and debit-note vouchers (the party is the supplier), entered as item invoices (one taxable base per inventory line) or accounting invoices (one taxable base per
 //! ledger line whose ledger carries a GST classification). The rate comes from the item's or the
 //! ledger's effective-dated rate, selected by the time of supply, and is then confirmed against a
 //! **verified** slab entry of the rule pack in force: the CGST, SGST/UTGST and IGST percentages
 //! are taken from the pack, never recomputed from the rate.
+//!
+//! The tax heads compare the **supplier's** state with the place of supply (IGST Act s.7, s.8):
+//! the same state is CGST + SGST (or CGST + UTGST), different states are IGST. On a sale the
+//! supplier's state is the company's single registration in force; on a purchase it is the party
+//! ledger's state, or the state code of its GSTIN when no state is set. A party whose state and
+//! GSTIN disagree, or which has neither, is `Unsupported`, never guessed.
 //!
 //! # Rounding policy (spec 6.3)
 //!
@@ -30,10 +36,9 @@
 //!
 //! # Not computed (returns `Unsupported`)
 //!
-//! Purchase and debit-note vouchers (the supplier is the party, so the intra/inter decision and
-//! whether tax is charged at all depend on the supplier's state and registration, and
-//! composition or unregistered suppliers raise reverse-charge and no-ITC questions), reverse
-//! charge, cancelled vouchers, plain Dr/Cr vouchers, composition suppliers, registrations
+//! Purchases and debit notes from a supplier that is not a regular taxpayer (composition
+//! suppliers charge no tax, unregistered suppliers raise reverse-charge questions, SEZ and
+//! overseas suppliers are imports) or whose state is unknown or ambiguous, reverse charge, cancelled vouchers, plain Dr/Cr vouchers, composition suppliers, registrations
 //! in several states, SEZ/overseas/UIN recipients (zero-rated supplies belong to place-of-supply
 //! card G3), a missing place of supply, a payment dated before the invoice (time of supply,
 //! card G12), vouchers posting to a cess ledger (no verified cess rate exists yet), taxable lines
@@ -211,8 +216,8 @@ fn invalid(field: &str, reason: String) -> GstError {
     }
 }
 
-/// Computes the GST on a sales or credit-note voucher (purchase and debit-note vouchers are
-/// `Unsupported`, see the module docs).
+/// Computes the GST on a sales, credit-note, purchase or debit-note voucher (see the module docs
+/// for what is `Unsupported`).
 ///
 /// `rules` must be the rule set selected for this voucher's time of supply (`supply_date` when
 /// set, otherwise the voucher date), see [`crate::pack::RulePack::for_time_of_supply`].
@@ -231,7 +236,7 @@ pub fn compute_voucher_tax(
     rules: &RuleSet,
     company: &Company,
 ) -> Result<Outcome<GstBreakup>, GstError> {
-    supported!(check_scope(v, masters, company)?);
+    let supplier = supported!(check_scope(v, masters, company)?);
     let tos = supported!(time_of_supply(v));
     if rules.date() != tos {
         return Err(invalid(
@@ -242,7 +247,7 @@ pub fn compute_voucher_tax(
             ),
         ));
     }
-    let heads = supported!(supply_heads(v, masters, company, tos)?);
+    let heads = supported!(supply_heads(v, masters, company, supplier, tos)?);
     let bases = supported!(collect_bases(v, masters, tos)?);
     let mut lines = Vec::with_capacity(bases.len());
     for base in &bases {
@@ -252,7 +257,20 @@ pub fn compute_voucher_tax(
     Ok(Outcome::Value(breakup))
 }
 
-fn check_scope(v: &Voucher, masters: &Masters, company: &Company) -> Result<Outcome<()>, GstError> {
+/// Who supplies on a taxed voucher.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Supplier {
+    /// The company supplies (sales, credit note); the party is the recipient.
+    Company,
+    /// The party supplies (purchase, debit note); the company is the recipient.
+    Party,
+}
+
+fn check_scope(
+    v: &Voucher,
+    masters: &Masters,
+    company: &Company,
+) -> Result<Outcome<Supplier>, GstError> {
     if !company.features.gst {
         return unsupported(
             "GST on a voucher",
@@ -278,14 +296,9 @@ fn check_scope(v: &Voucher, masters: &Masters, company: &Company) -> Result<Outc
         .voucher_types
         .get(&v.type_id)
         .ok_or_else(|| not_found(format!("voucher type {}", v.type_id.0)))?;
-    match voucher_type.base {
-        BaseVoucherKind::Sales | BaseVoucherKind::CreditNote => {}
-        BaseVoucherKind::Purchase | BaseVoucherKind::DebitNote => {
-            return unsupported(
-                format!("GST on a {:?} voucher", voucher_type.base),
-                "the supplier is the party: the supplier's state and registration type are not applied here, so purchase tax is not computed",
-            );
-        }
+    let supplier = match voucher_type.base {
+        BaseVoucherKind::Sales | BaseVoucherKind::CreditNote => Supplier::Company,
+        BaseVoucherKind::Purchase | BaseVoucherKind::DebitNote => Supplier::Party,
         BaseVoucherKind::Contra
         | BaseVoucherKind::Payment
         | BaseVoucherKind::Receipt
@@ -302,12 +315,12 @@ fn check_scope(v: &Voucher, masters: &Masters, company: &Company) -> Result<Outc
         | BaseVoucherKind::PurchaseOrder => {
             return unsupported(
                 format!("GST on a {:?} voucher", voucher_type.base),
-                "only sales and credit-note vouchers are taxed",
+                "only sales, credit-note, purchase and debit-note vouchers are taxed",
             );
         }
-    }
+    };
     match v.mode {
-        VoucherMode::AccountingInvoice | VoucherMode::ItemInvoice => Ok(Outcome::Value(())),
+        VoucherMode::AccountingInvoice | VoucherMode::ItemInvoice => Ok(Outcome::Value(supplier)),
         VoucherMode::AsVoucher => unsupported(
             "GST on a voucher entered as plain Dr/Cr lines",
             "enter it as an invoice so that taxable lines can be identified",
@@ -328,8 +341,8 @@ fn time_of_supply(v: &Voucher) -> Outcome<Date> {
     }
 }
 
-/// The state of the single registration that supplies on `tos`.
-fn supplier_state(company: &Company, tos: Date) -> Outcome<StateCode> {
+/// The state of the company's single registration that supplies on `tos`.
+fn company_supplier_state(company: &Company, tos: Date) -> Outcome<StateCode> {
     let regs: Vec<&GstRegistration> = company
         .registrations
         .iter()
@@ -381,13 +394,78 @@ fn party_supported(v: &Voucher, masters: &Masters) -> Result<Outcome<()>, GstErr
     }
 }
 
+/// The state of the party that supplies on a purchase or debit note: its ledger's state, or its
+/// GSTIN's state code when the ledger has no state. `Unsupported` unless the party is a regular
+/// taxpayer whose state is known and unambiguous.
+fn party_supplier_state(v: &Voucher, masters: &Masters) -> Result<Outcome<StateCode>, GstError> {
+    let Some(party_id) = v.party else {
+        return unsupported(
+            "GST on a purchase without a party",
+            "the supplier's state decides CGST + SGST against IGST; set the supplier as the party",
+        );
+    };
+    let party = masters
+        .ledgers
+        .get(&party_id)
+        .ok_or_else(|| not_found(format!("party ledger {}", party_id.0)))?;
+    let Some(details) = &party.party else {
+        return unsupported(
+            "GST on a purchase from a ledger without party details",
+            "the supplier's state and registration are not on the party ledger; add them",
+        );
+    };
+    match details.registration {
+        RegistrationType::Regular => {}
+        RegistrationType::Composition => {
+            return unsupported(
+                "GST on a purchase from a composition supplier",
+                "a composition supplier issues a bill of supply without tax; not computed",
+            );
+        }
+        RegistrationType::Unregistered | RegistrationType::Consumer => {
+            return unsupported(
+                format!(
+                    "GST on a purchase from a {:?} supplier",
+                    details.registration
+                ),
+                "an unregistered supplier charges no GST and reverse charge may apply; not computed",
+            );
+        }
+        RegistrationType::Sez | RegistrationType::Overseas | RegistrationType::Uin => {
+            return unsupported(
+                format!(
+                    "GST on a purchase from a {:?} supplier",
+                    details.registration
+                ),
+                "imports and SEZ or UIN supplies are not computed by voucher tax",
+            );
+        }
+    }
+    let from_gstin = details.gstin.as_ref().and_then(ledgerly_core::Gstin::state);
+    match (details.state, from_gstin) {
+        (Some(a), Some(b)) if a != b => unsupported(
+            "GST on a purchase from a supplier whose state is ambiguous",
+            "the party ledger's state and its GSTIN's state differ; correct the party ledger",
+        ),
+        (Some(a), Some(_) | None) | (None, Some(a)) => Ok(Outcome::Value(a)),
+        (None, None) => unsupported(
+            "GST on a purchase from a supplier of unknown state",
+            "the party ledger has neither a state nor a GSTIN; set the supplier's state",
+        ),
+    }
+}
+
 fn supply_heads(
     v: &Voucher,
     masters: &Masters,
     company: &Company,
+    supplier: Supplier,
     tos: Date,
 ) -> Result<Outcome<TaxHeads>, GstError> {
-    let supplier = supported!(supplier_state(company, tos));
+    let supplier = match supplier {
+        Supplier::Company => supported!(company_supplier_state(company, tos)),
+        Supplier::Party => supported!(party_supplier_state(v, masters)?),
+    };
     let Some(place) = v.place_of_supply else {
         return unsupported(
             "GST place of supply",

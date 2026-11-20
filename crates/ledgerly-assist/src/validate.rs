@@ -536,10 +536,11 @@ fn debit_total(v: &Voucher) -> Result<Paise, MoneyError> {
     Ok(total)
 }
 
-/// Card G4 takes the company's registration state as the supplier's state whatever the voucher
-/// kind. That is right when the company supplies (sales) and wrong when the party supplies
-/// (purchase, debit note), unless the party is in the company's own state. Anything else would be
-/// a guess about CGST+SGST against IGST, so it is `Unsupported` (rule A1).
+/// On a purchase or debit note the party supplies. The assistant accepts such a draft only when
+/// the party is in the company's own registration state; any other supplier is `Unsupported`
+/// (rule A1). Card G4 now reads the supplier's state from the party ledger and computes IGST for
+/// an out-of-state supplier, so this check is stricter than the engine; relaxing it changes the
+/// A1 tests' expected outcomes and is a separate decision.
 fn check_supplier_state(v: &Voucher, kind: BaseVoucherKind, books: &Books) -> Step<()> {
     if !matches!(supplier_is(kind), SupplierIs::Party) {
         return Ok(());
