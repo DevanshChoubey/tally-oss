@@ -1,7 +1,7 @@
 //! Fuzz target `gst_json` (card H2, rule D4): every GST JSON reader must return `Ok` or `Err`
 //! on arbitrary bytes, and never panic, hang or allocate without bound.
 //!
-//! Readers covered: GSTR-2B (`parse_gstr2b`) and IMS (`parse_ims`, card F4/F-series),
+//! Readers covered: GSTR-2B (`parse_gstr2b`) and IMS (`parse_ims`, both card F3),
 //! against their frozen interfaces. The GSTR-1, 3B, e-invoice and e-way bill modules only write
 //! JSON (no reader in their frozen interface), so there is nothing to feed them untrusted bytes.
 #![no_main]
