@@ -1,0 +1,27 @@
+# HSN-keyed rates (card G2). No HSN-to-rate mapping is verified in the research; the N.9/2025 schedule
+# has not been read. Entries below only reserve the keys and stay pending.
+version = "2026.1-hsn"
+
+[[entry]]
+id = "rate.hsn.7102"
+effective_from = "2025-09-22"
+pending = true
+[entry.params]
+source_note = "docs/research/04-gst.md 2.2 [V]: special 0.25% for rough diamonds; HSN heading and schedule entry not checked"
+hsn = "7102"
+
+[[entry]]
+id = "rate.hsn.7108"
+effective_from = "2025-09-22"
+pending = true
+[entry.params]
+source_note = "docs/research/04-gst.md 2.2 [V]: special 3% for gold and jewellery; HSN headings and schedule entry not checked"
+hsn = "7108"
+
+[[entry]]
+id = "rate.hsn.2402"
+effective_from = "2025-09-22"
+pending = true
+[entry.params]
+source_note = "docs/research/04-gst.md 2.2 [V] date, [S] rate: tobacco at 40% from 22 Sep 2025; schedule entry not checked"
+hsn = "2402"

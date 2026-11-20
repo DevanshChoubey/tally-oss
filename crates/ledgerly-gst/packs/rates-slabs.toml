@@ -1,0 +1,122 @@
+# Rate packs: slab structure of the GST rate schedule (card G2).
+# Verified entries rest on docs/research/04-gst.md section 2.2 row "GST 2.0 slabs" (tag [V]).
+# The notification text itself has not been read by this project; a person should check it.
+# Pre-22-Sep-2025 slabs are [K] in the research and stay pending (they evaluate to Unsupported).
+version = "2026.1-slabs"
+
+[[entry]]
+id = "slab.zero"
+effective_from = "2017-07-01"
+effective_to = "2025-09-21"
+pending = true
+[entry.params]
+source_note = "docs/research/04-gst.md 2.2 [K]: slab structure before GST 2.0, no notification cited"
+igst_percent = "0"
+cgst_percent = "0"
+sgst_percent = "0"
+
+[[entry]]
+id = "slab.five"
+effective_from = "2017-07-01"
+effective_to = "2025-09-21"
+pending = true
+[entry.params]
+source_note = "docs/research/04-gst.md 2.2 [K]: slab structure before GST 2.0, no notification cited"
+igst_percent = "5"
+cgst_percent = "2.5"
+sgst_percent = "2.5"
+
+[[entry]]
+id = "slab.twelve"
+effective_from = "2017-07-01"
+effective_to = "2025-09-21"
+pending = true
+[entry.params]
+source_note = "docs/research/04-gst.md 2.2 [K]: slab structure before GST 2.0, no notification cited"
+igst_percent = "12"
+cgst_percent = "6"
+sgst_percent = "6"
+
+[[entry]]
+id = "slab.eighteen"
+effective_from = "2017-07-01"
+effective_to = "2025-09-21"
+pending = true
+[entry.params]
+source_note = "docs/research/04-gst.md 2.2 [K]: slab structure before GST 2.0, no notification cited"
+igst_percent = "18"
+cgst_percent = "9"
+sgst_percent = "9"
+
+[[entry]]
+id = "slab.twenty_eight"
+effective_from = "2017-07-01"
+effective_to = "2025-09-21"
+pending = true
+[entry.params]
+source_note = "docs/research/04-gst.md 2.2 [K]: slab structure before GST 2.0, no notification cited"
+igst_percent = "28"
+cgst_percent = "14"
+sgst_percent = "14"
+
+[[entry]]
+id = "slab.zero"
+effective_from = "2025-09-22"
+legal_ref = "Notification No. 9/2025-Central Tax (Rate) dated 17 Sep 2025 (goods); Notification No. 15/2025-Central Tax (Rate) dated 17 Sep 2025 (services)"
+[entry.params]
+igst_percent = "0"
+cgst_percent = "0"
+sgst_percent = "0"
+
+[[entry]]
+id = "slab.five"
+effective_from = "2025-09-22"
+legal_ref = "Notification No. 9/2025-Central Tax (Rate) dated 17 Sep 2025 (goods); Notification No. 15/2025-Central Tax (Rate) dated 17 Sep 2025 (services)"
+[entry.params]
+igst_percent = "5"
+cgst_percent = "2.5"
+sgst_percent = "2.5"
+
+[[entry]]
+id = "slab.eighteen"
+effective_from = "2025-09-22"
+legal_ref = "Notification No. 9/2025-Central Tax (Rate) dated 17 Sep 2025 (goods); Notification No. 15/2025-Central Tax (Rate) dated 17 Sep 2025 (services)"
+[entry.params]
+igst_percent = "18"
+cgst_percent = "9"
+sgst_percent = "9"
+
+[[entry]]
+id = "slab.forty"
+effective_from = "2025-09-22"
+legal_ref = "Notification No. 9/2025-Central Tax (Rate) dated 17 Sep 2025 (goods); Notification No. 15/2025-Central Tax (Rate) dated 17 Sep 2025 (services)"
+[entry.params]
+igst_percent = "40"
+cgst_percent = "20"
+sgst_percent = "20"
+
+[[entry]]
+id = "special.rough_diamonds"
+effective_from = "2025-09-22"
+legal_ref = "Notification No. 9/2025-Central Tax (Rate) dated 17 Sep 2025"
+[entry.params]
+igst_percent = "0.25"
+cgst_percent = "0.125"
+sgst_percent = "0.125"
+
+[[entry]]
+id = "special.gold_jewellery"
+effective_from = "2025-09-22"
+legal_ref = "Notification No. 9/2025-Central Tax (Rate) dated 17 Sep 2025"
+[entry.params]
+igst_percent = "3"
+cgst_percent = "1.5"
+sgst_percent = "1.5"
+
+[[entry]]
+id = "special.construction_n14_2025"
+effective_from = "2025-09-22"
+pending = true
+[entry.params]
+source_note = "docs/research/04-gst.md 2.2 [V]: 6% CGST on some construction items under N.14/2025; notification date and item list not captured"
+cgst_percent = "6"

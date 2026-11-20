@@ -1,0 +1,25 @@
+# Cess entries (card G2). Dates are [V] in docs/research/04-gst.md 2.2, rates are [S] or unconfirmed,
+# so every entry is pending.
+version = "2026.1-cess"
+
+[[entry]]
+id = "cess.tobacco"
+effective_from = "2017-07-01"
+effective_to = "2026-01-31"
+pending = true
+[entry.params]
+source_note = "docs/research/04-gst.md 2.2: pre-2026 tobacco compensation cess rates not captured"
+
+[[entry]]
+id = "cess.tobacco"
+effective_from = "2026-02-01"
+pending = true
+[entry.params]
+source_note = "docs/research/04-gst.md 2.2 [V] date, [S] rate: reduced to nil from 1 Feb 2026 by N.03/2025-Compensation Cess (Rate) dated 31 Dec 2025; text not read"
+
+[[entry]]
+id = "cess.non_tobacco_goods"
+effective_from = "2025-09-22"
+pending = true
+[entry.params]
+source_note = "docs/research/04-gst.md 2.2: end of cess for non-tobacco goods on 22 Sep 2025 is from secondary sources, unconfirmed"
