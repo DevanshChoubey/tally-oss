@@ -29,3 +29,11 @@ Template:
 - Current interface: `StockError` has `Money`, `Unit`, `NoStandardCost`, `NegativeStockBlocked` and the generic `Invalid { field, reason }`.
 - Requested change: add `Unsupported { reason: String }` (engineering rule A1: a value, `Unsupported`, or an error). `fifo` returns `Invalid` today for: an item not set to FIFO, a voucher that both receives and issues the item (godown transfer, stock journal), and a value-only movement. These are unsupported inputs, not corrupt data, and a UI cannot tell them apart now. Once added, T4 switches those cases to `Unsupported`.
 - Why (test or spec section that needs it): `malformed_moves_are_errors` and `other_valuation_method_is_an_error_not_a_fifo_number` in `crates/ledgerly-stock/tests/t4_fifo.rs`; spec section 6.4.
+## G4: RuleSet lookup by id prefix
+- Crate/file: `crates/ledgerly-gst/src/pack.rs` (`RuleSet`)
+- Current interface: `RuleSet::get(id)` only; there is no way to list the entries in force.
+- Requested change: an iterator over the verified (non-pending) entries in force, or a prefix lookup
+  such as `entries_with_prefix("slab.")`, returning entries in id order.
+- Why (test or spec section that needs it): `compute.rs` finds a rate slab by probing a fixed list of
+  ids (`SLAB_IDS`); a slab added to a pack under a new id is silently never found (the voucher is
+  `Unsupported`, the safe direction). A test guards the list meanwhile.
