@@ -72,8 +72,7 @@ fn titles(shell: &Shell) -> Vec<String> {
     shell
         .tabs()
         .active_stack()
-        .map(ScreenStack::breadcrumbs)
-        .unwrap_or_default()
+        .map_or_default(ScreenStack::breadcrumbs)
 }
 
 // ---- stack ---------------------------------------------------------------------------------

@@ -190,11 +190,11 @@ fn decode_utf8(bytes: &[u8], base: usize) -> Result<String, TallyXmlError> {
 
 /// Decodes UTF-16 code units. `base` is the BOM length, so offsets point into the raw input.
 fn decode_utf16(payload: &[u8], little_endian: bool, base: usize) -> Result<String, TallyXmlError> {
-    let chunks = payload.chunks_exact(2);
-    let remainder_len = chunks.remainder().len();
-    let units: Vec<u16> = chunks
-        .filter_map(|pair| <[u8; 2]>::try_from(pair).ok())
-        .map(|pair| {
+    let (pairs, remainder) = payload.as_chunks::<2>();
+    let remainder_len = remainder.len();
+    let units: Vec<u16> = pairs
+        .iter()
+        .map(|&pair| {
             if little_endian {
                 u16::from_le_bytes(pair)
             } else {
@@ -854,7 +854,7 @@ impl<'a> Parser<'a> {
                     attributes,
                     self_closing,
                     offset,
-                } => self.on_start(name, attributes, self_closing, offset)?,
+                } => self.on_start(&name, attributes, self_closing, offset)?,
                 Token::End { name, offset } => self.on_end(&name, offset)?,
                 Token::Text { text, offset } => self.on_text(&text, offset)?,
                 Token::Eof => {
@@ -874,7 +874,7 @@ impl<'a> Parser<'a> {
 
     fn on_start(
         &mut self,
-        name: String,
+        name: &str,
         attributes: Vec<(String, String)>,
         self_closing: bool,
         offset: usize,
@@ -896,10 +896,10 @@ impl<'a> Parser<'a> {
                 format!("elements nested deeper than {MAX_DEPTH} levels"),
             ));
         }
-        self.begin(&name, attributes, offset);
-        self.path.push(name.clone());
+        self.begin(name, attributes, offset);
+        self.path.push(name.to_owned());
         if self_closing {
-            self.on_end(&name, offset)?;
+            self.on_end(name, offset)?;
         }
         Ok(())
     }

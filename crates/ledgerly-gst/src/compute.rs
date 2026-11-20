@@ -189,6 +189,10 @@ macro_rules! supported {
     };
 }
 
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "builds the Result<Outcome> every check returns, so callers can `return unsupported(..)`"
+)]
 fn unsupported<T>(
     what: impl Into<String>,
     reason: impl Into<String>,

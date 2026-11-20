@@ -166,7 +166,9 @@ date = "2026-02-03"
             assert_eq!(version, "3.1");
             assert_eq!(date.to_string(), "2026-02-03");
         }
-        other => panic!("wrong provenance {other:?}"),
+        other @ (Provenance::Derived { .. } | Provenance::Pending) => {
+            panic!("wrong provenance {other:?}")
+        }
     }
     assert!(case.provenance.pending_reason().is_none());
 }
@@ -202,7 +204,9 @@ fn wrong_expected_value_fails_with_both_values() {
         CaseStatus::Failed { detail } => {
             assert!(detail.contains('0') && detail.contains('1'), "{detail}");
         }
-        other => panic!("expected failure, got {other:?}"),
+        other @ (CaseStatus::Passed | CaseStatus::Pending { .. }) => {
+            panic!("expected failure, got {other:?}")
+        }
     }
 }
 

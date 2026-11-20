@@ -12,9 +12,13 @@
 //!   the tuple out here, not by calling `record_hash`. A byte-exact known-answer vector from an
 //!   independent CBOR implementation is `pending`; until then the encoding is pinned only by this
 //!   recomputation.
-//! - Atomicity: a SQLite trigger that aborts the insert of seq 3 (sqlite.org/lang_createtrigger.html,
+//! - Atomicity: a SQLite trigger that aborts the insert of seq 3 (`sqlite.org/lang_createtrigger.html`,
 //!   `RAISE(ABORT, ..)`) stands in for a constraint failure mid-batch; SQLite rolls back the whole
-//!   transaction, so no row of that batch may remain (sqlite.org/lang_transaction.html).
+//!   transaction, so no row of that batch may remain (`sqlite.org/lang_transaction.html`).
+#![allow(
+    clippy::unwrap_used,
+    reason = "test code: rule B2 lets tests unwrap and panic"
+)]
 
 use std::path::Path;
 
@@ -175,7 +179,9 @@ fn stored_record_round_trips_meta_and_event() {
     let locked = Event::PeriodLocked {
         until: date(2026, Month::September, 30),
     };
-    store.commit(&[locked.clone()], &meta()).unwrap();
+    store
+        .commit(std::slice::from_ref(&locked), &meta())
+        .unwrap();
     let recs = store.events(EventSeq(1), 10).unwrap();
     assert_eq!(recs[0].event, locked);
     assert_eq!(recs[0].meta, meta());
@@ -217,13 +223,13 @@ fn empty_batch_writes_nothing() {
     let dir = tempfile::tempdir().unwrap();
     let (path, mut store) = new_store(dir.path());
     let empty = store.commit(&[], &meta()).unwrap();
-    assert!(empty.seqs.is_empty());
+    assert_eq!(empty.seqs, [] as [ledgerly_core::EventSeq; 0]);
     assert_eq!(empty.last_hash, [0u8; 32]);
     assert_eq!(row_count(&path), 0);
 
     let one = store.commit(&[setting(1)], &meta()).unwrap();
     let again = store.commit(&[], &meta()).unwrap();
-    assert!(again.seqs.is_empty());
+    assert_eq!(again.seqs, [] as [ledgerly_core::EventSeq; 0]);
     assert_eq!(again.last_hash, one.last_hash);
     assert_eq!(row_count(&path), 1);
 }
@@ -240,9 +246,18 @@ fn events_honours_from_and_limit() {
     let seqs: Vec<EventSeq> = from_two.iter().map(|r| r.seq).collect();
     assert_eq!(seqs, vec![EventSeq(2), EventSeq(3)]);
 
-    assert!(store.events(EventSeq(1), 0).unwrap().is_empty());
-    assert!(store.events(EventSeq(5), 10).unwrap().is_empty());
-    assert!(store.events(EventSeq(u64::MAX), 10).unwrap().is_empty());
+    assert_eq!(
+        store.events(EventSeq(1), 0).unwrap(),
+        [] as [ledgerly_store::AuditRecord; 0]
+    );
+    assert_eq!(
+        store.events(EventSeq(5), 10).unwrap(),
+        [] as [ledgerly_store::AuditRecord; 0]
+    );
+    assert_eq!(
+        store.events(EventSeq(u64::MAX), 10).unwrap(),
+        [] as [ledgerly_store::AuditRecord; 0]
+    );
     // `from` 0 behaves like 1: sequence numbers start at 1.
     assert_eq!(store.events(EventSeq(0), 100).unwrap().len(), 4);
     assert_eq!(store.events(EventSeq(1), usize::MAX).unwrap().len(), 4);

@@ -152,6 +152,10 @@ mod iso_date {
     use serde::{Deserialize, Deserializer, Serializer, de::Error as _, ser::Error as _};
     use time::format_description::well_known::Iso8601;
 
+    #[expect(
+        clippy::trivially_copy_pass_by_ref,
+        reason = "serde's serialize_with calls this with &Date"
+    )]
     pub(super) fn serialize<S: Serializer>(date: &Date, s: S) -> Result<S::Ok, S::Error> {
         let text = date.format(&Iso8601::DATE).map_err(S::Error::custom)?;
         s.serialize_str(&text)

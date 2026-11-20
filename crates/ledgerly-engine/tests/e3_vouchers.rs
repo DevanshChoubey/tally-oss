@@ -519,7 +519,10 @@ fn altering_with_no_change_returns_no_events() {
     // there is nothing to record.
     let stored = payment(1, date!(2026 - 07 - 10), Some("PAY-001"), 500);
     let books = with(empty_books(false), vec![stored.clone()]);
-    assert!(events(alter_voucher(stored, &books).unwrap()).is_empty());
+    assert_eq!(
+        events(alter_voucher(stored, &books).unwrap()),
+        [] as [ledgerly_store::Event; 0]
+    );
 }
 
 #[test]
@@ -629,8 +632,11 @@ fn cancel_keeps_the_number_and_drops_the_amounts() {
     let after = cancelled_form(&stored);
     assert_eq!(after.status, VoucherStatus::Cancelled);
     assert_eq!(after.number.as_deref(), Some("PAY-001"));
-    assert!(after.ledger_lines.is_empty());
-    assert!(after.inventory_lines.is_empty());
+    assert_eq!(after.ledger_lines, [] as [ledgerly_model::LedgerLine; 0]);
+    assert_eq!(
+        after.inventory_lines,
+        [] as [ledgerly_model::InventoryLine; 0]
+    );
     assert!(after.gst.is_none());
 }
 

@@ -391,8 +391,7 @@ fn check_gstin(
             .and_then(|id| books.masters.ledgers.get(&id))
             .and_then(|l| l.party.as_ref())
             .and_then(|p| p.gstin.as_ref())
-            .map(|g| vec![g.as_str()])
-            .unwrap_or_default(),
+            .map_or_default(|g| vec![g.as_str()]),
         SupplierIs::Company => books
             .company
             .registrations

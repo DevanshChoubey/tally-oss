@@ -272,7 +272,7 @@ fn gstin_check(first14: &str, expected: char) -> Result<(), String> {
 }
 
 /// Sum of the amounts of `postings`, debit positive, with checked arithmetic.
-fn signed_sum<'a>(postings: impl Iterator<Item = &'a Posting>) -> Result<Paise, String> {
+fn signed_sum<'a>(mut postings: impl Iterator<Item = &'a Posting>) -> Result<Paise, String> {
     postings.try_fold(Paise::ZERO, |sum, p| {
         let value = p.amount.to_signed().map_err(|e| e.to_string())?;
         sum.checked_add(value).map_err(|e| e.to_string())

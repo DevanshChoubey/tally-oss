@@ -99,7 +99,7 @@ impl ScreenStack {
     /// Title of the top screen.
     #[must_use]
     pub fn top_title(&self) -> String {
-        self.screens.last().map(|s| s.title()).unwrap_or_default()
+        self.screens.last().map_or_default(|s| s.title())
     }
 
     /// The top screen, which is the one drawn.

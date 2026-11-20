@@ -4,6 +4,11 @@
 //!
 //! Cases that are pending (no provenance yet, so the screen says `Unsupported`) are listed at the
 //! end of the file as tests that assert `Unsupported`.
+#![allow(
+    clippy::unwrap_used,
+    clippy::panic,
+    reason = "test code: rule B2 lets tests unwrap and panic"
+)]
 
 use std::collections::BTreeMap;
 
@@ -566,7 +571,7 @@ fn a_balanced_draft_gets_an_empty_line_on_the_last_side() {
     d.push_prefilled_row().unwrap();
     let last = d.rows.last().unwrap();
     assert_eq!(last.side, DrCr::Cr);
-    assert!(last.amount_text.is_empty());
+    assert_eq!(last.amount_text, "");
 }
 
 #[test]
@@ -618,7 +623,7 @@ fn a_good_draft_becomes_a_voucher() {
     assert_eq!(v.status, VoucherStatus::Regular);
     assert_eq!(v.mode, VoucherMode::AsVoucher);
     assert_eq!(v.narration, "office rent tax");
-    assert!(v.inventory_lines.is_empty());
+    assert_eq!(v.inventory_lines, [] as [ledgerly_model::InventoryLine; 0]);
     assert!(v.gst.is_none());
 }
 
@@ -972,7 +977,10 @@ fn alt_c_creates_a_ledger_request_and_the_line_waits_for_the_host() {
     // A name that already exists is refused (case-insensitive), and nothing is requested.
     s.confirm_create(m, "cash", Some(GROUP));
     assert!(s.error_text().unwrap().contains("already exists"));
-    assert!(s.take_master_requests().is_empty());
+    assert_eq!(
+        s.take_master_requests(),
+        [] as [ledgerly_app::screens::voucher_entry::CreateLedgerRequest; 0]
+    );
     // A group is required, and it must exist.
     s.confirm_create(m, "Petty Expenses", None);
     assert!(s.error_text().unwrap().contains("group"));

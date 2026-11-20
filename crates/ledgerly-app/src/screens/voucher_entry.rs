@@ -856,18 +856,16 @@ impl VoucherDraft {
                 DrCr::Cr => cr = cr.checked_add(amount)?,
             }
         }
-        Ok(if dr == cr {
-            Balance::Balanced
-        } else if dr > cr {
-            Balance::Needs {
+        Ok(match dr.cmp(&cr) {
+            std::cmp::Ordering::Equal => Balance::Balanced,
+            std::cmp::Ordering::Greater => Balance::Needs {
                 side: DrCr::Cr,
                 amount: dr.checked_sub(cr)?,
-            }
-        } else {
-            Balance::Needs {
+            },
+            std::cmp::Ordering::Less => Balance::Needs {
                 side: DrCr::Dr,
                 amount: cr.checked_sub(dr)?,
-            }
+            },
         })
     }
 
@@ -1327,7 +1325,7 @@ impl VoucherEntryScreen {
                 self.go(Field::Amount(i));
             }
             Some(PickerItem::Create { name }) => {
-                self.create = Some(CreateForm { name, group: None })
+                self.create = Some(CreateForm { name, group: None });
             }
             None => self.fail("No ledger matches; press Alt+C to create one."),
         }
@@ -1413,8 +1411,7 @@ impl VoucherEntryScreen {
                 .draft
                 .rows
                 .get(i)
-                .map(|r| r.ledger_text.trim().to_owned())
-                .unwrap_or_default();
+                .map_or_default(|r| r.ledger_text.trim().to_owned());
             self.create = Some(CreateForm { name, group: None });
         }
     }
@@ -1456,7 +1453,7 @@ impl VoucherEntryScreen {
         };
         if let Some(r) = self.draft.rows.get_mut(i) {
             r.ledger = Some(LedgerRef::Pending(name.to_owned()));
-            r.ledger_text = name.to_owned();
+            name.clone_into(&mut r.ledger_text);
         }
         self.master_requests.push(CreateLedgerRequest {
             name: name.to_owned(),
@@ -1935,7 +1932,7 @@ impl VoucherEntryScreen {
     }
 
     fn draw(&mut self, ui: &mut Ui, masters: &Masters) -> ScreenAction {
-        let base = ui.id().with("voucher-entry");
+        let base = ui.scope_id().with("voucher-entry");
         let escape_wanted = self.create.is_some()
             || self.confirm_discard
             || self.searching()
@@ -1990,12 +1987,11 @@ impl Screen for VoucherEntryScreen {
     }
 
     fn ui(&mut self, ui: &mut Ui, ctx: &mut AppCtx) -> ScreenAction {
-        match ctx.books.as_ref() {
-            Some(books) => self.draw(ui, &books.masters),
-            None => {
-                ui.label("No company is open.");
-                ScreenAction::Stay
-            }
+        if let Some(books) = ctx.books.as_ref() {
+            self.draw(ui, &books.masters)
+        } else {
+            ui.label("No company is open.");
+            ScreenAction::Stay
         }
     }
 }

@@ -13,6 +13,12 @@
 //! ```
 //!
 //! `rs(n)` is `n` rupees.
+#![allow(
+    clippy::unwrap_used,
+    clippy::panic,
+    clippy::indexing_slicing,
+    reason = "test code: rule B2 lets tests unwrap and panic"
+)]
 
 use std::collections::BTreeMap;
 

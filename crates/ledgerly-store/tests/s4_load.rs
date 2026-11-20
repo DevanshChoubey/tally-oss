@@ -140,9 +140,9 @@ fn two_line(id: u64, on: Date, paise: i64) -> Voucher {
 }
 
 /// Asserts the load failed with `StoreError::Encoding` whose message names `needle`.
-fn assert_encoding_error(result: Result<Books, StoreError>, needle: &str) {
+fn assert_encoding_error(result: &Result<Books, StoreError>, needle: &str) {
     assert!(
-        matches!(&result, Err(StoreError::Encoding(m)) if m.contains(needle)),
+        matches!(result, Err(StoreError::Encoding(m)) if m.contains(needle)),
         "{result:?}"
     );
 }
@@ -154,8 +154,8 @@ fn empty_log_gives_empty_books_with_the_company() {
     let books = store.load_books(None).unwrap();
     assert_eq!(books.company, company());
     assert!(books.vouchers.is_empty());
-    assert!(books.postings.is_empty());
-    assert!(books.stock_moves.is_empty());
+    assert_eq!(books.postings, [] as [ledgerly_model::Posting; 0]);
+    assert_eq!(books.stock_moves, [] as [ledgerly_model::StockMove; 0]);
     assert_eq!(books.masters, ledgerly_model::Masters::default());
 }
 
@@ -273,7 +273,10 @@ fn cancelled_voucher_has_zero_postings_but_is_listed() {
     assert_eq!(cancelled.status, VoucherStatus::Cancelled);
     // Number is kept; amounts are removed.
     assert_eq!(cancelled.number.as_deref(), Some("V1"));
-    assert!(cancelled.ledger_lines.is_empty());
+    assert_eq!(
+        cancelled.ledger_lines,
+        [] as [ledgerly_model::LedgerLine; 0]
+    );
     assert!(books.postings.iter().all(|p| p.voucher != VoucherId(1)));
     assert_eq!(books.postings.len(), 2);
     assert_eq!(books.vouchers.len(), 2);
@@ -295,7 +298,7 @@ fn deleted_voucher_is_gone() {
         .unwrap();
     let books = store.load_books(None).unwrap();
     assert!(books.vouchers.is_empty());
-    assert!(books.postings.is_empty());
+    assert_eq!(books.postings, [] as [ledgerly_model::Posting; 0]);
 }
 
 #[test]
@@ -424,7 +427,7 @@ fn events_that_do_not_change_books_are_ignored() {
         .unwrap();
     let books = store.load_books(None).unwrap();
     assert!(books.vouchers.is_empty());
-    assert!(books.postings.is_empty());
+    assert_eq!(books.postings, [] as [ledgerly_model::Posting; 0]);
 }
 
 #[test]
@@ -439,7 +442,7 @@ fn duplicate_post_fails_naming_the_event() {
         )
         .unwrap();
     // Derived: the second event (seq 2) creates an id that exists, which a valid log never does.
-    assert_encoding_error(store.load_books(None), "event 2");
+    assert_encoding_error(&store.load_books(None), "event 2");
 }
 
 #[test]
@@ -540,7 +543,7 @@ fn negative_ledger_line_amount_fails() {
         vec![line(10, dr(-100)), line(20, cr(100))],
     );
     store.commit(&[Event::VoucherPosted(v)], &meta()).unwrap();
-    assert_encoding_error(store.load_books(None), "negative amount");
+    assert_encoding_error(&store.load_books(None), "negative amount");
 }
 
 #[test]
@@ -557,7 +560,7 @@ fn match_confirmed_for_missing_voucher_fails() {
     store
         .commit(&[Event::MatchConfirmed(matched)], &meta())
         .unwrap();
-    assert_encoding_error(store.load_books(None), "event 1");
+    assert_encoding_error(&store.load_books(None), "event 1");
 }
 
 #[test]
@@ -579,7 +582,7 @@ fn match_confirmed_for_voucher_without_bank_line_fails() {
             &meta(),
         )
         .unwrap();
-    assert_encoding_error(store.load_books(None), "event 2");
+    assert_encoding_error(&store.load_books(None), "event 2");
 }
 
 #[test]
@@ -590,7 +593,7 @@ fn delete_of_missing_voucher_fails() {
     store
         .commit(&[Event::VoucherDeleted { before: v }], &meta())
         .unwrap();
-    assert_encoding_error(store.load_books(None), "event 1");
+    assert_encoding_error(&store.load_books(None), "event 1");
 }
 
 #[test]
@@ -603,5 +606,5 @@ fn delete_of_missing_master_fails() {
             &meta(),
         )
         .unwrap();
-    assert_encoding_error(store.load_books(None), "event 1");
+    assert_encoding_error(&store.load_books(None), "event 1");
 }

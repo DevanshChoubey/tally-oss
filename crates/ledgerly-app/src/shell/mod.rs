@@ -97,8 +97,7 @@ impl Shell {
         let trail = self
             .tabs
             .active_stack()
-            .map(ScreenStack::breadcrumbs)
-            .unwrap_or_default();
+            .map_or_default(ScreenStack::breadcrumbs);
         let can_go_back = trail.len() > 1;
 
         let mut cmds = Vec::new();

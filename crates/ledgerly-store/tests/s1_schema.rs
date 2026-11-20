@@ -9,6 +9,10 @@
 //!   numbers (spec 6.6: migrations never lose events, so an older build must refuse, not guess).
 //! - `SCHEMA_VERSION == 1`: `migrations/0001_init.sql` is the only migration in this wave, derived
 //!   from the card text.
+#![allow(
+    clippy::unwrap_used,
+    reason = "test code: rule B2 lets tests unwrap and panic"
+)]
 
 use std::path::Path;
 

@@ -243,7 +243,7 @@ fn predefined_entities_and_valid_char_refs_decode() {
         panic!("expected ledger");
     };
     assert_eq!(l.name, "A & B < C \u{20B9}");
-    assert!(parsed.warnings.is_empty());
+    assert_eq!(parsed.warnings, [] as [ledgerly_tally_xml::XmlWarning; 0]);
 }
 
 #[test]
