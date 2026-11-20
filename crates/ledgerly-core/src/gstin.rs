@@ -156,7 +156,16 @@ impl std::fmt::Display for Gstin {
 mod tests {
     use super::*;
 
-    // Fictional GSTINs whose check characters were computed with the algorithm above.
+    // Fictional GSTINs. Provenance: derived by hand with the mod-36 algorithm described in the
+    // module doc. That algorithm is recalled, not quoted from GSTN, so these vectors are only as
+    // good as the recall until the source is quoted (see module doc).
+    //
+    // Hand derivation for 29ABCDE1234F1ZW (0-9 = 0-9, A = 10 .. Z = 35; factors 1,2,1,2,..
+    // from the left; each product p contributes p/36 + p%36):
+    //   2x1=2 -> 2      9x2=18 -> 18    A10x1=10 -> 10  B11x2=22 -> 22  C12x1=12 -> 12
+    //   D13x2=26 -> 26  E14x1=14 -> 14  1x2=2 -> 2      2x1=2 -> 2      3x2=6 -> 6
+    //   4x1=4 -> 4      F15x2=30 -> 30  1x1=1 -> 1      Z35x2=70 -> 1+34=35
+    //   sum = 184; 184 mod 36 = 4; check = (36 - 4) mod 36 = 32 = 'W'.
     const VALID: [&str; 3] = ["29ABCDE1234F1ZW", "07AAACL0000A1ZP", "24AAACB1111C1ZT"];
 
     #[test]

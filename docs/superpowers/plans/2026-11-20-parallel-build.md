@@ -460,15 +460,23 @@ Deviations from the text above, for builders and reviewers:
   card and the frozen interface in a `text` block. Builders replace the body; they never edit
   another card's file. The exceptions are `ledgerly-store` `commit.rs` and `load.rs`, which return
   `StoreError::NotBuilt("S2"/"S4")` because `impl Store for SqliteStore` must compile. S2 and S4
-  remove those variants' uses; the `NotBuilt` variant goes in W-wave cleanup.
+  remove those uses; W1 deletes the `NotBuilt` variant once nothing returns it.
+- **Placeholders that are stubs:** `ledgerly-app` `main.rs` and `ledgerly-cli` `main.rs` are
+  `fn main() {}` (U1 and W2 replace them) and `benches/reports.rs` is empty (H3). They exist so
+  the manifests compile. Fuzz targets are no-ops (H1, H2).
+- **Types a card's interface names but nothing defines** (for example `ApiError`, `Command`,
+  `PullResult`, `BridgeError`, `StockWarning`, `TallyReportKind`, `OcrOutput`, `Redaction`,
+  `RcmLiability`, `Brs`) are defined by that card, in its own file. A check on 2026-11-20 found
+  no such type consumed by a different card's interface.
 - **`arithmetic_side_effects` is not a lint.** It was too noisy against `Decimal` and `u64` ids.
   Instead: `overflow-checks = true` in every profile, and money arithmetic only through `Paise`
   checked methods (there is no `Add` impl).
 - **`Proposal::Voucher` holds `Box<VoucherDraft>`**, and `Event` carries
   `#[expect(clippy::large_enum_variant)]`.
 - **GSTIN check character and the state-code table are recalled, not sourced.** `ledgerly-core`
-  marks both. Tests use self-generated vectors only. Before release someone quotes the GSTN source;
-  until then G-cards treat a wrong check character as a parse error, as now.
+  marks both. Test vectors are fictional, with one hand derivation written in the test; they are
+  only as good as the recalled algorithm. The owner checks the state table (it feeds place of
+  supply) before G1–G4 run, and someone quotes the GSTN source before release.
 - **Fixture GSTIN for Maharashtra is unfilled** (`27ABCDE1234F1Z?`); Q1 computes it.
 - **Fuzz crate** `fuzz/` is outside the workspace; targets are no-ops until H1/H2.
 - Interface change requests go to `docs/interface-requests.md`.
