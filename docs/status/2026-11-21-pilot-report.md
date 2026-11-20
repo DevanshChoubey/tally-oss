@@ -10,6 +10,14 @@ Every card was reviewed once, read-only. A card the reviewer marked "changes" go
 and the fix itself has not been re-reviewed. Agents used: 42 in the final run and about 48 across
 the earlier runs that were stopped. The final run used 4.8M subagent tokens.
 
+**Integration compile (2026-11-21, later the same day).** The owner allowed one controlled build
+of `integration`. After lint, rustdoc and one borrow fix (commits 2616a53, 33eedd7), card G4
+gained purchase and debit-note GST from the supplier's state (b01d8ad), which the three A1
+purchase tests needed. Now green on `integration`: `cargo fmt --check`, clippy `-D warnings`,
+rustdoc `-D warnings`, `cargo deny check`, and nextest with 634 of 634 tests passing. No test
+assertion was loosened. The "Compiled" column below describes the cards before this build.
+Nothing is pushed or merged to `main`.
+
 | Card | Status | Compiled | Review | Blocking | Fixed |
 |---|---|---|---|---|---|
 | C1 | done | yes | approve | 0 | - |
