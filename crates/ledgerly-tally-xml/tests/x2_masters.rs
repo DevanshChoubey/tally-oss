@@ -328,11 +328,10 @@ fn invalid_utf8_is_a_decode_error_with_offset() {
 fn truncated_input_returns_offset_and_everything_parsed_so_far() {
     // Derived: the document is cut in the middle of the second ledger. The first ledger was
     // complete and must come back in `partial`; the error offset is the end of the input.
-    let full = wrap(
-        "<LEDGER NAME=\"One\"><GUID>g1</GUID><ALTERID>1</ALTERID><NAME>One</NAME></LEDGER>\
-         <LEDGER NAME=\"Two\"><GUID>g2</GUID><ALTERID>2</ALTERID><NAME>Tw",
-    );
-    let err = parse_masters_text(&full).expect_err("truncated");
+    let full = "<ENVELOPE><BODY><DATA><TALLYMESSAGE>\
+        <LEDGER NAME=\"One\"><GUID>g1</GUID><ALTERID>1</ALTERID><NAME>One</NAME></LEDGER>\
+        <LEDGER NAME=\"Two\"><GUID>g2</GUID><ALTERID>2</ALTERID><NAME>Tw";
+    let err = parse_masters_text(full).expect_err("truncated");
     assert_eq!(err.error, TallyXmlError::Truncated { offset: full.len() });
     assert_eq!(err.partial.masters.len(), 1);
     let TallyMaster::Ledger(l) = &err.partial.masters[0] else {
