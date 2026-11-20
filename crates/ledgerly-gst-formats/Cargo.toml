@@ -1,0 +1,25 @@
+[package]
+name = "ledgerly-gst-formats"
+description = "GST return data shapes and their official JSON/Excel formats (GSTR-1/1A/3B/2B, IMS, e-invoice, e-way bill)."
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+license = "MIT OR Apache-2.0"
+repository.workspace = true
+publish = false
+
+[dependencies]
+ledgerly-core.workspace = true
+rust_decimal.workspace = true
+time.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+rust_xlsxwriter.workspace = true
+calamine.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+insta.workspace = true
+
+[lints]
+workspace = true

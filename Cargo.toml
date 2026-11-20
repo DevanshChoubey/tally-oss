@@ -1,0 +1,122 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+exclude = ["fuzz"]
+
+[workspace.package]
+edition = "2024"
+rust-version = "1.100"
+repository = "https://github.com/OWNER/ledgerly"
+
+[workspace.dependencies]
+# Internal crates
+ledgerly-core = { path = "crates/ledgerly-core" }
+ledgerly-model = { path = "crates/ledgerly-model" }
+ledgerly-store = { path = "crates/ledgerly-store" }
+ledgerly-engine = { path = "crates/ledgerly-engine" }
+ledgerly-gst = { path = "crates/ledgerly-gst" }
+ledgerly-stock = { path = "crates/ledgerly-stock" }
+ledgerly-reports = { path = "crates/ledgerly-reports" }
+ledgerly-bank = { path = "crates/ledgerly-bank" }
+ledgerly-tally-xml = { path = "crates/ledgerly-tally-xml" }
+ledgerly-tally-bridge = { path = "crates/ledgerly-tally-bridge" }
+ledgerly-gst-formats = { path = "crates/ledgerly-gst-formats" }
+ledgerly-bankfmt = { path = "crates/ledgerly-bankfmt" }
+ledgerly-assist = { path = "crates/ledgerly-assist" }
+ledgerly-print = { path = "crates/ledgerly-print" }
+ledgerly-api = { path = "crates/ledgerly-api" }
+ledgerly-conformance = { path = "crates/ledgerly-conformance" }
+# Numbers and time (rule A3: money is Paise(i64); quantities and rates are Decimal)
+rust_decimal = { version = "1.43", default-features = false, features = ["std", "serde-str"] }
+time = { version = "0.3.55", features = ["serde", "macros", "parsing", "formatting"] }
+# Storage and hashing
+rusqlite = { version = "0.43", features = ["bundled"] }
+sha2 = "0.11"
+ciborium = "0.2"
+hex = "0.4"
+# Formats
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+toml = "1"
+quick-xml = "0.42"
+encoding_rs = "0.8"
+csv = "1.4"
+calamine = "0.38"
+rust_xlsxwriter = "0.103"
+pdf-writer = "0.15"
+qrcode = { version = "0.15", default-features = false }
+percent-encoding = "2.3"
+# Network (explicit user action only, rule D5)
+ureq = "3.5"
+# Plumbing
+thiserror = "2"
+anyhow = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+keyring = "4"
+tempfile = "3"
+clap = { version = "4.6", features = ["derive"] }
+# UI (ledgerly-app only, rule C1)
+egui = "0.37"
+eframe = { version = "0.37", default-features = false, features = ["wgpu", "default_fonts", "wayland", "x11", "accesskit"] }
+egui_extras = "0.37"
+rfd = "0.18"
+# Tests and benches
+insta = { version = "1.49", features = ["yaml", "json"] }
+proptest = "1.12"
+criterion = "0.8"
+
+# Wave 0 declares every card's dependencies up front so builders never edit manifests. Re-enable
+# after Wave 3 integration and remove what is still unused.
+[workspace.lints.cargo]
+unused_dependencies = "allow"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+unused_must_use = "deny"
+unreachable_pub = "warn"
+rust_2018_idioms = { level = "warn", priority = -1 }
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+# Rule B2: library code must not panic on outside input.
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+unreachable = "deny"
+indexing_slicing = "deny"
+# Rule A3: no floats outside app layout and assist confidences (those crates allow it with a reason).
+float_arithmetic = "deny"
+float_cmp = "deny"
+cast_precision_loss = "deny"
+# Rule A2: no wildcard arms over our own enums.
+wildcard_enum_match_arm = "deny"
+match_wildcard_for_single_variants = "deny"
+# Rule B5: every allow needs a reason.
+allow_attributes_without_reason = "deny"
+# Rule C3: complexity limits (values in clippy.toml).
+cognitive_complexity = "warn"
+too_many_lines = "warn"
+too_many_arguments = "warn"
+type_complexity = "warn"
+# Logging goes through tracing.
+print_stdout = "warn"
+print_stderr = "warn"
+dbg_macro = "deny"
+# Pedantic lints that are noise for this codebase.
+module_name_repetitions = "allow"
+must_use_candidate = "allow"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+debug = "line-tables-only"
+# Rule A3: integer overflow is never silent, even in release builds.
+overflow-checks = true
+
+[profile.dev.package."*"]
+opt-level = 1

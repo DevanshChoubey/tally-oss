@@ -1,0 +1,21 @@
+[package]
+name = "ledgerly-core"
+description = "Shared vocabulary: Paise, quantities, rates, dates and financial years, GSTIN/PAN/state codes, ids, Outcome and Unsupported."
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+license = "MIT OR Apache-2.0"
+repository.workspace = true
+publish = false
+
+[dependencies]
+rust_decimal.workspace = true
+time.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,29 @@
+[package]
+name = "ledgerly-assist"
+description = "AI proposer: typed proposals, OCR and model clients, and the validator that recomputes through the engine."
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+license = "AGPL-3.0-or-later"
+repository.workspace = true
+publish = false
+
+[dependencies]
+ledgerly-core.workspace = true
+ledgerly-model.workspace = true
+ledgerly-engine.workspace = true
+ledgerly-gst.workspace = true
+rust_decimal.workspace = true
+time.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+ureq.workspace = true
+keyring.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+insta.workspace = true
+
+[lints]
+workspace = true

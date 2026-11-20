@@ -1,0 +1,35 @@
+[package]
+name = "ledgerly-app"
+description = "Ledgerly desktop app (egui)."
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+license = "AGPL-3.0-or-later"
+repository.workspace = true
+publish = false
+
+[[bin]]
+name = "ledgerly-app"
+path = "src/main.rs"
+
+[dependencies]
+ledgerly-core.workspace = true
+ledgerly-model.workspace = true
+ledgerly-api.workspace = true
+egui.workspace = true
+eframe.workspace = true
+egui_extras.workspace = true
+rfd.workspace = true
+serde.workspace = true
+toml.workspace = true
+time.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+anyhow.workspace = true
+
+[dev-dependencies]
+insta.workspace = true
+
+[lints]
+workspace = true

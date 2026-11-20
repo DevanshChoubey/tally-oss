@@ -1,0 +1,35 @@
+[package]
+name = "ledgerly-conformance"
+description = "Golden cases with provenance, fixtures, the ratchet pass-list and benchmarks."
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+license = "AGPL-3.0-or-later"
+repository.workspace = true
+publish = false
+
+[dependencies]
+ledgerly-core.workspace = true
+ledgerly-model.workspace = true
+ledgerly-store.workspace = true
+ledgerly-engine.workspace = true
+ledgerly-gst.workspace = true
+ledgerly-stock.workspace = true
+ledgerly-reports.workspace = true
+rust_decimal.workspace = true
+time.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+toml.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+criterion.workspace = true
+tempfile.workspace = true
+
+[[bench]]
+name = "reports"
+harness = false
+
+[lints]
+workspace = true

@@ -1,0 +1,27 @@
+[package]
+name = "ledgerly-bank"
+description = "Bank statements, matching, BRS, cheques and UPI payment payloads."
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+license = "AGPL-3.0-or-later"
+repository.workspace = true
+publish = false
+
+[dependencies]
+ledgerly-core.workspace = true
+ledgerly-model.workspace = true
+ledgerly-bankfmt.workspace = true
+rust_decimal.workspace = true
+time.workspace = true
+serde.workspace = true
+sha2.workspace = true
+hex.workspace = true
+percent-encoding.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+
+[lints]
+workspace = true

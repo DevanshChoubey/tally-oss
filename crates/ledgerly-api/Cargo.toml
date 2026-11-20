@@ -1,0 +1,33 @@
+[package]
+name = "ledgerly-api"
+description = "Command and query facade used by the app, the CLI and the MCP server."
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+license = "AGPL-3.0-or-later"
+repository.workspace = true
+publish = false
+
+[dependencies]
+ledgerly-core.workspace = true
+ledgerly-model.workspace = true
+ledgerly-store.workspace = true
+ledgerly-engine.workspace = true
+ledgerly-gst.workspace = true
+ledgerly-gst-formats.workspace = true
+ledgerly-stock.workspace = true
+ledgerly-reports.workspace = true
+ledgerly-bank.workspace = true
+ledgerly-bankfmt.workspace = true
+ledgerly-tally-bridge.workspace = true
+ledgerly-assist.workspace = true
+ledgerly-print.workspace = true
+time.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,23 @@
+[package]
+name = "ledgerly-mcp"
+description = "MCP server (JSON-RPC over stdio) exposing read queries and propose tools. No posting tool."
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+license = "AGPL-3.0-or-later"
+repository.workspace = true
+publish = false
+
+[dependencies]
+ledgerly-core.workspace = true
+ledgerly-api.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+insta.workspace = true
+
+[lints]
+workspace = true

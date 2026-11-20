@@ -1,0 +1,27 @@
+[package]
+name = "ledgerly-gst"
+description = "Effective-dated GST rule packs, place of supply, voucher tax, return builders and 2B/IMS reconciliation."
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+license = "AGPL-3.0-or-later"
+repository.workspace = true
+publish = false
+
+[dependencies]
+ledgerly-core.workspace = true
+ledgerly-model.workspace = true
+ledgerly-gst-formats.workspace = true
+rust_decimal.workspace = true
+time.workspace = true
+serde.workspace = true
+toml.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+insta.workspace = true
+
+[lints]
+workspace = true

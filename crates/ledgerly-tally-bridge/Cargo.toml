@@ -1,0 +1,27 @@
+[package]
+name = "ledgerly-tally-bridge"
+description = "Import from a running Tally (HTTP/XML on port 9000) or exported XML files, mapping and reconciliation."
+version = "0.0.0"
+edition.workspace = true
+rust-version.workspace = true
+license = "AGPL-3.0-or-later"
+repository.workspace = true
+publish = false
+
+[dependencies]
+ledgerly-core.workspace = true
+ledgerly-model.workspace = true
+ledgerly-store.workspace = true
+ledgerly-tally-xml.workspace = true
+ledgerly-reports.workspace = true
+ureq.workspace = true
+time.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+insta.workspace = true
+
+[lints]
+workspace = true
