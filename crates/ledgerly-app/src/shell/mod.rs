@@ -10,8 +10,8 @@
 //!
 //! What the shell does (spec 7):
 //!
-//! * Every tab is a screen stack. A screen asks for [`ScreenAction::Push`] ("open on top",
-//!   resumable) or [`ScreenAction::Replace`]; Esc, or a click on an earlier breadcrumb, goes back.
+//! * Every tab is a screen stack. A screen asks for [`crate::ScreenAction::Push`] ("open on top",
+//!   resumable) or [`crate::ScreenAction::Replace`]; Esc, or a click on an earlier breadcrumb, goes back.
 //! * Esc is handled after the screen has drawn, and only when the screen did not consume it, so a
 //!   screen can keep Esc for its own pop-ups and fields.
 //! * Ctrl+T opens a tab, Ctrl+W closes the active one. The key map of card U2 is not wired in

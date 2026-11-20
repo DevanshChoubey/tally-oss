@@ -50,19 +50,19 @@ fn light_tokens_are_the_mock_tokens() {
     // reference. ink_3 is a documented deviation, see below.
     let t = theme::tokens(ThemeKind::Light);
     let expected: [(&str, Color32, u32); 13] = [
-        ("paper", t.paper, 0xF2F4F7),
-        ("sheet", t.sheet, 0xFFFFFF),
-        ("ink", t.ink, 0x172033),
-        ("ink_2", t.ink_2, 0x47536A),
-        ("line", t.line, 0xDCE1E9),
-        ("ruling", t.ruling, 0xCBD6EC),
-        ("margin", t.margin, 0xC23B35),
-        ("accent", t.accent, 0x3541A8),
-        ("accent_ink", t.accent_ink, 0xFFFFFF),
-        ("accent_soft", t.accent_soft, 0xE5E8FA),
-        ("haldi_soft", t.haldi_soft, 0xFBF0D8),
-        ("leaf_soft", t.leaf_soft, 0xDDF0E4),
-        ("focus_band", t.focus_band, 0xFFF7D6),
+        ("paper", t.paper, 0x00F2_F4F7),
+        ("sheet", t.sheet, 0x00FF_FFFF),
+        ("ink", t.ink, 0x0017_2033),
+        ("ink_2", t.ink_2, 0x0047_536A),
+        ("line", t.line, 0x00DC_E1E9),
+        ("ruling", t.ruling, 0x00CB_D6EC),
+        ("margin", t.margin, 0x00C2_3B35),
+        ("accent", t.accent, 0x0035_41A8),
+        ("accent_ink", t.accent_ink, 0x00FF_FFFF),
+        ("accent_soft", t.accent_soft, 0x00E5_E8FA),
+        ("haldi_soft", t.haldi_soft, 0x00FB_F0D8),
+        ("leaf_soft", t.leaf_soft, 0x00DD_F0E4),
+        ("focus_band", t.focus_band, 0x00FF_F7D6),
     ];
     for (name, got, want) in expected {
         assert_eq!(hex(got), want, "light token {name}");
@@ -74,22 +74,22 @@ fn dark_tokens_are_the_mock_tokens() {
     // derived: design/mock/index.html lines 38-41 and 45-48 (dark overrides).
     let t = theme::tokens(ThemeKind::Dark);
     let expected: [(&str, Color32, u32); 16] = [
-        ("paper", t.paper, 0x0E1320),
-        ("sheet", t.sheet, 0x151B2A),
-        ("ink", t.ink, 0xE5E9F2),
-        ("ink_2", t.ink_2, 0xA9B3C6),
-        ("ink_3", t.ink_3, 0x7D889D),
-        ("line", t.line, 0x263049),
-        ("ruling", t.ruling, 0x25345A),
-        ("margin", t.margin, 0xE46A5F),
-        ("accent", t.accent, 0x97A0F7),
-        ("accent_ink", t.accent_ink, 0x0E1320),
-        ("accent_soft", t.accent_soft, 0x232A5C),
-        ("haldi", t.haldi, 0xE6AE4E),
-        ("haldi_soft", t.haldi_soft, 0x3A2C12),
-        ("leaf", t.leaf, 0x62C08A),
-        ("leaf_soft", t.leaf_soft, 0x173726),
-        ("focus_band", t.focus_band, 0x2C2A17),
+        ("paper", t.paper, 0x000E_1320),
+        ("sheet", t.sheet, 0x0015_1B2A),
+        ("ink", t.ink, 0x00E5_E9F2),
+        ("ink_2", t.ink_2, 0x00A9_B3C6),
+        ("ink_3", t.ink_3, 0x007D_889D),
+        ("line", t.line, 0x0026_3049),
+        ("ruling", t.ruling, 0x0025_345A),
+        ("margin", t.margin, 0x00E4_6A5F),
+        ("accent", t.accent, 0x0097_A0F7),
+        ("accent_ink", t.accent_ink, 0x000E_1320),
+        ("accent_soft", t.accent_soft, 0x0023_2A5C),
+        ("haldi", t.haldi, 0x00E6_AE4E),
+        ("haldi_soft", t.haldi_soft, 0x003A_2C12),
+        ("leaf", t.leaf, 0x0062_C08A),
+        ("leaf_soft", t.leaf_soft, 0x0017_3726),
+        ("focus_band", t.focus_band, 0x002C_2A17),
     ];
     for (name, got, want) in expected {
         assert_eq!(hex(got), want, "dark token {name}");
@@ -107,7 +107,7 @@ fn light_ink_3_deviates_from_the_mock_because_the_mock_fails_wcag() {
     let mock = Color32::from_rgb(0x77, 0x83, 0x9A);
     let sheet = Color32::from_rgb(0xFF, 0xFF, 0xFF);
     assert!(contrast(mock, sheet) < 4.5);
-    assert_ne!(hex(theme::tokens(ThemeKind::Light).ink_3), 0x77839A);
+    assert_ne!(hex(theme::tokens(ThemeKind::Light).ink_3), 0x0077_839A);
 }
 
 #[test]
@@ -120,8 +120,8 @@ fn light_haldi_and_leaf_deviate_from_the_mock_because_the_mock_fails_wcag() {
     assert!(contrast(Color32::from_rgb(0x9A, 0x64, 0x10), haldi_soft) < 4.5);
     assert!(contrast(Color32::from_rgb(0x2C, 0x7A, 0x4B), leaf_soft) < 4.5);
     let t = theme::tokens(ThemeKind::Light);
-    assert_eq!(hex(t.haldi), 0x8F5C0C);
-    assert_eq!(hex(t.leaf), 0x286F45);
+    assert_eq!(hex(t.haldi), 0x008F_5C0C);
+    assert_eq!(hex(t.leaf), 0x0028_6F45);
 }
 
 /// Text pairs that screens draw: (name, foreground, background).
