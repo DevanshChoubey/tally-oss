@@ -1,0 +1,37 @@
+# Fuzz targets (rule D4). Not a workspace member; needs nightly: `cargo +nightly fuzz run <target>`.
+# Cards H1 (tally_xml) and H2 (gst_json, bank) fill in the targets.
+[package]
+name = "ledgerly-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+ledgerly-tally-xml = { path = "../crates/ledgerly-tally-xml" }
+ledgerly-gst-formats = { path = "../crates/ledgerly-gst-formats" }
+ledgerly-bankfmt = { path = "../crates/ledgerly-bankfmt" }
+
+[[bin]]
+name = "tally_xml"
+path = "fuzz_targets/tally_xml.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "gst_json"
+path = "fuzz_targets/gst_json.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "bank"
+path = "fuzz_targets/bank.rs"
+test = false
+doc = false
+bench = false

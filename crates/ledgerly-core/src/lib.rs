@@ -4,6 +4,7 @@
 //! float (engineering rule A3). Every computation elsewhere returns an [`Outcome`]: a value or an
 //! explicit [`Unsupported`] (rule A1).
 
+mod cancel;
 mod clock;
 mod dates;
 mod gstin;
@@ -20,6 +21,7 @@ pub mod date_entry;
 pub mod format;
 pub mod money_ops;
 
+pub use cancel::CancelToken;
 pub use clock::Clock;
 pub use dates::{FinancialYear, Period, PeriodError};
 pub use gstin::{Gstin, GstinError, gstin_check_character};

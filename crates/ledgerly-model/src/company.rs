@@ -71,7 +71,7 @@ pub enum EntityKind {
     Other,
 }
 
-/// Feature switches. Dependencies between them are checked by [`Features::validate`]
+/// Feature switches. Dependencies between them are checked by `Features::validate`
 /// (module [`crate::features`], card M3).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default, Serialize, Deserialize)]
 #[expect(

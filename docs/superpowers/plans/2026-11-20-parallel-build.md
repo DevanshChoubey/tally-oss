@@ -448,3 +448,27 @@ core/model/store/engine; RV-tax: reports/gst/stock/bank; RV-interop: tally/assis
 card's dependencies are inside the set. That proves a voucher can be posted, taxed, reported,
 parsed from Tally XML, drafted by the AI and shown, and measures real cost per card. Then scale
 to the full plan.
+
+## Wave 0 status and deviations (2026-11-20)
+
+Wave 0 is done on branch `build/wave-0`, tag `wave-0`. Gates: fmt, clippy `-D warnings`, nextest
+(16 tests, all in `ledgerly-core`), rustdoc `-D warnings`, `cargo deny check`, headless check.
+
+Deviations from the text above, for builders and reviewers:
+
+- **Contract modules, not stubs.** Each card's owned file exists and holds a module doc naming the
+  card and the frozen interface in a `text` block. Builders replace the body; they never edit
+  another card's file. The exceptions are `ledgerly-store` `commit.rs` and `load.rs`, which return
+  `StoreError::NotBuilt("S2"/"S4")` because `impl Store for SqliteStore` must compile. S2 and S4
+  remove those variants' uses; the `NotBuilt` variant goes in W-wave cleanup.
+- **`arithmetic_side_effects` is not a lint.** It was too noisy against `Decimal` and `u64` ids.
+  Instead: `overflow-checks = true` in every profile, and money arithmetic only through `Paise`
+  checked methods (there is no `Add` impl).
+- **`Proposal::Voucher` holds `Box<VoucherDraft>`**, and `Event` carries
+  `#[expect(clippy::large_enum_variant)]`.
+- **GSTIN check character and the state-code table are recalled, not sourced.** `ledgerly-core`
+  marks both. Tests use self-generated vectors only. Before release someone quotes the GSTN source;
+  until then G-cards treat a wrong check character as a parse error, as now.
+- **Fixture GSTIN for Maharashtra is unfilled** (`27ABCDE1234F1Z?`); Q1 computes it.
+- **Fuzz crate** `fuzz/` is outside the workspace; targets are no-ops until H1/H2.
+- Interface change requests go to `docs/interface-requests.md`.
