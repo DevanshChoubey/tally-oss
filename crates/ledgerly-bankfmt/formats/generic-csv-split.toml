@@ -1,0 +1,19 @@
+# Generic layout, not a claim about any bank: one header row, then
+# date, value date, narration, reference, withdrawal, deposit, balance.
+# The user picks it explicitly; nothing guesses a layout from a file.
+id = "generic-csv-split"
+name = "Generic CSV, separate withdrawal and deposit columns"
+kind = "csv"
+delimiter = ","
+skip_rows = 1
+date_format = "dd/mm/yyyy"
+amounts = "split"
+
+[columns]
+date = 0
+value_date = 1
+description = 2
+reference = 3
+debit = 4
+credit = 5
+balance = 6

@@ -1,0 +1,16 @@
+# Generic layout, not a claim about any bank: one header row, then
+# date, narration, reference, signed amount (negative is money out), balance.
+id = "generic-csv-signed"
+name = "Generic CSV, one signed amount column"
+kind = "csv"
+delimiter = ","
+skip_rows = 1
+date_format = "yyyy-mm-dd"
+amounts = "signed"
+
+[columns]
+date = 0
+description = 1
+reference = 2
+amount = 3
+balance = 4

@@ -1,0 +1,17 @@
+# Generic layout, not a claim about any bank: one header row, then
+# date, narration, reference, amount, Dr/Cr marker, balance.
+id = "generic-csv-indicator"
+name = "Generic CSV, amount with a Dr/Cr marker column"
+kind = "csv"
+delimiter = ","
+skip_rows = 1
+date_format = "dd-Mon-yyyy"
+amounts = "indicator"
+
+[columns]
+date = 0
+description = 1
+reference = 2
+amount = 3
+indicator = 4
+balance = 5

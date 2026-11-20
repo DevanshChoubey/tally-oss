@@ -1,0 +1,17 @@
+# Generic layout, not a claim about any bank: the header row is the first row that holds all of
+# the cells below (letterhead rows above it are skipped), then
+# date, narration, reference, withdrawal, deposit, balance.
+id = "generic-xlsx-split"
+name = "Generic Excel, separate withdrawal and deposit columns"
+kind = "xlsx"
+header_cells = ["Date", "Narration", "Withdrawal", "Deposit", "Balance"]
+date_format = "dd/mm/yyyy"
+amounts = "split"
+
+[columns]
+date = 0
+description = 1
+reference = 2
+debit = 3
+credit = 4
+balance = 5
