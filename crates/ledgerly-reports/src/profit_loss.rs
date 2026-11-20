@@ -484,6 +484,30 @@ fn stock_cell(value: Paise, debit: bool, provisional: Option<&str>) -> Result<Ce
     })
 }
 
+/// Joins the provisional reasons of both stock inputs, `None` when both are final.
+fn combined_reason(opening: &StockTotal, closing: &StockTotal) -> Option<String> {
+    let joined = [
+        opening.provisional.as_deref(),
+        closing.provisional.as_deref(),
+    ]
+    .into_iter()
+    .flatten()
+    .collect::<Vec<_>>()
+    .join("; ");
+    (!joined.is_empty()).then_some(joined)
+}
+
+fn report_notes(provisional: Option<&str>) -> Vec<String> {
+    let mut notes =
+        vec!["Profit figures are positive for a profit and negative for a loss.".to_owned()];
+    if let Some(reason) = provisional {
+        notes.push(format!(
+            "Gross and net profit are provisional because stock is provisional ({reason})."
+        ));
+    }
+    notes
+}
+
 fn render(
     books: &Books,
     params: &ReportParams,
@@ -491,10 +515,7 @@ fn render(
     opening: &StockTotal,
     closing: &StockTotal,
 ) -> Result<Report, ReportError> {
-    let detailed = match params.detail {
-        Detail::Detailed => true,
-        Detail::Condensed => false,
-    };
+    let detailed = params.detail == Detail::Detailed;
     let net = |b: Bucket| tree.bucket_net.get(&b).copied().unwrap_or(Paise::ZERO);
     // Debit-positive net of the trading account: Dr items minus Cr items, stock included.
     let trading_dr = net(Bucket::TradingExpense)
@@ -504,15 +525,7 @@ fn render(
     let gross = trading_dr.checked_neg()?;
     let indirect_dr = net(Bucket::IndirectExpense).checked_add(net(Bucket::IndirectIncome))?;
     let net_profit = gross.checked_sub(indirect_dr)?;
-    let provisional = [
-        opening.provisional.as_deref(),
-        closing.provisional.as_deref(),
-    ]
-    .into_iter()
-    .flatten()
-    .collect::<Vec<_>>()
-    .join("; ");
-    let provisional = (!provisional.is_empty()).then_some(provisional);
+    let provisional = combined_reason(opening, closing);
 
     let mut rows = vec![text_row("Trading account")];
     rows.push(row(
@@ -550,13 +563,7 @@ fn render(
         net_cell.clone(),
     ));
 
-    let mut notes =
-        vec!["Profit figures are positive for a profit and negative for a loss.".to_owned()];
-    if let Some(reason) = &provisional {
-        notes.push(format!(
-            "Gross and net profit are provisional because stock is provisional ({reason})."
-        ));
-    }
+    let notes = report_notes(provisional.as_deref());
     Ok(Report {
         title: "Profit and loss account".into(),
         params: params.clone(),
