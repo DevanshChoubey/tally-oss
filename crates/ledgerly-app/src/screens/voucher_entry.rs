@@ -51,6 +51,10 @@ use crate::{AppCtx, Screen, ScreenAction};
 const PICKER_LIMIT: usize = 50;
 /// How many recently used ledgers are remembered.
 const RECENTS_LIMIT: usize = 20;
+/// Deepest nesting of parentheses and unary minus signs an amount may have.
+const MAX_AMOUNT_DEPTH: usize = 64;
+/// Longest amount text, in characters, that is evaluated.
+const MAX_AMOUNT_CHARS: usize = 256;
 /// The id a voucher carries until the store assigns one on commit.
 pub const UNASSIGNED_VOUCHER_ID: VoucherId = VoucherId(0);
 
@@ -90,6 +94,27 @@ pub enum AmountError {
         /// 1-based character position.
         at: usize,
     },
+    /// A percentage on its own (`18%`) or at the start of a sum (`10%+5`): it is unclear what it
+    /// is a percentage of.
+    #[error(
+        "a percentage needs something to be a percentage of (character {at}); write for example 1200*18%"
+    )]
+    LonePercent {
+        /// 1-based character position.
+        at: usize,
+    },
+    /// Parentheses or minus signs nested too deeply.
+    #[error("the amount nests parentheses or minus signs too deeply (character {at})")]
+    TooDeep {
+        /// 1-based character position.
+        at: usize,
+    },
+    /// More text than any amount needs.
+    #[error("the amount is longer than {max} characters")]
+    TooLong {
+        /// The limit.
+        max: usize,
+    },
     /// Division by zero.
     #[error("division by zero")]
     DivideByZero,
@@ -124,6 +149,7 @@ impl Operand {
 struct Parser {
     chars: Vec<char>,
     pos: usize,
+    depth: usize,
 }
 
 impl Parser {
@@ -146,15 +172,31 @@ impl Parser {
         self.pos.saturating_add(1)
     }
 
+    /// Enters one more nesting level, or fails when the text nests too deeply.
+    fn descend(&mut self) -> Result<(), AmountError> {
+        self.depth = self.depth.saturating_add(1);
+        if self.depth > MAX_AMOUNT_DEPTH {
+            return Err(AmountError::TooDeep { at: self.at() });
+        }
+        Ok(())
+    }
+
+    fn ascend(&mut self) {
+        self.depth = self.depth.saturating_sub(1);
+    }
+
     /// `expr := term (('+' | '-') term)*`
-    fn expr(&mut self) -> Result<Decimal, AmountError> {
-        let mut acc = self.term()?.value;
+    fn expr(&mut self) -> Result<Operand, AmountError> {
+        let mut acc = self.term()?;
         loop {
             self.skip_space();
             let op = self.peek();
             let adding = op == Some('+');
             if !adding && op != Some('-') {
                 return Ok(acc);
+            }
+            if acc.bare_percent {
+                return Err(AmountError::LonePercent { at: self.at() });
             }
             self.bump();
             let at = self.at();
@@ -163,11 +205,11 @@ impl Parser {
                 return Err(AmountError::AmbiguousPercent { at });
             }
             let next = if adding {
-                acc.checked_add(rhs.value)
+                acc.value.checked_add(rhs.value)
             } else {
-                acc.checked_sub(rhs.value)
+                acc.value.checked_sub(rhs.value)
             };
-            acc = next.ok_or(AmountError::Overflow)?;
+            acc = Operand::plain(next.ok_or(AmountError::Overflow)?);
         }
     }
 
@@ -199,7 +241,9 @@ impl Parser {
         self.skip_space();
         if self.peek() == Some('-') {
             self.bump();
+            self.descend()?;
             let inner = self.unary()?;
+            self.ascend();
             return Ok(Operand {
                 value: -inner.value,
                 bare_percent: inner.bare_percent,
@@ -242,13 +286,15 @@ impl Parser {
         }
         if c == '(' {
             self.bump();
-            let value = self.expr()?;
+            self.descend()?;
+            let inner = self.expr()?;
+            self.ascend();
             self.skip_space();
             if self.peek() != Some(')') {
                 return Err(AmountError::Syntax { at: self.at() });
             }
             self.bump();
-            return Ok(Operand::plain(value));
+            return Ok(inner);
         }
         Err(AmountError::Syntax { at: self.at() })
     }
@@ -264,7 +310,9 @@ fn allowed_in_amount(c: char) -> bool {
 ///
 /// Grammar: numbers (digits with one optional `.`), `+ - * /`, parentheses, unary minus, and a
 /// postfix `%` meaning "divided by 100", so `1200*18%` is 1200 x 0.18 = 216. `x%` directly after
-/// `+` or `-` is refused as ambiguous ([`AmountError::AmbiguousPercent`]). The result is rounded
+/// `+` or `-` is refused as ambiguous ([`AmountError::AmbiguousPercent`]), and a percentage that
+/// is not the operand of `*` or `/` (a lone `18%`) is refused ([`AmountError::LonePercent`]).
+/// Text over 256 characters or nested more than 64 deep is refused. The result is rounded
 /// to the nearest paisa, halves away from zero ([`RoundingRule::HalfUpToPaise`]). No floats are
 /// involved. A negative result is an error: the side (Dr or Cr) carries the sign.
 ///
@@ -278,15 +326,30 @@ pub fn eval_amount(input: &str) -> Result<Paise, AmountError> {
     if let Some(ch) = text.chars().find(|c| !allowed_in_amount(*c)) {
         return Err(AmountError::BadChar { ch });
     }
+    if text
+        .chars()
+        .take(MAX_AMOUNT_CHARS.saturating_add(1))
+        .count()
+        > MAX_AMOUNT_CHARS
+    {
+        return Err(AmountError::TooLong {
+            max: MAX_AMOUNT_CHARS,
+        });
+    }
     let mut parser = Parser {
         chars: text.chars().collect(),
         pos: 0,
+        depth: 0,
     };
-    let value = parser.expr()?;
+    let result = parser.expr()?;
     parser.skip_space();
     if parser.pos < parser.chars.len() {
         return Err(AmountError::Syntax { at: parser.at() });
     }
+    if result.bare_percent {
+        return Err(AmountError::LonePercent { at: 1 });
+    }
+    let value = result.value;
     if value.is_sign_negative() && !value.is_zero() {
         return Err(AmountError::Negative);
     }
@@ -499,33 +562,33 @@ pub enum PickerItem {
     },
 }
 
-/// How well `candidate` matches the lowercase `query`: 0 exact, 1 prefix, 2 a word starts with it,
-/// 3 contains it, 4 its letters appear in order. `None` for no match.
+/// How well the lowercase `candidate` matches the lowercase `query`: 0 exact, 1 prefix, 2 a word
+/// starts with it, 3 contains it, 4 its letters appear in order. `None` for no match.
 fn match_rank(candidate: &str, query: &str) -> Option<u8> {
-    let c = candidate.to_lowercase();
-    if c == query {
+    if candidate == query {
         Some(0)
-    } else if c.starts_with(query) {
+    } else if candidate.starts_with(query) {
         Some(1)
-    } else if c.split_whitespace().any(|w| w.starts_with(query)) {
+    } else if candidate.split_whitespace().any(|w| w.starts_with(query)) {
         Some(2)
-    } else if c.contains(query) {
+    } else if candidate.contains(query) {
         Some(3)
     } else {
-        let mut rest = c.chars();
+        let mut rest = candidate.chars();
         query.chars().all(|q| rest.any(|x| x == q)).then_some(4)
     }
 }
 
-/// The best rank of a ledger's name or aliases for the lowercase `q`, and the alias that gave it
-/// when it beat the name. An empty query matches everything with rank 5.
-fn best_match(ledger: &Ledger, q: &str) -> Option<(u8, Option<String>)> {
+/// The best rank of a ledger's name (given lowercase as `name_lower`) or aliases for the
+/// lowercase `q`, and the alias that gave it when it beat the name. An empty query matches
+/// everything with rank 5.
+fn best_match(ledger: &Ledger, name_lower: &str, q: &str) -> Option<(u8, Option<String>)> {
     if q.is_empty() {
         return Some((5, None));
     }
-    let mut best = match_rank(&ledger.name, q).map(|r| (r, None));
+    let mut best = match_rank(name_lower, q).map(|r| (r, None));
     for alias in &ledger.aliases {
-        if let Some(r) = match_rank(alias, q)
+        if let Some(r) = match_rank(&alias.to_lowercase(), q)
             && best.as_ref().is_none_or(|(b, _)| r < *b)
         {
             best = Some((r, Some(alias.clone())));
@@ -547,11 +610,15 @@ pub fn search_ledgers(
     recents: &[LedgerId],
     balances: &BTreeMap<LedgerId, SignedAmount>,
 ) -> Vec<PickerItem> {
+    type SortKey = (u8, usize, u8, String, LedgerId);
     let typed = query.trim();
     let q = typed.to_lowercase();
-    let mut scored: Vec<((u8, usize, u8, String, LedgerId), LedgerHit)> = Vec::new();
+    let mut exists = false;
+    let mut scored: Vec<(SortKey, &Ledger, Option<String>)> = Vec::new();
     for ledger in masters.ledgers.values() {
-        let Some((rank, via_alias)) = best_match(ledger, &q) else {
+        let name_lower = ledger.name.to_lowercase();
+        exists = exists || name_lower == q;
+        let Some((rank, via_alias)) = best_match(ledger, &name_lower, &q) else {
             continue;
         };
         let recent_pos = recents.iter().position(|r| *r == ledger.id);
@@ -559,30 +626,36 @@ pub fn search_ledgers(
             u8::from(rank != 0),
             recent_pos.unwrap_or(usize::MAX),
             rank,
-            ledger.name.to_lowercase(),
+            name_lower,
             ledger.id,
         );
-        let hit = LedgerHit {
-            id: ledger.id,
-            name: ledger.name.clone(),
-            via_alias,
-            gstin: ledger
-                .party
-                .as_ref()
-                .and_then(|p| p.gstin.as_ref())
-                .map(|g| g.as_str().to_owned()),
-            balance: balances.get(&ledger.id).copied(),
-            recent: recent_pos.is_some(),
-        };
-        scored.push((key, hit));
+        scored.push((key, ledger, via_alias));
     }
-    scored.sort_by_cached_key(|(key, _)| key.clone());
+    // Only the best PICKER_LIMIT are listed: partition them out before sorting, so a company with
+    // tens of thousands of ledgers does not pay a full sort on every frame. Keys end in the ledger
+    // id, so they are distinct and the order is total.
+    if scored.len() > PICKER_LIMIT {
+        let _partitioned = scored.select_nth_unstable_by(PICKER_LIMIT, |a, b| a.0.cmp(&b.0));
+        scored.truncate(PICKER_LIMIT);
+    }
+    scored.sort_by_cached_key(|entry| entry.0.clone());
     let mut items: Vec<PickerItem> = scored
         .into_iter()
-        .take(PICKER_LIMIT)
-        .map(|(_, hit)| PickerItem::Ledger(hit))
+        .map(|(key, ledger, via_alias)| {
+            PickerItem::Ledger(LedgerHit {
+                id: ledger.id,
+                name: ledger.name.clone(),
+                via_alias,
+                gstin: ledger
+                    .party
+                    .as_ref()
+                    .and_then(|p| p.gstin.as_ref())
+                    .map(|g| g.as_str().to_owned()),
+                balance: balances.get(&ledger.id).copied(),
+                recent: key.1 != usize::MAX,
+            })
+        })
         .collect();
-    let exists = masters.ledgers.values().any(|l| l.name.to_lowercase() == q);
     if !q.is_empty() && !exists {
         items.push(PickerItem::Create {
             name: typed.to_owned(),
@@ -696,6 +769,22 @@ pub enum DraftError {
         /// 1-based line number.
         line: usize,
     },
+}
+
+/// `Unsupported` when `ledger` needs bill allocations or cost centres: this screen has no
+/// sub-forms for them, and a line without them would be wrong. Checked when the ledger is picked
+/// and again when the voucher is built.
+fn entry_support(ledger: &Ledger) -> Outcome<()> {
+    if ledger.bill_wise.is_some() || ledger.cost_centres_applicable {
+        return Outcome::unsupported(
+            format!(
+                "posting to '{}' on the accounting entry screen",
+                ledger.name
+            ),
+            "the ledger needs bill allocations or cost centres, whose entry sub-forms are not built yet",
+        );
+    }
+    Outcome::Value(())
 }
 
 /// A voucher being entered: text fields as typed, turned into a [`Voucher`] only by
@@ -838,6 +927,10 @@ impl VoucherDraft {
         if lines.is_empty() {
             return Err(VoucherError::Empty.into());
         }
+        // Entry-aid check on the typed lines so the user hears about it before the host is asked
+        // to post; `validate_voucher` (ledgerly-model, spec 5 invariant 1) and the engine decide
+        // for real when the voucher is posted. To be replaced by `money_ops::sum` and dropped in
+        // favour of the engine's answer once those exist (docs/interface-requests.md).
         if dr != cr {
             return Err(VoucherError::Unbalanced { dr, cr }.into());
         }
@@ -869,14 +962,8 @@ impl VoucherDraft {
             .ledgers
             .get(&id)
             .ok_or(VoucherError::UnknownLedger(id))?;
-        if ledger.bill_wise.is_some() || ledger.cost_centres_applicable {
-            return Ok(Outcome::unsupported(
-                format!(
-                    "posting to '{}' on the accounting entry screen",
-                    ledger.name
-                ),
-                "the ledger needs bill allocations or cost centres, whose entry sub-forms are not built yet",
-            ));
+        if let Outcome::Unsupported(u) = entry_support(ledger) {
+            return Ok(Outcome::Unsupported(u));
         }
         if amount.is_zero() {
             return Err(DraftError::ZeroAmount { line });
@@ -975,6 +1062,25 @@ enum UiEvent {
     Pick(usize),
     Side(usize),
     Leave,
+}
+
+/// The keys this screen reads. They are hard-coded here, in one table, until the keymap (card U2,
+/// `keymap.rs`) is merged and the screen can ask it for its bindings (spec 7: keys are rebindable;
+/// the need is filed in `docs/interface-requests.md`). Ctrl+Enter is deliberately absent: spec 7
+/// gives it to "alter master", which this screen does not do, so it is left to the shell.
+mod bindings {
+    use egui::{Key, Modifiers};
+
+    /// Save: Ctrl+A and Ctrl+S (spec 7 names Ctrl+A; Ctrl+S is the plan's second binding).
+    pub(super) const SAVE: [(Modifiers, Key); 2] =
+        [(Modifiers::COMMAND, Key::A), (Modifiers::COMMAND, Key::S)];
+    /// Create a ledger inline (spec 7: Alt+C).
+    pub(super) const CREATE_MASTER: (Modifiers, Key) = (Modifiers::ALT, Key::C);
+    /// Switch the line between Dr and Cr. Provisional: no source for this binding yet.
+    pub(super) const TOGGLE_SIDE: (Modifiers, Key) = (Modifiers::ALT, Key::S);
+    /// Delete the line. Provisional: no source for this binding yet (spec 7 gives Alt+D to
+    /// "delete" a voucher, not a line), so it is only a placeholder until the keymap is merged.
+    pub(super) const DELETE_LINE: (Modifiers, Key) = (Modifiers::COMMAND, Key::D);
 }
 
 /// Keys read before the widgets see them.
@@ -1136,6 +1242,11 @@ impl VoucherEntryScreen {
     /// Moves the highlight in the type-ahead list by `delta`, staying inside it.
     pub fn move_pick(&mut self, masters: &Masters, delta: isize) {
         let len = self.picker_items(masters).len();
+        self.shift_pick(len, delta);
+    }
+
+    /// Moves the highlight by `delta` in a list of `len` items, staying inside it.
+    fn shift_pick(&mut self, len: usize, delta: isize) {
         let next = self.pick_index.saturating_add_signed(delta);
         self.pick_index = next.min(len.saturating_sub(1));
     }
@@ -1203,6 +1314,11 @@ impl VoucherEntryScreen {
         }
         match self.picker_items(masters).get(self.pick_index).cloned() {
             Some(PickerItem::Ledger(hit)) => {
+                if let Some(Outcome::Unsupported(u)) =
+                    masters.ledgers.get(&hit.id).map(entry_support)
+                {
+                    return self.fail(format!("Not supported yet: {} ({})", u.what, u.reason));
+                }
                 if let Some(r) = self.draft.rows.get_mut(i) {
                     r.ledger = Some(LedgerRef::Chosen(hit.id));
                     r.ledger_text = hit.name;
@@ -1269,7 +1385,8 @@ impl VoucherEntryScreen {
         }
     }
 
-    /// Ctrl+D: deletes the line that has the keyboard (the only line is emptied instead).
+    /// Deletes the line that has the keyboard (the only line is emptied instead). Bound to a
+    /// provisional key, see `bindings::DELETE_LINE`.
     pub fn delete_line(&mut self) {
         let (Field::Ledger(i) | Field::Amount(i)) = self.focus else {
             return;
@@ -1578,19 +1695,21 @@ fn read_keys(ui: &Ui, picker_open: bool, escape_wanted: bool, confirming: bool) 
                 out.push(KeyCmd::DiscardNo);
             }
         }
-        if i.consume_key(Modifiers::COMMAND, Key::Enter)
-            || i.consume_key(Modifiers::COMMAND, Key::A)
-            || i.consume_key(Modifiers::COMMAND, Key::S)
-        {
+        let mut save = false;
+        for (modifiers, key) in bindings::SAVE {
+            // Consume every binding, so one key press never reaches a widget.
+            save |= i.consume_key(modifiers, key);
+        }
+        if save {
             out.push(KeyCmd::Save);
         }
-        if i.consume_key(Modifiers::COMMAND, Key::D) {
+        if i.consume_key(bindings::DELETE_LINE.0, bindings::DELETE_LINE.1) {
             out.push(KeyCmd::DeleteLine);
         }
-        if i.consume_key(Modifiers::ALT, Key::C) {
+        if i.consume_key(bindings::CREATE_MASTER.0, bindings::CREATE_MASTER.1) {
             out.push(KeyCmd::CreateMaster);
         }
-        if i.consume_key(Modifiers::ALT, Key::S) {
+        if i.consume_key(bindings::TOGGLE_SIDE.0, bindings::TOGGLE_SIDE.1) {
             out.push(KeyCmd::ToggleSide);
         }
         if picker_open && i.consume_key(Modifiers::NONE, Key::ArrowDown) {
@@ -1607,7 +1726,8 @@ fn read_keys(ui: &Ui, picker_open: bool, escape_wanted: bool, confirming: bool) 
 }
 
 impl VoucherEntryScreen {
-    fn handle_key(&mut self, masters: &Masters, cmd: &KeyCmd) -> ScreenAction {
+    /// `picker_len` is the length of the type-ahead list this frame already computed.
+    fn handle_key(&mut self, masters: &Masters, cmd: &KeyCmd, picker_len: usize) -> ScreenAction {
         match cmd {
             KeyCmd::Save => self.save(masters),
             KeyCmd::DeleteLine => self.delete_line(),
@@ -1617,8 +1737,8 @@ impl VoucherEntryScreen {
                     self.toggle_side(i);
                 }
             }
-            KeyCmd::PickUp => self.move_pick(masters, -1),
-            KeyCmd::PickDown => self.move_pick(masters, 1),
+            KeyCmd::PickUp => self.shift_pick(picker_len, -1),
+            KeyCmd::PickDown => self.shift_pick(picker_len, 1),
             KeyCmd::DiscardYes => {
                 if self.answer_discard(true) {
                     return ScreenAction::Pop;
@@ -1694,9 +1814,11 @@ impl VoucherEntryScreen {
 
     fn balance_text(&self) -> String {
         match self.draft.balance() {
-            Ok(Balance::Balanced) => "Debits equal credits.".to_owned(),
+            Ok(Balance::Balanced) => {
+                "Lines as typed balance (the engine checks again when it posts).".to_owned()
+            }
             Ok(Balance::Needs { side, amount }) => format!(
-                "Out of balance: a {} line of {} would balance it.",
+                "Lines as typed do not balance: a {} line of {} would balance them.",
                 side_label(side),
                 format_amount(amount)
             ),
@@ -1719,8 +1841,13 @@ impl VoucherEntryScreen {
         });
     }
 
-    fn draw_rows(&mut self, ui: &mut Ui, base: Id, masters: &Masters, events: &mut Vec<UiEvent>) {
-        let items = self.picker_items(masters);
+    fn draw_rows(
+        &mut self,
+        ui: &mut Ui,
+        base: Id,
+        items: &[PickerItem],
+        events: &mut Vec<UiEvent>,
+    ) {
         let want = self.focus_pending.then_some(self.focus);
         for (i, row) in self.draft.rows.iter_mut().enumerate() {
             let balance = match &row.ledger {
@@ -1731,7 +1858,7 @@ impl VoucherEntryScreen {
                 base,
                 want,
                 focused: self.focus,
-                items: &items,
+                items,
                 pick: self.pick_index,
                 balance,
             };
@@ -1813,13 +1940,21 @@ impl VoucherEntryScreen {
             || self.confirm_discard
             || self.searching()
             || !self.draft.is_blank();
-        let picker_open = !self.picker_items(masters).is_empty();
-        let keys = read_keys(ui, picker_open, escape_wanted, self.confirm_discard);
+        // The type-ahead list is computed once per frame (twice when a key changed the state it
+        // depends on), never once per use: it ranks every ledger (rule D1).
+        let mut items = self.picker_items(masters);
+        let keys = read_keys(ui, !items.is_empty(), escape_wanted, self.confirm_discard);
         let mut action = ScreenAction::Stay;
         for cmd in &keys {
-            if matches!(self.handle_key(masters, cmd), ScreenAction::Pop) {
+            if matches!(
+                self.handle_key(masters, cmd, items.len()),
+                ScreenAction::Pop
+            ) {
                 action = ScreenAction::Pop;
             }
+        }
+        if !keys.is_empty() {
+            items = self.picker_items(masters);
         }
         ui.heading(self.title());
         if self.confirm_discard {
@@ -1833,7 +1968,7 @@ impl VoucherEntryScreen {
         ui.add_enabled_ui(enabled, |ui| {
             self.draw_header(ui, base, &mut events);
             ui.separator();
-            self.draw_rows(ui, base, masters, &mut events);
+            self.draw_rows(ui, base, &items, &mut events);
             ui.separator();
             self.draw_footer(ui, base, masters, &mut events);
         });

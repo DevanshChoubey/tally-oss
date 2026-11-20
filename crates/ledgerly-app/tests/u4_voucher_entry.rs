@@ -198,9 +198,56 @@ fn fractional_percent() {
 }
 
 #[test]
-fn a_lone_percent_is_a_hundredth() {
-    // provenance: derived; the postfix % divides by 100: 10% = 0.10 rupee = 10 paise.
-    assert_eq!(eval_amount("10%"), Ok(Paise::new(10)));
+fn a_lone_percent_is_refused() {
+    // Review fix. Someone who types 18% in an amount field means neither 18 paise nor 18 rupees,
+    // and a plausible wrong number is worse than an error (rule A1), the same reasoning that
+    // refuses `a+b%`. Percent stays valid only as an operand of * and / (`1200*18%`).
+    // provenance: design decision (spec: never a wrong number); pending observed provenance.
+    assert!(matches!(
+        eval_amount("10%"),
+        Err(AmountError::LonePercent { .. })
+    ));
+    assert!(matches!(
+        eval_amount("(18%)"),
+        Err(AmountError::LonePercent { .. })
+    ));
+    assert!(matches!(
+        eval_amount("10%+5"),
+        Err(AmountError::LonePercent { .. })
+    ));
+    // A percentage on the right of * or / is still an operand: 1200 x 0.18 = 216 rupees, and
+    // 5 / 50% = 5 / 0.5 = 10 rupees = 1,000 paise (derived by hand).
+    assert_eq!(eval_amount("1200*18%"), Ok(Paise::new(21_600)));
+    assert_eq!(eval_amount("5/50%"), Ok(Paise::new(1_000)));
+}
+
+#[test]
+fn pasted_nesting_and_length_are_bounded_not_a_stack_overflow() {
+    // Rule B2: no panic or abort on any input. 10,000 parentheses are far beyond what an amount
+    // needs: refused by the length cap before the parser recurses.
+    let long = "(".repeat(10_000);
+    assert!(matches!(
+        eval_amount(&long),
+        Err(AmountError::TooLong { .. })
+    ));
+    let long_minus = "-".repeat(10_000);
+    assert!(matches!(
+        eval_amount(&long_minus),
+        Err(AmountError::TooLong { .. })
+    ));
+    // Within the length cap but deeper than 64 levels: refused by the depth limit.
+    let deep = format!("{}1{}", "(".repeat(100), ")".repeat(100));
+    assert!(matches!(
+        eval_amount(&deep),
+        Err(AmountError::TooDeep { .. })
+    ));
+    let deep_minus = format!("{}1", "-".repeat(100));
+    assert!(matches!(
+        eval_amount(&deep_minus),
+        Err(AmountError::TooDeep { .. })
+    ));
+    // Ordinary nesting still works: ((1+2)*3) = 9 rupees = 900 paise.
+    assert_eq!(eval_amount("((1+2)*3)"), Ok(Paise::new(900)));
 }
 
 #[test]
@@ -360,6 +407,8 @@ fn an_exact_name_comes_first_and_offers_no_create_item() {
 fn prefix_then_in_order_letters_and_a_create_item_last() {
     let b = books();
     let items = search_ledgers(&b.masters, "sha", &[], &BTreeMap::new());
+    // The ranking order (exact, recents, match quality) is a design choice of this screen,
+    // pending observed provenance; the match facts below are derived by hand.
     // derived: "sharma traders" starts with "sha" (rank 1). "shree stationers" does not start,
     // has no word starting, does not contain "sha", but s,h,a appear in order (s,h in "shree",
     // a in "stationers"), rank 4. "cash" contains "sha"? c-a-s-h: no ("sh" but then no 'a').
@@ -374,6 +423,8 @@ fn prefix_then_in_order_letters_and_a_create_item_last() {
 fn an_alias_match_is_exact_and_reports_the_alias() {
     let b = books();
     let items = search_ledgers(&b.masters, "st", &[], &BTreeMap::new());
+    // The ranking order is a design choice of this screen (see above); the match facts are
+    // derived by hand.
     // derived: alias "ST" equals "st" case-insensitively (rank 0, listed first); "shree
     // stationers" has a word starting with "st" (rank 2). "sharma traders" by name alone would
     // only match in order (rank 4) so the alias wins. "cash", "hdfc bank", "rent" have no 's'
@@ -391,8 +442,10 @@ fn an_alias_match_is_exact_and_reports_the_alias() {
 #[test]
 fn recents_come_first_but_after_an_exact_match() {
     let b = books();
+    // Recents-first is spec 7's "recents first"; the order inside it (by lowercase name) is a
+    // design choice of this screen, pending observed provenance.
     // Empty query lists all ledgers: the recent one first, then by name (case-insensitive):
-    // cash, hdfc bank, sharma traders, shree stationers.
+    // cash, hdfc bank, kaveri packaging, sharma traders, shree stationers.
     let items = search_ledgers(&b.masters, "", &[RENT], &BTreeMap::new());
     assert_eq!(
         hit_names(&items),
@@ -486,7 +539,7 @@ fn the_balancing_line_is_prefilled_on_the_opposite_side() {
 
 #[test]
 fn the_balancing_line_uses_inline_arithmetic_totals() {
-    // provenance: derived; Dr Rent 1200 and Dr Cash 1200*18% = 216 total 1416 debit, so the
+    // provenance: derived; Dr Rent 1200 and Dr Shree 1200*18% = 216 total 1416 debit, so the
     // credit that balances is 1416.00.
     let mut d = draft(
         EntryKind::Journal,
@@ -708,8 +761,9 @@ fn opening_checks_the_voucher_type() {
 
 #[test]
 fn first_side_follows_double_entry_for_payment_and_receipt() {
-    // derived: a payment credits the paying cash/bank account (money leaves it); a receipt debits
-    // the receiving one (money arrives).
+    // design choice; pending observed provenance. Double entry fixes that the voucher has a debit
+    // side and a credit side, not which line is entered first. The screen starts a payment on the
+    // paying account's credit and a receipt on the receiving account's debit.
     assert_eq!(EntryKind::Payment.first_side(), DrCr::Cr);
     assert_eq!(EntryKind::Receipt.first_side(), DrCr::Dr);
     assert_eq!(EntryKind::Journal.first_side(), DrCr::Dr);
@@ -1168,4 +1222,98 @@ fn alt_s_switches_the_side_of_the_current_line() {
     frame(&ctx, &mut s, &mut app, RawInput::default());
     frame(&ctx, &mut s, &mut app, key(Key::S, Modifiers::ALT));
     assert_eq!(s.draft().rows[0].side, DrCr::Cr);
+}
+
+#[test]
+fn alt_c_opens_the_create_form_from_the_keyboard() {
+    let b = books();
+    let ctx = egui::Context::default();
+    let mut s = open(&b, T_JOURNAL);
+    s.set_ledger_text(0, "Gupta Hardware");
+    let mut app = AppCtx { books: Some(b) };
+    frame(&ctx, &mut s, &mut app, RawInput::default());
+    assert!(!s.is_creating());
+    frame(&ctx, &mut s, &mut app, key(Key::C, Modifiers::ALT));
+    // spec 7: Alt+C creates a master inline.
+    assert!(s.is_creating());
+}
+
+#[test]
+fn ctrl_s_saves_like_ctrl_a() {
+    let b = books();
+    let ctx = egui::Context::default();
+    let mut s = open(&b, T_JOURNAL);
+    let mut app = AppCtx { books: Some(b) };
+    frame(&ctx, &mut s, &mut app, RawInput::default());
+    frame(&ctx, &mut s, &mut app, key(Key::S, Modifiers::COMMAND));
+    // Nothing entered: the same "no lines" refusal as Ctrl+A (spec 5 invariant 1).
+    assert!(s.error_text().unwrap().contains("no lines"));
+}
+
+#[test]
+fn ctrl_enter_does_not_save() {
+    // Plan U2 section: "Ctrl+Enter alters the master under the cursor (the mock's Ctrl+Enter-to-
+    // save is changed in U4/U5)". This screen has no master to alter, so it must not save, and
+    // must not consume the key meant for the shell.
+    let b = books();
+    let ctx = egui::Context::default();
+    let mut s = open(&b, T_JOURNAL);
+    let mut app = AppCtx { books: Some(b) };
+    frame(&ctx, &mut s, &mut app, RawInput::default());
+    frame(&ctx, &mut s, &mut app, key(Key::Enter, Modifiers::COMMAND));
+    assert!(s.take_save_request().is_none());
+    assert!(!s.error_text().is_some_and(|e| e.contains("no lines")));
+}
+
+#[test]
+fn arrow_down_and_up_move_the_highlight_in_a_frame() {
+    let b = books();
+    let ctx = egui::Context::default();
+    let mut s = open(&b, T_JOURNAL);
+    s.set_ledger_text(0, "s");
+    let mut app = AppCtx { books: Some(b) };
+    frame(&ctx, &mut s, &mut app, RawInput::default());
+    assert_eq!(s.pick_index(), 0);
+    frame(&ctx, &mut s, &mut app, key(Key::ArrowDown, Modifiers::NONE));
+    assert_eq!(s.pick_index(), 1);
+    frame(&ctx, &mut s, &mut app, key(Key::ArrowUp, Modifiers::NONE));
+    assert_eq!(s.pick_index(), 0);
+}
+
+#[test]
+fn a_ledger_that_needs_bill_allocations_is_refused_when_picked() {
+    // pending (see above): the bill allocation sub-form is not built. The user hears it at the
+    // pick, not after typing the whole voucher.
+    let b = books();
+    let m = &b.masters;
+    let mut s = open(&b, T_JOURNAL);
+    s.set_ledger_text(0, "kaveri");
+    s.submit(m);
+    assert_eq!(s.draft().rows[0].ledger, None);
+    assert_eq!(s.focus(), Field::Ledger(0));
+    let message = s.error_text().unwrap();
+    assert!(message.contains("Not supported yet"));
+    assert!(message.contains("Kaveri Packaging"));
+}
+
+#[test]
+fn the_list_is_capped_at_fifty_and_recents_still_lead() {
+    // Design choice of this screen (documented on search_ledgers), pending observed provenance:
+    // at most 50 ledgers are listed. 60 ledgers named L00..L59 match the empty query with equal
+    // rank, so they come in name order: L00..L49. A recent ledger beyond the cap (L59) is listed
+    // first.
+    let mut b = books();
+    for n in 0..60_u64 {
+        let id = LedgerId(100 + n);
+        b.masters
+            .ledgers
+            .insert(id, ledger(id, &format!("L{n:02}"), &[]));
+    }
+    let items = search_ledgers(&b.masters, "L", &[LedgerId(159)], &BTreeMap::new());
+    let names = hit_names(&items);
+    assert_eq!(names.len(), 51, "50 ledgers and the create item");
+    assert_eq!(names[0], "L59");
+    assert_eq!(names[1], "L00");
+    assert_eq!(names[49], "L48");
+    assert_eq!(names[50], "+L");
 }
