@@ -14,6 +14,11 @@
 //!   from a voucher line"); status copied from the voucher.
 //! - Amounts: 1,000 paise etc. are literal fixture values; nothing is computed.
 
+#![allow(
+    clippy::unwrap_used,
+    reason = "test helpers outside #[test] fns unwrap fixture values"
+)]
+
 use std::collections::BTreeMap;
 use std::path::Path;
 
@@ -22,9 +27,9 @@ use ledgerly_core::{
     Paise, Pan, Period, SignedAmount, StateCode, UserId, VoucherId, VoucherTypeId,
 };
 use ledgerly_model::{
-    Address, BankAllocation, BankMatch, Company, EntityKind, Features, Group, GstRegistration,
-    InstrumentKind, LedgerLine, MasterSnapshot, MatchKind, NegativeStockPolicy, Voucher,
-    VoucherMode, VoucherStatus,
+    Address, BankAllocation, BankMatch, Books, Company, EntityKind, Features, Group,
+    GstRegistration, InstrumentKind, LedgerLine, MasterSnapshot, MatchKind, NegativeStockPolicy,
+    Voucher, VoucherMode, VoucherStatus,
 };
 use ledgerly_store::{Actor, AuditMeta, Event, SqliteStore, Store, StoreError};
 
@@ -132,6 +137,14 @@ fn group(id: u64, name: &str) -> Group {
 
 fn two_line(id: u64, on: Date, paise: i64) -> Voucher {
     voucher(id, on, vec![line(10, dr(paise)), line(20, cr(paise))])
+}
+
+/// Asserts the load failed with `StoreError::Encoding` whose message names `needle`.
+fn assert_encoding_error(result: Result<Books, StoreError>, needle: &str) {
+    assert!(
+        matches!(&result, Err(StoreError::Encoding(m)) if m.contains(needle)),
+        "{result:?}"
+    );
 }
 
 #[test]
@@ -426,10 +439,7 @@ fn duplicate_post_fails_naming_the_event() {
         )
         .unwrap();
     // Derived: the second event (seq 2) creates an id that exists, which a valid log never does.
-    match store.load_books(None) {
-        Err(StoreError::Encoding(msg)) => assert!(msg.contains("event 2"), "{msg}"),
-        other => panic!("expected an Encoding error, got {other:?}"),
-    }
+    assert_encoding_error(store.load_books(None), "event 2");
 }
 
 #[test]
@@ -512,4 +522,86 @@ fn more_events_than_one_read_page_all_load() {
     // Same date, so voucher id order.
     assert_eq!(books.postings[0].voucher, VoucherId(1));
     assert_eq!(books.postings[2_004].voucher, VoucherId(2_005));
+}
+
+// Error paths. Derived from the `Event`, `SignedAmount` and `BankMatch` doc comments: an event
+// whose ids do not agree with the state built by the events before it cannot occur in a valid
+// log, so the load must fail naming the event (seq numbers are 1-based, in commit order) rather
+// than skip it.
+
+#[test]
+fn negative_ledger_line_amount_fails() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut store = new_store(dir.path());
+    // `SignedAmount::amount` is "never negative for a well-formed value".
+    let v = voucher(
+        1,
+        date(2026, Month::April, 5),
+        vec![line(10, dr(-100)), line(20, cr(100))],
+    );
+    store.commit(&[Event::VoucherPosted(v)], &meta()).unwrap();
+    assert_encoding_error(store.load_books(None), "negative amount");
+}
+
+#[test]
+fn match_confirmed_for_missing_voucher_fails() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut store = new_store(dir.path());
+    let matched = BankMatch {
+        statement: BankStatementId(1),
+        statement_lines: vec![1],
+        vouchers: vec![VoucherId(9)],
+        kind: MatchKind::Manual,
+        bank_date: date(2026, Month::April, 7),
+    };
+    store
+        .commit(&[Event::MatchConfirmed(matched)], &meta())
+        .unwrap();
+    assert_encoding_error(store.load_books(None), "event 1");
+}
+
+#[test]
+fn match_confirmed_for_voucher_without_bank_line_fails() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut store = new_store(dir.path());
+    // `two_line` has no bank allocation on either line, so there is no bank date to set.
+    let v = two_line(1, date(2026, Month::April, 5), 1_000);
+    let matched = BankMatch {
+        statement: BankStatementId(1),
+        statement_lines: vec![1],
+        vouchers: vec![VoucherId(1)],
+        kind: MatchKind::Manual,
+        bank_date: date(2026, Month::April, 7),
+    };
+    store
+        .commit(
+            &[Event::VoucherPosted(v), Event::MatchConfirmed(matched)],
+            &meta(),
+        )
+        .unwrap();
+    assert_encoding_error(store.load_books(None), "event 2");
+}
+
+#[test]
+fn delete_of_missing_voucher_fails() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut store = new_store(dir.path());
+    let v = two_line(1, date(2026, Month::April, 5), 1_000);
+    store
+        .commit(&[Event::VoucherDeleted { before: v }], &meta())
+        .unwrap();
+    assert_encoding_error(store.load_books(None), "event 1");
+}
+
+#[test]
+fn delete_of_missing_master_fails() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut store = new_store(dir.path());
+    store
+        .commit(
+            &[Event::MasterDeleted(MasterSnapshot::Group(group(1, "A")))],
+            &meta(),
+        )
+        .unwrap();
+    assert_encoding_error(store.load_books(None), "event 1");
 }
