@@ -27,6 +27,14 @@ pub struct Transcribed<T> {
     pub confidence_permille: u16,
 }
 
+impl<T> Transcribed<T> {
+    /// Whether the confidence reaches `threshold_permille` (equal counts). Below it the value is
+    /// blank: callers treat it as not read.
+    pub fn is_confident(&self, threshold_permille: u16) -> bool {
+        self.confidence_permille >= threshold_permille
+    }
+}
+
 /// Where a transcribed value came from.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum SourceRef {
