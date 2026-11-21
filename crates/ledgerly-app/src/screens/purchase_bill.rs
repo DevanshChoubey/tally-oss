@@ -12,7 +12,11 @@ impl Screen for PurchaseBillScreen {
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, _ctx: &mut AppCtx) -> ScreenAction {
-        super::draw_stub(ui, &self.title(), "purchase-bill.reading, purchase-bill.proposal, purchase-bill.low-confidence, purchase-bill.mismatch, purchase-bill.duplicate, purchase-bill.offline-ai, purchase-bill.cloud-consent, purchase-bill.error and purchase-bill.accepted");
+        super::draw_stub(
+            ui,
+            &self.title(),
+            "purchase-bill.reading, purchase-bill.proposal, purchase-bill.low-confidence, purchase-bill.mismatch, purchase-bill.duplicate, purchase-bill.offline-ai, purchase-bill.cloud-consent, purchase-bill.error and purchase-bill.accepted",
+        );
         ScreenAction::Stay
     }
 }

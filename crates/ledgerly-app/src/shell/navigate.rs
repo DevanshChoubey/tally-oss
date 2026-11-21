@@ -343,10 +343,26 @@ pub fn sidebar() -> Vec<SidebarGroup> {
         SidebarGroup {
             title: "Enter",
             entries: vec![
-                row("Sales", Some("F8"), PaletteTarget::Command(Action::NewSales)),
-                row("Purchase", Some("F9"), PaletteTarget::Command(Action::NewPurchase)),
-                row("Payment", Some("F5"), PaletteTarget::Command(Action::NewPayment)),
-                row("Receipt", Some("F6"), PaletteTarget::Command(Action::NewReceipt)),
+                row(
+                    "Sales",
+                    Some("F8"),
+                    PaletteTarget::Command(Action::NewSales),
+                ),
+                row(
+                    "Purchase",
+                    Some("F9"),
+                    PaletteTarget::Command(Action::NewPurchase),
+                ),
+                row(
+                    "Payment",
+                    Some("F5"),
+                    PaletteTarget::Command(Action::NewPayment),
+                ),
+                row(
+                    "Receipt",
+                    Some("F6"),
+                    PaletteTarget::Command(Action::NewReceipt),
+                ),
                 row("Plain-words entry", None, screen(QUICK_ENTRY_KEY)),
             ],
         },

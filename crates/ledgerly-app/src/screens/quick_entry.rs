@@ -12,7 +12,11 @@ impl Screen for QuickEntryScreen {
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, _ctx: &mut AppCtx) -> ScreenAction {
-        super::draw_stub(ui, &self.title(), "quick-entry.proposal, quick-entry.hinglish, quick-entry.unknown-ledger, quick-entry.loading and quick-entry.rejected");
+        super::draw_stub(
+            ui,
+            &self.title(),
+            "quick-entry.proposal, quick-entry.hinglish, quick-entry.unknown-ledger, quick-entry.loading and quick-entry.rejected",
+        );
         ScreenAction::Stay
     }
 }

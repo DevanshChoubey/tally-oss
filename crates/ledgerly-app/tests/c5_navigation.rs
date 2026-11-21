@@ -647,9 +647,16 @@ fn a_voucher_that_is_not_in_the_books_is_an_error_not_a_blank_screen() {
 
 // ---- the mock's screens: palette rows, stubs and the sidebar (card U4) ------------------------
 
-/// The fixture books plus one bank ledger, so the bank reconciliation has a screen to open.
+/// The fixture books plus one bank ledger and one GST registration, so the bank reconciliation
+/// and the GST returns have a screen to open.
 fn books_with_bank() -> Books {
     let mut fixture = books();
+    fixture.company.registrations = vec![ledgerly_model::GstRegistration {
+        gstin: Gstin::parse(CUSTOMER_GSTIN).unwrap(),
+        state: StateCode::new(29).unwrap(),
+        effective_from: date!(2026 - 04 - 01),
+        composition: false,
+    }];
     let mut bank = plain(LedgerId(4), "HDFC Current", ReservedGroup::BankAccounts);
     bank.bank = Some(ledgerly_model::BankDetails {
         account_number: "000123456789".to_owned(),
@@ -786,8 +793,7 @@ fn the_sidebar_shows_the_mock_key_hints_and_no_guessed_count() {
     // new-sales F8, new-purchase F9, new-payment F5, new-receipt F6). The Review queue count is
     // not guessed: it stays None until the shell reads it from the API.
     let groups = navigate::sidebar();
-    let flat: Vec<&navigate::SidebarEntry> =
-        groups.iter().flat_map(|g| g.entries.iter()).collect();
+    let flat: Vec<&navigate::SidebarEntry> = groups.iter().flat_map(|g| g.entries.iter()).collect();
     let hints: Vec<(&str, &str)> = flat
         .iter()
         .filter_map(|e| e.hint.map(|h| (e.label, h)))
@@ -818,7 +824,11 @@ fn every_sidebar_target_resolves_to_a_screen_or_a_keymap_command() {
                 "\"{}\" is not a keymap action",
                 entry.label
             ),
-            target => {
+            target @ (PaletteTarget::Report(_)
+            | PaletteTarget::Master(_)
+            | PaletteTarget::Voucher(_)
+            | PaletteTarget::Setting(_)
+            | PaletteTarget::AiIntent(_)) => {
                 if let Err(err) = open_target(target, &ctx) {
                     panic!("sidebar row \"{}\" did not open: {err}", entry.label);
                 }

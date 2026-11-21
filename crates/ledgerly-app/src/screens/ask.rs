@@ -12,7 +12,11 @@ impl Screen for AskScreen {
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, _ctx: &mut AppCtx) -> ScreenAction {
-        super::draw_stub(ui, &self.title(), "ask.result, ask.loading, ask.low-confidence, ask.unsupported and ask.offline-ai");
+        super::draw_stub(
+            ui,
+            &self.title(),
+            "ask.result, ask.loading, ask.low-confidence, ask.unsupported and ask.offline-ai",
+        );
         ScreenAction::Stay
     }
 }

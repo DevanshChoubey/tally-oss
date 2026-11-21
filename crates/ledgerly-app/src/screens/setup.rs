@@ -12,7 +12,11 @@ impl Screen for SetupScreen {
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, _ctx: &mut AppCtx) -> ScreenAction {
-        super::draw_stub(ui, &self.title(), "setup.welcome, setup.company, setup.gstin-error, setup.features, setup.keyboard, setup.ai, setup.backup and setup.done");
+        super::draw_stub(
+            ui,
+            &self.title(),
+            "setup.welcome, setup.company, setup.gstin-error, setup.features, setup.keyboard, setup.ai, setup.backup and setup.done",
+        );
         ScreenAction::Stay
     }
 }
