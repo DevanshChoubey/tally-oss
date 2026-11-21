@@ -36,7 +36,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use ledgerly_core::{
-    Date, GroupId, LedgerId, Outcome, Paise, SignedAmount, VoucherId, VoucherTypeId,
+    Date, DrCr, GroupId, LedgerId, Outcome, Paise, SignedAmount, VoucherId, VoucherTypeId,
 };
 use ledgerly_model::{
     BaseVoucherKind, Books, Ledger, Posting, ReservedLedger, Scenario, VoucherStatus, VoucherType,
@@ -47,13 +47,13 @@ use crate::{
     ReportParams, ReportRow, RowKind,
 };
 
-/// Text of the particulars cell when the voucher touches no other ledger.
 /// Report name used in `Unsupported` messages.
 const LEDGER_NAME: &str = "ledger vouchers";
 
 /// Report name used in `Unsupported` messages.
 const GROUP_NAME: &str = "group summary";
 
+/// Text of the particulars cell when the voucher touches no other ledger.
 const NO_OTHER_LEDGER: &str = "(no other ledger)";
 
 /// One posting that counts under the scenario, with its debit-positive value.
