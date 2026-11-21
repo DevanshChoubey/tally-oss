@@ -811,6 +811,36 @@ fn overlapping_statements_that_disagree_at_the_as_of_date_are_unsupported() {
 }
 
 #[test]
+fn chained_but_overlapping_statements_are_unsupported_by_coverage() {
+    // provenance: derived - S1 opens 10_000_000, 5 Apr credit 100, 20 Apr debit 100, closes
+    // 10_000_000 (chains: 10_000_000 + 100 - 100). S2 opens 10_000_000 (= S1's closing), 7 Apr
+    // credit 100, closes 10_000_100. S2 starts on 7 Apr, before S1 ends on 20 Apr, so the two
+    // statements overlap. Under the round-2 policy the whole BRS was Unsupported. Replaces the
+    // round-2 policy: overlap now decides only the statement-side figure, and only when two
+    // statements cover the same as-of date. At 30 Apr neither statement covers the date (S1 ends
+    // 20 Apr, S2 has one line on 7 Apr), so the statement side is Unsupported and the books side
+    // is a value: balance as per books 10_000_000 (no vouchers), balance as per bank 10_000_000.
+    // Provenance: derived (ours; see the brs module docs).
+    let s1 = stmt(
+        "k3-co1",
+        10_000_000,
+        10_000_000,
+        vec![raw_line(1, apr(5), 0, 100), raw_line(2, apr(20), 100, 0)],
+    );
+    let s2 = stmt(
+        "k3-co2",
+        10_000_000,
+        10_000_100,
+        vec![raw_line(1, apr(7), 0, 100)],
+    );
+    let result = value(brs(&books(Vec::new()), BANK, apr(30), &[s1, s2]));
+    assert_eq!(result.books_balance, Paise::new(10_000_000));
+    assert_eq!(result.balance_as_per_bank, Paise::new(10_000_000));
+    assert!(result.statement_balance.is_unsupported());
+    assert!(result.difference.is_unsupported());
+}
+
+#[test]
 fn postings_that_disagree_with_voucher_lines_are_an_error() {
     // Remove one posting of the bank ledger: the read model no longer matches the vouchers.
     let mut b = books(scenario_vouchers());
