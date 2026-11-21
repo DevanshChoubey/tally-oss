@@ -912,7 +912,12 @@ fn enter_on_narration_saves_when_the_answer_is_current() {
     s.submit(m);
     assert_eq!(s.focus(), Field::Narration);
     assert_eq!(s.draft().rows.len(), 1);
+    // Two-step save (mock design/mock-v2/index.html sales-invoice save-confirm): the first Enter on
+    // the narration asks for confirmation and does not save.
     s.submit(m);
+    assert!(s.take_save_request().is_none());
+    // The confirming Enter (KeyCmd::ConfirmSave) calls save(), with the answer still current.
+    s.save(m);
     assert!(s.take_save_request().is_some());
 }
 

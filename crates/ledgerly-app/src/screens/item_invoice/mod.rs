@@ -53,8 +53,11 @@ mod nav;
 mod picker;
 
 use self::picker::ledger_hits;
-use crate::screens::voucher_entry::{EntryDateError, LedgerHit, OpenError, format_entry_date};
+use crate::screens::voucher_entry::{
+    EntryDateError, LedgerHit, OpenError, format_entry_date, parse_entry_date,
+};
 use crate::shell::submit::CommandReply;
+use crate::ui::format;
 use crate::worker::Ticket;
 use ledgerly_core::format::amount_in_words;
 use ledgerly_core::{
@@ -69,6 +72,7 @@ use std::str::FromStr;
 use thiserror::Error;
 
 pub use self::draft::{InvoiceDraft, InvoiceRow};
+pub use self::draw::{LineShown, tax_rows};
 pub use self::picker::{ItemHit, search_items};
 
 /// How many type-ahead entries are listed at most.
@@ -422,6 +426,7 @@ enum UiEvent {
 #[derive(Clone, Copy)]
 enum KeyCmd {
     Save,
+    ConfirmSave,
     PickUp,
     PickDown,
     Escape,
@@ -440,6 +445,11 @@ pub struct ItemInvoiceScreen {
     focus_pending: bool,
     pick_index: usize,
     confirm_discard: bool,
+    /// Set by Enter on the narration: the screen asks "Save this invoice?" and waits for a second
+    /// Enter (or Yes), so a save is never one stray key away (mock `sales-invoice.save-confirm`).
+    confirming_save: bool,
+    /// The period lock date the host passes in each frame; `None` when none is known.
+    lock_date: Option<Date>,
     notice: Option<Notice>,
     requested: Option<Voucher>,
     answer: Option<(Voucher, GstResult)>,
@@ -496,6 +506,8 @@ impl ItemInvoiceScreen {
             outbox: None,
             posting: None,
             computing: None,
+            confirming_save: false,
+            lock_date: None,
         }))
     }
 
@@ -635,32 +647,72 @@ impl ItemInvoiceScreen {
 
     // ---- save --------------------------------------------------------------------------------
 
-    /// Ctrl+A: queues the voucher for the host when the engine's answer for this exact invoice is
-    /// a computed block; otherwise says why not.
-    pub fn save(&mut self, masters: &Masters) {
-        let voucher = match self.draft.build_voucher(masters, self.fy) {
-            Ok(v) => v,
-            Err(e) => return self.fail(e.to_string()),
-        };
+    /// The period lock, when the invoice is dated on or before the lock date the host passed in:
+    /// the invoice date and the lock date. `None` when no lock date is known or the date is not
+    /// valid text yet.
+    #[must_use]
+    pub(super) fn locked_on(&self) -> Option<(Date, Date)> {
+        let lock = self.lock_date?;
+        let date = parse_entry_date(&self.draft.date_text, self.fy).ok()?;
+        (date <= lock).then_some((date, lock))
+    }
+
+    /// The voucher a save would post, or the reason it cannot be saved yet. Every check a save
+    /// makes is here, so Ctrl+A and the Enter confirmation refuse the same invoices.
+    fn saveable(&self, masters: &Masters) -> Result<Voucher, String> {
+        let voucher = self
+            .draft
+            .build_voucher(masters, self.fy)
+            .map_err(|e| e.to_string())?;
+        if let Some((date, lock)) = self.locked_on() {
+            return Err(format!(
+                "the period is locked: {} is on or before the lock date {}",
+                format::date(date),
+                format::date(lock)
+            ));
+        }
         let block = match &self.answer {
             Some((for_voucher, GstResult::Computed(block))) if *for_voucher == voucher => block,
             Some((for_voucher, GstResult::Unsupported(u))) if *for_voucher == voucher => {
-                let message = format!("Not supported yet: {} ({})", u.what, u.reason);
-                return self.fail(message);
+                return Err(format!("Not supported yet: {} ({})", u.what, u.reason));
             }
             Some((for_voucher, GstResult::Failed(m))) if *for_voucher == voucher => {
-                let message = format!("The tax engine failed: {m}");
-                return self.fail(message);
+                return Err(format!("The tax engine failed: {m}"));
             }
             Some(_) | None => {
-                return self.fail("Tax has not been computed for this invoice yet.".to_owned());
+                return Err("Tax has not been computed for this invoice yet.".to_owned());
             }
         };
         let mut final_voucher = voucher;
         final_voucher.ledger_lines.clone_from(&block.ledger_lines);
         final_voucher.gst = Some(block.stored.clone());
-        self.outbox = Some(final_voucher);
-        self.notice = Some(Notice::Info("Saving...".to_owned()));
+        Ok(final_voucher)
+    }
+
+    /// Ctrl+A: queues the voucher for the host when the engine's answer for this exact invoice is
+    /// a computed block and the period is open; otherwise says why not. Saves at once: the
+    /// Enter-on-narration path asks first through [`Self::ask_save`].
+    pub fn save(&mut self, masters: &Masters) {
+        self.confirming_save = false;
+        match self.saveable(masters) {
+            Ok(voucher) => {
+                self.outbox = Some(voucher);
+                self.notice = Some(Notice::Info("Saving...".to_owned()));
+            }
+            Err(message) => self.fail(message),
+        }
+    }
+
+    /// Enter on the narration: when the invoice could be saved, asks "Save this invoice?" and
+    /// waits for Enter or Yes; when it could not, says why, exactly as [`Self::save`] does.
+    pub fn ask_save(&mut self, masters: &Masters) {
+        match self.saveable(masters) {
+            Ok(_) => {
+                self.notice = None;
+                self.confirming_save = true;
+            }
+            Err(message) => self.fail(message),
+        }
     }
 
     /// The voucher queued by [`Self::save`], for the host to post.
@@ -682,6 +734,7 @@ impl ItemInvoiceScreen {
         self.focus = Field::Party;
         self.focus_pending = true;
         self.pick_index = 0;
+        self.confirming_save = false;
         self.notice = Some(Notice::Info("Saved.".to_owned()));
     }
 
