@@ -158,6 +158,7 @@ impl Api {
             Cache::Blocked(unsupported) => return Ok(Outcome::Unsupported(unsupported.clone())),
             Cache::Stale => return Err(ApiError::Stale),
         };
+        let cmd = command::assign_ids(cmd, books)?;
         let events = match command::run(cmd, books, self.lock)? {
             Outcome::Value(events) => events,
             Outcome::Unsupported(unsupported) => return Ok(Outcome::Unsupported(unsupported)),
@@ -181,6 +182,19 @@ impl Api {
     pub fn report(&self, p: &ReportParams) -> Result<Outcome<Report>, ApiError> {
         match &self.cache {
             Cache::Ready(books) => report::run(&self.store, books, p),
+            Cache::Blocked(unsupported) => Ok(Outcome::Unsupported(unsupported.clone())),
+            Cache::Stale => Err(ApiError::Stale),
+        }
+    }
+
+    /// An owned copy of the loaded books, for a caller that draws masters and vouchers on another
+    /// thread (the app's worker sends it back to the UI thread after each change).
+    ///
+    /// # Errors
+    /// [`ApiError::Stale`] after a saved change whose reload failed; run a command to reload.
+    pub fn books(&self) -> Result<Outcome<Books>, ApiError> {
+        match &self.cache {
+            Cache::Ready(books) => Ok(Outcome::Value(Books::clone(books))),
             Cache::Blocked(unsupported) => Ok(Outcome::Unsupported(unsupported.clone())),
             Cache::Stale => Err(ApiError::Stale),
         }
