@@ -470,10 +470,10 @@ fn check_item_names(it: &StockItem, books: &Books) -> Result<(), EngineError> {
 }
 
 fn check_item_units(it: &StockItem, books: &Books) -> Result<(), EngineError> {
-    if let Some(group) = it.group {
-        if !books.masters.stock_groups.contains_key(&group) {
-            return Err(missing(format!("stock group {} of the item", group.0)));
-        }
+    if let Some(group) = it.group
+        && !books.masters.stock_groups.contains_key(&group)
+    {
+        return Err(missing(format!("stock group {} of the item", group.0)));
     }
     if !books.masters.units.contains_key(&it.unit) {
         return Err(missing(format!("base unit {} of the item", it.unit.0)));
@@ -885,13 +885,13 @@ fn check_batch(b: &Batch, books: &Books) -> Result<(), EngineError> {
             item.name
         )));
     }
-    if let (Some(mfg), Some(expiry)) = (b.mfg, b.expiry) {
-        if expiry < mfg {
-            return Err(invalid(
-                "batch expiry",
-                format!("{expiry} is before the manufacturing date {mfg}"),
-            ));
-        }
+    if let (Some(mfg), Some(expiry)) = (b.mfg, b.expiry)
+        && expiry < mfg
+    {
+        return Err(invalid(
+            "batch expiry",
+            format!("{expiry} is before the manufacturing date {mfg}"),
+        ));
     }
     Ok(())
 }
