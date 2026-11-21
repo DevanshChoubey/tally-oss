@@ -722,3 +722,86 @@ fn a_match_suggestion_for_another_statement_row_is_rejected() {
         Err(AssistError::Output { .. })
     ));
 }
+
+/// A one-line draft over "Paid Sharma 25000 for 2 units" (29 characters: "Sharma" 5..11, "25000"
+/// 12..17, "2" 22..23, "units" 24..29). The amount is `rupees` cited at `start..end`.
+fn sentence_draft(rupees: i64, start: usize, end: usize) -> Proposal {
+    Proposal::VoucherDraft(Box::new(VoucherDraft {
+        kind: BaseVoucherKind::Payment,
+        date: None,
+        party_name: Some(typed("Sharma".to_owned(), 5, 11, 900)),
+        party: None,
+        invoice_number: None,
+        supplier_gstin: None,
+        lines: vec![DraftLine {
+            ledger_name: typed("Sharma".to_owned(), 5, 11, 900),
+            ledger: None,
+            side: DrCr::Dr,
+            amount: typed(Paise::new(rupees * 100), start, end, 900),
+        }],
+        items: vec![],
+        document_total: None,
+        document_tax: None,
+        create_ledgers: vec![],
+        narration: String::new(),
+    }))
+}
+
+#[test]
+fn a_figure_cited_at_a_range_that_holds_another_number_is_rejected() {
+    // provenance: derived. The sentence states 25000 and 2 (units). An amount of Rs 2 cited at the
+    // whole sentence, and Rs 25000 cited at the whole sentence, each cite a range that states a
+    // second number, so neither figure is vouched for by its own text. Before the fix, the
+    // range-level check accepted Rs 2 because "2" occurs somewhere in the cited sentence.
+    let input = ProposalInput::Text("Paid Sharma 25000 for 2 units".to_owned());
+    let rs2_whole = serde_json::to_string(&sentence_draft(2, 0, 29)).unwrap();
+    assert!(
+        matches!(
+            propose_with_reply(&rs2_whole, &input),
+            Err(AssistError::Output { .. })
+        ),
+        "Rs 2 cited at the whole sentence was accepted"
+    );
+    let rs25000_whole = serde_json::to_string(&sentence_draft(25_000, 0, 29)).unwrap();
+    assert!(matches!(
+        propose_with_reply(&rs25000_whole, &input),
+        Err(AssistError::Output { .. })
+    ));
+    // Rs 25000 cited at its own token, "25000" at 12..17, is accepted.
+    let own_token = serde_json::to_string(&sentence_draft(25_000, 12, 17)).unwrap();
+    assert!(propose_with_reply(&own_token, &input).is_ok());
+}
+
+#[test]
+fn a_report_query_that_moves_the_period_or_names_an_unstated_ledger_is_rejected() {
+    // provenance: derived. The question states the period 2026-04-01 to 2026-06-30 and the
+    // ledger "HDFC Bank". A model answer that moves the start to 2026-07-01, or names
+    // "Sharma Properties", states something the question does not. Before the fix, both were
+    // accepted without a check: the report would show the wrong period with no error.
+    let question = "trial balance from 2026-04-01 to 2026-06-30 for HDFC Bank";
+    let input = ProposalInput::Question(question.to_owned());
+    let query = |from: &str, names: &[&str]| {
+        json!({"ReportQuery": {
+            "report": "trial_balance",
+            "from": from,
+            "to": "2026-06-30",
+            "ledger_names": names,
+        }})
+        .to_string()
+    };
+    let faithful = query("2026-04-01", &["HDFC Bank"]);
+    assert!(
+        matches!(propose_with_reply(&faithful, &input), Ok(Proposal::ReportQuery(_))),
+        "the faithful query was refused"
+    );
+    let moved_period = query("2026-07-01", &["HDFC Bank"]);
+    assert!(matches!(
+        propose_with_reply(&moved_period, &input),
+        Err(AssistError::Output { .. })
+    ));
+    let unstated_ledger = query("2026-04-01", &["Sharma Properties"]);
+    assert!(matches!(
+        propose_with_reply(&unstated_ledger, &input),
+        Err(AssistError::Output { .. })
+    ));
+}

@@ -46,9 +46,21 @@ fn json(
     party: Option<&str>,
     account: Option<&str>,
 ) -> String {
+    json_with_narration(kind, amount, date, party, account, "rent")
+}
+
+/// The model's JSON with a chosen narration. The narration must be a word the text types.
+fn json_with_narration(
+    kind: &str,
+    amount: Option<&str>,
+    date: Option<&str>,
+    party: Option<&str>,
+    account: Option<&str>,
+    narration: &str,
+) -> String {
     let q = |v: Option<&str>| v.map_or("null".to_owned(), |s| format!("\"{s}\""));
     format!(
-        "{{\"kind\":\"{kind}\",\"amount_text\":{},\"date_text\":{},\"party_name\":{},\"account_name\":{},\"narration\":\"rent\",\"confidence_permille\":900}}",
+        "{{\"kind\":\"{kind}\",\"amount_text\":{},\"date_text\":{},\"party_name\":{},\"account_name\":{},\"narration\":\"{narration}\",\"confidence_permille\":900}}",
         q(amount),
         q(date),
         q(party),
@@ -185,14 +197,16 @@ fn with_no_masters_every_name_is_suggested_once() {
 #[test]
 fn receipt_debits_the_bank_and_credits_the_party() {
     let text = "received 1.5 lakh from Sharma Properties in HDFC";
+    // The narration is a word the text types ("rent" is not in this sentence).
     let d = draft_for(
         text,
-        &json(
+        &json_with_narration(
             "receipt",
             Some("1.5 lakh"),
             None,
             Some("Sharma Properties"),
             Some("HDFC"),
+            "received",
         ),
         masters(),
     );
@@ -641,4 +655,60 @@ fn amount_text_that_is_not_one_clean_amount_is_an_error() {
         parse_amount_text("99999999999999 cr"),
         Err(AmountTextError::Overflow)
     );
+}
+
+#[test]
+fn amount_text_with_malformed_digit_grouping_is_refused_not_read() {
+    // provenance: derived - the grouping rule is in nl_entry.rs (grouping_is_valid): the last
+    // group has three digits and each middle group two. "1,5 lakh" once read as 15 lakh because
+    // the commas were dropped before the unit was applied: a wrong number.
+    for text in ["1,5 lakh", "12,3,4", "1,5", "12,34,5"] {
+        assert!(
+            matches!(
+                parse_amount_text(text),
+                Err(AmountTextError::BadGrouping(_))
+            ),
+            "{text}"
+        );
+    }
+}
+
+#[test]
+fn amount_text_with_indian_or_thousands_grouping_is_read() {
+    // provenance: derived. 12,34,567 rupees = 1,234,567 rupees = 123,456,700 paise.
+    // 100,000 rupees = 10,000,000 paise.
+    assert_eq!(parse_amount_text("12,34,567"), Ok(Paise::new(123_456_700)));
+    assert_eq!(parse_amount_text("100,000"), Ok(Paise::new(10_000_000)));
+}
+
+#[test]
+fn a_model_amount_with_malformed_grouping_is_an_output_error_not_a_draft() {
+    // "1,5 lakh" is typed, so the transcription check passes; the amount reader then refuses it.
+    let text = "paid rent 1,5 lakh to Sharma Properties by HDFC";
+    let err = error_for(
+        text,
+        &json(
+            "payment",
+            Some("1,5 lakh"),
+            None,
+            Some("Sharma Properties"),
+            Some("HDFC"),
+        ),
+        masters(),
+    );
+    match err {
+        AssistError::Output { reason } => assert!(reason.contains("grouping"), "{reason}"),
+        other => panic!("expected an output error, got {other:?}"),
+    }
+}
+
+#[test]
+fn a_narration_word_the_person_did_not_type_is_an_output_error() {
+    // The model wrote "Monthly office rent"; only "rent" was typed. The narration is stored on
+    // the voucher, so an untyped word must be refused.
+    let model_json = "{\"kind\":\"payment\",\"amount_text\":\"25k\",\"date_text\":null,\
+        \"party_name\":\"Sharma Properties\",\"account_name\":\"HDFC\",\
+        \"narration\":\"Monthly office rent\",\"confidence_permille\":900}";
+    let err = error_for(RENT, model_json, masters());
+    assert!(matches!(err, AssistError::Output { .. }), "{err:?}");
 }

@@ -657,3 +657,114 @@ fn long_text_wraps_without_losing_words() {
     assert!(body.len() > 1, "80 words do not fit one A5 line");
     assert_eq!(body.join(" "), text);
 }
+
+/// Two lines of one tax row each, with the party posting split into a debit and a credit.
+fn party_lines(debit: Paise, credit: Option<Paise>) -> Vec<LedgerLine> {
+    let mut lines = vec![LedgerLine {
+        ledger: LedgerId(PARTY),
+        amount: SignedAmount::dr(debit),
+        bills: vec![],
+        cost: vec![],
+        bank: None,
+    }];
+    if let Some(c) = credit {
+        lines.push(LedgerLine {
+            ledger: LedgerId(PARTY),
+            amount: SignedAmount::cr(c),
+            bills: vec![],
+            cost: vec![],
+            bank: None,
+        });
+    }
+    lines
+}
+
+#[test]
+fn balanced_debit_and_credit_to_the_party_are_not_the_invoice_total() {
+    // derived: the invoice is 11,800.00. A debit of 5,900.00 and a credit of 5,900.00 to the party
+    // net to 0.00, not 11,800.00. Before the fix the sides were ignored and the two summed to
+    // 11,800.00, which printed as the total.
+    let b = default_books();
+    let (mut v, gst) = igst_sale();
+    v.ledger_lines = party_lines(rs(5_900), Some(rs(5_900)));
+    let PrintError::Render { reason } = err(render_invoice(&template(FULL), &v, &b, &gst)) else {
+        panic!("expected a render error");
+    };
+    assert!(reason.contains("posted to the party ledger"), "{reason}");
+}
+
+#[test]
+fn a_credit_posting_to_the_party_is_not_the_debit_the_total_needs() {
+    // derived: the invoice is 11,800.00 and the party line is a credit of 11,800.00, which is
+    // minus 11,800.00 once sides are counted. It is not the debit the total needs.
+    let b = default_books();
+    let (mut v, gst) = igst_sale();
+    v.ledger_lines = party_lines(rs(11_800), None);
+    v.ledger_lines[0].amount = SignedAmount::cr(rs(11_800));
+    let PrintError::Render { reason } = err(render_invoice(&template(FULL), &v, &b, &gst)) else {
+        panic!("expected a render error");
+    };
+    assert!(reason.contains("a net credit"), "{reason}");
+}
+
+#[test]
+fn two_tax_rows_with_the_same_taxable_value_leave_a_cess_line_unsupported() {
+    // derived: two IGST rows of 10,000.00 (at 18% and 12%) and a cess line of 10,000.00. The
+    // stored lines do not say which row the cess belongs to, so it is refused, not attached to the
+    // first row. Before the fix it was attached to the 18% row.
+    let b = default_books();
+    let gst = StoredGst {
+        pack_version: "test".to_owned(),
+        lines: vec![
+            gst_line(IGST, TaxLedgerKind::Igst, rs(10_000), 18, rs(1_800)),
+            gst_line(IGST, TaxLedgerKind::Igst, rs(10_000), 12, rs(1_200)),
+            gst_line(17, TaxLedgerKind::Cess, rs(10_000), 1, rs(100)),
+        ],
+        round_off: Paise::ZERO,
+    };
+    let v = voucher(rs(13_100), vec![], &gst, 7);
+    assert!(matches!(
+        err(render_invoice(&template(FULL), &v, &b, &gst)),
+        PrintError::Unsupported { .. }
+    ));
+}
+
+#[test]
+fn every_item_heading_is_followed_by_a_row_before_its_page_footer() {
+    // derived: 120 lines of 1 piece each. Each heading ("Description") must be followed, before the
+    // footer of its page ("Page n of N"), by at least one item row ("Widget"). A heading left at
+    // the foot of a page would have no row between it and that footer.
+    let b = default_books();
+    let gst = StoredGst {
+        pack_version: "test".to_owned(),
+        lines: vec![gst_line(
+            IGST,
+            TaxLedgerKind::Igst,
+            rs(120_000),
+            18,
+            rs(21_600),
+        )],
+        round_off: Paise::ZERO,
+    };
+    let v = voucher(rs(141_600), (0..120).map(|_| line(1)).collect(), &gst, 7);
+    let t = texts(&render_invoice(&template(FULL), &v, &b, &gst).unwrap());
+    let mut checked = 0_usize;
+    for (i, s) in t.iter().enumerate() {
+        if s != "Description" {
+            continue;
+        }
+        let footer = t
+            .iter()
+            .enumerate()
+            .skip(i)
+            .find(|(_, x)| x.starts_with("Page "))
+            .map(|(j, _)| j)
+            .unwrap();
+        assert!(
+            t[i..footer].iter().any(|x| x == "Widget"),
+            "the heading at text {i} has no item row on its page"
+        );
+        checked = checked.saturating_add(1);
+    }
+    assert!(checked >= 2, "{checked}");
+}

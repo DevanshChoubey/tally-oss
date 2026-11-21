@@ -39,7 +39,10 @@ use serde_json::{Value, json};
 use time::macros::format_description;
 
 use crate::redact::{Redaction, Redactor, restore, to_original_range};
-use crate::{AssistError, Proposal, ProposalInput, Proposer, SourceRef, Transcribed, VoucherDraft};
+use crate::{
+    AssistError, Proposal, ProposalInput, Proposer, ReportQuery, SourceRef, Transcribed,
+    VoucherDraft,
+};
 
 /// Version of the prompt template, recorded in the audit event (spec 6.8).
 pub const PROMPT_TEMPLATE_VERSION: &str = "cloud-v1";
@@ -246,7 +249,8 @@ pub struct CloudOutcome {
     pub prompt_template_version: &'static str,
 }
 
-/// The cloud tier of the assistant.
+/// The cloud tier of the assistant. It implements [`Proposer`] only; it does not implement the
+/// `nl_entry::ModelClient` seam, because redaction (spec 9) runs inside its own request path.
 pub struct CloudClient {
     config: CloudConfig,
     keys: Box<dyn KeyStore>,
@@ -266,8 +270,8 @@ struct Prepared {
     message: String,
     /// The redacted input text alone (what source offsets refer to).
     input_text: String,
-    /// The typed text before redaction (empty for inputs that are not typed text). Cited ranges
-    /// are mapped back to it and checked against it.
+    /// The typed text or question before redaction (empty for other inputs). Cited ranges are
+    /// mapped back to it and checked against it, and a report query is checked against it.
     original_text: String,
     redactions: Vec<Redaction>,
 }
@@ -466,9 +470,8 @@ fn prepare(input: &ProposalInput) -> Result<Prepared, AssistError> {
     };
     let message = format!("TASK: {task}\nINPUT:\n{input_text}");
     let original_text = match input {
-        ProposalInput::Text(text) => text.clone(),
-        ProposalInput::Question(_)
-        | ProposalInput::BankLine { .. }
+        ProposalInput::Text(text) | ProposalInput::Question(text) => text.clone(),
+        ProposalInput::BankLine { .. }
         | ProposalInput::Columns { .. }
         | ProposalInput::Document { .. } => String::new(),
     };
@@ -671,24 +674,54 @@ fn check_and_remap_sources(
     proposal: &mut Proposal,
     prepared: &Prepared,
 ) -> Result<(), AssistError> {
-    let Proposal::VoucherDraft(draft) = proposal else {
-        return Ok(());
-    };
-    let mut checker = SourceChecker {
-        sent_chars: prepared.input_text.chars().count(),
-        redactions: &prepared.redactions,
-        original: &prepared.original_text,
-        valid: true,
-    };
-    checker.draft(draft);
-    if checker.valid {
+    match proposal {
+        Proposal::VoucherDraft(draft) => {
+            let mut checker = SourceChecker {
+                sent_chars: prepared.input_text.chars().count(),
+                redactions: &prepared.redactions,
+                original: &prepared.original_text,
+                valid: true,
+            };
+            checker.draft(draft);
+            if checker.valid {
+                Ok(())
+            } else {
+                Err(output_error(
+                    "a value cites a source that is not inside the text that was sent, is not \
+                     what the cited text says, or has a confidence above 1000",
+                ))
+            }
+        }
+        Proposal::ReportQuery(query) => check_report_query(query, &prepared.original_text),
+        Proposal::MatchSuggestion(_) | Proposal::MappingSuggestion(_) => Ok(()),
+    }
+}
+
+/// A report query has no source ranges, so its dates and ledger names are checked against the
+/// question the person typed: the model cannot move a period or name a ledger the question does
+/// not state (a changed period is a wrong report with no error otherwise).
+fn check_report_query(query: &ReportQuery, typed: &str) -> Result<(), AssistError> {
+    let dates_stated = [query.from, query.to]
+        .iter()
+        .flatten()
+        .all(|date| date_in_text(typed, *date));
+    let names_stated = query.ledger_names.iter().all(|name| token_in(typed, name));
+    if dates_stated && names_stated {
         Ok(())
     } else {
         Err(output_error(
-            "a value cites a source that is not inside the text that was sent, is not what the \
-             cited text says, or has a confidence above 1000",
+            "the report query states a date or a ledger name that the question does not say",
         ))
     }
+}
+
+/// Whether `date` is written as a numeric date (see [`date_in`]) anywhere in `text`.
+fn date_in_text(text: &str, date: Date) -> bool {
+    let parts: Vec<&str> = text
+        .split(|c: char| !c.is_ascii_digit())
+        .filter(|p| !p.is_empty())
+        .collect();
+    parts.windows(3).any(|window| date_in(&window.join("-"), date))
 }
 
 /// A value type that can be compared with the text it claims to be read from.
@@ -705,22 +738,24 @@ impl Cited for String {
 
 impl Cited for Paise {
     fn appears_in(&self, cited: &str) -> bool {
-        // The text states rupees; the value is paise.
-        numbers(cited, true)
-            .iter()
-            .any(|n| n.checked_mul(Decimal::from(100)) == Some(Decimal::from(self.get())))
+        // The text states rupees; the value is paise. The cited range must state this one figure
+        // and no other: a range that also holds a second number cannot vouch for the first.
+        matches!(
+            numbers(cited, true).as_slice(),
+            [n] if n.checked_mul(Decimal::from(100)) == Some(Decimal::from(self.get()))
+        )
     }
 }
 
 impl Cited for Qty {
     fn appears_in(&self, cited: &str) -> bool {
-        numbers(cited, false).contains(&self.0)
+        matches!(numbers(cited, false).as_slice(), [n] if *n == self.0)
     }
 }
 
 impl Cited for Rate {
     fn appears_in(&self, cited: &str) -> bool {
-        numbers(cited, false).contains(&self.0)
+        matches!(numbers(cited, false).as_slice(), [n] if *n == self.0)
     }
 }
 
@@ -829,6 +864,14 @@ fn numbers(text: &str, with_units: bool) -> Vec<Decimal> {
     }
     let mut out = Vec::new();
     for (s, e) in runs {
+        // A run glued to a letter before it is part of another token (INV2026, A25).
+        if text
+            .get(..s)
+            .and_then(|before| before.chars().next_back())
+            .is_some_and(char::is_alphanumeric)
+        {
+            continue;
+        }
         let digits: String = text
             .get(s..e)
             .unwrap_or_default()
@@ -838,16 +881,37 @@ fn numbers(text: &str, with_units: bool) -> Vec<Decimal> {
         let Ok(base) = Decimal::from_str(digits.trim_end_matches('.')) else {
             continue;
         };
-        let multiplier = if with_units {
-            unit_multiplier(text.get(e..).unwrap_or_default())
-        } else {
-            1
-        };
+        let after = text.get(e..).unwrap_or_default();
+        let multiplier = if with_units { unit_multiplier(after) } else { 1 };
+        if !number_token_ends(after, multiplier) {
+            continue;
+        }
         if let Some(value) = base.checked_mul(Decimal::from(multiplier)) {
             out.push(value);
         }
     }
     out
+}
+
+/// Whether the text after a number run ends the number's token. A unit word may follow the run
+/// directly or after a space (`25k`, `2 lakh`). Any other letter or digit glued to the run makes
+/// it part of another token (`25kg`, `2B`), so it is not a number of this text.
+fn number_token_ends(after: &str, multiplier: i64) -> bool {
+    let glued = after.chars().next().is_some_and(char::is_alphanumeric);
+    if glued && multiplier == 1 {
+        return false;
+    }
+    let trimmed = after.trim_start();
+    let word_end = trimmed
+        .find(|c: char| !c.is_ascii_alphabetic())
+        .unwrap_or(trimmed.len());
+    if word_end == 0 {
+        return true;
+    }
+    !trimmed
+        .get(word_end..)
+        .and_then(|rest| rest.chars().next())
+        .is_some_and(char::is_alphanumeric)
 }
 
 fn unit_multiplier(after: &str) -> i64 {
