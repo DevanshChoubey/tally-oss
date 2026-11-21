@@ -14,6 +14,10 @@
 //! document, an invalid character or an unknown entity is an error with the byte offset, never
 //! repaired silently (rule A1).
 //!
+//! Tag and attribute names are matched ignoring ASCII case. This leniency is deliberate: the
+//! casing Tally uses in replies has not been observed, and the names involved cannot collide.
+//! Whether Tally accepts a UTF-8 request body is also unobserved.
+//!
 //! Shape assumption, **not yet observed**: the request is an inline collection over `Company`
 //! (research R8 section 2.3 example (b)), and the reply lists each company as
 //! `<COMPANY NAME="..."><NAME>...</NAME></COMPANY>` inside `<COLLECTION>`. Both the attribute and
@@ -405,21 +409,21 @@ impl Scan {
                 ));
             }
         }
-        if name.eq_ignore_ascii_case("COMPANY") {
-            if let Some((tag_offset, attr)) = self.company.take() {
-                let chosen = self.child_name.take().or(attr).unwrap_or_default();
-                self.push_company(&chosen, tag_offset)?;
-            }
+        if name.eq_ignore_ascii_case("COMPANY")
+            && let Some((tag_offset, attr)) = self.company.take()
+        {
+            let chosen = self.child_name.take().or(attr).unwrap_or_default();
+            self.push_company(&chosen, tag_offset)?;
         }
         Ok(())
     }
 
     fn text(&mut self, text: &str) {
         let parent = self.stack.last().map_or("", String::as_str);
-        if parent.eq_ignore_ascii_case("RESPONSE") || parent.eq_ignore_ascii_case("LINEERROR") {
-            if let Some(m) = self.message.as_mut() {
-                m.push_str(text);
-            }
+        if (parent.eq_ignore_ascii_case("RESPONSE") || parent.eq_ignore_ascii_case("LINEERROR"))
+            && let Some(m) = self.message.as_mut()
+        {
+            m.push_str(text);
         }
         if parent.eq_ignore_ascii_case("STATUS") && text.trim() == "0" {
             self.status_zero = true;

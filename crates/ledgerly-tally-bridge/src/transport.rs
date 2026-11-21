@@ -182,14 +182,17 @@ fn decode_utf16(bytes: &[u8], little_endian: bool, base: usize) -> Result<String
     let mut offset = base;
     for unit in char::decode_utf16(units) {
         match unit {
-            Ok(c) => out.push(c),
+            Ok(c) => {
+                out.push(c);
+                // Two bytes per UTF-16 code unit: a surrogate pair is four bytes.
+                offset = offset.saturating_add(c.len_utf16().saturating_mul(2));
+            }
             Err(_) => {
                 return Err(TransportError::Io(format!(
                     "reply has an unpaired UTF-16 surrogate near byte {offset}"
                 )));
             }
         }
-        offset = offset.saturating_add(2);
     }
     Ok(out)
 }
