@@ -40,7 +40,12 @@ use ledgerly_core::format::format_inr;
 use ledgerly_core::{Date, Gstin, Paise, Unsupported, VoucherId};
 use thiserror::Error;
 
+use crate::screens::wire::unsupported_text;
 use crate::{AppCtx, Screen, ScreenAction};
+
+mod worker;
+
+pub use worker::{FigureRow, Figures};
 
 // ---------------------------------------------------------------------------------------------
 // View model
@@ -421,6 +426,12 @@ pub struct GstScreen {
     reapply: Option<GstTab>,
     export: Option<Vec<ConfirmedAction>>,
     revision: u64,
+    /// The load from the API worker (see the `worker` module).
+    run: worker::GstRun,
+    /// Figures of the GSTR-1 tab, from the worker.
+    figures1: Figures,
+    /// Figures of the GSTR-3B tab, from the worker.
+    figures3b: Figures,
 }
 
 /// What a click in the table asks for, applied after the frame is drawn.
@@ -458,6 +469,9 @@ impl GstScreen {
             reapply: None,
             export: None,
             revision: 0,
+            run: worker::GstRun::default(),
+            figures1: Figures::default(),
+            figures3b: Figures::default(),
         }
     }
 
@@ -892,9 +906,18 @@ impl GstScreen {
         self.draw_chips(ui, &mut events);
         ui.separator();
         let want_scroll = self.scroll_pending;
+        if let Some(error) = &self.run.error {
+            ui.colored_label(ui.visuals().error_fg_color, format!("Error: {error}"));
+        }
         match self.tab {
-            GstTab::Gstr1 => self.draw_exceptions(ui, &self.gstr1, want_scroll, &mut events),
-            GstTab::Gstr3b => self.draw_exceptions(ui, &self.gstr3b, want_scroll, &mut events),
+            GstTab::Gstr1 => {
+                draw_figures(ui, &self.figures1);
+                self.draw_exceptions(ui, &self.gstr1, want_scroll, &mut events);
+            }
+            GstTab::Gstr3b => {
+                draw_figures(ui, &self.figures3b);
+                self.draw_exceptions(ui, &self.gstr3b, want_scroll, &mut events);
+            }
             GstTab::Reconciliation => self.draw_recon(ui, want_scroll, &mut events),
         }
         self.scroll_pending = false;
@@ -1142,6 +1165,27 @@ fn select_cell(
     }
 }
 
+/// The figures a return holds, one per line, and the notes about what is not drawn.
+fn draw_figures(ui: &mut Ui, figures: &Figures) {
+    if figures.rows.is_empty() && figures.notes.is_empty() {
+        return;
+    }
+    egui::CollapsingHeader::new("Figures from the return")
+        .default_open(true)
+        .show(ui, |ui| {
+            egui::Grid::new("gst-figures").striped(true).show(ui, |ui| {
+                for figure in &figures.rows {
+                    ui.label(figure.label.as_str());
+                    ui.label(amount_cell(Some(figure.amount)));
+                    ui.end_row();
+                }
+            });
+            for note in &figures.notes {
+                ui.weak(note.as_str());
+            }
+        });
+}
+
 /// Says why a feed shows no table.
 fn draw_not_ready<T>(ui: &mut Ui, feed: &Feed<T>) {
     match feed {
@@ -1150,10 +1194,7 @@ fn draw_not_ready<T>(ui: &mut Ui, feed: &Feed<T>) {
             ui.weak("Not loaded for this period yet.");
         }
         Feed::Unsupported(u) => {
-            ui.colored_label(
-                ui.visuals().error_fg_color,
-                format!("Not supported yet: {}. {}", u.what, u.reason),
-            );
+            ui.colored_label(ui.visuals().error_fg_color, unsupported_text(u));
         }
     }
 }
@@ -1202,7 +1243,11 @@ impl Screen for GstScreen {
         "GST returns".to_owned()
     }
 
-    fn ui(&mut self, ui: &mut Ui, _ctx: &mut AppCtx) -> ScreenAction {
+    fn ui(&mut self, ui: &mut Ui, ctx: &mut AppCtx) -> ScreenAction {
+        self.tick(ctx.api.as_ref());
+        if self.is_loading() {
+            ui.ctx().request_repaint();
+        }
         self.draw(ui)
     }
 }

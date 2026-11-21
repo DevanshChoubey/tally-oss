@@ -35,9 +35,16 @@
 //! column; the tiles wrap instead.
 
 use egui::{Color32, Event, InputState, Key, Modifiers, RichText, Sense, Ui};
+use ledgerly_api::{
+    Api, Cell, ColumnSpec, Detail, Report, ReportFilter, ReportKind, ReportParams, RowKind,
+};
 use ledgerly_core::format::format_inr;
-use ledgerly_core::{Outcome, Paise};
+use ledgerly_core::{Date, DrCr, Outcome, Paise, Period, SignedAmount, Unsupported};
+use ledgerly_model::seed_groups::reserved_groups;
+use ledgerly_model::{ReservedGroup, Scenario};
 
+use crate::screens::wire::{Done, Latest};
+use crate::worker::ApiWorker;
 use crate::{AppCtx, Screen, ScreenAction};
 
 /// Width of one KPI tile, in points.
@@ -176,6 +183,164 @@ pub fn kpi_view(kpi: &Kpi) -> KpiView {
         label: kpi.label.clone(),
         value_text: value_text(&kpi.value),
         footnote_text,
+    }
+}
+
+/// One balance tile: which reserved group it reads and on which side that group's balance
+/// normally stands.
+struct Tile {
+    label: &'static str,
+    group: ReservedGroup,
+    normal: DrCr,
+    node: &'static str,
+}
+
+/// The tiles. Tally's dashboard (help page read 2026-11-21,
+/// <https://help.tallysolutions.com/tally-prime/reports-in-tallyprime/dashboard/>) has tiles for
+/// Cash/Bank Accounts and Receivables/Payables among its nine default tiles, so the existing
+/// cash, bank, receivables and payables set is kept. The page does not define the figures, so
+/// each tile here is the closing balance of one reserved group, taken from the group summary.
+const TILES: [Tile; 4] = [
+    Tile {
+        label: "Cash in hand",
+        group: ReservedGroup::CashInHand,
+        normal: DrCr::Dr,
+        node: "Cash-in-hand",
+    },
+    Tile {
+        label: "Bank accounts",
+        group: ReservedGroup::BankAccounts,
+        normal: DrCr::Dr,
+        node: "Bank accounts",
+    },
+    Tile {
+        label: "Receivables",
+        group: ReservedGroup::SundryDebtors,
+        normal: DrCr::Dr,
+        node: "Sundry debtors",
+    },
+    Tile {
+        label: "Payables",
+        group: ReservedGroup::SundryCreditors,
+        normal: DrCr::Cr,
+        node: "Sundry creditors",
+    },
+];
+
+/// The home KPI tiles as of `as_of`, from `Api::report` (group summaries). Runs on the API
+/// worker. A tile whose report fails or is unsupported carries `Unsupported` with the reason;
+/// no tile ever carries a guessed figure.
+#[must_use]
+pub fn home_kpis(api: &Api, as_of: Date) -> Vec<Kpi> {
+    let mut kpis: Vec<Kpi> = TILES
+        .iter()
+        .map(|tile| tile_kpi(api, tile, as_of))
+        .collect();
+    kpis.push(Kpi {
+        label: "GST payable".to_owned(),
+        value: Outcome::unsupported(
+            "GST payable",
+            "the engine gives the GSTR-3B working (tax and credit separately) but no payable \
+             after set-off, and this screen does not subtract",
+        ),
+        footnote: "after ITC".to_owned(),
+        target: HomeTarget::GstReturns {
+            tab: "gstr3b".to_owned(),
+        },
+    });
+    kpis
+}
+
+fn tile_kpi(api: &Api, tile: &Tile, as_of: Date) -> Kpi {
+    let value = tile_value(api, tile, as_of);
+    Kpi {
+        label: tile.label.to_owned(),
+        value,
+        footnote: format!("Closing balance as of {as_of}"),
+        target: HomeTarget::BalanceSheet {
+            node: tile.node.to_owned(),
+        },
+    }
+}
+
+fn tile_value(api: &Api, tile: &Tile, as_of: Date) -> Outcome<Paise> {
+    let what = tile.label;
+    let Some(group) = reserved_groups()
+        .into_iter()
+        .find(|g| g.reserved == Some(tile.group))
+    else {
+        return Outcome::unsupported(what, "the reserved group is not in the seed list");
+    };
+    let period = match Period::new(as_of, as_of) {
+        Ok(period) => period,
+        Err(e) => return Outcome::unsupported(what, format!("the date is not usable: {e}")),
+    };
+    let params = ReportParams {
+        kind: ReportKind::GroupSummary(group.id),
+        period,
+        as_of,
+        scenario: Scenario::Actual,
+        detail: Detail::Condensed,
+        columns: ColumnSpec::Single,
+        filter: ReportFilter::default(),
+        exceptions_only: false,
+    };
+    match api.report(&params) {
+        Ok(Outcome::Value(report)) => net_balance(&report, tile.normal, what),
+        Ok(Outcome::Unsupported(u)) => Outcome::Unsupported(u),
+        Err(e) => Outcome::unsupported(what, format!("the report failed: {e}")),
+    }
+}
+
+/// One cell of the net balance row: `None` when empty, the amount when there is one.
+fn cell_amount(cell: &Cell, what: &str) -> Result<Option<SignedAmount>, Unsupported> {
+    match cell {
+        Cell::Empty => Ok(None),
+        Cell::Amount(amount) => Ok(Some(*amount)),
+        Cell::Unsupported(u) => Err(u.clone()),
+        Cell::Signed(_)
+        | Cell::Qty(_)
+        | Cell::Text(_)
+        | Cell::Date(_)
+        | Cell::Provisional { .. } => Err(Unsupported {
+            what: what.to_owned(),
+            reason: "the net balance row holds a cell that is not a final amount".to_owned(),
+        }),
+    }
+}
+
+/// The group's net balance, read from the report's net balance row (never summed here). A
+/// balance on the side opposite to `normal` is not shown as a plain figure, because the tile
+/// has no side marker.
+fn net_balance(report: &Report, normal: DrCr, what: &str) -> Outcome<Paise> {
+    let refuse = |reason: &str| Outcome::unsupported(what, reason);
+    let Some(row) = report
+        .rows
+        .iter()
+        .rev()
+        .find(|r| r.kind == RowKind::Subtotal)
+    else {
+        return refuse("the group summary has no net balance row");
+    };
+    let (Some(dr_cell), Some(cr_cell)) = (row.cells.first(), row.cells.get(1)) else {
+        return refuse("the net balance row does not have a debit and a credit cell");
+    };
+    let (dr, cr) = match (cell_amount(dr_cell, what), cell_amount(cr_cell, what)) {
+        (Ok(dr), Ok(cr)) => (dr, cr),
+        (Err(u), Ok(_) | Err(_)) | (Ok(_), Err(u)) => return Outcome::Unsupported(u),
+    };
+    let amount = match (dr, cr) {
+        (None, None) => return Outcome::Value(Paise::ZERO),
+        (Some(a), None) | (None, Some(a)) => a,
+        (Some(_), Some(_)) => return refuse("the net balance row has both a debit and a credit"),
+    };
+    if amount.side == normal {
+        Outcome::Value(amount.amount)
+    } else {
+        refuse(&format!(
+            "the balance is {} on the side opposite to the usual one; open the balance sheet to see it with its side",
+            format_inr(amount.amount)
+        ))
     }
 }
 
@@ -318,6 +483,12 @@ fn consume_exact(input: &mut InputState, key: Key, modifiers: Modifiers) -> bool
 pub struct HomeScreen {
     data: HomeData,
     request: Option<HomeTarget>,
+    /// The date the next KPI refresh is for, when one is wanted and not yet sent to the worker.
+    want: Option<Date>,
+    /// The KPI refresh running on the API worker.
+    latest: Latest<Vec<Kpi>>,
+    /// Why the KPIs could not be refreshed, when they could not.
+    notice: Option<String>,
 }
 
 impl HomeScreen {
@@ -327,7 +498,55 @@ impl HomeScreen {
         Self {
             data,
             request: None,
+            want: None,
+            latest: Latest::default(),
+            notice: None,
         }
+    }
+
+    /// Asks for the KPI tiles to be computed as of `as_of` by the API worker. The next
+    /// [`HomeScreen::tick`] sends the request; the tiles change when the answer arrives.
+    pub fn request_refresh(&mut self, as_of: Date) {
+        self.want = Some(as_of);
+    }
+
+    /// `true` while a refresh is waiting for the worker or running on it.
+    #[must_use]
+    pub fn is_loading(&self) -> bool {
+        self.want.is_some() || self.latest.is_pending()
+    }
+
+    /// Why the last refresh failed, when it did.
+    #[must_use]
+    pub fn notice(&self) -> Option<&str> {
+        self.notice.as_deref()
+    }
+
+    /// Advances the refresh by one step: shows a finished answer, then sends a waiting request
+    /// to `worker`. With no worker (no company open) the request is dropped and the notice says
+    /// so; the tiles are left as they were.
+    pub fn tick(&mut self, worker: Option<&ApiWorker>) {
+        match self.latest.poll() {
+            Some(Done::Ready(kpis)) => {
+                self.data.kpis = kpis;
+                self.notice = None;
+            }
+            Some(Done::Lost) => {
+                self.notice = Some(
+                    "The background worker stopped, so the figures could not be refreshed."
+                        .to_owned(),
+                );
+            }
+            None => {}
+        }
+        let Some(as_of) = self.want.take() else {
+            return;
+        };
+        let Some(handle) = worker else {
+            self.notice = Some("No company is open, so there are no figures to show.".to_owned());
+            return;
+        };
+        self.latest.start(handle, move |api| home_kpis(api, as_of));
     }
 
     /// What the screen shows now.
@@ -509,7 +728,11 @@ impl Screen for HomeScreen {
         "Home".to_owned()
     }
 
-    fn ui(&mut self, ui: &mut Ui, _ctx: &mut AppCtx) -> ScreenAction {
+    fn ui(&mut self, ui: &mut Ui, ctx: &mut AppCtx) -> ScreenAction {
+        self.tick(ctx.api.as_ref());
+        if self.is_loading() {
+            ui.ctx().request_repaint();
+        }
         self.handle_keys(ui);
         egui::ScrollArea::vertical().show(ui, |ui| {
             let heading = if self.data.company_name.is_empty() {
@@ -522,6 +745,9 @@ impl Screen for HomeScreen {
                 ui.label(RichText::new(self.data.subtitle.as_str()).weak());
             }
             ui.add_space(8.0);
+            if let Some(notice) = &self.notice {
+                ui.colored_label(ui.visuals().error_fg_color, notice.as_str());
+            }
             self.draw_kpis(ui);
             ui.add_space(12.0);
             let mut chosen = None;

@@ -6,12 +6,14 @@ use egui::{Key, Modifiers, Ui};
 use ledgerly_core::format::format_inr;
 use ledgerly_core::{Date, DrCr, FinancialYear, Outcome, PeriodError, SignedAmount};
 
+use super::direct::{DirectImport, DirectState};
 use super::types::{
     DetectState, ImportError, ImportRequest, ImportSource, MAX_VOUCHERS_PER_REQUEST, MapReport,
     MapState, MapStatus, PullProgress, PullStage, PullState, ReconReport, ReconSectionReport,
     ReconState, RowStatus, Step, TALLY_PORT,
 };
 use super::wizard::ImportWizard;
+use crate::worker::ApiWorker;
 use crate::{AppCtx, Screen, ScreenAction};
 
 // ---------------------------------------------------------------------------------------------
@@ -60,6 +62,8 @@ pub struct ImportScreen {
     export_path: String,
     differences_only: bool,
     notice: Option<String>,
+    /// The one-call import path (see the `direct` module).
+    direct: DirectImport,
 }
 
 impl ImportScreen {
@@ -73,6 +77,7 @@ impl ImportScreen {
             export_path: String::new(),
             differences_only: false,
             notice: None,
+            direct: DirectImport::default(),
         })
     }
 
@@ -90,6 +95,30 @@ impl ImportScreen {
     /// Takes the work the screen wants done; see [`ImportWizard::take_requests`].
     pub fn take_requests(&mut self) -> Vec<ImportRequest> {
         self.wizard.take_requests()
+    }
+
+    /// What the one-call import shows now.
+    #[must_use]
+    pub fn direct_state(&self) -> &DirectState {
+        &self.direct.state
+    }
+
+    /// Sets the form of the one-call import: host, port text and Tally company name.
+    pub fn set_direct_form(&mut self, host: &str, port: &str, company: &str) {
+        host.clone_into(&mut self.direct.host);
+        port.clone_into(&mut self.direct.port);
+        company.clone_into(&mut self.direct.company);
+    }
+
+    /// Starts the one-call import on `worker`: `Api::import_tally_http` with the form's host,
+    /// port and company. With no worker, or a bad field, the state becomes `Failed`.
+    pub fn start_direct_import(&mut self, worker: Option<&ApiWorker>) {
+        self.direct.start(worker);
+    }
+
+    /// Takes a finished one-call import answer, if there is one.
+    pub fn tick(&mut self) {
+        self.direct.tick();
     }
 
     /// The last refusal shown under the step, if any.
@@ -159,7 +188,11 @@ impl Screen for ImportScreen {
         "Import from Tally".to_owned()
     }
 
-    fn ui(&mut self, ui: &mut Ui, _ctx: &mut AppCtx) -> ScreenAction {
+    fn ui(&mut self, ui: &mut Ui, ctx: &mut AppCtx) -> ScreenAction {
+        self.tick();
+        if self.direct.state == DirectState::Running {
+            ui.ctx().request_repaint();
+        }
         let mut clicks = Vec::new();
         if ui
             .ctx()
@@ -170,7 +203,13 @@ impl Screen for ImportScreen {
         draw_steps(ui, &self.wizard);
         ui.separator();
         match self.wizard.step() {
-            Step::Detect => draw_detect(ui, &self.wizard, &mut self.export_path, &mut clicks),
+            Step::Detect => {
+                draw_detect(ui, &self.wizard, &mut self.export_path, &mut clicks);
+                ui.separator();
+                if draw_direct(ui, &mut self.direct) {
+                    self.direct.start(ctx.api.as_ref());
+                }
+            }
             Step::ChooseCompany => draw_choose(ui, &self.wizard, &mut clicks),
             Step::Pull => draw_pull(ui, &self.wizard, &mut clicks),
             Step::Map => draw_map(ui, &self.wizard, &mut clicks),
@@ -261,6 +300,38 @@ fn draw_detect(
             ui.colored_label(ui.visuals().error_fg_color, format!("Error: {reason}"));
         }
     }
+}
+
+/// The one-call import form. Returns `true` when the user pressed the button.
+fn draw_direct(ui: &mut Ui, direct: &mut DirectImport) -> bool {
+    ui.heading("Import in one step");
+    ui.label("Reads the whole company from a running Tally into the open, empty company file.");
+    egui::Grid::new("u10-direct-form").show(ui, |ui| {
+        ui.label("Host");
+        ui.text_edit_singleline(&mut direct.host);
+        ui.end_row();
+        ui.label("Port");
+        ui.text_edit_singleline(&mut direct.port);
+        ui.end_row();
+        ui.label("Tally company");
+        ui.text_edit_singleline(&mut direct.company);
+        ui.end_row();
+    });
+    let running = direct.state == DirectState::Running;
+    let pressed = ui
+        .add_enabled(!running, egui::Button::new("Import from Tally"))
+        .clicked();
+    if let Some(text) = direct.state.text() {
+        match &direct.state {
+            DirectState::Failed(_) | DirectState::Refused(_) => {
+                ui.colored_label(ui.visuals().error_fg_color, text);
+            }
+            DirectState::Idle | DirectState::Running | DirectState::Imported(_) => {
+                ui.label(text);
+            }
+        }
+    }
+    pressed
 }
 
 fn draw_choose(ui: &mut Ui, wizard: &ImportWizard, clicks: &mut Vec<Click>) {
