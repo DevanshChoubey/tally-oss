@@ -20,6 +20,10 @@ pub enum ApiError {
     /// A report engine rejected its parameters or its input.
     #[error(transparent)]
     Report(#[from] ReportError),
+    /// A Tally import did not finish (Tally unreachable, a response that cannot be read, or a
+    /// cancel). Nothing was committed.
+    #[error(transparent)]
+    Import(#[from] ledgerly_tally_bridge::import::ImportError),
     /// A change was saved, but the books could not be reloaded afterwards, so figures are not
     /// computed until a command or [`crate::Api::open`] reloads them.
     #[error(

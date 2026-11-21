@@ -19,3 +19,4 @@ pub use command::{Command, CommandResult};
 pub use error::ApiError;
 pub use facade::Api;
 pub use search::{MatchedOn, SearchHit};
+pub use tally_import::ImportSummary;
