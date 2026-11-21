@@ -29,8 +29,9 @@ None was loosened:
 - s3_verify assumed SQLite's foreign keys are off by default, but bundled libsqlite3-sys turns
   them on.
 
-The 66 cards have not yet had the per-card review the pilot cards had. Nothing is pushed or
-merged to `main`.
+Like the pilot cards, the 66 cards had one read-only review before anything was compiled: 8 lane
+reviewers, followed by one fix round. A second review of the compiled code is under way. Nothing
+is pushed or merged to `main`.
 
 | Card | Status | Compiled | Review | Blocking | Fixed |
 |---|---|---|---|---|---|
