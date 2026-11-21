@@ -18,5 +18,6 @@ mod tally_import;
 pub use command::{Command, CommandResult};
 pub use error::ApiError;
 pub use facade::Api;
+pub use gst::{Bucket, BucketedVoucher, Gstr1, Gstr1Return, Gstr3bWorking, RulePack};
 pub use search::{MatchedOn, SearchHit};
 pub use tally_import::ImportSummary;

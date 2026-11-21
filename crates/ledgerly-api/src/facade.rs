@@ -237,10 +237,6 @@ impl Api {
     ///
     /// # Errors
     /// [`ApiError::Stale`] after a saved change whose reload failed.
-    #[allow(
-        dead_code,
-        reason = "crate-internal seam for the Wave 2 extensions; remove once used"
-    )]
     pub(crate) fn cached_books(&self) -> Result<Outcome<&Books>, ApiError> {
         match &self.cache {
             Cache::Ready(books) => Ok(Outcome::Value(books)),
