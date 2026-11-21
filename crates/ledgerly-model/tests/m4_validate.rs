@@ -339,7 +339,6 @@ mod tests {
         assert_eq!(
             validate_voucher(&v, &masters(), &company()),
             Err(VoucherError::BillOnWrongLedger {
-                ineligible_itc: None,
                 bill: "INV-9".to_string(),
                 ledger: DEBTORS_2
             })

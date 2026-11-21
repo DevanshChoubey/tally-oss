@@ -178,6 +178,10 @@ fn voucher_type(id: VoucherTypeId, base: BaseVoucherKind, name: &str) -> Voucher
     }
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "the fixture lists every master the tests use"
+)]
 fn masters() -> Masters {
     let mut m = Masters::default();
     m.voucher_types

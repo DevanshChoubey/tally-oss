@@ -752,7 +752,6 @@ pub enum DraftError {
     /// A line names a ledger created inline that does not exist yet.
     #[error("line {line}: the ledger '{name}' has not been created yet")]
     PendingLedger {
-        ineligible_itc: None,
         /// 1-based line number.
         line: usize,
         /// The ledger's name.
@@ -952,7 +951,6 @@ impl VoucherDraft {
             LedgerRef::Chosen(id) => *id,
             LedgerRef::Pending(name) => {
                 return Err(DraftError::PendingLedger {
-                    ineligible_itc: None,
                     line,
                     name: name.clone(),
                 });

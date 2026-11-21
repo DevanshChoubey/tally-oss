@@ -728,7 +728,6 @@ fn incomplete_zero_unknown_and_pending_lines_are_errors() {
     assert_eq!(
         build(vec![pending]),
         Err(DraftError::PendingLedger {
-            ineligible_itc: None,
             line: 1,
             name: "Petty".to_owned()
         })

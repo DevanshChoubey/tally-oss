@@ -94,7 +94,6 @@ pub enum MapError {
         "ledger '{ledger}' has no parent group, so it cannot be placed in the chart of accounts"
     )]
     LedgerWithoutGroup {
-        ineligible_itc: None,
         /// Ledger name.
         ledger: String,
     },
@@ -135,7 +134,6 @@ pub enum MapError {
     /// A voucher names a ledger that is not in the masters.
     #[error("{voucher} uses ledger '{ledger}', which is not in the masters")]
     UnknownLedger {
-        ineligible_itc: None,
         /// Voucher description.
         voucher: String,
         /// Ledger name.
@@ -496,7 +494,6 @@ impl State {
                 return Ok(());
             }
             return Err(MapError::LedgerWithoutGroup {
-                ineligible_itc: None,
                 ledger: rec.name.clone(),
             });
         };
@@ -695,7 +692,6 @@ impl State {
             .get(name)
             .copied()
             .ok_or_else(|| MapError::UnknownLedger {
-                ineligible_itc: None,
                 voucher: label.to_owned(),
                 ledger: name.to_owned(),
             })

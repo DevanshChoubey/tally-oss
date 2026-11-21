@@ -123,3 +123,21 @@ Filed from the r2/* fix branches. Each line names the card and the request; the 
 - **B3** (tally): Define the reserved identity field.
 - **G7** (gst): A use flag per purchase line (further supply, passenger or goods transport, driving training, obligation under law, and so on) so s.17(5) blocked categories can be decided instead of Unsupported. docs/interface-requests.md was not edited, per the task rules.
 - **G6** (gst): Registration details on every party ledger used for sales, so classification is never Unsupported for a registered customer. Data-entry requirement only; no interface change.
+
+## Round 3 (2026-11-21)
+
+- **S5** (model): `InventoryLine` needs a typed side (source or destination) so a stock journal can
+  be projected per the documented rule (source reduces, destination increases). Use
+  `#[serde(default)]` so old events decode. Until then stock journals are `StoreError::Unsupported`.
+- **S5** (store): accepted in round 3: `StockMove.status`, `StoreError::Unsupported { voucher,
+  reason }`, `stock_moves()` returning carried (Regular and Optional) moves. Any valuation that
+  reads `stock_moves()` must filter by status. `Books.stock_moves` holds Regular moves only.
+- **E2** (engine): accepted in round 3: `EngineError::InUseByMaster { what, by }`.
+- **K3** (bank): accepted in round 3: `Brs.statement_balance: Outcome<Paise>`,
+  `Brs.balance_as_per_bank: Paise`, `Brs.difference: Outcome<Paise>`, `Brs::is_reconciled() ->
+  Outcome<bool>`.
+- **G7** (model + gst): accepted in round 3: `ineligible_itc: Option<bool>` on Ledger, Group,
+  StockItem, StockGroup and LedgerLine, and `Company::ineligible_itc_default`.
+  `itc_eligibility(v, line, company, masters, rules)`, plus the advisory `blocked_category_for`.
+- **G7** (tally-bridge): map Tally's ineligible-for-input-credit setting on import once an
+  observed XML capture shows the tag.

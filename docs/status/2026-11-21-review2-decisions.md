@@ -6,7 +6,7 @@ The fix agents ran on Claude Haiku 5.5, and their commits say so. The post-merge
 
 ## Decisions for the owner
 
-Defaults applied until the owner decides: M3 keeps "godowns need inventory" with pending tests; F3 refuses JSON numbers over 15 significant digits; K4 bounce-rule tests are pending; G7 returns Unsupported where s.17(5) has a use-based exception; P1 `serve` waits for the Wave 2 facade.
+Round 3 (see `2026-11-21-round3-tally-decisions.md`) replaced the M3, G7, K3, U3, U4 and U11 items below with Tally's documented behaviour. Defaults applied until the owner decides: M3 keeps "godowns need inventory" with pending tests; F3 refuses JSON numbers over 15 significant digits; K4 bounce-rule tests are pending; G7 returns Unsupported where s.17(5) has a use-based exception; P1 `serve` waits for the Wave 2 facade.
 
 One more, from the merge: B1 keeps its own inline `Company` collection request; X1 builds a `List of Companies` request. Neither is observed; pick one before the bridge is used.
 

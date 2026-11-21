@@ -524,7 +524,6 @@ fn ledger_bases(v: &Voucher, masters: &Masters) -> Result<Outcome<Vec<(Base, DrC
         }
         let base = Base {
             source: LineSource::Ledger {
-                ineligible_itc: None,
                 ledger: line.ledger,
             },
             taxability: class.taxability,

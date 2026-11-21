@@ -2,6 +2,12 @@
 //! blobs. A set value survives a round trip, and a blob encoded before the field existed (the key
 //! absent) decodes as `None`, so old data keeps its meaning: nothing set.
 
+#![allow(
+    clippy::expect_used,
+    clippy::panic,
+    reason = "test code: rule B2 lets tests unwrap and panic"
+)]
+
 use ciborium::Value;
 use ledgerly_core::{GroupId, LedgerId, Paise, SignedAmount, StockItemId, UnitId};
 use ledgerly_model::{Ledger, StockItem, ValuationMethod};
@@ -67,7 +73,11 @@ fn without_key(bytes: &[u8]) -> Vec<u8> {
     };
     let before = entries.len();
     entries.retain(|(k, _)| k.as_text() != Some(KEY));
-    assert_eq!(entries.len() + 1, before, "the field was encoded under `{KEY}`");
+    assert_eq!(
+        entries.len() + 1,
+        before,
+        "the field was encoded under `{KEY}`"
+    );
     encode(&value)
 }
 

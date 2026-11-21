@@ -570,7 +570,6 @@ fn accounting_invoice_uses_the_ledger_rate() {
     assert_eq!(
         b.lines.first().unwrap().source,
         LineSource::Ledger {
-            ineligible_itc: None,
             ledger: SALES_LEDGER
         }
     );

@@ -214,17 +214,20 @@ fn masters_with(base: BaseVoucherKind, item_hsn: Option<&str>) -> Masters {
             None,
         ),
     );
-    m.groups.insert(GroupId(1), Group {
-        id: GroupId(1),
-        name: "Group 1".to_owned(),
-        aliases: vec![],
-        parent: None,
-        reserved: None,
-        nature: None,
-        affects_gross_profit: false,
-        ineligible_itc: None,
-        tally: None,
-    });
+    m.groups.insert(
+        GroupId(1),
+        Group {
+            id: GroupId(1),
+            name: "Group 1".to_owned(),
+            aliases: vec![],
+            parent: None,
+            reserved: None,
+            nature: None,
+            affects_gross_profit: false,
+            ineligible_itc: None,
+            tally: None,
+        },
+    );
     m
 }
 
@@ -744,7 +747,10 @@ fn an_explicit_no_on_a_motor_car_is_eligible() {
         inventory_lines: vec![inv_line(ITEM, BY_ITEM)],
         ..purchase(PARTY, BY_ITEM)
     };
-    assert_eq!(explicit(&v, 0, &company(None), &m), ItcEligibility::Eligible);
+    assert_eq!(
+        explicit(&v, 0, &company(None), &m),
+        ItcEligibility::Eligible
+    );
 }
 
 #[test]
@@ -769,10 +775,18 @@ fn the_invoice_line_overrides_the_masters() {
         ..purchase(PARTY, BY_ITEM)
     };
     v.ledger_lines[0].ineligible_itc = Some(false);
-    assert_eq!(explicit(&v, 0, &company(None), &m), ItcEligibility::Eligible);
+    assert_eq!(
+        explicit(&v, 0, &company(None), &m),
+        ItcEligibility::Eligible
+    );
     let mut office = purchase(PARTY, OFFICE);
     office.ledger_lines[0].ineligible_itc = Some(true);
-    assert!(is_ineligible(&explicit(&office, 0, &company(None), &masters())));
+    assert!(is_ineligible(&explicit(
+        &office,
+        0,
+        &company(None),
+        &masters()
+    )));
 }
 
 #[test]
@@ -799,8 +813,10 @@ fn a_stock_item_takes_the_nearest_flagged_stock_group() {
     let mut m = masters_with(BaseVoucherKind::Purchase, Some("482010"));
     m.stock_groups
         .insert(STOCK_PARENT, stock_group(STOCK_PARENT, None, Some(true)));
-    m.stock_groups
-        .insert(STOCK_CHILD, stock_group(STOCK_CHILD, Some(STOCK_PARENT), None));
+    m.stock_groups.insert(
+        STOCK_CHILD,
+        stock_group(STOCK_CHILD, Some(STOCK_PARENT), None),
+    );
     m.stock_items.get_mut(&ITEM).unwrap().group = Some(STOCK_CHILD);
     let v = Voucher {
         inventory_lines: vec![inv_line(ITEM, BY_ITEM)],

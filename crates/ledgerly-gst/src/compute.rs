@@ -104,7 +104,6 @@ pub enum LineSource {
     },
     /// A ledger line posted to this (sales, purchase, income or expense) ledger.
     Ledger {
-        ineligible_itc: None,
         /// The ledger.
         ledger: LedgerId,
     },
@@ -575,7 +574,6 @@ fn ledger_base(line: &LedgerLine, class: &GstClassification) -> Result<Base, Gst
     }
     Ok(Base {
         source: LineSource::Ledger {
-            ineligible_itc: None,
             ledger: line.ledger,
         },
         taxability: class.taxability,

@@ -206,7 +206,6 @@ fn doc(kind: InwardDocKind, number: &str, igst: i64) -> InwardDoc {
 
 fn group(ctin: &str, docs: Vec<InwardDoc>) -> SupplierGroup<InwardDoc> {
     SupplierGroup {
-        ineligible_itc: None,
         ctin: ctin.to_owned(),
         trade_name: None,
         supplier_period: None,

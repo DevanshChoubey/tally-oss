@@ -712,7 +712,6 @@ fn against_a_bill_of_another_ledger_is_rejected() {
     assert_eq!(
         validate_bill_refs(&r, &books),
         Err(EngineError::Voucher(VoucherError::BillOnWrongLedger {
-            ineligible_itc: None,
             bill: "INV-1".to_string(),
             ledger: OTHER_DEBTOR,
         }))

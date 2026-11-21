@@ -27,6 +27,7 @@
 //!      setting and a ledger setting that disagree are `Unsupported` (pending: not documented);
 //!    * the company default ([`Company::ineligible_itc_default`]). A master value that disagrees
 //!      with it is `Unsupported` (pending: not documented).
+//!
 //!    Set Yes gives `Ineligible`; set No gives `Eligible`, whatever the HSN/SAC.
 //! 3. Nothing set at any level: the HSN/SAC rules of the rule pack apply, as before this setting
 //!    existed. A line whose HSN/SAC is in a blocked category of the pack (s.17(5)) is `Unsupported`,

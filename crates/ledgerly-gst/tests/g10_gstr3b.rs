@@ -31,8 +31,8 @@ use ledgerly_gst::gstr3b::{
 use ledgerly_gst::pack::{RulePack, load_pack};
 use ledgerly_model::{
     Address, BaseVoucherKind, BillAllocation, BillRefKind, Books, Company, EntityKind, Features,
-    GstClassification, GstHistory, GstRegistration, InventoryLine, Ledger, LedgerLine, Masters,
-    NegativeStockPolicy, NumberingConfig, NumberingMethod, PartyDetails, RegistrationType,
+    Group, GstClassification, GstHistory, GstRegistration, InventoryLine, Ledger, LedgerLine,
+    Masters, NegativeStockPolicy, NumberingConfig, NumberingMethod, PartyDetails, RegistrationType,
     RestartPeriod, StockItem, Taxability, Unit, UnitKind, ValuationMethod, Voucher, VoucherMode,
     VoucherStatus, VoucherType,
 };
@@ -186,6 +186,23 @@ fn voucher_type(id: VoucherTypeId, name: &str, base: BaseVoucherKind) -> Voucher
 
 fn masters() -> Masters {
     let mut m = Masters::default();
+    // Every ledger here sits under GroupId(1). Round 3: ITC eligibility walks a ledger's group
+    // chain for the ineligible-for-input-credit setting, so the group must exist (it was
+    // referenced but missing before). Nothing is set on it, so no expected value changes.
+    m.groups.insert(
+        GroupId(1),
+        Group {
+            id: GroupId(1),
+            name: "Group 1".to_owned(),
+            aliases: vec![],
+            parent: None,
+            reserved: None,
+            nature: None,
+            affects_gross_profit: false,
+            ineligible_itc: None,
+            tally: None,
+        },
+    );
     for (id, name, base) in [
         (SALES_TYPE, "Sales", BaseVoucherKind::Sales),
         (PURCHASE_TYPE, "Purchase", BaseVoucherKind::Purchase),
@@ -823,7 +840,7 @@ fn a_motor_car_marked_ineligible_on_its_ledger_goes_to_the_not_claimable_row() {
     books.masters.ledgers.get_mut(&CAR).unwrap().ineligible_itc = Some(true);
     let w = value(&books, None);
     assert_eq!(w.itc_all_other, Gstr3bTaxAmounts::default());
-    assert!(w.itc_vouchers.is_empty());
+    assert_eq!(w.itc_vouchers, Vec::<VoucherId>::new());
     assert_eq!(w.itc_not_claimable, amounts(0, 900_000, 900_000));
 }
 
