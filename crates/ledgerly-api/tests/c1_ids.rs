@@ -18,9 +18,7 @@
 )]
 
 use ledgerly_api::{Api, ApiError, Command, CommandResult, CreatedId};
-use ledgerly_core::{
-    Clock, CompanyId, GroupId, LedgerId, Outcome, Paise, SignedAmount, StateCode,
-};
+use ledgerly_core::{Clock, CompanyId, GroupId, LedgerId, Outcome, Paise, SignedAmount, StateCode};
 use ledgerly_engine::EngineError;
 use ledgerly_model::{
     Address, Company, EntityKind, Features, Group, Ledger, Nature, NegativeStockPolicy,

@@ -106,7 +106,14 @@ fn period() -> Period {
 
 fn run(fake: &Fake) -> Outcome<ImportedTally> {
     let dir = tempfile::tempdir().unwrap();
-    import_company(fake, "Test Traders", period(), dir.path(), &CancelToken::new()).unwrap()
+    import_company(
+        fake,
+        "Test Traders",
+        period(),
+        dir.path(),
+        &CancelToken::new(),
+    )
+    .unwrap()
 }
 
 fn fake(cash: &str, capital: &str, vouchers: Vec<(&'static str, String)>) -> Fake {
@@ -152,16 +159,14 @@ fn a_negative_opening_is_a_debit_and_a_positive_one_a_credit() {
         opening_of(&imported, "Capital"),
         SignedAmount::cr(Paise::new(1_000_000))
     );
-    assert_eq!(
-        opening_of(&imported, "Rent"),
-        SignedAmount::dr(Paise::ZERO)
-    );
-    let difference: Vec<_> = imported
+    assert_eq!(opening_of(&imported, "Rent"), SignedAmount::dr(Paise::ZERO));
+    let difference: Vec<&str> = imported
         .warnings
         .iter()
         .filter(|w| w.message.contains("do not balance"))
+        .map(|w| w.message.as_str())
         .collect();
-    assert_eq!(difference, Vec::new());
+    assert_eq!(difference, Vec::<&str>::new());
 }
 
 #[test]
@@ -227,8 +232,16 @@ fn vouchers_outside_the_period_are_reported_not_skipped_silently() {
         .map(|w| w.message.as_str())
         .collect();
     assert_eq!(outside.len(), 2, "{:?}", imported.warnings);
-    assert!(outside.iter().any(|m| m.contains("1 voucher(s) dated 2026-03-15")));
-    assert!(outside.iter().any(|m| m.contains("1 voucher(s) dated 2027-04-10")));
+    assert!(
+        outside
+            .iter()
+            .any(|m| m.contains("1 voucher(s) dated 2026-03-15"))
+    );
+    assert!(
+        outside
+            .iter()
+            .any(|m| m.contains("1 voucher(s) dated 2027-04-10"))
+    );
 }
 
 #[test]
@@ -238,10 +251,11 @@ fn nothing_outside_the_period_means_no_such_warning() {
     let Outcome::Value(imported) = run(&fake("0", "0", vouchers)) else {
         panic!("expected an import");
     };
-    let outside: Vec<_> = imported
+    let outside: Vec<&str> = imported
         .warnings
         .iter()
         .filter(|w| w.message.contains("outside the import period"))
+        .map(|w| w.message.as_str())
         .collect();
-    assert_eq!(outside, Vec::new());
+    assert_eq!(outside, Vec::<&str>::new());
 }

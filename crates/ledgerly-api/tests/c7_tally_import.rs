@@ -17,9 +17,7 @@ use ledgerly_api::{Api, ApiError, ImportSummary};
 use ledgerly_core::{
     CancelToken, Clock, CompanyId, Outcome, Paise, Period, SignedAmount, StateCode,
 };
-use ledgerly_model::{
-    Address, Company, EntityKind, Features, NegativeStockPolicy, Scenario,
-};
+use ledgerly_model::{Address, Company, EntityKind, Features, NegativeStockPolicy, Scenario};
 use ledgerly_reports::{
     Cell as ReportCell, ColumnSpec, Detail, Report, ReportFilter, ReportKind, ReportParams,
 };
@@ -175,7 +173,14 @@ fn opening_balances_import_and_the_trial_balance_matches_the_hand_derivation() {
         vouchers: vec![("20260410", journal("v-1", "20260410"))],
     };
     let summary = committed(api.import_tally_with(&tally, "Test Traders", &CancelToken::new()));
-    assert_eq!(summary.warnings.iter().filter(|w| w.contains("do not balance")).count(), 0);
+    assert_eq!(
+        summary
+            .warnings
+            .iter()
+            .filter(|w| w.contains("do not balance"))
+            .count(),
+        0
+    );
     let tb = trial_balance(&api);
     assert_eq!(
         row_cells(&tb, "Cash"),

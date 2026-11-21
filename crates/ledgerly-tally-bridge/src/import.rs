@@ -201,7 +201,13 @@ pub fn import_company(
         message: w.message,
     }));
     warnings.extend(opening_warnings);
-    warnings.extend(probe_outside_period(t, company, range, capture_dir, cancel)?);
+    warnings.extend(probe_outside_period(
+        t,
+        company,
+        range,
+        capture_dir,
+        cancel,
+    )?);
     Ok(Outcome::Value(ImportedTally {
         events,
         warnings,
@@ -374,7 +380,7 @@ fn split_openings(masters: &[TallyMaster]) -> Result<(Vec<TallyMaster>, Openings
             DrCr::Cr
         };
         openings.push((rec.name.clone(), SignedAmount { amount, side }));
-        element.text = "0".to_owned();
+        "0".clone_into(&mut element.text);
         element.children.clear();
     }
     Ok((out, openings))
@@ -466,12 +472,11 @@ fn probe_outside_period(
             .into());
         }
         let file = format!("vouchers-outside-{which}.xml");
-        let request = try_vouchers_request(company, from, to).map_err(|error| {
-            PullError::Vouchers {
+        let request =
+            try_vouchers_request(company, from, to).map_err(|error| PullError::Vouchers {
                 file: file.clone(),
                 error,
-            }
-        })?;
+            })?;
         let raw = t.post(&request).map_err(PullError::from)?;
         let path = capture_dir.join(&file);
         std::fs::write(&path, &raw).map_err(|e| PullError::Io {

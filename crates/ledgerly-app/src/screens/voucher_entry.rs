@@ -2069,7 +2069,8 @@ impl VoucherEntryScreen {
         let Some(worker) = ctx.api.as_ref() else {
             return;
         };
-        self.create_queue.extend(self.take_master_requests());
+        let requests = self.take_master_requests();
+        self.create_queue.extend(requests);
         if self.creating.is_some() {
             return;
         }

@@ -18,8 +18,8 @@
 use std::time::{Duration, Instant};
 
 use ledgerly_api::{Api, Command, CreatedId};
-use ledgerly_app::shell::submit::{self, CommandReply};
 use ledgerly_app::shell::Shell;
+use ledgerly_app::shell::submit::{self, CommandReply};
 use ledgerly_app::worker::{ApiWorker, Ticket};
 use ledgerly_app::{AppCtx, Screen, ScreenAction};
 use ledgerly_core::{

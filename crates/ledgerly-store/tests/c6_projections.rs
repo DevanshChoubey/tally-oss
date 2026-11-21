@@ -182,7 +182,7 @@ fn fifty_events() -> Vec<Event> {
         let day = u8::try_from(id % 28 + 1).unwrap();
         let before = two_line(id, d(day), i64::try_from(id).unwrap() * 100);
         let mut after = two_line(id, d(day), 9_000 + i64::try_from(id).unwrap());
-        after.narration = "corrected".to_owned();
+        "corrected".clone_into(&mut after.narration);
         events.push(Event::VoucherAltered { before, after });
     }
     events.push(Event::VoucherCancelled {
