@@ -12,6 +12,17 @@
 # Switch Dr/Cr is unbound. Read 2026-11-21: Tally's shortcut page gives Alt+S to Stock Query and
 # lists no side-switch key; the contra page sets a line's side by the Dr or Cr field it is entered
 # in. The binding is pending. The voucher screen's Dr / Cr button does the switch.
+#
+# Tally citations, extended 2026-11-22 (read that day). Tally's keyboard shortcut page
+# (https://help.tallysolutions.com/tally-prime/keyboard-shortcuts/keyboard-shortcuts-tally-prime/)
+# lists, with the same keys as below: F1 help, F2 date or period, F3 switch company, F4-F9 Contra,
+# Payment, Receipt, Journal, Sales, Purchase, F11 company features, F12 configure, Alt+F1 detailed
+# or condensed, Ctrl+A accept or save, Alt+C create a master on the fly, Ctrl+Enter alter a master,
+# Alt+D delete a voucher, Alt+X cancel a voucher, Alt+2 duplicate a voucher, Ctrl+I more details,
+# Ctrl+D delete an item or ledger line, Ctrl+P print, Ctrl+E export, Ctrl+M e-mail. Alt+G (go to)
+# and Ctrl+G (switch to) are the palette keys. Ctrl+S, Ctrl+K, Ctrl+Z, Alt+I and the Ctrl+W close-tab
+# key are modern aliases or Ledgerly's own. The same page lists Alt+S for Stock Query and no key
+# that switches a line's side, so switch-side stays unbound.
 
 preset = "classic"
 

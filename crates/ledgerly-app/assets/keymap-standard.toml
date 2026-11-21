@@ -1,0 +1,58 @@
+# Ledgerly keymap: the standard desktop preset (decision 4 in
+# docs/status/2026-11-22-ui-parity-report.md, and the mock's keyboard map, design/mock-v2/index.html,
+# the KEYMAP table: its second column is this preset).
+#
+# Format and rules are the same as keymap-classic.toml: `preset` names the keymap, `[bindings]`
+# maps an action id to its chords, a chord may belong to one action only.
+#
+# Principle: save is Ctrl+S, so Ctrl+A is left to text fields (select all). The voucher keys keep
+# the function keys as aliases, as the mock says ("Function keys still work as aliases"). Keys that
+# no desktop convention covers keep their classic chord (Alt+C, Ctrl+Enter, Ctrl+D, Alt+D, Alt+X,
+# Alt+2, Alt+I, Alt+F1, Ctrl+P/E/M, Ctrl+K, Ctrl+Z, Ctrl+I).
+#
+# Sources: the mock's KEYMAP table (design/mock-v2/index.html, lines 1836-1841) for the Ctrl+Shift
+# voucher keys, Ctrl+Shift+O company, Ctrl+S save and the palette; Ctrl+T and Ctrl+W are the tab
+# keys the shell already handles; the other chords follow keymap-classic.toml.
+# Switch Dr/Cr is unbound in both presets; see keymap-classic.toml for why.
+
+preset = "standard"
+
+[bindings]
+# Create a voucher of each kind: Ctrl+Shift letter, with the function key as alias.
+new-contra = ["Ctrl+Shift+C", "F4"]
+new-payment = ["Ctrl+Shift+Y", "F5"]
+new-receipt = ["Ctrl+Shift+R", "F6"]
+new-journal = ["Ctrl+Shift+J", "F7"]
+new-sales = ["Ctrl+Shift+S", "F8"]
+new-purchase = ["Ctrl+Shift+P", "F9"]
+
+# Context and screens.
+change-period = ["F2"]
+switch-company = ["Ctrl+Shift+O"]
+company-features = ["F11"]
+configure = ["F12"]
+help = ["F1"]
+back = ["Escape"]
+open-palette = ["Ctrl+K"]
+switch-palette = ["Ctrl+G"]
+new-tab = ["Ctrl+T"]
+close-tab = ["Ctrl+W"]
+
+# Forms and vouchers.
+save = ["Ctrl+S"]
+create-master = ["Alt+C"]
+alter-master = ["Ctrl+Enter"]
+more-details = ["Ctrl+I"]
+delete-line = ["Ctrl+D"]
+switch-side = []
+delete-voucher = ["Alt+D"]
+cancel-voucher = ["Alt+X"]
+duplicate-voucher = ["Alt+2"]
+insert-voucher = ["Alt+I"]
+undo = ["Ctrl+Z"]
+
+# Reports and output.
+toggle-detail = ["Alt+F1"]
+print = ["Ctrl+P"]
+export = ["Ctrl+E"]
+email = ["Ctrl+M"]

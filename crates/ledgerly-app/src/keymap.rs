@@ -28,8 +28,25 @@ use serde::Deserialize;
 /// The classic preset, embedded at build time.
 const CLASSIC_TOML: &str = include_str!("../assets/keymap-classic.toml");
 
+/// The standard desktop preset, embedded at build time.
+const STANDARD_TOML: &str = include_str!("../assets/keymap-standard.toml");
+
 /// Name of the classic preset.
 const CLASSIC_NAME: &str = "classic";
+
+/// Name of the standard desktop preset.
+const STANDARD_NAME: &str = "standard";
+
+/// Names of the presets that ship, in the order the keyboard map lists them.
+pub const PRESET_NAMES: [&str; 2] = [CLASSIC_NAME, STANDARD_NAME];
+
+/// The preset in use when nothing else is chosen. There is no persistence yet, so the app always
+/// uses this one; a stored choice would replace it once settings are stored.
+pub const DEFAULT_PRESET: &str = CLASSIC_NAME;
+
+/// Keys a focused text field edits itself when Ctrl is held: select all, copy, paste, cut, undo
+/// and redo.
+const TEXT_EDIT_KEYS: [Key; 6] = [Key::A, Key::C, Key::V, Key::X, Key::Z, Key::Y];
 
 /// Something the user can ask for with a key press. Each action has a stable id (used in the
 /// TOML file) and a label in our own words (used in the palette and key bar).
@@ -439,6 +456,12 @@ pub enum KeymapError {
         /// The chord, in canonical text.
         chord: String,
     },
+    /// No preset of this name ships (see [`PRESET_NAMES`]).
+    #[error("there is no keyboard preset named `{name}`")]
+    UnknownPreset {
+        /// The name asked for.
+        name: String,
+    },
 }
 
 /// The shape of the keymap file.
@@ -564,6 +587,38 @@ impl Keymap {
         }
         fired
     }
+
+    /// Like [`Keymap::consume_action`], for a screen that has text fields. While a text field has
+    /// focus (`text_focused`, from `egui::Context::text_edit_focused`), a text-editing chord (see
+    /// [`is_text_edit_chord`]) is left in the frame, so the field can select all, copy or paste
+    /// with it. Every other chord of `action` still fires. Returns true when a chord was consumed.
+    ///
+    /// Call this before the widgets draw: a key that is consumed never reaches a text field.
+    pub fn consume_action_outside_text(
+        &self,
+        input: &mut InputState,
+        action: Action,
+        text_focused: bool,
+    ) -> bool {
+        let mut fired = false;
+        for chord in self.chords(action) {
+            if text_focused && is_text_edit_chord(*chord) {
+                continue;
+            }
+            if consume_chord(input, *chord) {
+                fired = true;
+            }
+        }
+        fired
+    }
+}
+
+/// Whether a chord is one a focused text field takes for itself: Ctrl with A, C, V, X, Z or Y,
+/// and no Alt or Shift. With a text field focused, such a chord is never consumed by an action
+/// (see [`Keymap::consume_action_outside_text`]), so Ctrl+A selects all and never saves.
+#[must_use]
+pub fn is_text_edit_chord(chord: Chord) -> bool {
+    chord.command && !chord.alt && !chord.shift && TEXT_EDIT_KEYS.contains(&chord.key)
 }
 
 /// Removes every press of exactly this chord from the frame's events; true if there was one.
@@ -615,6 +670,44 @@ pub fn classic() -> Keymap {
 /// Any [`KeymapError`] from reading the embedded file.
 pub fn try_classic() -> Result<Keymap, KeymapError> {
     from_toml(CLASSIC_TOML)
+}
+
+/// The standard desktop preset (decision 4, `docs/status/2026-11-22-ui-parity-report.md`), read
+/// from `assets/keymap-standard.toml`. Saves with Ctrl+S, so Ctrl+A stays select-all in text
+/// fields. Like [`classic`], this returns an empty keymap and logs the error if the file is bad.
+#[must_use]
+pub fn standard() -> Keymap {
+    match try_standard() {
+        Ok(keymap) => keymap,
+        Err(error) => {
+            tracing::error!("the embedded standard keymap is invalid: {error}");
+            Keymap::unbound(STANDARD_NAME)
+        }
+    }
+}
+
+/// Like [`standard`], but returns the error instead of an empty keymap.
+///
+/// # Errors
+/// Any [`KeymapError`] from reading the embedded file.
+pub fn try_standard() -> Result<Keymap, KeymapError> {
+    from_toml(STANDARD_TOML)
+}
+
+/// The preset called `name` (`classic` or `standard`, see [`PRESET_NAMES`]). Loading by name
+/// does not change the keymap in use: the app keeps [`DEFAULT_PRESET`] until a choice can be
+/// stored and applied.
+///
+/// # Errors
+/// [`KeymapError::UnknownPreset`] for any other name; any [`KeymapError`] from reading the file.
+pub fn preset(name: &str) -> Result<Keymap, KeymapError> {
+    match name {
+        CLASSIC_NAME => try_classic(),
+        STANDARD_NAME => try_standard(),
+        other => Err(KeymapError::UnknownPreset {
+            name: other.to_owned(),
+        }),
+    }
 }
 
 /// Reads a keymap from TOML (the format [`to_toml`] writes).
