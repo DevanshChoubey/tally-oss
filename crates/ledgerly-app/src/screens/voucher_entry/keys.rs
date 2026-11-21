@@ -5,6 +5,7 @@ use ledgerly_model::Masters;
 
 use super::state::{Field, VoucherEntryScreen};
 use crate::ScreenAction;
+use crate::keymap::{Action, Keymap};
 
 /// What the user did in the widgets this frame, applied after drawing.
 pub(super) enum UiEvent {
@@ -14,27 +15,6 @@ pub(super) enum UiEvent {
     Pick(usize),
     Side(usize),
     Leave,
-}
-
-/// The keys this screen reads. They are hard-coded here, in one table, until the keymap (card U2,
-/// `keymap.rs`) is merged and the screen can ask it for its bindings (spec 7: keys are rebindable;
-/// the need is filed in `docs/interface-requests.md`). Ctrl+Enter is deliberately absent: spec 7
-/// gives it to "alter master", which this screen does not do, so it is left to the shell.
-mod bindings {
-    use egui::{Key, Modifiers};
-
-    /// Save: Ctrl+A and Ctrl+S (spec 7 names Ctrl+A; Ctrl+S is the plan's second binding).
-    pub(super) const SAVE: [(Modifiers, Key); 2] =
-        [(Modifiers::COMMAND, Key::A), (Modifiers::COMMAND, Key::S)];
-    /// Create a ledger inline (spec 7: Alt+C).
-    pub(super) const CREATE_MASTER: (Modifiers, Key) = (Modifiers::ALT, Key::C);
-    // Switching a line between Dr and Cr has no keyboard binding. Read 2026-11-21: Tally's
-    // shortcut page (https://help.tallysolutions.com/tally-prime/keyboard-shortcuts/keyboard-shortcuts-tally-prime/) gives Alt+S to Stock Query and lists no side-switch key. The
-    // contra page (https://help.tallysolutions.com/record-contra-entry/) sets a line's side by the field it is entered in. The binding is pending;
-    // the on-screen Dr / Cr button does the switch.
-    /// Delete the line. Provisional: no source for this binding yet (spec 7 gives Alt+D to
-    /// "delete" a voucher, not a line), so it is only a placeholder until the keymap is merged.
-    pub(super) const DELETE_LINE: (Modifiers, Key) = (Modifiers::COMMAND, Key::D);
 }
 
 /// Keys read before the widgets see them.
@@ -51,6 +31,7 @@ pub(super) enum KeyCmd {
 
 pub(super) fn read_keys(
     ui: &Ui,
+    keymap: &Keymap,
     picker_open: bool,
     escape_wanted: bool,
     confirming: bool,
@@ -65,18 +46,15 @@ pub(super) fn read_keys(
                 out.push(KeyCmd::DiscardNo);
             }
         }
-        let mut save = false;
-        for (modifiers, key) in bindings::SAVE {
-            // Consume every binding, so one key press never reaches a widget.
-            save |= i.consume_key(modifiers, key);
-        }
-        if save {
+        // Every key comes from the keymap, so a rebound key (spec 7) works here too. Consuming
+        // the event keeps one press from reaching a widget as well.
+        if keymap.consume_action(i, Action::Save) {
             out.push(KeyCmd::Save);
         }
-        if i.consume_key(bindings::DELETE_LINE.0, bindings::DELETE_LINE.1) {
+        if keymap.consume_action(i, Action::DeleteLine) {
             out.push(KeyCmd::DeleteLine);
         }
-        if i.consume_key(bindings::CREATE_MASTER.0, bindings::CREATE_MASTER.1) {
+        if keymap.consume_action(i, Action::CreateMaster) {
             out.push(KeyCmd::CreateMaster);
         }
         if picker_open && i.consume_key(Modifiers::NONE, Key::ArrowDown) {

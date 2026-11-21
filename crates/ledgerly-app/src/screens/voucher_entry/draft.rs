@@ -154,16 +154,58 @@ pub struct VoucherDraft {
 }
 
 impl VoucherDraft {
-    /// A draft with one empty line on the kind's first side.
+    /// A draft with one empty line on the kind's first side. A single-entry draft (payment or
+    /// receipt) starts with its account line and one particulars line on the other side.
     #[must_use]
     pub fn new(type_id: VoucherTypeId, kind: EntryKind, date_text: String) -> Self {
+        let rows = if kind.is_single_entry() {
+            vec![
+                DraftRow::empty(kind.first_side()),
+                DraftRow::empty(kind.first_side().opposite()),
+            ]
+        } else {
+            vec![DraftRow::empty(kind.first_side())]
+        };
         VoucherDraft {
             type_id,
             kind,
             date_text,
             narration: String::new(),
-            rows: vec![DraftRow::empty(kind.first_side())],
+            rows,
         }
+    }
+
+    /// `true` when the draft is in single-entry style: line 0 is the cash or bank account, which
+    /// the user picks once, and the lines after it are the ledgers paid or received. The account's
+    /// amount is the total of those lines and is never typed.
+    #[must_use]
+    pub fn is_single_entry(&self) -> bool {
+        self.kind.is_single_entry()
+    }
+
+    /// Adds an empty particulars line on the side opposite the account (single entry only).
+    pub fn push_particular(&mut self) {
+        self.rows
+            .push(DraftRow::empty(self.kind.first_side().opposite()));
+    }
+
+    /// The total of the particulars lines (every line after the account in single entry), or
+    /// `None` while none of them has an amount. An entry aid: the engine checks the voucher when
+    /// it posts.
+    ///
+    /// # Errors
+    /// The first particulars line whose amount is invalid, or an overflow.
+    pub fn particulars_total(&self) -> Result<Option<Paise>, DraftError> {
+        let mut total: Option<Paise> = None;
+        for (index, _) in self.rows.iter().enumerate().skip(1) {
+            if let Some(amount) = self.line_amount(index)? {
+                total = Some(match total {
+                    Some(sum) => sum.checked_add(amount)?,
+                    None => amount,
+                });
+            }
+        }
+        Ok(total)
     }
 
     /// `true` when no line holds anything and there is no narration (the date does not count).
@@ -177,6 +219,9 @@ impl VoucherDraft {
     /// # Errors
     /// [`DraftError::Amount`] when the text is not a valid amount, [`DraftError::NoSuchLine`].
     pub fn line_amount(&self, index: usize) -> Result<Option<Paise>, DraftError> {
+        if index == 0 && self.is_single_entry() {
+            return self.particulars_total();
+        }
         let line = index.saturating_add(1);
         let row = self
             .rows
@@ -261,7 +306,12 @@ impl VoucherDraft {
         let mut lines = Vec::new();
         let mut dr = Paise::ZERO;
         let mut cr = Paise::ZERO;
-        for (i, row) in self.rows.iter().enumerate().filter(|(_, r)| !r.is_blank()) {
+        for (i, row) in self
+            .rows
+            .iter()
+            .enumerate()
+            .filter(|(i, r)| !r.is_blank() || (*i == 0 && self.is_single_entry()))
+        {
             let line = match self.line_for(masters, i, row)? {
                 Outcome::Value(line) => line,
                 Outcome::Unsupported(u) => return Ok(Outcome::Unsupported(u)),

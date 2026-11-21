@@ -6,6 +6,7 @@ use ledgerly_core::{Date, FinancialYear, GroupId, LedgerId, Outcome, SignedAmoun
 use ledgerly_model::{Books, Masters, Voucher};
 use thiserror::Error;
 
+use crate::keymap::{self, Keymap};
 use crate::shell::submit::CommandReply;
 use crate::worker::Ticket;
 
@@ -61,6 +62,8 @@ pub(super) struct CreateForm {
 /// The accounting voucher entry screen (card U4).
 pub struct VoucherEntryScreen {
     pub(super) type_name: String,
+    /// The keymap the screen reads its keys from (the classic preset until the shell passes its own).
+    pub(super) keymap: Keymap,
     pub(super) fy: FinancialYear,
     pub(super) books_begin: Date,
     pub(super) draft: VoucherDraft,
@@ -109,6 +112,7 @@ impl VoucherEntryScreen {
         };
         Ok(Outcome::Value(VoucherEntryScreen {
             type_name: voucher_type.name.clone(),
+            keymap: keymap::classic(),
             fy,
             books_begin: books.company.books_begin,
             draft: VoucherDraft::new(type_id, kind, format_entry_date(today)),
@@ -183,6 +187,16 @@ impl VoucherEntryScreen {
         self.notice = Some(Notice::Error(message.into()));
     }
 
+    /// The field that follows the ledger of line `i`: the amount, or for the single-entry account
+    /// (line 0) the first particulars ledger, since the account has no amount of its own.
+    pub(super) fn after_ledger(&self, i: usize) -> Field {
+        if self.draft.is_single_entry() && i == 0 {
+            Field::Ledger(1)
+        } else {
+            Field::Amount(i)
+        }
+    }
+
     pub(super) fn remember(&mut self, id: LedgerId) {
         self.recents.retain(|r| *r != id);
         self.recents.insert(0, id);
@@ -254,6 +268,7 @@ impl VoucherEntryScreen {
     pub fn step_back(&mut self) {
         let previous = match self.focus {
             Field::Date | Field::Ledger(0) => Field::Date,
+            Field::Ledger(1) if self.draft.is_single_entry() => Field::Ledger(0),
             Field::Ledger(i) => Field::Amount(i.saturating_sub(1)),
             Field::Amount(i) => Field::Ledger(i),
             Field::Narration => Field::Amount(self.draft.rows.len().saturating_sub(1)),
@@ -276,7 +291,7 @@ impl VoucherEntryScreen {
             return;
         };
         if row.ledger.is_some() {
-            self.go(Field::Amount(i));
+            self.go(self.after_ledger(i));
             return;
         }
         if row.ledger_text.trim().is_empty() {
@@ -295,7 +310,7 @@ impl VoucherEntryScreen {
                     r.ledger_text = hit.name;
                 }
                 self.remember(hit.id);
-                self.go(Field::Amount(i));
+                self.go(self.after_ledger(i));
             }
             Some(PickerItem::Create { name }) => {
                 self.create = Some(CreateForm { name, group: None });
@@ -306,6 +321,9 @@ impl VoucherEntryScreen {
 
     /// Enter on an empty ledger field: ends the list when the lines balance.
     pub(super) fn end_of_list(&mut self, i: usize) {
+        if self.draft.is_single_entry() {
+            return self.end_of_single_list(i);
+        }
         let row_empty = self
             .draft
             .rows
@@ -323,6 +341,27 @@ impl VoucherEntryScreen {
         }
     }
 
+    /// Enter on an empty ledger field of a single-entry voucher: the list ends after at least one
+    /// particulars line. The account is never a list end; it must be picked first.
+    pub(super) fn end_of_single_list(&mut self, i: usize) {
+        if i == 0 {
+            return self.fail("Pick the cash or bank account first.");
+        }
+        let row_empty = self
+            .draft
+            .rows
+            .get(i)
+            .is_some_and(|r| r.amount_text.trim().is_empty());
+        if !row_empty {
+            return self.fail("Pick a ledger: type part of its name or alias.");
+        }
+        if i == 1 {
+            return self.fail("Pick the ledger that is paid or received first.");
+        }
+        self.draft.rows.truncate(i);
+        self.go(Field::Narration);
+    }
+
     pub(super) fn submit_amount(&mut self, i: usize) {
         let amount = match self.draft.line_amount(i) {
             Ok(Some(amount)) => amount,
@@ -336,6 +375,14 @@ impl VoucherEntryScreen {
             r.amount_text = amount.to_rupees().to_string();
         }
         let next = i.saturating_add(1);
+        if self.draft.is_single_entry() {
+            // Single entry: each amount is followed by the next particulars line, which is always
+            // there to be filled or finished with an empty Enter.
+            if next >= self.draft.rows.len() {
+                self.draft.push_particular();
+            }
+            return self.go(Field::Ledger(next));
+        }
         if next < self.draft.rows.len() {
             return self.go(Field::Ledger(next));
         }
@@ -356,12 +403,15 @@ impl VoucherEntryScreen {
         }
     }
 
-    /// Deletes the line that has the keyboard (the only line is emptied instead). Bound to a
-    /// provisional key, see `bindings::DELETE_LINE`.
+    /// Deletes the line that has the keyboard (the only line is emptied instead). Bound to the
+    /// keymap's `delete-line` action.
     pub fn delete_line(&mut self) {
         let (Field::Ledger(i) | Field::Amount(i)) = self.focus else {
             return;
         };
+        if self.draft.is_single_entry() {
+            return self.delete_single_line(i);
+        }
         if self.draft.rows.len() <= 1 {
             self.draft.rows = vec![DraftRow::empty(self.draft.kind.first_side())];
             return self.go(Field::Ledger(0));
@@ -372,5 +422,21 @@ impl VoucherEntryScreen {
         self.go(Field::Ledger(
             i.min(self.draft.rows.len().saturating_sub(1)),
         ));
+    }
+
+    /// Deletes a particulars line of a single-entry voucher. The account (line 0) stays, and one
+    /// particulars line is always left to fill.
+    pub(super) fn delete_single_line(&mut self, i: usize) {
+        if i == 0 {
+            return self.fail("The cash or bank account is set once for the whole voucher.");
+        }
+        if i < self.draft.rows.len() {
+            self.draft.rows.remove(i);
+        }
+        if self.draft.rows.len() < 2 {
+            self.draft.push_particular();
+        }
+        let last = self.draft.rows.len().saturating_sub(1);
+        self.go(Field::Ledger(i.min(last)));
     }
 }

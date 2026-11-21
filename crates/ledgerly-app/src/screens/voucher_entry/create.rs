@@ -67,7 +67,7 @@ impl VoucherEntryScreen {
         });
         self.create = None;
         self.notice = Some(Notice::Info(format!("Creating ledger '{name}'.")));
-        self.go(Field::Amount(i));
+        self.go(self.after_ledger(i));
     }
 
     /// Ledgers the user asked to create since the last call, for the host to create.

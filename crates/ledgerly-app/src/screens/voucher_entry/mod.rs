@@ -52,11 +52,59 @@ pub use state::{CreateLedgerRequest, Field, OpenError, VoucherEntryScreen};
 
 use egui::Ui;
 
+use crate::keymap::Action;
+use crate::screen::KeyHint;
 use crate::{AppCtx, Screen, ScreenAction};
 
 impl Screen for VoucherEntryScreen {
     fn title(&self) -> String {
         format!("{} voucher", self.type_name)
+    }
+
+    fn page_title(&self) -> String {
+        self.type_name.clone()
+    }
+
+    fn subtitle(&self) -> Option<String> {
+        let (action, text) = match self.draft.kind {
+            EntryKind::Payment => (
+                Action::NewPayment,
+                "single entry: pick the cash or bank account once, then the ledgers",
+            ),
+            EntryKind::Receipt => (
+                Action::NewReceipt,
+                "single entry: pick the cash or bank account once, then the ledgers",
+            ),
+            EntryKind::Contra => (
+                Action::NewContra,
+                "double entry: every line has its own Dr or Cr",
+            ),
+            EntryKind::Journal => (
+                Action::NewJournal,
+                "double entry: every line has its own Dr or Cr",
+            ),
+            EntryKind::Memorandum | EntryKind::ReversingJournal => return None,
+        };
+        Some(match self.keymap.shortcut_label(action) {
+            Some(key) => format!("{key} · {text}"),
+            None => text.to_owned(),
+        })
+    }
+
+    fn keys(&self) -> Vec<KeyHint> {
+        let mut hints = vec![KeyHint::new("Enter", "Next field")];
+        let bound = [
+            (Action::CreateMaster, "Create ledger"),
+            (Action::DeleteLine, "Delete line"),
+            (Action::Save, "Save"),
+            (Action::Back, "Discard"),
+        ];
+        for (action, label) in bound {
+            if let Some(keys) = self.keymap.shortcut_label(action) {
+                hints.push(KeyHint::new(keys, label));
+            }
+        }
+        hints
     }
 
     fn ui(&mut self, ui: &mut Ui, ctx: &mut AppCtx) -> ScreenAction {

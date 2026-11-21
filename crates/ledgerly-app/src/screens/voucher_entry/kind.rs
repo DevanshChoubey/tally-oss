@@ -52,6 +52,13 @@ impl EntryKind {
         }
     }
 
+    /// `true` for the kinds entered in single-entry style: payment and receipt. Their first line
+    /// is the cash or bank account, and no line has its own Dr / Cr switch.
+    #[must_use]
+    pub fn is_single_entry(self) -> bool {
+        matches!(self, EntryKind::Payment | EntryKind::Receipt)
+    }
+
     /// The side the first line starts on: a payment credits the paying account first, the other
     /// kinds start on the debit. It is only a starting point; the Dr / Cr button switches it.
     #[must_use]
