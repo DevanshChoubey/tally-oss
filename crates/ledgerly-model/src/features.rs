@@ -12,7 +12,9 @@
 //!
 //! Rules (spec section 5: "Feature flags are a typed struct with dependency rules"):
 //!
-//! - Batches and godowns are properties of stock items, so each requires inventory.
+//! - Batches are properties of stock items, so they require inventory (card text).
+//! - Godowns also require inventory. This is a judgment (godowns hold stock items), not a rule
+//!   the spec or the card states; it is kept, and its test is pending the owner's decision.
 //! - GST needs at least one GST registration (a GSTIN) on the company.
 //!
 //! The remaining flags (cost centres, bill-wise, bank reconciliation, optional vouchers,

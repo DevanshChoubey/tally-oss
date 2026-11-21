@@ -9,7 +9,9 @@
 //! Ids follow the order of `ALL` (1-based), which is the declaration order of
 //! [`BaseVoucherKind`], so the seed is deterministic. Names follow the reconstructed list in
 //! research R1 "Reserved voucher types" (Material In/Out, job-work, payroll and attendance
-//! types are v2 and have no base kind yet).
+//! types are v2 and have no base kind yet). The R1 list is reconstructed and not yet checked
+//! against an official enumeration (`docs/research/01-core-accounting.md`), so the names are
+//! product choices until confirmed.
 //!
 //! Numbering defaults are product choices, not facts about another product:
 //!
@@ -95,12 +97,12 @@ const fn prevents_renumbering(kind: BaseVoucherKind) -> bool {
     }
 }
 
-/// Whether vouchers of `kind` post to ledgers and so change base balances.
+/// Whether vouchers of `kind` post Dr/Cr ledger lines in this seed's classification.
 ///
-/// Spec section 5, invariant 3: memorandum and reversing vouchers never affect base balances
-/// (only a named scenario includes them). Order, note and stock kinds post no ledger lines (they
-/// move stock or record intent), so they do not change ledger balances either; the engine
-/// treats them the same way. The other kinds post.
+/// Spec section 5, invariant 3 names memorandum and reversing vouchers as never affecting base
+/// balances (only a named scenario includes them); the other kinds in the `false` arm are this
+/// module's classification, and the spec does not state their rule. No engine caller uses this
+/// function yet, so nothing in the repository checks the `false` arm for the other kinds.
 pub const fn affects_books(kind: BaseVoucherKind) -> bool {
     match kind {
         BaseVoucherKind::Contra

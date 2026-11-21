@@ -15,13 +15,15 @@
 //! snapshot of the database (including the WAL), so a backup taken while the company is open is a
 //! complete, self-contained file. The copy is written under a `.partial` name, verified (SQLite's
 //! `integrity_check`, same application id, same newest event sequence number and hash as the
-//! source) and only then renamed to its final name, so a failed backup never leaves something that
-//! looks like a good one. An existing file is never overwritten. The file name is
+//! source, and the audit chain of card S3 via [`crate::verify::verify_chain`]) and only then
+//! renamed to its final name, so a failed backup never leaves something that looks like a good
+//! one. An existing file is never overwritten. The file name is
 //! `<company file stem>-backup-<UTC time as YYYYMMDDTHHMMSSZ>.ledgerly`, taken from the injected
 //! [`Clock`] (rule C5).
 //!
-//! The audit-chain hash check (card S3) is not repeated here; run `verify_chain` on a restored
-//! store for that.
+//! [`restore_from`] does not repeat the audit-chain check; it compares the newest event of the
+//! backup (WAL included) with the restored file, so events left in a backup's `-wal` file are never
+//! silently lost. Run `verify_chain` on a restored store to re-check its chain.
 //!
 //! # Rebuild and compare
 //!
@@ -142,8 +144,10 @@ pub struct NotCompared {
 ///
 /// # Errors
 /// [`StoreError::Io`] when `dir` or the file cannot be created, or when the target name exists
-/// (kind `AlreadyExists`); [`StoreError::Sqlite`] when SQLite fails or the copy does not verify
-/// (the message of [`StoreError::Encoding`] names the failed check); nothing but possibly a
+/// (kind `AlreadyExists`); [`StoreError::Sqlite`] when SQLite fails; [`StoreError::Encoding`]
+/// when the copy does not verify (the message names the failed check); [`StoreError::ChainBroken`]
+/// naming the first bad sequence number when the audit chain or a checkpoint of the copy does not
+/// verify. Nothing but possibly a
 /// `.partial` file is left behind on error, and that is removed on a best-effort basis.
 pub fn backup_to(store: &SqliteStore, dir: &Path, clock: Clock) -> Result<PathBuf, StoreError> {
     std::fs::create_dir_all(dir).map_err(|source| io_error(dir, source))?;
@@ -186,8 +190,10 @@ pub fn backup_to(store: &SqliteStore, dir: &Path, clock: Clock) -> Result<PathBu
 /// # Errors
 /// [`StoreError::Io`] when `target` exists (kind `AlreadyExists`) or a file cannot be read or
 /// written; [`StoreError::NotACompanyFile`] and [`StoreError::SchemaTooNew`] as for
-/// [`SqliteStore::open`]; [`StoreError::Encoding`] when the backup fails `integrity_check`;
-/// [`StoreError::Sqlite`] when `backup` is not a SQLite database at all.
+/// [`SqliteStore::open`]; [`StoreError::Encoding`] when the backup fails `integrity_check`, or
+/// when the restored file's newest event differs from the backup's (for example because events
+/// were only in the backup's `-wal` file, which is not copied); [`StoreError::Sqlite`] when
+/// `backup` is not a SQLite database at all.
 pub fn restore_from(backup: &Path, target: &Path) -> Result<SqliteStore, StoreError> {
     if !backup.is_file() {
         return Err(io_error(
@@ -329,6 +335,16 @@ fn write_and_verify(store: &SqliteStore, partial: &Path) -> Result<(), StoreErro
             "backup verification failed: application id differs from the company file".to_owned(),
         ));
     }
+    // The head comparison above cannot see an altered stored event (its hash column is intact),
+    // so the copy also goes through the audit-chain verifier of card S3.
+    let verifier = SqliteStore {
+        conn: copy,
+        path: partial.to_path_buf(),
+    };
+    let report = crate::verify::verify_chain(&verifier)?;
+    if let Some(seq) = report.first_broken_seq() {
+        return Err(StoreError::ChainBroken(seq));
+    }
     Ok(())
 }
 
@@ -386,8 +402,20 @@ fn application_id(conn: &Connection) -> Result<i64, StoreError> {
 }
 
 fn copy_and_open(backup: &Path, target: &Path) -> Result<SqliteStore, StoreError> {
+    // Read before copying: the backup's newest event, WAL included. `fs::copy` copies only the
+    // main database file, so events still in a `-wal` file next to the backup are not in `target`.
+    let source_head = chain_head(&open_read_only(backup)?)?;
     std::fs::copy(backup, target).map_err(|source| io_error(target, source))?;
-    SqliteStore::open(target)
+    let restored = SqliteStore::open(target)?;
+    let restored_head = chain_head(&restored.conn)?;
+    if restored_head != source_head {
+        return Err(StoreError::Encoding(format!(
+            "restore verification failed: the newest event is {restored_head:?} in the restored \
+             file but {source_head:?} in the backup; events only in the backup's WAL file were \
+             not copied"
+        )));
+    }
+    Ok(restored)
 }
 
 fn with_suffix(path: &Path, suffix: &str) -> PathBuf {

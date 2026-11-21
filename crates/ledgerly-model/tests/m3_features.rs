@@ -3,8 +3,8 @@
 //! Provenance for every expected value: `derived` from spec section 5 (docs/specs/
 //! 2026-11-20-ledgerly-design.md): "Feature flags are a typed struct with dependency rules".
 //! The card text fixes two rules: batches without inventory is an error, and GST without a GSTIN
-//! on the company is an error. Godowns requiring inventory is the same reasoning as batches
-//! (both are stock-item properties); that is a judgment recorded in the card report.
+//! on the company is an error. Godowns requiring inventory is a judgment, not a cited rule: its
+//! tests are labelled `pending` (owner decision), not `derived`.
 #![allow(
     clippy::unwrap_used,
     clippy::expect_used,
@@ -74,7 +74,8 @@ fn batches_with_inventory_is_ok() {
 
 #[test]
 fn godowns_without_inventory_is_an_error() {
-    // derived: godowns hold stock items, so they need inventory (same rule as batches).
+    // provenance: pending - a judgment, not a cited rule: godowns hold stock items, so they are
+    // taken to need inventory as batches do. The owner has not yet confirmed this rule.
     let f = Features {
         godowns: true,
         ..Features::default()
@@ -127,16 +128,24 @@ fn defaults_and_independent_flags_are_ok() {
 
 #[test]
 fn requires_lists_direct_prerequisites() {
-    // derived: the rules above.
+    // derived: the batches rule above (card text).
     assert_eq!(Features::requires(Flag::Batches), vec![Flag::Inventory]);
-    assert_eq!(Features::requires(Flag::Godowns), vec![Flag::Inventory]);
     assert_eq!(Features::requires(Flag::Inventory), Vec::<Flag>::new());
     assert_eq!(Features::requires(Flag::Gst), Vec::<Flag>::new());
 }
 
 #[test]
+fn requires_godowns_lists_inventory() {
+    // provenance: pending - a judgment, not a cited rule (see
+    // `godowns_without_inventory_is_an_error`); the owner has not yet confirmed it.
+    assert_eq!(Features::requires(Flag::Godowns), vec![Flag::Inventory]);
+}
+
+#[test]
 fn first_violation_is_reported_in_flag_order() {
-    // derived: godowns precede batches in `Flag` declaration order, so godowns is reported.
+    // provenance: pending - the expected flag depends on the godowns rule, which is a judgment
+    // (see `godowns_without_inventory_is_an_error`); the ordering itself is derived from the
+    // `Flag` declaration order.
     let f = Features {
         godowns: true,
         batches: true,
