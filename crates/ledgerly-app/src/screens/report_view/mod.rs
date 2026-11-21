@@ -1,4 +1,5 @@
-//! Report viewer with drill-down. **Card U7** implements this module.
+//! Report viewer with drill-down. **Card U7** implements this module, wired to `ledgerly-api` in
+//! card W7.
 //!
 //! Frozen interface (plan card U7):
 //!
@@ -19,40 +20,52 @@
 //!
 //! # Where the figures come from (rule C4)
 //!
-//! This screen sums nothing and rounds nothing. Every figure arrives in a [`ViewReport`] that the
-//! host built from a `ledgerly-reports` `Report`, and the screen only formats it
-//! ([`cell_text`]). `ledgerly-app` does not depend on `ledgerly-reports` yet (the manifest is
-//! frozen), so [`ViewReport`], [`ViewRow`], [`ViewCell`] and [`ViewKey`] mirror that crate's
-//! model one to one, using the shared `ledgerly-core` types for money and ids. The host (Wave 2
-//! wiring, cards W6 and W7) converts, and supplies a [`ReportSource`]: two functions, one that
-//! re-runs the report with new parameters and one that opens what a row drills to.
+//! This screen sums nothing and rounds nothing. Every figure is copied from a `ledgerly-api`
+//! report by [`convert::view_report`] and the screen only formats it ([`cell_text`]). A cell that
+//! cannot be shown as a figure is shown as words ("Not supported yet: ..."), never as a number. A
+//! report whose rows do not each carry one cell per column is rejected ([`ViewError::RowShape`])
+//! rather than drawn.
 //!
-//! A cell that cannot be shown as a figure is shown as words ("Unsupported: ..."), never as a
-//! number. A report whose rows do not each carry one cell per column is rejected
-//! ([`ViewError::RowShape`]) rather than drawn, because a figure under the wrong heading is a
-//! wrong number. When a refresh fails or is unsupported, the previous report stays on screen with
-//! its own period and detail in the header, and the reason is shown above it.
+//! # Requests and staleness (review finding U7)
+//!
+//! Refresh and drill are asynchronous. Each is a [`ReportRequest`]:
+//!
+//! * With an API worker in the context ([`crate::AppCtx::api`]), the screen runs the request on the
+//!   worker itself and polls it each frame. The UI thread never waits (rule D1).
+//! * Without one (tests, or a host that runs requests elsewhere), the host takes the request with
+//!   [`ReportViewScreen::take_request`] and answers it with [`ReportViewScreen::answer`].
+//!
+//! Only the newest request counts. A request that starts while an earlier one is still running
+//! drops the earlier one, and an answer to an earlier request is ignored, so a slow answer never
+//! replaces a newer one. A drill to a voucher is answered by the host with a screen
+//! ([`ReportViewScreen::answer_drill_target`]), because only the shell can open the voucher form.
 //!
 //! Dr and Cr are written as words next to each amount, so no meaning rests on colour alone.
 
+pub mod convert;
 mod model;
 mod text;
+pub mod wire;
 
 use egui::{Align, Context, Key, Layout, Modifiers, RichText, Ui};
 use egui_extras::{Column, TableBuilder, TableRow};
+use ledgerly_api::{Detail, ReportParams};
 use ledgerly_core::{Outcome, Period};
 
+use crate::worker::ApiWorker;
 use crate::{AppCtx, Screen, ScreenAction};
+use wire::{Done, Latest, unsupported_message, unsupported_text};
 
+pub use convert::{drill_params, run_report, view_report, with_view};
 pub use model::{
-    DrillTarget, ReportSource, ReportToken, ViewCell, ViewDetail, ViewError, ViewKey, ViewParams,
-    ViewReport, ViewRow, ViewRowKind,
+    DrillTarget, ReportRequest, ReportSource, ReportToken, RequestKind, ViewCell, ViewDetail,
+    ViewError, ViewKey, ViewParams, ViewReport, ViewRow, ViewRowKind,
 };
 pub use text::{
     PeriodTextError, amount_text, cell_text, date_text, parse_period_date, parse_period_text,
     period_text,
 };
-use text::{numeric_date_text, unsupported_text};
+use text::numeric_date_text;
 
 /// Height of one table row, in points.
 const ROW_HEIGHT: f32 = 22.0;
@@ -109,18 +122,38 @@ struct TableEvents {
     opened: Option<usize>,
 }
 
+/// The request whose answer the screen is waiting for.
+#[derive(Debug, Clone)]
+struct Awaiting {
+    /// Its sequence number.
+    seq: u64,
+    /// Refresh or drill.
+    kind: RequestKind,
+    /// The parameters it runs with.
+    params: ReportParams,
+}
+
 /// Shows one report, with row selection, drill-down, the detail toggle and the period editor.
 pub struct ReportViewScreen {
     report: ViewReport,
+    /// The parameters the shown report was run with; a refresh or drill starts from them.
     source: ReportSource,
     selected: usize,
     scroll_pending: bool,
     period_edit: Option<PeriodEdit>,
     notice: Option<Notice>,
+    /// The request nobody has taken yet. Only the newest one is kept.
+    queued: Option<ReportRequest>,
+    /// The request whose answer is wanted.
+    awaiting: Option<Awaiting>,
+    /// The call running on the API worker, if any.
+    latest: Latest<Result<Outcome<ViewReport>, ViewError>>,
+    /// A screen a drill opened, pushed on the next frame.
+    pending_push: Option<Box<dyn Screen>>,
 }
 
 impl ReportViewScreen {
-    /// A screen for `report`, with the first row selected.
+    /// A screen for `report`, run with `source`, with the first row selected.
     ///
     /// # Errors
     /// [`ViewError::RowShape`] or [`ViewError::TotalsShape`] when the report is not rectangular.
@@ -133,6 +166,10 @@ impl ReportViewScreen {
             scroll_pending: false,
             period_edit: None,
             notice: None,
+            queued: None,
+            awaiting: None,
+            latest: Latest::default(),
+            pending_push: None,
         })
     }
 
@@ -166,6 +203,18 @@ impl ReportViewScreen {
         self.period_edit.is_some()
     }
 
+    /// `true` while a request is waiting for its answer.
+    #[must_use]
+    pub fn is_loading(&self) -> bool {
+        self.awaiting.is_some()
+    }
+
+    /// The request the host should run, when no worker is attached. Taking it leaves the screen
+    /// waiting for an answer with the same sequence number.
+    pub fn take_request(&mut self) -> Option<ReportRequest> {
+        self.queued.take()
+    }
+
     fn last_row(&self) -> usize {
         self.report.rows.len().saturating_sub(1)
     }
@@ -194,39 +243,37 @@ impl ReportViewScreen {
         self.notice = Some(Notice::Error(text.into()));
     }
 
-    /// Opens what the selected row drills to: a report screen, or another screen such as a
-    /// voucher. Returns [`ScreenAction::Push`], so this screen stays below with its selection.
-    /// A row that opens nothing, an unsupported drill and a host failure leave the screen as it is
-    /// and say why in [`ReportViewScreen::notice`].
-    pub fn drill(&mut self) -> ScreenAction {
+    /// Asks for what the selected row drills to. The drilled report or screen arrives later and
+    /// then opens on top of this screen, so this screen stays below with its selection. A row that
+    /// opens nothing, and a drill this build cannot answer, say why in
+    /// [`ReportViewScreen::notice`].
+    pub fn drill(&mut self) {
         self.notice = None;
-        let (key, label) = if let Some(row) = self.report.rows.get(self.selected) {
-            (row.key.clone(), row.label.clone())
-        } else {
+        let Some(row) = self.report.rows.get(self.selected) else {
             self.info("This report has no rows to open.");
-            return ScreenAction::Stay;
+            return;
         };
-        let Some(key) = key else {
+        let Some(key) = row.key.clone() else {
+            let label = row.label.clone();
             self.info(format!("\"{label}\" has nothing to open."));
-            return ScreenAction::Stay;
+            return;
         };
-        match (self.source.drill)(&self.report.token, &key, self.report.params) {
-            Err(e) => {
-                self.fail(e.to_string());
-                ScreenAction::Stay
+        match key {
+            ViewKey::Voucher(_) => {
+                let params = self.source.base().clone();
+                self.queue(RequestKind::Drill(key), params);
             }
-            Ok(Outcome::Unsupported(u)) => {
-                self.fail(unsupported_text(&u));
-                ScreenAction::Stay
-            }
-            Ok(Outcome::Value(DrillTarget::Screen(screen))) => ScreenAction::Push(screen),
-            Ok(Outcome::Value(DrillTarget::Report(report))) => {
-                match ReportViewScreen::new(report, self.source.clone()) {
-                    Ok(screen) => ScreenAction::Push(Box::new(screen)),
-                    Err(e) => {
-                        self.fail(e.to_string());
-                        ScreenAction::Stay
-                    }
+            ViewKey::Item(_) | ViewKey::Bill { .. } => self.fail(unsupported_message(
+                "drill into stock items and bills",
+                "no report exists for them yet",
+            )),
+            ViewKey::Group(_) | ViewKey::Ledger(_) => {
+                match drill_params(self.source.base(), &key) {
+                    Some(params) => self.queue(RequestKind::Drill(key), params),
+                    None => self.fail(unsupported_message(
+                        "this drill",
+                        "no report exists for this row yet",
+                    )),
                 }
             }
         }
@@ -234,20 +281,26 @@ impl ReportViewScreen {
 
     /// Switches between condensed and detailed (Alt+F1) and re-runs the report in place.
     pub fn toggle_detail(&mut self) {
-        let params = ViewParams {
-            detail: self.report.params.detail.toggled(),
-            ..self.report.params
+        let base = self.source.base();
+        let params = ReportParams {
+            detail: match base.detail {
+                Detail::Condensed => Detail::Detailed,
+                Detail::Detailed => Detail::Condensed,
+            },
+            ..base.clone()
         };
-        self.refresh(params);
+        self.queue(RequestKind::Refresh, params);
     }
 
     /// Re-runs the report for `period` and keeps the detail level.
     pub fn set_period(&mut self, period: Period) {
-        let params = ViewParams {
+        let base = self.source.base();
+        let view = ViewParams {
             period,
-            ..self.report.params
+            detail: convert::view_detail(base.detail),
         };
-        self.refresh(params);
+        let params = with_view(base, view, period.to());
+        self.queue(RequestKind::Refresh, params);
     }
 
     /// Opens the period editor (F2), filled with the current period.
@@ -289,16 +342,92 @@ impl ReportViewScreen {
         self.period_edit = None;
     }
 
-    fn refresh(&mut self, params: ViewParams) {
+    /// Answers the request with sequence number `seq`. An answer to a request that is no longer
+    /// the newest one is ignored. A refresh replaces the report; a drill opens its report on top.
+    pub fn answer(&mut self, seq: u64, result: Result<Outcome<ViewReport>, ViewError>) {
+        let Some(awaited) = self.take_awaited(seq) else {
+            return;
+        };
+        match awaited.kind {
+            RequestKind::Refresh => self.apply_refresh(result, awaited.params),
+            RequestKind::Drill(_) => {
+                self.finish_drill(result.map(|o| o.map(DrillTarget::Report)), awaited.params);
+            }
+        }
+    }
+
+    /// Answers a drill with the screen it opens, for drills the host answers itself (a voucher).
+    /// Ignored when `seq` is not the newest request.
+    pub fn answer_drill_target(
+        &mut self,
+        seq: u64,
+        result: Result<Outcome<DrillTarget>, ViewError>,
+    ) {
+        let Some(awaited) = self.take_awaited(seq) else {
+            return;
+        };
+        self.finish_drill(result, awaited.params);
+    }
+
+    /// Takes the awaited request when `seq` is that request and still the newest one. Clears the
+    /// wait, so an answer is applied once.
+    fn take_awaited(&mut self, seq: u64) -> Option<Awaiting> {
+        let matches = matches!(&self.awaiting, Some(a) if a.seq == seq);
+        if !matches || !self.latest.is_current(seq) {
+            return None;
+        }
+        self.awaiting.take()
+    }
+
+    fn apply_refresh(
+        &mut self,
+        result: Result<Outcome<ViewReport>, ViewError>,
+        params: ReportParams,
+    ) {
         self.notice = None;
-        match (self.source.refresh)(&self.report.token, params) {
+        match result {
             Err(e) => self.fail(e.to_string()),
             Ok(Outcome::Unsupported(u)) => self.fail(unsupported_text(&u)),
             Ok(Outcome::Value(report)) => match report.check_shape() {
-                Ok(()) => self.replace_report(report),
+                Ok(()) => {
+                    self.replace_report(report);
+                    self.source = ReportSource::new(params);
+                }
                 Err(e) => self.fail(e.to_string()),
             },
         }
+    }
+
+    fn finish_drill(
+        &mut self,
+        result: Result<Outcome<DrillTarget>, ViewError>,
+        params: ReportParams,
+    ) {
+        self.notice = None;
+        match result {
+            Err(e) => self.fail(e.to_string()),
+            Ok(Outcome::Unsupported(u)) => self.fail(unsupported_text(&u)),
+            Ok(Outcome::Value(DrillTarget::Screen(screen))) => self.pending_push = Some(screen),
+            Ok(Outcome::Value(DrillTarget::Report(report))) => {
+                match ReportViewScreen::new(report, ReportSource::new(params)) {
+                    Ok(screen) => self.pending_push = Some(Box::new(screen)),
+                    Err(e) => self.fail(e.to_string()),
+                }
+            }
+        }
+    }
+
+    /// Queues a request, replacing any earlier one that nobody has taken. The request becomes
+    /// the one whose answer is wanted.
+    fn queue(&mut self, kind: RequestKind, params: ReportParams) {
+        self.notice = None;
+        let seq = self.latest.next_seq();
+        self.awaiting = Some(Awaiting {
+            seq,
+            kind: kind.clone(),
+            params: params.clone(),
+        });
+        self.queued = Some(ReportRequest { seq, kind, params });
     }
 
     /// Swaps in a reshaped report and keeps the selection on the same row: the row with the same
@@ -322,7 +451,7 @@ impl ReportViewScreen {
         self.scroll_pending = true;
     }
 
-    fn run(&mut self, cmd: KeyCmd) -> ScreenAction {
+    fn run(&mut self, cmd: KeyCmd) {
         match cmd {
             KeyCmd::Up => self.select_prev(1),
             KeyCmd::Down => self.select_next(1),
@@ -330,22 +459,47 @@ impl ReportViewScreen {
             KeyCmd::PageDown => self.select_next(PAGE_ROWS),
             KeyCmd::First => self.select(0),
             KeyCmd::Last => self.select(self.last_row()),
-            KeyCmd::Open => return self.drill(),
+            KeyCmd::Open => self.drill(),
             KeyCmd::ToggleDetail => self.toggle_detail(),
             KeyCmd::EditPeriod => self.open_period_editor(),
             KeyCmd::ApplyPeriod => self.apply_period_edit(),
             KeyCmd::CancelPeriod => self.cancel_period_edit(),
         }
-        ScreenAction::Stay
+    }
+
+    /// Starts the queued request on the worker when there is one, and applies a finished answer.
+    /// A voucher drill stays queued for the host, because only the shell opens the voucher form.
+    fn pump(&mut self, ctx: &Context, worker: Option<&ApiWorker>) {
+        let Some(worker) = worker else {
+            return;
+        };
+        let host_only = matches!(
+            self.queued.as_ref().map(|r| &r.kind),
+            Some(RequestKind::Drill(ViewKey::Voucher(_)))
+        );
+        if !host_only && let Some(request) = self.queued.take() {
+            let params = request.params.clone();
+            self.latest
+                .start_as(request.seq, worker, move |api| run_report(api, &params));
+        }
+        match self.latest.poll() {
+            Some(Done::Ready(seq, result)) => self.answer(seq, result),
+            Some(Done::Lost(seq)) => {
+                let message = "the API worker stopped before the report ran".to_owned();
+                self.answer(seq, Err(ViewError::Source { message }));
+            }
+            None => {
+                if self.latest.is_pending() {
+                    ctx.request_repaint();
+                }
+            }
+        }
     }
 
     fn draw(&mut self, ui: &mut Ui) -> ScreenAction {
         let keys = read_keys(ui.ctx(), self.period_edit.is_some());
-        let mut action = ScreenAction::Stay;
         for cmd in &keys {
-            if let ScreenAction::Push(screen) = self.run(*cmd) {
-                action = ScreenAction::Push(screen);
-            }
+            self.run(*cmd);
         }
         ui.heading(self.report.title.as_str());
         ui.label(format!(
@@ -353,6 +507,9 @@ impl ReportViewScreen {
             period_text(self.report.params.period),
             self.report.params.detail.label()
         ));
+        if self.is_loading() {
+            ui.weak("Running the report...");
+        }
         match &self.notice {
             Some(Notice::Error(s)) => {
                 ui.colored_label(ui.visuals().error_fg_color, format!("Error: {s}"));
@@ -374,14 +531,14 @@ impl ReportViewScreen {
         }
         if let Some(i) = events.opened {
             self.selected = i.min(self.last_row());
-            if let ScreenAction::Push(screen) = self.drill() {
-                action = ScreenAction::Push(screen);
-            }
+            self.drill();
         }
         if !keys.is_empty() {
             ui.ctx().request_repaint();
         }
-        action
+        self.pending_push
+            .take()
+            .map_or(ScreenAction::Stay, ScreenAction::Push)
     }
 
     fn draw_period_editor(&mut self, ui: &mut Ui) {
@@ -554,7 +711,8 @@ impl Screen for ReportViewScreen {
         self.report.title.clone()
     }
 
-    fn ui(&mut self, ui: &mut Ui, _ctx: &mut AppCtx) -> ScreenAction {
+    fn ui(&mut self, ui: &mut Ui, ctx: &mut AppCtx) -> ScreenAction {
+        self.pump(ui.ctx(), ctx.api.as_ref());
         self.draw(ui)
     }
 }

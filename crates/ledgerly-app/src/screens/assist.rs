@@ -38,6 +38,7 @@ use egui::{Button, Key, Modifiers, RichText, TextEdit, Ui};
 use ledgerly_core::format::format_inr;
 use ledgerly_core::{DrCr, Paise};
 
+use crate::screens::report_view::wire::unsupported_message;
 use crate::{AppCtx, Screen, ScreenAction};
 
 /// Heading of everything the assistant proposed.
@@ -402,7 +403,7 @@ fn check_blocked_reason(check: &EngineCheck, noun: &str) -> Option<String> {
         EngineCheck::NotChecked => Some(format!("The engine has not checked this {noun} yet.")),
         EngineCheck::Blocked { field, reason } => Some(format!("Blocked at {field}: {reason}")),
         EngineCheck::Unsupported { what, reason } => {
-            Some(format!("Not supported yet ({what}): {reason}"))
+            Some(unsupported_message(what, reason))
         }
     }
 }
@@ -493,12 +494,7 @@ fn draw_check(ui: &mut Ui, check: &EngineCheck) {
         }
         EngineCheck::Unsupported { what, reason } => {
             let warn = ui.visuals().warn_fg_color;
-            ui.label(
-                RichText::new(format!("Not supported yet: {what}"))
-                    .color(warn)
-                    .strong(),
-            );
-            ui.label(reason);
+            ui.label(RichText::new(unsupported_message(what, reason)).color(warn).strong());
         }
     }
 }
@@ -564,12 +560,7 @@ fn draw_report(ui: &mut Ui, view: &ReportView) {
         ReportAnswer::Computed(figures) => draw_figures(ui, "u11_report_figures", figures),
         ReportAnswer::Unsupported { what, reason } => {
             let warn = ui.visuals().warn_fg_color;
-            ui.label(
-                RichText::new(format!("Not supported yet: {what}"))
-                    .color(warn)
-                    .strong(),
-            );
-            ui.label(reason);
+            ui.label(RichText::new(unsupported_message(what, reason)).color(warn).strong());
         }
     }
 }

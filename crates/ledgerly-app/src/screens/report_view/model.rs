@@ -1,10 +1,7 @@
-//! The report data the screen shows, and the two functions it asks of the host.
-
-use std::rc::Rc;
+//! The report data the screen shows, and the requests it makes of the API or the host.
 
 use ledgerly_core::{
-    Date, GroupId, LedgerId, Outcome, Paise, Period, Qty, SignedAmount, StockItemId, Unsupported,
-    VoucherId,
+    Date, GroupId, LedgerId, Paise, Period, Qty, SignedAmount, StockItemId, Unsupported, VoucherId,
 };
 use thiserror::Error;
 
@@ -194,36 +191,47 @@ pub enum DrillTarget {
     Screen(Box<dyn Screen>),
 }
 
-/// Re-runs a report with new parameters.
-type RefreshFn = dyn Fn(&ReportToken, ViewParams) -> Result<Outcome<ViewReport>, ViewError>;
-/// Opens what a row drills to. Arguments: the report's token, the row key, the report's
-/// parameters (period and detail carry over to the drilled report).
-type DrillFn =
-    dyn Fn(&ReportToken, &ViewKey, ViewParams) -> Result<Outcome<DrillTarget>, ViewError>;
+/// What the screen asks the host for. A request is answered with [`ReportViewScreen::answer_refresh`]
+/// or [`ReportViewScreen::answer_drill`], or run on the API worker when the screen has one.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RequestKind {
+    /// Re-run the report shown, with the period or detail the user chose.
+    Refresh,
+    /// Open what a row drills to.
+    Drill(ViewKey),
+}
 
-/// The two things a report screen asks of the host. Cloning shares the same functions, so a
-/// drilled report screen uses the source its parent had.
-///
-/// The functions run on the UI thread, so the host must make them cheap (serve a cached or
-/// precomputed report) until the screen gets a request and poll hook (rule D1; see
-/// `docs/interface-requests.md`, U7).
-#[derive(Clone)]
+/// One request from a report screen. `params` is what the API runs (a drilled report carries
+/// the period and detail of its parent).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReportRequest {
+    /// Number of the request. Only the latest one's answer is shown.
+    pub seq: u64,
+    /// Refresh or drill.
+    pub kind: RequestKind,
+    /// The parameters to run.
+    pub params: ledgerly_api::ReportParams,
+}
+
+/// The report a screen shows was run with these parameters. A refresh and a drill are both
+/// built from them. The screen holds it, so the host needs to store nothing.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ReportSource {
-    pub(super) refresh: Rc<RefreshFn>,
-    pub(super) drill: Rc<DrillFn>,
+    /// The parameters the shown report was run with.
+    base: ledgerly_api::ReportParams,
 }
 
 impl ReportSource {
-    /// A source from the two functions.
-    pub fn new(
-        refresh: impl Fn(&ReportToken, ViewParams) -> Result<Outcome<ViewReport>, ViewError> + 'static,
-        drill: impl Fn(&ReportToken, &ViewKey, ViewParams) -> Result<Outcome<DrillTarget>, ViewError>
-        + 'static,
-    ) -> Self {
-        Self {
-            refresh: Rc::new(refresh),
-            drill: Rc::new(drill),
-        }
+    /// A source for a report run with `base`.
+    #[must_use]
+    pub fn new(base: ledgerly_api::ReportParams) -> Self {
+        Self { base }
+    }
+
+    /// The parameters the shown report was run with.
+    #[must_use]
+    pub fn base(&self) -> &ledgerly_api::ReportParams {
+        &self.base
     }
 }
 

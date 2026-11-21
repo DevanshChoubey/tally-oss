@@ -144,7 +144,12 @@ fn unsupported_tile_shows_words_and_reason_never_a_number() {
     assert_eq!(v.value_text, "Not supported yet");
     assert!(!v.value_text.chars().any(|c| c.is_ascii_digit()));
     assert!(!v.value_text.contains('\u{20B9}'));
-    assert_eq!(v.footnote_text, "GSTR-3B liability: rate pack pending");
+    // Decided behaviour (card W7): every screen words an Unsupported outcome the same way, as
+    // "Not supported yet: what (reason)" (screens/report_view/wire.rs), so the footnote changed.
+    assert_eq!(
+        v.footnote_text,
+        "Not supported yet: GSTR-3B liability (rate pack pending)"
+    );
 }
 
 #[test]
