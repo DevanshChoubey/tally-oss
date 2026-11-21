@@ -972,6 +972,33 @@ fn a_failed_comparison_can_be_run_again() {
 }
 
 #[test]
+fn a_report_for_another_period_is_refused_and_the_comparison_stays_out() {
+    // provenance: derived - the wizard asked for FY 2026-27 (2026-04-01 to 2027-03-31). A report
+    // for FY 2025-26 (2025-04-01 to 2026-03-31) whose figures all agree is a late or wrong reply.
+    // It must be refused, not shown as "all figures match". The state stays Reconciling, so the
+    // report for the period asked can still arrive. The old code accepted the other year.
+    let mut w = at_committing();
+    w.commit_done().unwrap();
+    assert_eq!(*w.recon_state(), ReconState::Reconciling);
+    let other = Period::new(date!(2025 - 04 - 01), date!(2026 - 03 - 31)).unwrap();
+    let late = ReconReport {
+        period: other,
+        sections: matching_sections(),
+    };
+    assert!(matches!(
+        w.recon_ready(late).unwrap_err(),
+        ImportError::WrongPeriod { .. }
+    ));
+    assert_eq!(*w.recon_state(), ReconState::Reconciling);
+    let right = ReconReport {
+        period: period(),
+        sections: matching_sections(),
+    };
+    w.recon_ready(right.clone()).unwrap();
+    assert_eq!(*w.recon_state(), ReconState::Ready(right));
+}
+
+#[test]
 fn replies_out_of_turn_are_refused() {
     let mut w = at_committing();
     let report = ReconReport {
