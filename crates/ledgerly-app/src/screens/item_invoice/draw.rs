@@ -308,7 +308,9 @@ impl Screen for ItemInvoiceScreen {
             ui.label(no_books_text(ctx));
             ScreenAction::Stay
         };
-        self.send_saves(ctx);
+        if ctx.api.is_some() {
+            self.send_saves(ctx);
+        }
         action
     }
 }
@@ -326,15 +328,13 @@ impl ItemInvoiceScreen {
     /// Sends the voucher the user asked to save to the worker. Without a worker nothing can be
     /// posted, and the screen says so.
     fn send_saves(&mut self, ctx: &AppCtx) {
-        let Some(voucher) = self.take_save_request() else {
+        // Without a worker the host takes the request itself, so it stays in the outbox.
+        let Some(worker) = ctx.api.as_ref() else {
             return;
         };
-        match ctx.api.as_ref() {
-            Some(worker) => {
-                self.posting = Some(submit::send(worker, Command::PostVoucher(voucher)));
-                self.notice = Some(Notice::Info("Saving...".to_owned()));
-            }
-            None => self.save_failed("no company is open"),
+        if let Some(voucher) = self.take_save_request() {
+            self.posting = Some(submit::send(worker, Command::PostVoucher(voucher)));
+            self.notice = Some(Notice::Info("Saving...".to_owned()));
         }
     }
 

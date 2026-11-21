@@ -68,8 +68,10 @@ fn answer(mut ticket: ledgerly_app::worker::Ticket<CommandReply>) -> CommandRepl
 fn the_company_form_refuses_a_blank_name_a_bad_state_and_a_bad_year() {
     // derived: a company needs a name (the form's own rule).
     assert!(company_from_form("   ", "27", "2026").is_err());
-    // derived: GST state codes run 01 to 38 (CBIC state code list); 99 is not one.
-    assert!(company_from_form("Asha Traders", "99", "2026").is_err());
+    // derived: the CBIC state code list has 01 to 38, then 97 (Other Territory) and 99 (Centre
+    // Jurisdiction). 39 is in none of them, so it is refused. (99 is a valid code; an earlier
+    // version of this test wrongly used it as the invalid case.)
+    assert!(company_from_form("Asha Traders", "39", "2026").is_err());
     // derived: a financial year is a year number; "twenty" is not one.
     assert!(company_from_form("Asha Traders", "27", "twenty").is_err());
 }

@@ -59,7 +59,7 @@ use list::snapshot_name;
 use thiserror::Error;
 
 use crate::shell::submit::{self, CommandReply};
-use crate::worker::Ticket;
+use crate::worker::{ApiWorker, Ticket};
 use crate::{AppCtx, Screen, ScreenAction};
 use ledgerly_api::Command;
 
@@ -986,8 +986,11 @@ impl Screen for MastersScreen {
             ui.label(no_books_text(ctx));
             ScreenAction::Stay
         };
-        self.queue_requests();
-        self.send_next(ctx);
+        // Without a worker the requests stay with the screen for the host to take.
+        if let Some(worker) = ctx.api.as_ref() {
+            self.queue_requests();
+            self.send_next(worker);
+        }
         action
     }
 }
@@ -1014,17 +1017,10 @@ impl MastersScreen {
     }
 
     /// Sends the oldest queued command to the worker, when none is running.
-    fn send_next(&mut self, ctx: &AppCtx) {
-        if self.commands.is_empty() {
+    fn send_next(&mut self, worker: &ApiWorker) {
+        if self.posting.is_some() {
             return;
         }
-        let Some(worker) = ctx.api.as_ref() else {
-            self.commands.clear();
-            self.notice = Some(Notice::Error(
-                "No company is open; nothing was saved.".to_owned(),
-            ));
-            return;
-        };
         if let Some(cmd) = self.commands.pop_front() {
             self.posting = Some(submit::send(worker, cmd));
             self.notice = Some(Notice::Info("Saving...".to_owned()));
