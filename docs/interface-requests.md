@@ -200,3 +200,24 @@ Filed from the r2/* fix branches. Each line names the card and the request; the 
   written through `create` plus `commit`. To make `Api::create` switch it on (so `rebuild_check`
   matches on every new file), `facade.rs` needs `store.enable_projections()?` after the seed commit,
   and those retained tests need an owner decision.
+## Wave 3 C3 (bank statements persisted, 2026-11-21)
+
+- **Done**: the three Wave 2 K3 requests. `Event::BankStatementStored { .. }` (store `event.rs`) holds the
+  verified statement (lines, balances, end date, file hash); `Api::import_bank_statement` commits it instead
+  of `StatementImported`. The CSV parser reads the opening and closing balance from the balance column
+  (opening = first line's balance taken back over its own amounts; closing = last line's balance).
+  `BankStatement::end_date` is the MT940 `:62F:` date and the BRS covers it.
+- **Store, shared edit (coordinator)**: `crates/ledgerly-store/src/lib.rs` gains
+  `pub use event::StoredStatementLine` (the line type the new event carries). Every exhaustive `match` on
+  `Event` outside C3's files needs an arm for `BankStatementStored`: `ledgerly-store/src/load.rs` (no effect on
+  books, like `StatementImported`), `ledgerly-tally-bridge/src/import.rs` and its `tests/w3_import.rs`.
+- **Facade (C1/C2-owned `facade.rs`)**: `Api::open` does not read the statements. `bank.rs` reads them from
+  the audit log on first use (lazy), because `facade.rs` is not C3's. If the owner prefers an eager read,
+  `Api::open` can call a `Statements::load` after `reload`. Not requested, only an option.
+- **Files written before C3**: they hold `StatementImported(id)` only. Those statements have no rows, so they
+  are not shown after a reopen (as before); their ids are not reused.
+- **Pending**: whether Tally covers the day of the statement's last line when the file states an end date is
+  not on Tally's Bank Reconciliation help page; the end-date rule is ours.
+- **Bank screen**: `BankScreen::worker(name, ledger, as_of)` runs `brs`, `bank_suggestions` and
+  `confirm_bank_match` through the worker. The shell must construct it (C1/C5 own the shell); nothing in
+  `ledgerly-app/src/shell` calls it yet. Manual matches and rule suggestions are not sent to the API.

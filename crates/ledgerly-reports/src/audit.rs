@@ -240,6 +240,7 @@ fn vouchers_of(event: &Event) -> Vec<&Voucher> {
         | Event::SettingChanged { .. }
         | Event::PeriodLocked { .. }
         | Event::StatementImported(_)
+        | Event::BankStatementStored { .. }
         | Event::MatchConfirmed(_)
         | Event::AiProposalRecorded(_) => Vec::new(),
     }
@@ -353,6 +354,11 @@ fn describe(rec: &AuditRecord, books: &Books) -> (ObjectKey, String, String) {
             format!("Locked books until {until}"),
         ),
         Event::StatementImported(id) => (
+            ObjectKey::Statement(*id),
+            format!("bank statement {}", id.0),
+            "Imported bank statement".to_owned(),
+        ),
+        Event::BankStatementStored { id, .. } => (
             ObjectKey::Statement(*id),
             format!("bank statement {}", id.0),
             "Imported bank statement".to_owned(),
@@ -633,6 +639,7 @@ fn deleted_altered(
             | Event::SettingChanged { .. }
             | Event::PeriodLocked { .. }
             | Event::StatementImported(_)
+            | Event::BankStatementStored { .. }
             | Event::MatchConfirmed(_)
             | Event::AiProposalRecorded(_) => false,
         };

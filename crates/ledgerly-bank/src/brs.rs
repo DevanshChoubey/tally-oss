@@ -45,9 +45,10 @@
 //!   `Unsupported`). A covered date does not care about other statements.
 //! - Overlap: when two statements cover `as_of`, the figure is given only if they agree on the
 //!   balance at `as_of`; otherwise `Unsupported`.
-//! - A statement's last line date is never a covered date, so a statement ending on `as_of`
-//!   gives `Unsupported` until the end date (`:62F:` or the sheet label) is carried through
-//!   `RawStatement`. That interface request is open in `docs/interface-requests.md`.
+//! - A statement's last line date is a covered date only when the file states its end date
+//!   ([`BankStatement::end_date`], the `:62F:` date for MT940, card C3); then every date from the
+//!   first line up to and including the end date is covered. A statement with no stated end date
+//!   (CSV, XLSX) covers dates strictly before its last line only.
 //! - No statement, no lines, or `as_of` outside every statement: `Unsupported` for the statement
 //!   side only.
 //!
@@ -296,7 +297,13 @@ fn statement_side(statements: &[BankStatement], as_of: Date) -> Result<Outcome<P
         let Some((first, last)) = statement.period() else {
             continue;
         };
-        if first <= as_of && as_of < last {
+        // A stated end date means the file lists every transaction up to and including that day,
+        // so the last day is covered. Without one only dates before the last line are.
+        let covered = match statement.end_date() {
+            Some(end) => as_of <= end,
+            None => as_of < last,
+        };
+        if first <= as_of && covered {
             covering.push(balance_at(statement, as_of)?);
         }
     }
@@ -304,7 +311,7 @@ fn statement_side(statements: &[BankStatement], as_of: Date) -> Result<Outcome<P
         let reason = if statements.is_empty() {
             "import the bank statement for the period; the balance per statement comes only from an imported statement"
         } else {
-            "no imported statement covers the as-of date: a statement covers a date from its first line up to, but not including, its last line, because the file's own end date is not stored; import a statement that runs past this date"
+            "no imported statement covers the as-of date: a statement covers a date from its first line up to, but not including, its last line, because the file states no end date of its own; import a statement that runs past this date, or one that states its end date (MT940)"
         };
         return Ok(Outcome::unsupported(
             "BRS balance per imported statement",

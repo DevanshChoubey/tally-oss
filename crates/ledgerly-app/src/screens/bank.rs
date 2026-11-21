@@ -33,6 +33,14 @@
 //! statement is [`Outcome::Unsupported`] until the host supplies it with
 //! [`BankScreen::set_brs`], never a zero.
 //!
+//! # Worker mode (card C3)
+//!
+//! [`BankScreen::worker`] builds a screen that gets everything from the API worker: the
+//! reconciliation statement (`Api::brs`), the newest stored statement with the matcher's
+//! suggestions (`Api::stored_bank_statements`, `Api::bank_suggestions`), and each accepted
+//! suggestion is sent to `Api::confirm_bank_match`. See the `worker` submodule for the rules
+//! (pending line, error on a lost worker, stale answers dropped).
+//!
 //! This crate does not depend on `ledgerly-bank` (its manifest is frozen), so the screen defines
 //! its own plain view types and the host converts. See `docs/interface-requests.md`.
 
@@ -45,6 +53,8 @@ use ledgerly_model::{BankMatch, MatchKind};
 use thiserror::Error;
 
 use crate::{AppCtx, Screen, ScreenAction};
+
+mod worker;
 
 // ---------------------------------------------------------------------------------------------
 // View types handed in by the host
@@ -273,6 +283,12 @@ pub struct BankScreen {
     confirmed: Vec<BankMatch>,
     error: Option<BankScreenError>,
     brs: Outcome<BrsView>,
+    /// Text shown under the reconciliation statement (why the statement side is missing).
+    brs_note: Option<String>,
+    /// A failure reported by the worker or the API, shown in red until the next success.
+    notice: Option<String>,
+    /// Present only in worker mode.
+    run: Option<worker::Run>,
 }
 
 impl BankScreen {
@@ -343,6 +359,9 @@ impl BankScreen {
                 "Bank reconciliation statement",
                 "the engine has not supplied it to this screen yet",
             ),
+            brs_note: None,
+            notice: None,
+            run: None,
         })
     }
 
@@ -855,12 +874,20 @@ impl BankScreen {
         if let Some(err) = &self.error {
             ui.colored_label(ui.visuals().error_fg_color, format!("Error: {err}"));
         }
+        if let Some(text) = &self.notice {
+            ui.colored_label(ui.visuals().error_fg_color, format!("Error: {text}"));
+        }
         for event in events {
             self.run_event(event);
         }
     }
 
     fn draw_matching(&self, ui: &mut Ui, events: &mut Vec<UiEvent>) {
+        if self.is_loading() {
+            ui.weak("Loading the statement and its suggestions.");
+        } else if self.lines.is_empty() {
+            ui.weak("No bank statement has been imported for this ledger.");
+        }
         ui.weak(format!(
             "{} of {} statement lines are not matched. Enter accepts the suggestion, S skips, \
              M matches by hand, J and K move.",
@@ -965,6 +992,9 @@ impl BankScreen {
                         ui.end_row();
                     }
                 });
+                if let Some(note) = &self.brs_note {
+                    ui.weak(note.as_str());
+                }
             }
             Outcome::Unsupported(u) => {
                 ui.strong("Reconciliation statement");
@@ -979,7 +1009,11 @@ impl Screen for BankScreen {
         format!("Bank reconciliation: {}", self.ledger_name)
     }
 
-    fn ui(&mut self, ui: &mut Ui, _ctx: &mut AppCtx) -> ScreenAction {
+    fn ui(&mut self, ui: &mut Ui, ctx: &mut AppCtx) -> ScreenAction {
+        self.tick(ctx.api.as_ref());
+        if self.is_loading() {
+            ui.ctx().request_repaint();
+        }
         self.draw(ui);
         ScreenAction::Stay
     }

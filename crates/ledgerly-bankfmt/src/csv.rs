@@ -19,6 +19,8 @@
 //! - Amounts accept plain, western (`123,456.78`) and Indian (`1,23,456.78`) grouping, at most two
 //!   decimals, an optional leading `-`. Anything else is a row error.
 //! - Exactly one of debit and credit is non-zero on every line.
+//! - The opening and closing balance come from the balance column, when the first and last line
+//!   state one (see `balances_from_column`); otherwise they stay unset.
 
 use crate::{BankFmtError, RawLine, RawStatement};
 use ledgerly_core::{Date, Month, Paise};
@@ -145,13 +147,39 @@ pub fn parse_csv_with_layout(
         }
         lines.push(parse_line(row, cells, layout)?);
     }
+    let (opening, closing) = balances_from_column(&lines)?;
     Ok(RawStatement {
         format_id: layout.format_id.clone(),
         account_hint: None,
-        opening: None,
-        closing: None,
+        opening,
+        closing,
         lines,
     })
+}
+
+/// Opening and closing balance read from the balance column (card C3).
+///
+/// The closing balance is the running balance on the last line. The opening balance is the
+/// running balance on the first line taken back by that line's own amounts:
+/// `balance - credit + debit`. Both are `None` unless the first and the last line state a
+/// balance, so a file without a balance column is still refused by the statement check. The
+/// running balances in between are checked later against these two, so a file whose lines are
+/// out of order or incomplete is rejected, never repaired.
+///
+/// # Errors
+/// [`BankFmtError::Row`] when the arithmetic overflows.
+fn balances_from_column(lines: &[RawLine]) -> Result<(Option<Paise>, Option<Paise>), BankFmtError> {
+    let (Some(first), Some(last)) = (lines.first(), lines.last()) else {
+        return Ok((None, None));
+    };
+    let (Some(first_balance), Some(closing)) = (first.balance, last.balance) else {
+        return Ok((None, None));
+    };
+    let opening = first_balance
+        .checked_sub(first.credit)
+        .and_then(|b| b.checked_add(first.debit))
+        .map_err(|e| row_err(first.row, e.to_string()))?;
+    Ok((Some(opening), Some(closing)))
 }
 
 fn row_err(row: u32, reason: impl Into<String>) -> BankFmtError {

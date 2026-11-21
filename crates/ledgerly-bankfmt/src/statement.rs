@@ -17,6 +17,16 @@ pub struct RawStatement {
     pub lines: Vec<RawLine>,
 }
 
+/// A parsed statement together with the end date the file itself states (card C3).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ParsedStatement {
+    /// The statement as parsed.
+    pub raw: RawStatement,
+    /// The statement's stated end date (the `:62F:` date for MT940); `None` when the format
+    /// states none.
+    pub end_date: Option<Date>,
+}
+
 /// One statement line. Balances are from the account holder's view: credit balance positive.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RawLine {

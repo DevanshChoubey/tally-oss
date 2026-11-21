@@ -6,4 +6,4 @@ pub mod registry;
 mod statement;
 pub mod xlsx;
 
-pub use statement::{BankFmtError, RawLine, RawStatement};
+pub use statement::{BankFmtError, ParsedStatement, RawLine, RawStatement};
