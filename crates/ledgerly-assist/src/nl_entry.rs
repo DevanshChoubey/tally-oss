@@ -85,9 +85,13 @@ pub struct ModelRequest {
 
 /// A model that completes a [`ModelRequest`] with grammar-constrained JSON text.
 ///
-/// Implementations: the local llama.cpp model, the cloud client (card A4) and
-/// [`RecordedModel`] for tests. This is a second seam beside [`Proposer`] because three real
-/// implementations exist (rule C2).
+/// This is not a second assistant seam: [`Proposer`] stays the one seam the app calls, and
+/// [`NlEntry`] is its implementation. `ModelClient` is the narrower seam beneath it (rule C2: a
+/// trait only where more than one implementation exists). Today the only implementation is
+/// [`RecordedModel`], the recorded test double. The local llama.cpp client and the cloud client
+/// (card A4) are the planned real implementations; until one lands, the trait is public only
+/// because [`NlEntry`] is generic over it and must be nameable by those cards, and it is not
+/// part of the frozen interface (rule C7), which is `NlEntry` and its `Proposer` impl.
 pub trait ModelClient {
     /// Returns the model's raw output for the request.
     ///
@@ -414,11 +418,56 @@ fn typed_source(text: &str, needle: &str, role: &str) -> Result<SourceRef, Assis
     if needle.is_empty() {
         return Err(missing());
     }
-    let byte = text.find(needle).ok_or_else(missing)?;
+    let byte = text
+        .match_indices(needle)
+        .map(|(i, _)| i)
+        .find(|&i| on_token_boundaries(text, i, needle))
+        .ok_or_else(missing)?;
     let before = text.get(..byte).ok_or_else(missing)?;
     let start = before.chars().count();
     let end = start.saturating_add(needle.chars().count());
     Ok(SourceRef::Typed { start, end })
+}
+
+/// True when the match of `needle` at byte offset `at` in `text` is a whole token: not preceded or
+/// followed by an alphanumeric character, and not glued on by a digit separator (`.`, `,`, `/`,
+/// `-`) that joins it to a neighbouring digit. This keeps `5k` from matching inside `25k` and `5`
+/// from matching inside `1.5`.
+fn on_token_boundaries(text: &str, at: usize, needle: &str) -> bool {
+    let is_sep = |c: char| matches!(c, '.' | ',' | '/' | '-');
+    let end = at.saturating_add(needle.len());
+    let (Some(before), Some(after)) = (text.get(..at), text.get(end..)) else {
+        return false;
+    };
+    let first_alnum = needle.chars().next().is_some_and(char::is_alphanumeric);
+    let last_alnum = needle
+        .chars()
+        .next_back()
+        .is_some_and(char::is_alphanumeric);
+    let mut back = before.chars().rev();
+    let prev = back.next();
+    let prev2 = back.next();
+    let mut fwd = after.chars();
+    let next = fwd.next();
+    let next2 = fwd.next();
+    if prev.is_some_and(char::is_alphanumeric) && first_alnum {
+        return false;
+    }
+    if next.is_some_and(char::is_alphanumeric) && last_alnum {
+        return false;
+    }
+    let starts_digit = needle.chars().next().is_some_and(|c| c.is_ascii_digit());
+    let ends_digit = needle
+        .chars()
+        .next_back()
+        .is_some_and(|c| c.is_ascii_digit());
+    if starts_digit && prev.is_some_and(is_sep) && prev2.is_some_and(|c| c.is_ascii_digit()) {
+        return false;
+    }
+    if ends_digit && next.is_some_and(is_sep) && next2.is_some_and(|c| c.is_ascii_digit()) {
+        return false;
+    }
+    true
 }
 
 /// Why a typed amount could not be read.

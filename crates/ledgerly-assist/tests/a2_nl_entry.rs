@@ -317,6 +317,42 @@ fn an_amount_the_user_did_not_type_is_rejected() {
 }
 
 #[test]
+fn an_amount_that_is_only_the_tail_of_a_typed_token_is_rejected() {
+    // The user typed "25k"; the model returned "5k", which is a substring of it but a different
+    // amount (5,000 instead of 25,000). A transcription must match whole tokens.
+    let err = error_for(
+        RENT,
+        &json(
+            "payment",
+            Some("5k"),
+            None,
+            Some("Sharma Properties"),
+            Some("HDFC"),
+        ),
+        masters(),
+    );
+    assert!(matches!(err, AssistError::Output { .. }), "{err:?}");
+}
+
+#[test]
+fn an_amount_that_is_part_of_a_decimal_is_rejected() {
+    // "5" sits inside the typed "1.5 lakh" after a decimal point; it is not a separate token.
+    let text = "received 1.5 lakh from Sharma Properties in HDFC";
+    let err = error_for(
+        text,
+        &json(
+            "receipt",
+            Some("5 lakh"),
+            None,
+            Some("Sharma Properties"),
+            Some("HDFC"),
+        ),
+        masters(),
+    );
+    assert!(matches!(err, AssistError::Output { .. }), "{err:?}");
+}
+
+#[test]
 fn a_missing_or_unreadable_amount_is_an_error() {
     let none = error_for(
         RENT,
