@@ -24,10 +24,12 @@ use ledgerly_assist::cloud::{
     PROMPT_TEMPLATE_VERSION,
 };
 use ledgerly_assist::{
-    AssistError, DraftLine, MappingSuggestion, MatchSuggestion, Proposal, ProposalInput, Proposer,
-    SourceRef, Transcribed, VoucherDraft,
+    AssistError, DraftItem, DraftLine, MappingSuggestion, MatchSuggestion, Proposal, ProposalInput,
+    Proposer, SourceRef, Transcribed, VoucherDraft,
 };
-use ledgerly_core::{CancelToken, DrCr, LedgerId, Paise, SignedAmount, VoucherId};
+use ledgerly_core::{
+    CancelToken, Decimal, DrCr, LedgerId, Paise, Qty, Rate, SignedAmount, VoucherId,
+};
 use ledgerly_model::BaseVoucherKind;
 use serde_json::{Value, json};
 use time::macros::date;
@@ -560,6 +562,162 @@ fn provider_envelope_without_text_is_rejected() {
     );
     assert!(matches!(
         client.propose(&text_input(), &CancelToken::new()),
+        Err(AssistError::Output { .. })
+    ));
+}
+
+fn propose_with_reply(model_text: &str, input: &ProposalInput) -> Result<Proposal, AssistError> {
+    let (client, _) = client_with(
+        config(CloudProvider::OpenAiCompatible),
+        Ok(KEY.to_owned()),
+        openai_reply(model_text),
+    );
+    client.propose(input, &CancelToken::new())
+}
+
+#[test]
+fn a_figure_that_the_cited_text_does_not_state_is_rejected() {
+    // Provenance: derived. In "PAN [PAN_1] paid 25000 to Sharma" the characters 17..22 are
+    // "25000", i.e. 25000 rupees = 2_500_000 paise (25000 * 100).
+    let good = serde_json::to_string(&recorded_draft()).unwrap();
+    // The right amount is accepted.
+    assert!(propose_with_reply(&good, &text_input()).is_ok());
+    // 2_600_000 paise (26000 rupees) cited at "25000": the text does not say 26000.
+    let wrong_amount = good.replace("2500000", "2600000");
+    assert_ne!(wrong_amount, good);
+    assert!(matches!(
+        propose_with_reply(&wrong_amount, &text_input()),
+        Err(AssistError::Output { .. })
+    ));
+    // 2_500_000 paise cited at 26..32, which is the word "Sharma", not an amount.
+    let amount_on_a_name = good.replace(
+        "\"amount\":{\"value\":2500000,\"source\":{\"Typed\":{\"start\":17,\"end\":22}}",
+        "\"amount\":{\"value\":2500000,\"source\":{\"Typed\":{\"start\":26,\"end\":32}}",
+    );
+    assert_ne!(amount_on_a_name, good);
+    assert!(matches!(
+        propose_with_reply(&amount_on_a_name, &text_input()),
+        Err(AssistError::Output { .. })
+    ));
+}
+
+#[test]
+fn a_name_that_the_cited_text_does_not_state_is_rejected() {
+    // The text at 26..32 is "Sharma"; the model claims the party is "Verma".
+    let good = serde_json::to_string(&recorded_draft()).unwrap();
+    let wrong_name = good.replace("\"value\":\"Sharma\"", "\"value\":\"Verma\"");
+    assert_ne!(wrong_name, good);
+    assert!(matches!(
+        propose_with_reply(&wrong_name, &text_input()),
+        Err(AssistError::Output { .. })
+    ));
+}
+
+/// Hand-written input with no identifier in it. Character positions (0-based, end exclusive):
+/// `Sharma` 0..6, `sold` 7..11, `2.5` 12..15, `rice` 16..20, `at` 21..23, `40` 24..26,
+/// `on` 27..29, `31-03-2026` 30..40, `for` 41..44, `100` 45..48; 48 characters in all.
+const ITEM_TEXT: &str = "Sharma sold 2.5 rice at 40 on 31-03-2026 for 100";
+
+fn item_draft() -> Proposal {
+    Proposal::VoucherDraft(Box::new(VoucherDraft {
+        kind: BaseVoucherKind::Payment,
+        date: Some(typed(date!(2026 - 03 - 31), 30, 40, 900)),
+        party_name: Some(typed("Sharma".to_owned(), 0, 6, 900)),
+        party: None,
+        invoice_number: None,
+        supplier_gstin: None,
+        lines: vec![],
+        items: vec![DraftItem {
+            name: typed("rice".to_owned(), 16, 20, 900),
+            qty: Some(typed(Qty(Decimal::new(25, 1)), 12, 15, 900)),
+            rate: Some(typed(Rate(Decimal::from(40)), 24, 26, 900)),
+            // 100 rupees = 10_000 paise (100 * 100).
+            amount: Some(typed(Paise::new(10_000), 45, 48, 900)),
+        }],
+        document_total: None,
+        document_tax: None,
+        create_ledgers: vec![],
+        narration: String::new(),
+    }))
+}
+
+#[test]
+fn a_draft_with_a_date_and_decimal_items_round_trips_in_both_date_forms() {
+    let input = ProposalInput::Text(ITEM_TEXT.to_owned());
+    let proposal = item_draft();
+
+    // Form 1: exactly what serde writes for a `Proposal` (the date is a `[year, ordinal]` array).
+    let as_serde = serde_json::to_string(&proposal).unwrap();
+    // Form 2: what the system prompt asks a model for (the date is an ISO string).
+    let mut value = serde_json::to_value(&proposal).unwrap();
+    *value.pointer_mut("/VoucherDraft/date/value").unwrap() = json!("2026-03-31");
+    let as_prompted = value.to_string();
+    assert_ne!(as_serde, as_prompted);
+
+    for text in [as_serde, as_prompted] {
+        let answer = propose_with_reply(&text, &input).unwrap();
+        // No identifier in the text, so offsets are unchanged and the draft comes back equal.
+        assert_eq!(answer, proposal, "{text}");
+    }
+
+    // The date the text does not state is rejected (31 March, not 30 March).
+    let mut wrong = serde_json::to_value(&proposal).unwrap();
+    *wrong.pointer_mut("/VoucherDraft/date/value").unwrap() = json!("2026-03-30");
+    assert!(matches!(
+        propose_with_reply(&wrong.to_string(), &input),
+        Err(AssistError::Output { .. })
+    ));
+}
+
+#[test]
+fn the_system_prompt_states_the_wire_formats() {
+    let (client, spy) = client_with(
+        config(CloudProvider::OpenAiCompatible),
+        Ok(KEY.to_owned()),
+        openai_reply("no json here"),
+    );
+    let _ = client.propose(&text_input(), &CancelToken::new());
+    let sent = spy.sent.lock().unwrap();
+    let system = body_of(&sent[0])["messages"][0]["content"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    for needle in [
+        "YYYY-MM-DD",
+        "paise",
+        "JSON string",
+        "\"Dr\"",
+        "VoucherDraft",
+    ] {
+        assert!(system.contains(needle), "{needle}");
+    }
+}
+
+#[test]
+fn a_match_suggestion_for_another_statement_row_is_rejected() {
+    let input = ProposalInput::BankLine {
+        row: 3,
+        date: date!(2026 - 03 - 31),
+        description: "rent".to_owned(),
+        reference: None,
+        amount: SignedAmount {
+            amount: Paise::new(2_500_000),
+            side: DrCr::Dr,
+        },
+    };
+    let suggestion = |row: u32| {
+        serde_json::to_string(&Proposal::MatchSuggestion(MatchSuggestion {
+            statement_row: row,
+            vouchers: vec![],
+            ledger_name: None,
+            reason: "rent".to_owned(),
+            confidence_permille: 800,
+        }))
+        .unwrap()
+    };
+    assert!(propose_with_reply(&suggestion(3), &input).is_ok());
+    assert!(matches!(
+        propose_with_reply(&suggestion(4), &input),
         Err(AssistError::Output { .. })
     ));
 }

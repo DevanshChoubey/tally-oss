@@ -120,10 +120,22 @@ pub fn redact(text: &str) -> (String, Vec<Redaction>) {
 }
 
 /// Redacts several pieces of text with one numbering, so placeholders are consistent across them.
-#[derive(Debug, Default)]
+///
+/// `Debug` shows placeholders and counts only: the map of originals never reaches a log (spec 9).
+#[derive(Default)]
 pub struct Redactor {
     seen: BTreeMap<(RedactionKind, String), String>,
     found: Vec<Redaction>,
+}
+
+impl fmt::Debug for Redactor {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let placeholders: Vec<&str> = self.seen.values().map(String::as_str).collect();
+        f.debug_struct("Redactor")
+            .field("placeholders", &placeholders)
+            .field("redactions", &self.found.len())
+            .finish()
+    }
 }
 
 impl Redactor {
@@ -258,10 +270,10 @@ fn scan(text: &str) -> Vec<Hit> {
             i += used;
             continue;
         }
-        if let Some(&(start, end)) = spans.get(i) {
-            if let Some(kind) = text.get(start..end).and_then(classify) {
-                hits.push(Hit { start, end, kind });
-            }
+        if let Some(&(start, end)) = spans.get(i)
+            && let Some(kind) = text.get(start..end).and_then(classify)
+        {
+            hits.push(Hit { start, end, kind });
         }
         i += 1;
     }
@@ -386,8 +398,10 @@ mod tests {
         assert_eq!(out, "PAN of Sharma is [PAN_1], ok");
         assert_eq!(found.len(), 1);
         assert_eq!(found[0].kind, RedactionKind::Pan);
-        assert_eq!(found[0].start, 16);
-        assert_eq!(found[0].end, 26);
+        // Hand count: "PAN of Sharma is " is 3 + 1 + 2 + 1 + 6 + 1 + 2 + 1 = 17 bytes, so the PAN
+        // starts at byte 17 and, being 10 characters long, ends (exclusive) at byte 27.
+        assert_eq!(found[0].start, 17);
+        assert_eq!(found[0].end, 27);
     }
 
     #[test]
@@ -483,5 +497,17 @@ mod tests {
     fn debug_output_does_not_contain_the_original() {
         let (_, found) = redact("ABCDE1234F");
         assert!(!format!("{found:?}").contains("ABCDE1234F"));
+    }
+
+    #[test]
+    fn redactor_debug_output_does_not_contain_the_original() {
+        let mut redactor = Redactor::default();
+        let _ = redactor.apply("ABCDE1234F 29ABCDE1234F1ZW 123456789012345");
+        let shown = format!("{redactor:?}");
+        assert!(!shown.contains("ABCDE1234F"));
+        assert!(!shown.contains("29ABCDE1234F1ZW"));
+        assert!(!shown.contains("123456789012345"));
+        // It still says what it holds: the placeholders (hand-written from the numbering rule).
+        assert!(shown.contains("[PAN_1]"));
     }
 }
