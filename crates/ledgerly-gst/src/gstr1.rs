@@ -128,7 +128,8 @@ pub struct BucketedVoucher {
 /// Builds GSTR-1 for `gstin` and `period` from the books, with every in-period voucher bucketed.
 ///
 /// `period` must be one calendar month or one calendar quarter (Jan-Mar, Apr-Jun, Jul-Sep,
-/// Oct-Dec); anything else, a company without GST enabled and a composition registration are
+/// Oct-Dec); anything else, a company without GST enabled, a composition registration and a
+/// company with several registrations are
 /// `Unsupported`. Each voucher's rules are selected from `pack` by its time of supply.
 ///
 /// # Errors
@@ -166,6 +167,12 @@ pub fn build_gstr1(
         return Ok(Outcome::unsupported(
             "GSTR-1 for a composition registration",
             "a composition taxpayer does not file GSTR-1",
+        ));
+    }
+    if books.company.registrations.len() > 1 {
+        return Ok(Outcome::unsupported(
+            "GSTR-1 for a company with several GST registrations",
+            "a voucher does not say which registration it belongs to, so the books cannot be split into one return per GSTIN",
         ));
     }
     let mut evals = Vec::new();
@@ -1399,7 +1406,7 @@ fn ranges_of(numbers: &BTreeMap<String, bool>) -> Result<Vec<DocRange>, GstError
                 by_prefix
                     .entry(prefix)
                     .or_default()
-                    .push((n, text.as_str(), *cancelled))
+                    .push((n, text.as_str(), *cancelled));
             }
             None => out.push(new_run(text, *cancelled)),
         }

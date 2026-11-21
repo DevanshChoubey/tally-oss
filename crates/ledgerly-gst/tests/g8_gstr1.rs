@@ -714,3 +714,18 @@ fn quarter_period_is_accepted() {
     assert_eq!(buckets.len(), 1);
     assert_eq!(r.b2b.len(), 1);
 }
+
+#[test]
+fn a_company_with_two_registrations_is_unsupported() {
+    // provenance: derived. A voucher carries no registration, so with two GSTINs the same
+    // vouchers would appear in both returns; the builder refuses instead of double counting.
+    let mut b = books(vec![sale(1, "INV-1", REGISTERED, GUJARAT, &[1_000_000])]);
+    b.company.registrations.push(GstRegistration {
+        gstin: gstin(BUYER_GSTIN),
+        state: state(GUJARAT),
+        effective_from: date!(2017 - 07 - 01),
+        composition: false,
+    });
+    let out = build_gstr1(&b, &gstin(OWN_GSTIN), january(), &full_pack()).unwrap();
+    assert!(matches!(out, Outcome::Unsupported(_)));
+}
