@@ -30,8 +30,17 @@ None was loosened:
   them on.
 
 Like the pilot cards, the 66 cards had one read-only review before anything was compiled: 8 lane
-reviewers, followed by one fix round. A second review of the compiled code is under way. Nothing
-is pushed or merged to `main`.
+reviewers, followed by one fix round.
+
+**Second review (2026-11-21).** 10 read-only reviewers checked all 66 cards on the compiled code.
+They found 22 blocking, 68 should-fix and 38 nit findings; 87 findings from the first review were
+still open. A fix round followed: 10 code-only agents running on Claude Haiku 5.5, each in its
+own worktree. It fixed 74 findings and left 42, each with a reason. After the merge and one
+controlled build, every gate passes with 2248 of 2248 tests (commit 0aed364). Tests that pinned
+a silent default were replaced with stricter ones. None was deleted without a replacement, and
+none was ignored. Open decisions and unfixed findings are in
+`docs/status/2026-11-21-review2-decisions.md`, and the new interface requests are in
+`docs/interface-requests.md`. Nothing is pushed or merged to `main`.
 
 | Card | Status | Compiled | Review | Blocking | Fixed |
 |---|---|---|---|---|---|
