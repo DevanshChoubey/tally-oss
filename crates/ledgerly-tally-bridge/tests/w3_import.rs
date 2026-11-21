@@ -305,12 +305,11 @@ fn imported_events_match_a_hand_derivation_of_the_fixture() {
 fn a_tally_voucher_type_with_a_default_name_and_other_behaviour_is_refused() {
     let dir = tmp();
     let mut tally = FakeTally::standard();
-    // "Sales" under Journal: Ledgerly's default "Sales" is a Sales type, so they cannot merge.
-    tally.masters[2] = (
-        "LedgerlyVoucherTypes",
+    // Keep the Journal type the vouchers use, and add "Sales" under Journal: Ledgerly's default
+    // "Sales" is a Sales type, so the two cannot merge.
+    tally.masters[2].1.push_str(
         "<VOUCHERTYPE NAME=\"Sales\"><GUID>vt-sales</GUID><ALTERID>4</ALTERID>\
-         <NAME>Sales</NAME><PARENT>Journal</PARENT></VOUCHERTYPE>"
-            .to_owned(),
+         <NAME>Sales</NAME><PARENT>Journal</PARENT></VOUCHERTYPE>",
     );
     match import_company(
         &tally,
