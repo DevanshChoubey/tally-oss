@@ -6,8 +6,8 @@
 //! the same rows as `packs/rates-slabs.toml`). Rounding: each head is rounded once per voucher to
 //! the paisa (G4's product policy). Table meanings: 3.1(a) is outward taxable supplies other than
 //! zero rated, nil rated and exempted; 4(A)(5) is all other ITC (GSTR-3B form). Blocked credit:
-//! CGST Act s.17(5)(a) motor vehicles; which codes are blocked is fixture pack data (prefix 8703).
-//! A line in a blocked category makes the working Unsupported, because its exceptions depend on use.
+//! CGST Act s.17(5) ineligibility is the user's setting (TallyPrime model, card G7), not an HSN
+//! lookup: a purchase marked ineligible goes to the not-claimable row, and an unmarked one is claimed.
 //! The portal values in the comparison tests are typed in the test, as a user would type them; they
 //! are not observed portal output. No test here is `observed`.
 
@@ -102,6 +102,7 @@ fn pack(with_itc: bool) -> RulePack {
 
 fn company() -> Company {
     Company {
+        ineligible_itc_default: None,
         id: CompanyId(1),
         name: "Test Co".to_owned(),
         mailing_name: None,
@@ -132,6 +133,7 @@ fn ledger(
     gst: Option<GstClassification>,
 ) -> Ledger {
     Ledger {
+        ineligible_itc: None,
         id,
         name: format!("Ledger {}", id.0),
         aliases: vec![],
@@ -207,6 +209,7 @@ fn masters() -> Masters {
     m.stock_items.insert(
         ITEM,
         StockItem {
+            ineligible_itc: None,
             id: ITEM,
             name: "Widget".to_owned(),
             aliases: vec![],
@@ -277,6 +280,7 @@ fn voucher(id: u64, type_id: VoucherTypeId, mode: VoucherMode, on: Date) -> Vouc
 fn line(ledger: LedgerId, paise: i64, credit: bool) -> LedgerLine {
     let amount = Paise::new(paise);
     LedgerLine {
+        ineligible_itc: None,
         ledger,
         amount: if credit {
             SignedAmount::cr(amount)
@@ -399,8 +403,9 @@ fn january_books() -> Books {
     books_with(vec![s1, s2, s3, s4, s5, s6, s7, p11, p13, p14, p15])
 }
 
-/// A motor car purchase in January 2026. Its s.17(5)(a) exceptions depend on use, so the working
-/// is Unsupported whenever it is in the period. It is kept out of [`january_books`] for that reason.
+/// A motor car purchase in January 2026 (taxable 1,00,000.00 at 18%). It is kept out of
+/// [`january_books`]: with no ineligibility setting it is claimable, which is a different case
+/// from the ones [`january_books`] checks.
 fn car_purchase() -> Voucher {
     ledger_purchase(12, date!(2026 - 01 - 15), SUPPLIER_KA, CAR, 10_000_000)
 }
@@ -480,16 +485,15 @@ fn table_3_1_a_tax_is_per_head_over_the_taxable_vouchers() {
 #[test]
 fn table_4_a_5_is_the_tax_on_eligible_purchases_only() {
     // provenance: derived — 3B table 4(A)(5) = all other ITC; CGST Act s.16(1) allows credit of
-    // tax on inputs. The motor car is not in january_books (see a_blocked_motor_car_...).
+    // tax on inputs. The motor car is not in january_books (see a_motor_car_with_no_flag_...).
     //   P11 purchase 50,000.00 (HSN 482010) from a Karnataka supplier: CGST 4,500.00, SGST 4,500.00
     //       -> 450,000 + 450,000 paise, eligible.
     //   P13 item purchase 20,000.50 from a Maharashtra supplier (item HSN 847130): IGST
     //       20,000.50 x 18% = 3,600.09 -> 360,009 paise, eligible.
     // Left out: P14 (reverse charge), P15 (dated February).
     // 4(A)(5): integrated 360,009; central 450,000; state 450,000.
-    // Nothing is in the not-claimable row: a line that is blocked or ineligible makes the working
-    // Unsupported (blocked) or is rejected by compute (composition and unregistered suppliers),
-    // so no line can be reported as a known, not-claimable amount.
+    // Nothing is in the not-claimable row: no purchase in January carries an ineligibility
+    // setting, and composition and unregistered suppliers are rejected by compute.
     let w = value(&january_books(), None);
     assert_eq!(w.itc_all_other, amounts(360_009, 450_000, 450_000));
     assert_eq!(w.itc_vouchers, vec![VoucherId(11), VoucherId(13)]);
@@ -497,20 +501,43 @@ fn table_4_a_5_is_the_tax_on_eligible_purchases_only() {
 }
 
 #[test]
-fn a_blocked_motor_car_makes_the_working_unsupported_not_an_understated_4_a_5() {
-    // provenance: derived — CGST Act s.17(5)(a): a motor car's exceptions (further supply,
-    // passenger or goods transport, driving training) depend on use, which is not recorded. The
-    // credit cannot be called blocked, so the working is Unsupported. A silent 4(A)(5) of zero
-    // would be a wrong number, because the car may be claimable.
-    let books = books_with(vec![car_purchase()]);
-    assert_unsupported(&books);
+fn a_motor_car_with_no_flag_is_claimed_in_4_a_5_because_tally_does_not_infer_from_the_category() {
+    // provenance: derived — Tally ineligible-ITC page (https://help.tallysolutions.com/docs/te9rel66/
+    // Tax_India/gst/gst_accounting_for_ineligible_itc.htm, read 2026-11-21): the user marks
+    // ineligibility on the master or the company; nothing marked means the credit is not
+    // ineligible, and the HSN does not decide. The car is intra-state at 18% (the ledger's rate):
+    //   car 1,00,000.00 x 9% = 9,000.00 CGST and 9,000.00 SGST -> 900,000 + 900,000 paise.
+    // Replaces the round-2 default, under which the working was Unsupported (s.17(5)(a) fixture).
+    let w = value(&books_with(vec![car_purchase()]), None);
+    assert_eq!(w.itc_all_other, amounts(0, 900_000, 900_000));
+    assert_eq!(w.itc_vouchers, vec![VoucherId(12)]);
+    assert_eq!(w.itc_not_claimable, Gstr3bTaxAmounts::default());
 }
 
 #[test]
-fn a_blocked_motor_car_is_unsupported_even_next_to_eligible_purchases() {
-    // provenance: derived — the same rule with an eligible purchase in the period: the working as
-    // a whole is Unsupported, so the eligible line's credit is not shown as the full 4(A)(5).
-    let books = books_with(vec![
+fn a_motor_car_flagged_ineligible_on_its_ledger_is_not_claimable() {
+    // provenance: derived — Tally ineligible-ITC page: a ledger or master marked Yes makes the
+    // purchase ineligible. The same car as above, with its ledger marked Yes: the 900,000 +
+    // 900,000 paise of tax is not-claimable, and 4(A)(5) carries nothing for it.
+    let mut books = books_with(vec![car_purchase()]);
+    books
+        .masters
+        .ledgers
+        .get_mut(&CAR)
+        .unwrap()
+        .ineligible_itc = Some(true);
+    let w = value(&books, None);
+    assert_eq!(w.itc_all_other, Gstr3bTaxAmounts::default());
+    assert!(w.itc_vouchers.is_empty());
+    assert_eq!(w.itc_not_claimable, amounts(0, 900_000, 900_000));
+}
+
+#[test]
+fn a_flagged_car_next_to_eligible_purchases_leaves_their_credit_intact() {
+    // provenance: derived — the same flagged car with the eligible purchase P11 of January (tax
+    // 450,000 + 450,000 paise, as in table_4_a_5 above): 4(A)(5) carries P11 only; the car sits
+    // in the not-claimable row.
+    let mut books = books_with(vec![
         ledger_purchase(
             11,
             date!(2026 - 01 - 15),
@@ -520,7 +547,16 @@ fn a_blocked_motor_car_is_unsupported_even_next_to_eligible_purchases() {
         ),
         car_purchase(),
     ]);
-    assert_unsupported(&books);
+    books
+        .masters
+        .ledgers
+        .get_mut(&CAR)
+        .unwrap()
+        .ineligible_itc = Some(true);
+    let w = value(&books, None);
+    assert_eq!(w.itc_all_other, amounts(0, 450_000, 450_000));
+    assert_eq!(w.itc_vouchers, vec![VoucherId(11)]);
+    assert_eq!(w.itc_not_claimable, amounts(0, 900_000, 900_000));
 }
 
 #[test]
@@ -764,21 +800,24 @@ fn a_payment_dated_before_the_invoice_without_a_supply_date_is_unsupported() {
 }
 
 #[test]
-fn a_pack_without_blocked_categories_makes_a_taxable_purchase_unsupported() {
-    // provenance: derived — engineering rule A8: an unverifiable blocked category means "not
-    // blocked" cannot be claimed, so any taxable purchase in the period makes the working
-    // Unsupported (the fixture pack has the slabs but no itc.blocked.* entries).
+fn a_pack_without_blocked_categories_does_not_block_a_flag_free_purchase() {
+    // provenance: derived — Tally ineligible-ITC page (read 2026-11-21): credit follows the user's
+    // setting, not the rule pack's HSN categories. The fixture pack has the slabs but no
+    // itc.blocked.* entries; a flag-free taxable purchase (P11, 50,000.00, intra-state 18%:
+    // CGST 4,500.00 and SGST 4,500.00) is claimed. Replaces the round-2 Unsupported, which came
+    // from the missing blocked-category entries.
     let books = books_with(vec![ledger_purchase(
-        1,
+        11,
         date!(2026 - 01 - 15),
         SUPPLIER_KA,
         PURCHASE18,
         5_000_000,
     )]);
-    assert!(matches!(
-        run(&books, &pack(false), None).unwrap(),
-        Outcome::Unsupported(_)
-    ));
+    let w = match run(&books, &pack(false), None).unwrap() {
+        Outcome::Value(w) => w,
+        Outcome::Unsupported(u) => panic!("unexpected Unsupported: {u:?}"),
+    };
+    assert_eq!(w.itc_all_other, amounts(0, 450_000, 450_000));
 }
 
 #[test]

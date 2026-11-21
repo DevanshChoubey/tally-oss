@@ -448,6 +448,7 @@ fn build_lines(d: &VoucherDraft, books: &Books, threshold: u16) -> Step<Vec<Ledg
             DrCr::Cr => SignedAmount::cr(*amount),
         };
         lines.push(LedgerLine {
+            ineligible_itc: None,
             ledger: id,
             amount: signed,
             bills: Vec::new(),

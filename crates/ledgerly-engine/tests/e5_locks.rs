@@ -17,6 +17,7 @@ use time::macros::date;
 fn books(fy_start: time::Date, books_begin: time::Date) -> Books {
     Books {
         company: Company {
+            ineligible_itc_default: None,
             id: CompanyId(1),
             name: "Fictional Traders".to_owned(),
             mailing_name: None,

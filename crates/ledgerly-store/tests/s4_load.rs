@@ -40,6 +40,7 @@ fn date(y: i32, m: Month, d: u8) -> Date {
 fn company() -> Company {
     // Fictional data; GSTIN check character derived by hand in ledgerly-core's gstin tests.
     Company {
+        ineligible_itc_default: None,
         id: CompanyId(7),
         name: "Example Traders Pvt Ltd".to_owned(),
         mailing_name: None,
@@ -81,6 +82,7 @@ fn meta() -> AuditMeta {
 
 fn line(ledger: u64, amount: SignedAmount) -> LedgerLine {
     LedgerLine {
+        ineligible_itc: None,
         ledger: LedgerId(ledger),
         amount,
         bills: Vec::new(),
@@ -124,6 +126,7 @@ fn voucher(id: u64, on: Date, lines: Vec<LedgerLine>) -> Voucher {
 
 fn group(id: u64, name: &str) -> Group {
     Group {
+        ineligible_itc: None,
         id: GroupId(id),
         name: name.to_owned(),
         aliases: Vec::new(),

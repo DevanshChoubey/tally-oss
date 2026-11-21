@@ -49,6 +49,7 @@ fn rs(n: i64) -> Paise {
 
 fn group(id: u64, parent: Option<u64>, reserved: Option<ReservedGroup>) -> Group {
     Group {
+        ineligible_itc: None,
         id: GroupId(id),
         name: format!("group {id}"),
         aliases: vec![],
@@ -62,6 +63,7 @@ fn group(id: u64, parent: Option<u64>, reserved: Option<ReservedGroup>) -> Group
 
 fn ledger(id: u64, group: u64) -> Ledger {
     Ledger {
+        ineligible_itc: None,
         id: LedgerId(id),
         name: format!("ledger {id}"),
         aliases: vec![],
@@ -101,6 +103,7 @@ fn books_with(vouchers: Vec<Voucher>) -> Books {
     }
     Books {
         company: Company {
+            ineligible_itc_default: None,
             id: CompanyId(1),
             name: "Test Traders".to_string(),
             mailing_name: None,
@@ -136,6 +139,7 @@ fn cheque_alloc(number: Option<&str>) -> BankAllocation {
 
 fn line(ledger: u64, amount: SignedAmount, bank: Option<BankAllocation>) -> LedgerLine {
     LedgerLine {
+        ineligible_itc: None,
         ledger: LedgerId(ledger),
         amount,
         bills: vec![],

@@ -216,6 +216,7 @@ fn reverse_bill(bill: &BillAllocation) -> BillAllocation {
 
 fn reverse_line(line: &LedgerLine) -> LedgerLine {
     LedgerLine {
+        ineligible_itc: None,
         ledger: line.ledger,
         amount: SignedAmount {
             amount: line.amount.amount,
@@ -229,6 +230,7 @@ fn reverse_line(line: &LedgerLine) -> LedgerLine {
 
 fn plain_line(ledger: LedgerId, amount: SignedAmount) -> LedgerLine {
     LedgerLine {
+        ineligible_itc: None,
         ledger,
         amount,
         bills: Vec::new(),

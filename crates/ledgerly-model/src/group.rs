@@ -18,6 +18,10 @@ pub struct Group {
     pub nature: Option<Nature>,
     /// Whether balances under this group go to the trading account (gross profit).
     pub affects_gross_profit: bool,
+    /// Ineligible for input credit, set on this group. `None` means not set here: the parent
+    /// chain, then the company setting, decides (see `ledgerly_gst::itc`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ineligible_itc: Option<bool>,
     /// Identity in Tally, when imported.
     pub tally: Option<TallyRef>,
 }

@@ -50,6 +50,9 @@ pub struct StockGroup {
     pub name: String,
     /// Parent group.
     pub parent: Option<StockGroupId>,
+    /// Ineligible for input credit, set on this stock group. `None` means not set here.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ineligible_itc: Option<bool>,
     /// Identity in Tally, when imported.
     pub tally: Option<TallyRef>,
 }
@@ -81,6 +84,10 @@ pub struct StockItem {
     pub opening: Vec<OpeningStock>,
     /// Dated standard costs (for [`ValuationMethod::StandardCost`]).
     pub standard_costs: Vec<StandardCost>,
+    /// Ineligible for input credit, set on this item. `None` means not set here: the stock group
+    /// chain decides next (see `ledgerly_gst::itc`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ineligible_itc: Option<bool>,
     /// Identity in Tally, when imported.
     pub tally: Option<TallyRef>,
 }

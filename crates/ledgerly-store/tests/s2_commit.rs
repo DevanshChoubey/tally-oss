@@ -40,6 +40,7 @@ fn date(y: i32, m: Month, d: u8) -> Date {
 fn company() -> Company {
     // Fictional data; GSTIN check character derived by hand in ledgerly-core's gstin tests.
     Company {
+        ineligible_itc_default: None,
         id: CompanyId(7),
         name: "Example Traders Pvt Ltd".to_owned(),
         mailing_name: None,

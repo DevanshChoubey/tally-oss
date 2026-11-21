@@ -71,6 +71,7 @@ fn bank_line(
     cleared: Option<Date>,
 ) -> LedgerLine {
     LedgerLine {
+        ineligible_itc: None,
         ledger: BANK,
         amount,
         bills: Vec::new(),
@@ -87,6 +88,7 @@ fn bank_line(
 
 fn plain_line(ledger: LedgerId, amount: SignedAmount) -> LedgerLine {
     LedgerLine {
+        ineligible_itc: None,
         ledger,
         amount,
         bills: Vec::new(),
@@ -143,6 +145,7 @@ fn payment(id: u64, day: u8, paise: i64) -> Voucher {
 fn books(vouchers: Vec<Voucher>) -> Books {
     Books {
         company: Company {
+            ineligible_itc_default: None,
             id: CompanyId(1),
             name: "Fictional Traders".to_string(),
             mailing_name: None,

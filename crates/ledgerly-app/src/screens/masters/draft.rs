@@ -574,6 +574,7 @@ fn build_group(
     let mut names = labels.into_iter();
     let name = names.next().unwrap_or_default();
     Ok(MasterSnapshot::Group(Group {
+        ineligible_itc: None,
         id: editing.unwrap_or(GroupId(UNASSIGNED_ID)),
         name,
         aliases: names.collect(),
@@ -719,6 +720,7 @@ fn build_ledger(
     let mut names = labels.into_iter();
     let name = names.next().unwrap_or_default();
     Ok(MasterSnapshot::Ledger(Ledger {
+        ineligible_itc: None,
         id: id.unwrap_or(ledgerly_core::LedgerId(UNASSIGNED_ID)),
         name,
         aliases: names.collect(),
@@ -988,6 +990,7 @@ fn build_stock_group(
         }
     }
     Ok(MasterSnapshot::StockGroup(StockGroup {
+        ineligible_itc: None,
         id: editing.unwrap_or(StockGroupId(UNASSIGNED_ID)),
         name,
         parent: d.parent.map(StockGroupId),
@@ -1148,6 +1151,7 @@ fn build_stock_item(
     let mut names = labels.into_iter();
     let name = names.next().unwrap_or_default();
     Ok(MasterSnapshot::StockItem(StockItem {
+        ineligible_itc: None,
         id: editing.unwrap_or(StockItemId(UNASSIGNED_ID)),
         name,
         aliases: names.collect(),

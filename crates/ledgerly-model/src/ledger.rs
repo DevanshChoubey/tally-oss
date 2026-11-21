@@ -30,6 +30,10 @@ pub struct Ledger {
     pub gst: Option<GstClassification>,
     /// Which reserved ledger this is, if any.
     pub reserved: Option<ReservedLedger>,
+    /// Ineligible for input credit, set on this ledger. `None` means not set here: the parent
+    /// group chain, then the company setting, decides (see `ledgerly_gst::itc`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ineligible_itc: Option<bool>,
     /// Identity in Tally, when imported.
     pub tally: Option<TallyRef>,
 }

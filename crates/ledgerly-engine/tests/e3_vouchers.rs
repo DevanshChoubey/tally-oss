@@ -46,6 +46,7 @@ fn rs(rupees: i64) -> Paise {
 
 fn ledger(id: LedgerId, name: &str, bill_wise: bool) -> Ledger {
     Ledger {
+        ineligible_itc: None,
         id,
         name: name.to_string(),
         aliases: Vec::new(),
@@ -149,6 +150,7 @@ fn empty_books(gst: bool) -> Books {
     }
     Books {
         company: Company {
+            ineligible_itc_default: None,
             id: CompanyId(1),
             name: "Test Traders".to_string(),
             mailing_name: None,
@@ -182,6 +184,7 @@ fn with(mut books: Books, vs: Vec<Voucher>) -> Books {
 
 fn line(ledger: LedgerId, amount: SignedAmount, bills: Vec<BillAllocation>) -> LedgerLine {
     LedgerLine {
+        ineligible_itc: None,
         ledger,
         amount,
         bills,

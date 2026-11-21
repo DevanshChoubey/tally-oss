@@ -43,6 +43,7 @@ fn rs(rupees: i64) -> Paise {
 
 fn ledger(id: LedgerId, name: &str, bill_wise: bool) -> Ledger {
     Ledger {
+        ineligible_itc: None,
         id,
         name: name.to_string(),
         aliases: Vec::new(),
@@ -103,6 +104,7 @@ fn empty_books() -> Books {
     }
     Books {
         company: Company {
+            ineligible_itc_default: None,
             id: ledgerly_core::CompanyId(1),
             name: "Test Traders".to_string(),
             mailing_name: None,
@@ -138,6 +140,7 @@ fn alloc(kind: BillRefKind, name: &str, amount: SignedAmount) -> BillAllocation 
 
 fn line(ledger: LedgerId, amount: SignedAmount, bills: Vec<BillAllocation>) -> LedgerLine {
     LedgerLine {
+        ineligible_itc: None,
         ledger,
         amount,
         bills,
@@ -709,6 +712,7 @@ fn against_a_bill_of_another_ledger_is_rejected() {
     assert_eq!(
         validate_bill_refs(&r, &books),
         Err(EngineError::Voucher(VoucherError::BillOnWrongLedger {
+            ineligible_itc: None,
             bill: "INV-1".to_string(),
             ledger: OTHER_DEBTOR,
         }))

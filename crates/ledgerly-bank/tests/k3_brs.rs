@@ -39,6 +39,7 @@ fn apr(day: u8) -> Date {
 
 fn ledger(id: LedgerId, bank: bool, opening: SignedAmount) -> Ledger {
     Ledger {
+        ineligible_itc: None,
         id,
         name: format!("Fictional ledger {}", id.0),
         aliases: Vec::new(),
@@ -67,6 +68,7 @@ fn bank_line(
     with_allocation: bool,
 ) -> LedgerLine {
     LedgerLine {
+        ineligible_itc: None,
         ledger: BANK,
         amount,
         bills: Vec::new(),
@@ -83,6 +85,7 @@ fn bank_line(
 
 fn counter_line(amount: SignedAmount) -> LedgerLine {
     LedgerLine {
+        ineligible_itc: None,
         ledger: PARTY,
         amount: if amount.side == ledgerly_core::DrCr::Dr {
             SignedAmount::cr(amount.amount)
@@ -126,6 +129,7 @@ fn voucher(id: u64, date: Date, status: VoucherStatus, line: LedgerLine) -> Vouc
 fn books_with(opening: SignedAmount, bank: bool, vouchers: Vec<Voucher>) -> Books {
     let state = StateCode::new(27).unwrap();
     let company = Company {
+        ineligible_itc_default: None,
         id: CompanyId(1),
         name: "Fictional Traders".to_owned(),
         mailing_name: None,

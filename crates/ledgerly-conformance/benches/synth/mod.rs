@@ -227,6 +227,7 @@ fn creditor_id(shape: Shape, index: u64) -> LedgerId {
 fn company() -> Result<Company, SynthError> {
     let start = fy_start()?;
     Ok(Company {
+        ineligible_itc_default: None,
         id: CompanyId(1),
         name: "Synthetic Traders".to_owned(),
         mailing_name: None,
@@ -252,6 +253,7 @@ fn group_id(groups: &[Group], which: ReservedGroup) -> Result<GroupId, SynthErro
 
 fn ledger(id: LedgerId, name: String, group: GroupId, reserved: Option<ReservedLedger>) -> Ledger {
     Ledger {
+        ineligible_itc: None,
         id,
         name,
         aliases: Vec::new(),
@@ -385,6 +387,7 @@ fn voucher(
 ) -> Voucher {
     let (dr, cr, amount) = lines;
     let line = |ledger, side: SignedAmount| LedgerLine {
+        ineligible_itc: None,
         ledger,
         amount: side,
         bills: Vec::new(),

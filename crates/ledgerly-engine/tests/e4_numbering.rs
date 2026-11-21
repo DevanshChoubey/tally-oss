@@ -47,6 +47,7 @@ fn vtype(base: BaseVoucherKind, prefix: &str, width: u8, restart: RestartPeriod)
 
 fn books(gst: bool, vouchers: Vec<Voucher>) -> Books {
     let company = Company {
+        ineligible_itc_default: None,
         id: CompanyId(1),
         name: "Fictional Traders".to_string(),
         mailing_name: None,

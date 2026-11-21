@@ -33,6 +33,7 @@ mod tests {
 
     fn company() -> Company {
         Company {
+            ineligible_itc_default: None,
             id: CompanyId(1),
             name: "Test Traders".to_string(),
             mailing_name: None,
@@ -50,6 +51,7 @@ mod tests {
 
     fn ledger(id: LedgerId, bill_wise: bool) -> Ledger {
         Ledger {
+            ineligible_itc: None,
             id,
             name: format!("L{}", id.0),
             aliases: vec![],
@@ -107,6 +109,7 @@ mod tests {
 
     fn line(ledger: LedgerId, amount: SignedAmount) -> LedgerLine {
         LedgerLine {
+            ineligible_itc: None,
             ledger,
             amount,
             bills: vec![],
@@ -336,6 +339,7 @@ mod tests {
         assert_eq!(
             validate_voucher(&v, &masters(), &company()),
             Err(VoucherError::BillOnWrongLedger {
+                ineligible_itc: None,
                 bill: "INV-9".to_string(),
                 ledger: DEBTORS_2
             })

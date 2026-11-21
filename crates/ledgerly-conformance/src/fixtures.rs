@@ -241,6 +241,7 @@ fn company() -> Result<Company, FixtureError> {
     };
     let state = StateCode::new(27)?;
     Ok(Company {
+        ineligible_itc_default: None,
         id: CompanyId(1),
         name: "Neelgiri Traders".to_owned(),
         mailing_name: None,
@@ -297,6 +298,7 @@ fn masters() -> Result<Masters, FixtureError> {
         stock_groups: BTreeMap::from([(
             StockGroupId(1),
             StockGroup {
+                ineligible_itc: None,
                 id: StockGroupId(1),
                 name: "Trading Goods".to_owned(),
                 parent: None,
@@ -317,6 +319,7 @@ fn primary_group(
     affects_gross_profit: bool,
 ) -> Group {
     Group {
+        ineligible_itc: None,
         id,
         name: name.to_owned(),
         aliases: Vec::new(),
@@ -330,6 +333,7 @@ fn primary_group(
 
 fn sub_group(id: GroupId, name: &str, parent: GroupId, reserved: ReservedGroup) -> Group {
     Group {
+        ineligible_itc: None,
         parent: Some(parent),
         nature: None,
         ..primary_group(id, name, reserved, Nature::Asset, false)
@@ -401,6 +405,7 @@ fn groups() -> Vec<Group> {
 
 fn ledger(id: LedgerId, name: &str, group: GroupId) -> Ledger {
     Ledger {
+        ineligible_itc: None,
         id,
         name: name.to_owned(),
         aliases: Vec::new(),
@@ -593,6 +598,7 @@ fn godowns() -> Vec<Godown> {
 
 fn stock_item(id: StockItemId, name: &str, gst_percent: Option<i64>) -> StockItem {
     StockItem {
+        ineligible_itc: None,
         id,
         name: name.to_owned(),
         aliases: Vec::new(),
@@ -671,6 +677,7 @@ fn base(
 
 fn plain(ledger: LedgerId, amount: SignedAmount) -> LedgerLine {
     LedgerLine {
+        ineligible_itc: None,
         ledger,
         amount,
         bills: Vec::new(),

@@ -57,6 +57,7 @@ fn mv(v: u64, on: Date, item: StockItemId, qty_in: i64, qty_out: i64) -> StockMo
 
 fn stock_item(id: StockItemId, opening: i64) -> StockItem {
     StockItem {
+        ineligible_itc: None,
         id,
         name: format!("Item {}", id.0),
         aliases: vec![],
@@ -132,6 +133,7 @@ fn books(moves: Vec<StockMove>) -> Books {
         .insert(StockItemId(2), stock_item(StockItemId(2), 0));
     Books {
         company: Company {
+            ineligible_itc_default: None,
             id: CompanyId(1),
             name: "Fictional Traders".to_owned(),
             mailing_name: None,

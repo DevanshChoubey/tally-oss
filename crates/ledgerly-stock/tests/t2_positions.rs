@@ -35,6 +35,7 @@ fn q(n: i64) -> Qty {
 
 fn item(id: StockItemId, opening: Vec<OpeningStock>) -> StockItem {
     StockItem {
+        ineligible_itc: None,
         id,
         name: "Widget".to_owned(),
         aliases: vec![],
@@ -119,6 +120,7 @@ fn books(items: Vec<StockItem>, moves: Vec<StockMove>) -> Books {
     stock_moves.sort_by_key(|m| (m.date, m.voucher));
     Books {
         company: Company {
+            ineligible_itc_default: None,
             id: CompanyId(1),
             name: "Test Traders".to_owned(),
             mailing_name: None,

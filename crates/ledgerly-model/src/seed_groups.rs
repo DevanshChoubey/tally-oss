@@ -131,6 +131,7 @@ pub fn reserved_groups() -> Vec<Group> {
                 None => None,
             };
             Some(Group {
+                ineligible_itc: None,
                 id,
                 name: s.name.to_owned(),
                 aliases: Vec::new(),
