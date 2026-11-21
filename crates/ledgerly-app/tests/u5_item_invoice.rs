@@ -138,8 +138,7 @@ fn voucher_type(
     }
 }
 
-fn books() -> Books {
-    let mut masters = Masters::default();
+fn add_ledgers(masters: &mut Masters) {
     let mut sharma = ledger(SHARMA, "Sharma Traders");
     sharma.party = Some(PartyDetails {
         registration: RegistrationType::Regular,
@@ -162,6 +161,9 @@ fn books() -> Books {
     ] {
         masters.ledgers.insert(l.id, l);
     }
+}
+
+fn add_stock(masters: &mut Masters) {
     for u in [unit(NOS, "Nos", 0), unit(KG, "Kg", 3)] {
         masters.units.insert(u.id, u);
     }
@@ -173,6 +175,9 @@ fn books() -> Books {
     ] {
         masters.stock_items.insert(i.id, i);
     }
+}
+
+fn add_voucher_types(masters: &mut Masters) {
     for t in [
         voucher_type(
             T_SALES,
@@ -212,21 +217,32 @@ fn books() -> Books {
     ] {
         masters.voucher_types.insert(t.id, t);
     }
+}
+
+fn company() -> Company {
+    Company {
+        id: ledgerly_core::CompanyId(1),
+        name: "Test Traders".to_owned(),
+        mailing_name: None,
+        address: Address::default(),
+        state: StateCode::new(27).unwrap(),
+        pan: None,
+        registrations: Vec::new(),
+        fy_start: date!(2026 - 04 - 01),
+        books_begin: date!(2026 - 04 - 01),
+        entity_kind: EntityKind::Company,
+        features: Features::default(),
+        negative_stock: NegativeStockPolicy::Block,
+    }
+}
+
+fn books() -> Books {
+    let mut masters = Masters::default();
+    add_ledgers(&mut masters);
+    add_stock(&mut masters);
+    add_voucher_types(&mut masters);
     Books {
-        company: Company {
-            id: ledgerly_core::CompanyId(1),
-            name: "Test Traders".to_owned(),
-            mailing_name: None,
-            address: Address::default(),
-            state: StateCode::new(27).unwrap(),
-            pan: None,
-            registrations: Vec::new(),
-            fy_start: date!(2026 - 04 - 01),
-            books_begin: date!(2026 - 04 - 01),
-            entity_kind: EntityKind::Company,
-            features: Features::default(),
-            negative_stock: NegativeStockPolicy::Block,
-        },
+        company: company(),
         masters,
         vouchers: BTreeMap::new(),
         postings: Vec::new(),
@@ -529,6 +545,9 @@ fn item_search_ranks_prefix_before_word_before_substring_and_finds_aliases() {
     assert_eq!(hits[0].unit.as_deref(), Some("Kg"));
     // Empty query lists everything; no match lists nothing.
     assert_eq!(search_items(m, "").len(), 4);
+    // An empty query lists items by name. Nothing was typed, so no alias can have matched: derived
+    // from the doc contract "an empty query lists every item", not from engine output.
+    assert!(search_items(m, "").iter().all(|h| h.via_alias.is_none()));
     assert!(search_items(m, "zzz").is_empty());
 }
 
