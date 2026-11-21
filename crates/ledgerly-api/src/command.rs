@@ -19,6 +19,8 @@ use ledgerly_model::{
 };
 use ledgerly_store::{CommitReceipt, Event};
 
+use crate::voucher_gst;
+
 /// A change requested through the facade. Each variant is one engine command.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Command {
@@ -132,8 +134,12 @@ pub(crate) fn run(
         Command::CreateCostCentre(c) => masters_stock::create_cost_centre(c, books),
         Command::AlterCostCentre(c) => masters_stock::alter_cost_centre(c, books),
         Command::DeleteCostCentre(id) => masters_stock::delete_cost_centre(id, books),
-        Command::PostVoucher(v) => vouchers::post_voucher_with_lock(v, books, lock),
-        Command::AlterVoucher(v) => vouchers::alter_voucher_with_lock(v, books, lock),
+        Command::PostVoucher(v) => {
+            vouchers::post_voucher_with_lock(voucher_gst::with_gst(v, books)?, books, lock)
+        }
+        Command::AlterVoucher(v) => {
+            vouchers::alter_voucher_with_lock(voucher_gst::with_gst(v, books)?, books, lock)
+        }
         Command::CancelVoucher(id) => vouchers::cancel_voucher_with_lock(id, books, lock),
         Command::DeleteVoucher(id) => vouchers::delete_voucher_with_lock(id, books, lock),
         Command::LockPeriod(until) => locks::lock_period(until, books),

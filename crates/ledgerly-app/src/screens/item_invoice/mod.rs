@@ -45,6 +45,7 @@
 //! read their keys the same way. When the keymap is merged the one key table in `keys` is the
 //! place to switch over; until then remapping a key in the keymap does not change this screen.
 
+mod compute;
 mod draft;
 mod draw;
 mod keys;
@@ -446,6 +447,8 @@ pub struct ItemInvoiceScreen {
     /// The post the worker is running for this screen, if any. While it runs the screen shows
     /// "Saving..." and takes no keys, so a second save cannot start.
     posting: Option<Ticket<CommandReply>>,
+    /// The tax computation the worker is running, with the voucher it is for.
+    computing: Option<(Voucher, Ticket<compute::ComputeReply>)>,
 }
 
 impl ItemInvoiceScreen {
@@ -492,6 +495,7 @@ impl ItemInvoiceScreen {
             answer: None,
             outbox: None,
             posting: None,
+            computing: None,
         }))
     }
 

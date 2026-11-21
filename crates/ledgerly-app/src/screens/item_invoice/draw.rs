@@ -1,5 +1,6 @@
 //! Drawing the screen with egui. Draws and reports events; it computes nothing.
 
+use super::compute;
 use super::keys::read_keys;
 use super::{Field, GstBlock, GstStatus, ItemInvoiceScreen, Notice, UiEvent};
 use crate::shell::submit::{self, CommandReply};
@@ -302,6 +303,7 @@ impl Screen for ItemInvoiceScreen {
             self.wait_for_post(ui);
             return ScreenAction::Stay;
         }
+        self.drive_compute(ui, ctx);
         let action = if let Some(books) = ctx.books.as_ref() {
             self.draw(ui, &books.masters)
         } else {
@@ -325,6 +327,30 @@ fn no_books_text(ctx: &AppCtx) -> &'static str {
 }
 
 impl ItemInvoiceScreen {
+    /// Hands in the tax answer when the worker has it, and asks for the tax of the invoice as it
+    /// now stands when it is complete and no answer or request exists for it (card C2). Without a
+    /// worker nothing is asked, and the screen keeps saying tax is not computed.
+    fn drive_compute(&mut self, ui: &Ui, ctx: &AppCtx) {
+        let (Some(worker), Some(books)) = (ctx.api.as_ref(), ctx.books.as_ref()) else {
+            return;
+        };
+        if let Some((voucher, mut ticket)) = self.computing.take() {
+            match compute::settle(&mut ticket) {
+                Some(reply) => self.set_gst(voucher, compute::to_result(reply)),
+                None => self.computing = Some((voucher, ticket)),
+            }
+        }
+        if self.computing.is_none()
+            && let Some(voucher) = self.take_compute_request(&books.masters)
+        {
+            let ticket = compute::send(worker, voucher.clone());
+            self.computing = Some((voucher, ticket));
+        }
+        if self.computing.is_some() {
+            ui.ctx().request_repaint();
+        }
+    }
+
     /// Sends the voucher the user asked to save to the worker. Without a worker nothing can be
     /// posted, and the screen says so.
     fn send_saves(&mut self, ctx: &AppCtx) {

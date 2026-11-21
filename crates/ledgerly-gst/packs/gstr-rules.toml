@@ -1,0 +1,60 @@
+# GSTR-1 and input-credit rules (Wave 3 card C2). Not a `rates-*` file: those are read by the G2
+# tests, which demand a notification number on every verified entry. Read at 2026-11-21.
+# The slab pack stays separate; `RulePack::merge` joins them.
+version = "2026.1-gstr-rules"
+
+# Rule 59(4) of the CGST Rules, 2017 as amended by Notification No. 12/2024-Central Tax dated
+# 10 July 2024: "two and a half lakh rupees" becomes "one lakh rupees" with effect from
+# 1 August 2024; table 5 (B2CL) is "inter-State supplies with invoice value more than one lakh
+# rupees made to the unregistered persons". Read in the notification PDF
+# <https://www.gstcouncil.gov.in/sites/default/files/2024-09/central-tax-12-2024-11072024.pdf>
+# and the GSTR-1 user guide <https://tutorial.gst.gov.in/userguide/returns/Creation_of_Outward_Supplies_Return_in_GSTR-1.htm>
+# (Table 5A, 5B: "more than Rs. 1 lakh"; Rs 2.5 lakh up to the July 2024 tax period), both on 2026-11-21.
+# No entry before 2024-08-01: the start date of the Rs 2.5 lakh rule was not read.
+[[entry]]
+id = "gstr1.b2cl_threshold"
+effective_from = "2024-08-01"
+legal_ref = "Rule 59(4) of the CGST Rules, 2017 as amended by Notification No. 12/2024-Central Tax dated 10 July 2024, in force from 1 August 2024"
+[entry.params]
+invoice_value_rupees = "100000"
+
+# Table 12 and credit notes. The GSTR-1 user guide (read 2026-11-21) says the Table 12 B2B figures
+# must match the totals of Tables 4, 6B, 6C, 8, 9A, 9B, 9C and 15, which include credit and debit
+# notes, but it never says that notes reduce the HSN rows (net) or stay out of them (exclude).
+# The TallyPrime HSN/SAC summary page
+# <https://help.tallysolutions.com/tally-prime/gstr-1/hsn-sac-summary/> is silent on notes too.
+[[entry]]
+id = "gstr1.hsn_credit_notes"
+effective_from = "2024-08-01"
+pending = true
+[entry.params]
+source_note = "tutorial.gst.gov.in GSTR-1 user guide and help.tallysolutions.com HSN/SAC summary page read 2026-11-21: neither states whether credit notes reduce the Table 12 rows (net) or are left out (exclude)"
+
+# CGST Act s.17(5), read in <https://cbic-gst.gov.in/pdf/CGST-Act-Updated-31082021.pdf> on 2026-11-21:
+# (a) motor vehicles seating up to thirteen persons including the driver, unless used for further
+# supply of such vehicles, carrying passengers or driving training; (aa) vessels and aircraft,
+# with their own exceptions; (b)(i) food and beverages, outdoor catering, beauty treatment, health
+# services, cosmetic and plastic surgery, club and similar items, with a proviso. The section
+# names no HSN or SAC code and its exceptions depend on how the item is used, so a code list
+# (`hsn_prefixes`) cannot be read from it. A list written from memory could let blocked credit
+# through, so each entry stays pending and ITC stays Unsupported.
+[[entry]]
+id = "itc.blocked.motor_vehicles"
+effective_from = "2017-07-01"
+pending = true
+[entry.params]
+source_note = "CGST Act s.17(5)(a) read at cbic-gst.gov.in 2026-11-21: the section names no HSN code and its exceptions depend on use, so no hsn_prefixes list can be read from it"
+
+[[entry]]
+id = "itc.blocked.vessels_aircraft"
+effective_from = "2017-07-01"
+pending = true
+[entry.params]
+source_note = "CGST Act s.17(5)(aa) read at cbic-gst.gov.in 2026-11-21: the section names no HSN code and its exceptions depend on use, so no hsn_prefixes list can be read from it"
+
+[[entry]]
+id = "itc.blocked.food_beverages"
+effective_from = "2017-07-01"
+pending = true
+[entry.params]
+source_note = "CGST Act s.17(5)(b) read at cbic-gst.gov.in 2026-11-21: the section names no SAC code and its proviso depends on use, so no hsn_prefixes list can be read from it"
