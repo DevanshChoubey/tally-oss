@@ -111,6 +111,21 @@ fn books(moves: Vec<StockMove>) -> Books {
     ] {
         masters.voucher_types.insert(id, vtype(id, base));
     }
+    // Every unit a line or an item names must exist in the unit master, as in real books.
+    for (id, symbol) in [(UnitId(1), "pcs"), (UnitId(2), "alt")] {
+        masters.units.insert(
+            id,
+            Unit {
+                id,
+                symbol: symbol.to_owned(),
+                formal_name: symbol.to_owned(),
+                decimals: 0,
+                kind: UnitKind::Simple,
+                uqc: None,
+                tally: None,
+            },
+        );
+    }
     masters.stock_items.insert(ITEM, stock_item(ITEM, 10));
     masters
         .stock_items
