@@ -45,6 +45,7 @@ fn rs(rupees: i64) -> Paise {
 
 fn item(id: u64, name: &str, method: ValuationMethod, opening: &[(u64, i64, i64)]) -> StockItem {
     StockItem {
+        ineligible_itc: None,
         id: StockItemId(id),
         name: name.to_owned(),
         aliases: vec![],
@@ -118,6 +119,7 @@ fn voucher(id: u64, on: Date) -> Voucher {
 
 fn company() -> Company {
     Company {
+        ineligible_itc_default: None,
         id: CompanyId(1),
         name: "Fictional Traders".into(),
         mailing_name: None,

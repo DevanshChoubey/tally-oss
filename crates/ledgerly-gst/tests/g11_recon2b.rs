@@ -70,6 +70,7 @@ fn vtype(id: VoucherTypeId, base: BaseVoucherKind) -> VoucherType {
 
 fn party(id: LedgerId, gstin: &str) -> Ledger {
     Ledger {
+        ineligible_itc: None,
         id,
         name: format!("Supplier {}", id.0),
         aliases: vec![],
@@ -104,6 +105,7 @@ fn books(vouchers: Vec<Voucher>) -> Books {
     masters.ledgers.insert(PARTY_B, party(PARTY_B, SUPPLIER_B));
     Books {
         company: Company {
+            ineligible_itc_default: None,
             id: CompanyId(1),
             name: "Test Co".to_owned(),
             mailing_name: None,
@@ -204,6 +206,7 @@ fn doc(kind: InwardDocKind, number: &str, igst: i64) -> InwardDoc {
 
 fn group(ctin: &str, docs: Vec<InwardDoc>) -> SupplierGroup<InwardDoc> {
     SupplierGroup {
+        ineligible_itc: None,
         ctin: ctin.to_owned(),
         trade_name: None,
         supplier_period: None,

@@ -65,6 +65,7 @@ fn gid(books: &Books, reserved: ReservedGroup) -> GroupId {
 
 fn ledger(id: LedgerId, name: &str, group: GroupId) -> Ledger {
     Ledger {
+        ineligible_itc: None,
         id,
         name: name.to_owned(),
         aliases: Vec::new(),
@@ -83,6 +84,7 @@ fn ledger(id: LedgerId, name: &str, group: GroupId) -> Ledger {
 
 fn custom_group(id: GroupId, name: &str, parent: Option<GroupId>) -> Group {
     Group {
+        ineligible_itc: None,
         id,
         name: name.to_owned(),
         aliases: Vec::new(),
@@ -112,6 +114,7 @@ fn voucher_using(ledger: LedgerId) -> Voucher {
         reference_date: None,
         narration: String::new(),
         ledger_lines: vec![LedgerLine {
+            ineligible_itc: None,
             ledger,
             amount: SignedAmount::dr(Paise::new(100)),
             bills: Vec::new(),
@@ -132,6 +135,7 @@ fn base_books(features: Features) -> Books {
     }
     let mut books = Books {
         company: Company {
+            ineligible_itc_default: None,
             id: ledgerly_core::CompanyId(1),
             name: "Test Traders".to_owned(),
             mailing_name: None,
@@ -238,6 +242,7 @@ fn fill_inventory(m: &mut Masters) {
     m.stock_groups.insert(
         StockGroupId(1),
         StockGroup {
+            ineligible_itc: None,
             id: StockGroupId(1),
             name: "Primary Stock".to_owned(),
             parent: None,
@@ -247,6 +252,7 @@ fn fill_inventory(m: &mut Masters) {
     m.stock_items.insert(
         ITEM,
         StockItem {
+            ineligible_itc: None,
             id: ITEM,
             name: "Widget".to_owned(),
             aliases: Vec::new(),
@@ -947,6 +953,7 @@ fn altering_keeps_what_the_form_does_not_show() {
     assert_eq!(l.name, "Kaveri Packaging Pvt");
     assert_eq!(
         Ledger {
+            ineligible_itc: None,
             name: before.name.clone(),
             ..l
         },

@@ -90,6 +90,10 @@ pub struct LedgerLine {
     pub cost: Vec<CostAllocation>,
     /// Bank instrument details on bank lines.
     pub bank: Option<BankAllocation>,
+    /// Invoice-level "ineligible for input credit" for this line, as the user set it on the
+    /// invoice. `None` means the master value applies. Only purchase lines use it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ineligible_itc: Option<bool>,
 }
 
 /// A bill reference on a line.

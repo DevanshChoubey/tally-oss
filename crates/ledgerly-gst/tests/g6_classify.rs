@@ -69,6 +69,7 @@ fn history(from: Date, taxability: Taxability, percent: Option<i64>) -> GstHisto
 
 fn item_with(gst_history: Vec<GstHistory>, hsn: Option<&str>) -> StockItem {
     StockItem {
+        ineligible_itc: None,
         id: ITEM,
         name: "Widget".to_owned(),
         aliases: vec![],
@@ -92,6 +93,7 @@ fn ledger(
     gst: Option<GstClassification>,
 ) -> Ledger {
     Ledger {
+        ineligible_itc: None,
         id,
         name: format!("Ledger {}", id.0),
         aliases: vec![],
@@ -266,6 +268,7 @@ fn with_option(mut v: Voucher, option: &str) -> Voucher {
 
 fn ledger_line(ledger: LedgerId, paise: i64) -> LedgerLine {
     LedgerLine {
+        ineligible_itc: None,
         ledger,
         amount: SignedAmount::cr(Paise::new(paise)),
         bills: vec![],
@@ -413,6 +416,7 @@ fn receipt_voucher(bills: Vec<BillAllocation>, party_line_side_cr: bool) -> Vouc
     Voucher {
         ledger_lines: vec![
             LedgerLine {
+                ineligible_itc: None,
                 ledger: BANK,
                 amount: SignedAmount::dr(Paise::new(500_000)),
                 bills: vec![],
@@ -420,6 +424,7 @@ fn receipt_voucher(bills: Vec<BillAllocation>, party_line_side_cr: bool) -> Vouc
                 bank: None,
             },
             LedgerLine {
+                ineligible_itc: None,
                 ledger: PARTY,
                 amount,
                 bills,

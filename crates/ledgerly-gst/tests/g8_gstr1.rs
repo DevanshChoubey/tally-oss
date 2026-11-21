@@ -108,6 +108,7 @@ fn full_pack() -> RulePack {
 
 fn company() -> Company {
     Company {
+        ineligible_itc_default: None,
         id: CompanyId(1),
         name: "Test Co".to_owned(),
         mailing_name: None,
@@ -139,6 +140,7 @@ fn party_ledger(
     code: u8,
 ) -> Ledger {
     Ledger {
+        ineligible_itc: None,
         id,
         name: format!("Party {}", id.0),
         aliases: vec![],
@@ -208,6 +210,7 @@ fn masters() -> Masters {
     m.stock_items.insert(
         ITEM,
         StockItem {
+            ineligible_itc: None,
             id: ITEM,
             name: "Widget".to_owned(),
             aliases: vec![],
@@ -230,6 +233,7 @@ fn masters() -> Masters {
     m.ledgers.insert(
         SALES_LEDGER,
         Ledger {
+            ineligible_itc: None,
             gst: Some(GstClassification {
                 hsn: None,
                 taxability: Taxability::Taxable,

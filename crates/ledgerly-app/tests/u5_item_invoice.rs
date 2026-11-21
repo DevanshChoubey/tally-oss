@@ -68,6 +68,7 @@ const TODAY: Date = date!(2026 - 11 - 21);
 
 fn ledger(id: LedgerId, name: &str) -> Ledger {
     Ledger {
+        ineligible_itc: None,
         id,
         name: name.to_owned(),
         aliases: Vec::new(),
@@ -98,6 +99,7 @@ fn unit(id: UnitId, symbol: &str, decimals: u8) -> Unit {
 
 fn item(id: StockItemId, name: &str, aliases: &[&str], unit: UnitId, batches: bool) -> StockItem {
     StockItem {
+        ineligible_itc: None,
         id,
         name: name.to_owned(),
         aliases: aliases.iter().map(|a| (*a).to_owned()).collect(),
@@ -223,6 +225,7 @@ fn add_voucher_types(masters: &mut Masters) {
 
 fn company() -> Company {
     Company {
+        ineligible_itc_default: None,
         id: ledgerly_core::CompanyId(1),
         name: "Test Traders".to_owned(),
         mailing_name: None,
@@ -296,6 +299,7 @@ fn rupees(r: i64) -> Paise {
 
 fn line(ledger: LedgerId, amount: SignedAmount) -> LedgerLine {
     LedgerLine {
+        ineligible_itc: None,
         ledger,
         amount,
         bills: Vec::new(),

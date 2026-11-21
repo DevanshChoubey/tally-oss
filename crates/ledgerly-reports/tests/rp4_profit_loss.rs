@@ -56,6 +56,7 @@ fn period() -> Period {
 
 fn group(id: u64, name: &str, parent: Option<u64>, nature: Option<Nature>, gp: bool) -> Group {
     Group {
+        ineligible_itc: None,
         id: GroupId(id),
         name: name.into(),
         aliases: vec![],
@@ -69,6 +70,7 @@ fn group(id: u64, name: &str, parent: Option<u64>, nature: Option<Nature>, gp: b
 
 fn ledger(id: u64, name: &str, group: u64) -> Ledger {
     Ledger {
+        ineligible_itc: None,
         id: LedgerId(id),
         name: name.into(),
         aliases: vec![],
@@ -152,6 +154,7 @@ fn masters() -> Masters {
 
 fn company() -> Company {
     Company {
+        ineligible_itc_default: None,
         id: CompanyId(1),
         name: "Fictional Traders".into(),
         mailing_name: None,

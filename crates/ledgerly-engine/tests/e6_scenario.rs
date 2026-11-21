@@ -82,6 +82,7 @@ fn books(postings: Vec<Posting>) -> Books {
     }
     Books {
         company: Company {
+            ineligible_itc_default: None,
             id: CompanyId(1),
             name: "Fictional Traders".to_owned(),
             mailing_name: None,

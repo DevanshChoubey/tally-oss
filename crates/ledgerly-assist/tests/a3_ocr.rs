@@ -104,6 +104,7 @@ fn ledger(
     tax: Option<TaxDetails>,
 ) -> Ledger {
     Ledger {
+        ineligible_itc: None,
         id,
         name: name.to_owned(),
         aliases: vec![],

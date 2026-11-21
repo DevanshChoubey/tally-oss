@@ -67,6 +67,7 @@ fn state(code: u8) -> StateCode {
 
 fn company_in(code: u8) -> Company {
     Company {
+        ineligible_itc_default: None,
         id: CompanyId(1),
         name: "Test Co".to_owned(),
         mailing_name: None,
@@ -103,6 +104,7 @@ fn history(from: Date, taxability: Taxability, percent: Option<i64>) -> GstHisto
 
 fn item_with(gst_history: Vec<GstHistory>) -> StockItem {
     StockItem {
+        ineligible_itc: None,
         id: ITEM,
         name: "Widget".to_owned(),
         aliases: vec![],
@@ -126,6 +128,7 @@ fn ledger(
     gst: Option<GstClassification>,
 ) -> Ledger {
     Ledger {
+        ineligible_itc: None,
         id,
         name: format!("Ledger {}", id.0),
         aliases: vec![],
@@ -544,6 +547,7 @@ fn accounting_invoice_uses_the_ledger_rate() {
     let v = Voucher {
         ledger_lines: vec![
             LedgerLine {
+                ineligible_itc: None,
                 ledger: PARTY,
                 amount: SignedAmount::dr(Paise::new(105_000)),
                 bills: vec![],
@@ -551,6 +555,7 @@ fn accounting_invoice_uses_the_ledger_rate() {
                 bank: None,
             },
             LedgerLine {
+                ineligible_itc: None,
                 ledger: SALES_LEDGER,
                 amount: SignedAmount::cr(Paise::new(100_000)),
                 bills: vec![],
@@ -565,6 +570,7 @@ fn accounting_invoice_uses_the_ledger_rate() {
     assert_eq!(
         b.lines.first().unwrap().source,
         LineSource::Ledger {
+            ineligible_itc: None,
             ledger: SALES_LEDGER
         }
     );
@@ -655,6 +661,7 @@ fn unsupported_situations_are_reported_not_guessed() {
 
     let with_cess = Voucher {
         ledger_lines: vec![LedgerLine {
+            ineligible_itc: None,
             ledger: CESS_LEDGER,
             amount: SignedAmount::cr(Paise::new(100)),
             bills: vec![],
@@ -676,6 +683,7 @@ fn history_at(from: Date, percent: &str) -> GstHistory {
 
 fn classified_line(ledger: LedgerId, amount: SignedAmount) -> LedgerLine {
     LedgerLine {
+        ineligible_itc: None,
         ledger,
         amount,
         bills: vec![],

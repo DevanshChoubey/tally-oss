@@ -1,62 +1,60 @@
 //! Input tax credit eligibility, including s.17(5). **Card G7** implements this module.
 //!
-//! Frozen interface (plan card G7):
+//! The user's setting decides first (TallyPrime model; provenance in `tests/g7_itc.rs`). The user
+//! marks "ineligible for input credit" on a stock item or stock group, or on an accounting ledger or
+//! group, or enables it company-wide when no purchase gets credit. The purchase invoice shows the
+//! master value and the user may change it for that invoice.
 //!
 //! ```text
-//! pub enum ItcEligibility { Eligible, Blocked { section: String }, Ineligible { reason: String } }
-//! pub fn itc_eligibility(v: &Voucher, line: usize, masters: &Masters, rules: &RuleSet) -> Result<Outcome<ItcEligibility>, GstError>;
+//! pub fn itc_eligibility(v: &Voucher, line: usize, company: &Company, masters: &Masters,
+//!     rules: &RuleSet) -> Result<Outcome<ItcEligibility>, GstError>;
 //! ```
 //!
 //! # What `line` is
 //!
 //! `line` is a zero-based position in [`Voucher::ledger_lines`]. It must be a purchase or expense
-//! line, that is a line whose ledger carries a GST classification. The category of the line comes
-//! from its HSN/SAC: the ledger's own code, or, when the ledger has none, the codes of the stock
-//! items of the inventory lines posted to that ledger.
+//! line, that is a line whose ledger carries a GST classification.
 //!
-//! # How blocking is decided (pack-driven)
+//! # Resolution, in order
 //!
-//! Which HSN/SAC codes fall in a blocked category is data, not code. The rule pack holds one entry
-//! per blocked category, with the ids in [`BLOCKED_RULE_IDS`] and these params (strings):
-//!
-//! ```text
-//! section      = "17(5)(a)"        # named in the `Unsupported` reason for a line in the category
-//! hsn_prefixes = "8703,8702"       # comma separated; a code is in the category when it starts with one
-//! ```
-//!
-//! The entries are effective-dated like any other rule, so the rule set selected for the time of
-//! supply decides. If any of these entries is missing from the rule set, or is pending, the result
-//! is `Unsupported`: an unverifiable blocked category means "not blocked" cannot be claimed
-//! (engineering rule A8). Until the pack has these entries, every call is therefore `Unsupported`.
+//! 1. Supplier and voucher checks (below). They decide first, as no tax is claimable from them.
+//! 2. An explicit setting decides. The first of these that is set wins, and `Some(false)` counts:
+//!    * the invoice line's own setting ([`LedgerLine::ineligible_itc`]);
+//!    * the masters. For a line with inventory posted to its ledger, the stock item, then its stock
+//!      group chain upward; the purchase ledger, then its group chain upward. A set value stops the
+//!      walk. A loop in a parent chain is `Unsupported`; a missing parent is [`GstError::NotFound`].
+//!      Items under one line that set different values are `Unsupported` (split the line). An item
+//!      setting and a ledger setting that disagree are `Unsupported` (pending: not documented);
+//!    * the company default ([`Company::ineligible_itc_default`]). A master value that disagrees
+//!      with it is `Unsupported` (pending: not documented).
+//!    Set Yes gives `Ineligible`; set No gives `Eligible`, whatever the HSN/SAC.
+//! 3. Nothing set at any level: the HSN/SAC rules of the rule pack apply, as before this setting
+//!    existed. A line whose HSN/SAC is in a blocked category of the pack (s.17(5)) is `Unsupported`,
+//!    because its exceptions depend on use, which the books do not record. A line with no HSN/SAC,
+//!    or whose items fall in different categories, is `Unsupported`. Each of these reasons tells
+//!    the user to mark the stock item or the purchase ledger eligible or ineligible for input credit
+//!    (or to set it on the invoice), and then the setting decides. A line in no blocked category is
+//!    `Eligible`. We refuse rather than guess: an unmarked motor car is not claimed.
 //!
 //! # What is decided
 //!
-//! * `Ineligible`: the ledger is exempt, nil-rated or non-GST (no tax was charged), or the supplier
-//!   is a composition dealer, or is unregistered/a consumer and the voucher is not under reverse
-//!   charge (no tax invoice with tax, CGST Act s.16(2)(a), s.10(4)).
-//! * `Eligible`: taxable purchase from a registered (or SEZ) supplier, or a reverse-charge
-//!   purchase, whose HSN/SAC is in no blocked category of the pack.
-//! * `Unsupported`: the HSN/SAC is in a blocked category of the pack. Every blocked category has
-//!   exceptions that depend on use (further supply, transport, training, obligation under law), and
-//!   no use flag is recorded, so neither "blocked" nor "eligible" can be claimed.
+//! * `Ineligible`: the ledger is exempt, nil-rated or non-GST (no tax was charged); the supplier is
+//!   a composition dealer, or is unregistered/a consumer and the voucher is not under reverse charge
+//!   (no tax invoice with tax, CGST Act s.16(2)(a), s.10(4)); or an explicit setting is Yes.
+//! * `Eligible`: a taxable purchase from a registered (or SEZ) supplier, or a reverse-charge
+//!   purchase, with an explicit No, or with nothing set and no blocked HSN/SAC category.
+//! * `Unsupported`: a voucher that is not a regular purchase, a cancelled voucher, an overseas or
+//!   UIN supplier, a line without a GST classification, a conflict or a broken parent chain, and
+//!   the HSN/SAC fallback cases above.
 //!
-//! The `Blocked` variant is kept for the public enum but this function never returns it: a
-//! blocked category is never reported as a decided answer while no use flag exists.
+//! # Not decided
 //!
-//! # Not decided (the result is not a claim about these)
+//! The conditions of s.16(2) (2B match, receipt, supplier payment, 180 days), Rules 42 and 43, and
+//! the s.17(5) clauses that depend on use are not checked. Credit that becomes ineligible after
+//! purchase is reversed with a journal in Tally; that reversal is not modelled (pending).
 //!
-//! `Eligible` means "not blocked by an HSN/SAC based category and no ineligibility found". It does
-//! not check the conditions of s.16(2) (2B match, receipt, supplier payment, 180 days), Rules 42
-//! and 43, or the s.17(5) clauses that depend on use or events the books do not record: (c) and
-//! (d) construction, (e), (f), (fa), (g) personal consumption, (h) lost or gifted goods, (i). A
-//! vehicle bought by a transport business is therefore `Unsupported` until a use flag exists (see
-//! `docs/interface-requests.md`). Callers must treat the result as a first-pass classification,
-//! shown to the user for confirmation.
-//!
-//! `Unsupported` is returned for: a voucher that is not a regular purchase, a cancelled voucher,
-//! an overseas or UIN supplier (imports are not handled), a line without a classification or
-//! HSN/SAC, a ledger line mixing categories, a line in a blocked category, and the missing/pending
-//! pack entries above.
+//! [`blocked_category_for`] is a separate advisory helper: it reports whether an HSN/SAC falls in a
+//! blocked category of the pack. The fallback in step 3 uses it.
 //!
 //! Only claimable credit may reach GSTR-3B table 4(A): use [`ItcEligibility::is_claimable`].
 //!
@@ -64,15 +62,16 @@
 
 use std::collections::BTreeSet;
 
-use ledgerly_core::{Hsn, Outcome};
+use ledgerly_core::{GroupId, Hsn, Outcome, StockGroupId};
 use ledgerly_model::{
-    BaseVoucherKind, Ledger, Masters, RegistrationType, Taxability, Voucher, VoucherStatus,
+    BaseVoucherKind, Company, Group, Ledger, LedgerLine, Masters, RegistrationType, StockGroup,
+    StockItem, Taxability, Voucher, VoucherStatus,
 };
 
 use crate::GstError;
 use crate::pack::{PackEntry, RuleSet};
 
-/// Rule pack entry ids that hold a blocked-credit category (see the module docs for the params).
+/// Rule pack entry ids that hold a blocked-credit category (see [`blocked_category_for`]).
 ///
 /// A category added to a pack under another id is not read here; the caller sees no effect, so new
 /// categories are added to this list in the same change as the pack entry.
@@ -85,15 +84,16 @@ pub const BLOCKED_RULE_IDS: [&str; 3] = [
 /// Whether the tax on one purchase line may be claimed as input tax credit.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ItcEligibility {
-    /// No blocking or ineligibility found (see the module docs for what is not checked).
+    /// No ineligibility found (see the module docs for what is not checked).
     Eligible,
     /// Credit blocked by CGST Act s.17(5). Not returned by [`itc_eligibility`]: a blocked category
-    /// is `Unsupported` until a use flag exists (see the module docs).
+    /// is `Unsupported` until the user marks the line (see the module docs).
     Blocked {
         /// The clause, as written in the pack, for example `17(5)(a)`.
         section: String,
     },
-    /// Credit not available for a reason other than s.17(5).
+    /// Credit not available: the user marked it ineligible, or the supplier's registration rules
+    /// it out, or no tax was charged.
     Ineligible {
         /// What the user can read to understand why.
         reason: String,
@@ -135,7 +135,7 @@ fn unsupported<T>(
     clippy::unnecessary_wraps,
     reason = "builds the Result<Outcome> every check returns, so callers can `return value(..)`"
 )]
-fn value(e: ItcEligibility) -> Result<Outcome<ItcEligibility>, GstError> {
+fn value<T>(e: T) -> Result<Outcome<T>, GstError> {
     Ok(Outcome::Value(e))
 }
 
@@ -153,20 +153,23 @@ fn pack_err(reason: String) -> GstError {
     GstError::Pack { reason }
 }
 
-/// Decides whether the tax on `v.ledger_lines[line]` is eligible input tax credit.
+/// Decides whether the tax on `v.ledger_lines[line]` is eligible input tax credit (module docs,
+/// resolution order).
 ///
 /// `rules` must be the rule set selected for the voucher's time of supply
-/// ([`crate::pack::RulePack::for_time_of_supply`]); the caller owns that choice.
+/// ([`crate::pack::RulePack::for_time_of_supply`]); the caller owns that choice. It is used only
+/// when no setting applies (the HSN/SAC fallback).
 ///
 /// # Errors
 /// * [`GstError::Invalid`] when `line` is not a position in the voucher's ledger lines.
-/// * [`GstError::NotFound`] when the voucher refers to a voucher type, party, ledger or stock item
-///   that is not in `masters`.
+/// * [`GstError::NotFound`] when the voucher refers to a voucher type, party, ledger, stock item,
+///   stock group or group that is not in `masters`, or a parent group is missing.
 /// * [`GstError::Pack`] when a blocked-category entry lacks `section` or `hsn_prefixes`, or a
 ///   prefix is not made of digits.
 pub fn itc_eligibility(
     v: &Voucher,
     line: usize,
+    company: &Company,
     masters: &Masters,
     rules: &RuleSet,
 ) -> Result<Outcome<ItcEligibility>, GstError> {
@@ -202,30 +205,12 @@ pub fn itc_eligibility(
     if let Some(result) = supported!(supplier_check(v, masters)?) {
         return value(result);
     }
-    let codes = supported!(codes_for(v, ledger, masters)?);
-    let mut result: Option<ItcEligibility> = None;
-    for code in codes {
-        let found = supported!(classify(code, rules)?);
-        match &result {
-            None => result = Some(found),
-            Some(previous) if *previous == found => {}
-            Some(_) => {
-                return unsupported(
-                    "ITC on a ledger line that mixes categories",
-                    format!(
-                        "the items posted to ledger `{}` fall in different ITC categories; split the line",
-                        ledger.name
-                    ),
-                );
-            }
-        }
-    }
-    match result {
-        Some(r) => value(r),
-        None => unsupported(
-            "ITC without an HSN/SAC",
-            "no HSN/SAC found for the line; set it on the ledger or the stock item",
+    match supported!(effective_flag(v, ledger_line, ledger, company, masters)?) {
+        Some(true) => ineligible(
+            "the purchase is marked ineligible for input credit (on the invoice, a master, or the company setting)",
         ),
+        Some(false) => value(ItcEligibility::Eligible),
+        None => hsn_fallback(v, ledger, masters, rules),
     }
 }
 
@@ -317,6 +302,160 @@ fn supplier_check(
     }
 }
 
+/// The explicit "ineligible for input credit" setting of one purchase line: the invoice, then the
+/// masters, then the company default. `None` when nothing is set at any level.
+fn effective_flag(
+    v: &Voucher,
+    ledger_line: &LedgerLine,
+    ledger: &Ledger,
+    company: &Company,
+    masters: &Masters,
+) -> Result<Outcome<Option<bool>>, GstError> {
+    if let Some(flag) = ledger_line.ineligible_itc {
+        return value(Some(flag));
+    }
+    let master = supported!(master_flag(v, ledger, masters)?);
+    let disagree = matches!(
+        (master, company.ineligible_itc_default),
+        (Some(m), Some(c)) if m != c
+    );
+    if disagree {
+        return unsupported(
+            format!("ITC on ledger `{}`", ledger.name),
+            "the master's setting and the company setting disagree, and the books do not say which one applies; set the same value on both, or set it on the invoice",
+        );
+    }
+    value(master.or(company.ineligible_itc_default))
+}
+
+/// The setting from the masters for one line: the stock items posted to the ledger and their
+/// groups, and the purchase ledger and its groups. `None` when no master sets it.
+fn master_flag(
+    v: &Voucher,
+    ledger: &Ledger,
+    masters: &Masters,
+) -> Result<Outcome<Option<bool>>, GstError> {
+    let mut item_values: BTreeSet<bool> = BTreeSet::new();
+    for inv in v
+        .inventory_lines
+        .iter()
+        .filter(|l| l.ledger == Some(ledger.id))
+    {
+        let stock_item = masters
+            .stock_items
+            .get(&inv.item)
+            .ok_or_else(|| not_found(format!("stock item {}", inv.item.0)))?;
+        if let Some(flag) = supported!(stock_item_flag(stock_item, masters)?) {
+            item_values.insert(flag);
+        }
+    }
+    if item_values.len() > 1 {
+        return unsupported(
+            format!("ITC on ledger `{}`", ledger.name),
+            "the items posted to this ledger line are marked differently for input credit; split the line",
+        );
+    }
+    let item_flag = item_values.first().copied();
+    let ledger_flag = supported!(ledger_flag(ledger, masters)?);
+    let disagree = matches!(
+        (item_flag, ledger_flag),
+        (Some(i), Some(l)) if i != l
+    );
+    if disagree {
+        return unsupported(
+            format!("ITC on ledger `{}`", ledger.name),
+            "the stock item and the purchase ledger are marked differently for input credit, and the books do not say which one applies; set the same value on both, or set it on the invoice",
+        );
+    }
+    value(item_flag.or(ledger_flag))
+}
+
+/// The stock item's setting, else the nearest stock group that sets it.
+fn stock_item_flag(item: &StockItem, masters: &Masters) -> Result<Outcome<Option<bool>>, GstError> {
+    if let Some(flag) = item.ineligible_itc {
+        return value(Some(flag));
+    }
+    let mut seen: BTreeSet<StockGroupId> = BTreeSet::new();
+    let mut next = item.group;
+    while let Some(id) = next {
+        if !seen.insert(id) {
+            return unsupported(
+                format!("ITC on stock item `{}`", item.name),
+                "the stock groups form a loop in their parent chain; fix the parent of one group",
+            );
+        }
+        let group: &StockGroup = masters
+            .stock_groups
+            .get(&id)
+            .ok_or_else(|| not_found(format!("stock group {}", id.0)))?;
+        if let Some(flag) = group.ineligible_itc {
+            return value(Some(flag));
+        }
+        next = group.parent;
+    }
+    value(None)
+}
+
+/// The ledger's setting, else the nearest group that sets it.
+fn ledger_flag(ledger: &Ledger, masters: &Masters) -> Result<Outcome<Option<bool>>, GstError> {
+    if let Some(flag) = ledger.ineligible_itc {
+        return value(Some(flag));
+    }
+    let mut seen: BTreeSet<GroupId> = BTreeSet::new();
+    let mut next = Some(ledger.group);
+    while let Some(id) = next {
+        if !seen.insert(id) {
+            return unsupported(
+                format!("ITC on ledger `{}`", ledger.name),
+                "the groups form a loop in their parent chain; fix the parent of one group",
+            );
+        }
+        let group: &Group = masters
+            .groups
+            .get(&id)
+            .ok_or_else(|| not_found(format!("group {}", id.0)))?;
+        if let Some(flag) = group.ineligible_itc {
+            return value(Some(flag));
+        }
+        next = group.parent;
+    }
+    value(None)
+}
+
+/// The HSN/SAC rules, used only when no setting applies (module docs, step 3).
+fn hsn_fallback(
+    v: &Voucher,
+    ledger: &Ledger,
+    masters: &Masters,
+    rules: &RuleSet,
+) -> Result<Outcome<ItcEligibility>, GstError> {
+    let codes = supported!(codes_for(v, ledger, masters)?);
+    let mut result: Option<ItcEligibility> = None;
+    for code in codes {
+        let found = supported!(classify(code, rules)?);
+        match result.take() {
+            None => result = Some(found),
+            Some(previous) if previous == found => result = Some(previous),
+            Some(_) => {
+                return unsupported(
+                    "ITC on a ledger line that mixes categories",
+                    format!(
+                        "the items posted to ledger `{}` fall in different ITC categories; split the line, or mark the items eligible or ineligible for input credit",
+                        ledger.name
+                    ),
+                );
+            }
+        }
+    }
+    match result {
+        Some(r) => value(r),
+        None => unsupported(
+            "ITC without an HSN/SAC",
+            "no HSN/SAC found for the line; set it on the ledger or the stock item, or mark the stock item or purchase ledger eligible or ineligible for input credit",
+        ),
+    }
+}
+
 /// The HSN/SAC codes that classify the line: the ledger's own, else its stock items'.
 fn codes_for<'a>(
     v: &Voucher,
@@ -344,7 +483,10 @@ fn codes_for<'a>(
             None => {
                 return unsupported(
                     "ITC without an HSN/SAC",
-                    format!("stock item `{}` has no HSN/SAC", item.name),
+                    format!(
+                        "stock item `{}` has no HSN/SAC; set it, or mark the item eligible or ineligible for input credit",
+                        item.name
+                    ),
                 );
             }
         }
@@ -361,26 +503,45 @@ fn codes_for<'a>(
     Ok(Outcome::Value(codes))
 }
 
-/// Looks `code` up in every blocked category of the rule set.
+/// One code under the fallback: `Unsupported` in a blocked category, `Eligible` otherwise.
 ///
 /// A code in a blocked category is `Unsupported`, never `Blocked`: each category is a clause of
-/// s.17(5) whose exceptions depend on how the goods or services are used (further supply,
-/// transport, training, an obligation under law), and the books record no use. The section is
-/// still read on a hit, so a malformed entry is reported as a pack error.
+/// s.17(5) whose exceptions depend on how the goods or services are used, and the books record no
+/// use. The reason tells the user how to settle the line.
 fn classify(code: &Hsn, rules: &RuleSet) -> Result<Outcome<ItcEligibility>, GstError> {
+    match supported!(blocked_category_for(code, rules)?) {
+        Some(section) => unsupported(
+            format!("ITC on HSN/SAC {} under s.{section}", code.as_str()),
+            format!(
+                "s.{section} blocks this category except where an exception applies; the exceptions depend on how the goods or services are used, which the books do not record. Mark the stock item or purchase ledger eligible or ineligible for input credit (or set it on the invoice) and the setting decides"
+            ),
+        ),
+        None => value(ItcEligibility::Eligible),
+    }
+}
+
+/// Advisory helper, also used by the fallback: the blocked category of CGST Act s.17(5) that holds
+/// `code`, read from the rule pack. `Some(section)` names the clause (for example `17(5)(a)`);
+/// `None` means no blocked category of the pack holds the code.
+///
+/// Which HSN/SAC codes fall in a category is pack data. Each entry in [`BLOCKED_RULE_IDS`] carries
+/// `section` and `hsn_prefixes` (comma separated digit strings; a code is in the category when it
+/// starts with one). A missing or pending entry is `Unsupported`.
+///
+/// # Errors
+/// [`GstError::Pack`] when an entry lacks `section` or `hsn_prefixes`, or a prefix is not digits.
+pub fn blocked_category_for(
+    code: &Hsn,
+    rules: &RuleSet,
+) -> Result<Outcome<Option<String>>, GstError> {
     for id in BLOCKED_RULE_IDS {
         let entry = supported!(rules.get(id));
         if category_contains(entry, code)? {
             let section = param(entry, "section")?.trim().to_owned();
-            return unsupported(
-                format!("ITC on HSN/SAC {} under s.{section}", code.as_str()),
-                format!(
-                    "s.{section} blocks this category except where an exception applies; the exceptions depend on how the goods or services are used, which the books do not record, so the credit is neither blocked nor eligible"
-                ),
-            );
+            return value(Some(section));
         }
     }
-    value(ItcEligibility::Eligible)
+    value(None)
 }
 
 fn param<'e>(entry: &'e PackEntry, name: &str) -> Result<&'e str, GstError> {

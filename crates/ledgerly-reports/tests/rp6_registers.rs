@@ -47,6 +47,7 @@ fn rs(n: i64) -> Paise {
 
 fn ledger(id: u64, name: &str) -> Ledger {
     Ledger {
+        ineligible_itc: None,
         id: LedgerId(id),
         name: name.to_string(),
         aliases: vec![],
@@ -103,6 +104,7 @@ fn empty_books() -> Books {
     }
     Books {
         company: Company {
+            ineligible_itc_default: None,
             id: CompanyId(1),
             name: "Test Traders".to_string(),
             mailing_name: None,
@@ -125,6 +127,7 @@ fn empty_books() -> Books {
 
 fn line(ledger: u64, amount: SignedAmount) -> LedgerLine {
     LedgerLine {
+        ineligible_itc: None,
         ledger: LedgerId(ledger),
         amount,
         bills: vec![],

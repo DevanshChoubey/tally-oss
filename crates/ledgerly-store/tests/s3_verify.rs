@@ -41,6 +41,7 @@ fn date(y: i32, m: Month, d: u8) -> Date {
 fn company() -> Company {
     // Fictional data; same fixture as the S2 tests.
     Company {
+        ineligible_itc_default: None,
         id: CompanyId(7),
         name: "Example Traders Pvt Ltd".to_owned(),
         mailing_name: None,

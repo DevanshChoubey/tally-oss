@@ -436,6 +436,7 @@ fn ledger_without_group_is_an_error_except_the_reserved_profit_and_loss() {
     assert_eq!(
         map_to_events(&m, &[]).unwrap_err(),
         MapError::LedgerWithoutGroup {
+            ineligible_itc: None,
             ledger: "Stray".to_owned()
         }
     );

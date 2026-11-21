@@ -102,6 +102,7 @@ fn pack(with_itc: bool) -> RulePack {
 
 fn company() -> Company {
     Company {
+        ineligible_itc_default: None,
         id: CompanyId(1),
         name: "Test Co".to_owned(),
         mailing_name: None,
@@ -132,6 +133,7 @@ fn ledger(
     gst: Option<GstClassification>,
 ) -> Ledger {
     Ledger {
+        ineligible_itc: None,
         id,
         name: format!("Ledger {}", id.0),
         aliases: vec![],
@@ -207,6 +209,7 @@ fn masters() -> Masters {
     m.stock_items.insert(
         ITEM,
         StockItem {
+            ineligible_itc: None,
             id: ITEM,
             name: "Widget".to_owned(),
             aliases: vec![],
@@ -277,6 +280,7 @@ fn voucher(id: u64, type_id: VoucherTypeId, mode: VoucherMode, on: Date) -> Vouc
 fn line(ledger: LedgerId, paise: i64, credit: bool) -> LedgerLine {
     let amount = Paise::new(paise);
     LedgerLine {
+        ineligible_itc: None,
         ledger,
         amount: if credit {
             SignedAmount::cr(amount)
@@ -806,4 +810,30 @@ fn voucher_order_does_not_change_the_working() {
         reversed.vouchers.insert(*id, v.clone());
     }
     assert_eq!(value(&books, None), value(&reversed, None));
+}
+
+// Explicit settings on the motor car (round-3 fix). Provenance: derived, Tally ineligible-ITC page
+// (https://help.tallysolutions.com/docs/te9rel66/Tax_India/gst/gst_accounting_for_ineligible_itc.htm,
+// read 2026-11-21). The car's tax is 9,000.00 CGST and 9,000.00 SGST = 900,000 paise each.
+
+#[test]
+fn a_motor_car_marked_ineligible_on_its_ledger_goes_to_the_not_claimable_row() {
+    // provenance: derived — the purchase ledger is marked Yes, so the credit is ineligible.
+    let mut books = books_with(vec![car_purchase()]);
+    books.masters.ledgers.get_mut(&CAR).unwrap().ineligible_itc = Some(true);
+    let w = value(&books, None);
+    assert_eq!(w.itc_all_other, Gstr3bTaxAmounts::default());
+    assert!(w.itc_vouchers.is_empty());
+    assert_eq!(w.itc_not_claimable, amounts(0, 900_000, 900_000));
+}
+
+#[test]
+fn a_motor_car_marked_eligible_on_its_ledger_is_claimed() {
+    // provenance: derived — the purchase ledger is marked No (explicit user setting), so the HSN
+    // rule (s.17(5)(a) fixture) does not apply and the credit is claimed in 4(A)(5).
+    let mut books = books_with(vec![car_purchase()]);
+    books.masters.ledgers.get_mut(&CAR).unwrap().ineligible_itc = Some(false);
+    let w = value(&books, None);
+    assert_eq!(w.itc_all_other, amounts(0, 900_000, 900_000));
+    assert_eq!(w.itc_vouchers, vec![VoucherId(12)]);
 }

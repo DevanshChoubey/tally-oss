@@ -71,6 +71,7 @@ fn qty(n: i64) -> Qty {
 fn company() -> Company {
     // Fictional data; same company as the S4 tests.
     Company {
+        ineligible_itc_default: None,
         id: CompanyId(7),
         name: "Example Traders Pvt Ltd".to_owned(),
         mailing_name: None,
@@ -148,6 +149,7 @@ fn godown(id: u64) -> MasterSnapshot {
 
 fn masters_events() -> Vec<Event> {
     let item = StockItem {
+        ineligible_itc: None,
         id: StockItemId(1),
         name: "Widget".to_owned(),
         aliases: Vec::new(),

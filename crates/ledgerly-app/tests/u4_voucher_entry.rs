@@ -48,6 +48,7 @@ const GROUP: GroupId = GroupId(1);
 
 fn ledger(id: LedgerId, name: &str, aliases: &[&str]) -> Ledger {
     Ledger {
+        ineligible_itc: None,
         id,
         name: name.to_owned(),
         aliases: aliases.iter().map(|a| (*a).to_owned()).collect(),
@@ -89,6 +90,7 @@ fn books() -> Books {
     masters.groups.insert(
         GROUP,
         Group {
+            ineligible_itc: None,
             id: GROUP,
             name: "Current Assets".to_owned(),
             aliases: Vec::new(),
@@ -138,6 +140,7 @@ fn books() -> Books {
     }
     Books {
         company: Company {
+            ineligible_itc_default: None,
             id: ledgerly_core::CompanyId(1),
             name: "Test Traders".to_owned(),
             mailing_name: None,
@@ -725,6 +728,7 @@ fn incomplete_zero_unknown_and_pending_lines_are_errors() {
     assert_eq!(
         build(vec![pending]),
         Err(DraftError::PendingLedger {
+            ineligible_itc: None,
             line: 1,
             name: "Petty".to_owned()
         })

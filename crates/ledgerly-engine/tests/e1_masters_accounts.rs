@@ -43,6 +43,7 @@ use time::macros::date;
 
 fn group(id: u64, name: &str, parent: Option<u64>, nature: Option<Nature>) -> Group {
     Group {
+        ineligible_itc: None,
         id: GroupId(id),
         name: name.to_owned(),
         aliases: Vec::new(),
@@ -56,6 +57,7 @@ fn group(id: u64, name: &str, parent: Option<u64>, nature: Option<Nature>) -> Gr
 
 fn reserved_group(id: u64, name: &str, kind: ReservedGroup, nature: Option<Nature>) -> Group {
     Group {
+        ineligible_itc: None,
         reserved: Some(kind),
         ..group(id, name, None, nature)
     }
@@ -63,6 +65,7 @@ fn reserved_group(id: u64, name: &str, kind: ReservedGroup, nature: Option<Natur
 
 fn ledger(id: u64, name: &str, group: u64) -> Ledger {
     Ledger {
+        ineligible_itc: None,
         id: LedgerId(id),
         name: name.to_owned(),
         aliases: Vec::new(),
@@ -81,6 +84,7 @@ fn ledger(id: u64, name: &str, group: u64) -> Ledger {
 
 fn line(ledger: u64, amount: SignedAmount) -> LedgerLine {
     LedgerLine {
+        ineligible_itc: None,
         ledger: LedgerId(ledger),
         amount,
         bills: Vec::new(),
@@ -146,6 +150,7 @@ fn books() -> Books {
     }
     Books {
         company: Company {
+            ineligible_itc_default: None,
             id: CompanyId(1),
             name: "Fictional Traders".to_owned(),
             mailing_name: None,

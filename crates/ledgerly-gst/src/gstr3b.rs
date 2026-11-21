@@ -61,9 +61,8 @@
 //!   advances needs the time-of-supply rules of card G12), and outward lines that G6 classifies as
 //!   exports, SEZ supplies, deemed exports or advances (tables 3.1(b) and others are not worked
 //!   out here).
-//! * Anything G4, G6 or G7 returns `Unsupported` for, including a rule pack with no verified
-//!   blocked-credit entries (see [`crate::itc::BLOCKED_RULE_IDS`]) when a taxable purchase falls
-//!   in the period. The reason names the voucher.
+//! * Anything G4, G6 or G7 returns `Unsupported` for, including a purchase whose "ineligible for
+//!   input credit" settings conflict (see [`crate::itc`]). The reason names the voucher.
 //!
 //! # Errors
 //!
@@ -672,7 +671,13 @@ fn add_purchase(
             Taxability::Exempt | Taxability::NilRated | Taxability::NonGst => continue,
         }
         let index = supported!(itc_line_index(v, k, *position));
-        let eligibility = supported!(itc_eligibility(v, index, masters, &priced.rules)?);
+        let eligibility = supported!(itc_eligibility(
+            v,
+            index,
+            &scope.books.company,
+            masters,
+            &priced.rules,
+        )?);
         if eligibility.is_claimable() {
             eligible.add_line(line_tax)?;
         } else {

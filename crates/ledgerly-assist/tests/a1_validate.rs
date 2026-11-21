@@ -107,6 +107,7 @@ fn ledger(
     gst: Option<GstClassification>,
 ) -> Ledger {
     Ledger {
+        ineligible_itc: None,
         id,
         name: name.to_owned(),
         aliases: vec![],
@@ -178,6 +179,7 @@ fn unplaced_party_details() -> PartyDetails {
 
 fn books() -> Books {
     let company = Company {
+        ineligible_itc_default: None,
         id: CompanyId(1),
         name: "Test Co".to_owned(),
         mailing_name: None,

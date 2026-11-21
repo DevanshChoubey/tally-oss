@@ -28,6 +28,10 @@ pub struct Company {
     pub features: Features,
     /// What happens when a voucher would take stock below zero.
     pub negative_stock: NegativeStockPolicy,
+    /// Company-wide "ineligible for input credit" default, for when no purchase gets credit.
+    /// `None` means not set. Masters and invoice lines take precedence (see `ledgerly_gst::itc`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ineligible_itc_default: Option<bool>,
 }
 
 /// A postal address.

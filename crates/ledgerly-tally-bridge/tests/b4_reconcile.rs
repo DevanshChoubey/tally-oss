@@ -66,6 +66,7 @@ fn amt(debit: i64, credit: i64) -> ReconAmount {
 
 fn group(id: u64, name: &str, parent: Option<u64>, nature: Option<Nature>) -> Group {
     Group {
+        ineligible_itc: None,
         id: GroupId(id),
         name: name.to_string(),
         aliases: vec![],
@@ -79,6 +80,7 @@ fn group(id: u64, name: &str, parent: Option<u64>, nature: Option<Nature>) -> Gr
 
 fn ledger(id: u64, name: &str, group: u64, opening: SignedAmount) -> Ledger {
     Ledger {
+        ineligible_itc: None,
         id: LedgerId(id),
         name: name.to_string(),
         aliases: vec![],
@@ -159,6 +161,7 @@ fn books(capital: SignedAmount, cash: SignedAmount) -> Books {
         .insert(VoucherTypeId(JOURNAL_TYPE), journal_type());
     Books {
         company: Company {
+            ineligible_itc_default: None,
             id: CompanyId(1),
             name: "Test Traders".to_string(),
             mailing_name: None,

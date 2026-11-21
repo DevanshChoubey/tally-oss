@@ -19,6 +19,7 @@ const ITEM: StockItemId = StockItemId(1);
 
 fn item(method: ValuationMethod, opening: Vec<OpeningStock>) -> StockItem {
     StockItem {
+        ineligible_itc: None,
         id: ITEM,
         name: "Widget".to_owned(),
         aliases: vec![],

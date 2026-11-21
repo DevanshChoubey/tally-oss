@@ -94,6 +94,7 @@ fn group(
     reserved: Option<ReservedGroup>,
 ) -> Group {
     Group {
+        ineligible_itc: None,
         id,
         name: name.into(),
         aliases: vec![],
@@ -107,6 +108,7 @@ fn group(
 
 fn ledger(id: LedgerId, name: &str, group: GroupId, bill_wise: bool) -> Ledger {
     Ledger {
+        ineligible_itc: None,
         id,
         name: name.into(),
         aliases: vec![],
@@ -201,6 +203,7 @@ fn masters() -> Masters {
 
 fn company() -> Company {
     Company {
+        ineligible_itc_default: None,
         id: CompanyId(1),
         name: "Fictional Traders".into(),
         mailing_name: None,
@@ -234,6 +237,7 @@ fn alloc(
 
 fn line(ledger: LedgerId, amount: SignedAmount, bills: Vec<BillAllocation>) -> LedgerLine {
     LedgerLine {
+        ineligible_itc: None,
         ledger,
         amount,
         bills,

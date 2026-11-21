@@ -122,6 +122,7 @@ fn voucher_type(base: BaseVoucherKind) -> VoucherType {
 
 fn party_ledger(registration: RegistrationType, gstin: Option<&str>, name: &str) -> Ledger {
     Ledger {
+        ineligible_itc: None,
         id: LedgerId(PARTY),
         name: name.to_owned(),
         aliases: vec![],
@@ -160,6 +161,7 @@ fn registration(gstin: &str, composition: bool) -> GstRegistration {
 
 fn item(hsn: &str) -> StockItem {
     StockItem {
+        ineligible_itc: None,
         id: StockItemId(1),
         name: "Widget".to_owned(),
         aliases: vec![],
@@ -197,6 +199,7 @@ fn books(base: BaseVoucherKind, party: Ledger) -> Books {
         .insert(VoucherTypeId(1), voucher_type(base));
     Books {
         company: Company {
+            ineligible_itc_default: None,
             id: CompanyId(1),
             name: "Test Traders".to_owned(),
             mailing_name: None,
@@ -274,6 +277,7 @@ fn voucher(posted: Paise, items: Vec<InventoryLine>, gst: &StoredGst, pos: u8) -
         reference_date: None,
         narration: String::new(),
         ledger_lines: vec![LedgerLine {
+            ineligible_itc: None,
             ledger: LedgerId(PARTY),
             amount: SignedAmount::dr(posted),
             bills: vec![],
@@ -661,6 +665,7 @@ fn long_text_wraps_without_losing_words() {
 /// Two lines of one tax row each, with the party posting split into a debit and a credit.
 fn party_lines(debit: Paise, credit: Option<Paise>) -> Vec<LedgerLine> {
     let mut lines = vec![LedgerLine {
+        ineligible_itc: None,
         ledger: LedgerId(PARTY),
         amount: SignedAmount::dr(debit),
         bills: vec![],
@@ -669,6 +674,7 @@ fn party_lines(debit: Paise, credit: Option<Paise>) -> Vec<LedgerLine> {
     }];
     if let Some(c) = credit {
         lines.push(LedgerLine {
+            ineligible_itc: None,
             ledger: LedgerId(PARTY),
             amount: SignedAmount::cr(c),
             bills: vec![],

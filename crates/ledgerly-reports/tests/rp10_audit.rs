@@ -56,6 +56,7 @@ fn books() -> Books {
     );
     Books {
         company: Company {
+            ineligible_itc_default: None,
             id: CompanyId(1),
             name: "Test Traders".to_owned(),
             mailing_name: None,
@@ -103,6 +104,7 @@ fn voucher(id: u64, type_id: u64, on: Date, narration: &str) -> Voucher {
 
 fn group(id: u64, name: &str) -> Group {
     Group {
+        ineligible_itc: None,
         id: GroupId(id),
         name: name.to_owned(),
         aliases: vec![],
@@ -260,6 +262,7 @@ fn alter_of_an_amount_shows_rupees_and_side_not_raw_paise() {
     // rupee); both lines are debits. Only the line amount differs, so one field is listed, as
     // an amount with its side.
     let line = |paise: i64| LedgerLine {
+        ineligible_itc: None,
         ledger: LedgerId(1),
         amount: SignedAmount::dr(Paise::new(paise)),
         bills: vec![],

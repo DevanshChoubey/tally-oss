@@ -44,6 +44,7 @@ use time::macros::date;
 fn base() -> Books {
     Books {
         company: Company {
+            ineligible_itc_default: None,
             id: CompanyId(1),
             name: "Fictional Traders".to_owned(),
             mailing_name: None,
@@ -89,6 +90,7 @@ fn compound(id: u64, symbol: &str, first: u64, factor: i64, second: u64) -> Unit
 
 fn group(id: u64, name: &str, parent: Option<u64>) -> StockGroup {
     StockGroup {
+        ineligible_itc: None,
         id: StockGroupId(id),
         name: name.to_owned(),
         parent: parent.map(StockGroupId),
@@ -98,6 +100,7 @@ fn group(id: u64, name: &str, parent: Option<u64>) -> StockGroup {
 
 fn item(id: u64, name: &str, unit_id: u64) -> StockItem {
     StockItem {
+        ineligible_itc: None,
         id: StockItemId(id),
         name: name.to_owned(),
         aliases: Vec::new(),
@@ -237,6 +240,7 @@ fn inv_line(
 
 fn cost_line(category_id: u64, centre_id: u64) -> LedgerLine {
     LedgerLine {
+        ineligible_itc: None,
         ledger: LedgerId(1),
         amount: SignedAmount {
             side: DrCr::Dr,

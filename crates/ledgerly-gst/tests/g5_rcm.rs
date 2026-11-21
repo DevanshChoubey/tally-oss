@@ -110,6 +110,7 @@ fn state(code: u8) -> StateCode {
 
 fn company(composition: bool, gst: bool) -> Company {
     Company {
+        ineligible_itc_default: None,
         id: CompanyId(1),
         name: "Test Co".to_owned(),
         mailing_name: None,
@@ -150,6 +151,7 @@ fn ledger(
     gst: Option<GstClassification>,
 ) -> Ledger {
     Ledger {
+        ineligible_itc: None,
         id,
         name: format!("Ledger {}", id.0),
         aliases: vec![],
@@ -213,6 +215,7 @@ fn masters(base: BaseVoucherKind) -> Masters {
     m.stock_items.insert(
         ITEM,
         StockItem {
+            ineligible_itc: None,
             id: ITEM,
             name: "Freight item".to_owned(),
             aliases: vec![],
@@ -278,6 +281,7 @@ fn masters(base: BaseVoucherKind) -> Masters {
 
 fn line(ledger: LedgerId, paise: i64) -> LedgerLine {
     LedgerLine {
+        ineligible_itc: None,
         ledger,
         amount: SignedAmount::dr(Paise::new(paise)),
         bills: vec![],

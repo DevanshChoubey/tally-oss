@@ -11,6 +11,12 @@
 //! provenance (the shipped pack has no `itc.blocked.*` entries yet, so production is `Unsupported`,
 //! see the last tests).
 
+//! Round-3 fix (owner decision, 2026-11-21): an explicit setting decides: the invoice line, then the
+//! masters, then the company default. Only when nothing is set at any level do the HSN/SAC rules
+//! below apply. A blocked, use-based, missing or mixed category is then Unsupported, and the reason
+//! tells the user to mark the stock item or ledger eligible or ineligible. The explicit-setting
+//! tests are in the last section of this file.
+
 #![allow(
     clippy::unwrap_used,
     clippy::expect_used,
@@ -24,13 +30,16 @@ use std::fs;
 use std::path::PathBuf;
 
 use ledgerly_core::{
-    Date, Decimal, GroupId, Hsn, LedgerId, Outcome, Paise, Qty, Rate, SignedAmount, StockItemId,
-    UnitId, VoucherId, VoucherTypeId,
+    CompanyId, Date, Decimal, GroupId, Hsn, LedgerId, Outcome, Paise, Qty, Rate, SignedAmount,
+    StateCode, StockGroupId, StockItemId, UnitId, VoucherId, VoucherTypeId,
 };
 use ledgerly_gst::GstError;
 use ledgerly_gst::itc::{BLOCKED_RULE_IDS, ItcEligibility, itc_eligibility};
 use ledgerly_gst::pack::{RuleSet, load_pack};
-use ledgerly_model::{Address, TaxDetails, TaxLedgerKind};
+use ledgerly_model::{
+    Address, Company, EntityKind, Features, Group, NegativeStockPolicy, StockGroup, TaxDetails,
+    TaxLedgerKind,
+};
 use ledgerly_model::{
     BaseVoucherKind, GstClassification, InventoryLine, Ledger, LedgerLine, Masters,
     NumberingConfig, NumberingMethod, PartyDetails, RegistrationType, RestartPeriod, StockItem,
@@ -108,6 +117,7 @@ fn ledger(
         tax,
         gst,
         reserved: None,
+        ineligible_itc: None,
         tally: None,
     }
 }
@@ -169,6 +179,7 @@ fn masters_with(base: BaseVoucherKind, item_hsn: Option<&str>) -> Masters {
             batches_enabled: false,
             opening: vec![],
             standard_costs: vec![],
+            ineligible_itc: None,
             tally: None,
         },
     );
@@ -203,6 +214,17 @@ fn masters_with(base: BaseVoucherKind, item_hsn: Option<&str>) -> Masters {
             None,
         ),
     );
+    m.groups.insert(GroupId(1), Group {
+        id: GroupId(1),
+        name: "Group 1".to_owned(),
+        aliases: vec![],
+        parent: None,
+        reserved: None,
+        nature: None,
+        affects_gross_profit: false,
+        ineligible_itc: None,
+        tally: None,
+    });
     m
 }
 
@@ -217,6 +239,7 @@ fn line(ledger: LedgerId, paise: i64) -> LedgerLine {
         bills: vec![],
         cost: vec![],
         bank: None,
+        ineligible_itc: None,
     }
 }
 
@@ -250,14 +273,14 @@ fn purchase(party: LedgerId, expense: LedgerId) -> Voucher {
 }
 
 fn eligibility(v: &Voucher, line: usize, m: &Masters, r: &RuleSet) -> ItcEligibility {
-    match itc_eligibility(v, line, m, r).unwrap() {
+    match itc_eligibility(v, line, &company(None), m, r).unwrap() {
         Outcome::Value(e) => e,
         Outcome::Unsupported(u) => panic!("unexpected Unsupported: {u:?}"),
     }
 }
 
 fn assert_unsupported(v: &Voucher, line: usize, m: &Masters, r: &RuleSet) {
-    match itc_eligibility(v, line, m, r).unwrap() {
+    match itc_eligibility(v, line, &company(None), m, r).unwrap() {
         Outcome::Unsupported(_) => {}
         Outcome::Value(e) => panic!("expected Unsupported, got {e:?}"),
     }
@@ -562,17 +585,17 @@ fn missing_things_are_errors_not_guesses() {
     let v = purchase(PARTY, OFFICE);
     let r = rules(purchase_date());
     assert!(matches!(
-        itc_eligibility(&v, 3, &masters(), &r),
+        itc_eligibility(&v, 3, &company(None), &masters(), &r),
         Err(GstError::Invalid { .. })
     ));
     let mut no_ledger = masters();
     no_ledger.ledgers.remove(&OFFICE);
     assert!(matches!(
-        itc_eligibility(&v, 0, &no_ledger, &r),
+        itc_eligibility(&v, 0, &company(None), &no_ledger, &r),
         Err(GstError::NotFound { .. })
     ));
     assert!(matches!(
-        itc_eligibility(&v, 0, &Masters::default(), &r),
+        itc_eligibility(&v, 0, &company(None), &Masters::default(), &r),
         Err(GstError::NotFound { .. })
     ));
 }
@@ -590,7 +613,289 @@ fn a_malformed_pack_entry_is_a_pack_error() {
         legal_ref = \"CGST Act s.17(5)(b)\"\n[entry.params]\nhsn_prefixes = \"9963\"\n";
     let r = rules_from(bad, purchase_date());
     assert!(matches!(
-        itc_eligibility(&purchase(PARTY, OFFICE), 0, &masters(), &r),
+        itc_eligibility(&purchase(PARTY, OFFICE), 0, &company(None), &masters(), &r),
         Err(GstError::Pack { .. })
+    ));
+}
+
+// ---------------------------------------------------------------------------------------------
+// Explicit settings (round-3 fix). Tally: the user marks ineligibility on a stock item or group,
+// or a ledger or group, or the company; the invoice line may override the master. Provenance for
+// every test below: the Tally ineligible-ITC page (https://help.tallysolutions.com/docs/te9rel66/
+// Tax_India/gst/gst_accounting_for_ineligible_itc.htm, read 2026-11-21), derived by hand.
+// ---------------------------------------------------------------------------------------------
+
+const OTHER_ITEM: StockItemId = StockItemId(2);
+const STOCK_PARENT: StockGroupId = StockGroupId(1);
+const STOCK_CHILD: StockGroupId = StockGroupId(2);
+
+fn company(default: Option<bool>) -> Company {
+    Company {
+        id: CompanyId(1),
+        name: "Test Co".to_owned(),
+        mailing_name: None,
+        address: Address::default(),
+        state: StateCode::new(29).unwrap(),
+        pan: None,
+        registrations: vec![],
+        fy_start: date!(2025 - 04 - 01),
+        books_begin: date!(2025 - 04 - 01),
+        entity_kind: EntityKind::Company,
+        features: Features {
+            gst: true,
+            inventory: true,
+            ..Features::default()
+        },
+        negative_stock: NegativeStockPolicy::Warn,
+        ineligible_itc_default: default,
+    }
+}
+
+fn stock_group(
+    id: StockGroupId,
+    parent: Option<StockGroupId>,
+    ineligible_itc: Option<bool>,
+) -> StockGroup {
+    StockGroup {
+        id,
+        name: format!("Stock group {}", id.0),
+        parent,
+        ineligible_itc,
+        tally: None,
+    }
+}
+
+fn inv_line(item: StockItemId, ledger: LedgerId) -> InventoryLine {
+    InventoryLine {
+        item,
+        qty: Qty(Decimal::ONE),
+        unit: UnitId(1),
+        rate: Rate(Decimal::new(10_000, 0)),
+        discount_percent: None,
+        amount: Paise::new(1_000_000),
+        ledger: Some(ledger),
+        godowns: vec![],
+    }
+}
+
+fn plain_item(id: StockItemId, hsn: &str, group: Option<StockGroupId>) -> StockItem {
+    StockItem {
+        id,
+        name: format!("Item {}", id.0),
+        aliases: vec![],
+        group,
+        unit: UnitId(1),
+        alt_unit: None,
+        hsn: Some(Hsn::parse(hsn).unwrap()),
+        gst_history: vec![],
+        valuation: ValuationMethod::AverageCost,
+        batches_enabled: false,
+        opening: vec![],
+        standard_costs: vec![],
+        ineligible_itc: None,
+        tally: None,
+    }
+}
+
+fn explicit(v: &Voucher, line: usize, c: &Company, m: &Masters) -> ItcEligibility {
+    match itc_eligibility(v, line, c, m, &rules(purchase_date())).unwrap() {
+        Outcome::Value(e) => e,
+        Outcome::Unsupported(u) => panic!("unexpected Unsupported: {u:?}"),
+    }
+}
+
+fn explicit_unsupported(v: &Voucher, line: usize, c: &Company, m: &Masters) {
+    match itc_eligibility(v, line, c, m, &rules(purchase_date())).unwrap() {
+        Outcome::Unsupported(_) => {}
+        Outcome::Value(e) => panic!("expected Unsupported, got {e:?}"),
+    }
+}
+
+fn is_ineligible(e: &ItcEligibility) -> bool {
+    match e {
+        ItcEligibility::Ineligible { .. } => true,
+        ItcEligibility::Eligible | ItcEligibility::Blocked { .. } => false,
+    }
+}
+
+#[test]
+fn a_flagged_item_is_ineligible_even_with_an_eligible_hsn() {
+    // provenance: derived — the item is marked Yes; the purchase carries the master value, so the
+    // tax charged is not claimable. HSN 482010 would have been eligible under the HSN rules.
+    let mut m = masters_with(BaseVoucherKind::Purchase, Some("482010"));
+    m.stock_items.get_mut(&ITEM).unwrap().ineligible_itc = Some(true);
+    let v = Voucher {
+        inventory_lines: vec![inv_line(ITEM, BY_ITEM)],
+        ..purchase(PARTY, BY_ITEM)
+    };
+    let e = explicit(&v, 0, &company(None), &m);
+    assert!(is_ineligible(&e));
+    assert!(!e.is_claimable());
+}
+
+#[test]
+fn an_explicit_no_on_a_motor_car_is_eligible() {
+    // provenance: derived — the user marked the item No (explicit user setting). The HSN 870321 is
+    // a s.17(5)(a) heading, which without a setting would be Unsupported; with an explicit No the
+    // setting decides and the credit is Eligible.
+    let mut m = masters_with(BaseVoucherKind::Purchase, Some("870321"));
+    m.stock_items.get_mut(&ITEM).unwrap().ineligible_itc = Some(false);
+    let v = Voucher {
+        inventory_lines: vec![inv_line(ITEM, BY_ITEM)],
+        ..purchase(PARTY, BY_ITEM)
+    };
+    assert_eq!(explicit(&v, 0, &company(None), &m), ItcEligibility::Eligible);
+}
+
+#[test]
+fn a_flagged_motor_car_ledger_is_not_claimable() {
+    // provenance: derived — the purchase ledger is marked Yes; the car is ineligible.
+    let mut m = masters();
+    m.ledgers.get_mut(&CAR).unwrap().ineligible_itc = Some(true);
+    let e = explicit(&purchase(PARTY, CAR), 0, &company(None), &m);
+    assert!(is_ineligible(&e));
+    assert!(!e.is_claimable());
+}
+
+#[test]
+fn the_invoice_line_overrides_the_masters() {
+    // provenance: derived — the Tally page: the invoice shows the master value and the user may
+    // change it for that invoice. Item marked Yes, invoice says No: Eligible. Clean office ledger,
+    // invoice says Yes: Ineligible.
+    let mut m = masters_with(BaseVoucherKind::Purchase, Some("482010"));
+    m.stock_items.get_mut(&ITEM).unwrap().ineligible_itc = Some(true);
+    let mut v = Voucher {
+        inventory_lines: vec![inv_line(ITEM, BY_ITEM)],
+        ..purchase(PARTY, BY_ITEM)
+    };
+    v.ledger_lines[0].ineligible_itc = Some(false);
+    assert_eq!(explicit(&v, 0, &company(None), &m), ItcEligibility::Eligible);
+    let mut office = purchase(PARTY, OFFICE);
+    office.ledger_lines[0].ineligible_itc = Some(true);
+    assert!(is_ineligible(&explicit(&office, 0, &company(None), &masters())));
+}
+
+#[test]
+fn the_company_default_decides_when_nothing_else_is_set() {
+    // provenance: derived — the Tally page: the setting may be enabled at company level when no
+    // purchase gets credit. Default Yes on an unmarked office purchase: Ineligible. Default No on
+    // an unmarked motor car: Eligible (explicit company setting, so the HSN rules do not apply).
+    assert!(is_ineligible(&explicit(
+        &purchase(PARTY, OFFICE),
+        0,
+        &company(Some(true)),
+        &masters()
+    )));
+    assert_eq!(
+        explicit(&purchase(PARTY, CAR), 0, &company(Some(false)), &masters()),
+        ItcEligibility::Eligible
+    );
+}
+
+#[test]
+fn a_stock_item_takes_the_nearest_flagged_stock_group() {
+    // provenance: derived — the setting may be made on a stock group; the item has none and its
+    // child group none, so the parent group's Yes applies: Ineligible.
+    let mut m = masters_with(BaseVoucherKind::Purchase, Some("482010"));
+    m.stock_groups
+        .insert(STOCK_PARENT, stock_group(STOCK_PARENT, None, Some(true)));
+    m.stock_groups
+        .insert(STOCK_CHILD, stock_group(STOCK_CHILD, Some(STOCK_PARENT), None));
+    m.stock_items.get_mut(&ITEM).unwrap().group = Some(STOCK_CHILD);
+    let v = Voucher {
+        inventory_lines: vec![inv_line(ITEM, BY_ITEM)],
+        ..purchase(PARTY, BY_ITEM)
+    };
+    assert!(is_ineligible(&explicit(&v, 0, &company(None), &m)));
+}
+
+#[test]
+fn a_master_that_disagrees_with_the_company_default_is_unsupported() {
+    // provenance: pending — the Tally page does not say how a master setting combines with the
+    // company setting. Item No, company Yes: Unsupported, not a guess.
+    let mut m = masters_with(BaseVoucherKind::Purchase, Some("482010"));
+    m.stock_items.get_mut(&ITEM).unwrap().ineligible_itc = Some(false);
+    let v = Voucher {
+        inventory_lines: vec![inv_line(ITEM, BY_ITEM)],
+        ..purchase(PARTY, BY_ITEM)
+    };
+    explicit_unsupported(&v, 0, &company(Some(true)), &m);
+}
+
+#[test]
+fn a_stock_item_and_its_purchase_ledger_that_disagree_are_unsupported() {
+    // provenance: pending — the Tally page does not say which of an item's setting and the
+    // purchase ledger's setting wins. Item Yes, ledger No: Unsupported.
+    let mut m = masters_with(BaseVoucherKind::Purchase, Some("482010"));
+    m.stock_items.get_mut(&ITEM).unwrap().ineligible_itc = Some(true);
+    m.ledgers.get_mut(&BY_ITEM).unwrap().ineligible_itc = Some(false);
+    let v = Voucher {
+        inventory_lines: vec![inv_line(ITEM, BY_ITEM)],
+        ..purchase(PARTY, BY_ITEM)
+    };
+    explicit_unsupported(&v, 0, &company(None), &m);
+}
+
+#[test]
+fn items_on_one_line_with_different_settings_are_unsupported() {
+    // provenance: derived — one ledger line cannot be partly ineligible without a split; Yes and
+    // No on two items under one line: Unsupported (split the line).
+    let mut m = masters_with(BaseVoucherKind::Purchase, Some("482010"));
+    m.stock_items.get_mut(&ITEM).unwrap().ineligible_itc = Some(true);
+    m.stock_items
+        .insert(OTHER_ITEM, plain_item(OTHER_ITEM, "482010", None));
+    m.stock_items.get_mut(&OTHER_ITEM).unwrap().ineligible_itc = Some(false);
+    let v = Voucher {
+        inventory_lines: vec![inv_line(ITEM, BY_ITEM), inv_line(OTHER_ITEM, BY_ITEM)],
+        ..purchase(PARTY, BY_ITEM)
+    };
+    explicit_unsupported(&v, 0, &company(None), &m);
+}
+
+#[test]
+fn a_ledger_group_loop_is_unsupported_and_a_missing_parent_group_is_not_found() {
+    // provenance: derived — rule A1: a loop in the group parents is unsupported data (no endless
+    // walk); a parent group missing from the masters is bad data (NotFound).
+    let mut looped = masters();
+    looped.groups.insert(
+        GroupId(1),
+        Group {
+            id: GroupId(1),
+            name: "Group 1".to_owned(),
+            aliases: vec![],
+            parent: Some(GroupId(1)),
+            reserved: None,
+            nature: None,
+            affects_gross_profit: false,
+            ineligible_itc: None,
+            tally: None,
+        },
+    );
+    explicit_unsupported(&purchase(PARTY, OFFICE), 0, &company(None), &looped);
+
+    let mut missing = masters();
+    missing.groups.insert(
+        GroupId(1),
+        Group {
+            id: GroupId(1),
+            name: "Group 1".to_owned(),
+            aliases: vec![],
+            parent: Some(GroupId(9)),
+            reserved: None,
+            nature: None,
+            affects_gross_profit: false,
+            ineligible_itc: None,
+            tally: None,
+        },
+    );
+    assert!(matches!(
+        itc_eligibility(
+            &purchase(PARTY, OFFICE),
+            0,
+            &company(None),
+            &missing,
+            &rules(purchase_date())
+        ),
+        Err(GstError::NotFound { .. })
     ));
 }

@@ -71,6 +71,7 @@ fn masters() -> Masters {
 
 fn item(alt: Option<AltUnit>) -> StockItem {
     StockItem {
+        ineligible_itc: None,
         id: StockItemId(1),
         name: "Widget".to_owned(),
         aliases: vec![],

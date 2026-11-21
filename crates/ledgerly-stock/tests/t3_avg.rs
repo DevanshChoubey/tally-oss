@@ -25,6 +25,7 @@ fn d(n: i64) -> Decimal {
 
 fn item(opening: &[(i64, i64)]) -> StockItem {
     StockItem {
+        ineligible_itc: None,
         id: ITEM,
         name: "Widget".to_owned(),
         aliases: vec![],
