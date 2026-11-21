@@ -17,12 +17,18 @@
 //! because the IRP's rounding tolerance is unconfirmed (research 04, section 2.13). A strict check
 //! can reject a document the IRP would accept; it never accepts a document with a wrong total.
 //!
+//! Item arithmetic is checked against the rounding-independent window: an amount that is an exact
+//! decimal product (`Qty x UnitPrice` for `TotAmt`, `AssAmt x rate` for each tax head, with CGST
+//! and SGST at half the GST rate on an intra-state supply) must equal that product rounded to
+//! whole paise by any rule, that is its floor or its ceiling. These two rules are recalled from
+//! the schema, not yet quoted from it (rule A5), so their tests are pending.
+//!
 //! Not modelled (a document needing them cannot be expressed, rather than being written wrongly):
 //! export supply types (`EXPWP`, `EXPWOP`) and their `ExpDtls`/foreign-currency total, `DispDtls`,
 //! `ShipDtls`, `PayDtls`, `RefDtls`, `AddlDocDtls`, `EwbDtls`, item batch and attribute details,
 //! item-level other charges, non-ad-valorem cess, and `PreTaxVal`. Not checked (pending, no
-//! derivable rule): `tax = rate x assessable` per item, the allowed GST rate list, the round-off
-//! limit, and the earliest document date.
+//! derivable rule): the cess heads per item, the allowed GST rate list, the round-off limit, and
+//! the earliest document date. `TotAmt` is not checked when `Qty` is absent.
 
 use ledgerly_core::{Gstin, Hsn, MoneyError, Paise, StateCode};
 use rust_decimal::Decimal;
@@ -347,6 +353,82 @@ fn validate_item(idx: usize, it: &EInvItem, errs: &mut Vec<FormatError>) {
         errs.push(field_err(&name("GstRt"), "must not exceed 100"));
     }
     validate_item_amounts(idx, it, errs);
+    validate_gross_amount(idx, it, errs);
+}
+
+/// Whether `found` (whole paise) is `exact` (paise, exact in decimal) rounded to whole paise by
+/// any rounding rule: its floor or its ceiling.
+fn within_paise_rounding(found: Paise, exact: Decimal) -> bool {
+    let found = Decimal::from(found.get());
+    found == exact.floor() || found == exact.ceil()
+}
+
+/// `TotAmt` is `Qty x UnitPrice` (rupees, stated in paise). The product is exact, so only a
+/// whole-paise rounding of it is acceptable.
+fn validate_gross_amount(idx: usize, it: &EInvItem, errs: &mut Vec<FormatError>) {
+    let Some(qty) = it.quantity else {
+        return;
+    };
+    let name = format!("ItemList[{idx}].TotAmt");
+    let exact = qty
+        .checked_mul(it.unit_price)
+        .and_then(|v| v.checked_mul(Decimal::ONE_HUNDRED));
+    match exact {
+        Some(exact) if within_paise_rounding(it.gross_amount, exact) => {}
+        Some(exact) => errs.push(field_err(
+            &name,
+            format!(
+                "must be Qty x UnitPrice = {} rupees rounded to paise, found {}",
+                (exact / Decimal::ONE_HUNDRED).round_dp(4),
+                rupees(it.gross_amount)
+            ),
+        )),
+        None => errs.push(field_err(
+            &name,
+            "cannot be checked: Qty x UnitPrice does not fit the arithmetic",
+        )),
+    }
+}
+
+/// Each item's CGST and SGST (intra-state, at half the GST rate) or IGST (otherwise) must be the
+/// whole-paise rounding of `AssAmt x rate`. The heads that must be zero are left to
+/// [`validate_tax_kind`]; cess is not checked here.
+fn validate_item_tax(e: &EInvoice, idx: usize, it: &EInvItem, errs: &mut Vec<FormatError>) {
+    let intra = e.place_of_supply == e.seller.state && !e.igst_on_intra;
+    let divisor = if intra {
+        Decimal::from(200)
+    } else {
+        Decimal::ONE_HUNDRED
+    };
+    let heads: [(&str, Paise, bool); 3] = [
+        ("CgstAmt", it.cgst, intra),
+        ("SgstAmt", it.sgst, intra),
+        ("IgstAmt", it.igst, !intra),
+    ];
+    for (head, found, expected) in heads {
+        if !expected {
+            continue;
+        }
+        let name = format!("ItemList[{idx}].{head}");
+        let exact = Decimal::from(it.assessable.get())
+            .checked_mul(it.gst_rate)
+            .and_then(|v| v.checked_div(divisor));
+        match exact {
+            Some(exact) if within_paise_rounding(found, exact) => {}
+            Some(exact) => errs.push(field_err(
+                &name,
+                format!(
+                    "must be AssAmt x rate = {} rupees rounded to paise, found {}",
+                    (exact / Decimal::ONE_HUNDRED).round_dp(4),
+                    rupees(found)
+                ),
+            )),
+            None => errs.push(field_err(
+                &name,
+                "cannot be checked: AssAmt x rate does not fit the arithmetic",
+            )),
+        }
+    }
 }
 
 fn validate_item_amounts(idx: usize, it: &EInvItem, errs: &mut Vec<FormatError>) {
@@ -545,6 +627,7 @@ pub fn validate_einvoice(e: &EInvoice) -> Result<(), Vec<FormatError>> {
     }
     for (idx, it) in e.items.iter().enumerate() {
         validate_item(idx, it, &mut errs);
+        validate_item_tax(e, idx, it, &mut errs);
     }
     validate_tax_kind(e, &mut errs);
     validate_totals(e, &mut errs);
