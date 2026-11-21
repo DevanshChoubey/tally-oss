@@ -276,7 +276,9 @@ const SHORTCUTS: [Shortcut; 10] = [
     }),
     (Key::M, Modifiers::NONE, true, || HomeTarget::Masters),
     (Key::K, Modifiers::COMMAND, false, || HomeTarget::Palette),
-    (Key::J, Modifiers::COMMAND, false, || HomeTarget::DescribeTransaction),
+    (Key::J, Modifiers::COMMAND, false, || {
+        HomeTarget::DescribeTransaction
+    }),
 ];
 
 /// The target a key opens from the home screen, or `None` for a key it does not handle.

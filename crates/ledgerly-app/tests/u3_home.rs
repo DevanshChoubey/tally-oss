@@ -291,8 +291,9 @@ fn attention_kinds_carry_distinct_words() {
 
 #[test]
 fn ctrl_j_is_listed_for_describe_a_transaction() {
-    // provenance: derived from the home screen's own "Describe a transaction" row, which shows the
-    // key "Ctrl J" (home.rs ENTER_ROWS). The row's hint must name a key the screen really handles.
+    // provenance: the mock shows the assistant panel on Ctrl+J (design/mock/index.html, the
+    // Home help list "assistant", "Ctrl J"). The home row "Describe a transaction" advertises the
+    // same key, so the screen must handle it.
     assert_eq!(
         shortcut_target(Key::J, Modifiers::COMMAND),
         Some(HomeTarget::DescribeTransaction)
@@ -310,8 +311,8 @@ fn ctrl_j_in_a_frame_requests_describe_a_transaction() {
 #[test]
 fn alt_d_in_a_frame_does_not_open_the_day_book() {
     // provenance: derived. The home key for the day book is the plain D (mock help table). With
-    // Alt also held the press is Alt+D, which is delete in the classic keymap (spec 7), so the home
-    // screen must not treat it as D.
+    // Alt also held the press is Alt+D, which is delete-voucher in the classic keymap
+    // (assets/keymap-classic.toml, line 44); the home screen must not treat it as D.
     let ctx = egui::Context::default();
     let mut screen = HomeScreen::new(sample());
     frame(&ctx, &mut screen, key(Key::D, Modifiers::ALT));

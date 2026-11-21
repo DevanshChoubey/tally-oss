@@ -1312,8 +1312,8 @@ fn shift_y_does_not_confirm_a_master_delete() {
     });
     frame(&ctx, &mut s, &mut app, key(Key::D, Modifiers::ALT));
     assert_eq!(s.pending_delete().map(|t| t.id), Some(RENT.0));
-    // provenance: derived. The delete question is answered by a plain Y (spec 7). Shift+Y is not
-    // that key, so the question stays open and nothing is queued.
+    // Requirement, not a figure: the question asks for a plain Y ("Press Y to delete", masters.rs
+    // draw_confirm). Shift+Y is not that key, so the question stays open and nothing is queued.
     frame(&ctx, &mut s, &mut app, key(Key::Y, Modifiers::SHIFT));
     assert_eq!(s.pending_delete().map(|t| t.id), Some(RENT.0));
     assert!(s.take_requests().is_empty());
