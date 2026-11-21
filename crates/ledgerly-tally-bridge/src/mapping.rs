@@ -801,7 +801,7 @@ fn stuck_group_error(stuck: &[&MasterRecord]) -> MapError {
         };
     }
     MapError::GroupCycle {
-        name: stuck.first().map(|r| r.name.clone()).unwrap_or_default(),
+        name: stuck.first().map_or_default(|r| r.name.clone()),
     }
 }
 
@@ -962,8 +962,8 @@ fn insert_unique(map: &mut BTreeMap<String, String>, key: &str, value: String) {
     let mut n: u64 = 2;
     loop {
         let candidate = format!("{key}#{n}");
-        if !map.contains_key(&candidate) {
-            map.insert(candidate, value);
+        if let std::collections::btree_map::Entry::Vacant(e) = map.entry(candidate) {
+            e.insert(value);
             return;
         }
         n = n.saturating_add(1);

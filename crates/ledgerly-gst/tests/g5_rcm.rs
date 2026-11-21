@@ -421,9 +421,10 @@ fn union_territory_without_legislature_is_cgst_plus_utgst() {
 #[test]
 fn head_is_rounded_once_over_the_voucher_not_per_line() {
     // provenance: derived — product rounding policy (card G4): sum the unrounded tax, round the
-    // head once, half away from zero. Two lines of ₹33.33 at 9% CGST: each 33.33 x 9% = 2.9997;
-    // sum 5.9994 rounds to 5.99 = 599 paise. (Rounding each line first would give 3.00 + 3.00.)
-    // SGST is the same. Taxable total 66.66 = 6,666 paise.
+    // head once, half away from zero, to the paisa.
+    // Case 1: two lines of ₹33.33 at 9% CGST: each 33.33 x 9% = 2.9997; sum 5.9994, which to the
+    // paisa is 6.00 = 600 paise (the third decimal is 9). SGST is the same. Taxable 6,666 paise.
+    // (An earlier version of this comment said 5.99; 5.9994 is nearer 6.00 than 5.99.)
     let v = purchase(
         UNREG_KA,
         Some(KARNATAKA),
@@ -431,9 +432,26 @@ fn head_is_rounded_once_over_the_voucher_not_per_line() {
     );
     let p = payable(&v, &purchase_masters());
     assert_eq!(p.taxable_total, Paise::new(6_666));
-    assert_eq!(p.totals.cgst, Paise::new(599));
-    assert_eq!(p.totals.sgst, Paise::new(599));
+    assert_eq!(p.totals.cgst, Paise::new(600));
+    assert_eq!(p.totals.sgst, Paise::new(600));
     assert_eq!(p.lines.len(), 2);
+    // Case 2 separates the policies: three lines of ₹0.05 at 9% CGST: each 0.05 x 9% = 0.0045,
+    // which rounded per line would be 0.00 (three lines: 0 paise). Summed first: 0.0135, which
+    // rounds to 0.01 = 1 paisa. SGST is the same. Taxable 15 paise.
+    let v = purchase(
+        UNREG_KA,
+        Some(KARNATAKA),
+        vec![
+            line(GTA_LEDGER, 5),
+            line(GTA_LEDGER, 5),
+            line(GTA_LEDGER, 5),
+        ],
+    );
+    let p = payable(&v, &purchase_masters());
+    assert_eq!(p.taxable_total, Paise::new(15));
+    assert_eq!(p.totals.cgst, Paise::new(1));
+    assert_eq!(p.totals.sgst, Paise::new(1));
+    assert_eq!(p.lines.len(), 3);
 }
 
 #[test]

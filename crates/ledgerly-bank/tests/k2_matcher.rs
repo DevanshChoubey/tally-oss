@@ -51,7 +51,7 @@ fn line(row: u32, day: u8, debit: i64, credit: i64, description: &str) -> RawLin
     }
 }
 
-/// Opening 1_000_000 paise; closing is opening + credits - debits (scaffolding so the K1 balance
+/// Opening `1_000_000` paise; closing is opening + credits - debits (scaffolding so the K1 balance
 /// check accepts the file; it is not an expected value of any test).
 fn statement(lines: Vec<RawLine>) -> BankStatement {
     let net: i64 = lines.iter().map(|l| l.credit.get() - l.debit.get()).sum();
@@ -212,7 +212,7 @@ fn deposit_that_the_receipts_do_not_add_up_to_is_not_matched() {
         ],
         &[],
     );
-    assert!(out.is_empty());
+    assert_eq!(out, [] as [ledgerly_bank::matcher::Candidate; 0]);
 }
 
 #[test]
@@ -279,12 +279,18 @@ fn deposits_match_receipts_and_withdrawals_match_payments_only() {
         run(vec![deposit.clone()], vec![receipt(1, 10, 100_000)], &[]).len(),
         1
     );
-    assert!(run(vec![deposit], vec![payment(1, 10, 100_000)], &[]).is_empty());
+    assert_eq!(
+        run(vec![deposit], vec![payment(1, 10, 100_000)], &[]),
+        [] as [ledgerly_bank::matcher::Candidate; 0]
+    );
     assert_eq!(
         run(vec![withdrawal.clone()], vec![payment(1, 10, 100_000)], &[]).len(),
         1
     );
-    assert!(run(vec![withdrawal], vec![receipt(1, 10, 100_000)], &[]).is_empty());
+    assert_eq!(
+        run(vec![withdrawal], vec![receipt(1, 10, 100_000)], &[]),
+        [] as [ledgerly_bank::matcher::Candidate; 0]
+    );
 }
 
 #[test]
@@ -302,7 +308,7 @@ fn rule_neft_rent_suggests_the_rent_ledger() {
     assert_eq!(out[0].kind, MatchKind::Rule);
     assert_eq!(out[0].suggested_ledger, Some(RENT));
     assert_eq!(out[0].statement_lines, vec![3]);
-    assert!(out[0].vouchers.is_empty());
+    assert_eq!(out[0].vouchers, [] as [ledgerly_core::VoucherId; 0]);
     assert_eq!(out[0].proposed_bank_date, d(12));
 
     let none = run(
@@ -310,7 +316,7 @@ fn rule_neft_rent_suggests_the_rent_ledger() {
         Vec::new(),
         &rules,
     );
-    assert!(none.is_empty());
+    assert_eq!(none, [] as [ledgerly_bank::matcher::Candidate; 0]);
 }
 
 #[test]
@@ -329,13 +335,13 @@ fn first_matching_rule_wins_and_direction_restricts_a_rule() {
         ledger: OTHER,
         direction: Some(LineDirection::Deposit),
     }];
-    assert!(
+    assert_eq!(
         run(
             vec![line(1, 12, 100, 0, "NEFT-X")],
             Vec::new(),
             &deposit_only
-        )
-        .is_empty()
+        ),
+        [] as [ledgerly_bank::matcher::Candidate; 0]
     );
     assert_eq!(
         run(
@@ -407,7 +413,7 @@ fn cancelled_optional_and_already_cleared_vouchers_are_not_offered() {
         vec![cancelled, optional, cleared],
         &[],
     );
-    assert!(out.is_empty());
+    assert_eq!(out, [] as [ledgerly_bank::matcher::Candidate; 0]);
 }
 
 #[test]
@@ -418,7 +424,7 @@ fn vouchers_not_on_the_statements_bank_ledger_are_ignored() {
         first.ledger = LedgerId(11);
     }
     let out = run(vec![line(1, 10, 0, 100_000, "IN")], vec![other], &[]);
-    assert!(out.is_empty());
+    assert_eq!(out, [] as [ledgerly_bank::matcher::Candidate; 0]);
 }
 
 #[test]

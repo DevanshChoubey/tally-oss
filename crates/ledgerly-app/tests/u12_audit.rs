@@ -201,7 +201,7 @@ fn picking_a_kind_drops_the_old_table_and_asks_for_the_new_report() {
         screen.take_request().map(|r| r.kind),
         Some(AuditViewKind::BackDated)
     );
-    assert!(screen.visible().is_empty());
+    assert_eq!(screen.visible(), [] as [usize; 0]);
 }
 
 #[test]
@@ -248,7 +248,7 @@ fn unsupported_is_kept_with_its_reason_and_shows_no_rows() {
             reason: "narrow by voucher type only".to_owned(),
         }
     );
-    assert!(screen.visible().is_empty());
+    assert_eq!(screen.visible(), [] as [usize; 0]);
 }
 
 #[test]

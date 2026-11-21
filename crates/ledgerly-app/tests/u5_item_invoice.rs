@@ -17,6 +17,8 @@
     clippy::unwrap_used,
     clippy::panic,
     clippy::indexing_slicing,
+    clippy::assigning_clones,
+    clippy::many_single_char_names,
     reason = "test code: rule B2 lets tests unwrap and panic"
 )]
 
@@ -548,7 +550,10 @@ fn item_search_ranks_prefix_before_word_before_substring_and_finds_aliases() {
     // An empty query lists items by name. Nothing was typed, so no alias can have matched: derived
     // from the doc contract "an empty query lists every item", not from engine output.
     assert!(search_items(m, "").iter().all(|h| h.via_alias.is_none()));
-    assert!(search_items(m, "zzz").is_empty());
+    assert_eq!(
+        search_items(m, "zzz"),
+        [] as [ledgerly_app::screens::item_invoice::ItemHit; 0]
+    );
 }
 
 // ---- building the voucher --------------------------------------------------------------------
@@ -580,7 +585,7 @@ fn the_filled_invoice_becomes_an_item_invoice_voucher_without_accounting_or_gst(
     assert_eq!(l.ledger, Some(SALES));
     assert_eq!(l.discount_percent, None);
     // The tax engine owns these.
-    assert!(v.ledger_lines.is_empty());
+    assert_eq!(v.ledger_lines, [] as [ledgerly_model::LedgerLine; 0]);
     assert!(v.gst.is_none());
 }
 

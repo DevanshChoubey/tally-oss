@@ -135,6 +135,10 @@ pub fn suggest_matches(stmt: &BankStatement, books: &Books, rules: &[MatchRule])
 }
 
 /// Whether `text` matches `pattern`: whole string, ignoring case, `*` matches any run.
+#[expect(
+    clippy::similar_names,
+    reason = "p_pos and t_pos are the pattern and text cursors of one matcher; the pairing is the point"
+)]
 pub fn pattern_matches(pattern: &str, text: &str) -> bool {
     let pat: Vec<char> = pattern.to_lowercase().chars().collect();
     let txt: Vec<char> = text.to_lowercase().chars().collect();

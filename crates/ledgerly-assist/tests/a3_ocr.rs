@@ -4,10 +4,10 @@
 //! Provenance. The OCR output is a recorded-shape fixture of a fictional bill; the bill's own
 //! figures are hand arithmetic written next to them, not engine output:
 //!
-//! - Taxable value Rs 15,000.00 = 1_500_000 paise.
-//! - CGST at 9% of 15,000.00 = 1,350.00 (15,000 x 9 / 100) = 135_000 paise; SGST the same.
-//! - Total = 15,000.00 + 1,350.00 + 1,350.00 = 17,700.00 = 1_770_000 paise; total tax 2,700.00 =
-//!   270_000 paise.
+//! - Taxable value Rs 15,000.00 = `1_500_000` paise.
+//! - CGST at 9% of 15,000.00 = 1,350.00 (15,000 x 9 / 100) = `135_000` paise; SGST the same.
+//! - Total = 15,000.00 + 1,350.00 + 1,350.00 = 17,700.00 = `1_770_000` paise; total tax 2,700.00 =
+//!   `270_000` paise.
 //!
 //! Amount and date strings are expanded by hand where the case is about number format
 //! (rupees x 100 + paise). The supplier GSTIN is `ledgerly-core`'s hand-derived test vector
@@ -20,6 +20,7 @@
     clippy::unwrap_used,
     clippy::expect_used,
     clippy::panic,
+    clippy::type_complexity,
     reason = "test code: rule B2 lets tests unwrap and panic"
 )]
 
@@ -236,8 +237,8 @@ fn recorded_bill_becomes_a_draft_with_bbox_provenance() {
         })
     );
     assert_eq!(draft.narration, "Purchase bill KS/2026/0042");
-    assert!(draft.items.is_empty());
-    assert!(draft.create_ledgers.is_empty());
+    assert_eq!(draft.items, [] as [ledgerly_assist::DraftItem; 0]);
+    assert_eq!(draft.create_ledgers, [] as [std::string::String; 0]);
 }
 
 #[test]
@@ -349,7 +350,10 @@ fn lower_case_gstin_is_rejected_not_upper_cased() {
 fn only_the_buyer_gstin_on_the_bill_is_not_taken_as_the_supplier() {
     let reading = read_bill(&without("GSTIN"), &full_masters()).unwrap();
     assert_eq!(reading.draft.supplier_gstin, None);
-    assert!(reading.rejected.is_empty());
+    assert_eq!(
+        reading.rejected,
+        [] as [ledgerly_assist::ocr::RejectedField; 0]
+    );
     // The buyer line is still on the page; it is the buyer's, not the supplier's.
     assert!(bill_lines().iter().any(|l| l.text.contains(BUYER_GSTIN)));
 }
@@ -390,7 +394,7 @@ fn party_resolves_by_gstin_even_when_the_name_differs() {
     let ocr = replacing("Supplier:", "Supplier: Kaveri Stationery Mart");
     let draft = read(&ocr, &full_masters());
     assert_eq!(draft.party, Some(SUPPLIER));
-    assert!(draft.create_ledgers.is_empty());
+    assert_eq!(draft.create_ledgers, [] as [std::string::String; 0]);
 }
 
 #[test]
@@ -557,7 +561,7 @@ fn two_tax_ledgers_of_one_kind_are_left_unresolved_without_a_suggestion() {
         .find(|l| l.ledger_name.value == "CGST")
         .unwrap();
     assert_eq!(cgst_line.ledger, None);
-    assert!(draft.create_ledgers.is_empty());
+    assert_eq!(draft.create_ledgers, [] as [std::string::String; 0]);
 }
 
 #[test]

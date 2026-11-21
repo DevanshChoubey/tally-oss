@@ -10,6 +10,8 @@
     clippy::panic,
     clippy::indexing_slicing,
     clippy::wildcard_enum_match_arm,
+    clippy::needless_range_loop,
+    clippy::too_many_lines,
     reason = "test code: rule B2 lets tests unwrap and panic"
 )]
 
@@ -969,7 +971,7 @@ fn over_settled_books_are_an_error_not_a_number() {
 fn empty_books_give_an_empty_report() {
     // provenance: derived — no bills and nothing on account: no rows, and the totals are empty.
     let r = run(&books_with(vec![]), &params(true, Detail::Detailed), true);
-    assert!(r.rows.is_empty());
+    assert_eq!(r.rows, [] as [ledgerly_reports::ReportRow; 0]);
     assert!(r.totals.iter().all(|c| *c == Cell::Empty));
     assert_eq!(r.totals.len(), r.columns.len());
 }

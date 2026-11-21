@@ -16,6 +16,7 @@
     clippy::unwrap_used,
     clippy::expect_used,
     clippy::panic,
+    clippy::format_push_string,
     reason = "test code: rule B2 lets tests unwrap and panic"
 )]
 
@@ -436,11 +437,11 @@ fn invoice_value_equal_to_threshold_is_b2cs_and_one_paisa_below_is_b2cl() {
     // B2CS. Threshold Rs 117999.99: the value is one paisa above, B2CL.
     let b = books(vec![sale(1, "INV-1", UNREGISTERED, GUJARAT, &[10_000_000])]);
     let (r, _) = build(&b, &pack(Some("118000"), Some("net")));
-    assert!(r.b2cl.is_empty());
+    assert_eq!(r.b2cl, [] as [ledgerly_gst_formats::gstr1::B2clGroup; 0]);
     assert_eq!(r.b2cs.len(), 1);
     let (r, _) = build(&b, &pack(Some("117999.99"), Some("net")));
     assert_eq!(r.b2cl.len(), 1);
-    assert!(r.b2cs.is_empty());
+    assert_eq!(r.b2cs, [] as [ledgerly_gst_formats::gstr1::B2csRow; 0]);
 }
 
 #[test]
@@ -450,7 +451,7 @@ fn small_inter_state_unregistered_sale_is_b2cs_igst_row() {
     let b = books(vec![sale(1, "INV-1", UNREGISTERED, GUJARAT, &[1_000_000])]);
     let (r, buckets) = build(&b, &full_pack());
     assert_eq!(bucket_of(&buckets, 1).bucket, Bucket::Ready);
-    assert!(r.b2cl.is_empty());
+    assert_eq!(r.b2cl, [] as [ledgerly_gst_formats::gstr1::B2clGroup; 0]);
     let row = r.b2cs.first().unwrap();
     assert!(!row.intra_state);
     assert_eq!(row.pos, state(GUJARAT));
@@ -471,7 +472,7 @@ fn intra_state_unregistered_sale_is_never_b2cl() {
         &[10_000_000],
     )]);
     let (r, _) = build(&b, &full_pack());
-    assert!(r.b2cl.is_empty());
+    assert_eq!(r.b2cl, [] as [ledgerly_gst_formats::gstr1::B2clGroup; 0]);
     let row = r.b2cs.first().unwrap();
     assert!(row.intra_state);
     assert_eq!(
@@ -554,7 +555,7 @@ fn credit_note_without_hsn_treatment_in_the_pack_needs_correction() {
     let b = books(vec![note]);
     let (r, buckets) = build(&b, &pack(Some("100000"), None));
     assert_needs_correction(&buckets, 2, "unsupported");
-    assert!(r.cdnr.is_empty());
+    assert_eq!(r.cdnr, [] as [ledgerly_gst_formats::gstr1::CdnrParty; 0]);
 }
 
 #[test]
@@ -603,7 +604,7 @@ fn duplicate_document_numbers_need_correction() {
     let (r, buckets) = build(&b, &full_pack());
     assert_needs_correction(&buckets, 1, "INV-1");
     assert_needs_correction(&buckets, 2, "INV-1");
-    assert!(r.b2b.is_empty());
+    assert_eq!(r.b2b, [] as [ledgerly_gst_formats::gstr1::B2bParty; 0]);
 }
 
 #[test]
@@ -621,7 +622,7 @@ fn purchases_are_not_relevant_and_other_months_get_no_entry() {
     assert_eq!(buckets.len(), 1);
     assert_eq!(bucket_of(&buckets, 1).bucket, Bucket::NotRelevant);
     assert!(bucket_of(&buckets, 1).reason.is_some());
-    assert!(r.b2b.is_empty());
+    assert_eq!(r.b2b, [] as [ledgerly_gst_formats::gstr1::B2bParty; 0]);
 }
 
 #[test]
@@ -644,7 +645,7 @@ fn stored_tax_that_disagrees_with_the_masters_is_a_mismatch() {
     let b = bucket_of(&buckets, 1);
     assert_eq!(b.bucket, Bucket::Mismatch);
     assert!(b.reason.is_some());
-    assert!(r.b2b.is_empty());
+    assert_eq!(r.b2b, [] as [ledgerly_gst_formats::gstr1::B2bParty; 0]);
 }
 
 #[test]

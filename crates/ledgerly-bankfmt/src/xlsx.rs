@@ -404,7 +404,7 @@ fn read_statement(view: &View<'_>, job: &Job<'_>) -> Result<RawStatement, BankFm
         }
         let row = Row {
             no: view.row_no(idx)?,
-            cells: *cells,
+            cells,
             col0: view.first_col,
         };
         lines.push(parse_line(&row, &job.cols, job.dates)?);

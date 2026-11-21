@@ -3,9 +3,9 @@
 //! numbers or names), modelled on the mock's "Bank matching" tab.
 //!
 //! Provenance, `derived`: spec 6.5 says "only user-confirmed matches set the bank date",
-//! "many-to-many matches" and "kinds Exact | Rule | AiSuggested | Manual". Spec 7 says Esc goes
+//! "many-to-many matches" and "kinds Exact | Rule | `AiSuggested` | Manual". Spec 7 says Esc goes
 //! back. Amount text is derived by hand from the Indian digit grouping (last three digits, then
-//! pairs), for example 14_738_450 paise = Rs 147384.50 = `1,47,384.50`.
+//! pairs), for example `14_738_450` paise = Rs 147384.50 = `1,47,384.50`.
 //!
 //! Pending (no provenance, so the screen offers nothing): creating a new voucher from a
 //! statement line (the mock's "Create" suggestion) needs the engine to build and check the

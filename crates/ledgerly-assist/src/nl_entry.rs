@@ -56,7 +56,7 @@ short note of what the entry is for. confidence_permille is your confidence in t
 integer from 0 to 1000.";
 
 /// GBNF grammar (llama.cpp) that constrains the model to the JSON shape [`NlEntry`] parses.
-pub const OUTPUT_GRAMMAR: &str = r##"root ::= "{" ws kind "," ws amount "," ws date "," ws party "," ws account "," ws narration "," ws confidence ws "}"
+pub const OUTPUT_GRAMMAR: &str = r#"root ::= "{" ws kind "," ws amount "," ws date "," ws party "," ws account "," ws narration "," ws confidence ws "}"
 kind ::= "\"kind\"" ws ":" ws string
 amount ::= "\"amount_text\"" ws ":" ws nullable
 date ::= "\"date_text\"" ws ":" ws nullable
@@ -68,7 +68,7 @@ nullable ::= string | "null"
 string ::= "\"" ([^"\\\x7F\x00-\x1F] | "\\" (["\\/bfnrt] | "u" [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F] [0-9a-fA-F]))* "\""
 integer ::= "0" | [1-9] [0-9]? [0-9]? [0-9]?
 ws ::= [ \t\n]*
-"##;
+"#;
 
 /// What a model client is asked to complete.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -530,10 +530,10 @@ pub fn parse_amount_text(text: &str) -> Result<Paise, AmountTextError> {
     {
         return Err(not_a_number());
     }
-    if let Some((whole, fraction)) = number.split_once('.') {
-        if fraction.contains(',') || whole.is_empty() {
-            return Err(not_a_number());
-        }
+    if let Some((whole, fraction)) = number.split_once('.')
+        && (fraction.contains(',') || whole.is_empty())
+    {
+        return Err(not_a_number());
     }
     let digits: String = number.chars().filter(|c| *c != ',').collect();
     let value = Decimal::from_str(&digits).map_err(|_| not_a_number())?;

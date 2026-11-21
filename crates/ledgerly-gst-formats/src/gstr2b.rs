@@ -554,7 +554,7 @@ impl<'a> Obj<'a> {
     pub(crate) fn finish(self) -> Map<String, Value> {
         self.map
             .iter()
-            .filter(|entry| !self.used.iter().any(|u| *u == entry.0.as_str()))
+            .filter(|entry| !self.used.contains(&entry.0.as_str()))
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect()
     }

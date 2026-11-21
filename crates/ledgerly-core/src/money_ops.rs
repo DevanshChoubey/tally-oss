@@ -28,7 +28,7 @@ pub const MAX_SPLIT_PARTS: u32 = 1 << 20;
 pub fn sum<I: IntoIterator<Item = Paise>>(amounts: I) -> Result<Paise, MoneyError> {
     amounts
         .into_iter()
-        .try_fold(Paise::ZERO, |total, next| total.checked_add(next))
+        .try_fold(Paise::ZERO, super::money::Paise::checked_add)
 }
 
 /// `percent` percent of `base`, rounded to paise under `rule`.

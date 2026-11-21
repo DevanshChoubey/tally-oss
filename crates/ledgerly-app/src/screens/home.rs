@@ -256,7 +256,10 @@ const LOOKUP_ROWS: [EntryRow; 5] = [
 
 /// Keys that work from the home screen, as the mock lists them. The first flag says whether the
 /// key is a plain letter (ignored while a text field has focus).
-const SHORTCUTS: [(Key, Modifiers, bool, fn() -> HomeTarget); 9] = [
+/// One home-screen shortcut: key, modifiers, whether it is a plain letter, and its target.
+type Shortcut = (Key, Modifiers, bool, fn() -> HomeTarget);
+
+const SHORTCUTS: [Shortcut; 9] = [
     (Key::F8, Modifiers::NONE, false, || HomeTarget::SalesInvoice),
     (Key::F6, Modifiers::NONE, false, || HomeTarget::Receipt),
     (Key::F5, Modifiers::NONE, false, || HomeTarget::Payment),
@@ -452,7 +455,7 @@ fn draw_tile(ui: &mut Ui, index: usize, view: &KpiView) -> egui::Response {
         ui.label(RichText::new(view.value_text.as_str()).size(22.0).strong());
         ui.label(RichText::new(view.footnote_text.as_str()).weak().small());
     });
-    let id = ui.id().with(("home-kpi", index));
+    let id = ui.scope_id().with(("home-kpi", index));
     let response = ui.interact(inner.rect, id, Sense::click());
     let spoken = format!(
         "{}, {}. {}",

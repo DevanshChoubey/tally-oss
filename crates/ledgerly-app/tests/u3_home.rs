@@ -253,7 +253,10 @@ fn latest_request_wins_and_set_data_keeps_it() {
     screen.request_open(HomeTarget::Masters);
     screen.set_data(HomeData::default());
     assert_eq!(screen.take_request(), Some(HomeTarget::Masters));
-    assert!(screen.data().kpis.is_empty());
+    assert_eq!(
+        screen.data().kpis,
+        [] as [ledgerly_app::screens::home::Kpi; 0]
+    );
 }
 
 // ---- drawing --------------------------------------------------------------------------------

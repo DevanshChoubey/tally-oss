@@ -175,7 +175,9 @@ fn template_check_accepts_matching_and_names_the_first_difference() {
     write_sheets(&bad_header, &p).unwrap();
     match check_against_template(&p, &template, 0).unwrap_err() {
         FormatError::Field { field, .. } => assert_eq!(field, "alpha"),
-        other => panic!("unexpected error {other:?}"),
+        other @ (FormatError::Json { .. } | FormatError::Spreadsheet(_)) => {
+            panic!("unexpected error {other:?}")
+        }
     }
 
     // derived: a renamed sheet is reported as a sheet-name difference.
@@ -185,7 +187,9 @@ fn template_check_accepts_matching_and_names_the_first_difference() {
     write_sheets(&bad_name, &p).unwrap();
     match check_against_template(&p, &template, 0).unwrap_err() {
         FormatError::Field { field, .. } => assert_eq!(field, "sheet name"),
-        other => panic!("unexpected error {other:?}"),
+        other @ (FormatError::Json { .. } | FormatError::Spreadsheet(_)) => {
+            panic!("unexpected error {other:?}")
+        }
     }
 
     // derived: a missing sheet is reported by count.

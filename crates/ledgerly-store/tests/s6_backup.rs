@@ -329,7 +329,10 @@ fn backup_of_an_empty_company_works() {
     let store = new_store(dir.path());
     let file = backup_to(&store, dir.path(), epoch()).unwrap();
     let restored = restore_from(&file, &dir.path().join("restored.ledgerly")).unwrap();
-    assert!(restored.events(EventSeq(1), 10).unwrap().is_empty());
+    assert_eq!(
+        restored.events(EventSeq(1), 10).unwrap(),
+        [] as [ledgerly_store::AuditRecord; 0]
+    );
     assert_eq!(restored.company().unwrap(), company());
 }
 

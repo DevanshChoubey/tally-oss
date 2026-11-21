@@ -412,7 +412,7 @@ fn validate_tax_kind(e: &EInvoice, errs: &mut Vec<FormatError>) {
                 "must be zero for an intra-state supply; use CgstAmt and SgstAmt",
             ));
         }
-        if !intra && !(it.cgst.is_zero() && it.sgst.is_zero()) {
+        if !intra && (!it.cgst.is_zero() || !it.sgst.is_zero()) {
             errs.push(field_err(
                 &format!("ItemList[{idx}].CgstAmt"),
                 "CgstAmt and SgstAmt must be zero for an inter-state supply or IGST on intra-state; use IgstAmt",

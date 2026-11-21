@@ -207,7 +207,13 @@ fn gs(b: &Books, p: &ReportParams, group: u64) -> Report {
 fn bal(r: &Report, i: usize) -> (Paise, DrCr) {
     match &r.rows[i].cells[6] {
         Cell::Amount(a) => (a.amount, a.side),
-        other => panic!("balance cell is {other:?}"),
+        other @ (Cell::Signed(_)
+        | Cell::Qty(_)
+        | Cell::Text(_)
+        | Cell::Date(_)
+        | Cell::Empty
+        | Cell::Provisional { .. }
+        | Cell::Unsupported(_)) => panic!("balance cell is {other:?}"),
     }
 }
 

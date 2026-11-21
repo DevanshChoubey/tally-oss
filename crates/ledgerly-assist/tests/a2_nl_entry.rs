@@ -64,7 +64,9 @@ fn draft_for(text: &str, model_json: &str, ledgers: Vec<MasterLedger>) -> Vouche
         .unwrap()
     {
         Proposal::VoucherDraft(d) => *d,
-        other => panic!("expected a voucher draft, got {other:?}"),
+        other @ (Proposal::MatchSuggestion(_)
+        | Proposal::ReportQuery(_)
+        | Proposal::MappingSuggestion(_)) => panic!("expected a voucher draft, got {other:?}"),
     }
 }
 
@@ -102,7 +104,7 @@ fn rent_payment_becomes_a_payment_draft_with_resolved_ledgers() {
     assert_eq!(d.lines[1].ledger, Some(LedgerId(2)));
     assert_eq!(d.lines[1].amount.value, amount);
     assert_eq!(d.party, Some(LedgerId(5)));
-    assert!(d.create_ledgers.is_empty());
+    assert_eq!(d.create_ledgers, [] as [std::string::String; 0]);
     assert_eq!(d.date, None);
     assert_eq!(d.narration, "rent");
     assert_eq!(d.document_tax, None);
@@ -278,7 +280,11 @@ fn a_name_matching_two_ledgers_is_unsupported_not_a_guess() {
             assert!(u.what.contains("HDFC"));
             assert!(u.reason.contains("HDFC Bank") && u.reason.contains("HDFC Credit Card"));
         }
-        other => panic!("expected Unsupported, got {other:?}"),
+        other @ (AssistError::Cancelled
+        | AssistError::Disabled
+        | AssistError::Output { .. }
+        | AssistError::Network { .. }
+        | AssistError::Key { .. }) => panic!("expected Unsupported, got {other:?}"),
     }
 }
 

@@ -425,6 +425,10 @@ struct Ctx<'a> {
 }
 
 /// The facts of one invoice or note, before its table is chosen.
+#[expect(
+    clippy::struct_field_names,
+    reason = "inv_type mirrors the GSTR-1 field it fills"
+)]
 struct Inv {
     number: String,
     value: Paise,
@@ -817,7 +821,7 @@ fn shape(is_note: bool, classes: &[LineClass]) -> Result<B2bInvoiceType, Stop> {
             "unsupported: a voucher with both ordinary and deemed-export lines",
         )),
         (false, true) => Ok(B2bInvoiceType::DeemedExport),
-        (true, false) | (false, false) => Ok(B2bInvoiceType::Regular),
+        (true | false, false) => Ok(B2bInvoiceType::Regular),
     }
 }
 
@@ -1222,6 +1226,10 @@ impl Agg {
     }
 }
 
+#[expect(
+    clippy::similar_names,
+    reason = "intra and inter name the two GSTR-1 supply kinds; the similarity is the meaning"
+)]
 fn assemble(gstin: &Gstin, period: Period, evals: &[Eval]) -> Result<Gstr1, GstError> {
     let mut agg = Agg::default();
     for part in evals.iter().filter_map(|e| e.part.as_ref()) {
@@ -1376,7 +1384,7 @@ fn extend_runs(mut docs: Vec<(u64, &str, bool)>, out: &mut Vec<DocRange>) -> Res
         let continues = last.and_then(|l| l.checked_add(1)) == Some(n);
         match run.take() {
             Some(mut r) if continues => {
-                r.to = text.to_owned();
+                text.clone_into(&mut r.to);
                 r.total = bump(r.total)?;
                 if cancelled {
                     r.cancelled = bump(r.cancelled)?;

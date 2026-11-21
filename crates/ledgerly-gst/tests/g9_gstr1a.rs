@@ -12,6 +12,7 @@
     clippy::unwrap_used,
     clippy::expect_used,
     clippy::panic,
+    clippy::format_push_string,
     reason = "test code: rule B2 lets tests unwrap and panic"
 )]
 
@@ -347,7 +348,7 @@ fn unchanged_books_give_an_empty_amendment() {
     let b = books(vec![sale(1, "INV-1", REGISTERED, GUJARAT, &[1_000_000])]);
     let f = filed(&b, &p);
     let a = amend_value(&b, &f, &p);
-    assert!(a.b2ba.is_empty());
+    assert_eq!(a.b2ba, [] as [ledgerly_gst_formats::gstr1::B2baParty; 0]);
     assert_eq!(a.gstin, gstin(OWN_GSTIN));
     assert_eq!(a.period, january());
 }

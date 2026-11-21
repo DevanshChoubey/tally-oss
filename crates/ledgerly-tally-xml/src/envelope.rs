@@ -732,7 +732,7 @@ impl<'a> Builder<'a> {
             return Ok(());
         };
         if !frame.node.children.is_empty() {
-            frame.node.text = frame.node.text.trim().to_owned();
+            frame.node.text = String::from(frame.node.text.trim());
         }
         if frame.router {
             self.check_router_content(&frame);

@@ -173,6 +173,10 @@ fn with_vouchers(mut b: Books, vs: Vec<Voucher>) -> Books {
     b
 }
 
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "matches the Result<Outcome> the handlers return, so tests compare like with like"
+)]
 fn no_events() -> Result<Outcome<Vec<Event>>, EngineError> {
     Ok(Outcome::Value(Vec::new()))
 }

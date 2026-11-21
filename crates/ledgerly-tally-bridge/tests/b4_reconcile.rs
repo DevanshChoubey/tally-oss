@@ -253,7 +253,10 @@ fn equal_trial_balance_is_all_green() {
 
     assert_eq!(r.trial_balance.status, SectionStatus::Compared);
     assert!(r.is_green());
-    assert!(r.mismatches().is_empty());
+    assert_eq!(
+        r.mismatches(),
+        [] as [&ledgerly_tally_bridge::reconcile::ReconLine; 0]
+    );
     // Matching rows are listed too: 6 ledgers + the grand total.
     let lines = &r.trial_balance.lines;
     assert_eq!(lines.len(), 7);
@@ -480,7 +483,10 @@ fn exports_that_are_not_compared_are_unsupported_and_block_green() {
         r.balance_sheet.status,
         SectionStatus::Unsupported(_)
     ));
-    assert!(r.balance_sheet.lines.is_empty());
+    assert_eq!(
+        r.balance_sheet.lines,
+        [] as [ledgerly_tally_bridge::reconcile::ReconLine; 0]
+    );
     assert_eq!(r.profit_loss.status, SectionStatus::NotSupplied);
     assert_eq!(r.stock.status, SectionStatus::NotSupplied);
     assert_eq!(r.outstanding.status, SectionStatus::NotSupplied);
@@ -512,7 +518,10 @@ fn a_failure_on_our_side_is_reported_not_hidden() {
         r.trial_balance.status,
         SectionStatus::Failed { .. }
     ));
-    assert!(r.trial_balance.lines.is_empty());
+    assert_eq!(
+        r.trial_balance.lines,
+        [] as [ledgerly_tally_bridge::reconcile::ReconLine; 0]
+    );
     assert!(!r.is_green());
 }
 

@@ -202,12 +202,10 @@ fn step_number(step: Step) -> usize {
 fn draw_steps(ui: &mut Ui, wizard: &ImportWizard) {
     ui.horizontal_wrapped(|ui| {
         for step in Step::ALL {
-            let state = if step == wizard.step() {
-                "current"
-            } else if step < wizard.step() {
-                "done"
-            } else {
-                "to do"
+            let state = match step.cmp(&wizard.step()) {
+                std::cmp::Ordering::Equal => "current",
+                std::cmp::Ordering::Less => "done",
+                std::cmp::Ordering::Greater => "to do",
             };
             let text = format!("{}. {} ({state})", step_number(step), step.label());
             if step == wizard.step() {
@@ -378,12 +376,10 @@ fn draw_pull(ui: &mut Ui, wizard: &ImportWizard, clicks: &mut Vec<Click>) {
 
 fn draw_progress(ui: &mut Ui, progress: &PullProgress) {
     for stage in PullStage::ALL {
-        let state = if stage < progress.stage {
-            "done"
-        } else if stage == progress.stage {
-            "now"
-        } else {
-            "waiting"
+        let state = match stage.cmp(&progress.stage) {
+            std::cmp::Ordering::Less => "done",
+            std::cmp::Ordering::Equal => "now",
+            std::cmp::Ordering::Greater => "waiting",
         };
         ui.label(format!("{}: {state}", stage.label()));
     }

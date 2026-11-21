@@ -25,7 +25,7 @@ use ledgerly_tally_xml::request::{
     try_vouchers_request, vouchers_request,
 };
 
-const LIST_COMPANIES: &str = r#"<ENVELOPE>
+const LIST_COMPANIES: &str = r"<ENVELOPE>
   <HEADER>
     <VERSION>1</VERSION>
     <TALLYREQUEST>Export</TALLYREQUEST>
@@ -40,7 +40,7 @@ const LIST_COMPANIES: &str = r#"<ENVELOPE>
     </DESC>
   </BODY>
 </ENVELOPE>
-"#;
+";
 
 const LEDGERS_ACME: &str = r#"<ENVELOPE>
   <HEADER>

@@ -346,7 +346,7 @@ fn a_line_over_the_limit_stops_the_server_with_a_typed_error() {
     let mut out = Vec::new();
     let err = serve_with(&fake, input.as_slice(), &mut out).unwrap_err();
     assert!(matches!(err, McpError::MessageTooLarge));
-    assert!(out.is_empty());
+    assert_eq!(out, [] as [u8; 0]);
 }
 
 #[test]

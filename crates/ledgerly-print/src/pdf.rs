@@ -796,7 +796,7 @@ mod page {
                 lines.push(std::mem::take(&mut current));
             }
             if text_width(word, size, bold) <= max_width {
-                current = word.to_owned();
+                word.clone_into(&mut current);
                 continue;
             }
             for ch in word.chars() {

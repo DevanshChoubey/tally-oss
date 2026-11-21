@@ -14,6 +14,7 @@
     clippy::unwrap_used,
     clippy::expect_used,
     clippy::panic,
+    clippy::unnecessary_wraps,
     reason = "test code: rule B2 lets tests unwrap and panic"
 )]
 
@@ -361,7 +362,7 @@ fn bank_line_is_redacted_and_match_suggestion_loses_invented_voucher_ids() {
     let Proposal::MatchSuggestion(m) = proposal else {
         panic!("expected a match suggestion");
     };
-    assert!(m.vouchers.is_empty());
+    assert_eq!(m.vouchers, [] as [ledgerly_core::VoucherId; 0]);
     assert_eq!(m.ledger_name.as_deref(), Some("Rent"));
 }
 

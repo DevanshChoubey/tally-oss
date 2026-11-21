@@ -292,7 +292,7 @@ fn load_one(file: &str, text: &str) -> Result<FormatSpec, BankFmtError> {
         id: file.to_owned(),
         reason,
     };
-    if !file.ends_with(".toml") {
+    if std::path::Path::new(file).extension() != Some(std::ffi::OsStr::new("toml")) {
         return Err(file_err("file name does not end in .toml".to_owned()));
     }
     let raw: RawSpec = toml::from_str(text).map_err(|e| file_err(format!("{file}: {e}")))?;

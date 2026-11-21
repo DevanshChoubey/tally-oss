@@ -187,6 +187,10 @@ fn push_checked(out: &mut String, piece: &str, base: usize) -> Result<(), Bridge
 }
 
 /// Index of the `>` that closes the tag in `s` (which starts after the `<`), skipping quoted values.
+#[expect(
+    clippy::match_same_arms,
+    reason = "the empty arms are distinct states of the quote scanner, kept apart for reading"
+)]
 fn tag_end(s: &str) -> Option<usize> {
     let mut quote: Option<char> = None;
     for (i, c) in s.char_indices() {

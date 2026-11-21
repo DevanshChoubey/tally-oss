@@ -7,6 +7,7 @@
 #![allow(
     clippy::unwrap_used,
     clippy::panic,
+    clippy::unnecessary_wraps,
     reason = "test code: rule B2 lets tests unwrap and panic"
 )]
 
@@ -760,7 +761,10 @@ fn equal_trial_balance_is_all_green() {
     let s = report.summary();
     assert_eq!(s.rows, 6);
     assert_eq!(s.differing_rows, 0);
-    assert!(s.not_compared.is_empty());
+    assert_eq!(
+        s.not_compared,
+        [] as [ledgerly_app::screens::import::ReconSection; 0]
+    );
     assert!(s.all_match());
 }
 

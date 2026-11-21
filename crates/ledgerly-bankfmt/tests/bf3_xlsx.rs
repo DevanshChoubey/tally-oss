@@ -3,12 +3,13 @@
 //! serial rule stated next to it). None comes from running the parser.
 //!
 //! The workbooks are built here byte by byte (a stored, uncompressed zip holding the minimal
-//! SpreadsheetML parts) because the crate has no XLSX writer dependency.
+//! `SpreadsheetML` parts) because the crate has no XLSX writer dependency.
 
 #![allow(
     clippy::unwrap_used,
     clippy::indexing_slicing,
     clippy::panic,
+    clippy::format_push_string,
     reason = "test code: rule B2 lets tests unwrap and panic"
 )]
 use ledgerly_bankfmt::BankFmtError;
@@ -1150,23 +1151,20 @@ fn csv_and_xlsx_read_amounts_by_the_same_rules() {
             vec![C::S("05/04/2024"), C::S("x"), C::S(text)],
         ];
         let from_xlsx = parse_xlsx_with_layout(&one_sheet(rows), &xlsx_layout);
-        match expected {
-            Some((debit, credit)) => {
-                let c = from_csv.unwrap_or_else(|e| panic!("csv '{text}': {e:?}"));
-                let x = from_xlsx.unwrap_or_else(|e| panic!("xlsx '{text}': {e:?}"));
-                assert_eq!(c.lines[0].debit, Paise::new(debit), "csv debit '{text}'");
-                assert_eq!(c.lines[0].credit, Paise::new(credit), "csv credit '{text}'");
-                assert_eq!(x.lines[0].debit, Paise::new(debit), "xlsx debit '{text}'");
-                assert_eq!(
-                    x.lines[0].credit,
-                    Paise::new(credit),
-                    "xlsx credit '{text}'"
-                );
-            }
-            None => {
-                assert!(from_csv.is_err(), "csv accepted '{text}'");
-                assert!(from_xlsx.is_err(), "xlsx accepted '{text}'");
-            }
+        if let Some((debit, credit)) = expected {
+            let c = from_csv.unwrap_or_else(|e| panic!("csv '{text}': {e:?}"));
+            let x = from_xlsx.unwrap_or_else(|e| panic!("xlsx '{text}': {e:?}"));
+            assert_eq!(c.lines[0].debit, Paise::new(debit), "csv debit '{text}'");
+            assert_eq!(c.lines[0].credit, Paise::new(credit), "csv credit '{text}'");
+            assert_eq!(x.lines[0].debit, Paise::new(debit), "xlsx debit '{text}'");
+            assert_eq!(
+                x.lines[0].credit,
+                Paise::new(credit),
+                "xlsx credit '{text}'"
+            );
+        } else {
+            assert!(from_csv.is_err(), "csv accepted '{text}'");
+            assert!(from_xlsx.is_err(), "xlsx accepted '{text}'");
         }
     }
 }

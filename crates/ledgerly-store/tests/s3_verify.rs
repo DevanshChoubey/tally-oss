@@ -5,7 +5,7 @@
 //! code under test:
 //! - Tamper detection: the stored `hash` is SHA-256 over the canonical CBOR of
 //!   `(seq, prev_hash, meta, event)` and `prev_hash` is the previous record's `hash`. Changing any
-//!   stored byte of record `n` (event, meta, hash or prev_hash column) therefore makes record `n`
+//!   stored byte of record `n` (event, meta, hash or `prev_hash` column) therefore makes record `n`
 //!   inconsistent with its own hash or with its predecessor, and the verifier must name `n`. When
 //!   `hash` itself is flipped, record `n + 1` also stops following it, so the lowest named
 //!   sequence number is still `n`.
@@ -175,7 +175,7 @@ fn flipping_any_byte_of_a_stored_event_names_that_seq() {
     for column in ["event", "meta", "hash", "prev_hash"] {
         for seq in 1..=3u64 {
             let original = read_column(&side, column, seq);
-            assert!(!original.is_empty());
+            assert_ne!(original, [] as [u8; 0]);
             for (i, byte) in original.iter().enumerate() {
                 let mut tampered = original.clone();
                 tampered[i] = byte ^ 0x01;
@@ -404,8 +404,10 @@ fn cutting_the_tail_is_caught_by_a_checkpoint() {
         .commit(&[setting(1), setting(2), setting(3)], &meta_on(d1))
         .unwrap();
     write_checkpoint(&mut store, d1, &meta()).unwrap();
-    // The side connection has foreign keys off (SQLite default), as an attacker's tool would.
+    // The side connection has foreign keys off, as an attacker's tool would. Bundled
+    // libsqlite3-sys builds with SQLITE_DEFAULT_FOREIGN_KEYS=1, so turn them off explicitly.
     let side = Connection::open(&path).unwrap();
+    side.pragma_update(None, "foreign_keys", false).unwrap();
     side.execute("DELETE FROM events WHERE seq = 3", [])
         .unwrap();
     let report = verify_chain(&store).unwrap();

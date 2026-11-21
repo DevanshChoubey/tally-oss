@@ -405,7 +405,11 @@ fn every_response_is_on_disk_exactly_as_received() {
     // derived: 10 master files + 2 voucher windows (1..2 Apr, 3 Apr) + the manifest; no leftovers.
     let names = names_in(dir.path());
     assert_eq!(names.len(), 13);
-    assert!(names.iter().all(|n| !n.ends_with(".part")));
+    assert!(
+        names
+            .iter()
+            .all(|n| std::path::Path::new(n).extension() != Some(std::ffi::OsStr::new("part")))
+    );
     // derived: 2 vouchers a day for 3 days.
     assert_eq!(result.vouchers.len(), 6);
 }

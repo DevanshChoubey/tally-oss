@@ -188,7 +188,7 @@ fn action_ids_are_unique_and_round_trip() {
 fn action_labels_are_not_empty() {
     // provenance: derived — a label is shown in the palette, so it must exist.
     for action in Action::ALL {
-        assert!(!action.label().is_empty());
+        assert_ne!(action.label(), "");
     }
 }
 
@@ -287,7 +287,7 @@ fn rebinding_round_trips_through_toml() {
     assert_eq!(back.action_for(f(Key::F10)), Some(Action::Save));
     // The old Ctrl+A is free again and F5 is unbound.
     assert_eq!(back.action_for(f(Key::A).with_ctrl()), None);
-    assert!(back.chords(Action::NewPayment).is_empty());
+    assert_eq!(back.chords(Action::NewPayment), []);
     assert_eq!(back.action_for(f(Key::F5)), None);
 }
 
@@ -321,7 +321,7 @@ fn an_action_missing_from_the_file_is_unbound_not_defaulted() {
     let km = from_toml("preset = \"p\"\n[bindings]\nsave = [\"Ctrl+A\"]\n").unwrap();
     assert_eq!(km.action_for(f(Key::A).with_ctrl()), Some(Action::Save));
     assert_eq!(km.action_for(f(Key::F4)), None);
-    assert!(km.chords(Action::NewContra).is_empty());
+    assert_eq!(km.chords(Action::NewContra), []);
 }
 
 #[test]
@@ -400,7 +400,7 @@ fn unbind_frees_the_chords() {
     let mut km = classic();
     km.unbind(Action::Undo);
     assert_eq!(km.action_for(f(Key::Z).with_ctrl()), None);
-    assert!(km.chords(Action::Undo).is_empty());
+    assert_eq!(km.chords(Action::Undo), []);
 }
 
 #[test]

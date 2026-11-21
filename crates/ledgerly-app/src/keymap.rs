@@ -504,10 +504,7 @@ impl Keymap {
     /// The chords bound to an action (empty when unbound).
     #[must_use]
     pub fn chords(&self, action: Action) -> &[Chord] {
-        self.bindings
-            .get(&action)
-            .map(Vec::as_slice)
-            .unwrap_or_default()
+        self.bindings.get(&action).map_or_default(Vec::as_slice)
     }
 
     /// The action a chord is bound to.
@@ -672,6 +669,10 @@ pub fn to_toml(k: &Keymap) -> String {
 }
 
 /// A TOML basic string for `s`, with the characters TOML requires escaped.
+#[expect(
+    clippy::format_push_string,
+    reason = "a \\u escape is rare; format! keeps the four-digit padding readable"
+)]
 fn toml_string(s: &str) -> String {
     let mut out = String::with_capacity(s.len() + 2);
     out.push('"');

@@ -512,7 +512,7 @@ fn optional_and_post_dated_follow_the_scenario() {
     let mut p = day_params();
     p.as_of = date!(2026 - 06 - 29);
     let actual = value(day_book(&b, &p));
-    assert!(actual.rows.is_empty());
+    assert_eq!(actual.rows, [] as [ledgerly_reports::ReportRow; 0]);
 
     p.as_of = date!(2026 - 06 - 30);
     let on_date = value(day_book(&b, &p));

@@ -521,7 +521,7 @@ fn shipped_files_on_disk_match_the_compiled_in_copy() {
     let mut names: Vec<String> = std::fs::read_dir(dir)
         .unwrap()
         .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
-        .filter(|n| n.ends_with(".toml"))
+        .filter(|n| std::path::Path::new(n).extension() == Some(std::ffi::OsStr::new("toml")))
         .collect();
     names.sort();
     // derived: count of formats/*.toml files; ids are file stems by convention.

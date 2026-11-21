@@ -200,12 +200,11 @@ impl ReportViewScreen {
     /// and say why in [`ReportViewScreen::notice`].
     pub fn drill(&mut self) -> ScreenAction {
         self.notice = None;
-        let (key, label) = match self.report.rows.get(self.selected) {
-            Some(row) => (row.key.clone(), row.label.clone()),
-            None => {
-                self.info("This report has no rows to open.");
-                return ScreenAction::Stay;
-            }
+        let (key, label) = if let Some(row) = self.report.rows.get(self.selected) {
+            (row.key.clone(), row.label.clone())
+        } else {
+            self.info("This report has no rows to open.");
+            return ScreenAction::Stay;
         };
         let Some(key) = key else {
             self.info(format!("\"{label}\" has nothing to open."));
@@ -264,8 +263,8 @@ impl ReportViewScreen {
     /// Sets the text of the two period fields. Does nothing unless the editor is open.
     pub fn set_period_text(&mut self, from: &str, to: &str) {
         if let Some(edit) = self.period_edit.as_mut() {
-            edit.from = from.to_owned();
-            edit.to = to.to_owned();
+            from.clone_into(&mut edit.from);
+            to.clone_into(&mut edit.to);
         }
     }
 
@@ -386,7 +385,7 @@ impl ReportViewScreen {
     }
 
     fn draw_period_editor(&mut self, ui: &mut Ui) {
-        let base = ui.id().with("u7-period");
+        let base = ui.scope_id().with("u7-period");
         let Some(edit) = self.period_edit.as_mut() else {
             return;
         };

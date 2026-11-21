@@ -53,6 +53,10 @@ fn group_entries(m: &Masters) -> Vec<Entry> {
         .collect()
 }
 
+#[expect(
+    clippy::format_push_string,
+    reason = "builds one short detail line per row; format! reads better than write! here"
+)]
 fn ledger_entries(m: &Masters) -> Vec<Entry> {
     m.ledgers
         .values()
@@ -123,8 +127,7 @@ fn inventory_entries(m: &Masters, kind: MasterKind) -> Vec<Entry> {
                     m.units.get(&i.unit).map_or("?", |u| u.symbol.as_str()),
                     i.hsn
                         .as_ref()
-                        .map(|h| format!(", HSN {}", h.as_str()))
-                        .unwrap_or_default()
+                        .map_or_default(|h| format!(", HSN {}", h.as_str()))
                 ),
                 search: with_aliases(&i.name, &i.aliases),
             })

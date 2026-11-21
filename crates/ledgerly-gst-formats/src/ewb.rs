@@ -525,7 +525,7 @@ fn check_item(i: usize, it: &EwayItem, errs: &mut Vec<FormatError>) {
             push(errs, &f(name), "must be between 0 and 100 percent");
         }
     }
-    if !it.igst_rate.is_zero() && !(it.cgst_rate.is_zero() && it.sgst_rate.is_zero()) {
+    if !it.igst_rate.is_zero() && (!it.cgst_rate.is_zero() || !it.sgst_rate.is_zero()) {
         push(
             errs,
             &f("igstRate"),
@@ -549,7 +549,7 @@ fn check_amounts(e: &EwayBill, errs: &mut Vec<FormatError>) {
             push(errs, name, "must not be negative");
         }
     }
-    if !e.igst_value.is_zero() && !(e.cgst_value.is_zero() && e.sgst_value.is_zero()) {
+    if !e.igst_value.is_zero() && (!e.cgst_value.is_zero() || !e.sgst_value.is_zero()) {
         push(
             errs,
             "igstValue",

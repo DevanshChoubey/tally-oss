@@ -19,6 +19,7 @@
 //! `rs(n)` is `n` rupees. Books begin on 1 April 2026; reports are as of 30 September 2026.
 #![allow(
     clippy::unwrap_used,
+    clippy::expect_used,
     clippy::panic,
     clippy::indexing_slicing,
     clippy::wildcard_enum_match_arm,
@@ -489,7 +490,7 @@ fn loss_shows_on_the_assets_side() {
 fn no_activity_gives_zero_totals_and_no_rows() {
     // provenance: derived — nothing posted, nothing owned: both sides are 0.
     let r = run(&books_with(vec![]), &params(Detail::Detailed), &no_stock());
-    assert!(r.rows.is_empty());
+    assert_eq!(r.rows, [] as [ledgerly_reports::ReportRow; 0]);
     let (l, a) = total_amounts(&r);
     assert_eq!(l, Paise::ZERO);
     assert_eq!(a, Paise::ZERO);

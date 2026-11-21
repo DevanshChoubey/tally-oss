@@ -143,7 +143,7 @@ fn a_gstin_style_alias_is_found_by_prefix() {
             .with_aliases(["27ZZZZZ9999Z1Z0"]),
     ];
     assert_eq!(rank("27zzzzz", &entries, &[]), [0]);
-    assert!(rank("29zzzzz", &entries, &[]).is_empty());
+    assert_eq!(rank("29zzzzz", &entries, &[]), [] as [usize; 0]);
 }
 
 #[test]
@@ -188,7 +188,7 @@ fn with_an_empty_query_recents_come_first_most_recent_first() {
 #[test]
 fn nothing_matches_gibberish() {
     // provenance: derived — no entry contains 'q', 'z', 'x' in order.
-    assert!(rank("qzx", &reports(), &[]).is_empty());
+    assert_eq!(rank("qzx", &reports(), &[]), [] as [usize; 0]);
 }
 
 // ---- state -------------------------------------------------------------------------------------
@@ -381,5 +381,5 @@ fn escape_closes_without_choosing() {
     let mut p = open_palette(PaletteMode::OnTop);
     assert!(frame(&mut p, key_frame(&[Key::Escape])).is_none());
     assert!(!p.is_open());
-    assert!(p.recents().is_empty());
+    assert_eq!(p.recents(), []);
 }

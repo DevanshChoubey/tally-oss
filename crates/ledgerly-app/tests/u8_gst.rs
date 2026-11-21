@@ -588,8 +588,13 @@ fn frame(
     input: RawInput,
 ) -> ScreenAction {
     let mut action = ScreenAction::Stay;
+    // egui may run the closure twice in one frame (a discarded pass, with input only in the
+    // first); the shell applies each pass's action, so the first non-Stay action is the result.
     let out = ctx.run_ui(input, |ui| {
-        action = screen.ui(ui, app);
+        let a = screen.ui(ui, app);
+        if matches!(action, ScreenAction::Stay) {
+            action = a;
+        }
     });
     out.drop_without_applying_deltas();
     action

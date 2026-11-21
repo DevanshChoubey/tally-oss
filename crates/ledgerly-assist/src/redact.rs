@@ -458,7 +458,7 @@ mod tests {
         let text = "Paid rent 25,000.00 on 2026-03-31 vide INV-2026-0042 ref 12345678";
         let (out, found) = redact(text);
         assert_eq!(out, text);
-        assert!(found.is_empty());
+        assert_eq!(found.len(), 0);
     }
 
     #[test]
@@ -466,7 +466,7 @@ mod tests {
         let (once, _) = redact("ABCDE1234F 29ABCDE1234F1ZW 123456789012345 HDFC0000123 9876543210");
         let (twice, found) = redact(&once);
         assert_eq!(once, twice);
-        assert!(found.is_empty());
+        assert_eq!(found.len(), 0);
     }
 
     #[test]

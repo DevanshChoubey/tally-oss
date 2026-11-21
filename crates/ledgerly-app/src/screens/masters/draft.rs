@@ -358,11 +358,7 @@ impl MasterDraft {
                     group: i.group,
                     unit: Some(i.unit),
                     valuation: i.valuation,
-                    hsn: i
-                        .hsn
-                        .as_ref()
-                        .map(|h| h.as_str().to_owned())
-                        .unwrap_or_default(),
+                    hsn: i.hsn.as_ref().map_or_default(|h| h.as_str().to_owned()),
                     batches: i.batches_enabled,
                 }))
             }
@@ -521,11 +517,11 @@ fn parse_hsn(text: &str) -> Result<Option<Hsn>, MasterError> {
         .map_err(|e| invalid("HSN/SAC", e.to_string()))
 }
 
-fn original<'a, T>(
-    found: Option<&'a T>,
+fn original<T>(
+    found: Option<&T>,
     editing: bool,
     kind: MasterKind,
-) -> Result<Option<&'a T>, MasterError> {
+) -> Result<Option<&T>, MasterError> {
     match (found, editing) {
         (Some(o), _) => Ok(Some(o)),
         (None, false) => Ok(None),
@@ -641,21 +637,12 @@ fn ledger_draft(l: &Ledger) -> LedgerDraft {
         credit_days: l
             .bill_wise
             .and_then(|b| b.default_credit_days)
-            .map(|d| d.to_string())
-            .unwrap_or_default(),
+            .map_or_default(|d| d.to_string()),
         cost_centres: l.cost_centres_applicable,
         party: l.party.as_ref().map(|p| PartyDraft {
             registration: p.registration,
-            gstin: p
-                .gstin
-                .as_ref()
-                .map(|g| g.as_str().to_owned())
-                .unwrap_or_default(),
-            pan: p
-                .pan
-                .as_ref()
-                .map(|g| g.as_str().to_owned())
-                .unwrap_or_default(),
+            gstin: p.gstin.as_ref().map_or_default(|g| g.as_str().to_owned()),
+            pan: p.pan.as_ref().map_or_default(|g| g.as_str().to_owned()),
             state: p.state,
             address_lines: p.address.lines.join("\n"),
             pincode: p.address.pincode.clone().unwrap_or_default(),
@@ -669,16 +656,12 @@ fn ledger_draft(l: &Ledger) -> LedgerDraft {
         }),
         tax: l.tax.map(|t| TaxDraft {
             kind: t.kind,
-            rate_percent: t.rate_percent.map(|r| r.0.to_string()).unwrap_or_default(),
+            rate_percent: t.rate_percent.map_or_default(|r| r.0.to_string()),
         }),
         gst: l.gst.as_ref().map(|g| GstDraft {
-            hsn: g
-                .hsn
-                .as_ref()
-                .map(|h| h.as_str().to_owned())
-                .unwrap_or_default(),
+            hsn: g.hsn.as_ref().map_or_default(|h| h.as_str().to_owned()),
             taxability: g.taxability,
-            rate_percent: g.rate_percent.map(|r| r.0.to_string()).unwrap_or_default(),
+            rate_percent: g.rate_percent.map_or_default(|r| r.0.to_string()),
         }),
     }
 }
@@ -767,7 +750,7 @@ fn build_bill_wise(
         }
         return Ok(None);
     }
-    if !features.bill_wise && !orig.is_some_and(|o| o.bill_wise.is_some()) {
+    if !features.bill_wise && orig.is_none_or(|o| o.bill_wise.is_none()) {
         return Err(MasterError::FeatureOff {
             feature: "Bill-wise details",
         });
@@ -1172,11 +1155,11 @@ fn build_stock_item(
         unit,
         alt_unit: orig.and_then(|o| o.alt_unit),
         hsn: parse_hsn(&d.hsn)?,
-        gst_history: orig.map(|o| o.gst_history.clone()).unwrap_or_default(),
+        gst_history: orig.map_or_default(|o| o.gst_history.clone()),
         valuation: d.valuation,
         batches_enabled: d.batches,
-        opening: orig.map(|o| o.opening.clone()).unwrap_or_default(),
-        standard_costs: orig.map(|o| o.standard_costs.clone()).unwrap_or_default(),
+        opening: orig.map_or_default(|o| o.opening.clone()),
+        standard_costs: orig.map_or_default(|o| o.standard_costs.clone()),
         tally: orig.and_then(|o| o.tally.clone()),
     }))
 }
@@ -1209,7 +1192,7 @@ fn check_item_rules(
         return Err(MasterError::FeatureOff { feature: "Batches" });
     }
     if d.valuation == ValuationMethod::StandardCost
-        && !orig.is_some_and(|o| !o.standard_costs.is_empty())
+        && orig.is_none_or(|o| o.standard_costs.is_empty())
     {
         return Err(unsupported(
             "standard cost valuation",

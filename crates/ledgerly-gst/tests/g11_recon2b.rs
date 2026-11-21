@@ -11,6 +11,7 @@
     clippy::unwrap_used,
     clippy::expect_used,
     clippy::panic,
+    clippy::many_single_char_names,
     reason = "test code: rule B2 lets tests unwrap and panic"
 )]
 

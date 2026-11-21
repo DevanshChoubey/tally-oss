@@ -505,7 +505,10 @@ fn no_portal_values_means_no_comparison() {
     // value; with none injected there is nothing to compare.
     let w = value(&january_books(), None);
     assert_eq!(w.comparison, None);
-    assert!(w.differences().is_empty());
+    assert_eq!(
+        w.differences(),
+        [] as [&ledgerly_gst::gstr3b::ComparisonRow; 0]
+    );
 }
 
 #[test]
@@ -517,7 +520,10 @@ fn agreeing_portal_values_list_no_differences() {
     let w = value(&january_books(), Some(&portal));
     let rows = w.comparison.as_ref().unwrap();
     assert_eq!(rows.len(), 9);
-    assert!(w.differences().is_empty());
+    assert_eq!(
+        w.differences(),
+        [] as [&ledgerly_gst::gstr3b::ComparisonRow; 0]
+    );
 }
 
 #[test]
@@ -554,7 +560,7 @@ fn an_empty_period_is_a_zero_working() {
     assert_eq!(w.outward_taxable_value, Paise::ZERO);
     assert_eq!(w.outward_tax, Gstr3bTaxAmounts::default());
     assert_eq!(w.itc_all_other, Gstr3bTaxAmounts::default());
-    assert!(w.outward_vouchers.is_empty());
+    assert_eq!(w.outward_vouchers, [] as [ledgerly_core::VoucherId; 0]);
 }
 
 #[test]
@@ -570,7 +576,7 @@ fn a_blocked_only_purchase_adds_nothing_to_4_a_5() {
     )]);
     let w = value(&books, None);
     assert_eq!(w.itc_all_other, Gstr3bTaxAmounts::default());
-    assert!(w.itc_vouchers.is_empty());
+    assert_eq!(w.itc_vouchers, [] as [ledgerly_core::VoucherId; 0]);
     assert_eq!(w.itc_not_claimable, amounts(0, 900_000, 900_000));
 }
 

@@ -344,14 +344,30 @@ fn invalid_field(r: Result<MasterSnapshot, MasterError>) -> String {
 fn as_ledger(s: MasterSnapshot) -> Ledger {
     match s {
         MasterSnapshot::Ledger(l) => l,
-        other => panic!("expected a ledger, got {other:?}"),
+        other @ (MasterSnapshot::Group(_)
+        | MasterSnapshot::VoucherType(_)
+        | MasterSnapshot::Unit(_)
+        | MasterSnapshot::StockGroup(_)
+        | MasterSnapshot::StockItem(_)
+        | MasterSnapshot::Godown(_)
+        | MasterSnapshot::Batch(_)
+        | MasterSnapshot::CostCategory(_)
+        | MasterSnapshot::CostCentre(_)) => panic!("expected a ledger, got {other:?}"),
     }
 }
 
 fn as_group(s: MasterSnapshot) -> Group {
     match s {
         MasterSnapshot::Group(g) => g,
-        other => panic!("expected a group, got {other:?}"),
+        other @ (MasterSnapshot::Ledger(_)
+        | MasterSnapshot::VoucherType(_)
+        | MasterSnapshot::Unit(_)
+        | MasterSnapshot::StockGroup(_)
+        | MasterSnapshot::StockItem(_)
+        | MasterSnapshot::Godown(_)
+        | MasterSnapshot::Batch(_)
+        | MasterSnapshot::CostCategory(_)
+        | MasterSnapshot::CostCentre(_)) => panic!("expected a group, got {other:?}"),
     }
 }
 
@@ -416,7 +432,10 @@ fn ledgers_are_listed_by_name_and_found_by_alias_and_gstin() {
     // provenance: derived; the GSTIN is searchable in any case (spec 7: palette searches GSTIN).
     let by_gstin = list_rows(&b.masters, MasterKind::Ledger, "29abcde1234");
     assert_eq!(names(&by_gstin), ["Sharma Traders"]);
-    assert!(list_rows(&b.masters, MasterKind::Ledger, "zzz").is_empty());
+    assert_eq!(
+        list_rows(&b.masters, MasterKind::Ledger, "zzz"),
+        [] as [ledgerly_app::screens::masters::MasterRow; 0]
+    );
 }
 
 #[test]
@@ -1207,7 +1226,7 @@ fn every_screen_state_draws() {
     for kind in MasterKind::ALL {
         let mut s = MastersScreen::with_kind(kind);
         frame(&ctx, &mut s, &mut app, RawInput::default());
-        assert!(!s.title().is_empty());
+        assert_ne!(s.title(), "");
         let books = app.books.clone().unwrap();
         if s.begin_create(&books).is_ok() {
             frame(&ctx, &mut s, &mut app, RawInput::default());
@@ -1270,7 +1289,13 @@ fn a_create_carries_the_unassigned_id_for_every_kind() {
             MasterSnapshot::StockGroup(x) => x.id.0,
             MasterSnapshot::CostCategory(x) => x.id.0,
             MasterSnapshot::Godown(x) => x.id.0,
-            other => panic!("unexpected {other:?}"),
+            other @ (MasterSnapshot::Group(_)
+            | MasterSnapshot::Ledger(_)
+            | MasterSnapshot::VoucherType(_)
+            | MasterSnapshot::Unit(_)
+            | MasterSnapshot::StockItem(_)
+            | MasterSnapshot::Batch(_)
+            | MasterSnapshot::CostCentre(_)) => panic!("unexpected {other:?}"),
         };
         assert_eq!(id, UNASSIGNED_ID);
     }

@@ -131,7 +131,12 @@ fn truncated_reply_is_an_error_with_a_position() {
     let t = Fixture::ok(reply);
     match list_companies(&t).unwrap_err() {
         BridgeError::MalformedResponse { offset, .. } => assert_eq!(offset, reply.len()),
-        other => panic!("expected MalformedResponse, got {other:?}"),
+        other @ (BridgeError::Transport(_)
+        | BridgeError::Xml(_)
+        | BridgeError::UnexpectedResponse { .. }
+        | BridgeError::TallyReported { .. }
+        | BridgeError::Cancelled
+        | BridgeError::Io { .. }) => panic!("expected MalformedResponse, got {other:?}"),
     }
 }
 

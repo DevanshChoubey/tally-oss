@@ -89,6 +89,10 @@ impl HttpTransport {
         self.port
     }
 
+    #[expect(
+        clippy::wildcard_enum_match_arm,
+        reason = "ureq::Error is #[non_exhaustive]: a catch-all arm is required, and every other error is reported as I/O with its text"
+    )]
     fn map_error(&self, error: &ureq::Error) -> TransportError {
         match error {
             ureq::Error::StatusCode(status) => TransportError::Http { status: *status },
@@ -162,16 +166,14 @@ fn decode_utf8(bytes: &[u8], base: usize) -> Result<String, TransportError> {
 }
 
 fn decode_utf16(bytes: &[u8], little_endian: bool, base: usize) -> Result<String, TransportError> {
-    let chunks = bytes.chunks_exact(2);
-    if !chunks.remainder().is_empty() {
+    let (pairs, rest) = bytes.as_chunks::<2>();
+    if !rest.is_empty() {
         return Err(TransportError::Io(format!(
             "reply is UTF-16 but has an odd number of bytes (ends at byte {})",
             base.saturating_add(bytes.len())
         )));
     }
-    let units = chunks.map(|pair| {
-        let first = pair.first().copied().unwrap_or(0);
-        let second = pair.get(1).copied().unwrap_or(0);
+    let units = pairs.iter().map(|&[first, second]| {
         if little_endian {
             u16::from_le_bytes([first, second])
         } else {

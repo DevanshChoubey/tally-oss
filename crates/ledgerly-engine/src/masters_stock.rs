@@ -79,15 +79,27 @@ fn require_name(field: &str, name: &str) -> Result<(), EngineError> {
     }
 }
 
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "returns the Result<Outcome> that every command handler returns, so callers can `return` it"
+)]
 fn created(snapshot: MasterSnapshot) -> Result<Outcome<Vec<Event>>, EngineError> {
     Ok(Outcome::Value(vec![Event::MasterCreated(snapshot)]))
 }
 
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "returns the Result<Outcome> that every command handler returns, so callers can `return` it"
+)]
 fn deleted(snapshot: MasterSnapshot) -> Result<Outcome<Vec<Event>>, EngineError> {
     Ok(Outcome::Value(vec![Event::MasterDeleted(snapshot)]))
 }
 
 /// One alter event, or none when the master is unchanged.
+#[expect(
+    clippy::unnecessary_wraps,
+    reason = "returns the Result<Outcome> that every command handler returns, so callers can `return` it"
+)]
 fn altered(
     changed: bool,
     before: MasterSnapshot,

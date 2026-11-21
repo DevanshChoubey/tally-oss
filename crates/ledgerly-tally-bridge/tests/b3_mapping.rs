@@ -389,7 +389,10 @@ fn ledger_flags_and_zero_opening_are_read() {
     assert!(!l.cost_centres_applicable);
     assert_eq!(l.opening.amount, Paise::ZERO);
     // derived: all three tags were read, so nothing is reported as dropped.
-    assert!(mapped.warnings.is_empty());
+    assert_eq!(
+        mapped.warnings,
+        [] as [ledgerly_tally_bridge::mapping::MapWarning; 0]
+    );
 }
 
 #[test]
@@ -431,7 +434,7 @@ fn ledger_without_group_is_an_error_except_the_reserved_profit_and_loss() {
     );
     let pl = masters(&ledger_xml("Profit & Loss A/c", "g-2", "", ""));
     let mapped = map_with_warnings(&pl, &[]).unwrap();
-    assert!(mapped.events.is_empty());
+    assert_eq!(mapped.events, [] as [ledgerly_store::Event; 0]);
     assert_eq!(mapped.warnings.len(), 1);
 }
 
@@ -484,7 +487,7 @@ fn unsupported_master_kinds_are_reported() {
     let m =
         masters("<UNIT NAME=\"Nos\"><GUID>g-u</GUID><ALTERID>1</ALTERID><NAME>Nos</NAME></UNIT>");
     let mapped = map_with_warnings(&m, &[]).unwrap();
-    assert!(mapped.events.is_empty());
+    assert_eq!(mapped.events, [] as [ledgerly_store::Event; 0]);
     assert_eq!(mapped.warnings.len(), 1);
     assert_eq!(mapped.warnings[0].object, "unit 'Nos'");
 }

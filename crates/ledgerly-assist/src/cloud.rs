@@ -392,6 +392,10 @@ fn is_https(endpoint: &str) -> bool {
 }
 
 /// Builds the redacted message for an input (rule: redaction before any send).
+#[expect(
+    clippy::too_many_lines,
+    reason = "one match over every ProposalInput kind; splitting it hides the redaction order"
+)]
 fn prepare(input: &ProposalInput) -> Result<Prepared, AssistError> {
     let mut redactor = Redactor::default();
     let (task, input_text) = match input {
@@ -850,7 +854,7 @@ fn unit_multiplier(after: &str) -> i64 {
     let word: String = after
         .trim_start()
         .chars()
-        .take_while(|c| c.is_ascii_alphabetic())
+        .take_while(char::is_ascii_alphabetic)
         .collect::<String>()
         .to_ascii_lowercase();
     match word.as_str() {

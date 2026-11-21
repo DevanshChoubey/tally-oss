@@ -272,7 +272,10 @@ fn document_without_items_has_no_tax_split_and_is_unsupported() {
         {"ctin":"24AAACB1111C1ZT","inv":[{"inum":"X1","dt":"01-04-2024","val":10.00}]}]}}}"#;
     let r = parse_gstr2b(text).unwrap();
     let doc = &r.b2b[0].docs[0];
-    assert!(doc.items.is_empty());
+    assert_eq!(
+        doc.items,
+        [] as [ledgerly_gst_formats::gstr2b::InwardItem; 0]
+    );
     // A zero here would be a guess: the file carries no tax heads.
     assert!(doc.tax_totals().unwrap().is_unsupported());
     // provenance: derived - "val": 10.00 rupees = 1000 paise.
@@ -283,8 +286,20 @@ fn document_without_items_has_no_tax_split_and_is_unsupported() {
 fn absent_sections_are_empty_not_errors() {
     let text = r#"{"data":{"gstin":"29ABCDE1234F1ZW","rtnprd":"042024","docdata":{}}}"#;
     let r = parse_gstr2b(text).unwrap();
-    assert!(r.b2b.is_empty());
-    assert!(r.cdnr.is_empty());
+    assert_eq!(
+        r.b2b,
+        []
+            as [ledgerly_gst_formats::gstr2b::SupplierGroup<
+                ledgerly_gst_formats::gstr2b::InwardDoc,
+            >; 0]
+    );
+    assert_eq!(
+        r.cdnr,
+        []
+            as [ledgerly_gst_formats::gstr2b::SupplierGroup<
+                ledgerly_gst_formats::gstr2b::InwardDoc,
+            >; 0]
+    );
     assert_eq!(r.version, None);
     assert_eq!(r.generated_on, None);
 }

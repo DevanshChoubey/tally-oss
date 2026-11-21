@@ -196,7 +196,10 @@ fn leaf_err(number: &str, reason_part: &str, err: BankError) {
             assert_eq!(n, number);
             assert!(reason.contains(reason_part), "reason was: {reason}");
         }
-        other => panic!("expected ChequeLeaf, got {other:?}"),
+        other
+        @ (BankError::Money(_) | BankError::NotABankLedger(_) | BankError::Invalid { .. }) => {
+            panic!("expected ChequeLeaf, got {other:?}")
+        }
     }
 }
 

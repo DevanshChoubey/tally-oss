@@ -99,8 +99,12 @@ fn frames(s: &mut AssistScreen, input: &RawInput) -> (ScreenAction, Vec<String>)
         } else {
             RawInput::default()
         };
+        // The shell applies each pass's action, so the first non-Stay action is the result.
         let out = ctx.run_ui(raw, |ui| {
-            action = s.ui(ui, &mut app);
+            let a = s.ui(ui, &mut app);
+            if matches!(action, ScreenAction::Stay) {
+                action = a;
+            }
         });
         texts.clear();
         for clipped in &out.shapes {

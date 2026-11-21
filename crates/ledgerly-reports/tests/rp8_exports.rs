@@ -427,7 +427,7 @@ fn xlsx_write_replaces_atomically_and_leaves_no_temp_file() {
     assert_eq!(cell_string(range.get((1, 1))), "number 2.00");
     let leftovers = std::fs::read_dir(path.parent().unwrap())
         .unwrap()
-        .filter_map(|entry| entry.ok())
+        .filter_map(std::result::Result::ok)
         .filter(|entry| {
             let name = entry.file_name().to_string_lossy().into_owned();
             name.starts_with(".atomic.xlsx.") && name.ends_with(".ledgerly-tmp")
