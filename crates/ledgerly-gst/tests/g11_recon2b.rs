@@ -43,6 +43,10 @@ const PARTY_A: LedgerId = LedgerId(11);
 const PARTY_B: LedgerId = LedgerId(12);
 const IGST_LEDGER: LedgerId = LedgerId(20);
 
+/// A defaulted value of the inferred type (the `extra` maps are `serde_json` types this crate does not name).
+fn empty<T: Default>() -> T {
+    T::default()
+}
 fn vtype(id: VoucherTypeId, base: BaseVoucherKind) -> VoucherType {
     VoucherType {
         id,
@@ -175,7 +179,7 @@ fn item(igst: i64) -> InwardItem {
             sgst: Paise::ZERO,
             cess: Paise::ZERO,
         },
-        extra: Default::default(),
+        extra: empty(),
     }
 }
 
@@ -193,7 +197,7 @@ fn doc(kind: InwardDocKind, number: &str, igst: i64) -> InwardDoc {
         diff_percent: None,
         irn: None,
         items: vec![item(igst)],
-        extra: Default::default(),
+        extra: empty(),
     }
 }
 
@@ -204,7 +208,7 @@ fn group(ctin: &str, docs: Vec<InwardDoc>) -> SupplierGroup<InwardDoc> {
         supplier_period: None,
         supplier_filing_date: None,
         docs,
-        extra: Default::default(),
+        extra: empty(),
     }
 }
 
@@ -220,9 +224,9 @@ fn statement(b2b: Vec<SupplierGroup<InwardDoc>>, cdnr: Vec<SupplierGroup<InwardD
         checksum: None,
         b2b,
         cdnr,
-        extra: Default::default(),
-        docdata_extra: Default::default(),
-        root_extra: Default::default(),
+        extra: empty(),
+        docdata_extra: empty(),
+        root_extra: empty(),
     }
 }
 
@@ -619,7 +623,7 @@ fn split_heads_are_summed() {
             sgst: Paise::new(90_000),
             cess: Paise::ZERO,
         },
-        extra: Default::default(),
+        extra: empty(),
     }];
     let d = statement(vec![group(SUPPLIER_A, vec![portal])], vec![]);
     assert_eq!(run(&b, &d, 0)[0].level, MatchLevel::Exact);
