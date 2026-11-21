@@ -109,7 +109,7 @@ impl Replay {
         })
     }
 
-    fn apply(&mut self, event: Event) -> Result<(), String> {
+    pub(crate) fn apply(&mut self, event: Event) -> Result<(), String> {
         match event {
             Event::MasterCreated(snapshot) => apply_master(&mut self.masters, snapshot, Op::Insert),
             Event::MasterAltered { before, after } => {
@@ -223,7 +223,7 @@ impl Replay {
 }
 
 /// Appends the postings of `voucher`: none when it is cancelled, otherwise one per ledger line.
-fn postings_of(voucher: &Voucher, out: &mut Vec<Posting>) -> Result<(), String> {
+pub(crate) fn postings_of(voucher: &Voucher, out: &mut Vec<Posting>) -> Result<(), String> {
     match voucher.status {
         VoucherStatus::Cancelled => return Ok(()),
         VoucherStatus::Regular | VoucherStatus::Optional | VoucherStatus::PostDated => {}
