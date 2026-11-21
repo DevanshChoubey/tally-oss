@@ -6,7 +6,7 @@
 //! pub fn ocr_to_draft(ocr: &OcrOutput, masters: &Masters) -> Result<VoucherDraft, AssistError>;
 //! ```
 //!
-//! An OCR engine (PaddleOCR or Tesseract, spec 6.8) turns a bill image into text lines with a
+//! An OCR engine (`PaddleOCR` or Tesseract, spec 6.8) turns a bill image into text lines with a
 //! bounding box and a confidence each. That output is [`OcrOutput`]. This module reads it into a
 //! [`VoucherDraft`]: a purchase bill from a supplier. It is a transcription step, not a
 //! computation (rule A10):
