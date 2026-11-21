@@ -1,0 +1,11 @@
+---
+source: crates/ledgerly-reports/tests/rp8_exports.rs
+expression: to_csv(&trial_balance_fixture()).unwrap()
+---
+Particulars,Debit,Credit
+Capital Account,,-1000.00
+  Proprietor Capital,,-1000.00
+Current Assets,1000.00,
+  Cash,1000.00,
+Total,1000.00,-1000.00
+Note: Actual vouchers as of 2026-03-31

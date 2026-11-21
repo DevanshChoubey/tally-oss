@@ -6,8 +6,12 @@
 //! so both are rendered in rupees with the prefix `Rs` (and the side for a `SignedAmount`).
 //!
 //! A bare integer is recognised as paise by the name of its field (`amount`, `round_off`,
-//! `taxable`, `tax`: every `Paise` field that an event can carry, see the model crate). A
-//! `SignedAmount` is recognised by its shape. Any other integer is shown as it is.
+//! `taxable`, `tax`: every `Paise` field that an event can carry, see the model crate). An array
+//! of bare integers under such a name is a list of rupee amounts. A `SignedAmount` is recognised
+//! by its shape. Any other integer is shown as it is.
+//!
+//! The rule holds inside arrays too: an element that is added to or removed from an array is
+//! shown field by field, so an amount in it is rendered in rupees like any other.
 
 use std::collections::BTreeSet;
 
@@ -99,6 +103,63 @@ fn is_container(v: &Value) -> bool {
     matches!(v, Value::Object(_) | Value::Array(_))
 }
 
+/// Diffs one slot (an object key or an array index) that may be present on one side only.
+fn diff_slot(path: &str, left: Option<&Value>, right: Option<&Value>, out: &mut Vec<Change>) {
+    match (left, right) {
+        (Some(l), Some(r)) => diff_values(path, l, r, out),
+        (Some(l), None) => absent_changes(path, l, true, out),
+        (None, Some(r)) => absent_changes(path, r, false, out),
+        (None, None) => {}
+    }
+}
+
+/// Appends one [`Change`] per leaf of a subtree that exists on one side only (`(absent)` on the
+/// other), so that every amount in it is rendered in rupees.
+fn absent_changes(path: &str, value: &Value, present_before: bool, out: &mut Vec<Change>) {
+    let mut leaves = Vec::new();
+    collect_leaves(path, value, &mut leaves);
+    for (field, leaf) in leaves {
+        let shown = render(&field, leaf);
+        let (before, after) = if present_before {
+            (shown, "(absent)".to_owned())
+        } else {
+            ("(absent)".to_owned(), shown)
+        };
+        out.push(Change {
+            field,
+            before,
+            after,
+        });
+    }
+}
+
+/// The leaves of `value` with their paths. Objects and arrays that hold containers are split;
+/// a `SignedAmount`, an array of scalars and an empty container are leaves.
+fn collect_leaves<'a>(path: &str, value: &'a Value, out: &mut Vec<(String, &'a Value)>) {
+    if signed_amount_text(value).is_some() {
+        out.push((path.to_owned(), value));
+        return;
+    }
+    match value {
+        Value::Object(map) if !map.is_empty() => {
+            for (key, sub) in map {
+                collect_leaves(&join_path(path, key), sub, out);
+            }
+        }
+        Value::Array(items) if items.iter().any(is_container) => {
+            for (index, sub) in items.iter().enumerate() {
+                collect_leaves(&format!("{path}[{index}]"), sub, out);
+            }
+        }
+        Value::Null
+        | Value::Bool(_)
+        | Value::Number(_)
+        | Value::String(_)
+        | Value::Object(_)
+        | Value::Array(_) => out.push((path.to_owned(), value)),
+    }
+}
+
 fn join_path(path: &str, key: &str) -> String {
     if path.is_empty() {
         key.to_owned()
@@ -123,8 +184,9 @@ fn signed_amount_text(v: &Value) -> Option<String> {
 
 /// Appends one [`Change`] per leaf that differs between `before` and `after`.
 ///
-/// Objects are compared key by key (keys in sorted order). Arrays of the same length that hold
-/// containers are compared element by element (`path[0].field`); any other array is one leaf. A
+/// Objects are compared key by key (keys in sorted order). Arrays that hold containers are
+/// compared index by index (`path[0].field`), and an index present on one side only is shown
+/// field by field with `(absent)` on the other side; any other array is one leaf. A
 /// `SignedAmount` is one leaf, so a change of side alone is shown as `Rs 100.00 Dr` to
 /// `Rs 100.00 Cr`.
 pub(super) fn diff_values(path: &str, before: &Value, after: &Value, out: &mut Vec<Change>) {
@@ -144,28 +206,23 @@ pub(super) fn diff_values(path: &str, before: &Value, after: &Value, out: &mut V
             let keys: BTreeSet<&String> = old.keys().chain(new.keys()).collect();
             for key in keys {
                 let sub = join_path(path, key);
-                match (old.get(key), new.get(key)) {
-                    (Some(left), Some(right)) => diff_values(&sub, left, right, out),
-                    (Some(left), None) => out.push(Change {
-                        before: render(&sub, left),
-                        after: "(absent)".to_owned(),
-                        field: sub,
-                    }),
-                    (None, Some(right)) => out.push(Change {
-                        before: "(absent)".to_owned(),
-                        after: render(&sub, right),
-                        field: sub,
-                    }),
-                    (None, None) => {}
-                }
+                diff_slot(&sub, old.get(key), new.get(key), out);
             }
         }
         (Value::Array(old), Value::Array(new))
-            if old.len() == new.len() && old.iter().chain(new.iter()).any(is_container) =>
+            if old.iter().chain(new.iter()).any(is_container) =>
         {
-            for (index, (left, right)) in old.iter().zip(new.iter()).enumerate() {
-                diff_values(&format!("{path}[{index}]"), left, right, out);
+            for index in 0..old.len().max(new.len()) {
+                let sub = format!("{path}[{index}]");
+                diff_slot(&sub, old.get(index), new.get(index), out);
             }
+        }
+        // An optional struct (`None` serialises as null) that appears or disappears.
+        (Value::Null, container) if is_container(container) => {
+            absent_changes(path, container, false, out);
+        }
+        (container, Value::Null) if is_container(container) => {
+            absent_changes(path, container, true, out);
         }
         _ => out.push(Change {
             field: path.to_owned(),
@@ -188,16 +245,30 @@ fn render(path: &str, v: &Value) -> String {
     if let Some(text) = signed_amount_text(v) {
         return text;
     }
-    if PAISE_FIELDS.contains(&name)
-        && let Some(paise) = v.as_i64()
-    {
-        return format!("Rs {}", format_inr(Paise::new(paise)));
+    if PAISE_FIELDS.contains(&name) {
+        if let Some(paise) = v.as_i64() {
+            return rupees_text(paise);
+        }
+        if let Some(items) = v.as_array() {
+            let amounts: Option<Vec<String>> = items
+                .iter()
+                .map(|item| item.as_i64().map(rupees_text))
+                .collect();
+            if let Some(list) = amounts {
+                return format!("[{}]", list.join(","));
+            }
+        }
     }
     match v {
         Value::Null => "-".to_owned(),
         Value::String(s) => s.clone(),
         Value::Bool(_) | Value::Number(_) | Value::Array(_) | Value::Object(_) => v.to_string(),
     }
+}
+
+/// A paise count as rupees with two decimals and the `Rs` prefix.
+fn rupees_text(paise: i64) -> String {
+    format!("Rs {}", format_inr(Paise::new(paise)))
 }
 
 fn date_from_pair(v: &Value) -> Option<Date> {
@@ -316,5 +387,48 @@ mod tests {
         // derived: `count` is not a money field, so 10000 stays 10000.
         let got = changes(&json!({"count": 10000}), &json!({"count": 20000}));
         assert_eq!(got, vec![triple("count", "10000", "20000")]);
+    }
+
+    #[test]
+    fn paise_in_an_element_added_to_a_changed_length_array_is_shown_in_rupees() {
+        // derived: 150000 paise = Rs 1,500.00 (100 paise to the rupee; Indian grouping 1,500).
+        // The second element is new, so its amount is "(absent)" before and Rs 1,500.00 after.
+        let got = changes(
+            &json!({"lines": [{"amount": 150000}]}),
+            &json!({"lines": [{"amount": 150000}, {"amount": 150000}]}),
+        );
+        assert_eq!(
+            got,
+            vec![triple("lines[1].amount", "(absent)", "Rs 1,500.00")]
+        );
+    }
+
+    #[test]
+    fn paise_in_an_element_removed_from_a_changed_length_array_is_shown_in_rupees() {
+        // derived: 50 paise = Rs 0.50. The second element is removed, so its amount is Rs 0.50
+        // before and "(absent)" after.
+        let got = changes(
+            &json!({"lines": [{"amount": 100}, {"amount": 50}]}),
+            &json!({"lines": [{"amount": 100}]}),
+        );
+        assert_eq!(got, vec![triple("lines[1].amount", "Rs 0.50", "(absent)")]);
+    }
+
+    #[test]
+    fn array_of_paise_under_a_money_field_is_shown_in_rupees() {
+        // derived: 100 paise = Rs 1.00 and 250 paise = Rs 2.50. The field `tax` is a money
+        // field, so the array is a list of rupee amounts, and it changed length.
+        let got = changes(&json!({"tax": [100, 250]}), &json!({"tax": [100]}));
+        assert_eq!(got, vec![triple("tax", "[Rs 1.00,Rs 2.50]", "[Rs 1.00]")]);
+    }
+
+    #[test]
+    fn null_to_a_struct_with_paise_is_shown_field_by_field_in_rupees() {
+        // derived: 150000 paise = Rs 1,500.00. The optional struct was null (None) and is now
+        // present, so its taxable amount is "(absent)" before and Rs 1,500.00 after.
+        let before = json!({"gst": null});
+        let after = json!({"gst": {"taxable": 150000}});
+        let got = changes(&before, &after);
+        assert_eq!(got, vec![triple("gst.taxable", "(absent)", "Rs 1,500.00")]);
     }
 }
