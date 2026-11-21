@@ -28,13 +28,13 @@
 use std::collections::BTreeMap;
 
 use ledgerly_core::{
-    CompanyId, Date, DrCr, GroupId, LedgerId, MoneyError, Month, Outcome, Paise, Period, Qty,
-    SignedAmount, StateCode, StockItemId, VoucherId, VoucherTypeId,
+    CompanyId, Date, DrCr, GodownId, GroupId, LedgerId, MoneyError, Month, Outcome, Paise, Period,
+    Qty, Rate, SignedAmount, StateCode, StockItemId, UnitId, VoucherId, VoucherTypeId,
 };
 use ledgerly_model::{
     Address, BaseVoucherKind, Books, Company, EntityKind, Features, Group, Ledger, Masters, Nature,
-    NegativeStockPolicy, NumberingConfig, NumberingMethod, Posting, RestartPeriod, Scenario,
-    VoucherStatus, VoucherType,
+    NegativeStockPolicy, NumberingConfig, NumberingMethod, OpeningStock, Posting, ReservedGroup,
+    RestartPeriod, Scenario, StockItem, StockMove, ValuationMethod, VoucherStatus, VoucherType,
 };
 use ledgerly_reports::balance_sheet::balance_sheet;
 use ledgerly_reports::{
@@ -43,6 +43,7 @@ use ledgerly_reports::{
 };
 use ledgerly_stock::{ProvisionalReason, StockValuation, ValuationStatus};
 use proptest::prelude::*;
+use rust_decimal::Decimal;
 
 const CAPITAL: u64 = 20;
 const CREDITOR: u64 = 21;
@@ -957,4 +958,117 @@ proptest! {
         let (l, a) = total_amounts(&r);
         prop_assert_eq!(l, a);
     }
+}
+
+fn stock_item(opening: Vec<OpeningStock>) -> StockItem {
+    StockItem {
+        id: StockItemId(1),
+        name: "Widget".into(),
+        aliases: vec![],
+        group: None,
+        unit: UnitId(1),
+        alt_unit: None,
+        hsn: None,
+        gst_history: vec![],
+        valuation: ValuationMethod::AverageCost,
+        batches_enabled: false,
+        opening,
+        standard_costs: vec![],
+        tally: None,
+    }
+}
+
+fn opening_stock(qty: i64, rate: i64) -> OpeningStock {
+    OpeningStock {
+        godown: GodownId(1),
+        batch: None,
+        qty: Qty(Decimal::from(qty)),
+        rate: Rate(Decimal::from(rate)),
+    }
+}
+
+#[test]
+fn opening_stock_is_unsupported_not_an_overstated_profit() {
+    // provenance: derived — Widget opens with 10 units at Rs 100 = Rs 1,000 of stock that has no
+    // ledger, and nothing trades afterwards, so closing stock is still Rs 1,000 and the true
+    // profit is -(0) + 1,000 closing - 1,000 opening = 0. Without an opening stock input the
+    // report would show a profit of 1,000 and absorb the other 1,000 in the opening difference
+    // row, so it must say Unsupported instead.
+    let mut books = books_with(vec![]);
+    let item = stock_item(vec![opening_stock(10, 100)]);
+    books.masters.stock_items.insert(item.id, item);
+    let out = balance_sheet(&books, &params(Detail::Condensed), &stock(rs(1_000))).unwrap();
+    assert!(out.is_unsupported());
+}
+
+#[test]
+fn zero_valued_opening_stock_is_harmless() {
+    // provenance: derived — 10 units at rate 0 are worth Rs 0, so nothing is overstated.
+    let mut books = books_with(hand_postings());
+    let item = stock_item(vec![opening_stock(10, 0)]);
+    books.masters.stock_items.insert(item.id, item);
+    let out = balance_sheet(&books, &params(Detail::Condensed), &no_stock()).unwrap();
+    assert!(!out.is_unsupported());
+}
+
+#[test]
+fn stock_moved_before_books_begin_is_unsupported() {
+    // provenance: derived — a movement before books_begin has no matching ledger posting, so the
+    // stock it leaves in hand would be counted as profit.
+    let mut books = books_with(vec![]);
+    books.stock_moves.push(StockMove {
+        voucher: VoucherId(1),
+        date: d(2026, Month::March, 31),
+        item: StockItemId(1),
+        godown: GodownId(1),
+        batch: None,
+        qty_in: Qty(Decimal::from(5)),
+        qty_out: Qty::ZERO,
+        value: rs(500),
+    });
+    let out = balance_sheet(&books, &params(Detail::Condensed), &stock(rs(500))).unwrap();
+    assert!(out.is_unsupported());
+}
+
+#[test]
+fn balance_on_a_stock_in_hand_ledger_is_unsupported() {
+    // provenance: derived — a ledger under Stock-in-Hand holding Rs 1,000 plus an injected closing
+    // stock of Rs 1,000 would show the stock twice, so the report says Unsupported.
+    let mut books = books_with_openings(vec![], &[(CASH, SignedAmount::dr(rs(1_000)))]);
+    let mut g = group(12, "Stock-in-Hand", Some(4), None);
+    g.reserved = Some(ReservedGroup::StockInHand);
+    books.masters.groups.insert(g.id, g);
+    books
+        .masters
+        .ledgers
+        .insert(LedgerId(29), ledger(29, "Opening Stock", 12));
+    books
+        .masters
+        .ledgers
+        .get_mut(&LedgerId(29))
+        .unwrap()
+        .opening = SignedAmount::dr(rs(1_000));
+    books
+        .masters
+        .ledgers
+        .get_mut(&LedgerId(CASH))
+        .unwrap()
+        .opening = SignedAmount::cr(rs(1_000));
+    let out = balance_sheet(&books, &params(Detail::Condensed), &stock(rs(1_000))).unwrap();
+    assert!(out.is_unsupported());
+}
+
+#[test]
+fn empty_stock_in_hand_ledger_is_harmless() {
+    // provenance: derived — a Stock-in-Hand ledger with a zero balance counts nothing twice.
+    let mut books = books_with(hand_postings());
+    let mut g = group(12, "Stock-in-Hand", Some(4), None);
+    g.reserved = Some(ReservedGroup::StockInHand);
+    books.masters.groups.insert(g.id, g);
+    books
+        .masters
+        .ledgers
+        .insert(LedgerId(29), ledger(29, "Opening Stock", 12));
+    let out = balance_sheet(&books, &params(Detail::Condensed), &no_stock()).unwrap();
+    assert!(!out.is_unsupported());
 }

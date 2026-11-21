@@ -30,9 +30,10 @@
 //! counted twice.
 //!
 //! Opening balances may be unbalanced (spec invariant 4). The difference is an explicit
-//! [`RowKind::Difference`] row on the short side, so both totals agree (it is where an opening
-//! stock that has no ledger shows up). Postings that do not balance among themselves are corrupt
-//! input and an error, never absorbed.
+//! [`RowKind::Difference`] row on the short side, so both totals agree. Opening stock is not
+//! absorbed there: the profit row would be overstated by it (the frozen interface has no opening
+//! stock input to deduct), so books with opening stock are `Unsupported`. Postings that do not
+//! balance among themselves are corrupt input and an error, never absorbed.
 //!
 //! Closing stock is injected, never computed here: the valuation must be dated `params.as_of`.
 //! A provisional valuation makes the stock row, the profit row and both totals provisional.
@@ -42,7 +43,11 @@
 //! * comparative or monthly columns, filters and `exceptions_only`;
 //! * a named scenario over memorandum or reversing-journal postings;
 //! * a primary group with no nature that holds a non-zero balance;
-//! * closing stock being `Unsupported`.
+//! * closing stock being `Unsupported`;
+//! * books with opening stock (an item with a non-zero opening quantity and rate), a stock
+//!   movement dated before `books_begin`, or a non-zero balance on a ledger under the
+//!   Stock-in-Hand group: the profit would be overstated, or the stock counted twice, with no
+//!   visible sign because the opening difference row absorbs the gap.
 //!
 //! `Detail::Condensed` lists primary groups only; `Detail::Detailed` goes down to ledgers and
 //! leaves out ledgers and groups whose balance is zero.
@@ -51,7 +56,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use ledgerly_core::{Date, GroupId, LedgerId, Outcome, Paise, SignedAmount, VoucherTypeId};
 use ledgerly_model::{
-    BaseVoucherKind, Books, Group, Ledger, Nature, Posting, Scenario, VoucherStatus, VoucherType,
+    BaseVoucherKind, Books, Group, Ledger, Nature, Posting, ReservedGroup, Scenario, VoucherStatus,
+    VoucherType,
 };
 use ledgerly_stock::{ProvisionalReason, StockValuation, ValuationStatus};
 
@@ -148,6 +154,9 @@ pub fn balance_sheet(
     let stock = supported!(stock_total(closing_stock, params.as_of)?);
     let movement = supported!(movement_by_ledger(books, params)?);
     let (balances, opening_net) = closing_balances(books, &movement)?;
+    if let Some(unsupported) = unsupported_stock_books(books, &balances) {
+        return Ok(unsupported);
+    }
     build_report(books, params, &balances, opening_net, &stock)
 }
 
@@ -191,6 +200,78 @@ fn unsupported_params(params: &ReportParams) -> Option<Outcome<Report>> {
             "balance sheet: exceptions only",
             "no exception rules are defined for the balance sheet",
         ));
+    }
+    None
+}
+
+/// Whether `group` is the Stock-in-Hand group or sits under it.
+fn under_stock_in_hand(books: &Books, group: GroupId) -> bool {
+    let mut current = Some(group);
+    // The hop bound stops a cyclic chart; `check_all_placed` reports the cycle itself.
+    for _ in 0..=books.masters.groups.len() {
+        let Some(id) = current else {
+            return false;
+        };
+        let Some(g) = books.masters.groups.get(&id) else {
+            return false;
+        };
+        if g.reserved == Some(ReservedGroup::StockInHand) {
+            return true;
+        }
+        current = g.parent;
+    }
+    false
+}
+
+/// Books whose stock cannot be folded into the profit correctly.
+///
+/// The profit row is `-(income and expense net) + closing stock`. Opening stock, stock moved
+/// before the books begin, or a Stock-in-Hand ledger carrying a balance would each need an
+/// opening stock deduction (or would count the stock twice against the closing stock row); the
+/// opening difference row would hide the error, so the report says `Unsupported` instead.
+fn unsupported_stock_books(
+    books: &Books,
+    balances: &BTreeMap<LedgerId, Paise>,
+) -> Option<Outcome<Report>> {
+    for item in books.masters.stock_items.values() {
+        let valued = item
+            .opening
+            .iter()
+            .any(|o| !o.qty.0.is_zero() && !o.rate.0.is_zero());
+        if valued {
+            return Some(Outcome::unsupported(
+                "balance sheet: opening stock",
+                format!(
+                    "item '{}' has opening stock; the profit row would be overstated by its value",
+                    item.name
+                ),
+            ));
+        }
+    }
+    if let Some(m) = books
+        .stock_moves
+        .iter()
+        .find(|m| m.date < books.company.books_begin)
+    {
+        return Some(Outcome::unsupported(
+            "balance sheet: stock moved before the books begin",
+            format!(
+                "a stock movement is dated {}, before the books begin on {}",
+                m.date, books.company.books_begin
+            ),
+        ));
+    }
+    for (id, ledger) in &books.masters.ledgers {
+        let balance = balances.get(id).copied().unwrap_or(Paise::ZERO);
+        if !balance.is_zero() && under_stock_in_hand(books, ledger.group) {
+            return Some(Outcome::unsupported(
+                "balance sheet: balance on a Stock-in-Hand ledger",
+                format!(
+                    "ledger '{}' under Stock-in-Hand has a balance; closing stock is injected, so it would be counted twice",
+                    ledger.name
+                ),
+            ));
+        }
     }
     None
 }
