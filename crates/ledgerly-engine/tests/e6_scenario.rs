@@ -60,7 +60,7 @@ fn posting(
         voucher: VoucherId(voucher),
         date,
         ledger: LedgerId(10),
-        amount: SignedAmount::dr(Paise::new(100_00)),
+        amount: SignedAmount::dr(Paise::new(10_000)),
         status,
         type_id,
     }
