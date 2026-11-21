@@ -41,9 +41,13 @@ const EXPORT_FORMAT_XML: &str = "$$SysName:XML";
 const COMMON_FETCH: &str = "GUID, AlterID, Name, Parent";
 /// Ledger fields fetched in addition (names as in research 08 section 2.3 example b).
 const LEDGER_FETCH: &str = "GUID, AlterID, Name, Parent, OpeningBalance, PartyGSTIN";
-/// Voucher fields fetched, with the nested entry lists.
+/// Inline collection name for vouchers.
+const VOUCHER_COLLECTION: &str = "LedgerlyVouchers";
+/// Voucher fields fetched, with the nested entry lists. The status and invoice flags are fetched
+/// so that a voucher with a flag absent from the response is refused, never read as regular.
 const VOUCHER_FETCH: &str = "GUID, AlterID, Date, VoucherTypeName, VoucherNumber, \
-PartyLedgerName, Narration, AllLedgerEntries.*, AllInventoryEntries.*";
+PartyLedgerName, Narration, ISCANCELLED, ISOPTIONAL, ISPOSTDATED, ISINVOICE, \
+AllLedgerEntries.*, AllInventoryEntries.*";
 
 /// A kind of master that can be exported as a collection.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -58,28 +62,32 @@ pub enum MasterCollection {
     Units,
     /// Godowns (`GODOWN`).
     Godowns,
-    /// Voucher types (`VOUCHERTYPE`).
-    VoucherTypes,
     /// Cost centres (`COSTCENTRE`).
     CostCentres,
     /// Cost categories (`COSTCATEGORY`).
     CostCategories,
     /// Stock groups (`STOCKGROUP`).
     StockGroups,
+    /// Stock categories (`STOCKCATEGORY`).
+    StockCategories,
+    /// Voucher types (`VOUCHERTYPE`).
+    VoucherTypes,
 }
 
 impl MasterCollection {
-    /// Every kind, in the order the importer reads them (parents before children).
-    pub const ALL: [MasterCollection; 9] = [
+    /// Every kind, in the order the importer reads them (spec 6.7 step 2: parents before
+    /// children, voucher types last). This is the one list of master kinds the pull requests.
+    pub const ALL: [MasterCollection; 10] = [
         MasterCollection::Groups,
         MasterCollection::Ledgers,
         MasterCollection::Units,
         MasterCollection::StockGroups,
+        MasterCollection::StockCategories,
         MasterCollection::StockItems,
         MasterCollection::Godowns,
-        MasterCollection::VoucherTypes,
         MasterCollection::CostCategories,
         MasterCollection::CostCentres,
+        MasterCollection::VoucherTypes,
     ];
 
     /// The name of the inline collection, also the request `ID`.
@@ -95,6 +103,7 @@ impl MasterCollection {
             MasterCollection::CostCentres => "LedgerlyCostCentres",
             MasterCollection::CostCategories => "LedgerlyCostCategories",
             MasterCollection::StockGroups => "LedgerlyStockGroups",
+            MasterCollection::StockCategories => "LedgerlyStockCategories",
         }
     }
 
@@ -111,6 +120,7 @@ impl MasterCollection {
             MasterCollection::CostCentres => "Cost Centre",
             MasterCollection::CostCategories => "Cost Category",
             MasterCollection::StockGroups => "Stock Group",
+            MasterCollection::StockCategories => "Stock Category",
         }
     }
 
@@ -126,7 +136,8 @@ impl MasterCollection {
             | MasterCollection::VoucherTypes
             | MasterCollection::CostCentres
             | MasterCollection::CostCategories
-            | MasterCollection::StockGroups => COMMON_FETCH,
+            | MasterCollection::StockGroups
+            | MasterCollection::StockCategories => COMMON_FETCH,
         }
     }
 }
@@ -287,6 +298,18 @@ pub fn masters_request(company: &str, collection: MasterCollection) -> String {
     render("Collection", def.name, &variables, Some(&def))
 }
 
+/// The `FETCH` list sent for vouchers (pending an observed capture of the field names).
+#[must_use]
+pub fn voucher_fetch_fields() -> &'static str {
+    VOUCHER_FETCH
+}
+
+/// The inline collection name the voucher request uses, also its request `ID`.
+#[must_use]
+pub fn voucher_collection_name() -> &'static str {
+    VOUCHER_COLLECTION
+}
+
 /// The request for every voucher dated from `from` to `to` (both inclusive) in `company`.
 ///
 /// Dates are written `YYYYMMDD`. The caller is expected to pass `from <= to` and four-digit
@@ -300,7 +323,7 @@ pub fn vouchers_request(company: &str, from: Date, to: Date) -> String {
         ("SVEXPORTFORMAT", EXPORT_FORMAT_XML.to_owned()),
     ];
     let def = CollectionDef {
-        name: "LedgerlyVouchers",
+        name: VOUCHER_COLLECTION,
         object_type: "Voucher",
         fetch: VOUCHER_FETCH,
     };

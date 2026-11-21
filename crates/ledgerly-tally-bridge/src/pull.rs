@@ -45,10 +45,10 @@
 //! # Not yet verified against TallyPrime
 //!
 //! The request envelopes follow the documented shapes in research note R8 (sections 2.2, 2.3 a
-//! and b) but the collection type names and `FETCH` field lists are **pending an observed
-//! capture** from a real TallyPrime. They are private to this module because card X1 (request
-//! builders in `ledgerly-tally-xml`) was not built when this card was written; see the interface
-//! request filed with card B2.
+//! and b). The master kinds, their order, the collection names, object types and `FETCH` lists
+//! come from card X1 (`ledgerly_tally_xml::request::MasterCollection`), the one place that says
+//! what is requested. The collection type names and `FETCH` field lists are **pending an observed
+//! capture** from a real TallyPrime.
 
 use std::fs;
 use std::io::Write;
@@ -56,6 +56,9 @@ use std::path::{Path, PathBuf};
 
 use ledgerly_core::{CancelToken, Date, Period};
 use ledgerly_tally_xml::masters::{TallyMaster, parse_masters_text};
+use ledgerly_tally_xml::request::{
+    MasterCollection, voucher_collection_name, voucher_fetch_fields,
+};
 use ledgerly_tally_xml::vouchers::{TVoucher, parse_vouchers_xml};
 use ledgerly_tally_xml::{TallyXmlError, XmlWarning};
 use thiserror::Error;
@@ -319,63 +322,22 @@ pub fn pull_with_plan(
     Ok(result)
 }
 
-/// A master collection to request.
-struct MasterSpec {
-    /// Capture file name; the number keeps the dependency order visible on disk.
-    file: &'static str,
-    /// Tally collection type name (pending an observed capture).
-    tally_type: &'static str,
+/// The capture file name for one master kind. The number keeps the dependency order visible on
+/// disk. Every kind of [`MasterCollection::ALL`] has one name, checked by a test.
+fn capture_file(kind: MasterCollection) -> &'static str {
+    match kind {
+        MasterCollection::Groups => "masters-01-groups.xml",
+        MasterCollection::Ledgers => "masters-02-ledgers.xml",
+        MasterCollection::Units => "masters-03-units.xml",
+        MasterCollection::StockGroups => "masters-04-stock-groups.xml",
+        MasterCollection::StockCategories => "masters-05-stock-categories.xml",
+        MasterCollection::StockItems => "masters-06-stock-items.xml",
+        MasterCollection::Godowns => "masters-07-godowns.xml",
+        MasterCollection::CostCategories => "masters-08-cost-categories.xml",
+        MasterCollection::CostCentres => "masters-09-cost-centres.xml",
+        MasterCollection::VoucherTypes => "masters-10-voucher-types.xml",
+    }
 }
-
-/// Dependency order from spec 6.7 step 2.
-const MASTER_COLLECTIONS: [MasterSpec; 10] = [
-    MasterSpec {
-        file: "masters-01-groups.xml",
-        tally_type: "Group",
-    },
-    MasterSpec {
-        file: "masters-02-ledgers.xml",
-        tally_type: "Ledger",
-    },
-    MasterSpec {
-        file: "masters-03-units.xml",
-        tally_type: "Unit",
-    },
-    MasterSpec {
-        file: "masters-04-stock-groups.xml",
-        tally_type: "StockGroup",
-    },
-    MasterSpec {
-        file: "masters-05-stock-categories.xml",
-        tally_type: "StockCategory",
-    },
-    MasterSpec {
-        file: "masters-06-stock-items.xml",
-        tally_type: "StockItem",
-    },
-    MasterSpec {
-        file: "masters-07-godowns.xml",
-        tally_type: "Godown",
-    },
-    MasterSpec {
-        file: "masters-08-cost-categories.xml",
-        tally_type: "CostCategory",
-    },
-    MasterSpec {
-        file: "masters-09-cost-centres.xml",
-        tally_type: "CostCentre",
-    },
-    MasterSpec {
-        file: "masters-10-voucher-types.xml",
-        tally_type: "VoucherType",
-    },
-];
-
-/// Fields requested for every master (R8 section 2.3 b names these; pending an observed capture).
-const MASTER_FETCH: &str = "GUID, AlterID, Name, Parent";
-
-/// Fields requested for vouchers (pending an observed capture).
-const VOUCHER_FETCH: &str = "GUID, AlterID, Date, VoucherTypeName, VoucherNumber, PartyLedgerName, Narration, AllLedgerEntries, AllInventoryEntries";
 
 /// What happened to one voucher window.
 enum WindowOutcome {
@@ -404,27 +366,33 @@ impl Puller<'_> {
     }
 
     fn pull_masters(&mut self, result: &mut PullResult) -> Result<(), PullError> {
-        for spec in &MASTER_COLLECTIONS {
+        for kind in MasterCollection::ALL {
             self.checkpoint(result)?;
-            let request = collection_request(self.company, spec.tally_type, MASTER_FETCH, None);
+            let file = capture_file(kind);
+            let request = collection_request(
+                self.company,
+                kind.collection_name(),
+                kind.object_type(),
+                kind.fetch_fields(),
+                None,
+            );
             let raw = self.t.post(&request)?;
-            self.capture.store_raw(spec.file, &raw)?;
-            check_envelope(&raw, spec.file)?;
+            self.capture.store_raw(file, &raw)?;
+            check_envelope(&raw, file)?;
             let parsed = parse_masters_text(&raw).map_err(|e| PullError::Masters {
-                file: spec.file.to_owned(),
+                file: file.to_owned(),
                 error: e.error,
             })?;
             let count = parsed.masters.len();
             result
                 .warnings
                 .extend(parsed.warnings.into_iter().map(|warning| PullWarning {
-                    file: spec.file.to_owned(),
+                    file: file.to_owned(),
                     warning,
                 }));
             result.masters.extend(parsed.masters);
-            self.capture
-                .record(format!("masters\t{}\t{count}", spec.file))?;
-            result.master_files.push(spec.file.to_owned());
+            self.capture.record(format!("masters\t{file}\t{count}"))?;
+            result.master_files.push(file.to_owned());
         }
         Ok(())
     }
@@ -464,7 +432,13 @@ impl Puller<'_> {
     ) -> Result<WindowOutcome, PullError> {
         let (from, to) = (window.from(), window.to());
         let file = format!("vouchers-{}-{}.xml", ymd(from), ymd(to));
-        let request = collection_request(self.company, "Voucher", VOUCHER_FETCH, Some((from, to)));
+        let request = collection_request(
+            self.company,
+            voucher_collection_name(),
+            "Voucher",
+            voucher_fetch_fields(),
+            Some((from, to)),
+        );
         let raw = self.t.post(&request)?;
         self.capture.store_raw(&file, &raw)?;
         check_envelope(&raw, &file)?;
@@ -621,14 +595,15 @@ fn validate_company(company: &str) -> Result<(), PullError> {
 }
 
 /// An export request for a TDL collection (R8 section 2.3 b), optionally for a date range
-/// (`SVFROMDATE`/`SVTODATE`, R8 section 2.2).
+/// (`SVFROMDATE`/`SVTODATE`, R8 section 2.2). `id` is the collection name, `tally_type` its object
+/// type.
 fn collection_request(
     company: &str,
+    id: &str,
     tally_type: &str,
     fetch: &str,
     dates: Option<(Date, Date)>,
 ) -> String {
-    let id = format!("Ledgerly{tally_type}");
     let range = dates.map_or_else(String::new, |(from, to)| {
         format!(
             "<SVFROMDATE>{}</SVFROMDATE><SVTODATE>{}</SVTODATE>",
@@ -766,6 +741,31 @@ mod tests {
         let d = PullPlan::default();
         // provenance: derived — spec 6.7 step 2: at most 5,000 vouchers per request.
         assert_eq!(d.max_vouchers(), 5_000);
+    }
+
+    #[test]
+    fn every_master_kind_has_a_numbered_capture_file_in_request_order() {
+        // derived: spec 6.7 step 2 order; the file numbers follow the request order, one name per
+        // kind of X1's ALL list, with no name used twice.
+        let names: Vec<&str> = MasterCollection::ALL
+            .iter()
+            .map(|kind| capture_file(*kind))
+            .collect();
+        assert_eq!(
+            names,
+            [
+                "masters-01-groups.xml",
+                "masters-02-ledgers.xml",
+                "masters-03-units.xml",
+                "masters-04-stock-groups.xml",
+                "masters-05-stock-categories.xml",
+                "masters-06-stock-items.xml",
+                "masters-07-godowns.xml",
+                "masters-08-cost-categories.xml",
+                "masters-09-cost-centres.xml",
+                "masters-10-voucher-types.xml",
+            ]
+        );
     }
 
     #[test]

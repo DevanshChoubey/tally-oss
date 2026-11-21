@@ -4,10 +4,12 @@
 //! `docs/research/08-data-interop-editions.md` sections 2.2 and 2.3 (examples a and b: HEADER with
 //! VERSION, TALLYREQUEST, TYPE, ID; BODY/DESC/STATICVARIABLES with SVCURRENTCOMPANY, SVFROMDATE,
 //! SVTODATE and SVEXPORTFORMAT; inline TDL COLLECTION with TYPE and FETCH; dates as YYYYMMDD,
-//! as in example a: 20260401 to 20270331). All expectations are `derived` from that shape.
-//! Not observed: the report name `List of Companies`, the object names in COLLECTION/TYPE and the
-//! FETCH field names (research 08 marks every field name unverified until a real export is
-//! captured), so a captured export must confirm them before they count as verified.
+//! as in example a: 20260401 to 20270331). The envelope shape and the date format are `derived`
+//! from that documentation.
+//! `pending`, not observed: the report name `List of Companies`, the object names in COLLECTION/TYPE
+//! and the FETCH field names (research 08 marks every field name unverified until a real export is
+//! captured). The expected documents that pin those names are labelled `pending` where they are
+//! written, and a captured export must confirm them before they count as verified.
 
 #![allow(
     clippy::unwrap_used,
@@ -113,7 +115,7 @@ const VOUCHERS_FY: &str = r#"<ENVELOPE>
         <TDLMESSAGE>
           <COLLECTION NAME="LedgerlyVouchers">
             <TYPE>Voucher</TYPE>
-            <FETCH>GUID, AlterID, Date, VoucherTypeName, VoucherNumber, PartyLedgerName, Narration, AllLedgerEntries.*, AllInventoryEntries.*</FETCH>
+            <FETCH>GUID, AlterID, Date, VoucherTypeName, VoucherNumber, PartyLedgerName, Narration, ISCANCELLED, ISOPTIONAL, ISPOSTDATED, ISINVOICE, AllLedgerEntries.*, AllInventoryEntries.*</FETCH>
           </COLLECTION>
         </TDLMESSAGE>
       </TDL>
@@ -136,15 +138,17 @@ fn child<'a>(element: &'a RawElement, name: &str) -> &'a RawElement {
 
 #[test]
 fn list_of_companies_matches_the_documented_envelope() {
-    // provenance: derived: research 08 section 2.2 envelope and 2.3 example a (no company is
-    // selected because the answer names the companies).
+    // provenance: pending: the envelope follows research 08 section 2.2, but the report name
+    // `List of Companies` and its TYPE are not in R8 and no capture backs them. Observed capture
+    // needed before this expected document counts as verified.
     assert_eq!(list_companies_request(), LIST_COMPANIES);
 }
 
 #[test]
 fn ledger_masters_request_matches_the_documented_collection_envelope() {
-    // provenance: derived: research 08 section 2.3 example b (inline COLLECTION with FETCH);
-    // the Ledger field list is the one printed in example b.
+    // provenance: pending: the inline COLLECTION shape is research 08 section 2.3 example b; the
+    // Ledger FETCH list (with OpeningBalance and PartyGSTIN) is not observed. Observed capture
+    // needed.
     assert_eq!(
         masters_request("Acme Traders", MasterCollection::Ledgers),
         LEDGERS_ACME
@@ -153,7 +157,7 @@ fn ledger_masters_request_matches_the_documented_collection_envelope() {
 
 #[test]
 fn stock_item_masters_request_uses_the_spaced_object_name() {
-    // provenance: derived: same shape as example b; object name `Stock Item` is unobserved.
+    // provenance: pending: same shape as example b; the object name `Stock Item` is unobserved.
     assert_eq!(
         masters_request("Acme Traders", MasterCollection::StockItems),
         STOCK_ITEMS_ACME
@@ -186,8 +190,9 @@ fn dates_are_zero_padded_yyyymmdd() {
 
 #[test]
 fn every_master_kind_has_its_own_collection_and_object_name() {
-    // provenance: derived: the nine kinds of the frozen TallyMaster enum (card X2), each with
-    // the upper-case element name Tally exports it under.
+    // provenance: pending: the ten kinds of MasterCollection (the pulled set, spec 6.7 step 2).
+    // The collection and object names are unobserved; the stock category kind has no frozen
+    // TallyMaster variant yet (interface request for card X2).
     let expected = [
         (MasterCollection::Groups, "LedgerlyGroups", "Group"),
         (MasterCollection::Ledgers, "LedgerlyLedgers", "Ledger"),
@@ -202,6 +207,11 @@ fn every_master_kind_has_its_own_collection_and_object_name() {
             MasterCollection::VoucherTypes,
             "LedgerlyVoucherTypes",
             "Voucher Type",
+        ),
+        (
+            MasterCollection::StockCategories,
+            "LedgerlyStockCategories",
+            "Stock Category",
         ),
         (
             MasterCollection::CostCentres,
@@ -227,9 +237,25 @@ fn every_master_kind_has_its_own_collection_and_object_name() {
         assert!(text.contains(&format!("<COLLECTION NAME=\"{name}\">")));
         assert!(text.contains(&format!("<TYPE>{object}</TYPE>")));
     }
+    // provenance: derived: the ALL list is the pulled set, one entry per kind, no duplicates.
     assert_eq!(MasterCollection::ALL.len(), expected.len());
     for (kind, _, _) in expected {
         assert!(MasterCollection::ALL.contains(&kind));
+    }
+}
+
+#[test]
+fn voucher_request_fetches_the_cancel_optional_postdated_and_invoice_flags() {
+    // provenance: derived: rule A1 needs a voucher's status to be read from the response, not
+    // guessed. Without these FETCH names Tally may omit the flags, and the mapper would read a
+    // cancelled voucher as regular. The field names are pending an observed capture.
+    let text = vouchers_request(
+        "Acme Traders",
+        date(2026, Month::April, 1),
+        date(2026, Month::April, 1),
+    );
+    for flag in ["ISCANCELLED", "ISOPTIONAL", "ISPOSTDATED", "ISINVOICE"] {
+        assert!(text.contains(flag), "voucher request does not fetch {flag}");
     }
 }
 

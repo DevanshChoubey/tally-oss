@@ -32,18 +32,19 @@ fn period(from: Date, to: Date) -> Period {
 }
 
 /// (collection type sent in the request, element tag Tally answers with), in the order spec 6.7
-/// step 2 requires.
+/// step 2 requires. The type names are the object types of card X1 (`MasterCollection::object_type`),
+/// which the pull now takes from X1; they are pending an observed capture.
 const MASTER_ORDER: [(&str, &str); 10] = [
     ("Group", "GROUP"),
     ("Ledger", "LEDGER"),
     ("Unit", "UNIT"),
-    ("StockGroup", "STOCKGROUP"),
-    ("StockCategory", "STOCKCATEGORY"),
-    ("StockItem", "STOCKITEM"),
+    ("Stock Group", "STOCKGROUP"),
+    ("Stock Category", "STOCKCATEGORY"),
+    ("Stock Item", "STOCKITEM"),
     ("Godown", "GODOWN"),
-    ("CostCategory", "COSTCATEGORY"),
-    ("CostCentre", "COSTCENTRE"),
-    ("VoucherType", "VOUCHERTYPE"),
+    ("Cost Category", "COSTCATEGORY"),
+    ("Cost Centre", "COSTCENTRE"),
+    ("Voucher Type", "VOUCHERTYPE"),
 ];
 
 fn wrap(inner: &str) -> String {
@@ -344,6 +345,42 @@ fn masters_are_requested_in_dependency_order_before_vouchers() {
     assert_eq!(result.warnings.len(), 1);
     assert_eq!(result.warnings[0].file, "masters-05-stock-categories.xml");
     assert_eq!(result.vouchers.len(), 1);
+}
+
+#[test]
+fn ledger_request_fetches_the_opening_balance() {
+    // provenance: derived: a ledger's opening balance is read from the response only when the
+    // request asks for it (rule A1: an absent opening is unknown, not zero). The field name
+    // OpeningBalance is pending an observed capture.
+    let dir = tempfile::tempdir().unwrap();
+    let fake = FakeTally::new(1);
+    pull(&fake, "Acme", one_day(), dir.path(), &CancelToken::new()).unwrap();
+    let sent: Vec<String> = fake.requests.borrow().clone();
+    let ledger = sent
+        .iter()
+        .find(|r| r.contains("<TYPE>Ledger</TYPE>"))
+        .expect("a ledger request");
+    assert!(
+        ledger.contains("<FETCH>GUID, AlterID, Name, Parent, OpeningBalance"),
+        "{ledger}"
+    );
+}
+
+#[test]
+fn voucher_request_fetches_the_status_and_invoice_flags() {
+    // provenance: derived: a cancelled or optional voucher is only recognised when its flags are
+    // fetched (rule A1). The flag names are pending an observed capture.
+    let dir = tempfile::tempdir().unwrap();
+    let fake = FakeTally::new(1);
+    pull(&fake, "Acme", one_day(), dir.path(), &CancelToken::new()).unwrap();
+    let sent: Vec<String> = fake.requests.borrow().clone();
+    let voucher = sent
+        .iter()
+        .find(|r| r.contains("<TYPE>Voucher</TYPE>"))
+        .expect("a voucher request");
+    for flag in ["ISCANCELLED", "ISOPTIONAL", "ISPOSTDATED", "ISINVOICE"] {
+        assert!(voucher.contains(flag), "voucher request lacks {flag}: {voucher}");
+    }
 }
 
 #[test]
