@@ -701,16 +701,26 @@ fn check_trial_balance(tb: &Report) {
 
 /// Derived. Closing stock is 6 units. The average-cost pool holds 10 units bought at 1,000
 /// (10,000), 5 at 1,000 (5,000) and the returned unit at 1,500 (1,500): value 16,500 over 16
-/// units. Closing value = 6 x 16,500 / 16 = 6,187.50. Liabilities are capital 499,000 + supplier
-/// 8,700 + output tax 2,250 = Cr 509,950. Assets are cash 31,770 + bank 447,000 + buyer 7,620 +
-/// karnataka customer 2,360 + input IGST 2,700 + stock 6,187.50 + the loss of 12,312.50 shown
-/// on the asset side = Dr 509,950.
+/// units. Closing value = 6 x 16,500 / 16 = 6,187.50.
+///
+/// Decided behaviour (owner instruction 2026-11-21, "take how tally does"): Tally's Balance Sheet
+/// shows each group as one amount (screenshot in <https://help.tallysolutions.com/balance-sheet-tally/>,
+/// image View-Balance-sheet.gif, read 2026-11-21: Current Liabilities is a single figure). So the
+/// Input IGST debit of 2,700, which sits in Duties & Taxes under Current Liabilities, nets against
+/// that group and is not moved to the asset side. The first version of this test moved it and
+/// expected 509,950 on both sides; that expectation was changed for this reason, not to match
+/// output.
+///
+/// Liabilities: capital 499,000 + Current Liabilities (supplier 8,700 + output tax 2,250 - input
+/// IGST 2,700 = 8,250) = Cr 507,250. Assets: cash 31,770 + bank 447,000 + buyer 7,620 + karnataka
+/// customer 2,360 + stock 6,187.50 = 494,937.50, plus the loss of 12,312.50 shown on the asset
+/// side = Dr 507,250.
 fn check_balance_sheet(bs: &Report) {
     assert_eq!(
         bs.totals,
         vec![
-            Cell::Amount(SignedAmount::cr(rs(509_950))),
-            Cell::Amount(SignedAmount::dr(rs(509_950))),
+            Cell::Amount(SignedAmount::cr(rs(507_250))),
+            Cell::Amount(SignedAmount::dr(rs(507_250))),
         ]
     );
 }
