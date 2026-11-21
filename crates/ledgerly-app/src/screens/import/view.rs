@@ -7,9 +7,9 @@ use ledgerly_core::format::format_inr;
 use ledgerly_core::{Date, DrCr, FinancialYear, Outcome, PeriodError, SignedAmount};
 
 use super::types::{
-    DetectState, ImportError, ImportSource, MAX_VOUCHERS_PER_REQUEST, MapReport, MapState,
-    MapStatus, PullProgress, PullStage, PullState, ReconReport, ReconSectionReport, ReconState,
-    RowStatus, Step, TALLY_PORT,
+    DetectState, ImportError, ImportRequest, ImportSource, MAX_VOUCHERS_PER_REQUEST, MapReport,
+    MapState, MapStatus, PullProgress, PullStage, PullState, ReconReport, ReconSectionReport,
+    ReconState, RowStatus, Step, TALLY_PORT,
 };
 use super::wizard::ImportWizard;
 use crate::{AppCtx, Screen, ScreenAction};
