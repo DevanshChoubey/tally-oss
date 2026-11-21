@@ -8,7 +8,7 @@
 //! once, and every component drawn after that follows it. Before `apply` has run the kit uses
 //! the light theme.
 //!
-//! The kit paints and lays out. It never computes or formats a figure beyond [`format`], which
+//! The kit paints and lays out. It never computes or formats a figure beyond [`format`](mod@format), which
 //! only writes numbers the engine has already produced.
 
 pub mod badge;

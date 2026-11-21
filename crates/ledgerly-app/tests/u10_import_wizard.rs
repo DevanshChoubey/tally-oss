@@ -1052,8 +1052,8 @@ fn screen() -> ImportScreen {
 
 #[test]
 fn the_screen_is_titled_as_an_interop_label() {
-    // provenance: derived — CLAUDE.md: "Tally" appears in UI copy only as a factual interop label
-    // ("Import from Tally").
+    // provenance: owner decision, 2026-11-22 (docs/status/2026-11-22-ui-parity-report.md,
+    // decision 3): the UI names no other product, so the screen is "Import from another app".
     assert_eq!(screen().title(), "Import from another app");
 }
 

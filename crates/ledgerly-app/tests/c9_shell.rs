@@ -319,7 +319,7 @@ fn the_palette_lists_the_home_gst_and_import_screens() {
     assert_eq!(shell.notice(), None);
     assert_eq!(
         titles(&shell),
-        vec!["Home".to_owned(), "Import from Tally".to_owned()]
+        vec!["Home".to_owned(), "Import from another app".to_owned()]
     );
 }
 
