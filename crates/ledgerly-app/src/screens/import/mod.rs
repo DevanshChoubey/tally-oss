@@ -43,10 +43,12 @@
 //! Not built here, and said so rather than guessed: AI column mapping (spec 6.8), a pull period
 //! that is not a run of whole financial years, and the live two-way sync (v1.1).
 
+mod direct;
 mod types;
 mod view;
 mod wizard;
 
+pub use direct::DirectState;
 pub use types::*;
 pub use view::{ImportScreen, format_signed_amount};
 pub use wizard::ImportWizard;
