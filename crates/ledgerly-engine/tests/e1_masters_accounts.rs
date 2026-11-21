@@ -421,19 +421,25 @@ fn deleting_a_group_that_still_has_children_or_ledgers_errors() {
     // provenance: derived, spec 5 invariant 2 spirit: no master may point at a deleted master.
     let b = books();
     // Region(10) has North(11) under it.
-    assert!(matches!(
+    assert_eq!(
         delete_group(GroupId(10), &b),
-        Err(EngineError::Invalid { .. })
-    ));
+        Err(EngineError::InUseByMaster {
+            what: "group 'Region'".to_owned(),
+            by: "sub-group 'North'".to_owned(),
+        })
+    );
     // A custom group holding a ledger.
     let mut b = books();
     b.masters
         .ledgers
         .insert(LedgerId(9), ledger(9, "Zone ledger", 12));
-    assert!(matches!(
+    assert_eq!(
         delete_group(GroupId(12), &b),
-        Err(EngineError::Invalid { .. })
-    ));
+        Err(EngineError::InUseByMaster {
+            what: "group 'North-East'".to_owned(),
+            by: "ledger 'Zone ledger'".to_owned(),
+        })
+    );
 }
 
 #[test]
@@ -785,4 +791,30 @@ fn bill_wise_can_be_turned_off_when_no_bills_exist() {
     let mut off = b.masters.ledgers[&LedgerId(2)].clone();
     off.bill_wise = None;
     assert!(matches!(alter_ledger(off, &b), Ok(Outcome::Value(_))));
+}
+
+#[test]
+fn group_in_use_by_a_sub_group_or_ledger_is_typed_in_use_by_master() {
+    // provenance: derived from the groups page (https://help.tallysolutions.com/tally-prime/accounting/groups-in-tallyprime/,
+    // accessed 2026-11-21): a group with sub-groups or ledgers under it cannot be deleted. Hand
+    // derivation: group 11 'North' sits under 'Region' (10), so the refusal names sub-group 'North';
+    // group 12 'North-East' holds ledger 9 'Zone ledger', so the refusal names that ledger.
+    let mut b = books();
+    b.masters
+        .ledgers
+        .insert(LedgerId(9), ledger(9, "Zone ledger", 12));
+    assert_eq!(
+        delete_group(GroupId(12), &b),
+        Err(EngineError::InUseByMaster {
+            what: "group 'North-East'".to_owned(),
+            by: "ledger 'Zone ledger'".to_owned(),
+        })
+    );
+    assert_eq!(
+        delete_group(GroupId(10), &b),
+        Err(EngineError::InUseByMaster {
+            what: "group 'Region'".to_owned(),
+            by: "sub-group 'North'".to_owned(),
+        })
+    );
 }
