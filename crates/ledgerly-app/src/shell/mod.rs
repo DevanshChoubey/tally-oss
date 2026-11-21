@@ -22,6 +22,7 @@
 //! scalable fonts. They need storage or screens that other cards own.
 
 mod chrome;
+pub mod submit;
 mod stack;
 mod welcome;
 
@@ -32,7 +33,7 @@ use crate::{AppCtx, Screen};
 use chrome::ChromeCmd;
 
 pub use stack::{ScreenStack, StackChange, Tabs};
-pub use welcome::WelcomeScreen;
+pub use welcome::{WelcomeScreen, company_from_form};
 
 /// The application: tabs of screen stacks, the active theme and the shared screen context.
 pub struct Shell {
@@ -57,7 +58,7 @@ impl Shell {
     /// A shell with the welcome screen as its only screen.
     #[must_use]
     pub fn with_welcome() -> Self {
-        Self::new(Box::new(WelcomeScreen))
+        Self::new(Box::new(WelcomeScreen::default()))
     }
 
     /// Chooses the theme; it is applied on the next frame.
@@ -152,7 +153,7 @@ impl Shell {
             ChromeCmd::CloseActiveTab => {
                 self.tabs.close(self.tabs.active_index());
             }
-            ChromeCmd::NewTab => self.tabs.open(Box::new(WelcomeScreen)),
+            ChromeCmd::NewTab => self.tabs.open(Box::new(WelcomeScreen::default())),
             ChromeCmd::PopTo(depth) => {
                 if let Some(stack) = self.tabs.active_stack_mut() {
                     stack.truncate_to(depth);
