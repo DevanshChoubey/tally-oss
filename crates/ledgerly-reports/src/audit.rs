@@ -167,6 +167,10 @@ pub fn audit_report(
 /// the first broken event, the checkpoints and every problem found.
 ///
 /// The report covers the whole log, so its period spans every date the calendar supports.
+///
+/// # Panics
+/// Never in practice: the only `expect` builds `Period::new(Date::MIN, Date::MAX)`, which fails
+/// only when `MIN > MAX`. The frozen signature has no way to return an error.
 #[must_use]
 #[expect(
     clippy::expect_used,
@@ -390,17 +394,17 @@ fn master_key(s: &MasterSnapshot) -> (ObjectKey, String) {
 /// Object key, object label and action text of a record.
 fn describe(rec: &AuditRecord, books: &Books) -> (ObjectKey, String, String) {
     match &rec.event {
-        Event::MasterCreated(s) => {
-            let (k, l) = master_key(s);
-            (k, l, format!("Created {}", master_kind(s)))
+        Event::MasterCreated(snap) => {
+            let (key, label) = master_key(snap);
+            (key, label, format!("Created {}", master_kind(snap)))
         }
         Event::MasterAltered { after, .. } => {
-            let (k, l) = master_key(after);
-            (k, l, format!("Altered {}", master_kind(after)))
+            let (key, label) = master_key(after);
+            (key, label, format!("Altered {}", master_kind(after)))
         }
-        Event::MasterDeleted(s) => {
-            let (k, l) = master_key(s);
-            (k, l, format!("Deleted {}", master_kind(s)))
+        Event::MasterDeleted(snap) => {
+            let (key, label) = master_key(snap);
+            (key, label, format!("Deleted {}", master_kind(snap)))
         }
         Event::VoucherPosted(v) => voucher_description(v, books, "Posted voucher"),
         Event::VoucherAltered { after, .. } => voucher_description(after, books, "Altered voucher"),
@@ -423,15 +427,15 @@ fn describe(rec: &AuditRecord, books: &Books) -> (ObjectKey, String, String) {
             format!("bank statement {}", id.0),
             "Imported bank statement".to_owned(),
         ),
-        Event::MatchConfirmed(m) => (
-            ObjectKey::Statement(m.statement),
-            format!("bank statement {}", m.statement.0),
+        Event::MatchConfirmed(matched) => (
+            ObjectKey::Statement(matched.statement),
+            format!("bank statement {}", matched.statement.0),
             "Confirmed bank match".to_owned(),
         ),
-        Event::AiProposalRecorded(p) => (
+        Event::AiProposalRecorded(proposal) => (
             ObjectKey::AiProposal(rec.seq),
-            format!("assistant proposal by {}", p.model),
-            if p.accepted {
+            format!("assistant proposal by {}", proposal.model),
+            if proposal.accepted {
                 "Assistant proposal accepted".to_owned()
             } else {
                 "Assistant proposal not accepted".to_owned()
@@ -577,31 +581,31 @@ fn diff_values(path: &str, before: &Value, after: &Value, out: &mut Vec<Change>)
         return;
     }
     match (before, after) {
-        (Value::Object(b), Value::Object(a)) => {
-            let keys: BTreeSet<&String> = b.keys().chain(a.keys()).collect();
+        (Value::Object(old), Value::Object(new)) => {
+            let keys: BTreeSet<&String> = old.keys().chain(new.keys()).collect();
             for key in keys {
-                let p = join_path(path, key);
-                match (b.get(key), a.get(key)) {
-                    (Some(x), Some(y)) => diff_values(&p, x, y, out),
-                    (Some(x), None) => out.push(Change {
-                        before: render(&p, x),
+                let sub = join_path(path, key);
+                match (old.get(key), new.get(key)) {
+                    (Some(left), Some(right)) => diff_values(&sub, left, right, out),
+                    (Some(left), None) => out.push(Change {
+                        before: render(&sub, left),
                         after: "(absent)".to_owned(),
-                        field: p,
+                        field: sub,
                     }),
-                    (None, Some(y)) => out.push(Change {
+                    (None, Some(right)) => out.push(Change {
                         before: "(absent)".to_owned(),
-                        after: render(&p, y),
-                        field: p,
+                        after: render(&sub, right),
+                        field: sub,
                     }),
                     (None, None) => {}
                 }
             }
         }
-        (Value::Array(b), Value::Array(a))
-            if b.len() == a.len() && b.iter().chain(a.iter()).any(is_container) =>
+        (Value::Array(old), Value::Array(new))
+            if old.len() == new.len() && old.iter().chain(new.iter()).any(is_container) =>
         {
-            for (i, (x, y)) in b.iter().zip(a.iter()).enumerate() {
-                diff_values(&format!("{path}[{i}]"), x, y, out);
+            for (index, (left, right)) in old.iter().zip(new.iter()).enumerate() {
+                diff_values(&format!("{path}[{index}]"), left, right, out);
             }
         }
         _ => out.push(Change {

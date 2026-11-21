@@ -164,10 +164,10 @@ fn run(records: &[AuditRecord], kind: AuditReportKind) -> Report {
 }
 
 fn text(c: &Cell) -> String {
-    match c {
-        Cell::Text(t) => t.clone(),
-        other => panic!("expected text, got {other:?}"),
-    }
+    let Cell::Text(t) = c else {
+        panic!("expected a text cell, got {c:?}");
+    };
+    t.clone()
 }
 
 /// Sequence numbers of the event rows (depth 0), in row order.
@@ -267,7 +267,7 @@ fn alter_with_no_difference_lists_no_field() {
     )];
     let r = run(&records, AuditReportKind::DeletedAltered);
     assert_eq!(seqs(&r), ["1"]);
-    assert!(diffs(&r).is_empty());
+    assert_eq!(diffs(&r).len(), 0);
 }
 
 #[test]
@@ -458,7 +458,7 @@ fn back_dated_first_posting_and_in_order_postings_give_an_empty_report() {
         rec(3, posted(3, 1, date!(2026 - 04 - 03))),
     ];
     let r = run(&records, AuditReportKind::BackDated);
-    assert!(seqs(&r).is_empty());
+    assert_eq!(seqs(&r).len(), 0);
     assert_eq!(r.totals[0], Cell::Text("0 events".to_owned()));
 }
 
@@ -531,7 +531,7 @@ fn edits_after_lock_with_no_lock_event_is_empty() {
     // derived: with no PeriodLocked event nothing was ever locked.
     let records = [rec(1, posted(1, 1, date!(2020 - 01 - 01)))];
     let r = run(&records, AuditReportKind::EditsAfterLock);
-    assert!(seqs(&r).is_empty());
+    assert_eq!(seqs(&r).len(), 0);
 }
 
 #[test]
@@ -673,6 +673,8 @@ fn input_order_does_not_change_the_report() {
 
 #[test]
 fn duplicate_sequence_number_is_an_error() {
+    // derived: sequence numbers are unique by the log's definition (spec 6.6), so two records
+    // numbered 1 cannot both be genuine; the report refuses rather than pick one.
     let records = [
         rec(1, posted(1, 1, date!(2026 - 04 - 10))),
         rec(1, posted(2, 1, date!(2026 - 04 - 11))),
@@ -684,6 +686,7 @@ fn duplicate_sequence_number_is_an_error() {
 
 #[test]
 fn mismatched_params_kind_is_an_error() {
+    // derived: params built for the edit log must not produce a back-dated report.
     let p = params(AuditReportKind::EditLog);
     let err = audit_report(&[], &books(), &AuditReportKind::BackDated, &p).unwrap_err();
     assert!(matches!(err, ReportError::Invalid { .. }));
@@ -691,6 +694,7 @@ fn mismatched_params_kind_is_an_error() {
 
 #[test]
 fn period_columns_are_unsupported() {
+    // Rule A1: a monthly layout has no meaning for an event log; it says so.
     let mut p = params(AuditReportKind::EditLog);
     p.columns = ColumnSpec::Monthly;
     let out = audit_report(&[], &books(), &AuditReportKind::EditLog, &p).unwrap();
@@ -699,6 +703,7 @@ fn period_columns_are_unsupported() {
 
 #[test]
 fn integrity_certificate_through_audit_report_is_unsupported() {
+    // Rule A1: the certificate needs a VerifyReport that audit_report is not given.
     let p = params(AuditReportKind::IntegrityCertificate);
     let out = audit_report(&[], &books(), &AuditReportKind::IntegrityCertificate, &p).unwrap();
     assert!(out.is_unsupported());
@@ -706,9 +711,11 @@ fn integrity_certificate_through_audit_report_is_unsupported() {
 
 #[test]
 fn empty_log_gives_an_empty_report_with_zero_total() {
+    // derived: no records, so no rows, no notes and a count of zero events; totals has one cell
+    // per column.
     let r = run(&[], AuditReportKind::EditLog);
-    assert!(r.rows.is_empty());
-    assert!(r.notes.is_empty());
+    assert_eq!(r.rows.len(), 0);
+    assert_eq!(r.notes.len(), 0);
     assert_eq!(r.totals[0], Cell::Text("0 events".to_owned()));
     assert_eq!(r.totals.len(), r.columns.len());
 }
