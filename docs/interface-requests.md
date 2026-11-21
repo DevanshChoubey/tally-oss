@@ -160,3 +160,28 @@ Filed from the r2/* fix branches. Each line names the card and the request; the 
 - **Facade** (W1, facade.rs): W5 added a `pub(crate) bank: Statements` field to `Api` and removed the
   `allow(dead_code)` lines on `loaded_books`, `cached_books`, `store`, `commit_as` and `actor`. The
   brief allowed removing the allow lines only; the field addition is outside that and is flagged here.
+
+## W6 (Wave 2 wiring): the app cannot read the books or assign master ids
+
+- Crate/file: `ledgerly-api/src/facade.rs` (`Api`, owned by W1; W6 may not edit it).
+- Current interface: `Api` has no public read of the books. `cached_books(&self) -> Result<Outcome<&Books>, ApiError>` exists but is `pub(crate)`. The app's `AppCtx::books` therefore stays `None` once a company is opened through the API, and the voucher, item invoice and masters screens draw nothing (they show "The company is open, but this screen cannot read its masters yet.").
+- Requested change: promote `cached_books` to `pub` (or add `pub fn books(&self) -> Result<Outcome<Books>, ApiError>` returning an owned copy, which the worker can send back to the UI thread after each commit). `Books` would also need a `pub use` from `ledgerly-api/src/lib.rs`, or the app would need `ledgerly-model` types only, which it already depends on.
+- Why: the screens need `Masters` for pickers and `Books` to build a voucher. Rule C4 (one query path) and D1 (the UI thread never blocks: the copy is taken on the worker, not on the UI thread).
+
+## W6: new master ids and new inline ledgers need an id from the company file
+
+- Crate/file: `ledgerly-api` (`command.rs`, `Command::CreateGroup` and the other `Create*` variants) and `ledgerly-engine` (`masters_accounts.rs`, `masters_stock.rs`).
+- Current interface: the masters draft carries id `0` (`UNASSIGNED_ID`) on a create, and the engine stores the id it is given. The comment in `screens/masters/draft.rs` says "the store assigns the real id on commit", but no code assigns it. Sending `Command::Create*` with id 0 would store a master under the reserved id 0.
+- Requested change: either the engine or the API assigns the next id (for example `Command::CreateGroup` taking `Option<id>`, or the API returning the new id in `CommandResult`), or the screens get the next id from the books once the books read above exists.
+- Until then W6 refuses creates in the app with "a new group needs an id from the company file, which this build cannot assign yet" (`screens/masters/command.rs`), and voucher entry refuses inline ledger creation (Alt+C) the same way. Alter and delete use the ids the books already hold, so they go through.
+
+## W6: item invoice needs a tax computation the API can run without posting
+
+- Crate/file: `ledgerly-api` (a new public method, or a `Command`-free query) over `ledgerly-gst`.
+- Current interface: `ItemInvoiceScreen::set_gst` takes a `GstResult`, and nothing in the app computes one (rule C4: the UI must not compute tax). So Accept is refused with "Tax has not been computed for this invoice yet." The only frozen W4 name is `Api::gstr1_json`, which is a return, not a per-invoice computation.
+- Requested change: a public `Api` method that runs the GST engine on a draft `Voucher` and returns the `GstBlock` (the ledger lines, the stored GST and the invoice total), or `Unsupported` with the reason. W4 owns the name; W6 then calls it from `ItemInvoiceScreen` and passes the result to `set_gst`.
+- Why: spec 6.3 and 7 (the GST block shows engine output).
+
+## W6: the save path for item invoices and masters, and the welcome screen's file dialog
+
+- The app opens and creates company files by typed path (`shell/welcome.rs`). A file-picker dialog (`rfd`) would block the UI thread while open, so it is not used. Pending: a non-blocking dialog, if the owner wants one.

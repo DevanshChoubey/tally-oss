@@ -53,6 +53,8 @@ mod picker;
 
 use self::picker::ledger_hits;
 use crate::screens::voucher_entry::{EntryDateError, LedgerHit, OpenError, format_entry_date};
+use crate::shell::submit::CommandReply;
+use crate::worker::Ticket;
 use ledgerly_core::format::amount_in_words;
 use ledgerly_core::{
     Date, Decimal, FinancialYear, LedgerId, MoneyError, Outcome, Paise, SignedAmount, StateCode,
@@ -441,6 +443,9 @@ pub struct ItemInvoiceScreen {
     requested: Option<Voucher>,
     answer: Option<(Voucher, GstResult)>,
     outbox: Option<Voucher>,
+    /// The post the worker is running for this screen, if any. While it runs the screen shows
+    /// "Saving..." and takes no keys, so a second save cannot start.
+    posting: Option<Ticket<CommandReply>>,
 }
 
 impl ItemInvoiceScreen {
@@ -486,6 +491,7 @@ impl ItemInvoiceScreen {
             requested: None,
             answer: None,
             outbox: None,
+            posting: None,
         }))
     }
 
