@@ -1,3 +1,17 @@
-//! The command/query facade (card W1, Wave 2). The app, CLI and MCP server use only this crate.
+//! Command and query facade used by the app, the CLI and the MCP server (card W1, Wave 2).
+//!
+//! The entry point is [`Api`]: [`Api::execute`] runs a [`Command`], [`Api::report`] runs a
+//! [`ledgerly_reports::ReportParams`] and [`Api::search`] finds ledgers, vouchers, reports and
+//! settings. Every figure comes from the engine or the report engines (spec section 4).
 
+mod command;
+mod error;
+mod events;
 pub mod facade;
+mod report;
+mod search;
+
+pub use command::{Command, CommandResult};
+pub use error::ApiError;
+pub use facade::Api;
+pub use search::{MatchedOn, SearchHit};
