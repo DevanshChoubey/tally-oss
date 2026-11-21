@@ -2,6 +2,7 @@
 //! reconciliation.
 
 pub mod discover;
+pub mod import;
 pub mod mapping;
 pub mod pull;
 pub mod reconcile;

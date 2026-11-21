@@ -221,10 +221,6 @@ impl Api {
     ///
     /// # Errors
     /// [`ApiError::Store`] when a needed reload fails.
-    #[allow(
-        dead_code,
-        reason = "crate-internal seam for the Wave 2 extensions; remove once used"
-    )]
     pub(crate) fn loaded_books(&mut self) -> Result<Outcome<&Books>, ApiError> {
         if matches!(self.cache, Cache::Stale) {
             self.reload()?;
@@ -254,19 +250,11 @@ impl Api {
     }
 
     /// The company file, for read-only store calls (verify, backup, audit reads).
-    #[allow(
-        dead_code,
-        reason = "crate-internal seam for the Wave 2 extensions; remove once used"
-    )]
     pub(crate) fn store(&self) -> &SqliteStore {
         &self.store
     }
 
     /// The lock date in force, from the audit log.
-    #[allow(
-        dead_code,
-        reason = "crate-internal seam for the Wave 2 extensions; remove once used"
-    )]
     pub(crate) fn lock(&self) -> Option<Date> {
         self.lock
     }
@@ -277,10 +265,6 @@ impl Api {
     /// # Errors
     /// [`ApiError::Store`] when the commit fails (nothing is written) or the reload fails (the
     /// change is saved and the cache is stale).
-    #[allow(
-        dead_code,
-        reason = "crate-internal seam for the Wave 2 extensions; remove once used"
-    )]
     pub(crate) fn commit_as(
         &mut self,
         events: &[Event],
@@ -296,12 +280,14 @@ impl Api {
     }
 
     /// The actor changes are attributed to.
-    #[allow(
-        dead_code,
-        reason = "crate-internal seam for the Wave 2 extensions; remove once used"
-    )]
     pub(crate) fn actor(&self) -> &Actor {
         &self.actor
+    }
+
+    /// The clock that stamps audit records. Used by the Tally import to find the current
+    /// financial year without reading the system clock itself.
+    pub(crate) fn clock(&self) -> Clock {
+        self.clock
     }
 
     /// Reloads the cache and the lock date from the store.
