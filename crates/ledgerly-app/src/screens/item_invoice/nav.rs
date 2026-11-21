@@ -1,9 +1,9 @@
 //! Moving between fields: Enter order, validation on leaving a field, and Escape.
 
-use super::draft::InvoiceRow;
+use super::draft::{InvoiceRow, typed_amount};
 use super::picker::{ledger_hits, search_items};
 use super::{Field, ItemInvoiceScreen, Step, parse_decimal, parse_place, place_label};
-use crate::screens::voucher_entry::{LedgerHit, eval_amount, format_entry_date, parse_entry_date};
+use crate::screens::voucher_entry::{LedgerHit, format_entry_date, parse_entry_date};
 use ledgerly_model::Masters;
 
 impl ItemInvoiceScreen {
@@ -202,9 +202,9 @@ impl ItemInvoiceScreen {
             Field::Discount(_) if !row.discount_text.trim().is_empty() => {
                 parse_decimal(&row.discount_text).map(|_| ())
             }
-            Field::Amount(_) if !row.amount_text.trim().is_empty() => eval_amount(&row.amount_text)
-                .map(|_| ())
-                .map_err(|e| e.to_string()),
+            Field::Amount(_) if !row.amount_text.trim().is_empty() => {
+                typed_amount(&row.amount_text).map(|_| ())
+            }
             Field::Date
             | Field::Number
             | Field::Party

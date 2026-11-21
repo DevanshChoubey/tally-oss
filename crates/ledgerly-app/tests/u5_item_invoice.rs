@@ -1058,3 +1058,39 @@ fn recent_ledgers_and_balances_reach_the_party_list() {
     assert_eq!(sharma.balance, Some(SignedAmount::dr(rupees(500))));
     assert_eq!(hits.iter().find(|h| h.id == CGST).unwrap().balance, None);
 }
+
+#[test]
+fn a_typed_amount_with_a_fraction_of_a_paisa_is_refused_not_rounded() {
+    let b = books();
+    // provenance: derived. 100.005 rupees is 10_000.5 paise, so no whole-paisa value is exact.
+    // Rounding it would store 100.01 with no notice, and no rounding rule for a typed line amount
+    // has provenance (item_invoice/mod.rs), so the line is refused and says why.
+    assert!(matches!(
+        amount_of(&b, "100", "100", "", "100.005", WIDGET),
+        Err(InvoiceError::Line { line: 1, .. })
+    ));
+    // provenance: derived. 100.50 rupees = 10_050 paise, exact, so it is still accepted.
+    assert_eq!(
+        amount_of(&b, "100", "100", "", "100.50", WIDGET),
+        Ok(Paise::new(10_050))
+    );
+}
+
+#[test]
+fn shift_y_does_not_discard_a_started_invoice() {
+    let b = books();
+    let ctx = egui::Context::default();
+    let mut app = AppCtx {
+        books: Some(b.clone()),
+    };
+    let mut s = open(&b, T_SALES);
+    s.draft_mut().narration = "x".to_owned();
+    frame(&ctx, &mut s, &mut app, RawInput::default());
+    frame(&ctx, &mut s, &mut app, key(Key::Escape, Modifiers::NONE));
+    assert!(s.is_confirming_discard());
+    // provenance: derived. The discard question is answered by a plain Y. Shift+Y is not that key,
+    // so the question stays open and the invoice is not closed.
+    let action = frame(&ctx, &mut s, &mut app, key(Key::Y, Modifiers::SHIFT));
+    assert!(matches!(action, ScreenAction::Stay));
+    assert!(s.is_confirming_discard());
+}
