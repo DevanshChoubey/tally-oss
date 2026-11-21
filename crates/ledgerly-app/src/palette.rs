@@ -511,8 +511,7 @@ pub fn entries_from_hits(query: &str, hits: &[SearchHit]) -> Vec<PaletteEntry> {
                 )
             }
             SearchHit::Report { title, kind } => {
-                let key = report_key(kind)
-                    .unwrap_or_else(|| format!("unsupported-report:{title}"));
+                let key = report_key(kind).unwrap_or_else(|| format!("unsupported-report:{title}"));
                 Some(PaletteEntry::new(PaletteTarget::Report(key), *title).with_detail("Report"))
             }
             SearchHit::Setting { name } => Some(
@@ -540,7 +539,7 @@ pub fn unavailable_reason(hits: &[SearchHit]) -> Option<&str> {
 fn matched_text(matched: ledgerly_api::MatchedOn) -> &'static str {
     use ledgerly_api::MatchedOn;
     match matched {
-        MatchedOn::Name => "name",
+        MatchedOn::Name | MatchedOn::SettingName => "name",
         MatchedOn::Alias => "alias",
         MatchedOn::Gstin => "GSTIN",
         MatchedOn::Number => "number",
@@ -548,7 +547,6 @@ fn matched_text(matched: ledgerly_api::MatchedOn) -> &'static str {
         MatchedOn::Amount => "amount",
         MatchedOn::Date => "date",
         MatchedOn::Title => "title",
-        MatchedOn::SettingName => "name",
     }
 }
 

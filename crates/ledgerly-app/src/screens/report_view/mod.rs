@@ -55,12 +55,12 @@ pub use model::{
 };
 use remote::{drill_params, run_report, view_detail, with_view};
 use text::numeric_date_text;
-pub use voucher_view::{
-    VoucherView, VoucherViewError, VoucherViewLine, VoucherViewScreen, voucher_view,
-};
 pub use text::{
     PeriodTextError, amount_text, cell_text, date_text, parse_period_date, parse_period_text,
     period_text,
+};
+pub use voucher_view::{
+    VoucherView, VoucherViewError, VoucherViewLine, VoucherViewScreen, voucher_view,
 };
 
 /// Height of one table row, in points.
