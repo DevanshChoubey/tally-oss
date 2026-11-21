@@ -1,11 +1,19 @@
 //! Developer tool: opens the real app window on a fictional company and saves a screenshot of
-//! each main screen, so the app can be compared with the design mock (`design/mock/index.html`).
+//! each registered screen state, so the app can be compared with the design mock
+//! (`design/mock-v2/`). `design/app-captures/capture.sh` runs it and converts the output.
 //!
-//! Usage: `cargo run -p ledgerly-app --example ui_snapshots -- <output dir>`
+//! Usage: `cargo run -p ledgerly-app --example ui_snapshots -- <output dir> [--only <substring>]`
 //!
-//! It writes `NN-<screen>.ppm` files (convert with `ffmpeg -i in.ppm out.png`). The company file
-//! is created in the output directory. All names, GSTINs and amounts are fictional; the figures
-//! on screen are whatever the engine computes, and this tool asserts none of them.
+//! Each entry in [`shots`] is named by the mock state id it should match (`states.json`) and a
+//! theme. It writes `<output dir>/<theme>/<state-id>.ppm` (theme `light`, `dark` or `hc`); convert
+//! with `ffmpeg -i in.ppm out.webp`. `--only` keeps the entries whose `<theme>/<state-id>` label
+//! contains the substring. The company file is created in the output directory. All names, GSTINs
+//! and amounts are fictional; the figures on screen are whatever the engine computes, and this
+//! tool asserts none of them.
+//!
+//! Between shots the tool returns to Home: it presses Esc, one press per key cycle, until the
+//! active tab's screen stack is back at its root and the palette is closed. If [`HOME_PRESSES_MAX`]
+//! presses do not get there, the stack and the palette are closed directly, with a warning printed.
 
 #![allow(
     clippy::unwrap_used,
@@ -24,7 +32,7 @@ use std::sync::{Arc, Mutex};
 
 use egui::{Event, Key, Modifiers};
 use ledgerly_api::{Api, Command};
-use ledgerly_app::shell::{GatewayScreen, Shell, submit};
+use ledgerly_app::shell::{GatewayScreen, ScreenStack, Shell, submit};
 use ledgerly_app::theme::ThemeKind;
 use ledgerly_app::worker::ApiWorker;
 use ledgerly_core::{
@@ -280,53 +288,106 @@ fn company_file(dir: &Path) -> Api {
     api
 }
 
-/// One screenshot: keys pressed first, then an optional palette query and the keys after it.
+/// A colour theme a shot is taken in.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Theme {
+    Light,
+    Dark,
+    Hc,
+}
+
+impl Theme {
+    /// The shell's theme for this entry.
+    fn kind(self) -> ThemeKind {
+        match self {
+            Theme::Light => ThemeKind::Light,
+            Theme::Dark => ThemeKind::Dark,
+            Theme::Hc => ThemeKind::HighContrast,
+        }
+    }
+
+    /// The directory name of the theme, the same as in `design/mock-v2/captures/states/`.
+    fn dir(self) -> &'static str {
+        match self {
+            Theme::Light => "light",
+            Theme::Dark => "dark",
+            Theme::Hc => "hc",
+        }
+    }
+}
+
+/// One screenshot: the mock state it matches, its theme, and the keys that reach it. The keys go in
+/// after the return to Home, then an optional palette query, then the keys after the query.
 struct Shot {
-    name: &'static str,
+    /// The mock state id (`design/mock-v2/states.json`), which also names the image.
+    state: &'static str,
+    theme: Theme,
     keys: Vec<(Key, Modifiers)>,
     query: Option<&'static str>,
     after: Vec<(Key, Modifiers)>,
-    theme: Option<ThemeKind>,
 }
 
-fn shot(name: &'static str, keys: &[(Key, Modifiers)]) -> Shot {
+impl Shot {
+    /// The `<theme>/<state-id>` label that `--only` matches against.
+    fn label(&self) -> String {
+        format!("{}/{}", self.theme.dir(), self.state)
+    }
+
+    /// The same shot in another theme.
+    fn themed(mut self, theme: Theme) -> Self {
+        self.theme = theme;
+        self
+    }
+
+    /// The same shot with a palette query typed after its keys.
+    fn query(mut self, query: &'static str) -> Self {
+        self.query = Some(query);
+        self
+    }
+
+    /// The same shot with keys pressed after the query.
+    fn then(mut self, keys: &[(Key, Modifiers)]) -> Self {
+        self.after = keys.to_vec();
+        self
+    }
+}
+
+fn shot(state: &'static str, keys: &[(Key, Modifiers)]) -> Shot {
     Shot {
-        name,
+        state,
+        theme: Theme::Light,
         keys: keys.to_vec(),
         query: None,
         after: Vec::new(),
-        theme: None,
     }
 }
 
 const NONE: Modifiers = Modifiers::NONE;
 const ESC: (Key, Modifiers) = (Key::Escape, Modifiers::NONE);
 
+/// The most Escape presses one return to Home may take before the screens are closed directly.
+const HOME_PRESSES_MAX: u32 = 12;
+
+/// The registry: one entry per image, named by the mock state id it should match.
 fn shots() -> Vec<Shot> {
     let palette = (Key::K, Modifiers::COMMAND);
     vec![
-        shot("home", &[]),
-        shot("palette", &[palette]),
-        shot("balance-sheet", &[ESC, (Key::B, NONE)]),
-        shot("day-book", &[ESC, (Key::D, NONE)]),
-        shot("gst-returns", &[ESC, (Key::G, NONE)]),
-        shot("masters", &[ESC, (Key::M, NONE)]),
-        shot("sales-invoice", &[ESC, (Key::F8, NONE)]),
-        shot("receipt", &[ESC, (Key::F6, NONE)]),
-        Shot {
-            name: "bank-reconciliation",
-            keys: vec![ESC, palette],
-            query: Some("Bank Reconciliation"),
-            after: vec![(Key::Enter, NONE)],
-            theme: None,
-        },
-        Shot {
-            name: "home-dark",
-            keys: vec![ESC],
-            query: None,
-            after: Vec::new(),
-            theme: Some(ThemeKind::Dark),
-        },
+        shot("home.default", &[]),
+        shot("home.default", &[]).themed(Theme::Dark),
+        shot("home.default", &[]).themed(Theme::Hc),
+        shot("palette.default", &[palette]),
+        shot("palette.search", &[palette]).query("bal"),
+        shot("balance-sheet.default", &[(Key::B, NONE)]),
+        shot("day-book.default", &[(Key::D, NONE)]),
+        shot("gst.gstr1", &[(Key::G, NONE), (Key::Num1, NONE)]),
+        shot("gst.gstr3b", &[(Key::G, NONE), (Key::Num3, NONE)]),
+        shot("masters.ledgers", &[(Key::M, NONE)]),
+        shot("sales-invoice.default", &[(Key::F8, NONE)]),
+        shot("receipt.default", &[(Key::F6, NONE)]),
+        shot("payment.default", &[(Key::F5, NONE)]),
+        shot("bank.default", &[palette])
+            .query("Bank Reconciliation")
+            .then(&[(Key::Enter, NONE)]),
     ]
 }
 
@@ -335,6 +396,8 @@ fn shots() -> Vec<Shot> {
 enum Stage {
     /// Waiting for the books and the first figures.
     Warm,
+    /// Escape goes in, one press per key cycle, until the screen is back at Home.
+    Home,
     /// Keys of the current shot go in on the next frame.
     Keys,
     /// The palette query goes in.
@@ -360,6 +423,8 @@ struct Snapshots {
     inject: VecDeque<(Key, Modifiers)>,
     /// Frames to wait before the next queued key.
     gap: u32,
+    /// Escape presses so far in the current return to Home.
+    presses: u32,
     image: Arc<Mutex<Option<Arc<egui::ColorImage>>>>,
 }
 
@@ -369,9 +434,21 @@ impl Snapshots {
         self.frames = 0;
     }
 
+    /// True when the active tab's stack is at its root and the palette is closed.
+    fn at_home(&self) -> bool {
+        !self.shell.palette().is_open()
+            && self
+                .shell
+                .tabs()
+                .active_stack()
+                .is_some_and(|stack| stack.depth() == 1)
+    }
+
     fn write_shot(&self, image: &egui::ColorImage) {
-        let name = self.shots[self.index].name;
-        let path = self.out.join(format!("{:02}-{name}.ppm", self.index + 1));
+        let current = &self.shots[self.index];
+        let dir = self.out.join(current.theme.dir());
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(format!("{}.ppm", current.state));
         let [w, h] = image.size;
         let mut file = std::fs::File::create(&path).unwrap();
         write!(file, "P6\n{w} {h}\n255\n").unwrap();
@@ -411,14 +488,38 @@ impl eframe::App for Snapshots {
         match self.stage {
             Stage::Warm => {
                 if self.shell.app_ctx_mut().books.is_some() && self.frames > 90 {
-                    self.next_stage(Stage::Keys);
+                    self.next_stage(Stage::Home);
+                }
+            }
+            Stage::Home => {
+                // One Escape per key cycle: a key goes in only once the last one has been
+                // handled (inject empty, gap spent), so the check below sees its effect.
+                if self.inject.is_empty() && self.gap == 0 {
+                    if self.at_home() {
+                        self.next_stage(Stage::Keys);
+                    } else if self.presses < HOME_PRESSES_MAX {
+                        self.presses += 1;
+                        self.inject.push_back(ESC);
+                    } else {
+                        // Escape did not close what is open (a form that keeps its draft, say).
+                        // Close the stack and the palette directly, and say so in the output.
+                        println!(
+                            "warning: Escape did not return to Home in {HOME_PRESSES_MAX} presses \
+                             (stack depth {:?}, palette open: {}); closing them directly",
+                            self.shell.tabs().active_stack().map(ScreenStack::depth),
+                            self.shell.palette().is_open(),
+                        );
+                        if let Some(stack) = self.shell.tabs_mut().active_stack_mut() {
+                            stack.truncate_to(1);
+                        }
+                        self.shell.palette_mut().close();
+                        self.next_stage(Stage::Keys);
+                    }
                 }
             }
             Stage::Keys => {
                 let current = &self.shots[self.index];
-                if let Some(theme) = current.theme {
-                    self.shell.set_theme(theme);
-                }
+                self.shell.set_theme(current.theme.kind());
                 self.inject = current.keys.iter().copied().collect();
                 self.next_stage(Stage::Query);
             }
@@ -451,12 +552,15 @@ impl eframe::App for Snapshots {
                 let taken = self.image.lock().ok().and_then(|mut held| held.take());
                 if let Some(image) = taken {
                     self.write_shot(&image);
+                    // Restore the default theme; the next entry sets its own.
+                    self.shell.set_theme(ThemeKind::Light);
                     self.index += 1;
                     if self.index == self.shots.len() {
                         self.next_stage(Stage::Done);
                         ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
                     } else {
-                        self.next_stage(Stage::Keys);
+                        self.presses = 0;
+                        self.next_stage(Stage::Home);
                     }
                 } else {
                     assert!(self.frames < 600, "no screenshot arrived");
@@ -467,12 +571,31 @@ impl eframe::App for Snapshots {
     }
 }
 
+/// The output directory and the optional `--only` substring, from the command line.
+fn parse_args() -> (PathBuf, Option<String>) {
+    const USAGE: &str = "usage: ui_snapshots <output dir> [--only <substring>]";
+    let mut args = std::env::args().skip(1);
+    let out = PathBuf::from(args.next().expect(USAGE));
+    let mut only = None;
+    while let Some(arg) = args.next() {
+        match arg.as_str() {
+            "--only" => only = Some(args.next().expect("--only needs a substring")),
+            other => panic!("unknown argument {other}; {USAGE}"),
+        }
+    }
+    (out, only)
+}
+
 fn main() -> eframe::Result<()> {
-    let out = PathBuf::from(
-        std::env::args()
-            .nth(1)
-            .expect("usage: ui_snapshots <output dir>"),
-    );
+    let (out, only) = parse_args();
+    let entries: Vec<Shot> = shots()
+        .into_iter()
+        .filter(|s| {
+            only.as_deref()
+                .is_none_or(|needle| s.label().contains(needle))
+        })
+        .collect();
+    assert!(!entries.is_empty(), "no entry matches --only {only:?}");
     std::fs::create_dir_all(&out).unwrap();
     let api = company_file(&out);
     let mut shell = Shell::new(Box::new(GatewayScreen::new()));
@@ -481,12 +604,13 @@ fn main() -> eframe::Result<()> {
     let app = Snapshots {
         shell,
         out,
-        shots: shots(),
+        shots: entries,
         index: 0,
         stage: Stage::Warm,
         frames: 0,
         inject: VecDeque::new(),
         gap: 0,
+        presses: 0,
         image: Arc::new(Mutex::new(None)),
     };
     let options = eframe::NativeOptions {
