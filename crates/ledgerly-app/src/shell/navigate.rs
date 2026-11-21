@@ -32,13 +32,26 @@
 //! same default is applied to every report here and is `pending` for the others. The user changes
 //! the period with F2 and the detail with Alt+F1.
 //!
-//! The GST screen and the bank reconciliation open on the same period. No Tally page read on
-//! 2026-11-21 says which period GSTR-1 or GSTR-3B opens with (the GSTR-1 and GSTR-3B pages of
-//! help.tallysolutions.com list "Period" in the header and say it can be changed), so that default
-//! is `pending`.
+//! The bank reconciliation opens on the financial-year period above. The GST screen does not: it
+//! opens on one calendar month, which is the return period (decision 7 of the UI parity report,
+//! monthly). The rule is [`gst_return_period`]:
+//!
+//! * when today (the India date from [`today`]) is in the company's financial year, the calendar
+//!   month of today;
+//! * otherwise the calendar month of the last voucher dated in the year;
+//! * when the year has no voucher, the first calendar month of the year.
+//!
+//! The GST portal's returns page (<https://www.gst.gov.in/help/returns>, read 2026-11-22) names
+//! the normal return as "Monthly/Quarterly Return by Normal Taxpayer under QRMP Scheme": monthly
+//! is the default and quarterly is the QRMP option. The registration model has no filing-frequency
+//! field, so a quarterly filer cannot be told apart from a monthly one yet; that is a gap.
+//! `ledgerly-gst` accepts one calendar month or one calendar quarter (`check_period`), so a monthly
+//! period is a valid input to the engine.
 
 use ledgerly_api::{AuditReportKind, ColumnSpec, Detail, ReportFilter, ReportKind, ReportParams};
-use ledgerly_core::{Date, FinancialYear, GroupId, LedgerId, Period, PeriodError, VoucherId};
+use ledgerly_core::{
+    Date, FinancialYear, GroupId, LedgerId, Month, Period, PeriodError, VoucherId,
+};
 use ledgerly_model::{Books, Scenario};
 use thiserror::Error;
 
@@ -47,7 +60,7 @@ use crate::palette::{PaletteEntry, PaletteTarget, command_entries};
 use crate::screens::ai_settings::AiSettingsScreen;
 use crate::screens::ask::AskScreen;
 use crate::screens::bank::BankScreen;
-use crate::screens::gst::GstScreen;
+use crate::screens::gst::{GstScreen, GstTab};
 use crate::screens::import::ImportScreen;
 use crate::screens::keymap_map::KeymapScreen;
 use crate::screens::masters::MastersScreen;
@@ -403,8 +416,74 @@ pub fn today() -> Date {
     }
 }
 
-/// The GST screen for the company's GST registration, loading GSTR-1 and GSTR-3B for
-/// [`default_period`].
+/// The calendar month of `date`, as a period from its first day to its last.
+///
+/// # Errors
+/// [`NavError::Period`] when `date` is outside the supported calendar range.
+fn calendar_month(date: Date) -> Result<Period, NavError> {
+    let first = Date::from_calendar_date(date.year(), date.month(), 1)
+        .map_err(|_| PeriodError::OutOfRange)?;
+    let mut last = first;
+    while let Some(next) = last.next_day() {
+        if next.month() != first.month() {
+            break;
+        }
+        last = next;
+    }
+    Ok(Period::new(first, last)?)
+}
+
+/// The return period a GST screen opens with (the rule is in the module header): the calendar
+/// month of `today` when `today` is in the company's financial year, otherwise the calendar month
+/// of the last voucher dated in that year, or the first month of the year when it has none.
+///
+/// `today` is passed in so the rule can be tested; [`gst_screen`] passes [`today`]. The API has no
+/// clock of its own that the app can read (`ledgerly_api::Api` keeps its `Clock` private), so the
+/// app's India date stands in for it.
+///
+/// # Errors
+/// [`NavError::Period`] when the financial year or the month is not a valid period.
+pub fn gst_return_period(books: &Books, today: Date) -> Result<Period, NavError> {
+    let year = FinancialYear {
+        start: books.company.fy_start,
+    }
+    .period()?;
+    let anchor = if year.contains(today) {
+        today
+    } else {
+        books
+            .vouchers
+            .values()
+            .map(|voucher| voucher.date)
+            .filter(|date| year.contains(*date))
+            .max()
+            .unwrap_or(year.from())
+    };
+    calendar_month(anchor)
+}
+
+/// A return period's first month as the label reads, for example `November 2026`.
+#[must_use]
+pub fn return_label(period: Period) -> String {
+    let month = match period.from().month() {
+        Month::January => "January",
+        Month::February => "February",
+        Month::March => "March",
+        Month::April => "April",
+        Month::May => "May",
+        Month::June => "June",
+        Month::July => "July",
+        Month::August => "August",
+        Month::September => "September",
+        Month::October => "October",
+        Month::November => "November",
+        Month::December => "December",
+    };
+    format!("{month} {}", period.from().year())
+}
+
+/// The GST screen for the company's GST registration, loading GSTR-1 and GSTR-3B for the return
+/// period of [`gst_return_period`] (monthly), opening on the GSTR-1 tab as the mock does.
 ///
 /// # Errors
 /// [`NavError::Unsupported`] when the company has no GST registration, or more than one (the
@@ -428,9 +507,9 @@ pub fn gst_screen(books: &Books) -> Result<GstScreen, NavError> {
             });
         }
     };
-    let period = default_period(books)?;
-    let label = format!("{} to {}", period.from(), period.to());
-    let mut screen = GstScreen::new(label, Some(gstin.clone()));
+    let period = gst_return_period(books, today())?;
+    let mut screen = GstScreen::new(return_label(period), Some(gstin.clone()));
+    screen.switch_tab(GstTab::Gstr1);
     screen.request_load(gstin, period);
     Ok(screen)
 }

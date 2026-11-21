@@ -7,8 +7,9 @@
 //! impl Screen for <Name>Screen { .. }
 //! ```
 //!
-//! Here `<Name>` is `Gst`. The screen has three tabs, as in the mock: GSTR-1 (key `1`), 2B and IMS
-//! reconciliation (key `2`) and GSTR-3B (key `3`).
+//! Here `<Name>` is `Gst`. The screen has three tabs numbered as the mock numbers them: GSTR-1 (key
+//! `1`), GSTR-3B (key `2`) and 2B and IMS reconciliation (key `3`). It opens on GSTR-1 when the
+//! shell opens it ([`crate::shell::navigate::gst_screen`]).
 //!
 //! * **Exception buckets** (spec 6.3): Ready, Not relevant, Mismatch and Needs correction. Every
 //!   item arrives with its bucket already decided by the engine; the screen never classifies a
@@ -81,8 +82,8 @@ impl GstTab {
     pub fn key(self) -> Key {
         match self {
             GstTab::Gstr1 => Key::Num1,
-            GstTab::Reconciliation => Key::Num2,
-            GstTab::Gstr3b => Key::Num3,
+            GstTab::Gstr3b => Key::Num2,
+            GstTab::Reconciliation => Key::Num3,
         }
     }
 
@@ -91,8 +92,8 @@ impl GstTab {
     pub fn key_hint(self) -> &'static str {
         match self {
             GstTab::Gstr1 => "1",
-            GstTab::Reconciliation => "2",
-            GstTab::Gstr3b => "3",
+            GstTab::Gstr3b => "2",
+            GstTab::Reconciliation => "3",
         }
     }
 }
@@ -380,6 +381,8 @@ pub enum GstCmd {
     Open,
     /// Leave the screen (Esc).
     Close,
+    /// Export the GSTR-1 JSON (Ctrl+E).
+    ExportJson,
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -425,6 +428,8 @@ pub struct GstScreen {
     drill: Option<VoucherId>,
     reapply: Option<GstTab>,
     export: Option<Vec<ConfirmedAction>>,
+    /// The GSTR-1 JSON built by the worker, with its file name, until the user saves it.
+    export_json: Option<(String, String)>,
     revision: u64,
     /// The load from the API worker (see the `worker` module).
     run: worker::GstRun,
@@ -445,6 +450,7 @@ enum UiEvent {
     Decide(usize, ImsAction),
     Reapply,
     Export,
+    ExportJson,
 }
 
 impl GstScreen {
@@ -468,6 +474,7 @@ impl GstScreen {
             drill: None,
             reapply: None,
             export: None,
+            export_json: None,
             revision: 0,
             run: worker::GstRun::default(),
             figures1: Figures::default(),
@@ -800,6 +807,15 @@ impl GstScreen {
         }
     }
 
+    /// Asks for the GSTR-1 JSON, or says why it cannot be asked for yet (the reason is in
+    /// [`GstScreen::export_blocked_reason`]).
+    fn request_json_export(&mut self) {
+        match self.export_blocked_reason() {
+            Some(reason) => self.notice = Some(reason),
+            None => self.request_json(),
+        }
+    }
+
     // ---- commands ----------------------------------------------------------------------------
 
     fn decide_with_notice(&mut self, row: usize, action: ImsAction) {
@@ -869,6 +885,7 @@ impl GstScreen {
             GstCmd::Decide(action) => self.decide_focused(action),
             GstCmd::Open => self.open_focused(),
             GstCmd::Close => return ScreenAction::Pop,
+            GstCmd::ExportJson => self.request_json_export(),
         }
         ScreenAction::Stay
     }
@@ -886,6 +903,7 @@ impl GstScreen {
             UiEvent::Decide(row, action) => self.decide_with_notice(row, action),
             UiEvent::Reapply => self.request_reapply(),
             UiEvent::Export => self.request_export(),
+            UiEvent::ExportJson => self.request_json_export(),
         }
         self.clamp_focus();
     }
@@ -899,9 +917,28 @@ impl GstScreen {
                 action = ScreenAction::Pop;
             }
         }
+        if let Some((name, json)) = self.take_json_export() {
+            self.notice = Some(save_json_file(&name, &json));
+        }
         let mut events = Vec::new();
-        ui.heading("GST returns");
-        ui.weak(self.subtitle());
+        let subtitle = self.subtitle();
+        let json_enabled = self.export_blocked_reason().is_none();
+        crate::ui::page_head::page_head(ui, "GST returns", Some(subtitle.as_str()), |ui| {
+            let clicked = ui
+                .add_enabled_ui(json_enabled, |ui| {
+                    crate::ui::button::button(
+                        ui,
+                        "Export JSON",
+                        Some("Ctrl+E"),
+                        crate::ui::button::ButtonKind::Secondary,
+                    )
+                })
+                .inner
+                .clicked();
+            if clicked {
+                events.push(UiEvent::ExportJson);
+            }
+        });
         self.draw_tabs(ui, &mut events);
         self.draw_chips(ui, &mut events);
         ui.separator();
@@ -911,11 +948,15 @@ impl GstScreen {
         }
         match self.tab {
             GstTab::Gstr1 => {
+                self.draw_tiles(ui);
+                self.draw_next_steps(ui);
                 draw_figures(ui, &self.figures1);
                 self.draw_exceptions(ui, &self.gstr1, want_scroll, &mut events);
             }
             GstTab::Gstr3b => {
+                self.draw_tiles(ui);
                 draw_figures(ui, &self.figures3b);
+                self.draw_3b_notes(ui);
                 self.draw_exceptions(ui, &self.gstr3b, want_scroll, &mut events);
             }
             GstTab::Reconciliation => self.draw_recon(ui, want_scroll, &mut events),
@@ -927,6 +968,75 @@ impl GstScreen {
             self.apply_event(event);
         }
         action
+    }
+
+    /// The status tiles of the tab on show. Each count is of the vouchers the engine put in a
+    /// bucket (the screen only counts rows, rule C4). A figure that is not in the API says so
+    /// rather than showing a number.
+    fn draw_tiles(&self, ui: &mut Ui) {
+        ui.horizontal(|ui| {
+            match self.tab {
+                GstTab::Gstr1 => {
+                    for bucket in Bucket::ALL {
+                        let value = match self.bucket_count(GstTab::Gstr1, bucket) {
+                            Some(n) => n.to_string(),
+                            None => "Not loaded".to_owned(),
+                        };
+                        tile(ui, bucket.label(), &value, "vouchers");
+                    }
+                }
+                GstTab::Gstr3b => {
+                    tile(
+                        ui,
+                        "Payable in cash after set-off",
+                        "Not supported yet",
+                        "the engine has no set-off figure",
+                    );
+                    tile(
+                        ui,
+                        "ITC accepted in IMS",
+                        "Not loaded",
+                        "2B and IMS import is not built",
+                    );
+                }
+                GstTab::Reconciliation => {}
+            }
+        });
+        ui.add_space(8.0);
+    }
+
+    /// The guidance card of GSTR-1, with a note when vouchers are held back.
+    fn draw_next_steps(&self, ui: &mut Ui) {
+        let held = self
+            .bucket_count(GstTab::Gstr1, Bucket::NeedsCorrection)
+            .unwrap_or(0);
+        if held > 0 {
+            let text = format!(
+                "{held} voucher(s) need correction. The JSON is held back until they are fixed; \
+                 the reason is in the table below."
+            );
+            crate::ui::note::note(ui, crate::ui::note::NoteKind::Warn, &text);
+            ui.add_space(8.0);
+        }
+        crate::ui::card::card(ui, |ui| {
+            ui.strong("What happens next");
+            for step in NEXT_STEPS {
+                ui.label(format!("- {step}"));
+            }
+        });
+        ui.add_space(8.0);
+    }
+
+    /// The "Read this before filing" card of GSTR-3B, from the engine's own notes on what the
+    /// working does and does not check.
+    fn draw_3b_notes(&self, ui: &mut Ui) {
+        crate::ui::card::card(ui, |ui| {
+            ui.strong("Read this before filing");
+            for line in GSTR3B_NOTES {
+                ui.label(format!("- {line}"));
+            }
+        });
+        ui.add_space(8.0);
     }
 
     fn draw_tabs(&self, ui: &mut Ui, events: &mut Vec<UiEvent>) {
@@ -1016,7 +1126,7 @@ impl GstScreen {
 
     fn draw_recon(&self, ui: &mut Ui, want_scroll: bool, events: &mut Vec<UiEvent>) {
         let Feed::Loaded(rows) = &self.recon else {
-            draw_not_ready(ui, &self.recon);
+            draw_recon_not_ready(ui, &self.recon);
             return;
         };
         let visible = self.visible_recon();
@@ -1098,6 +1208,9 @@ impl GstScreen {
     fn draw_footer(&self, ui: &mut Ui, events: &mut Vec<UiEvent>) {
         if let Some(text) = &self.notice {
             ui.label(text.as_str());
+        }
+        if let Some(reason) = self.export_blocked_reason() {
+            ui.weak(format!("Export JSON: {reason}"));
         }
         if self.tab == GstTab::Reconciliation {
             ui.weak(
@@ -1199,6 +1312,72 @@ fn draw_not_ready<T>(ui: &mut Ui, feed: &Feed<T>) {
     }
 }
 
+/// Says why the 2B and IMS tab shows no table. Nothing is imported in this version, so a feed
+/// that was never supplied says so and names what is missing.
+fn draw_recon_not_ready(ui: &mut Ui, feed: &Feed<Vec<ReconRow>>) {
+    match feed {
+        Feed::NotLoaded => {
+            ui.weak(
+                "2B and IMS are not imported in this version, so there is nothing to match. \
+                 The match needs the engine's reconciliation (engine item E-3).",
+            );
+        }
+        Feed::Unsupported(_) | Feed::Loaded(_) => draw_not_ready(ui, feed),
+    }
+}
+
+/// One status tile: a label, the value in large type, and a line saying what the value counts.
+fn tile(ui: &mut Ui, label: &str, value: &str, note: &str) {
+    ui.vertical(|ui| {
+        ui.set_min_width(170.0);
+        ui.weak(label);
+        ui.label(egui::RichText::new(value).size(20.0).strong());
+        ui.weak(note);
+    });
+    ui.add_space(16.0);
+}
+
+/// The guidance under the GSTR-1 tiles. Each line says what the screen does and nothing it does
+/// not: there is no mark-as-filed and no portal upload. Sources: the `Api::gstr1_json` refusal
+/// (`ledgerly-api/src/gst.rs`), the GST portal's returns page
+/// (<https://www.gst.gov.in/help/returns>, read 2026-11-22), and the module notes of
+/// `ledgerly-gst/src/gstr3b.rs`, which say that Ledgerly does not file.
+const NEXT_STEPS: [&str; 4] = [
+    "Fix anything in Needs correction or Mismatch. Enter opens the voucher to fix.",
+    "Export JSON (Ctrl+E) writes the GSTR-1 JSON for the GST portal's offline tool. The engine \
+     writes it only when every voucher is Ready or Not relevant.",
+    "Ledgerly does not file. Upload the JSON and file on the GST portal yourself.",
+    "Ledgerly does not yet record a return as filed or lock its period.",
+];
+
+/// The "Read this before filing" lines of GSTR-3B. They follow the engine's module notes in
+/// `ledgerly-gst/src/gstr3b.rs` (what is worked out, which conditions are not checked, and the
+/// reverse-charge rule), not the mock's text, which the engine does not match.
+const GSTR3B_NOTES: [&str; 4] = [
+    "Ledgerly does not file GSTR-3B. It works out tables 3.1(a) and 4(A)(5) from your books.",
+    "Table 4(A)(5) is the credit your books could claim. It is not checked against GSTR-2B, and \
+     the conditions of CGST Act s.16(2) and s.16(4) are not checked.",
+    "Tax on blocked or ineligible purchase lines is shown apart and is never added to 4(A)(5).",
+    "Purchases under reverse charge are in neither 3.1(a) nor 4(A)(5). Set-off against the \
+     liability is not worked out yet, so no cash payable figure is shown.",
+];
+
+/// Asks where to save the GSTR-1 JSON and writes it there. Cancelling writes nothing. The dialog
+/// is the user's own choice of place; nothing is uploaded.
+fn save_json_file(name: &str, json: &str) -> String {
+    let Some(path) = rfd::FileDialog::new()
+        .set_file_name(name)
+        .add_filter("JSON", &["json"])
+        .save_file()
+    else {
+        return "Export cancelled. Nothing was written.".to_owned();
+    };
+    match std::fs::write(&path, json) {
+        Ok(()) => format!("Saved the GSTR-1 JSON to {}.", path.display()),
+        Err(error) => format!("Could not write {}: {error}.", path.display()),
+    }
+}
+
 /// Reads the workspace keys. Nothing is read while a text field has the keyboard.
 fn read_keys(ui: &Ui) -> Vec<GstCmd> {
     let ctx = ui.ctx();
@@ -1234,6 +1413,9 @@ fn read_keys(ui: &Ui) -> Vec<GstCmd> {
         if i.consume_key(Modifiers::NONE, Key::Escape) {
             out.push(GstCmd::Close);
         }
+        if i.consume_key(Modifiers::CTRL, Key::E) {
+            out.push(GstCmd::ExportJson);
+        }
     });
     out
 }
@@ -1241,6 +1423,29 @@ fn read_keys(ui: &Ui) -> Vec<GstCmd> {
 impl Screen for GstScreen {
     fn title(&self) -> String {
         "GST returns".to_owned()
+    }
+
+    fn page_title(&self) -> String {
+        "GST returns".to_owned()
+    }
+
+    fn subtitle(&self) -> Option<String> {
+        Some(GstScreen::subtitle(self))
+    }
+
+    fn keys(&self) -> Vec<crate::screen::KeyHint> {
+        use crate::screen::KeyHint;
+        let mut keys = vec![
+            KeyHint::new("1 2 3", "Tabs"),
+            KeyHint::new("J / K", "Move"),
+            KeyHint::new("Enter", "Open voucher"),
+            KeyHint::new("Ctrl+E", "Export JSON"),
+        ];
+        if self.tab == GstTab::Reconciliation {
+            keys.push(KeyHint::new("A R P", "IMS action"));
+        }
+        keys.push(KeyHint::new("Esc", "Back"));
+        keys
     }
 
     fn ui(&mut self, ui: &mut Ui, ctx: &mut AppCtx) -> ScreenAction {

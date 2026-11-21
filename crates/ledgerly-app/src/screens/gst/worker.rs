@@ -48,6 +48,14 @@ pub(super) struct GstRun {
     want: Option<(Gstin, Period)>,
     latest: Latest<GstAnswer>,
     error: Option<String>,
+    /// The return last asked for, which the JSON export builds from.
+    scope: Option<(Gstin, Period)>,
+    /// The user asked for the GSTR-1 JSON; the next tick starts it.
+    export_want: bool,
+    /// The GSTR-1 JSON call (`Api::gstr1_json`), which the engine refuses while a voucher is held.
+    export: Latest<Result<Outcome<String>, String>>,
+    /// The file name the JSON is saved under, fixed when the call starts.
+    export_name: String,
 }
 
 fn fetch(api: &Api, gstin: &Gstin, period: Period) -> GstAnswer {
@@ -61,7 +69,39 @@ impl GstScreen {
     /// Asks for GSTR-1 and GSTR-3B of `gstin` for `period`. The next [`GstScreen::tick`] sends
     /// the request to the API worker.
     pub fn request_load(&mut self, gstin: Gstin, period: Period) {
+        self.run.scope = Some((gstin.clone(), period));
         self.run.want = Some((gstin, period));
+    }
+
+    /// Asks for the GSTR-1 JSON of the loaded return. The next [`GstScreen::tick`] builds it, and
+    /// the screen then offers to save it. Nothing is checked here; see
+    /// [`GstScreen::export_blocked_reason`] for the checks the screen makes first.
+    pub(super) fn request_json(&mut self) {
+        self.run.export_want = true;
+    }
+
+    /// Why the GSTR-1 JSON cannot be exported now, or `None` when it can be asked for: the tab is
+    /// not GSTR-1, no return is loaded, GSTR-1 is still loading, or the engine could not build it.
+    /// The engine's own refusal (a voucher that must be fixed first) is not repeated here: the
+    /// JSON call returns it, and it is shown as a note.
+    #[must_use]
+    pub fn export_blocked_reason(&self) -> Option<String> {
+        if self.tab != GstTab::Gstr1 {
+            return Some("GSTR-1 JSON is exported from the GSTR-1 tab. Press 1 to open it.".to_owned());
+        }
+        if self.run.scope.is_none() {
+            return Some("No return is loaded, so there is no JSON to export.".to_owned());
+        }
+        match &self.gstr1 {
+            Feed::NotLoaded => Some("GSTR-1 is still loading, so there is no JSON yet.".to_owned()),
+            Feed::Unsupported(u) => Some(unsupported_text(u)),
+            Feed::Loaded(_) => None,
+        }
+    }
+
+    /// The JSON the user asked for, with its file name, once it is built.
+    pub fn take_json_export(&mut self) -> Option<(String, String)> {
+        self.export_json.take()
     }
 
     /// `true` while a load waits for the worker or runs on it.
@@ -113,6 +153,7 @@ impl GstScreen {
             }
             None => {}
         }
+        self.tick_export(worker);
         let Some((gstin, period)) = self.run.want.take() else {
             return;
         };
@@ -123,6 +164,47 @@ impl GstScreen {
         self.run
             .latest
             .start(handle, move |api| fetch(api, &gstin, period));
+    }
+
+    /// Shows a finished JSON answer, then starts a requested JSON call on `worker`.
+    fn tick_export(&mut self, worker: Option<&ApiWorker>) {
+        match self.run.export.poll() {
+            Some(Done::Ready(Ok(Outcome::Value(json)))) => {
+                self.export_json = Some((self.run.export_name.clone(), json));
+            }
+            Some(Done::Ready(Ok(Outcome::Unsupported(u)))) => {
+                self.notice = Some(unsupported_text(&u));
+            }
+            Some(Done::Ready(Err(message))) => {
+                self.notice = Some(format!("The JSON could not be built: {message}"));
+            }
+            Some(Done::Lost) => {
+                self.notice =
+                    Some("The background worker stopped before the JSON was built.".to_owned());
+            }
+            None => {}
+        }
+        if !self.run.export_want {
+            return;
+        }
+        self.run.export_want = false;
+        let Some((gstin, period)) = self.run.scope.clone() else {
+            self.notice = Some("No return is loaded, so there is no JSON to export.".to_owned());
+            return;
+        };
+        let Some(handle) = worker else {
+            self.notice = Some("No company is open, so no JSON can be built.".to_owned());
+            return;
+        };
+        let from = period.from();
+        self.run.export_name = format!(
+            "gstr1-{:04}-{:02}.json",
+            from.year(),
+            u8::from(from.month())
+        );
+        self.run.export.start(handle, move |api| {
+            api.gstr1_json(&gstin, period).map_err(|e| e.to_string())
+        });
     }
 
     fn apply_answer(&mut self, answer: GstAnswer) {
