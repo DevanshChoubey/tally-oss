@@ -8,12 +8,7 @@ use crate::theme::{SPACE_4, SPACE_6, TEXT_BODY, TEXT_H2};
 
 /// Draws an empty state. `action` is the label and key of the one thing to do next, such as
 /// `("New sale", "F8")`. Returns `true` in the frame the action is clicked.
-pub fn empty_state(
-    ui: &mut Ui,
-    title: &str,
-    sentence: &str,
-    action: Option<(&str, &str)>,
-) -> bool {
+pub fn empty_state(ui: &mut Ui, title: &str, sentence: &str, action: Option<(&str, &str)>) -> bool {
     let t = tokens(ui);
     let h2 = bold_font(ui, TEXT_H2);
     let mut clicked = false;

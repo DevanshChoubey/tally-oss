@@ -80,7 +80,11 @@ fn badge_colours_pair_each_kind_with_its_soft_background() {
             (BadgeKind::Neutral, (t.sunken, t.text_2)),
         ];
         for (badge_kind, want) in cases {
-            assert_eq!(badge::colors(badge_kind, &t), want, "{kind:?} {badge_kind:?}");
+            assert_eq!(
+                badge::colors(badge_kind, &t),
+                want,
+                "{kind:?} {badge_kind:?}"
+            );
         }
     }
 }
@@ -180,7 +184,10 @@ fn a_blocked_accept_never_fires() {
         prop::resolve(PropAction::Accept, true),
         Some(PropAction::Accept)
     );
-    assert_eq!(prop::resolve(PropAction::Edit, false), Some(PropAction::Edit));
+    assert_eq!(
+        prop::resolve(PropAction::Edit, false),
+        Some(PropAction::Edit)
+    );
     assert_eq!(
         prop::resolve(PropAction::Reject, false),
         Some(PropAction::Reject)
@@ -191,16 +198,13 @@ fn a_blocked_accept_never_fires() {
 fn ctrl_a_takes_the_accept_key_when_the_card_handles_keys() {
     let ctx = themed(ThemeKind::Light);
     let got: Cell<Option<PropAction>> = Cell::new(None);
-    run(
-        &ctx,
-        vec![key(Key::A, Modifiers::CTRL)],
-        |ui| {
-            let action = Prop::new("Voucher 1042")
+    run(&ctx, vec![key(Key::A, Modifiers::CTRL)], |ui| {
+        let action =
+            Prop::new("Voucher 1042")
                 .handles_keys(true)
                 .show(ui, |_ui| {}, |_ui| {}, |_ui| {});
-            got.set(action);
-        },
-    );
+        got.set(action);
+    });
     assert_eq!(got.get(), Some(PropAction::Accept));
 }
 
@@ -208,17 +212,13 @@ fn ctrl_a_takes_the_accept_key_when_the_card_handles_keys() {
 fn ctrl_a_does_not_save_a_blocked_proposal() {
     let ctx = themed(ThemeKind::Light);
     let got: Cell<Option<PropAction>> = Cell::new(Some(PropAction::Edit));
-    run(
-        &ctx,
-        vec![key(Key::A, Modifiers::CTRL)],
-        |ui| {
-            let action = Prop::new("Voucher 1042")
-                .accept(false, Some("Debit and credit differ"))
-                .handles_keys(true)
-                .show(ui, |_ui| {}, |_ui| {}, |_ui| {});
-            got.set(action);
-        },
-    );
+    run(&ctx, vec![key(Key::A, Modifiers::CTRL)], |ui| {
+        let action = Prop::new("Voucher 1042")
+            .accept(false, Some("Debit and credit differ"))
+            .handles_keys(true)
+            .show(ui, |_ui| {}, |_ui| {}, |_ui| {});
+        got.set(action);
+    });
     assert_eq!(got.get(), None);
 }
 
@@ -226,14 +226,10 @@ fn ctrl_a_does_not_save_a_blocked_proposal() {
 fn keys_are_ignored_when_the_card_does_not_handle_them() {
     let ctx = themed(ThemeKind::Light);
     let got: Cell<Option<PropAction>> = Cell::new(Some(PropAction::Edit));
-    run(
-        &ctx,
-        vec![key(Key::A, Modifiers::CTRL)],
-        |ui| {
-            let action = Prop::new("Voucher 1042").show(ui, |_ui| {}, |_ui| {}, |_ui| {});
-            got.set(action);
-        },
-    );
+    run(&ctx, vec![key(Key::A, Modifiers::CTRL)], |ui| {
+        let action = Prop::new("Voucher 1042").show(ui, |_ui| {}, |_ui| {}, |_ui| {});
+        got.set(action);
+    });
     assert_eq!(got.get(), None);
 }
 
@@ -241,17 +237,13 @@ fn keys_are_ignored_when_the_card_does_not_handle_them() {
 fn a_settled_proposal_takes_no_keys() {
     let ctx = themed(ThemeKind::Light);
     let got: Cell<Option<PropAction>> = Cell::new(Some(PropAction::Edit));
-    run(
-        &ctx,
-        vec![key(Key::Enter, Modifiers::NONE)],
-        |ui| {
-            let action = Prop::new("Voucher 1042")
-                .state(PropState::Done)
-                .handles_keys(true)
-                .show(ui, |_ui| {}, |_ui| {}, |_ui| {});
-            got.set(action);
-        },
-    );
+    run(&ctx, vec![key(Key::Enter, Modifiers::NONE)], |ui| {
+        let action = Prop::new("Voucher 1042")
+            .state(PropState::Done)
+            .handles_keys(true)
+            .show(ui, |_ui| {}, |_ui| {}, |_ui| {});
+        got.set(action);
+    });
     assert_eq!(got.get(), None);
 }
 

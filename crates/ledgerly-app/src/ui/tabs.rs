@@ -66,10 +66,7 @@ fn tab(ui: &mut Ui, label: &str, selected: bool, t: &Tokens) -> (Rect, Response)
     let text_pos = pos2(rect.min.x + TAB_PAD, rect.center().y - text_size.y / 2.0);
     painter.galley(text_pos, galley, ink);
     if selected {
-        let underline = Rect::from_min_max(
-            pos2(rect.min.x, rect.max.y - UNDERLINE),
-            rect.max,
-        );
+        let underline = Rect::from_min_max(pos2(rect.min.x, rect.max.y - UNDERLINE), rect.max);
         painter.rect_filled(underline, CornerRadius::ZERO, t.accent);
     }
     (rect, response)

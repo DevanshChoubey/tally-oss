@@ -316,31 +316,38 @@ fn apply_twice_switches_theme_in_place() {
 
 #[test]
 fn fonts_and_text_styles_are_installed_once_on_apply() {
-    // derived: Noto Sans is the UI face (design/mock-v2/index.html `font-family`), Noto Sans
-    // Devanagari is the fallback for Hindi names, and the bold face is its own family.
+    // derived: the mock's UI face is Inter (design/mock-v2/index.html `font-family`). Noto Sans
+    // stands in for it (installed with the system, OFL; decided 2026-11-22 when wave 1 started),
+    // Noto Sans Devanagari is the fallback for Hindi names, and the bold face is its own family.
     let ctx = egui::Context::default();
     theme::apply(&ctx, ThemeKind::Light);
     theme::apply(&ctx, ThemeKind::Dark);
-    let _ = ctx
-        .run_ui(
-            RawInput {
-                screen_rect: Some(egui::Rect::from_min_size(
-                    egui::Pos2::ZERO,
-                    egui::Vec2::new(800.0, 600.0),
-                )),
-                ..RawInput::default()
-            },
-            |_ui| {},
-        )
-        .drop_without_applying_deltas();
+    ctx.run_ui(
+        RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::Vec2::new(800.0, 600.0),
+            )),
+            ..RawInput::default()
+        },
+        |_ui| {},
+    )
+    .drop_without_applying_deltas();
     let families = ctx.fonts(|f| f.definitions().families.clone());
     let chain = families
         .get(&FontFamily::Proportional)
         .cloned()
         .unwrap_or_default();
     assert_eq!(chain.first().map(String::as_str), Some("NotoSans-Regular"));
-    assert!(chain.iter().any(|name| name == "NotoSansDevanagari-Regular"));
-    let bold = families.get(&theme::bold_family()).cloned().unwrap_or_default();
+    assert!(
+        chain
+            .iter()
+            .any(|name| name == "NotoSansDevanagari-Regular")
+    );
+    let bold = families
+        .get(&theme::bold_family())
+        .cloned()
+        .unwrap_or_default();
     assert_eq!(bold.first().map(String::as_str), Some("NotoSans-Bold"));
 }
 
@@ -351,7 +358,7 @@ fn text_styles_follow_the_type_scale() {
     let ctx = egui::Context::default();
     theme::apply(&ctx, ThemeKind::Light);
     let styles = ctx.global_style().text_styles.clone();
-    let size = |style: TextStyle| styles.get(&style).map(|f| f.size).unwrap_or(0.0);
+    let size = |style: TextStyle| styles.get(&style).map_or(0.0, |f| f.size);
     assert!(same(size(TextStyle::Small), 12.0));
     assert!(same(size(TextStyle::Body), 13.0));
     assert!(same(size(TextStyle::Button), 13.0));

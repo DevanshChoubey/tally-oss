@@ -51,6 +51,10 @@ pub fn bold_font(ui: &Ui, size: f32) -> FontId {
     let bound = ui
         .ctx()
         .fonts(|f| f.definitions().families.contains_key(&bold));
-    let family = if bound { bold } else { FontFamily::Proportional };
+    let family = if bound {
+        bold
+    } else {
+        FontFamily::Proportional
+    };
     FontId::new(size, family)
 }

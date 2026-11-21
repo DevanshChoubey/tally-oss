@@ -25,14 +25,16 @@ pub fn width(ui: &Ui, label: &str) -> f32 {
 
 /// Paints a keycap into `rect`: `fill` behind the label, `edge` as the outline, `ink` for the
 /// label. Used by [`keycap`] and by buttons that carry a key.
-pub fn paint(painter: &Painter, rect: Rect, label: &str, fill: Color32, edge: Color32, ink: Color32) {
+pub fn paint(
+    painter: &Painter,
+    rect: Rect,
+    label: &str,
+    fill: Color32,
+    edge: Color32,
+    ink: Color32,
+) {
     painter.rect_filled(rect, RADIUS_XS, fill);
-    painter.rect_stroke(
-        rect,
-        RADIUS_XS,
-        Stroke::new(1.0, edge),
-        StrokeKind::Inside,
-    );
+    painter.rect_stroke(rect, RADIUS_XS, Stroke::new(1.0, edge), StrokeKind::Inside);
     painter.text(
         rect.center(),
         Align2::CENTER_CENTER,

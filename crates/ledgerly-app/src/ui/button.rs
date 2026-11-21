@@ -26,7 +26,12 @@ const GAP: f32 = 8.0;
 
 /// Fill, edge and label colours of a button. Disabled buttons are sunken with muted text.
 #[must_use]
-pub fn colors(kind_of: ButtonKind, enabled: bool, hovered: bool, t: &Tokens) -> (Color32, Color32, Color32) {
+pub fn colors(
+    kind_of: ButtonKind,
+    enabled: bool,
+    hovered: bool,
+    t: &Tokens,
+) -> (Color32, Color32, Color32) {
     if !enabled {
         return (t.sunken, t.border, t.text_3);
     }

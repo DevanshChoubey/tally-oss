@@ -63,14 +63,17 @@ pub fn conf(ui: &mut Ui, level: Confidence) -> Response {
         );
         let painter = ui.painter();
         for (i, dx) in BAR_OFFSETS.iter().enumerate() {
-            let bar = Rect::from_min_size(
-                pos2(rect.min.x + *dx, rect.min.y),
-                Vec2::new(BAR_W, BAR_H),
-            );
+            let bar =
+                Rect::from_min_size(pos2(rect.min.x + *dx, rect.min.y), Vec2::new(BAR_W, BAR_H));
             let color = if i < lit { lit_color } else { dim_color };
             painter.rect_filled(bar, CornerRadius::same(1), color);
         }
-        ui.label(RichText::new(word(level)).size(TEXT_META).strong().color(t.text_2));
+        ui.label(
+            RichText::new(word(level))
+                .size(TEXT_META)
+                .strong()
+                .color(t.text_2),
+        );
     });
     inner.response
 }

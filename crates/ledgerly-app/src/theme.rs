@@ -147,7 +147,7 @@ impl ThemeKind {
 }
 
 /// The colour tokens of one theme. Field names are the mock's CSS custom properties in
-/// snake_case (`--text-2` is `text_2`).
+/// `snake_case` (`--text-2` is `text_2`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Tokens {
     /// Page background (`--bg`).
@@ -570,10 +570,10 @@ fn set_text_styles(style: &mut Style) {
 
 /// The egui id under which [`apply`] stores the active [`ThemeKind`].
 fn kind_id() -> Id {
-    Id::new("ledgerly.theme.kind")
+    Id::unique("ledgerly.theme.kind")
 }
 
 /// The egui id under which [`apply`] records that the fonts are installed.
 fn fonts_id() -> Id {
-    Id::new("ledgerly.theme.fonts_installed")
+    Id::unique("ledgerly.theme.fonts_installed")
 }

@@ -21,14 +21,21 @@ pub fn chip(ui: &mut Ui, label: &str) -> Response {
         .layout_no_wrap(label.to_owned(), font.clone(), Color32::WHITE)
         .size()
         .x;
-    let (rect, response) = ui.allocate_exact_size(
-        Vec2::new(2.0 * PAD_X + text_w, CHIP_HEIGHT),
-        Sense::click(),
-    );
-    let fill = if response.hovered() { t.hover } else { t.surface };
+    let (rect, response) =
+        ui.allocate_exact_size(Vec2::new(2.0 * PAD_X + text_w, CHIP_HEIGHT), Sense::click());
+    let fill = if response.hovered() {
+        t.hover
+    } else {
+        t.surface
+    };
     let painter = ui.painter();
     painter.rect_filled(rect, RADIUS_S, fill);
-    painter.rect_stroke(rect, RADIUS_S, Stroke::new(bw, t.border), StrokeKind::Inside);
+    painter.rect_stroke(
+        rect,
+        RADIUS_S,
+        Stroke::new(bw, t.border),
+        StrokeKind::Inside,
+    );
     painter.text(
         pos2(rect.min.x + PAD_X, rect.center().y),
         Align2::LEFT_CENTER,

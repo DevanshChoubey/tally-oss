@@ -5,7 +5,10 @@
 //! of checks and a footer. It never computes or formats an amount. The caller decides whether
 //! Accept is allowed, from the engine's checks, and passes that in with [`Prop::accept`].
 
-use egui::{CornerRadius, Frame, Key, Margin, Modifiers, Rect, RichText, Shape, Stroke, StrokeKind, Ui, pos2};
+use egui::{
+    CornerRadius, Frame, Key, Margin, Modifiers, Rect, RichText, Shape, Stroke, StrokeKind, Ui,
+    pos2,
+};
 
 use super::button::{ButtonKind, button};
 use super::{kind, tokens};
