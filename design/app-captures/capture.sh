@@ -55,6 +55,10 @@ fi
 
 # The flat captures from before the <theme>/<state-id> layout.
 find "$OUT" -maxdepth 1 -name '*.webp' -delete
+# A full run replaces every capture, so a renamed or removed registry entry leaves nothing behind.
+if (( ${#only[@]} == 0 )); then
+  rm -rf "$OUT/light" "$OUT/dark" "$OUT/hc"
+fi
 
 mapfile -d '' ppms < <(find "$RAW" -name '*.ppm' -print0 | sort -z)
 if (( ${#ppms[@]} == 0 )); then
