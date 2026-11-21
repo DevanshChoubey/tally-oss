@@ -961,7 +961,9 @@ function render(){
     if(p.tx&&FREEZE==null&&TX[tx].render==='start'){const els=$$(TX[tx].targets[0].selector);if(els[0])els[0].addEventListener('animationend',()=>go(TX[tx].end),{once:true})} }
   document.title=`Ledgerly · ${(REG.states.find(s=>s.hash===buildHash({screen:p.screen,state:p.state,base:p.base,query:p.query}))||{title:def.title||'mock'}).title}`;
   const ready=()=>{document.documentElement.dataset.ready='1'};
-  document.documentElement.dataset.ready='0'; (document.fonts&&document.fonts.ready?document.fonts.ready:Promise.resolve()).then(()=>requestAnimationFrame(ready));
+  document.documentElement.dataset.ready='0';
+  // Layout that depends on text size (centring a row) waits for the fonts, so every capture of a state is the same.
+  (document.fonts&&document.fonts.ready?document.fonts.ready:Promise.resolve()).then(()=>{if(scr.settle)scr.settle(st,p);requestAnimationFrame(ready)});
 }
 window.addEventListener('hashchange',render);
 
@@ -1131,7 +1133,7 @@ SCREENS.palette = {title:'Command palette',default:null,hi:0,
  mount(_,p){
   const q=p.query||''; const off=false;
   $('#overlay').innerHTML=`<div class="scrim" data-cmd="palclose"><div class="palette" role="dialog" aria-label="Command palette" onclick="event.stopPropagation()">
-   <div class="pin">${ic('search','l')}<input id="palq" aria-label="Search" placeholder="Search reports, ledgers, vouchers, or type ? to ask, + to enter" value="${esc(q)}" autocomplete="off"><span class="meta">Go to</span></div>
+   <div class="pin">${ic('search','l')}<input id="palq" aria-label="Search" spellcheck="false" autocomplete="off" placeholder="Search reports, ledgers, vouchers, or type ? to ask, + to enter" value="${esc(q)}" autocomplete="off"><span class="meta">Go to</span></div>
    <div class="modes"><span>${kb('#')} voucher</span><span>${kb('@')} party</span><span>${kb('>')} command</span><span>${kb('?')} ask</span><span>${kb('+')} entry</span></div>
    <div class="res" id="palres" role="listbox"></div>
    <div class="pfoot"><span>${kb('↑')}${kb('↓')} move</span><span>${kb('Enter')} open on top</span><span>${kb('Shift+Enter')} replace screen</span><span>${kb('Esc')} close, back to where you were</span></div></div></div>`;
@@ -1765,7 +1767,8 @@ SCREENS.bank={title:'Bank reconciliation',default:'default',
    else side=`<div class="card pad"><h2>${esc(l.narr)}</h2><p>${badge(KIND_B[kindOf(l)][0],KIND_B[kindOf(l)][1])} ${esc(m.why||'')}</p><p class="meta" style="margin-top:6px">Exact and Rule matches come from engine code and your saved rules, not from AI.</p></div>`}
   return head+strip+tabs+`<div class="grid g-main" style="align-items:start">${table}<div id="bkside">${side}</div></div>`;
  },
- mount(st,p){const s=$('#bk tr.sel');if(s)s.scrollIntoView({block:'center'});const t=$('#bk');if(t)t.addEventListener('click',e=>{const r=e.target.closest('tr[data-row]');if(!r)return;$$('#bk tr.sel').forEach(x=>x.classList.remove('sel'));r.classList.add('sel')})},
+ settle(){const s=$('#bk tr.sel');if(s)s.scrollIntoView({block:'center'})},
+ mount(st,p){const t=$('#bk');if(t)t.addEventListener('click',e=>{const r=e.target.closest('tr[data-row]');if(!r)return;$$('#bk tr.sel').forEach(x=>x.classList.remove('sel'));r.classList.add('sel')})},
  key(k,e,st,p){if(isTyping())return false;
   if(k==='J'||k==='ArrowDown'){listMove('#bk',1);return true}if(k==='K'||k==='ArrowUp'){listMove('#bk',-1);return true}
   const r=selRow('#bk');const id=r&&r.dataset.row;

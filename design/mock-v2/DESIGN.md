@@ -342,6 +342,12 @@ and takes a 1280×800 screenshot.
 The page sets `document.documentElement.dataset.ready = '1'` once fonts are ready and the first
 frame is painted. Wait for that before capturing.
 
+A screen's `mount(state, params)` runs as soon as the screen renders, before the fonts are
+ready. Any layout that depends on text size, such as scrolling a selected row to the centre,
+goes in the screen's `settle(state, params)`. It runs after the fonts are ready and before the
+ready flag is set. Done in `mount`, the scroll depends on whether the fonts arrived first, and
+two captures of the same state differ.
+
 ### states.json
 
 ```json
@@ -388,6 +394,32 @@ The registry is embedded in `index.html` as `<script id="registry" type="applica
 `node extract-registry.js` regenerates `states.json` and `transitions.json` from it, so the page and
 the JSON files cannot drift. To add a state, add it to the registry and to the screen's `render`,
 then run the script.
+
+### Capturing
+
+The mock is the central design record, kept in git together with its captures. Every change to
+the mock commits fresh captures in the same commit.
+
+```bash
+node extract-registry.js   # after changing the registry in index.html
+node capture.mjs           # every state and transition, all themes, then the catalog
+node capture.mjs --check   # exit 1 when captures/ is older than the mock
+node capture.mjs --only bank   # ids containing "bank" only (does not rewrite the catalog)
+```
+
+- It needs `google-chrome` and an `ffmpeg` built with libwebp. No npm packages are used: Node's
+  built-in WebSocket drives Chrome over the DevTools protocol.
+- States go to `captures/states/<theme>/<id>.webp`. Transition frames go to
+  `captures/transitions/<id>/<theme>/<ms>ms.webp`, with one `<theme>.gif` per transition.
+- Images are lossless WebP. That is half the size of PNG with the same pixels, and the same render
+  gives the same bytes, so git stores an unchanged screen only once.
+- `captures/CATALOG.md` shows every state and transition with its images.
+- `captures/manifest.json` records the sha256 of the sources, which is what `--check` compares.
+- Before each shot the script hides the text caret and stops the skeleton shimmer, which would
+  otherwise land on a different frame each time. A focused field shows no caret in captures.
+- Chrome runs with spell checking off and software raster, and each shot is taken again until two
+  in a row match. Two runs of the script give the same bytes for every image.
+- Google Fonts must be reachable. Offline, the system-font fallback changes every image.
 
 ## 9. Open questions
 
