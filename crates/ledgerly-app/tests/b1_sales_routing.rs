@@ -65,12 +65,7 @@ fn company() -> Company {
 fn books(name: &str) -> Books {
     let path = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(name);
     let _removed = std::fs::remove_file(&path);
-    let api = Api::create(
-        &path,
-        &company(),
-        Clock::Fixed(OffsetDateTime::UNIX_EPOCH),
-    )
-    .unwrap();
+    let api = Api::create(&path, &company(), Clock::Fixed(OffsetDateTime::UNIX_EPOCH)).unwrap();
     match api.books().unwrap() {
         Outcome::Value(books) => books,
         Outcome::Unsupported(u) => panic!("the books did not load: {}", u.reason),

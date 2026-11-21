@@ -264,7 +264,7 @@ fn draw_detect(
 ) {
     ui.heading("Import from another app");
     ui.label(format!(
-        "Ledgerly looks for a running accounting app on this computer, port {TALLY_PORT}. Nothing is sent anywhere else."
+        "Ledgerly looks for a running app on this computer, port {TALLY_PORT}. Nothing is sent anywhere else."
     ));
     let checking = *wizard.detect_state() == DetectState::Checking;
     if ui
