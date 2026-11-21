@@ -22,8 +22,12 @@
 //! 4000 km, 250 items, vehicle-number shapes) are **recalled** from the public NIC e-way bill
 //! API/bulk-upload documentation, not yet quoted from it. They must be checked against the
 //! official JSON schema and sample file before release; the exact-output test in
-//! `tests/f5_ewb.rs` is marked accordingly. Nothing here computes a tax or a value: the writer
-//! only checks that the bill is internally consistent and prints what it was given.
+//! `tests/f5_ewb.rs` is marked accordingly. Nothing here computes a tax or a value to write: the
+//! writer checks that the bill is internally consistent (its totals add up, and each header tax
+//! head lies within rounding of the items' own tax, see `check_tax_heads`) and prints what it was
+//! given. An HSN code with a leading zero is refused as [`FormatError::Unsupported`] until the
+//! numeric `hsnCode` field is confirmed against the official schema, rather than written as a
+//! different code.
 //!
 //! Not checked here (needs data or a clock we do not have): the pincode-to-state mapping, the
 //! 180-day age limit of the base document, the Rule 138 value threshold, and registration status
@@ -252,7 +256,7 @@ pub struct EwayItem {
     pub product_name: String,
     /// Product description.
     pub product_desc: Option<String>,
-    /// HSN code. Written as a number, so leading zeros are dropped (the portal field is numeric).
+    /// HSN code. A code with a leading zero is refused by [`validate_ewb`] (see the module docs).
     pub hsn: Hsn,
     /// Quantity, greater than zero.
     pub quantity: Decimal,
@@ -391,8 +395,73 @@ pub fn validate_ewb(e: &EwayBill) -> Result<(), Vec<FormatError>> {
     check_transaction(e, &mut errs);
     check_items(&e.items, &mut errs);
     check_amounts(e, &mut errs);
+    check_tax_heads(e, &mut errs);
     check_transport(&e.transport, &mut errs);
     if errs.is_empty() { Ok(()) } else { Err(errs) }
+}
+
+/// Lowest and highest whole-paise tax the items can add up to for one tax head.
+///
+/// An item's tax is `taxable x rate / 100`, exact in decimal. Whatever rounding the portal
+/// applies to a whole-paise amount, the result is its floor or its ceiling, so the header total
+/// lies between the sum of the floors and the sum of the ceilings. `None` when the arithmetic
+/// overflows, which the caller reports rather than skipping.
+fn tax_bounds(items: &[EwayItem], rate: fn(&EwayItem) -> Decimal) -> Option<(Decimal, Decimal)> {
+    let mut low = Decimal::ZERO;
+    let mut high = Decimal::ZERO;
+    for it in items {
+        let exact = Decimal::from(it.taxable_amount.get())
+            .checked_mul(rate(it))?
+            .checked_div(Decimal::ONE_HUNDRED)?;
+        low = low.checked_add(exact.floor())?;
+        high = high.checked_add(exact.ceil())?;
+    }
+    Some((low, high))
+}
+
+/// Each header tax head (CGST, SGST, IGST, cess) must lie within rounding of the sum of the
+/// items' tax for that head (CGST Act s.15 and the rate in percent: tax is value times rate).
+///
+/// Skipped when an item has a rate outside 0 to 100: that item is already reported, and the tax
+/// it implies is not defined.
+fn check_tax_heads(e: &EwayBill, errs: &mut Vec<FormatError>) {
+    let rates_defined = e.items.iter().all(|it| {
+        [it.cgst_rate, it.sgst_rate, it.igst_rate, it.cess_rate]
+            .into_iter()
+            .all(|r| !r.is_sign_negative() && r <= Decimal::ONE_HUNDRED)
+    });
+    if !rates_defined {
+        return;
+    }
+    let heads: [(&str, Paise, fn(&EwayItem) -> Decimal); 4] = [
+        ("cgstValue", e.cgst_value, |it| it.cgst_rate),
+        ("sgstValue", e.sgst_value, |it| it.sgst_rate),
+        ("igstValue", e.igst_value, |it| it.igst_rate),
+        ("cessValue", e.cess_value, |it| it.cess_rate),
+    ];
+    for (field, header, rate) in heads {
+        let Some((low, high)) = tax_bounds(&e.items, rate) else {
+            push(
+                errs,
+                field,
+                "cannot be checked against the items: the tax does not fit the arithmetic",
+            );
+            continue;
+        };
+        let found = Decimal::from(header.get());
+        if found < low || found > high {
+            push(
+                errs,
+                field,
+                &format!(
+                    "is {} but the items' tax on this head comes to {} to {}",
+                    money(header),
+                    (low / Decimal::ONE_HUNDRED).round_dp(2),
+                    (high / Decimal::ONE_HUNDRED).round_dp(2)
+                ),
+            );
+        }
+    }
 }
 
 fn check_header(e: &EwayBill, errs: &mut Vec<FormatError>) {
@@ -496,6 +565,16 @@ fn check_item(i: usize, it: &EwayItem, errs: &mut Vec<FormatError>) {
         100,
         false,
     );
+    if it.hsn.as_str().starts_with('0') {
+        errs.push(FormatError::Unsupported {
+            reason: format!(
+                "itemList[{i}].hsnCode: HSN {} starts with 0; the portal field is written as a \
+                 number and leading zeros are not yet confirmed against the official schema \
+                 (card F5), so the code is not written as a different one",
+                it.hsn.as_str()
+            ),
+        });
+    }
     if it.quantity <= Decimal::ZERO {
         push(errs, &f("quantity"), "must be greater than zero");
     }
@@ -823,8 +902,7 @@ fn item_object(i: &EwayItem) -> Obj {
     if let Some(d) = &i.product_desc {
         o.text("productDesc", d);
     }
-    let digits = i.hsn.as_str().trim_start_matches('0');
-    o.raw("hsnCode", if digits.is_empty() { "0" } else { digits });
+    o.raw("hsnCode", i.hsn.as_str());
     o.raw("quantity", &number(i.quantity));
     o.text("qtyUnit", &i.qty_unit);
     o.raw("taxableAmount", &money(i.taxable_amount));

@@ -172,14 +172,16 @@ fn negative_other_value_and_leading_zero_hsn() {
     let mut e = sample();
     e.other_value = Paise::new(-5_000);
     e.tot_inv_value = Paise::new(1_175_000);
-    e.items[0].hsn = Hsn::parse("0101").unwrap();
     let json = ewb_to_json(&e).unwrap();
     // provenance: derived. Round-off of -50.00: 10,000.00 + 1,800.00 - 50.00 = 11,750.00.
-    // The portal's hsnCode is numeric, so 0101 is written as 101 (a JSON number cannot start
-    // with 0).
     assert!(json.contains(r#""otherValue":-50.00"#), "{json}");
     assert!(json.contains(r#""totInvValue":11750.00"#), "{json}");
-    assert!(json.contains(r#""hsnCode":101,"#), "{json}");
+    // A leading zero is refused (Unsupported), not written as 101: 0101 is a different code.
+    e.items[0].hsn = Hsn::parse("0101").unwrap();
+    assert!(matches!(
+        ewb_to_json(&e),
+        Err(FormatError::Unsupported { .. })
+    ));
 }
 
 #[test]
@@ -353,11 +355,17 @@ fn igst_with_cgst_is_rejected() {
     // adds up, but IGST and CGST are never charged on the same supply, so it is still rejected.
     e.cgst_value = Paise::new(90_000);
     e.tot_inv_value = Paise::new(1_270_000);
-    assert_eq!(fields(validate_ewb(&e)), ["igstValue"]);
+    // The header CGST of 900.00 is also not the items' tax (their CGST rate is 0), so the
+    // header CGST is reported too.
+    assert_eq!(fields(validate_ewb(&e)), ["igstValue", "cgstValue"]);
 
     let mut e = sample();
     e.items[0].cgst_rate = Decimal::from(9);
-    assert_eq!(fields(validate_ewb(&e)), ["itemList[0].igstRate"]);
+    // Item CGST is 9% of 10,000.00 = 900.00, but the header CGST is 0.00.
+    assert_eq!(
+        fields(validate_ewb(&e)),
+        ["itemList[0].igstRate", "cgstValue"]
+    );
 }
 
 #[test]
