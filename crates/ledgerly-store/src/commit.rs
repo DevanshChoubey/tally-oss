@@ -332,6 +332,7 @@ fn project_event(conn: &Connection, seq: u64, event: &Event) -> Result<(), Store
         Event::SettingChanged { .. }
         | Event::PeriodLocked { .. }
         | Event::StatementImported(_)
+        | Event::BankStatementStored { .. }
         | Event::AiProposalRecorded(_) => Ok(()),
     }
 }

@@ -66,8 +66,8 @@ fn an_end_date_equal_to_the_last_line_is_accepted() {
 
 #[test]
 fn an_end_date_before_the_last_line_is_refused() {
-    let err = check_statement_with_end(raw(), Some(date!(2026 - 04 - 04)), b"a", BANK, &[])
-        .unwrap_err();
+    let err =
+        check_statement_with_end(raw(), Some(date!(2026 - 04 - 04)), b"a", BANK, &[]).unwrap_err();
     assert_eq!(
         err,
         StatementError::EndBeforeLastLine {
@@ -97,5 +97,8 @@ fn a_stored_statement_that_does_not_balance_is_refused_on_restore() {
     // derived: 1000 + 500 = 1500, but this says 1600.
     bad.closing = Some(Paise::new(160_000));
     let err = restore_statement(bad, None, "00".to_owned(), BANK).unwrap_err();
-    assert!(matches!(err, StatementError::BalanceMismatch { .. }), "{err:?}");
+    assert!(
+        matches!(err, StatementError::BalanceMismatch { .. }),
+        "{err:?}"
+    );
 }

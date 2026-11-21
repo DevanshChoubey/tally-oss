@@ -161,11 +161,9 @@ impl BankScreen {
             if let Some(run) = self.run.as_mut() {
                 run.want_load = false;
             }
-            let queued: Vec<BankMatch> = self
-                .run
-                .as_mut()
-                .map(|run| run.queue.drain(..).map(|(m, _)| m).collect())
-                .unwrap_or_default();
+            let queued: Vec<BankMatch> = self.run.as_mut().map_or_else(Vec::new, |run| {
+                run.queue.drain(..).map(|(m, _)| m).collect()
+            });
             for matched in &queued {
                 self.revert(matched);
             }
@@ -219,7 +217,10 @@ impl BankScreen {
             run.matched.clear();
         }
         self.statement = loaded.statement;
-        let matched = self.run.as_ref().map(|run| run.matched.clone()).unwrap_or_default();
+        let matched = self
+            .run
+            .as_ref()
+            .map_or_else(Default::default, |run| run.matched.clone());
         self.lines = loaded
             .lines
             .into_iter()
@@ -367,7 +368,8 @@ impl BankScreen {
         }
         run.want_load = false;
         let (ledger, as_of) = (run.ledger, run.as_of);
-        run.load.start(handle, move |api| load_statement(api, ledger));
+        run.load
+            .start(handle, move |api| load_statement(api, ledger));
         run.brs.start(handle, move |api| {
             let answer = api.brs(ledger, as_of).map_err(|e| e.to_string());
             (as_of, answer)

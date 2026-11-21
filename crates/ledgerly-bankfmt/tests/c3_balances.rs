@@ -22,7 +22,10 @@ fn layout(balance_col: Option<usize>) -> CsvLayout {
         value_date_col: None,
         description_col: 1,
         reference_col: None,
-        amounts: AmountColumns::Split { debit: 2, credit: 3 },
+        amounts: AmountColumns::Split {
+            debit: 2,
+            credit: 3,
+        },
         balance_col,
         date_format: DateFormat::DdMmYyyy,
         date_separator: '/',
@@ -33,7 +36,8 @@ fn layout(balance_col: Option<usize>) -> CsvLayout {
 fn csv_balances_come_from_the_first_and_last_balance_cells() {
     // derived: row 2 deposit 500.00 leaves 1500.00, so the opening is 1500.00 - 500.00 = 1000.00;
     // row 3 withdrawal 300.00 leaves 1200.00, which is the closing.
-    let text = "Date,Narration,Dr,Cr,Bal\n05/04/2026,A,,500.00,1500.00\n12/04/2026,B,300.00,,1200.00\n";
+    let text =
+        "Date,Narration,Dr,Cr,Bal\n05/04/2026,A,,500.00,1500.00\n12/04/2026,B,300.00,,1200.00\n";
     let st = parse_csv_with_layout(text.as_bytes(), &layout(Some(4))).unwrap();
     assert_eq!(st.opening, Some(Paise::new(100_000)));
     assert_eq!(st.closing, Some(Paise::new(120_000)));

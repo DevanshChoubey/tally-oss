@@ -9,18 +9,15 @@
 //! page does not mention a statement end date; that part of the behaviour is ours (an MT940
 //! `:62F:` date states that the file is complete up to that day) and is `pending` confirmation
 //! against Tally.
-//!
-//! Books on 2026-05-03 (all seven vouchers of `w5_bank.rs`): opening 100_000 + receipts 50_000 +
-//! 120_000 + 20_000 + 77_000 - payments 30_000 - 45_000 - 25_000 = 267_000. With no bank date set,
-//! uncleared deposits are all four receipts (267_000) and uncleared payments all three payments
-//! (100_000), so the balance per bank is 267_000 - 267_000 + 100_000 = 100_000.
-//!
-//! The MT940 statement: opening 100_000, lines +50_000, +120_000, -30_000, -45_000, -1_000,
-//! +77_000, so its balance on 2026-05-03 is 100_000 + 50_000 + 120_000 - 30_000 - 45_000 - 1_000
-//! + 77_000 = 271_000, which is its stated `:62F:` 2710,00.
-
-    reason = "test code: rule B2 lets tests unwrap and panic"
-)]
+//
+// Books on 2026-05-03 (all seven vouchers of `w5_bank.rs`): opening 100_000 + receipts 50_000 +
+// 120_000 + 20_000 + 77_000 - payments 30_000 - 45_000 - 25_000 = 267_000. With no bank date set,
+// uncleared deposits are all four receipts (267_000) and uncleared payments all three payments
+// (100_000), so the balance per bank is 267_000 - 267_000 + 100_000 = 100_000.
+//
+// The MT940 statement: opening 100_000, lines +50_000, +120_000, -30_000, -45_000, -1_000,
+// +77_000, so its balance on 2026-05-03 is 100_000 + 50_000 + 120_000 - 30_000 - 45_000 -
+// 1_000 + 77_000 = 271_000, which is its stated `:62F:` 2710,00.
 
 #![allow(
     clippy::unwrap_used,
@@ -41,8 +38,8 @@ use ledgerly_model::seed_groups::reserved_groups;
 use ledgerly_model::seed_voucher_types::default_voucher_types;
 use ledgerly_model::{
     Address, BankAllocation, BankDetails, BaseVoucherKind, Company, EntityKind, Features,
-    InstrumentKind, Ledger, LedgerLine, NegativeStockPolicy, ReservedGroup, Voucher,
-    VoucherMode, VoucherStatus,
+    InstrumentKind, Ledger, LedgerLine, NegativeStockPolicy, ReservedGroup, Voucher, VoucherMode,
+    VoucherStatus,
 };
 use time::OffsetDateTime;
 use time::macros::date;
@@ -88,8 +85,8 @@ const STATEMENT: &str = "{1:F01TESTINBBAXXX0000000000}{2:O9400000000000TESTINBBX
 
 /// A fictional CSV statement in the generic split layout with a running balance on every row.
 /// Row 2: 2026-04-05 deposit 500.00, balance 1500.00. Row 3: 2026-04-12 withdrawal 300.00,
-/// balance 1200.00. Derived: the opening balance is 1500.00 - 500.00 = 1000.00 (100_000 paise) and
-/// the closing balance is the last row's 1200.00 (120_000 paise); 1000 + 500 - 300 = 1200 agrees.
+/// balance 1200.00. Derived: the opening balance is 1500.00 - 500.00 = 1000.00 (`100_000` paise) and
+/// the closing balance is the last row's 1200.00 (`120_000` paise); 1000 + 500 - 300 = 1200 agrees.
 const CSV: &str = "Date,Value Date,Narration,Ref,Withdrawal,Deposit,Balance\n05/04/2026,05/04/2026,NEFT RECEIPT,R1,,500.00,1500.00\n12/04/2026,12/04/2026,CHEQUE,R2,300.00,,1200.00\n";
 
 /// The same rows, but the second running balance is 1300.00 where 1500 - 300 = 1200 is right.
@@ -308,9 +305,14 @@ fn setup() -> (tempfile::TempDir, PathBuf, Api) {
     for v in vouchers {
         value(api.execute(Command::PostVoucher(v)));
     }
+    (dir, path, api)
+}
 
 fn import(api: &mut Api, file: &str, format: &str) -> BankStatementId {
-    match api.import_bank_statement(file.as_bytes(), format, BANK).unwrap() {
+    match api
+        .import_bank_statement(file.as_bytes(), format, BANK)
+        .unwrap()
+    {
         Outcome::Value(id) => id,
         other @ Outcome::Unsupported(_) => panic!("expected an imported statement, got {other:?}"),
     }
@@ -337,7 +339,10 @@ fn a_statement_survives_reopen_and_the_brs_keeps_its_statement_side() {
     // derived: balance on 30 Apr = 100_000 + 50_000 + 120_000 - 30_000 - 45_000 - 1_000 = 194_000;
     // balance per bank with nothing cleared is 100_000 (header), so the difference is 94_000.
     let brs = brs_at(&api, date!(2026 - 04 - 30));
-    assert_eq!(brs.statement_balance.clone().value(), Some(Paise::new(194_000)));
+    assert_eq!(
+        brs.statement_balance.clone().value(),
+        Some(Paise::new(194_000))
+    );
     assert_eq!(brs.difference.clone().value(), Some(Paise::new(94_000)));
 }
 
@@ -367,7 +372,10 @@ fn an_mt940_end_date_covers_the_last_day_of_the_statement() {
     let brs = brs_at(&api, date!(2026 - 05 - 03));
     assert_eq!(brs.books_balance, Paise::new(267_000));
     assert_eq!(brs.balance_as_per_bank, Paise::new(100_000));
-    assert_eq!(brs.statement_balance.clone().value(), Some(Paise::new(271_000)));
+    assert_eq!(
+        brs.statement_balance.clone().value(),
+        Some(Paise::new(271_000))
+    );
     assert_eq!(brs.difference.clone().value(), Some(Paise::new(171_000)));
     // The day after the end date is not covered.
     let after = brs_at(&api, date!(2026 - 05 - 04));
@@ -412,7 +420,11 @@ fn a_csv_with_a_balance_column_is_verified_and_imported() {
     let brs = brs_at(&api, date!(2026 - 04 - 05));
     assert_eq!(brs.statement_balance.value(), Some(Paise::new(150_000)));
     // derived: with no end date the last line's day (12 Apr) is not covered.
-    assert!(brs_at(&api, date!(2026 - 04 - 12)).statement_balance.is_unsupported());
+    assert!(
+        brs_at(&api, date!(2026 - 04 - 12))
+            .statement_balance
+            .is_unsupported()
+    );
     drop(api);
     let api = Api::open(&path).unwrap();
     assert_eq!(api.bank_statements(BANK).len(), 1);

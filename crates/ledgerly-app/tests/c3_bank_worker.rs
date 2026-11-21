@@ -1,19 +1,19 @@
 //! Card C3 tests: the bank screen in worker mode against a real `Api` on a company file.
 //!
 //! Provenance `derived`: every figure is worked out by hand from the company below.
-//!
-//! Company: bank ledger (debit opening Rs 1,000.00 = 100_000 paise), one customer, one receipt
-//! of Rs 500.00 (50_000) on 2026-04-05 into the bank, no bank date. MT940 statement: opening
-//! 1000,00, one credit of 500,00 on 2026-04-05, closing 1500,00 dated 2026-04-30.
-//!
-//! BRS as of 2026-04-30, before matching: books 100_000 + 50_000 = 150_000; the receipt is not
-//! reflected in the bank, so deposits 50_000, payments 0; balance per bank 150_000 - 50_000 +
-//! 0 = 100_000; the statement balance on 30 Apr (its stated end date) is 100_000 + 50_000 =
-//! 150_000; difference 150_000 - 100_000 = 50_000.
-//!
-//! After the receipt is matched (bank date 2026-04-05): deposits 0, balance per bank 150_000,
-//! difference 0.
-//!
+//
+// Company: bank ledger (debit opening Rs 1,000.00 = 100_000 paise), one customer, one receipt
+// of Rs 500.00 (50_000) on 2026-04-05 into the bank, no bank date. MT940 statement: opening
+// 1000,00, one credit of 500,00 on 2026-04-05, closing 1500,00 dated 2026-04-30.
+//
+// BRS as of 2026-04-30, before matching: books 100_000 + 50_000 = 150_000; the receipt is not
+// reflected in the bank, so deposits 50_000, payments 0; balance per bank 150_000 - 50_000 +
+// 0 = 100_000; the statement balance on 30 Apr (its stated end date) is 100_000 + 50_000 =
+// 150_000; difference 150_000 - 100_000 = 50_000.
+//
+// After the receipt is matched (bank date 2026-04-05): deposits 0, balance per bank 150_000,
+// difference 0.
+//
 //! Tally (accessed 2026-11-21): the Bank Reconciliation page
 //! <https://help.tallysolutions.com/docs/te9rel65/Reports/Display_Registers_Ledgers/Bank_Reconciliation.htm>
 //! lists "Balance as per company books", the amounts not reflected in bank, "Balance as per bank",
@@ -76,7 +76,13 @@ fn company() -> Company {
     }
 }
 
-fn ledger(id: LedgerId, name: &str, kind: ReservedGroup, bank: Option<BankDetails>, opening: i64) -> Ledger {
+fn ledger(
+    id: LedgerId,
+    name: &str,
+    kind: ReservedGroup,
+    bank: Option<BankDetails>,
+    opening: i64,
+) -> Ledger {
     Ledger {
         ineligible_itc: None,
         id,
@@ -206,7 +212,11 @@ fn settle(screen: &mut BankScreen, worker: &ApiWorker) {
 
 fn amount_of(screen: &BankScreen, label: &str) -> Option<Paise> {
     match screen.brs() {
-        Outcome::Value(view) => view.rows.iter().find(|r| r.label == label).map(|r| r.amount),
+        Outcome::Value(view) => view
+            .rows
+            .iter()
+            .find(|r| r.label == label)
+            .map(|r| r.amount),
         Outcome::Unsupported(_) => None,
     }
 }
@@ -220,12 +230,18 @@ fn the_screen_shows_a_brs_and_the_statement_lines_from_the_worker() {
     assert!(screen.brs().is_unsupported());
     settle(&mut screen, &worker);
     assert_eq!(screen.notice(), None);
-    assert_eq!(amount_of(&screen, "Balance as per company books"), Some(Paise::new(150_000)));
+    assert_eq!(
+        amount_of(&screen, "Balance as per company books"),
+        Some(Paise::new(150_000))
+    );
     assert_eq!(
         amount_of(&screen, "Amounts not reflected in bank: deposits"),
         Some(Paise::new(50_000))
     );
-    assert_eq!(amount_of(&screen, "Balance as per bank"), Some(Paise::new(100_000)));
+    assert_eq!(
+        amount_of(&screen, "Balance as per bank"),
+        Some(Paise::new(100_000))
+    );
     assert_eq!(
         amount_of(&screen, "Balance as per imported bank statement"),
         Some(Paise::new(150_000))
@@ -253,7 +269,10 @@ fn accepting_a_suggestion_confirms_it_through_the_api_and_the_brs_reconciles() {
         amount_of(&screen, "Amounts not reflected in bank: deposits"),
         Some(Paise::new(0))
     );
-    assert_eq!(amount_of(&screen, "Balance as per bank"), Some(Paise::new(150_000)));
+    assert_eq!(
+        amount_of(&screen, "Balance as per bank"),
+        Some(Paise::new(150_000))
+    );
     assert_eq!(amount_of(&screen, "Difference"), Some(Paise::new(0)));
 }
 

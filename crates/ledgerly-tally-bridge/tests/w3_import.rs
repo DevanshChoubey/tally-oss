@@ -267,6 +267,7 @@ fn imported_events_match_a_hand_derivation_of_the_fixture() {
             | Event::SettingChanged { .. }
             | Event::PeriodLocked { .. }
             | Event::StatementImported(_)
+            | Event::BankStatementStored { .. }
             | Event::MatchConfirmed(_)
             | Event::AiProposalRecorded(_) => None,
         })
@@ -290,6 +291,7 @@ fn imported_events_match_a_hand_derivation_of_the_fixture() {
             | Event::SettingChanged { .. }
             | Event::PeriodLocked { .. }
             | Event::StatementImported(_)
+            | Event::BankStatementStored { .. }
             | Event::MatchConfirmed(_)
             | Event::AiProposalRecorded(_) => None,
         })

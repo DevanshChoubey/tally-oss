@@ -146,6 +146,7 @@ impl Replay {
             Event::SettingChanged { .. }
             | Event::PeriodLocked { .. }
             | Event::StatementImported(_)
+            | Event::BankStatementStored { .. }
             | Event::AiProposalRecorded(_) => Ok(()),
         }
     }

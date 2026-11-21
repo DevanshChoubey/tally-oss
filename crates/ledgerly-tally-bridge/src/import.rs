@@ -257,6 +257,7 @@ fn align_voucher_types(events: Vec<Event>) -> Result<Vec<Event>, Unsupported> {
             | Event::SettingChanged { .. }
             | Event::PeriodLocked { .. }
             | Event::StatementImported(_)
+            | Event::BankStatementStored { .. }
             | Event::MatchConfirmed(_)
             | Event::AiProposalRecorded(_)) => out.push(other),
         }

@@ -353,12 +353,7 @@ fn describe(rec: &AuditRecord, books: &Books) -> (ObjectKey, String, String) {
             "period lock".to_owned(),
             format!("Locked books until {until}"),
         ),
-        Event::StatementImported(id) => (
-            ObjectKey::Statement(*id),
-            format!("bank statement {}", id.0),
-            "Imported bank statement".to_owned(),
-        ),
-        Event::BankStatementStored { id, .. } => (
+        Event::StatementImported(id) | Event::BankStatementStored { id, .. } => (
             ObjectKey::Statement(*id),
             format!("bank statement {}", id.0),
             "Imported bank statement".to_owned(),
