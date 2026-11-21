@@ -2,6 +2,7 @@
 
 use std::rc::Rc;
 
+use ledgerly_api::ReportParams;
 use ledgerly_core::{
     Date, GroupId, LedgerId, Outcome, Paise, Period, Qty, SignedAmount, StockItemId, Unsupported,
     VoucherId,
@@ -201,28 +202,75 @@ type RefreshFn = dyn Fn(&ReportToken, ViewParams) -> Result<Outcome<ViewReport>,
 type DrillFn =
     dyn Fn(&ReportToken, &ViewKey, ViewParams) -> Result<Outcome<DrillTarget>, ViewError>;
 
+/// Where a report screen gets its reports from.
+#[derive(Clone)]
+enum SourceMode {
+    /// Synchronous callbacks run on the UI thread (the host's own closures, used by tests and
+    /// hosts that have the report already).
+    Host {
+        refresh: Rc<RefreshFn>,
+        drill: Rc<DrillFn>,
+    },
+    /// Reports run on the API worker. `base` is the engine parameters the screen starts from.
+    Worker { base: ReportParams },
+}
+
 /// The two things a report screen asks of the host. Cloning shares the same functions, so a
 /// drilled report screen uses the source its parent had.
 ///
-/// The functions run on the UI thread, so the host must make them cheap (serve a cached or
-/// precomputed report) until the screen gets a request and poll hook (rule D1; see
-/// `docs/interface-requests.md`, U7).
+/// [`ReportSource::new`] takes synchronous callbacks that run on the UI thread, so the host must
+/// make them cheap (rule D1). [`ReportSource::worker`] runs every report on the `ApiWorker`
+/// through the screen's own request and poll (see `docs/interface-requests.md`, U7).
 #[derive(Clone)]
 pub struct ReportSource {
-    pub(super) refresh: Rc<RefreshFn>,
-    pub(super) drill: Rc<DrillFn>,
+    mode: SourceMode,
 }
 
 impl ReportSource {
-    /// A source from the two functions.
+    /// A source from the two functions. Both run on the calling (UI) thread.
     pub fn new(
         refresh: impl Fn(&ReportToken, ViewParams) -> Result<Outcome<ViewReport>, ViewError> + 'static,
         drill: impl Fn(&ReportToken, &ViewKey, ViewParams) -> Result<Outcome<DrillTarget>, ViewError>
         + 'static,
     ) -> Self {
         Self {
-            refresh: Rc::new(refresh),
-            drill: Rc::new(drill),
+            mode: SourceMode::Host {
+                refresh: Rc::new(refresh),
+                drill: Rc::new(drill),
+            },
+        }
+    }
+
+    /// A source that runs every report on the API worker. `base` holds the scenario, the filters
+    /// and the balance date; the screen changes its period and detail.
+    #[must_use]
+    pub fn worker(base: ReportParams) -> Self {
+        Self {
+            mode: SourceMode::Worker { base },
+        }
+    }
+
+    /// The host's refresh function, or `None` in worker mode.
+    pub(super) fn host_refresh(&self) -> Option<Rc<RefreshFn>> {
+        match &self.mode {
+            SourceMode::Host { refresh, .. } => Some(Rc::clone(refresh)),
+            SourceMode::Worker { .. } => None,
+        }
+    }
+
+    /// The host's drill function, or `None` in worker mode.
+    pub(super) fn host_drill(&self) -> Option<Rc<DrillFn>> {
+        match &self.mode {
+            SourceMode::Host { drill, .. } => Some(Rc::clone(drill)),
+            SourceMode::Worker { .. } => None,
+        }
+    }
+
+    /// The engine parameters a worker source starts from, or `None` in host mode.
+    pub(super) fn worker_base(&self) -> Option<&ReportParams> {
+        match &self.mode {
+            SourceMode::Worker { base } => Some(base),
+            SourceMode::Host { .. } => None,
         }
     }
 }

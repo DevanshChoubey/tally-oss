@@ -10,3 +10,4 @@ pub mod item_invoice;
 pub mod masters;
 pub mod report_view;
 pub mod voucher_entry;
+pub mod wire;
