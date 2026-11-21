@@ -7,15 +7,12 @@
 //! `docs/status/2026-11-22-ui-parity-report.md` section 8, decisions 4 and 10. Each expected chord
 //! is typed here from those sources. The text-field behaviour is egui 0.37's own: a focused
 //! single-line `TextEdit` selects all on Ctrl+A (`egui-0.37.0/src/text_selection/cursor_range.rs`).
-#![allow(
-    clippy::unwrap_used,
-    reason = "test code: rule B2 lets tests unwrap"
-)]
+#![allow(clippy::unwrap_used, reason = "test code: rule B2 lets tests unwrap")]
 
 use egui::{Event, Key, Modifiers, RawInput};
 use ledgerly_app::keymap::{
-    Action, Chord, Keymap, KeymapError, PRESET_NAMES, classic, is_text_edit_chord, preset,
-    standard, to_toml, from_toml, DEFAULT_PRESET,
+    Action, Chord, DEFAULT_PRESET, Keymap, KeymapError, PRESET_NAMES, classic, from_toml,
+    is_text_edit_chord, preset, standard, to_toml,
 };
 use ledgerly_app::screens::keymap_map::layout;
 
@@ -64,7 +61,7 @@ fn press_in_text_field(
     modifiers: Modifiers,
 ) -> (bool, [usize; 2]) {
     let ctx = egui::Context::default();
-    let id = egui::Id::new("s-j-text-field");
+    let id = egui::Id::unique("s-j-text-field");
     let mut text = String::from("Hello");
 
     // Frame 1: the field draws and asks for focus.
@@ -100,7 +97,10 @@ fn standard_saves_with_ctrl_s_and_leaves_ctrl_a_to_text_fields() {
     // standard column. Ctrl+A is select-all in a text field, so the standard preset must not
     // bind it.
     let km = standard();
-    assert_eq!(km.action_for(Chord::key(Key::S).with_ctrl()), Some(Action::Save));
+    assert_eq!(
+        km.action_for(Chord::key(Key::S).with_ctrl()),
+        Some(Action::Save)
+    );
     assert_eq!(km.action_for(Chord::key(Key::A).with_ctrl()), None);
     assert_eq!(chord_texts(&km, Action::Save), ["Ctrl+S"]);
 }
@@ -113,7 +113,10 @@ fn standard_voucher_keys_follow_the_mock_with_function_key_aliases() {
     // same actions.
     let km = standard();
     assert_eq!(chord_texts(&km, Action::NewSales), ["Ctrl+Shift+S", "F8"]);
-    assert_eq!(chord_texts(&km, Action::NewPurchase), ["Ctrl+Shift+P", "F9"]);
+    assert_eq!(
+        chord_texts(&km, Action::NewPurchase),
+        ["Ctrl+Shift+P", "F9"]
+    );
     assert_eq!(chord_texts(&km, Action::NewPayment), ["Ctrl+Shift+Y", "F5"]);
     assert_eq!(chord_texts(&km, Action::NewReceipt), ["Ctrl+Shift+R", "F6"]);
     assert_eq!(chord_texts(&km, Action::NewContra), ["Ctrl+Shift+C", "F4"]);
@@ -198,8 +201,12 @@ fn text_edit_chords_are_ctrl_with_a_c_v_x_z_or_y_only() {
     // (select all, copy, paste, cut, undo, redo). Alt or Shift changes the chord, so it is not one.
     assert!(is_text_edit_chord(Chord::key(Key::A).with_ctrl()));
     assert!(is_text_edit_chord(Chord::key(Key::Z).with_ctrl()));
-    assert!(!is_text_edit_chord(Chord::key(Key::A).with_ctrl().with_shift()));
-    assert!(!is_text_edit_chord(Chord::key(Key::A).with_ctrl().with_alt()));
+    assert!(!is_text_edit_chord(
+        Chord::key(Key::A).with_ctrl().with_shift()
+    ));
+    assert!(!is_text_edit_chord(
+        Chord::key(Key::A).with_ctrl().with_alt()
+    ));
     assert!(!is_text_edit_chord(Chord::key(Key::S).with_ctrl()));
     assert!(!is_text_edit_chord(Chord::key(Key::F4)));
     assert!(!is_text_edit_chord(Chord::key(Key::A)));
@@ -221,7 +228,8 @@ fn ctrl_a_in_a_focused_text_field_selects_all_and_fires_no_save() {
     // provenance: derived — decision 10 (parity report section 8): Ctrl+A in a focused single-line
     // text field selects all, and no save is fired. "Hello" has five characters, so the
     // selection is [0, 5].
-    let (fired, selection) = press_in_text_field(&classic(), Action::Save, Key::A, Modifiers::COMMAND);
+    let (fired, selection) =
+        press_in_text_field(&classic(), Action::Save, Key::A, Modifiers::COMMAND);
     assert!(!fired, "Ctrl+A must not save while a text field has focus");
     assert_eq!(selection, [0, 5], "Ctrl+A must select all the text");
 }
@@ -266,7 +274,13 @@ fn the_map_groups_follow_the_mock_titles_in_order() {
     let titles: Vec<&str> = layout().iter().map(|group| group.title).collect();
     assert_eq!(
         titles,
-        ["Go anywhere", "Vouchers", "Inside a voucher", "Reports", "Other actions"]
+        [
+            "Go anywhere",
+            "Vouchers",
+            "Inside a voucher",
+            "Reports",
+            "Other actions"
+        ]
     );
 }
 
@@ -278,13 +292,16 @@ fn the_classic_map_shows_the_mock_classic_keys() {
     let km = classic();
     assert_eq!(chord_texts(&km, Action::OpenPalette), ["Ctrl+K", "Alt+G"]);
     assert_eq!(chord_texts(&km, Action::NewSales), ["F8"]);
-    assert_eq!(chord_texts(&km, Action::Save).first().map(String::as_str), Some("Ctrl+A"));
+    assert_eq!(
+        chord_texts(&km, Action::Save).first().map(String::as_str),
+        Some("Ctrl+A")
+    );
 }
 
 #[test]
 fn an_action_without_a_key_shows_no_keys() {
     // provenance: derived — switch-side is pending (keymap-classic.toml), so the map has no key
     // to show for it on either preset.
-    assert!(chord_texts(&classic(), Action::SwitchSide).is_empty());
-    assert!(chord_texts(&standard(), Action::SwitchSide).is_empty());
+    assert_eq!(chord_texts(&classic(), Action::SwitchSide).len(), 0);
+    assert_eq!(chord_texts(&standard(), Action::SwitchSide).len(), 0);
 }

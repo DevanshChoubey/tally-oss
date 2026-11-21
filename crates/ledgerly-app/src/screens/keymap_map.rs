@@ -190,14 +190,11 @@ impl Screen for KeymapScreen {
     }
 
     fn keys(&self) -> Vec<KeyHint> {
-        vec![
-            KeyHint::new("1", "Classic"),
-            KeyHint::new("2", "Standard"),
-        ]
+        vec![KeyHint::new("1", "Classic"), KeyHint::new("2", "Standard")]
     }
 
     fn ui(&mut self, ui: &mut Ui, _ctx: &mut AppCtx) -> ScreenAction {
-        let id = ui.id().with(VIEW_SALT);
+        let id = ui.scope_id().with(VIEW_SALT);
         let t = tokens(ui);
         let mut view: usize = ui.ctx().data(|d| d.get_temp::<usize>(id)).unwrap_or(0);
 
