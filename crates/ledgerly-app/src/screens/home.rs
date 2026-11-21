@@ -26,7 +26,8 @@
 //!
 //! Keys handled here, from the mock: F8 sales invoice, F6 receipt, F5 payment, F9 purchase from a
 //! bill, B balance sheet, D day book, G GST returns, M masters, Ctrl+K search. The letters are
-//! ignored while a text field has focus. Ctrl+J opens the describe-a-transaction row. Modifiers
+//! ignored while a text field has focus. Ctrl+Shift+J opens the describe-a-transaction row (the
+//! table of keys says why it is not Ctrl+J). Modifiers
 //! match exactly: Alt+D or Shift+F5 is not D or F5. The key map of card U2 is not wired in yet
 //! (Wave 2), so the keys are read directly, as the shell does for Ctrl+T.
 //!
@@ -216,7 +217,7 @@ const ENTER_ROWS: [EntryRow; 5] = [
         target: || HomeTarget::DescribeTransaction,
         title: "Describe a transaction",
         detail: "Type it in words; the assistant drafts the voucher",
-        key: "Ctrl J",
+        key: "Ctrl Shift J",
     },
 ];
 
@@ -260,6 +261,10 @@ const LOOKUP_ROWS: [EntryRow; 5] = [
 /// One home-screen shortcut: key, modifiers, whether it is a plain letter, and its target.
 type Shortcut = (Key, Modifiers, bool, fn() -> HomeTarget);
 
+/// The home-screen keys. Checked on 2026-11-21 against Tally's keyboard shortcut page
+/// (https://help.tallysolutions.com/tally-prime/keyboard-shortcuts/keyboard-shortcuts-tally-prime/):
+/// Ctrl+J is the report exceptions key there, so it is not used here. Ctrl+Shift+J is not listed
+/// anywhere on that page. The describe row is our own key, since Tally has no assistant.
 const SHORTCUTS: [Shortcut; 10] = [
     (Key::F8, Modifiers::NONE, false, || HomeTarget::SalesInvoice),
     (Key::F6, Modifiers::NONE, false, || HomeTarget::Receipt),
@@ -276,7 +281,7 @@ const SHORTCUTS: [Shortcut; 10] = [
     }),
     (Key::M, Modifiers::NONE, true, || HomeTarget::Masters),
     (Key::K, Modifiers::COMMAND, false, || HomeTarget::Palette),
-    (Key::J, Modifiers::COMMAND, false, || {
+    (Key::J, Modifiers::COMMAND.plus(Modifiers::SHIFT), false, || {
         HomeTarget::DescribeTransaction
     }),
 ];

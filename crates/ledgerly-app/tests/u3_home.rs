@@ -290,22 +290,39 @@ fn attention_kinds_carry_distinct_words() {
 }
 
 #[test]
-fn ctrl_j_is_listed_for_describe_a_transaction() {
-    // provenance: the mock shows the assistant panel on Ctrl+J (design/mock/index.html, the
-    // Home help list "assistant", "Ctrl J"). The home row "Describe a transaction" advertises the
-    // same key, so the screen must handle it.
+fn ctrl_shift_j_is_listed_for_describe_a_transaction() {
+    // provenance: derived. Tally's shortcut page, read 2026-11-21:
+    // https://help.tallysolutions.com/tally-prime/keyboard-shortcuts/keyboard-shortcuts-tally-prime/
+    // It gives Ctrl+J to the report exceptions view, not to the home screen, and it lists no
+    // Ctrl+Shift+J at all, so that chord is free for the describe-a-transaction row. Replaces the
+    // round-2 default of Ctrl+J, which collided with Tally's exceptions key.
     assert_eq!(
-        shortcut_target(Key::J, Modifiers::COMMAND),
+        shortcut_target(Key::J, Modifiers::COMMAND | Modifiers::SHIFT),
         Some(HomeTarget::DescribeTransaction)
     );
 }
 
 #[test]
-fn ctrl_j_in_a_frame_requests_describe_a_transaction() {
+fn ctrl_shift_j_in_a_frame_requests_describe_a_transaction() {
+    let ctx = egui::Context::default();
+    let mut screen = HomeScreen::new(sample());
+    frame(
+        &ctx,
+        &mut screen,
+        key(Key::J, Modifiers::COMMAND | Modifiers::SHIFT),
+    );
+    assert_eq!(screen.take_request(), Some(HomeTarget::DescribeTransaction));
+}
+
+#[test]
+fn ctrl_j_opens_nothing_on_home() {
+    // provenance: derived. Ctrl+J is the exceptions key in Tally's reports (Tally shortcut page,
+    // read 2026-11-21), and the home screen does not handle it, so it must not open the row.
+    assert_eq!(shortcut_target(Key::J, Modifiers::COMMAND), None);
     let ctx = egui::Context::default();
     let mut screen = HomeScreen::new(sample());
     frame(&ctx, &mut screen, key(Key::J, Modifiers::COMMAND));
-    assert_eq!(screen.take_request(), Some(HomeTarget::DescribeTransaction));
+    assert_eq!(screen.take_request(), None);
 }
 
 #[test]

@@ -515,7 +515,7 @@ impl EntryKind {
     }
 
     /// The side the first line starts on: a payment credits the paying account first, the other
-    /// kinds start on the debit. It is only a starting point; Alt+S switches it.
+    /// kinds start on the debit. It is only a starting point; the Dr / Cr button switches it.
     #[must_use]
     pub fn first_side(self) -> DrCr {
         match self {
@@ -1074,8 +1074,10 @@ mod bindings {
         [(Modifiers::COMMAND, Key::A), (Modifiers::COMMAND, Key::S)];
     /// Create a ledger inline (spec 7: Alt+C).
     pub(super) const CREATE_MASTER: (Modifiers, Key) = (Modifiers::ALT, Key::C);
-    /// Switch the line between Dr and Cr. Provisional: no source for this binding yet.
-    pub(super) const TOGGLE_SIDE: (Modifiers, Key) = (Modifiers::ALT, Key::S);
+    // Switching a line between Dr and Cr has no keyboard binding. Read 2026-11-21: Tally's
+    // shortcut page (https://help.tallysolutions.com/tally-prime/keyboard-shortcuts/keyboard-shortcuts-tally-prime/) gives Alt+S to Stock Query and lists no side-switch key. The
+    // contra page (https://help.tallysolutions.com/record-contra-entry/) sets a line's side by the field it is entered in. The binding is pending;
+    // the on-screen Dr / Cr button does the switch.
     /// Delete the line. Provisional: no source for this binding yet (spec 7 gives Alt+D to
     /// "delete" a voucher, not a line), so it is only a placeholder until the keymap is merged.
     pub(super) const DELETE_LINE: (Modifiers, Key) = (Modifiers::COMMAND, Key::D);
@@ -1086,7 +1088,6 @@ enum KeyCmd {
     Save,
     DeleteLine,
     CreateMaster,
-    ToggleSide,
     PickUp,
     PickDown,
     Escape,
@@ -1631,7 +1632,7 @@ fn draw_row(ui: &mut Ui, i: usize, row: &mut DraftRow, rc: &RowCtx<'_>, events: 
     ui.horizontal(|ui| {
         if ui
             .button(side_label(row.side))
-            .on_hover_text("Switch Dr / Cr (Alt+S)")
+            .on_hover_text("Switch Dr / Cr")
             .clicked()
         {
             events.push(UiEvent::Side(i));
@@ -1706,9 +1707,6 @@ fn read_keys(ui: &Ui, picker_open: bool, escape_wanted: bool, confirming: bool) 
         if i.consume_key(bindings::CREATE_MASTER.0, bindings::CREATE_MASTER.1) {
             out.push(KeyCmd::CreateMaster);
         }
-        if i.consume_key(bindings::TOGGLE_SIDE.0, bindings::TOGGLE_SIDE.1) {
-            out.push(KeyCmd::ToggleSide);
-        }
         if picker_open && i.consume_key(Modifiers::NONE, Key::ArrowDown) {
             out.push(KeyCmd::PickDown);
         }
@@ -1729,11 +1727,6 @@ impl VoucherEntryScreen {
             KeyCmd::Save => self.save(masters),
             KeyCmd::DeleteLine => self.delete_line(),
             KeyCmd::CreateMaster => self.begin_create(),
-            KeyCmd::ToggleSide => {
-                if let Field::Ledger(i) | Field::Amount(i) = self.focus {
-                    self.toggle_side(i);
-                }
-            }
             KeyCmd::PickUp => self.shift_pick(picker_len, -1),
             KeyCmd::PickDown => self.shift_pick(picker_len, 1),
             KeyCmd::DiscardYes => {

@@ -1222,14 +1222,26 @@ fn escape_on_a_blank_voucher_is_left_for_the_shell() {
 }
 
 #[test]
-fn alt_s_switches_the_side_of_the_current_line() {
+fn alt_s_does_not_switch_the_side() {
+    // provenance: derived. Read 2026-11-21: Tally's shortcut page
+    // https://help.tallysolutions.com/tally-prime/keyboard-shortcuts/keyboard-shortcuts-tally-prime/
+    // gives Alt+S to the Stock Query report for the selected stock item, so this screen cannot
+    // use it. The same page lists no key that switches a voucher line between Dr and Cr. Two more
+    // pages were read: the accounting entry page
+    // https://help.tallysolutions.com/tally-prime/accounting/accounting-entry-tally/
+    // covers only post-dated vouchers, and the contra page
+    // https://help.tallysolutions.com/record-contra-entry/
+    // sets a line's side by the Dr or Cr field the ledger is entered in, not by a key. So the
+    // keyboard binding is pending. Replaces the round-2 default (Alt+S switched the side). The
+    // on-screen Dr / Cr button still switches it: switching_a_side_and_deleting_a_line calls the
+    // same method the button calls.
     let b = books();
     let ctx = egui::Context::default();
     let mut s = open(&b, T_JOURNAL);
     let mut app = AppCtx { books: Some(b) };
     frame(&ctx, &mut s, &mut app, RawInput::default());
     frame(&ctx, &mut s, &mut app, key(Key::S, Modifiers::ALT));
-    assert_eq!(s.draft().rows[0].side, DrCr::Cr);
+    assert_eq!(s.draft().rows[0].side, DrCr::Dr);
 }
 
 #[test]

@@ -148,6 +148,21 @@ fn has(texts: &[String], needle: &str) -> bool {
     texts.iter().any(|t| t.contains(needle))
 }
 
+/// Ctrl+A alone: the key that accepts or saves a screen on Tally's shortcut page.
+fn ctrl_a() -> RawInput {
+    RawInput {
+        events: vec![Event::Key {
+            key: Key::A,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: Modifiers::COMMAND,
+        }],
+        ..RawInput::default()
+    }
+}
+
+/// Ctrl+Enter alone: the alter-master key on Tally's shortcut page. It must not accept a proposal.
 fn ctrl_enter() -> RawInput {
     RawInput {
         events: vec![Event::Key {
@@ -307,14 +322,39 @@ fn accept_when_ok_is_recorded_once() {
 }
 
 #[test]
-fn ctrl_enter_accepts_only_when_ok() {
+fn ctrl_a_accepts_only_when_ok() {
+    // provenance: derived. Tally's shortcut page, read 2026-11-21:
+    // https://help.tallysolutions.com/tally-prime/keyboard-shortcuts/keyboard-shortcuts-tally-prime/
+    // It names Ctrl+A as the key that accepts or saves a screen. The engine verdict still gates
+    // it: an Ok check accepts, a blocked one does not. Replaces the round-2 default of Ctrl+Enter,
+    // because Ctrl+Enter is the alter-master key on that page.
     let mut ok = screen_with(ok_check());
-    frames(&mut ok, &ctrl_enter());
+    frames(&mut ok, &ctrl_a());
     assert_eq!(ok.take_action(), Some(PanelAction::Accept));
 
     let mut blocked = screen_with(blocked_check());
-    frames(&mut blocked, &ctrl_enter());
+    frames(&mut blocked, &ctrl_a());
     assert_eq!(blocked.take_action(), None);
+}
+
+#[test]
+fn ctrl_enter_does_not_accept() {
+    // provenance: derived. Same Tally shortcut page, read 2026-11-21. Ctrl+Enter is the
+    // alter-master key during voucher entry. The assistant's Accept must not use it, even when the
+    // engine check is Ok. Replaces the round-2 default (Ctrl+Enter accepted).
+    let mut ok = screen_with(ok_check());
+    frames(&mut ok, &ctrl_enter());
+    assert_eq!(ok.take_action(), None);
+}
+
+#[test]
+fn accept_button_is_labelled_with_ctrl_a() {
+    // provenance: derived, same Tally page. The key shown on the button must be the key that
+    // accepts, so the label names Ctrl+A and not Ctrl+Enter.
+    let mut s = screen_with(ok_check());
+    let (_, texts) = frames(&mut s, &RawInput::default());
+    assert!(has(&texts, "Accept (Ctrl+A)"));
+    assert!(!has(&texts, "Ctrl+Enter"));
 }
 
 #[test]

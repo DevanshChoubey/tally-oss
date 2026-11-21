@@ -77,6 +77,17 @@ fn classic_binds_the_context_keys() {
 }
 
 #[test]
+fn classic_leaves_switch_side_unbound() {
+    // provenance: derived. Read 2026-11-21: Tally's shortcut page
+    // https://help.tallysolutions.com/tally-prime/keyboard-shortcuts/keyboard-shortcuts-tally-prime/
+    // gives Alt+S to Stock Query for the selected item, and no key on it switches a line's Dr / Cr
+    // side. The binding is pending until a Tally source exists, so the classic preset leaves it
+    // empty. Replaces the round-2 default (Alt+S).
+    let km = classic();
+    assert_eq!(km.action_for(f(Key::S).with_alt()), None);
+}
+
+#[test]
 fn classic_binds_ctrl_a_to_save() {
     // provenance: derived — spec section 7 "Ctrl+A save", and the plan's key note "Save is
     // Ctrl+A (and Ctrl+S)".
@@ -157,9 +168,21 @@ fn the_embedded_classic_file_parses_and_names_itself() {
 fn classic_binds_every_action_and_no_chord_twice() {
     // provenance: derived — every action in `Action::ALL` is part of the preset, and a key press
     // may mean one thing (`Keymap::new` rejects a chord bound twice, so a built keymap is clean).
+    // Replaces the round-2 policy that every action is bound: switch-side is pending, because
+    // Tally's shortcut page (read 2026-11-21) gives Alt+S to Stock Query and lists no key that
+    // switches a line's Dr/Cr side. So it must stay unbound until a Tally source is found.
+    let pending = [Action::SwitchSide];
     let km = classic();
     let mut seen = BTreeSet::new();
     for action in Action::ALL {
+        if pending.contains(action) {
+            assert!(
+                km.chords(*action).is_empty(),
+                "{} is pending and must stay unbound",
+                action.id()
+            );
+            continue;
+        }
         assert!(
             !km.chords(*action).is_empty(),
             "{} is unbound in classic",

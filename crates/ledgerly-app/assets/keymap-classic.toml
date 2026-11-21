@@ -9,7 +9,9 @@
 # Alt+C, Ctrl+Enter, Alt+D, Alt+X, Alt+2, Alt+F1, Ctrl+P/E/M, and the modern aliases Ctrl+S,
 # Ctrl+K, Ctrl+Z) and docs/research/02-ux-keyboard.md section 3 for the rest (F1, Alt+I, Ctrl+I,
 # Ctrl+D, Alt+G, Ctrl+G). Ctrl+T and Ctrl+W are the tab keys U1 already handles.
-# Alt+S (switch Dr/Cr) has no source; it is the voucher screen's own key until the owner chooses.
+# Switch Dr/Cr is unbound. Read 2026-11-21: Tally's shortcut page gives Alt+S to Stock Query and
+# lists no side-switch key; the contra page sets a line's side by the Dr or Cr field it is entered
+# in. The binding is pending. The voucher screen's Dr / Cr button does the switch.
 
 preset = "classic"
 
@@ -40,7 +42,7 @@ create-master = ["Alt+C"]
 alter-master = ["Ctrl+Enter"]
 more-details = ["Ctrl+I"]
 delete-line = ["Ctrl+D"]
-switch-side = ["Alt+S"]
+switch-side = []
 delete-voucher = ["Alt+D"]
 cancel-voucher = ["Alt+X"]
 duplicate-voucher = ["Alt+2"]
