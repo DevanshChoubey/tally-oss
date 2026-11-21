@@ -15,13 +15,13 @@
 use std::collections::BTreeMap;
 
 use ledgerly_core::{
-    CompanyId, Date, EventSeq, GroupId, LedgerId, OffsetDateTime, Outcome, Period, StateCode,
-    UserId, VoucherId, VoucherTypeId,
+    CompanyId, Date, EventSeq, GroupId, LedgerId, OffsetDateTime, Outcome, Paise, Period,
+    SignedAmount, StateCode, UserId, VoucherId, VoucherTypeId,
 };
 use ledgerly_model::{
-    Address, BaseVoucherKind, Books, Company, EntityKind, Features, Group, MasterSnapshot, Masters,
-    NegativeStockPolicy, NumberingConfig, NumberingMethod, RestartPeriod, Scenario, Voucher,
-    VoucherMode, VoucherStatus, VoucherType,
+    Address, BaseVoucherKind, Books, Company, EntityKind, Features, Group, LedgerLine,
+    MasterSnapshot, Masters, NegativeStockPolicy, NumberingConfig, NumberingMethod, RestartPeriod,
+    Scenario, Voucher, VoucherMode, VoucherStatus, VoucherType,
 };
 use ledgerly_reports::audit::{audit_report, integrity_certificate};
 use ledgerly_reports::{
@@ -255,6 +255,34 @@ fn alter_of_two_fields_lists_both_in_field_name_order_with_dates_readable() {
 }
 
 #[test]
+fn alter_of_an_amount_shows_rupees_and_side_not_raw_paise() {
+    // derived: 10000 paise is 100.00 rupees and 25050 paise is 250.50 rupees (100 paise to the
+    // rupee); both lines are debits. Only the line amount differs, so one field is listed, as
+    // an amount with its side.
+    let line = |paise: i64| LedgerLine {
+        ledger: LedgerId(1),
+        amount: SignedAmount::dr(Paise::new(paise)),
+        bills: vec![],
+        cost: vec![],
+        bank: None,
+    };
+    let mut before = voucher(1, 1, date!(2026 - 04 - 10), "n");
+    before.ledger_lines = vec![line(10_000)];
+    let mut after = before.clone();
+    after.ledger_lines = vec![line(25_050)];
+    let records = [rec(1, Event::VoucherAltered { before, after })];
+    let r = run(&records, AuditReportKind::DeletedAltered);
+    assert_eq!(
+        diffs(&r),
+        [triple(
+            "ledger_lines[0].amount",
+            "Rs 100.00 Dr",
+            "Rs 250.50 Dr"
+        )]
+    );
+}
+
+#[test]
 fn alter_with_no_difference_lists_no_field() {
     // derived: identical before and after leave nothing to list.
     let v = voucher(1, 1, date!(2026 - 04 - 10), "same");
@@ -467,6 +495,39 @@ fn back_dated_first_posting_and_in_order_postings_give_an_empty_report() {
 // ---------------------------------------------------------------------------------------------
 
 #[test]
+fn back_dated_says_so_when_the_window_does_not_start_at_event_one() {
+    // derived: the records start at event 2, so event 1 (and anything before it) was not read;
+    // the report lists no entry (no earlier posting is known) and says why. A window that
+    // starts at event 1 carries only the standing note.
+    let from_two = [rec(2, posted(1, 1, date!(2026 - 04 - 05)))];
+    let r = run(&from_two, AuditReportKind::BackDated);
+    assert_eq!(r.notes.len(), 2);
+    assert!(r.notes[1].starts_with("The records supplied start at event 2."));
+    let from_one = [rec(1, posted(1, 1, date!(2026 - 04 - 05)))];
+    assert_eq!(run(&from_one, AuditReportKind::BackDated).notes.len(), 1);
+}
+
+#[test]
+fn edits_after_lock_says_so_when_the_window_does_not_start_at_event_one() {
+    // derived: as for back-dated entries; the lock report starts from the first record supplied.
+    let from_three = [rec(3, posted(1, 1, date!(2026 - 03 - 05)))];
+    let r = run(&from_three, AuditReportKind::EditsAfterLock);
+    assert_eq!(r.notes.len(), 2);
+    assert!(r.notes[1].starts_with("The records supplied start at event 3."));
+}
+
+#[test]
+fn a_count_of_one_event_is_singular() {
+    // derived: one record gives "1 event" in the total and in the user note.
+    let r = run(
+        &[rec(1, posted(1, 1, date!(2026 - 04 - 05)))],
+        AuditReportKind::EditLog,
+    );
+    assert_eq!(r.totals[0], Cell::Text("1 event".to_owned()));
+    assert_eq!(r.notes, ["user 1: 1 event"]);
+}
+
+#[test]
 fn edits_after_lock_uses_the_lock_in_force_when_the_event_was_recorded() {
     // derived, lock dates in force by sequence number:
     //   seq 1: none        seq 2: sets 31 Mar   seq 3..6: 31 Mar   seq 7: sets 10 Mar   seq 8: 10 Mar
@@ -605,8 +666,9 @@ fn edit_log_selects_by_the_users_own_calendar_day() {
     p.period = Period::new(date!(2026 - 04 - 01), date!(2026 - 05 - 31)).unwrap();
     let all = run_with(&records, AuditReportKind::EditLog, &p);
     assert_eq!(seqs(&all), ["1", "2", "3"]);
-    // derived: user 1 made seq 1 and 3, user 2 made seq 2.
-    assert_eq!(all.notes, ["user 1: 2 events", "user 2: 1 events"]);
+    // derived: user 1 made seq 1 and 3, user 2 made seq 2; one event is "1 event", not
+    // "1 events".
+    assert_eq!(all.notes, ["user 1: 2 events", "user 2: 1 event"]);
     assert_eq!(all.totals[0], Cell::Text("3 events".to_owned()));
 }
 
@@ -742,7 +804,7 @@ fn certificate_of_a_sound_chain_says_pass_with_head_and_checkpoints() {
             hash: [0x01; 32],
         }],
     };
-    let r = integrity_certificate(&verify);
+    let r = integrity_certificate(&verify).unwrap();
     assert_eq!(value_of(&r, "Result"), "PASS");
     assert_eq!(value_of(&r, "Events checked"), "3");
     assert_eq!(
@@ -781,7 +843,7 @@ fn certificate_of_a_broken_chain_says_fail_and_names_the_first_broken_event() {
         ],
         checkpoints: vec![],
     };
-    let r = integrity_certificate(&verify);
+    let r = integrity_certificate(&verify).unwrap();
     assert_eq!(value_of(&r, "Result"), "FAIL");
     assert_eq!(value_of(&r, "First broken event"), "3");
     let problems: Vec<String> = r
@@ -804,7 +866,7 @@ fn certificate_of_an_empty_log_passes_with_no_head() {
         problems: vec![],
         checkpoints: vec![],
     };
-    let r = integrity_certificate(&verify);
+    let r = integrity_certificate(&verify).unwrap();
     assert_eq!(value_of(&r, "Result"), "PASS");
     assert_eq!(value_of(&r, "Head"), "none (the log is empty)");
 }

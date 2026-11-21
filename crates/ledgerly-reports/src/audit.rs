@@ -7,6 +7,11 @@
 //! pub fn integrity_certificate(verify: &VerifyReport) -> Report;
 //! ```
 //!
+//! `integrity_certificate` returns `Result<Report, ReportError>` instead of the frozen `Report`:
+//! the whole-calendar period it needs can only be built through the fallible `Period::new`, and a
+//! library crate may not `expect` (rule B2). Interface request: change the frozen signature, or
+//! give `Period` an infallible whole-calendar constructor.
+//!
 //! # Input
 //!
 //! `records` is a window of the audit log, as read with `Store::events`. Order does not matter
@@ -50,28 +55,37 @@
 //! - **Integrity certificate** needs the chain verification result: [`integrity_certificate`]
 //!   renders a `VerifyReport`; asking [`audit_report`] for it returns `Unsupported`.
 //!
+//! The back-dated and lock reports are stateful: they follow the posted dates and lock dates from
+//! the first record supplied onward. A window that omits earlier `VoucherPosted` or `PeriodLocked`
+//! events starts from nothing and can list too little. When the first record supplied is not event
+//! 1, both reports say so in their notes; pass the whole log (and use `params.period` to narrow
+//! the rows) for a complete answer.
+//!
 //! Voucher events are the only ones that carry a voucher date, so the back-dated and lock reports
 //! look at no other event. Filters other than `voucher_types` return `Unsupported` for the edit
 //! log, the back-dated report, the lock report and the deleted/altered report.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::fmt::Write as _;
 
 use ledgerly_core::{
     BankStatementId, BatchId, CostCategoryId, CostCentreId, Date, EventSeq, GodownId, GroupId,
     LedgerId, Outcome, Period, StockGroupId, StockItemId, UnitId, Unsupported, VoucherId,
     VoucherTypeId,
 };
-use ledgerly_model::{Books, MasterSnapshot, Scenario, Voucher};
-use ledgerly_store::verify::VerifyReport;
+use ledgerly_model::{Books, MasterSnapshot, Voucher};
 use ledgerly_store::{Actor, AuditRecord, Event};
-use serde::Serialize;
-use serde_json::Value;
 use time::OffsetDateTime;
 
+mod certificate;
+mod diff;
+
+pub use certificate::integrity_certificate;
+
+use diff::{Change, changes_of};
+
 use crate::{
-    AuditReportKind, Cell, ColumnHeader, ColumnSpec, Detail, DrillKey, Report, ReportError,
-    ReportFilter, ReportKind, ReportParams, ReportRow, RowKind,
+    AuditReportKind, Cell, ColumnHeader, ColumnSpec, DrillKey, Report, ReportError, ReportFilter,
+    ReportKind, ReportParams, ReportRow, RowKind,
 };
 
 /// Labels of the columns every event report starts with.
@@ -98,14 +112,6 @@ enum ObjectKey {
     PeriodLock,
     Statement(BankStatementId),
     AiProposal(EventSeq),
-}
-
-/// One changed field of an alteration.
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct Change {
-    field: String,
-    before: String,
-    after: String,
 }
 
 /// One record ready to become rows.
@@ -163,73 +169,6 @@ pub fn audit_report(
     }
 }
 
-/// Renders the chain verification result as a report: PASS or FAIL, the event count, the head,
-/// the first broken event, the checkpoints and every problem found.
-///
-/// The report covers the whole log, so its period spans every date the calendar supports.
-///
-/// # Panics
-/// Never in practice: the only `expect` builds `Period::new(Date::MIN, Date::MAX)`, which fails
-/// only when `MIN > MAX`. The frozen signature has no way to return an error.
-#[must_use]
-#[expect(
-    clippy::expect_used,
-    reason = "Period::new(Date::MIN, Date::MAX) cannot fail because MIN <= MAX; the frozen \
-              signature returns Report, not Result (see the interface request)"
-)]
-pub fn integrity_certificate(verify: &VerifyReport) -> Report {
-    let params = ReportParams {
-        kind: ReportKind::Audit(AuditReportKind::IntegrityCertificate),
-        period: Period::new(Date::MIN, Date::MAX).expect("Date::MIN is not after Date::MAX"),
-        as_of: Date::MAX,
-        scenario: Scenario::Actual,
-        detail: Detail::Detailed,
-        columns: ColumnSpec::Single,
-        filter: ReportFilter::default(),
-        exceptions_only: false,
-    };
-    let verdict = if verify.is_ok() { "PASS" } else { "FAIL" };
-    let head = match &verify.head {
-        Some((seq, hash)) => format!("event {} hash {}", seq.0, hex(hash)),
-        None => "none (the log is empty)".to_owned(),
-    };
-    let first_broken = verify
-        .first_broken_seq()
-        .map_or_else(|| "none".to_owned(), |s| s.0.to_string());
-    let mut rows = vec![
-        text_row(0, "Result", verdict.to_owned()),
-        text_row(0, "Events checked", verify.events_checked.to_string()),
-        text_row(0, "Head", head),
-        text_row(0, "First broken event", first_broken),
-        text_row(0, "Checkpoints", verify.checkpoints.len().to_string()),
-    ];
-    rows.extend(verify.checkpoints.iter().map(|c| {
-        text_row(
-            1,
-            &format!("Checkpoint {}", c.day),
-            format!("event {} hash {}", c.seq.0, hex(&c.hash)),
-        )
-    }));
-    rows.extend(
-        verify
-            .problems
-            .iter()
-            .map(|p| text_row(1, "Problem", p.describe())),
-    );
-    Report {
-        title: "Audit chain integrity certificate".to_owned(),
-        params,
-        columns: columns(&["Item", "Value"]),
-        rows,
-        totals: Vec::new(),
-        notes: vec![
-            "The check covers the events and checkpoints stored in this file. Keep a copy of the \
-             checkpoints outside the file (for example in a backup) to expose a rewritten tail."
-                .to_owned(),
-        ],
-    }
-}
-
 fn unsupported(what: &str, reason: &str) -> Outcome<Report> {
     Outcome::Unsupported(Unsupported {
         what: what.to_owned(),
@@ -255,15 +194,6 @@ fn columns(labels: &[&str]) -> Vec<ColumnHeader> {
             period: None,
         })
         .collect()
-}
-
-fn hex(bytes: &[u8; 32]) -> String {
-    let mut out = String::with_capacity(64);
-    for b in bytes {
-        // Writing to a String cannot fail.
-        let _ = write!(out, "{b:02x}");
-    }
-    out
 }
 
 /// Records sorted by sequence number; a repeated number is an error.
@@ -493,156 +423,6 @@ fn drill_key(key: &ObjectKey) -> Option<DrillKey> {
 }
 
 // ---------------------------------------------------------------------------------------------
-// Field diff
-// ---------------------------------------------------------------------------------------------
-
-fn to_json<T: Serialize>(seq: EventSeq, value: &T) -> Result<Value, ReportError> {
-    serde_json::to_value(value).map_err(|e| ReportError::Invalid {
-        field: "audit record".to_owned(),
-        reason: format!("event {} cannot be read as JSON: {e}", seq.0),
-    })
-}
-
-#[allow(
-    clippy::match_same_arms,
-    reason = "the arms have the same text but bind values of ten different types"
-)]
-fn snapshot_json(seq: EventSeq, s: &MasterSnapshot) -> Result<Value, ReportError> {
-    match s {
-        MasterSnapshot::Group(x) => to_json(seq, x),
-        MasterSnapshot::Ledger(x) => to_json(seq, x),
-        MasterSnapshot::VoucherType(x) => to_json(seq, x),
-        MasterSnapshot::Unit(x) => to_json(seq, x),
-        MasterSnapshot::StockGroup(x) => to_json(seq, x),
-        MasterSnapshot::StockItem(x) => to_json(seq, x),
-        MasterSnapshot::Godown(x) => to_json(seq, x),
-        MasterSnapshot::Batch(x) => to_json(seq, x),
-        MasterSnapshot::CostCategory(x) => to_json(seq, x),
-        MasterSnapshot::CostCentre(x) => to_json(seq, x),
-    }
-}
-
-/// The fields that changed in an alteration; empty for every other event.
-fn changes_of(rec: &AuditRecord) -> Result<Vec<Change>, ReportError> {
-    let mut out = Vec::new();
-    match &rec.event {
-        Event::MasterAltered { before, after } => diff_values(
-            "",
-            &snapshot_json(rec.seq, before)?,
-            &snapshot_json(rec.seq, after)?,
-            &mut out,
-        ),
-        Event::VoucherAltered { before, after } => diff_values(
-            "",
-            &to_json(rec.seq, before)?,
-            &to_json(rec.seq, after)?,
-            &mut out,
-        ),
-        Event::SettingChanged { key, before, after } => {
-            if before != after {
-                out.push(Change {
-                    field: key.clone(),
-                    before: before.clone(),
-                    after: after.clone(),
-                });
-            }
-        }
-        Event::MasterCreated(_)
-        | Event::MasterDeleted(_)
-        | Event::VoucherPosted(_)
-        | Event::VoucherCancelled { .. }
-        | Event::VoucherDeleted { .. }
-        | Event::PeriodLocked { .. }
-        | Event::StatementImported(_)
-        | Event::MatchConfirmed(_)
-        | Event::AiProposalRecorded(_) => {}
-    }
-    Ok(out)
-}
-
-fn is_container(v: &Value) -> bool {
-    matches!(v, Value::Object(_) | Value::Array(_))
-}
-
-fn join_path(path: &str, key: &str) -> String {
-    if path.is_empty() {
-        key.to_owned()
-    } else {
-        format!("{path}.{key}")
-    }
-}
-
-/// Appends one [`Change`] per leaf that differs between `before` and `after`.
-///
-/// Objects are compared key by key (keys in sorted order). Arrays of the same length that hold
-/// containers are compared element by element (`path[0].field`); any other array is one leaf.
-fn diff_values(path: &str, before: &Value, after: &Value, out: &mut Vec<Change>) {
-    if before == after {
-        return;
-    }
-    match (before, after) {
-        (Value::Object(old), Value::Object(new)) => {
-            let keys: BTreeSet<&String> = old.keys().chain(new.keys()).collect();
-            for key in keys {
-                let sub = join_path(path, key);
-                match (old.get(key), new.get(key)) {
-                    (Some(left), Some(right)) => diff_values(&sub, left, right, out),
-                    (Some(left), None) => out.push(Change {
-                        before: render(&sub, left),
-                        after: "(absent)".to_owned(),
-                        field: sub,
-                    }),
-                    (None, Some(right)) => out.push(Change {
-                        before: "(absent)".to_owned(),
-                        after: render(&sub, right),
-                        field: sub,
-                    }),
-                    (None, None) => {}
-                }
-            }
-        }
-        (Value::Array(old), Value::Array(new))
-            if old.len() == new.len() && old.iter().chain(new.iter()).any(is_container) =>
-        {
-            for (index, (left, right)) in old.iter().zip(new.iter()).enumerate() {
-                diff_values(&format!("{path}[{index}]"), left, right, out);
-            }
-        }
-        _ => out.push(Change {
-            field: path.to_owned(),
-            before: render(path, before),
-            after: render(path, after),
-        }),
-    }
-}
-
-/// Text of a leaf. A field whose name contains `date` and whose value is a `(year, ordinal)`
-/// pair (how `time` serialises a `Date` without its human-readable feature) is shown as a date.
-fn render(path: &str, v: &Value) -> String {
-    let name = path.rsplit(['.', '[']).next().unwrap_or(path);
-    if name.contains("date")
-        && let Some(d) = date_from_pair(v)
-    {
-        return d.to_string();
-    }
-    match v {
-        Value::Null => "-".to_owned(),
-        Value::String(s) => s.clone(),
-        Value::Bool(_) | Value::Number(_) | Value::Array(_) | Value::Object(_) => v.to_string(),
-    }
-}
-
-fn date_from_pair(v: &Value) -> Option<Date> {
-    let arr = v.as_array()?;
-    let [year, ordinal] = arr.as_slice() else {
-        return None;
-    };
-    let year = i32::try_from(year.as_i64()?).ok()?;
-    let ordinal = u16::try_from(ordinal.as_u64()?).ok()?;
-    Date::from_ordinal_date(year, ordinal).ok()
-}
-
-// ---------------------------------------------------------------------------------------------
 // Rows
 // ---------------------------------------------------------------------------------------------
 
@@ -720,7 +500,7 @@ fn make_report(
         .chain(extra_columns.iter())
         .copied()
         .collect();
-    let mut totals = vec![Cell::Text(format!("{} events", items.len()))];
+    let mut totals = vec![Cell::Text(count_events(items.len()))];
     totals.resize(labels.len(), Cell::Empty);
     Report {
         title: title.to_owned(),
@@ -795,16 +575,39 @@ fn edit_log(ordered: &[&AuditRecord], books: &Books, params: &ReportParams) -> O
     ))
 }
 
+/// `1 event`, `3 events`.
+fn count_events(n: usize) -> String {
+    if n == 1 {
+        "1 event".to_owned()
+    } else {
+        format!("{n} events")
+    }
+}
+
+/// Note for the stateful reports when the records supplied do not start at event 1.
+fn window_note(ordered: &[&AuditRecord]) -> Option<String> {
+    let first = ordered.first()?;
+    if first.seq.0 > 1 {
+        Some(format!(
+            "The records supplied start at event {}. Earlier events were not read, so postings \
+             and period locks before it are unknown to this report and it may list too little.",
+            first.seq.0
+        ))
+    } else {
+        None
+    }
+}
+
 /// One note per user with the number of events, in user-label order.
 fn user_counts(items: &[Item<'_>]) -> Vec<String> {
-    let mut counts: BTreeMap<String, u64> = BTreeMap::new();
+    let mut counts: BTreeMap<String, usize> = BTreeMap::new();
     for it in items {
         let n = counts.entry(actor_label(&it.rec.meta.actor)).or_insert(0);
         *n = n.saturating_add(1);
     }
     counts
         .into_iter()
-        .map(|(user, n)| format!("{user}: {n} events"))
+        .map(|(user, n)| format!("{user}: {}", count_events(n)))
         .collect()
 }
 
@@ -877,16 +680,19 @@ fn back_dated(ordered: &[&AuditRecord], books: &Books, params: &ReportParams) ->
         }
         latest = Some(latest.map_or(v.date, |m| m.max(v.date)));
     }
+    let mut notes = vec![
+        "A voucher is back-dated when its date is earlier than the latest date among vouchers \
+         posted before it. Only the records supplied are examined: earlier postings outside the \
+         window are not known to this report."
+            .to_owned(),
+    ];
+    notes.extend(window_note(ordered));
     Outcome::Value(make_report(
         "Back-dated entries",
         params,
         &["Voucher date", "Latest earlier date", "Days back"],
         &items,
-        vec![
-            "A voucher is back-dated when its date is earlier than the latest date among \
-             vouchers posted before it."
-                .to_owned(),
-        ],
+        notes,
     ))
 }
 
@@ -919,80 +725,18 @@ fn edits_after_lock(
             lock = Some(*until);
         }
     }
+    let mut notes = vec![
+        "Listed: voucher events that touch a date on or before the lock date in force when the \
+         event was recorded. The lock date in force starts from the first record supplied: a \
+         lock recorded before the window is not known to this report."
+            .to_owned(),
+    ];
+    notes.extend(window_note(ordered));
     Outcome::Value(make_report(
         "Edits after lock date",
         params,
         &["Voucher date", "Lock date"],
         &items,
-        vec![
-            "Listed: voucher events that touch a date on or before the lock date in force when \
-             the event was recorded."
-                .to_owned(),
-        ],
+        notes,
     ))
-}
-
-#[cfg(test)]
-#[allow(
-    clippy::unwrap_used,
-    clippy::panic,
-    clippy::indexing_slicing,
-    reason = "test code: rule B2 lets tests unwrap and panic"
-)]
-mod tests {
-    use super::*;
-    use serde_json::json;
-
-    fn changes(before: &Value, after: &Value) -> Vec<(String, String, String)> {
-        let mut out = Vec::new();
-        diff_values("", before, after, &mut out);
-        out.into_iter()
-            .map(|c| (c.field, c.before, c.after))
-            .collect()
-    }
-
-    fn triple(f: &str, b: &str, a: &str) -> (String, String, String) {
-        (f.to_owned(), b.to_owned(), a.to_owned())
-    }
-
-    #[test]
-    fn diff_lists_only_changed_leaves() {
-        // derived: of a, b, c only b differs (2 -> 3).
-        let got = changes(
-            &json!({"a": 1, "b": 2, "c": "x"}),
-            &json!({"a": 1, "b": 3, "c": "x"}),
-        );
-        assert_eq!(got, vec![triple("b", "2", "3")]);
-    }
-
-    #[test]
-    fn diff_recurses_into_objects_and_equal_length_arrays() {
-        // derived: only lines[1].amount changed, from 5 to 6.
-        let got = changes(
-            &json!({"lines": [{"amount": 1}, {"amount": 5}]}),
-            &json!({"lines": [{"amount": 1}, {"amount": 6}]}),
-        );
-        assert_eq!(got, vec![triple("lines[1].amount", "5", "6")]);
-    }
-
-    #[test]
-    fn diff_treats_arrays_of_different_length_as_one_leaf() {
-        // derived: [1,2] became [1,2,3]; one leaf with compact JSON on both sides.
-        let got = changes(&json!({"v": [1, 2]}), &json!({"v": [1, 2, 3]}));
-        assert_eq!(got, vec![triple("v", "[1,2]", "[1,2,3]")]);
-    }
-
-    #[test]
-    fn date_pair_renders_as_date() {
-        // derived: 2026 is not a leap year; ordinal 100 = 31 + 28 + 31 + 10 = 10 April.
-        let got = changes(&json!({"date": [2026, 100]}), &json!({"date": [2026, 101]}));
-        assert_eq!(got, vec![triple("date", "2026-04-10", "2026-04-11")]);
-    }
-
-    #[test]
-    fn null_renders_as_dash_and_string_unquoted() {
-        // derived: by the rendering rule, null is "-" and strings are shown without quotes.
-        let got = changes(&json!({"n": null}), &json!({"n": "text"}));
-        assert_eq!(got, vec![triple("n", "-", "text")]);
-    }
 }
