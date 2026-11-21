@@ -205,6 +205,35 @@ fn picking_a_kind_drops_the_old_table_and_asks_for_the_new_report() {
 }
 
 #[test]
+fn a_bad_period_on_a_new_report_drops_the_old_table_and_its_queued_request() {
+    // provenance: derived - the table on show must name the report the selector shows. Loaded
+    // under the integrity certificate, then a bad period and a pick of "Edit log": no table may
+    // remain, and the certificate's queued request must not reach the host. The old code kept the
+    // certificate's table under the "Edit log" heading and copy-rows button.
+    let mut screen = AuditScreen::new(fy_2026_27());
+    screen.select_kind(AuditViewKind::IntegrityCertificate);
+    assert!(screen.take_request().is_some());
+    screen.set_table(table(grouped()));
+    assert!(matches!(screen.state(), AuditState::Loaded(_)));
+    screen.set_period_text("nope", "30-04-2026");
+    screen.select_kind(AuditViewKind::EditLog);
+    assert_eq!(screen.kind(), AuditViewKind::EditLog);
+    assert_eq!(screen.state(), &AuditState::NotRun);
+    assert!(screen.input_error().is_some());
+    assert_eq!(screen.visible(), [] as [usize; 0]);
+    assert_eq!(screen.take_request(), None);
+
+    // A request queued for the certificate, then a bad period on another report: the certificate
+    // request is dropped as well.
+    let mut queued = AuditScreen::new(fy_2026_27());
+    queued.select_kind(AuditViewKind::IntegrityCertificate);
+    queued.set_period_text("nope", "30-04-2026");
+    queued.select_kind(AuditViewKind::BackDated);
+    assert_eq!(queued.take_request(), None);
+    assert_eq!(queued.state(), &AuditState::NotRun);
+}
+
+#[test]
 fn a_bad_period_queues_nothing_and_keeps_what_is_shown() {
     let mut screen = AuditScreen::new(fy_2026_27());
     screen.set_table(table(grouped()));
