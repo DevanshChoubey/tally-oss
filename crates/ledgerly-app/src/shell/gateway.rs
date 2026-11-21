@@ -28,6 +28,7 @@ use ledgerly_core::{Date, FinancialYear, Outcome, VoucherId};
 use ledgerly_model::{BaseVoucherKind, Books};
 
 use super::navigate::{self, NavError};
+use crate::screen::KeyHint;
 use crate::screens::gst::{GstScreen, GstTab};
 use crate::screens::home::{HomeData, HomeScreen, HomeTarget};
 use crate::screens::item_invoice::ItemInvoiceScreen;
@@ -270,6 +271,18 @@ fn only_bank_screen(books: &Books) -> Result<Box<dyn Screen>, NavError> {
 impl Screen for GatewayScreen {
     fn title(&self) -> String {
         self.home.title()
+    }
+
+    fn page_title(&self) -> String {
+        self.home.page_title()
+    }
+
+    fn subtitle(&self) -> Option<String> {
+        self.home.subtitle()
+    }
+
+    fn keys(&self) -> Vec<KeyHint> {
+        self.home.keys()
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, ctx: &mut AppCtx) -> ScreenAction {

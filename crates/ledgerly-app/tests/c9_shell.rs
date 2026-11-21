@@ -484,3 +484,15 @@ fn ctrl_t_opens_home_when_a_company_is_open() {
     assert_eq!(trail.len(), 2, "{trail:?}");
     assert!(trail[1].starts_with("Masters"), "{trail:?}");
 }
+
+#[test]
+fn the_gateway_shows_the_home_screens_title_subtitle_and_keys() {
+    // provenance: derived — the gateway is the home screen of an open company, so the shell chrome
+    // (page title, subtitle and key bar) shows what the home screen inside it gives.
+    let gateway = GatewayScreen::new();
+    let home = gateway.home();
+    assert_eq!(gateway.page_title(), home.page_title());
+    assert_eq!(gateway.subtitle(), home.subtitle());
+    assert!(!home.keys().is_empty(), "the home screen lists its keys");
+    assert_eq!(gateway.keys(), home.keys());
+}

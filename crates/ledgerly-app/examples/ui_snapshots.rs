@@ -377,17 +377,46 @@ fn shots() -> Vec<Shot> {
         shot("home.default", &[]).themed(Theme::Hc),
         shot("palette.default", &[palette]),
         shot("palette.search", &[palette]).query("bal"),
+        shot("palette.voucher", &[palette]).query("#0412"),
+        shot("palette.ask", &[palette]).query("?who owes us"),
+        shot("palette.entry", &[palette]).query("+paid rent"),
+        shot("palette.commands", &[palette]).query(">"),
+        shot("palette.no-results", &[palette]).query("zzqx"),
         shot("balance-sheet.default", &[(Key::B, NONE)]),
+        shot(
+            "balance-sheet.detailed",
+            &[(Key::B, NONE), (Key::F1, Modifiers::ALT)],
+        ),
         shot("day-book.default", &[(Key::D, NONE)]),
         shot("gst.gstr1", &[(Key::G, NONE), (Key::Num1, NONE)]),
-        shot("gst.gstr3b", &[(Key::G, NONE), (Key::Num3, NONE)]),
+        // The tabs are 1 GSTR-1, 2 GSTR-3B, 3 reconciliation (`screens/gst.rs`). The capture
+        // company has no 2B data, so the reconciliation tab is the mock's empty state.
+        shot("gst.gstr3b", &[(Key::G, NONE), (Key::Num2, NONE)]),
+        shot("gst.recon-empty", &[(Key::G, NONE), (Key::Num3, NONE)]),
         shot("masters.ledgers", &[(Key::M, NONE)]),
+        shot(
+            "masters.ledger-detail",
+            &[(Key::M, NONE), (Key::ArrowDown, NONE)],
+        ),
+        shot(
+            "masters.create-ledger",
+            &[(Key::M, NONE), (Key::C, Modifiers::ALT)],
+        ),
+        shot("keys.classic", &[palette])
+            .query("Keyboard map")
+            .then(&[(Key::Enter, NONE)]),
+        shot("keys.standard", &[palette])
+            .query("Keyboard map")
+            .then(&[(Key::Enter, NONE), (Key::Num2, NONE)]),
         shot("sales-invoice.default", &[(Key::F8, NONE)]),
         shot("receipt.default", &[(Key::F6, NONE)]),
         shot("payment.default", &[(Key::F5, NONE)]),
         shot("bank.default", &[palette])
             .query("Bank Reconciliation")
             .then(&[(Key::Enter, NONE)]),
+        shot("bank.brs", &[palette])
+            .query("Bank Reconciliation")
+            .then(&[(Key::Enter, NONE), (Key::B, NONE)]),
     ]
 }
 
