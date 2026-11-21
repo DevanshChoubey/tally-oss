@@ -72,7 +72,7 @@ pub struct Api {
 #[derive(Debug)]
 enum Cache {
     /// The books, loaded from the store.
-    Ready(Books),
+    Ready(Box<Books>),
     /// The store holds a voucher this build cannot project. Nothing is computed from the books.
     Blocked(Unsupported),
     /// A change was saved but the books could not be reloaded. The next command reloads them.
@@ -203,10 +203,9 @@ impl Api {
     fn unavailable_reason(&self) -> Option<String> {
         match &self.cache {
             Cache::Ready(_) => None,
-            Cache::Blocked(unsupported) => Some(format!(
-                "{}: {}",
-                unsupported.what, unsupported.reason
-            )),
+            Cache::Blocked(unsupported) => {
+                Some(format!("{}: {}", unsupported.what, unsupported.reason))
+            }
             Cache::Stale => Some(
                 "the books need reloading after a saved change; run a command to reload them"
                     .to_owned(),
@@ -227,7 +226,7 @@ impl Api {
             }
         };
         let cache = match self.store.load_books(None) {
-            Ok(books) => Cache::Ready(books),
+            Ok(books) => Cache::Ready(Box::new(books)),
             Err(StoreError::Unsupported { voucher, reason }) => {
                 Cache::Blocked(blocked(voucher, &reason))
             }

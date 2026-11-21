@@ -88,10 +88,7 @@ fn valuations_at(books: &Books, as_of: Date) -> Outcome<Vec<StockValuation>> {
     let period = match valuation_period(books.company.books_begin, as_of) {
         Ok(period) => period,
         Err(e) => {
-            return Outcome::unsupported(
-                format!("stock valuation at {as_of}"),
-                e.to_string(),
-            );
+            return Outcome::unsupported(format!("stock valuation at {as_of}"), e.to_string());
         }
     };
     let mut out = Vec::with_capacity(books.masters.stock_items.len());

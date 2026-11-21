@@ -278,7 +278,7 @@ fn unsupported_command_commits_nothing() {
         .unwrap();
     group.affects_gross_profit = !group.affects_gross_profit;
     match api.execute(Command::AlterGroup(group)) {
-        Ok(Outcome::Unsupported(u)) => assert!(!u.reason.is_empty()),
+        Ok(Outcome::Unsupported(u)) => assert_ne!(u.reason, ""),
         other => panic!("expected Unsupported, got {other:?}"),
     }
 
@@ -319,13 +319,9 @@ fn period_lock_refuses_on_or_before_lock_and_allows_after() {
     expect_locked(api.execute(Command::DeleteVoucher(VoucherId(1))), lock);
 
     // Dated after the lock: post, alter, cancel and delete all succeed.
-    let after = value(api.execute(Command::PostVoucher(payment(
-        4,
-        date!(2026 - 07 - 01),
-        300,
-    ))))
-    .posted
-    .unwrap();
+    let after = value(api.execute(Command::PostVoucher(payment(4, date!(2026 - 07 - 01), 300))))
+        .posted
+        .unwrap();
     let mut after_altered = after.clone();
     after_altered.narration = "edited".to_owned();
     assert!(
@@ -338,11 +334,7 @@ fn period_lock_refuses_on_or_before_lock_and_allows_after() {
             .receipt
             .is_some()
     );
-    value(api.execute(Command::PostVoucher(payment(
-        5,
-        date!(2026 - 07 - 02),
-        200,
-    ))));
+    value(api.execute(Command::PostVoucher(payment(5, date!(2026 - 07 - 02), 200))));
     assert!(
         value(api.execute(Command::DeleteVoucher(VoucherId(5))))
             .receipt
@@ -370,11 +362,7 @@ fn reopening_gives_identical_report_output_and_keeps_the_lock() {
         date!(2026 - 06 - 10),
         1000,
     ))));
-    value(api.execute(Command::PostVoucher(payment(
-        2,
-        date!(2026 - 07 - 15),
-        250,
-    ))));
+    value(api.execute(Command::PostVoucher(payment(2, date!(2026 - 07 - 15), 250))));
     value(api.execute(Command::LockPeriod(lock)));
     let tb = trial_balance(&api);
     let day_book = run_report(&api, ReportKind::DayBook, date!(2026 - 12 - 31));
@@ -397,7 +385,11 @@ fn reopening_gives_identical_report_output_and_keeps_the_lock() {
 #[test]
 fn search_finds_ledger_by_alias_and_voucher_by_number_and_amount() {
     let (_dir, _path, mut api) = setup();
-    let mut shop = ledger(SHOP, "Shop Premises", reserved(ReservedGroup::IndirectExpenses));
+    let mut shop = ledger(
+        SHOP,
+        "Shop Premises",
+        reserved(ReservedGroup::IndirectExpenses),
+    );
     shop.aliases = vec!["Godown Rent".to_owned()];
     value(api.execute(Command::CreateLedger(shop)));
     let posted = value(api.execute(Command::PostVoucher(payment(

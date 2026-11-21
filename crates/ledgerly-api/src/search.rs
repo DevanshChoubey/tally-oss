@@ -162,7 +162,7 @@ fn gstin_of(ledger: &ledgerly_model::Ledger) -> Option<&str> {
         .party
         .as_ref()
         .and_then(|party| party.gstin.as_ref())
-        .map(|gstin| gstin.as_str())
+        .map(ledgerly_core::Gstin::as_str)
 }
 
 fn voucher_hits(books: &Books, q: &str, needle: &str) -> Vec<SearchHit> {
