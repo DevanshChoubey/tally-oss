@@ -725,9 +725,9 @@ fn keys_through_egui_move_and_decide() {
     assert_eq!(s.decision(1), Some(ImsAction::Pending));
     frame(&ctx, &mut s, &mut app, key(Key::Num1, Modifiers::NONE));
     assert_eq!(s.tab(), GstTab::Gstr1);
-    frame(&ctx, &mut s, &mut app, key(Key::Num3, Modifiers::NONE));
-    assert_eq!(s.tab(), GstTab::Gstr3b);
     frame(&ctx, &mut s, &mut app, key(Key::Num2, Modifiers::NONE));
+    assert_eq!(s.tab(), GstTab::Gstr3b);
+    frame(&ctx, &mut s, &mut app, key(Key::Num3, Modifiers::NONE));
     assert_eq!(s.tab(), GstTab::Reconciliation);
 }
 

@@ -98,10 +98,12 @@ fn the_other_named_tabs_open_their_own_tab() {
 
 #[test]
 fn the_list_link_opens_the_default_tab() {
-    // An empty tab name (the G key and the palette) keeps the screen's default tab.
+    // An empty tab name (the G key and the palette) keeps the screen's default tab. The default is
+    // GSTR-1, as the mock opens (design/mock-v2 SCREENS.gst default 'gstr1'); it was the 2B tab
+    // before the monthly-period change (UI parity report, decision 7; see shell/navigate.rs).
     let books = books("b1_gst_list.db");
     let screen = gst_screen_for_target(&books, &gst_link("")).unwrap();
-    assert_eq!(screen.tab(), GstTab::Reconciliation);
+    assert_eq!(screen.tab(), GstTab::Gstr1);
 }
 
 #[test]
