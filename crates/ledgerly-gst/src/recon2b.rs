@@ -38,7 +38,10 @@
 //!    more than the tolerance.
 //!
 //! A level is assigned only when the pair is unambiguous. When one portal document fits several
-//! book vouchers, or several portal documents fit one book voucher, none of them is matched.
+//! book vouchers, or several portal documents fit one book voucher, none of them is matched. A
+//! document that is ambiguous at one level still counts toward the claims on every book it fits at
+//! the later levels, so no other document can take one of those books uniquely and be suggested
+//! Accept.
 //!
 //! # Suggestions
 //!
@@ -319,9 +322,11 @@ fn assign(docs: &[PortalDoc], books: &[BookDoc], tolerance: Paise) -> Result<Ass
         let mut candidates: Vec<Vec<usize>> = Vec::with_capacity(docs.len());
         let mut claims = vec![0usize; books.len()];
         for (i, doc) in docs.iter().enumerate() {
-            let open = matched.get(i).is_some_and(Option::is_none)
-                && !ambiguous.get(i).copied().unwrap_or(true);
-            let list = if open {
+            // A document that is ambiguous at an earlier level still counts its candidates here.
+            // The books it fits are then reserved: another document cannot take one of them
+            // uniquely at a later level. It is never assigned (see the loop below).
+            let unmatched = matched.get(i).is_some_and(Option::is_none);
+            let list = if unmatched {
                 candidates_for(rank, doc, books, &used, tolerance)?
             } else {
                 Vec::new()
@@ -334,6 +339,9 @@ fn assign(docs: &[PortalDoc], books: &[BookDoc], tolerance: Paise) -> Result<Ass
             candidates.push(list);
         }
         for (i, list) in candidates.iter().enumerate() {
+            if ambiguous.get(i).copied() == Some(true) {
+                continue;
+            }
             match list.as_slice() {
                 [] => {}
                 [j] if claims.get(*j).copied() == Some(1) => {
