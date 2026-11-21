@@ -1,0 +1,640 @@
+{
+ "version": 1,
+ "generated_from": "index.html <script id=\"registry\">",
+ "viewport": {
+  "width": 1280,
+  "height": 800
+ },
+ "themes": [
+  "light",
+  "dark",
+  "hc"
+ ],
+ "ready": "document.documentElement.dataset.ready === '1'",
+ "url": "index.html#{hash}&theme={theme}",
+ "states": [
+  {
+   "id": "home.default",
+   "kind": "happy",
+   "hash": "screen=home&state=default",
+   "title": "Home",
+   "description": "Dashboard: engine KPIs, plain-words entry bar, review queue and rule-based nudges."
+  },
+  {
+   "id": "home.loading",
+   "kind": "loading",
+   "hash": "screen=home&state=loading",
+   "title": "Home, company opening",
+   "description": "Skeleton rows while the company file opens and projections load; no figure is shown until the engine returns it."
+  },
+  {
+   "id": "home.empty",
+   "kind": "empty",
+   "hash": "screen=home&state=empty",
+   "title": "Home, new company",
+   "description": "A new company with no vouchers: first steps instead of zero-filled KPIs."
+  },
+  {
+   "id": "home.ai-off",
+   "kind": "offline-ai",
+   "hash": "screen=home&state=ai-off",
+   "title": "Home, AI off",
+   "description": "AI tier Off: no AI cards or entry bar, rule-based nudges still shown, top bar says AI off."
+  },
+  {
+   "id": "home.nudge-open",
+   "kind": "happy",
+   "hash": "screen=home&state=nudge-open",
+   "title": "Home, duplicate-bill nudge open",
+   "description": "Anomaly nudge expanded: possible duplicate purchase bill, with rule source and accept, edit, reject."
+  },
+  {
+   "id": "palette.default",
+   "kind": "happy",
+   "hash": "screen=palette&base=home",
+   "title": "Command palette",
+   "description": "Palette over Home with recents, prefixes and key hints; Enter opens on top, Shift+Enter replaces."
+  },
+  {
+   "id": "palette.search",
+   "kind": "happy",
+   "hash": "screen=palette&base=home&query=bal",
+   "title": "Palette, search 'bal'",
+   "description": "Fuzzy results across reports, ledgers and commands for the fragment 'bal'."
+  },
+  {
+   "id": "palette.voucher",
+   "kind": "happy",
+   "hash": "screen=palette&base=home&query=%230412",
+   "title": "Palette, voucher number",
+   "description": "The # prefix finds a voucher by number and shows party, date and engine amount."
+  },
+  {
+   "id": "palette.ask",
+   "kind": "happy",
+   "hash": "screen=palette&base=home&query=%3Fwho%20owes%20us%20for%20more%20than%2030%20days",
+   "title": "Palette, ask your books",
+   "description": "The ? prefix turns a question into a report query; the preview shows the query, not an answer."
+  },
+  {
+   "id": "palette.entry",
+   "kind": "happy",
+   "hash": "screen=palette&base=home&query=%2Bpaid%20rent%2025k%20to%20Sharma%20Properties%20from%20Saptagiri",
+   "title": "Palette, plain-words entry",
+   "description": "The + prefix drafts a voucher from plain words; Enter opens the draft for review."
+  },
+  {
+   "id": "palette.commands",
+   "kind": "happy",
+   "hash": "screen=palette&base=home&query=%3E",
+   "title": "Palette, commands",
+   "description": "The > prefix lists commands with their keys."
+  },
+  {
+   "id": "palette.no-results",
+   "kind": "empty",
+   "hash": "screen=palette&base=home&query=zzqx",
+   "title": "Palette, no results",
+   "description": "No match: offers to create a ledger, ask as a question, or search vouchers."
+  },
+  {
+   "id": "ask.result",
+   "kind": "happy",
+   "hash": "screen=ask&state=result",
+   "title": "Ask your books, result",
+   "description": "Question compiled to a visible ReportQuery; the engine ran it and renders a drillable table; prose carries no digits."
+  },
+  {
+   "id": "ask.loading",
+   "kind": "loading",
+   "hash": "screen=ask&state=loading",
+   "title": "Ask your books, building query",
+   "description": "The local model is turning the question into a query; cancellable with Esc."
+  },
+  {
+   "id": "ask.low-confidence",
+   "kind": "low-confidence",
+   "hash": "screen=ask&state=low-confidence",
+   "title": "Ask your books, ambiguous",
+   "description": "Two readings of 'top customers'; the user picks one before anything runs."
+  },
+  {
+   "id": "ask.unsupported",
+   "kind": "error",
+   "hash": "screen=ask&state=unsupported",
+   "title": "Ask your books, unsupported",
+   "description": "A forecast question: no report can answer it, so the app says Unsupported and offers related reports."
+  },
+  {
+   "id": "ask.offline-ai",
+   "kind": "offline-ai",
+   "hash": "screen=ask&state=offline-ai",
+   "title": "Ask your books, AI off",
+   "description": "AI is off for this company; the question box offers the report list and filters instead."
+  },
+  {
+   "id": "sales-invoice.default",
+   "kind": "happy",
+   "hash": "screen=sales-invoice&state=default",
+   "title": "Sales invoice, intra-state",
+   "description": "F8 item invoice to a Maharashtra party: CGST + SGST recomputed live on every keystroke."
+  },
+  {
+   "id": "sales-invoice.gst-inter-state",
+   "kind": "happy",
+   "hash": "screen=sales-invoice&state=gst-inter-state",
+   "title": "Sales invoice, inter-state",
+   "description": "Party in Gujarat: place of supply differs, so the engine applies IGST."
+  },
+  {
+   "id": "sales-invoice.b2c",
+   "kind": "happy",
+   "hash": "screen=sales-invoice&state=b2c",
+   "title": "Sales invoice, unregistered buyer",
+   "description": "Cash sale to an unregistered buyer: B2C, no GSTIN, e-invoice not applicable."
+  },
+  {
+   "id": "sales-invoice.item-list",
+   "kind": "happy",
+   "hash": "screen=sales-invoice&state=item-list",
+   "title": "Sales invoice, item list open",
+   "description": "Type-ahead over item masters with HSN, rate, GST and stock; Alt+C creates a new item."
+  },
+  {
+   "id": "sales-invoice.validation-error",
+   "kind": "validation-error",
+   "hash": "screen=sales-invoice&state=validation-error",
+   "title": "Sales invoice, validation errors",
+   "description": "Missing quantity and an unknown item block saving; each error says where and what to do."
+  },
+  {
+   "id": "sales-invoice.period-locked",
+   "kind": "period-locked",
+   "hash": "screen=sales-invoice&state=period-locked",
+   "title": "Sales invoice, period locked",
+   "description": "Date falls on or before the lock date 31 Oct 2026: saving is blocked and the reason is shown."
+  },
+  {
+   "id": "sales-invoice.save-confirm",
+   "kind": "happy",
+   "hash": "screen=sales-invoice&state=save-confirm",
+   "title": "Sales invoice, confirm save",
+   "description": "Enter on the last field asks to save; Ctrl+A saves from anywhere."
+  },
+  {
+   "id": "sales-invoice.saved",
+   "kind": "happy",
+   "hash": "screen=sales-invoice&state=saved",
+   "title": "Sales invoice, saved",
+   "description": "A fresh invoice opens after saving, with a toast naming the voucher saved."
+  },
+  {
+   "id": "purchase-bill.reading",
+   "kind": "loading",
+   "hash": "screen=purchase-bill&state=reading",
+   "title": "Bill photo, reading",
+   "description": "A bill photo is being read on this computer; the image never leaves the machine."
+  },
+  {
+   "id": "purchase-bill.proposal",
+   "kind": "happy",
+   "hash": "screen=purchase-bill&state=proposal",
+   "title": "Bill photo, draft purchase",
+   "description": "Draft purchase voucher from a bill photo: transcribed fields with boxes on the image, engine totals and checks."
+  },
+  {
+   "id": "purchase-bill.low-confidence",
+   "kind": "low-confidence",
+   "hash": "screen=purchase-bill&state=low-confidence",
+   "title": "Bill photo, field left blank",
+   "description": "One rate could not be read with enough confidence, so it is blank and Accept waits for it."
+  },
+  {
+   "id": "purchase-bill.mismatch",
+   "kind": "validation-error",
+   "hash": "screen=purchase-bill&state=mismatch",
+   "title": "Bill photo, total mismatch",
+   "description": "Printed total differs from the engine total of the lines; Accept is blocked until resolved."
+  },
+  {
+   "id": "purchase-bill.duplicate",
+   "kind": "validation-error",
+   "hash": "screen=purchase-bill&state=duplicate",
+   "title": "Bill photo, possible duplicate",
+   "description": "Same supplier and bill number already posted; the draft shows the existing voucher."
+  },
+  {
+   "id": "purchase-bill.offline-ai",
+   "kind": "offline-ai",
+   "hash": "screen=purchase-bill&state=offline-ai",
+   "title": "Bill photo, AI off",
+   "description": "Bill reading is off for this company; the purchase form stays available with the image beside it."
+  },
+  {
+   "id": "purchase-bill.cloud-consent",
+   "kind": "low-confidence",
+   "hash": "screen=purchase-bill&state=cloud-consent",
+   "title": "Bill photo, cloud consent",
+   "description": "Local reading was weak; the user may send this one image to their own cloud key, with redaction listed."
+  },
+  {
+   "id": "purchase-bill.error",
+   "kind": "error",
+   "hash": "screen=purchase-bill&state=error",
+   "title": "Bill photo, unreadable file",
+   "description": "The file is a password-protected PDF; the error says what failed and what to do."
+  },
+  {
+   "id": "purchase-bill.accepted",
+   "kind": "happy",
+   "hash": "screen=purchase-bill&state=accepted",
+   "title": "Bill photo, accepted",
+   "description": "The draft is posted as PB/0147 after the human accepted it; the audit note records the AI source."
+  },
+  {
+   "id": "quick-entry.proposal",
+   "kind": "happy",
+   "hash": "screen=quick-entry&state=proposal",
+   "title": "Plain-words entry, draft payment",
+   "description": "'paid rent 25k to Sharma Properties from Saptagiri' becomes a draft payment with each value traced."
+  },
+  {
+   "id": "quick-entry.hinglish",
+   "kind": "happy",
+   "hash": "screen=quick-entry&state=hinglish",
+   "title": "Plain-words entry, Hinglish",
+   "description": "Hinglish text becomes a draft receipt against an open bill and links the matching bank line."
+  },
+  {
+   "id": "quick-entry.unknown-ledger",
+   "kind": "validation-error",
+   "hash": "screen=quick-entry&state=unknown-ledger",
+   "title": "Plain-words entry, unknown name",
+   "description": "No ledger named 'Ramesh': the draft refuses to invent one and asks to pick or create."
+  },
+  {
+   "id": "quick-entry.loading",
+   "kind": "loading",
+   "hash": "screen=quick-entry&state=loading",
+   "title": "Plain-words entry, drafting",
+   "description": "The local model is drafting; the text stays editable and Esc cancels."
+  },
+  {
+   "id": "quick-entry.rejected",
+   "kind": "happy",
+   "hash": "screen=quick-entry&state=rejected",
+   "title": "Plain-words entry, rejected",
+   "description": "The user rejected the draft; nothing was posted and an optional reason is asked."
+  },
+  {
+   "id": "payment.default",
+   "kind": "happy",
+   "hash": "screen=payment&state=default",
+   "title": "Payment",
+   "description": "F5 payment in single-entry style: bank balance now and after saving."
+  },
+  {
+   "id": "payment.bill-wise",
+   "kind": "happy",
+   "hash": "screen=payment&state=bill-wise",
+   "title": "Payment, bill allocation",
+   "description": "Paying a supplier pops the bill-wise allocation with open bills from the engine."
+  },
+  {
+   "id": "payment.overdraft",
+   "kind": "validation-error",
+   "hash": "screen=payment&state=overdraft",
+   "title": "Payment, overdraft warning",
+   "description": "Amount exceeds the bank balance: a warning, with the shortfall computed by the engine."
+  },
+  {
+   "id": "receipt.default",
+   "kind": "happy",
+   "hash": "screen=receipt&state=default",
+   "title": "Receipt",
+   "description": "F6 receipt against an open sales bill."
+  },
+  {
+   "id": "balance-sheet.default",
+   "kind": "happy",
+   "hash": "screen=balance-sheet&state=default",
+   "title": "Balance sheet",
+   "description": "Condensed balance sheet as at 21 Nov 2026 with a 'both sides agree' check."
+  },
+  {
+   "id": "balance-sheet.detailed",
+   "kind": "happy",
+   "hash": "screen=balance-sheet&state=detailed",
+   "title": "Balance sheet, detailed",
+   "description": "Alt+F1 expands every group to ledgers."
+  },
+  {
+   "id": "balance-sheet.group",
+   "kind": "happy",
+   "hash": "screen=balance-sheet&state=group",
+   "title": "Balance sheet, group drill",
+   "description": "Drilled into Sundry debtors: ledgers with balances that sum to the group figure."
+  },
+  {
+   "id": "balance-sheet.ledger",
+   "kind": "happy",
+   "hash": "screen=balance-sheet&state=ledger",
+   "title": "Balance sheet, ledger vouchers",
+   "description": "Shree Ganesh Traders: opening, vouchers and running balance."
+  },
+  {
+   "id": "balance-sheet.voucher",
+   "kind": "happy",
+   "hash": "screen=balance-sheet&state=voucher",
+   "title": "Balance sheet, voucher",
+   "description": "Voucher SI/0412 read-only, with its audit line."
+  },
+  {
+   "id": "balance-sheet.loading",
+   "kind": "loading",
+   "hash": "screen=balance-sheet&state=loading",
+   "title": "Balance sheet, computing",
+   "description": "Report is computing; cancellable; the last result is never shown as current."
+  },
+  {
+   "id": "balance-sheet.provisional",
+   "kind": "error",
+   "hash": "screen=balance-sheet&state=provisional",
+   "title": "Balance sheet, provisional stock",
+   "description": "Negative stock makes closing stock Provisional; the figure is marked and explained, never silently used."
+  },
+  {
+   "id": "day-book.default",
+   "kind": "happy",
+   "hash": "screen=day-book&state=default",
+   "title": "Day book",
+   "description": "Vouchers for 20 Nov 2026, with who entered them and whether a draft came from AI."
+  },
+  {
+   "id": "day-book.month",
+   "kind": "happy",
+   "hash": "screen=day-book&state=month",
+   "title": "Day book, 1 to 21 Nov",
+   "description": "Period view of every November voucher."
+  },
+  {
+   "id": "day-book.empty",
+   "kind": "empty",
+   "hash": "screen=day-book&state=empty",
+   "title": "Day book, no vouchers",
+   "description": "21 Nov 2026 has no vouchers yet; offers voucher keys."
+  },
+  {
+   "id": "gst.gstr1",
+   "kind": "happy",
+   "hash": "screen=gst&state=gstr1",
+   "title": "GSTR-1, November",
+   "description": "Sections built from sales vouchers with exception buckets: Ready, Not relevant, Mismatch, Needs correction."
+  },
+  {
+   "id": "gst.gstr1-correction",
+   "kind": "validation-error",
+   "hash": "screen=gst&state=gstr1-correction",
+   "title": "GSTR-1, needs correction",
+   "description": "An item with no HSN code holds back the HSN summary; drill to the master to fix."
+  },
+  {
+   "id": "gst.gstr3b",
+   "kind": "happy",
+   "hash": "screen=gst&state=gstr3b",
+   "title": "GSTR-3B working, November",
+   "description": "Outward tax, ITC from accepted 2B records and engine set-off; books vs portal columns."
+  },
+  {
+   "id": "gst.recon",
+   "kind": "happy",
+   "hash": "screen=gst&state=recon",
+   "title": "2B and IMS reconciliation",
+   "description": "Engine match status per 2B record and a suggested IMS action the user must confirm."
+  },
+  {
+   "id": "gst.recon-explain",
+   "kind": "happy",
+   "hash": "screen=gst&state=recon-explain",
+   "title": "2B mismatch explained",
+   "description": "AI explanation of a value difference, with engine-bound figures and a draft fix."
+  },
+  {
+   "id": "gst.recon-empty",
+   "kind": "empty",
+   "hash": "screen=gst&state=recon-empty",
+   "title": "2B reconciliation, nothing imported",
+   "description": "No 2B/IMS file for November yet; explains how to import the downloaded JSON."
+  },
+  {
+   "id": "gst.recon-error",
+   "kind": "error",
+   "hash": "screen=gst&state=recon-error",
+   "title": "2B reconciliation, import failed",
+   "description": "The file is for another GSTIN; nothing is imported and the reason is shown."
+  },
+  {
+   "id": "gst.recon-locked",
+   "kind": "period-locked",
+   "hash": "screen=gst&state=recon-locked",
+   "title": "2B reconciliation, October final",
+   "description": "GSTR-3B for October is filed, so IMS actions for October are final and read-only."
+  },
+  {
+   "id": "bank.default",
+   "kind": "happy",
+   "hash": "screen=bank&state=default",
+   "title": "Bank reconciliation",
+   "description": "Statement lines with Exact, Rule, AI-suggested and unmatched status."
+  },
+  {
+   "id": "bank.ai-suggestions",
+   "kind": "happy",
+   "hash": "screen=bank&state=ai-suggestions",
+   "title": "Bank, AI suggestions",
+   "description": "Filtered to AI suggestions; the selected line shows its proposal, reason and confidence."
+  },
+  {
+   "id": "bank.suggested-ledger",
+   "kind": "happy",
+   "hash": "screen=bank&state=suggested-ledger",
+   "title": "Bank, suggested new ledger",
+   "description": "Lines with no fitting ledger: a proposal to create one, built from the narrations."
+  },
+  {
+   "id": "bank.empty",
+   "kind": "empty",
+   "hash": "screen=bank&state=empty",
+   "title": "Bank, no statement",
+   "description": "No statement imported for this account; import from CSV, XLSX or MT940."
+  },
+  {
+   "id": "bank.import-error",
+   "kind": "error",
+   "hash": "screen=bank&state=import-error",
+   "title": "Bank, balance check failed",
+   "description": "Opening plus lines does not equal the closing balance in the file; the import is refused."
+  },
+  {
+   "id": "bank.offline-ai",
+   "kind": "offline-ai",
+   "hash": "screen=bank&state=offline-ai",
+   "title": "Bank, AI off",
+   "description": "Only exact and rule matches; leftover lines wait for manual matching."
+  },
+  {
+   "id": "bank.brs",
+   "kind": "happy",
+   "hash": "screen=bank&state=brs",
+   "title": "Bank reconciliation statement",
+   "description": "Balance as per books, items not yet in the bank, and the engine's expected bank balance."
+  },
+  {
+   "id": "masters.ledgers",
+   "kind": "happy",
+   "hash": "screen=masters&state=ledgers",
+   "title": "Masters, ledgers",
+   "description": "Ledgers by group with engine balances; filter as you type."
+  },
+  {
+   "id": "masters.ledger-detail",
+   "kind": "happy",
+   "hash": "screen=masters&state=ledger-detail",
+   "title": "Masters, party detail",
+   "description": "Party ledger: GSTIN with check, state, credit days, open bills."
+  },
+  {
+   "id": "masters.items",
+   "kind": "happy",
+   "hash": "screen=masters&state=items",
+   "title": "Masters, stock items",
+   "description": "Items with HSN, GST rate, stock and value from the stock engine."
+  },
+  {
+   "id": "masters.create-ledger",
+   "kind": "happy",
+   "hash": "screen=masters&state=create-ledger",
+   "title": "Masters, create ledger",
+   "description": "Create a party ledger; GSTIN fills the state and checks the check character."
+  },
+  {
+   "id": "masters.gstin-error",
+   "kind": "validation-error",
+   "hash": "screen=masters&state=gstin-error",
+   "title": "Masters, GSTIN invalid",
+   "description": "Check character is wrong; the error says which character was expected."
+  },
+  {
+   "id": "masters.suggested-ledger",
+   "kind": "happy",
+   "hash": "screen=masters&state=suggested-ledger",
+   "title": "Masters, suggested ledger",
+   "description": "A proposed ledger from bank narrations, with source lines and accept, edit, reject."
+  },
+  {
+   "id": "review.default",
+   "kind": "happy",
+   "hash": "screen=review&state=default",
+   "title": "Review queue",
+   "description": "Every open proposal from every source in one list; J/K to move, Y/N to decide."
+  },
+  {
+   "id": "review.empty",
+   "kind": "empty",
+   "hash": "screen=review&state=empty",
+   "title": "Review queue, empty",
+   "description": "Nothing waiting for review."
+  },
+  {
+   "id": "keys.classic",
+   "kind": "happy",
+   "hash": "screen=keys&state=classic",
+   "title": "Keyboard map, classic preset",
+   "description": "Full keyboard map with the classic accountant keys preset."
+  },
+  {
+   "id": "keys.standard",
+   "kind": "happy",
+   "hash": "screen=keys&state=standard",
+   "title": "Keyboard map, standard preset",
+   "description": "Same map with the standard desktop preset (Ctrl+S, Ctrl+N)."
+  },
+  {
+   "id": "setup.welcome",
+   "kind": "happy",
+   "hash": "screen=setup&state=welcome",
+   "title": "First run, welcome",
+   "description": "Create a company, import from another app, open a file or try the sample."
+  },
+  {
+   "id": "setup.company",
+   "kind": "happy",
+   "hash": "screen=setup&state=company",
+   "title": "Setup, company details",
+   "description": "Name, GSTIN (fills state), financial year April to March, books begin date."
+  },
+  {
+   "id": "setup.gstin-error",
+   "kind": "validation-error",
+   "hash": "screen=setup&state=gstin-error",
+   "title": "Setup, GSTIN error",
+   "description": "GSTIN state code does not match the chosen state; the fix is named."
+  },
+  {
+   "id": "setup.features",
+   "kind": "happy",
+   "hash": "screen=setup&state=features",
+   "title": "Setup, features",
+   "description": "Inventory, GST, bank reconciliation, e-invoice JSON: each explained in one line."
+  },
+  {
+   "id": "setup.keyboard",
+   "kind": "happy",
+   "hash": "screen=setup&state=keyboard",
+   "title": "Setup, keyboard preset",
+   "description": "Classic accountant keys (default) or standard desktop keys, with a preview."
+  },
+  {
+   "id": "setup.ai",
+   "kind": "happy",
+   "hash": "screen=setup&state=ai",
+   "title": "Setup, AI and privacy",
+   "description": "Off, On this computer, or Cloud with your own key; what leaves the machine in each."
+  },
+  {
+   "id": "setup.backup",
+   "kind": "happy",
+   "hash": "screen=setup&state=backup",
+   "title": "Setup, backup",
+   "description": "Daily backup folder and the note on keeping a copy on storage in India."
+  },
+  {
+   "id": "setup.done",
+   "kind": "happy",
+   "hash": "screen=setup&state=done",
+   "title": "Setup, done",
+   "description": "Company created; the first three things to do, each with its key."
+  },
+  {
+   "id": "ai-settings.local",
+   "kind": "happy",
+   "hash": "screen=ai-settings&state=local",
+   "title": "AI and privacy, local",
+   "description": "Per-company AI tier, model details, what each feature sends, and the AI activity log."
+  },
+  {
+   "id": "ai-settings.cloud",
+   "kind": "happy",
+   "hash": "screen=ai-settings&state=cloud",
+   "title": "AI and privacy, cloud key",
+   "description": "Cloud with your own key: provider, redaction list, per-document confirmation."
+  },
+  {
+   "id": "ai-settings.off",
+   "kind": "offline-ai",
+   "hash": "screen=ai-settings&state=off",
+   "title": "AI and privacy, off",
+   "description": "AI off: every AI entry point hidden; rule checks and engine matching still work."
+  }
+ ]
+}

@@ -1,0 +1,403 @@
+{
+ "version": 1,
+ "generated_from": "index.html <script id=\"registry\">",
+ "viewport": {
+  "width": 1280,
+  "height": 800
+ },
+ "themes": [
+  "light",
+  "dark",
+  "hc"
+ ],
+ "ready": "document.documentElement.dataset.ready === '1'",
+ "url": "index.html?freeze={ms}#{render_hash}&tx={id}&theme={theme}",
+ "render_hash": "\"end\" renders the end hash and plays the motion into it; \"start\" renders the start hash and plays the motion out of it",
+ "motion_tokens": {
+  "--dur-instant": "0ms",
+  "--dur-fast": "120ms",
+  "--dur-base": "180ms",
+  "--dur-slow": "240ms",
+  "--dur-emph": "600ms",
+  "--ease-out": "cubic-bezier(.33,1,.68,1)",
+  "--ease-in": "cubic-bezier(.32,0,.67,0)",
+  "--ease-in-out": "cubic-bezier(.65,0,.35,1)"
+ },
+ "transitions": [
+  {
+   "id": "screen-push",
+   "title": "Screen push",
+   "kind": "slide",
+   "start": "screen=home&state=default",
+   "end": "screen=balance-sheet&state=default",
+   "render": "end",
+   "targets": [
+    {
+     "selector": "#stage",
+     "keyframes": "push-in"
+    }
+   ],
+   "duration": "--dur-base",
+   "duration_ms": 180,
+   "easing": "--ease-out",
+   "frames_ms": [
+    0,
+    45,
+    90,
+    135,
+    180
+   ]
+  },
+  {
+   "id": "screen-pop",
+   "title": "Screen pop (Esc)",
+   "kind": "slide",
+   "start": "screen=balance-sheet&state=default",
+   "end": "screen=home&state=default",
+   "render": "end",
+   "targets": [
+    {
+     "selector": "#stage",
+     "keyframes": "pop-in"
+    }
+   ],
+   "duration": "--dur-base",
+   "duration_ms": 180,
+   "easing": "--ease-out",
+   "frames_ms": [
+    0,
+    45,
+    90,
+    135,
+    180
+   ]
+  },
+  {
+   "id": "palette-open",
+   "title": "Palette open (Ctrl+K)",
+   "kind": "scale",
+   "start": "screen=home&state=default",
+   "end": "screen=palette&base=home",
+   "render": "end",
+   "targets": [
+    {
+     "selector": ".scrim",
+     "keyframes": "fade-in"
+    },
+    {
+     "selector": ".palette",
+     "keyframes": "scale-in"
+    }
+   ],
+   "duration": "--dur-fast",
+   "duration_ms": 120,
+   "easing": "--ease-out",
+   "frames_ms": [
+    0,
+    30,
+    60,
+    90,
+    120
+   ]
+  },
+  {
+   "id": "palette-close",
+   "title": "Palette close (Esc)",
+   "kind": "fade",
+   "start": "screen=palette&base=home&query=bal",
+   "end": "screen=home&state=default",
+   "render": "start",
+   "targets": [
+    {
+     "selector": ".scrim",
+     "keyframes": "fade-out"
+    },
+    {
+     "selector": ".palette",
+     "keyframes": "scale-out"
+    }
+   ],
+   "duration": "--dur-fast",
+   "duration_ms": 120,
+   "easing": "--ease-in",
+   "frames_ms": [
+    0,
+    30,
+    60,
+    90,
+    120
+   ]
+  },
+  {
+   "id": "drill-down",
+   "title": "Drill down (Enter on a row)",
+   "kind": "slide",
+   "start": "screen=balance-sheet&state=default",
+   "end": "screen=balance-sheet&state=group",
+   "render": "end",
+   "targets": [
+    {
+     "selector": "#report-body",
+     "keyframes": "drill-in"
+    }
+   ],
+   "duration": "--dur-base",
+   "duration_ms": 180,
+   "easing": "--ease-out",
+   "frames_ms": [
+    0,
+    45,
+    90,
+    135,
+    180
+   ]
+  },
+  {
+   "id": "drill-up",
+   "title": "Drill up (Esc), selection kept",
+   "kind": "highlight",
+   "start": "screen=balance-sheet&state=group",
+   "end": "screen=balance-sheet&state=default&sel=Sundry%20debtors",
+   "render": "end",
+   "targets": [
+    {
+     "selector": "#report-body",
+     "keyframes": "drill-out"
+    },
+    {
+     "selector": "tr.sel td",
+     "keyframes": "row-hilite",
+     "duration_ms": 600
+    }
+   ],
+   "duration": "--dur-base",
+   "duration_ms": 180,
+   "easing": "--ease-out",
+   "frames_ms": [
+    0,
+    45,
+    90,
+    180,
+    400,
+    600
+   ]
+  },
+  {
+   "id": "ai-proposal-arrive",
+   "title": "AI proposal arrives",
+   "kind": "slide+highlight",
+   "start": "screen=purchase-bill&state=reading",
+   "end": "screen=purchase-bill&state=proposal",
+   "render": "end",
+   "targets": [
+    {
+     "selector": ".prop",
+     "keyframes": "arrive"
+    }
+   ],
+   "duration": "--dur-emph",
+   "duration_ms": 600,
+   "easing": "--ease-out",
+   "frames_ms": [
+    0,
+    100,
+    200,
+    300,
+    450,
+    600
+   ]
+  },
+  {
+   "id": "proposal-accept",
+   "title": "Proposal accepted (Ctrl+A)",
+   "kind": "highlight+fade",
+   "start": "screen=purchase-bill&state=proposal",
+   "end": "screen=purchase-bill&state=accepted",
+   "render": "start",
+   "targets": [
+    {
+     "selector": ".prop",
+     "keyframes": "accept-out"
+    }
+   ],
+   "duration": "--dur-slow",
+   "duration_ms": 240,
+   "easing": "--ease-in",
+   "frames_ms": [
+    0,
+    60,
+    120,
+    180,
+    240
+   ]
+  },
+  {
+   "id": "proposal-reject",
+   "title": "Proposal rejected (Alt+D)",
+   "kind": "slide+fade",
+   "start": "screen=quick-entry&state=proposal",
+   "end": "screen=quick-entry&state=rejected",
+   "render": "start",
+   "targets": [
+    {
+     "selector": ".prop",
+     "keyframes": "reject-out"
+    }
+   ],
+   "duration": "--dur-base",
+   "duration_ms": 180,
+   "easing": "--ease-in",
+   "frames_ms": [
+    0,
+    45,
+    90,
+    135,
+    180
+   ]
+  },
+  {
+   "id": "bank-match-accept",
+   "title": "Bank match accepted (Y)",
+   "kind": "highlight",
+   "start": "screen=bank&state=ai-suggestions",
+   "end": "screen=bank&state=default&accepted=L09",
+   "render": "end",
+   "targets": [
+    {
+     "selector": "tr[data-row='L09'] td",
+     "keyframes": "row-hilite"
+    }
+   ],
+   "duration": "--dur-emph",
+   "duration_ms": 600,
+   "easing": "--ease-out",
+   "frames_ms": [
+    0,
+    100,
+    200,
+    400,
+    600
+   ]
+  },
+  {
+   "id": "gst-recompute",
+   "title": "Live GST recompute",
+   "kind": "highlight",
+   "start": "screen=sales-invoice&state=default",
+   "end": "screen=sales-invoice&state=gst-inter-state",
+   "render": "end",
+   "targets": [
+    {
+     "selector": ".taxbox .taxrow",
+     "keyframes": "hilite"
+    }
+   ],
+   "duration": "--dur-emph",
+   "duration_ms": 600,
+   "easing": "--ease-out",
+   "frames_ms": [
+    0,
+    150,
+    300,
+    450,
+    600
+   ]
+  },
+  {
+   "id": "toast-in",
+   "title": "Toast in",
+   "kind": "slide+fade",
+   "start": "screen=sales-invoice&state=save-confirm",
+   "end": "screen=sales-invoice&state=saved",
+   "render": "end",
+   "targets": [
+    {
+     "selector": "#toast",
+     "keyframes": "toast-in"
+    }
+   ],
+   "duration": "--dur-base",
+   "duration_ms": 180,
+   "easing": "--ease-out",
+   "frames_ms": [
+    0,
+    45,
+    90,
+    135,
+    180
+   ]
+  },
+  {
+   "id": "toast-out",
+   "title": "Toast out",
+   "kind": "fade",
+   "start": "screen=sales-invoice&state=saved",
+   "end": "screen=sales-invoice&state=saved&toast=none",
+   "render": "start",
+   "targets": [
+    {
+     "selector": "#toast",
+     "keyframes": "toast-out"
+    }
+   ],
+   "duration": "--dur-fast",
+   "duration_ms": 120,
+   "easing": "--ease-in",
+   "frames_ms": [
+    0,
+    30,
+    60,
+    90,
+    120
+   ]
+  },
+  {
+   "id": "theme-switch",
+   "title": "Theme switch (Ctrl+Shift+L)",
+   "kind": "fade",
+   "start": "screen=home&state=default&theme=light",
+   "end": "screen=home&state=default&theme=dark",
+   "render": "end",
+   "targets": [
+    {
+     "selector": ".theme-veil",
+     "keyframes": "fade-out"
+    }
+   ],
+   "duration": "--dur-slow",
+   "duration_ms": 240,
+   "easing": "--ease-in-out",
+   "frames_ms": [
+    0,
+    60,
+    120,
+    180,
+    240
+   ]
+  },
+  {
+   "id": "setup-step",
+   "title": "Setup next step (Enter)",
+   "kind": "slide",
+   "start": "screen=setup&state=company",
+   "end": "screen=setup&state=features",
+   "render": "end",
+   "targets": [
+    {
+     "selector": ".spane",
+     "keyframes": "push-in"
+    }
+   ],
+   "duration": "--dur-base",
+   "duration_ms": 180,
+   "easing": "--ease-out",
+   "frames_ms": [
+    0,
+    45,
+    90,
+    135,
+    180
+   ]
+  }
+ ]
+}
