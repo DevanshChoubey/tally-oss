@@ -22,6 +22,10 @@ The product's one promise is in the spec (`docs/specs/2026-11-20-ledgerly-design
    and `f64` are banned in every crate except `ledgerly-app` layout code and `ledgerly-assist`
    model confidences (clippy `float_arithmetic` denied elsewhere). Every conversion that can lose
    precision names its rounding rule and returns an error on overflow (checked arithmetic only).
+   Recorded exception: XLSX number cells are IEEE doubles (`rust_xlsxwriter` accepts only `f64`).
+   `ledgerly-reports::export` parses the exact decimal text to `f64` (no float arithmetic) and
+   writes the cell only when the double round-trips to the same decimal; otherwise it returns
+   `ReportError::Export` (never a rounded figure).
 4. Every expected value in a test carries provenance, recorded next to it:
    - `observed`: captured from TallyPrime (edition, release, date) or from the GST portal / an
      official offline tool (tool version, date); or
