@@ -4,8 +4,9 @@
 //! arithmetic next to it. Tally reference for the tile set: the TallyPrime dashboard help page
 //! lists Cash/Bank Accounts and Receivables/Payables among its default tiles (read 2026-11-21,
 //! <https://help.tallysolutions.com/tally-prime/reports-in-tallyprime/dashboard/>). The page does
-//! not define the figures, so the tiles here are the closing balance of one reserved group each
-//! (the group's own net balance, our choice, not Tally's wording).
+//! not define the figures. The receivables and payables tiles are the closing balance of one
+//! reserved group each (the group's own net balance, our choice, not Tally's wording). The cash and
+//! bank and GST tiles have no single engine figure yet, so they show "Not supported yet".
 
 #![allow(
     clippy::unwrap_used,
@@ -224,23 +225,29 @@ fn home_kpis_are_the_closing_group_balances_derived_by_hand() {
     // provenance: derived. Posted: V1 Cash Dr 1,00,000 / Capital Cr 1,00,000; V2 Cash Dr 5,000 /
     // Customer One Cr 5,000; V3 Customer Two Dr 30,000 / Capital Cr 30,000; V4 Capital Dr 8,000 /
     // Supplier Cr 8,000.
-    // Cash in hand: only Cash, Dr 1,00,000 + 5,000 = 1,05,000.00.
-    // Bank accounts: no ledger in the group, so a nil balance: 0.00.
+    // Cash and bank: the engine has cash in hand (Dr 1,05,000) and bank accounts (nil) as two
+    // groups and no combined figure, and the home screen does not add them, so the tile is not
+    // supported (rule A1). The two group figures are therefore not drawn on the home screen.
     // Receivables (Sundry Debtors): Customer One Cr 5,000 + Customer Two Dr 30,000 = Dr 25,000.00.
     // Payables (Sundry Creditors): Supplier Cr 8,000.00, the usual side for creditors.
-    // GST payable: the engine has no payable-after-set-off figure, so the tile is not supported.
-    // Indian grouping: 1,05,000.00 (last three digits, then pairs).
+    // GST cash payable: the engine has no payable-after-set-off figure, so the tile is not supported.
+    // Indian grouping: 25,000.00 (last three digits, then pairs).
+    // Footnote date: 30 Apr 2026, the as-of date of `refreshed`, in the mock's date form
+    // ("21 Nov 2026" in design/mock-v2/captures/states/light/home.default.webp).
     let worker = ApiWorker::spawn(setup("c4_home_kpis.ledgerly", true)).unwrap();
     let views = refreshed(&worker);
 
-    assert_eq!(
-        view(&views, "Cash in hand").value_text,
-        "\u{20B9}1,05,000.00"
-    );
-    assert_eq!(view(&views, "Bank accounts").value_text, "\u{20B9}0.00");
+    assert_eq!(view(&views, "Cash and bank").value_text, "Not supported yet");
     assert_eq!(view(&views, "Receivables").value_text, "\u{20B9}25,000.00");
+    assert_eq!(
+        view(&views, "Receivables").footnote_text,
+        "Closing balance as of 30 Apr 2026"
+    );
     assert_eq!(view(&views, "Payables").value_text, "\u{20B9}8,000.00");
-    assert_eq!(view(&views, "GST payable").value_text, "Not supported yet");
+    assert_eq!(
+        view(&views, "GST cash payable").value_text,
+        "Not supported yet"
+    );
 }
 
 #[test]
@@ -258,11 +265,8 @@ fn a_balance_on_the_unusual_side_is_not_shown_as_a_plain_figure() {
         "{}",
         receivables.footnote_text
     );
-    // The cash tile is still its own hand-derived figure: Dr 1,00,000 + 5,000.
-    assert_eq!(
-        view(&views, "Cash in hand").value_text,
-        "\u{20B9}1,05,000.00"
-    );
+    // The cash-and-bank tile has no combined engine figure, so it is not supported (rule A1).
+    assert_eq!(view(&views, "Cash and bank").value_text, "Not supported yet");
 }
 
 #[test]

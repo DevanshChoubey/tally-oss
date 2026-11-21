@@ -1,40 +1,41 @@
-//! Home dashboard; KPI tiles read report outputs only. **Card U3** implements this module.
+//! Home dashboard (card S-A, wave 2): the page head, the KPI tiles, the AI area and the nudges.
+//! The drawing is in `home/draw.rs`; this file holds the data, the figures, the keys and the
+//! choice of body.
 //!
-//! Frozen interface (plan card U3):
+//! Frozen interface (plan card U3, unchanged in wave 2):
 //!
 //! ```text
-//! pub struct <Name>Screen { .. }
-//! impl Screen for <Name>Screen { .. }
+//! pub struct HomeScreen { .. }
+//! impl Screen for HomeScreen { .. }
 //! ```
 //!
-//! Here `<Name>` is `Home`: [`HomeScreen`] implements [`Screen`].
+//! What the screen shows, from the mock's home (`design/mock-v2/index.html`, `SCREENS.home`, lines
+//! 1041 to 1078; the light capture is `design/mock-v2/captures/states/light/home.default.webp`):
 //!
-//! What the screen shows (spec 7 and the mock's Home screen): the company and date line, a row of
-//! KPI tiles, an "Enter" list, a "Look up" list and a "Needs attention" list.
+//! * a page head with "Day book" (D) and "New sale" (F8) on the right. The title is "Home": the
+//!   mock's greeting needs a user name, which the app does not have yet.
+//! * the KPI row: "Cash and bank", "Receivables", "Payables" and "GST cash payable". Each figure is
+//!   an [`Outcome<Paise>`] from a report output. The screen never sums anything (rule C4), and a
+//!   figure the engine cannot give shows "Not supported yet" with its reason (rule A1).
+//! * the AI area. With AI off it shows the mock's note. Otherwise the plain-words line and the
+//!   review list come with the assistant, so each is a labelled placeholder that runs nothing.
+//! * "Sales by month", which stays "Not supported yet" until the engine has a monthly sales series.
+//! * the nudges. Their rules are not built, so the card shows the host's attention items and a
+//!   placeholder when there are none.
 //!
-//! * **Rule C4, the UI never sums anything.** Every figure on a tile is an [`Outcome<Paise>`]
-//!   handed in by the host in [`HomeData`], taken from a report output (balance sheet, GST
-//!   return) and never computed here. The only transformation is formatting: [`format_inr`]
-//!   gives the Indian grouping `12,34,567.00`. A tile whose report is unsupported shows the words
-//!   "Not supported yet" and the reason, never a number (rule A1).
-//! * **The screen opens nothing.** It cannot build the other screens (other cards own them), so a
-//!   click or a key records a [`HomeTarget`] that the host takes with
-//!   [`HomeScreen::take_request`] and turns into a [`crate::ScreenAction::Push`]. This is the
-//!   same pattern the voucher screen uses for creating a ledger inline.
-//! * **No colour-only signals** (spec 7): every attention item starts with a word
-//!   ([`AttentionKind::word`]) as well as a colour.
+//! The "Enter" and "Look up" lists are gone: the sidebar does that (decision 9 of
+//! `docs/status/2026-11-22-ui-parity-report.md`).
 //!
 //! Keys handled here, from the mock: F8 sales invoice, F6 receipt, F5 payment, F9 purchase from a
 //! bill, B balance sheet, D day book, G GST returns, M masters, Ctrl+K search. The letters are
 //! ignored while a text field has focus. Ctrl+Shift+J opens the describe-a-transaction row (the
-//! table of keys says why it is not Ctrl+J). Modifiers
-//! match exactly: Alt+D or Shift+F5 is not D or F5. The key map of card U2 is not wired in yet
-//! (Wave 2), so the keys are read directly, as the shell does for Ctrl+T.
-//!
-//! Not built here: the mock's "engine" badge tooltip text and the narrow-width reflow to one
-//! column; the tiles wrap instead.
+//! table of keys says why it is not Ctrl+J). Modifiers match exactly: Alt+D or Shift+F5 is not D
+//! or F5. The key map of card U2 is not wired in yet (Wave 2), so the keys are read directly, as the
+//! shell does for Ctrl+T.
 
-use egui::{Color32, Event, InputState, Key, Modifiers, RichText, Sense, Ui};
+mod draw;
+
+use egui::{Event, InputState, Key, Modifiers, Rect, Ui};
 use ledgerly_api::{
     Api, Cell, ColumnSpec, Detail, Report, ReportFilter, ReportKind, ReportParams, RowKind,
 };
@@ -43,16 +44,26 @@ use ledgerly_core::{Date, DrCr, Outcome, Paise, Period, SignedAmount, Unsupporte
 use ledgerly_model::seed_groups::reserved_groups;
 use ledgerly_model::{ReservedGroup, Scenario};
 
+use crate::screen::{AiTier, KeyHint};
 use crate::screens::wire::{Done, Latest};
+use crate::theme::SPACE_3;
+use crate::ui::format;
 use crate::worker::ApiWorker;
 use crate::{AppCtx, Screen, ScreenAction};
 
-/// Width of one KPI tile, in points.
-const TILE_WIDTH: f32 = 230.0;
-/// Width of one list box, in points.
-const BOX_WIDTH: f32 = 340.0;
+/// Title of the page head. The mock's greeting needs a user name, which the app does not have yet.
+const PAGE_TITLE: &str = "Home";
+/// Smallest width of a KPI tile that still fits its figure, in points.
+pub const TILE_MIN_WIDTH: f32 = 200.0;
+/// Width from which the lower row shows its two panels side by side, in points (the mock's
+/// two-column main grid, which needs about 720 points).
+pub const WIDE_MIN_WIDTH: f32 = 720.0;
 /// Text shown in place of a figure the engine cannot compute yet.
 const UNSUPPORTED_WORDS: &str = "Not supported yet";
+/// Reason the cash-and-bank tile is not a figure: the engine has the two groups, not their total.
+const CASH_AND_BANK_REASON: &str = "the engine gives cash in hand and bank accounts as two groups and has no combined total yet, and this screen does not add them";
+/// Reason the GST tile is not a figure: the engine has no payable after set-off.
+const GST_REASON: &str = "the engine gives the GSTR-3B working (tax and credit separately) but no payable after set-off, and this screen does not subtract";
 
 /// Where a click or a key on the home screen asks to go. The host maps each to a screen.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -92,11 +103,11 @@ pub enum HomeTarget {
 /// One KPI tile. Every field comes from a report output; the screen computes none of them.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Kpi {
-    /// Tile title, for example "Cash and bank".
+    /// Tile title, for example "Receivables".
     pub label: String,
     /// The figure from the report, or why the report cannot give it.
     pub value: Outcome<Paise>,
-    /// Line under the figure, for example "2 bank accounts, 1 cash".
+    /// Line under the figure, for example "Closing balance as of 30 Apr 2026".
     pub footnote: String,
     /// What a click on the tile opens.
     pub target: HomeTarget,
@@ -125,7 +136,7 @@ impl AttentionKind {
     }
 }
 
-/// One line of "Needs attention".
+/// One line of the nudges card.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AttentionItem {
     /// How urgent it is.
@@ -141,13 +152,13 @@ pub struct AttentionItem {
 /// Everything the home screen shows, supplied by the host from report outputs.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct HomeData {
-    /// Company name for the heading.
+    /// Company name for the page's company line.
     pub company_name: String,
-    /// Line under the heading, for example the date and how far the books are open.
+    /// Line under the company name, for example how the figures are dated.
     pub subtitle: String,
     /// KPI tiles, in display order.
     pub kpis: Vec<Kpi>,
-    /// "Needs attention" items, in display order.
+    /// Nudge items, in display order. Empty until the nudge rules exist.
     pub attention: Vec<AttentionItem>,
 }
 
@@ -160,6 +171,8 @@ pub struct KpiView {
     pub value_text: String,
     /// The footnote, or for an unsupported tile the reason.
     pub footnote_text: String,
+    /// `true` when `value_text` is a figure, `false` when it is the unsupported words.
+    pub supported: bool,
 }
 
 /// The text of a tile's figure: `₹12,34,567.00` for a value, "Not supported yet" otherwise.
@@ -175,14 +188,98 @@ pub fn value_text(value: &Outcome<Paise>) -> String {
 /// user learns why the number is missing.
 #[must_use]
 pub fn kpi_view(kpi: &Kpi) -> KpiView {
-    let footnote_text = match &kpi.value {
-        Outcome::Value(_) => kpi.footnote.clone(),
-        Outcome::Unsupported(u) => format!("{}: {}", u.what, u.reason),
+    let (footnote_text, supported) = match &kpi.value {
+        Outcome::Value(_) => (kpi.footnote.clone(), true),
+        Outcome::Unsupported(u) => (format!("{}: {}", u.what, u.reason), false),
     };
     KpiView {
         label: kpi.label.clone(),
         value_text: value_text(&kpi.value),
         footnote_text,
+        supported,
+    }
+}
+
+/// How many KPI tiles sit side by side in `width` points: four when all four fit, then two,
+/// then one. Four is 4 x 200 + 3 x 12 = 836 points, two is 2 x 200 + 12 = 412 points.
+#[must_use]
+pub fn tile_columns(width: f32) -> usize {
+    const FOUR: f32 = 4.0 * TILE_MIN_WIDTH + 3.0 * SPACE_3;
+    const TWO: f32 = 2.0 * TILE_MIN_WIDTH + SPACE_3;
+    if width >= FOUR {
+        4
+    } else if width >= TWO {
+        2
+    } else {
+        1
+    }
+}
+
+/// `true` when the lower row shows its two panels side by side at `width` points.
+#[must_use]
+pub fn panel_row_is_wide(width: f32) -> bool {
+    width >= WIDE_MIN_WIDTH
+}
+
+/// Which body of the home screen is drawn.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HomeBody {
+    /// The open company has no vouchers yet: first steps and no figures (the mock's empty state,
+    /// `home.empty`). `begins` is the first day the books take entries for.
+    NewCompany {
+        /// First day on which vouchers may be entered.
+        begins: Date,
+    },
+    /// A refresh is waiting for the engine: skeleton rows and no figure (`home.loading`).
+    Loading,
+    /// The figures from the last refresh (`home.default`, `home.ai-off`).
+    Figures,
+    /// No company is open, so there are no figures to show.
+    NoFigures,
+}
+
+/// Chooses the body. A company with no vouchers always shows its first steps, so the engine's
+/// zero figures are never drawn; a loading refresh shows skeletons before any figure.
+#[must_use]
+pub fn body(new_company: Option<Date>, loading: bool, has_figures: bool) -> HomeBody {
+    match (new_company, loading, has_figures) {
+        (Some(begins), _, _) => HomeBody::NewCompany { begins },
+        (None, true, _) => HomeBody::Loading,
+        (None, false, true) => HomeBody::Figures,
+        (None, false, false) => HomeBody::NoFigures,
+    }
+}
+
+/// What the AI area of the home screen shows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AiPanel {
+    /// AI is off for the company: the mock's note says so, and the entry line and review list
+    /// are not drawn.
+    Off,
+    /// The assistant is not built, or its tier is not set: a labelled placeholder that runs
+    /// nothing.
+    Placeholder,
+}
+
+/// The AI panel for the company's AI tier (`AppCtx::ai_tier`). Only `Off` hides the AI area;
+/// `Local`, `Cloud` and "not set" all show the placeholder, since no assistant runs yet.
+#[must_use]
+pub fn ai_panel(tier: Option<AiTier>) -> AiPanel {
+    match tier {
+        Some(AiTier::Off) => AiPanel::Off,
+        Some(AiTier::Local | AiTier::Cloud) | None => AiPanel::Placeholder,
+    }
+}
+
+/// The company line under the page title: the company name, the data's subtitle, or both joined
+/// with a middle dot. Empty when neither is set.
+#[must_use]
+pub fn sub_line(company: &str, subtitle: &str) -> String {
+    match (company.is_empty(), subtitle.is_empty()) {
+        (true, true) => String::new(),
+        (false, true) => company.to_owned(),
+        (true, false) => subtitle.to_owned(),
+        (false, false) => format!("{company} \u{b7} {subtitle}"),
     }
 }
 
@@ -195,24 +292,12 @@ struct Tile {
     node: &'static str,
 }
 
-/// The tiles. Tally's dashboard (help page read 2026-11-21,
-/// <https://help.tallysolutions.com/tally-prime/reports-in-tallyprime/dashboard/>) has tiles for
-/// Cash/Bank Accounts and Receivables/Payables among its nine default tiles, so the existing
-/// cash, bank, receivables and payables set is kept. The page does not define the figures, so
-/// each tile here is the closing balance of one reserved group, taken from the group summary.
-const TILES: [Tile; 4] = [
-    Tile {
-        label: "Cash in hand",
-        group: ReservedGroup::CashInHand,
-        normal: DrCr::Dr,
-        node: "Cash-in-hand",
-    },
-    Tile {
-        label: "Bank accounts",
-        group: ReservedGroup::BankAccounts,
-        normal: DrCr::Dr,
-        node: "Bank accounts",
-    },
+/// The tiles that read a group balance. Receivables and payables are the two the engine gives as
+/// a single group balance. Tally's dashboard help page
+/// (<https://help.tallysolutions.com/tally-prime/reports-in-tallyprime/dashboard/>, read
+/// 2026-11-21) lists receivables and payables among its default tiles; it does not define the
+/// figures, so each tile is the closing balance of one reserved group, taken from the group summary.
+const TILES: [Tile; 2] = [
     Tile {
         label: "Receivables",
         group: ReservedGroup::SundryDebtors,
@@ -227,28 +312,40 @@ const TILES: [Tile; 4] = [
     },
 ];
 
-/// The home KPI tiles as of `as_of`, from `Api::report` (group summaries). Runs on the API
-/// worker. A tile whose report fails or is unsupported carries `Unsupported` with the reason;
-/// no tile ever carries a guessed figure.
+/// The home KPI tiles as of `as_of`, in the mock's order: cash and bank, receivables, payables,
+/// GST. Runs on the API worker. A tile whose report fails or is unsupported carries `Unsupported`
+/// with the reason; no tile ever carries a guessed figure.
 #[must_use]
 pub fn home_kpis(api: &Api, as_of: Date) -> Vec<Kpi> {
-    let mut kpis: Vec<Kpi> = TILES
-        .iter()
-        .map(|tile| tile_kpi(api, tile, as_of))
-        .collect();
-    kpis.push(Kpi {
-        label: "GST payable".to_owned(),
-        value: Outcome::unsupported(
-            "GST payable",
-            "the engine gives the GSTR-3B working (tax and credit separately) but no payable \
-             after set-off, and this screen does not subtract",
-        ),
-        footnote: "after ITC".to_owned(),
+    let mut kpis = vec![cash_and_bank_kpi()];
+    kpis.extend(TILES.iter().map(|tile| tile_kpi(api, tile, as_of)));
+    kpis.push(gst_kpi());
+    kpis
+}
+
+/// The cash-and-bank tile. The engine has no single figure for it, and this screen does not add
+/// the two groups, so it is unsupported until the engine gives a total.
+fn cash_and_bank_kpi() -> Kpi {
+    Kpi {
+        label: "Cash and bank".to_owned(),
+        value: Outcome::unsupported("Cash and bank", CASH_AND_BANK_REASON),
+        footnote: "Cash and bank accounts".to_owned(),
+        target: HomeTarget::BalanceSheet {
+            node: "Cash-in-hand".to_owned(),
+        },
+    }
+}
+
+/// The GST tile. It stays unsupported until the engine gives the net payable after set-off.
+fn gst_kpi() -> Kpi {
+    Kpi {
+        label: "GST cash payable".to_owned(),
+        value: Outcome::unsupported("GST cash payable", GST_REASON),
+        footnote: "after accepted ITC".to_owned(),
         target: HomeTarget::GstReturns {
             tab: "gstr3b".to_owned(),
         },
-    });
-    kpis
+    }
 }
 
 fn tile_kpi(api: &Api, tile: &Tile, as_of: Date) -> Kpi {
@@ -256,7 +353,7 @@ fn tile_kpi(api: &Api, tile: &Tile, as_of: Date) -> Kpi {
     Kpi {
         label: tile.label.to_owned(),
         value,
-        footnote: format!("Closing balance as of {as_of}"),
+        footnote: format!("Closing balance as of {}", format::date(as_of)),
         target: HomeTarget::BalanceSheet {
             node: tile.node.to_owned(),
         },
@@ -344,85 +441,6 @@ fn net_balance(report: &Report, normal: DrCr, what: &str) -> Outcome<Paise> {
     }
 }
 
-/// One row of an "Enter" or "Look up" list.
-#[derive(Debug, Clone, Copy)]
-struct EntryRow {
-    target: fn() -> HomeTarget,
-    title: &'static str,
-    detail: &'static str,
-    key: &'static str,
-}
-
-const ENTER_ROWS: [EntryRow; 5] = [
-    EntryRow {
-        target: || HomeTarget::SalesInvoice,
-        title: "Sales invoice",
-        detail: "Item invoice with GST, e-invoice ready",
-        key: "F8",
-    },
-    EntryRow {
-        target: || HomeTarget::Receipt,
-        title: "Receipt",
-        detail: "Money in, against bills",
-        key: "F6",
-    },
-    EntryRow {
-        target: || HomeTarget::Payment,
-        title: "Payment",
-        detail: "Money out, cash or bank",
-        key: "F5",
-    },
-    EntryRow {
-        target: || HomeTarget::PurchaseFromBill,
-        title: "Purchase from a photo of a bill",
-        detail: "Assistant reads it, you confirm",
-        key: "F9",
-    },
-    EntryRow {
-        target: || HomeTarget::DescribeTransaction,
-        title: "Describe a transaction",
-        detail: "Type it in words; the assistant drafts the voucher",
-        key: "Ctrl Shift J",
-    },
-];
-
-const LOOKUP_ROWS: [EntryRow; 5] = [
-    EntryRow {
-        target: || HomeTarget::BalanceSheet {
-            node: String::new(),
-        },
-        title: "Balance sheet",
-        detail: "Drill from any figure to the voucher",
-        key: "B",
-    },
-    EntryRow {
-        target: || HomeTarget::DayBook,
-        title: "Day book",
-        detail: "Every voucher, by date",
-        key: "D",
-    },
-    EntryRow {
-        target: || HomeTarget::GstReturns { tab: String::new() },
-        title: "GST returns",
-        detail: "GSTR-1, GSTR-3B, 2B and IMS",
-        key: "G",
-    },
-    EntryRow {
-        target: || HomeTarget::Masters,
-        title: "Ledgers and items",
-        detail: "Parties, stock items, HSN and rates",
-        key: "M",
-    },
-    EntryRow {
-        target: || HomeTarget::Palette,
-        title: "Anything else",
-        detail: "Search every ledger, voucher and report",
-        key: "Ctrl K",
-    },
-];
-
-/// Keys that work from the home screen, as the mock lists them. The first flag says whether the
-/// key is a plain letter (ignored while a text field has focus).
 /// One home-screen shortcut: key, modifiers, whether it is a plain letter, and its target.
 type Shortcut = (Key, Modifiers, bool, fn() -> HomeTarget);
 
@@ -452,6 +470,19 @@ const SHORTCUTS: [Shortcut; 10] = [
         false,
         || HomeTarget::DescribeTransaction,
     ),
+];
+
+/// The keys the key bar shows for this screen: the ones above that open a screen that exists.
+/// F9 and Ctrl+Shift+J are left out because they open nothing yet.
+const HOME_KEYS: [(&str, &str); 8] = [
+    ("F8", "Sales"),
+    ("F5", "Payment"),
+    ("F6", "Receipt"),
+    ("B", "Balance sheet"),
+    ("D", "Day book"),
+    ("G", "GST returns"),
+    ("M", "Masters"),
+    ("Ctrl+K", "Palette"),
 ];
 
 /// The target a key opens from the home screen, or `None` for a key it does not handle.
@@ -489,6 +520,8 @@ pub struct HomeScreen {
     latest: Latest<Vec<Kpi>>,
     /// Why the KPIs could not be refreshed, when they could not.
     notice: Option<String>,
+    /// Where each KPI tile was drawn in the last frame, in order. Empty when no tile was drawn.
+    tile_rects: Vec<Rect>,
 }
 
 impl HomeScreen {
@@ -501,6 +534,7 @@ impl HomeScreen {
             want: None,
             latest: Latest::default(),
             notice: None,
+            tile_rects: Vec::new(),
         }
     }
 
@@ -567,6 +601,13 @@ impl HomeScreen {
         self.data.kpis.iter().map(kpi_view).collect()
     }
 
+    /// The screen rectangle of each KPI tile as it was drawn in the last frame, in order. Empty
+    /// when the last frame drew no tiles (a loading, new-company or no-figures body).
+    #[must_use]
+    pub fn tile_rects(&self) -> &[Rect] {
+        &self.tile_rects
+    }
+
     /// Records that the user asked to open `target`, as a click does. The latest request wins.
     pub fn request_open(&mut self, target: HomeTarget) {
         self.request = Some(target);
@@ -592,140 +633,35 @@ impl HomeScreen {
         }
     }
 
-    fn draw_kpis(&mut self, ui: &mut Ui) {
-        if self.data.kpis.is_empty() {
-            ui.label(RichText::new("No figures yet. Open a company to see them.").weak());
-            return;
-        }
-        let mut clicked = None;
-        ui.horizontal_wrapped(|ui| {
-            for (index, kpi) in self.data.kpis.iter().enumerate() {
-                let view = kpi_view(kpi);
-                let response = draw_tile(ui, index, &view);
-                if response.clicked() {
-                    clicked = Some(kpi.target.clone());
-                }
-            }
-        });
-        if let Some(target) = clicked {
-            self.request_open(target);
-        }
+    /// The tiles as the drawing takes them: the view and the click target of each.
+    fn tile_items(&self) -> Vec<(KpiView, HomeTarget)> {
+        self.data
+            .kpis
+            .iter()
+            .map(|kpi| (kpi_view(kpi), kpi.target.clone()))
+            .collect()
     }
-
-    fn draw_list(ui: &mut Ui, heading: &str, rows: &[EntryRow]) -> Option<HomeTarget> {
-        let mut clicked = None;
-        frame_box(ui, |ui| {
-            ui.set_width(BOX_WIDTH);
-            ui.heading(heading);
-            for row in rows {
-                ui.horizontal(|ui| {
-                    let response = ui.add(egui::Button::new(row.title).frame(false));
-                    if response.clicked() {
-                        clicked = Some((row.target)());
-                    }
-                    ui.label(RichText::new(row.detail).weak().small());
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        ui.label(RichText::new(row.key).monospace().weak());
-                    });
-                });
-            }
-        });
-        clicked
-    }
-
-    fn draw_attention(&mut self, ui: &mut Ui) {
-        let mut clicked = None;
-        frame_box(ui, |ui| {
-            ui.set_width(BOX_WIDTH);
-            ui.heading("Needs attention");
-            if self.data.attention.is_empty() {
-                ui.label(RichText::new("Nothing needs attention.").weak());
-            }
-            for item in &self.data.attention {
-                ui.separator();
-                let color = attention_color(ui, item.kind);
-                ui.horizontal(|ui| {
-                    ui.label(RichText::new(item.kind.word()).color(color).strong());
-                    match &item.target {
-                        Some(target) => {
-                            if ui
-                                .add(egui::Button::new(item.headline.as_str()).frame(false))
-                                .clicked()
-                            {
-                                clicked = Some(target.clone());
-                            }
-                        }
-                        None => {
-                            ui.label(RichText::new(item.headline.as_str()).strong());
-                        }
-                    }
-                });
-                if !item.detail.is_empty() {
-                    ui.label(RichText::new(item.detail.as_str()).weak().small());
-                }
-            }
-        });
-        if let Some(target) = clicked {
-            self.request_open(target);
-        }
-    }
-}
-
-/// Colour of the word before an attention item. Taken from the active visuals so the three
-/// themes stay consistent; the word carries the meaning.
-fn attention_color(ui: &Ui, kind: AttentionKind) -> Color32 {
-    match kind {
-        AttentionKind::Pending => ui.visuals().warn_fg_color,
-        AttentionKind::Due => ui.visuals().error_fg_color,
-        AttentionKind::Done => ui.visuals().text_color(),
-    }
-}
-
-/// A bordered panel in the surface colour of the active theme.
-fn frame_box<R>(ui: &mut Ui, add_contents: impl FnOnce(&mut Ui) -> R) -> R {
-    let visuals = ui.visuals().widgets.noninteractive;
-    egui::Frame::new()
-        .fill(visuals.bg_fill)
-        .stroke(visuals.bg_stroke)
-        .corner_radius(egui::CornerRadius::same(4))
-        .inner_margin(egui::Margin::same(12))
-        .show(ui, add_contents)
-        .inner
-}
-
-/// Draws one KPI tile and returns its click response.
-fn draw_tile(ui: &mut Ui, index: usize, view: &KpiView) -> egui::Response {
-    let inner = frame_box_response(ui, |ui| {
-        ui.set_width(TILE_WIDTH);
-        ui.label(RichText::new(view.label.as_str()).weak());
-        ui.label(RichText::new(view.value_text.as_str()).size(22.0).strong());
-        ui.label(RichText::new(view.footnote_text.as_str()).weak().small());
-    });
-    let id = ui.scope_id().with(("home-kpi", index));
-    let response = ui.interact(inner.rect, id, Sense::click());
-    let spoken = format!(
-        "{}, {}. {}",
-        view.label, view.value_text, view.footnote_text
-    );
-    response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, spoken.as_str()));
-    response
-}
-
-/// Like [`frame_box`] but returns the frame's response, to make the whole tile clickable.
-fn frame_box_response(ui: &mut Ui, add_contents: impl FnOnce(&mut Ui)) -> egui::Response {
-    let visuals = ui.visuals().widgets.noninteractive;
-    egui::Frame::new()
-        .fill(visuals.bg_fill)
-        .stroke(visuals.bg_stroke)
-        .corner_radius(egui::CornerRadius::same(4))
-        .inner_margin(egui::Margin::same(12))
-        .show(ui, add_contents)
-        .response
 }
 
 impl Screen for HomeScreen {
     fn title(&self) -> String {
         "Home".to_owned()
+    }
+
+    fn page_title(&self) -> String {
+        PAGE_TITLE.to_owned()
+    }
+
+    fn subtitle(&self) -> Option<String> {
+        let line = sub_line(&self.data.company_name, &self.data.subtitle);
+        (!line.is_empty()).then_some(line)
+    }
+
+    fn keys(&self) -> Vec<KeyHint> {
+        HOME_KEYS
+            .iter()
+            .map(|(keys, label)| KeyHint::new(*keys, *label))
+            .collect()
     }
 
     fn ui(&mut self, ui: &mut Ui, ctx: &mut AppCtx) -> ScreenAction {
@@ -734,34 +670,38 @@ impl Screen for HomeScreen {
             ui.ctx().request_repaint();
         }
         self.handle_keys(ui);
+        let new_company = ctx
+            .books
+            .as_ref()
+            .filter(|books| books.vouchers.is_empty())
+            .map(|books| books.company.books_begin);
+        let shown = body(new_company, self.is_loading(), !self.data.kpis.is_empty());
+        let ai = ai_panel(ctx.ai_tier);
+        let tiles = self.tile_items();
+        let mut chosen = None;
+        let mut rects = Vec::new();
         egui::ScrollArea::vertical().show(ui, |ui| {
-            let heading = if self.data.company_name.is_empty() {
-                "Ledgerly"
-            } else {
-                self.data.company_name.as_str()
-            };
-            ui.heading(heading);
-            if !self.data.subtitle.is_empty() {
-                ui.label(RichText::new(self.data.subtitle.as_str()).weak());
+            draw::header(
+                ui,
+                shown,
+                &self.data.company_name,
+                &self.data.subtitle,
+                &mut chosen,
+            );
+            draw::notice(ui, self.notice.as_deref());
+            match shown {
+                HomeBody::NewCompany { begins } => draw::welcome(ui, begins, &mut chosen),
+                HomeBody::Loading => draw::skeleton(ui),
+                HomeBody::Figures => {
+                    rects = draw::figures(ui, &tiles, ai, &self.data.attention, &mut chosen);
+                }
+                HomeBody::NoFigures => draw::no_figures(ui),
             }
-            ui.add_space(8.0);
-            if let Some(notice) = &self.notice {
-                ui.colored_label(ui.visuals().error_fg_color, notice.as_str());
-            }
-            self.draw_kpis(ui);
-            ui.add_space(12.0);
-            let mut chosen = None;
-            ui.horizontal_wrapped(|ui| {
-                chosen = chosen.take().or(Self::draw_list(ui, "Enter", &ENTER_ROWS));
-                chosen = chosen
-                    .take()
-                    .or(Self::draw_list(ui, "Look up", &LOOKUP_ROWS));
-            });
-            if let Some(target) = chosen {
-                self.request_open(target);
-            }
-            ui.horizontal_wrapped(|ui| self.draw_attention(ui));
         });
+        self.tile_rects = rects;
+        if let Some(target) = chosen {
+            self.request_open(target);
+        }
         ScreenAction::Stay
     }
 }
