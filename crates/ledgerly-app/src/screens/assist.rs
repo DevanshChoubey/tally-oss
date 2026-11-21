@@ -604,6 +604,13 @@ impl AssistScreen {
         send
     }
 
+    /// Whether the Accept button is drawn: a proposal other than an answer to a question.
+    fn shows_accept(&self) -> bool {
+        self.proposal
+            .as_ref()
+            .is_some_and(|p| !matches!(p, ProposalView::Report(_)))
+    }
+
     /// The Accept and Reject buttons. Returns `(accept, reject)` clicks.
     fn draw_buttons(&self, ui: &mut Ui) -> (bool, bool) {
         let mut accept = false;
@@ -612,7 +619,7 @@ impl AssistScreen {
         let is_report = matches!(self.proposal, Some(ProposalView::Report(_)));
         ui.horizontal(|ui| {
             if !is_report {
-                let button = ui.add_enabled(can_accept, Button::new("Accept (Ctrl+Enter)"));
+                let button = ui.add_enabled(can_accept, Button::new("Accept (Ctrl+A)"));
                 accept = button.clicked();
             }
             let label = if is_report { "Dismiss" } else { "Reject" };
@@ -636,6 +643,11 @@ impl Screen for AssistScreen {
             self.closing = false;
             return ScreenAction::Pop;
         }
+        // Ctrl+A is read before the input row draws, so the text field does not also select all.
+        // voucher_entry.rs reads its save key the same way. It is read only while Accept is shown,
+        // so Ctrl+A keeps its normal meaning in the text field otherwise.
+        let key_accept =
+            self.shows_accept() && ui.input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::A));
         ui.heading("Assistant");
         ui.weak(self.tier.describe());
         if self.draw_input(ui) {
@@ -663,7 +675,6 @@ impl Screen for AssistScreen {
         }
         ui.separator();
         let (accept, reject) = self.draw_buttons(ui);
-        let key_accept = ui.input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::Enter));
         if accept || key_accept {
             self.accept();
         }

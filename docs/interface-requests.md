@@ -78,8 +78,8 @@ Template:
 
 ## U4: keymap bindings
 - Crate/file: `ledgerly-app/src/keymap.rs` (card U2).
-- Current interface: none merged; U4 hard-codes its keys in one table (`bindings` in `voucher_entry.rs`): Ctrl+A and Ctrl+S save, Alt+C create ledger, Alt+S switch Dr/Cr, Ctrl+D delete line.
-- Requested change: actions for "save", "create master", "switch side" and "delete line" in the classic preset and a lookup the screen can call each frame. Ctrl+Enter is not consumed by U4 (spec 7: alter master). Ctrl+D and Alt+S have no source in spec 7; the owner to choose the bindings.
+- Current interface: none merged; U4 hard-codes its keys in one table (`bindings` in `voucher_entry.rs`): Ctrl+A and Ctrl+S save, Alt+C create ledger, Ctrl+D delete line. Switch Dr/Cr is the on-screen button only (round 3: the Alt+S binding was removed, see below).
+- Requested change: actions for "save", "create master", "switch side" and "delete line" in the classic preset and a lookup the screen can call each frame. Ctrl+Enter is not consumed by U4 (spec 7: alter master). Ctrl+D has no source in spec 7; the owner to choose it. Alt+S is removed (round 3, 2026-11-21): Tally's shortcut page gives Alt+S to Stock Query and lists no key that switches a line's Dr/Cr side, so that keyboard binding is pending.
 - Why: spec 7 says the keys are fully rebindable.
 
 ## U4: shared helpers to adopt when C1, C2 and C3 merge
@@ -101,7 +101,7 @@ Filed from the r2/* fix branches. Each line names the card and the request; the 
 - **M2** (core-store): Crate ledgerly-model, seed_voucher_types.rs: accept or remove the public fn affects_books. It is outside the frozen interface and has no engine caller. Its doc was narrowed to spec wording.
 - **U11 (Wave 2 wiring)** (app-b): Build SuggestionView.check (new public field) from the engine for every bank match and mapping: Ok, Blocked, Unsupported or NotChecked. Any SuggestionView literal outside the tests must set it.
 - **U12 (Wave 2 wiring)** (app-b): Change AuditScreen::set_table to take the report kind (or have the host echo it) so that a late answer for an earlier report is refused rather than shown under the current heading.
-- **U2 / U11 (keymap)** (app-b): Owner to choose the Accept key for the assistant panel, since Ctrl+Enter is also the U2 alter-master key.
+- **U2 / U11 (keymap)** (app-b): Owner to choose the Accept key for the assistant panel, since Ctrl+Enter is also the U2 alter-master key. Resolved in round 3 (2026-11-21): the panel accepts on Ctrl+A, which Tally's shortcut page lists as accept or save a screen.
 - **U9 / U10 / U11 (wiring)** (app-b): New public error variants to handle where errors are mapped for the user: BankScreenError::NegativeLineAmount, NegativeVoucherAmount, UnknownSuggestionVoucher; ImportError::WrongPeriod. Any exhaustive match in wiring must cover them.
 - **U5** (app-a): File in docs/interface-requests.md (I could not edit it): an engine or api seam that returns the posted line amount (quantity x rate less discount, with the rounding rule named) together with the GST block, so the screen shows that figure and does not compute it (rule C4). Until then check_block refuses any mismatch.
 - **U4 (voucher_entry.rs, eval_amount) with U5** (app-a): File in docs/interface-requests.md: eval_amount should return an error or Unsupported when the exact result has more than two decimals, instead of HalfUpToPaise rounding, or the rounding needs provenance. Affects typed amounts in voucher_entry and item_invoice (draft.rs and nav.rs call it through typed_amount).
