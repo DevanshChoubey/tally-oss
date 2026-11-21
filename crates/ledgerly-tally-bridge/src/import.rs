@@ -19,9 +19,36 @@
 //!
 //! # Refusals
 //!
-//! Anything the mapping cannot represent faithfully (inventory lines, a non-zero opening balance,
-//! an unknown base voucher kind) makes the whole import [`Outcome::Unsupported`], naming the first
-//! object. Nothing is half imported. A Tally export that does not parse is an [`ImportError`].
+//! Anything the mapping cannot represent faithfully (inventory lines, an unknown base voucher
+//! kind, an opening balance that is not a plain amount of at most two decimals) makes the whole
+//! import [`Outcome::Unsupported`], naming the first object. Nothing is half imported. A Tally
+//! export that does not parse is an [`ImportError`].
+//!
+//! # Opening balances (card C7)
+//!
+//! A ledger's non-zero `OPENINGBALANCE` is imported as the ledger's opening balance. The sign
+//! follows Tally's own: a negative amount is a debit and a positive amount is a credit. Sources
+//! (read 2026-11-21): Tally's developer reference, Case Study I, imports the bank ledger `ICICI`
+//! with `<OPENINGBALANCE>-12500</OPENINGBALANCE>`, a debit balance on a bank account
+//! (<https://help.tallysolutions.com/article/DeveloperReference/integration-capabilities/case_study_1.htm>),
+//! and the same page's trial balance sample shows a debit as a negative number. Tally's import
+//! FAQ states the same for voucher amounts: "negative ... imported as debit" and "positive ...
+//! imported as credit" (<https://help.tallysolutions.com/import-data-faq/>). One other Tally
+//! sample shows a positive `13500` on a bank ledger without saying which side it is
+//! (<https://help.tallysolutions.com/understanding-tally-xml-tags/>); no Tally page states the
+//! rule for `OPENINGBALANCE` outright, so the convention is `derived` and an observed capture is
+//! pending. The mapping module still refuses a non-zero opening; this module reads the openings
+//! first, hands the mapping zero, and sets the opening on the created ledger afterwards.
+//!
+//! Openings need not balance. Tally shows any imbalance as "Difference in opening balances"
+//! in the Trial Balance (<https://help.tallysolutions.com/trial-balance-tally/>), and so does
+//! the import: it warns with the difference and does not invent a balancing ledger.
+//!
+//! # Vouchers outside the period (card C7)
+//!
+//! After the pull, the import asks Tally for vouchers dated before the books' beginning and after
+//! the end of the period (up to 31 December 2099) and warns with the count and dates of any it
+//! finds. They are not imported. A check Tally refuses is itself a warning, never silence.
 //!
 //! # Period
 //!
@@ -32,16 +59,28 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use ledgerly_core::{CancelToken, Date, Month, Outcome, Period, Unsupported, VoucherTypeId};
+use std::str::FromStr;
+
+use ledgerly_core::{
+    CancelToken, Date, Decimal, DrCr, Month, Outcome, Paise, Period, RoundingRule, SignedAmount,
+    Unsupported, VoucherTypeId, round_rupees_to_paise,
+};
 use ledgerly_model::seed_voucher_types::default_voucher_types;
 use ledgerly_model::{MasterSnapshot, VoucherType};
 use ledgerly_store::Event;
 use ledgerly_tally_xml::masters::TallyMaster;
+use ledgerly_tally_xml::request::try_vouchers_request;
+use ledgerly_tally_xml::vouchers::parse_vouchers_xml;
 use thiserror::Error;
 
 use crate::TallyTransport;
 use crate::mapping::{MapError, map_with_warnings};
 use crate::pull::{PullError, PullResult, pull};
+
+/// First day asked for when looking for vouchers before the books' beginning.
+const PROBE_EARLIEST: (i32, Month, u8) = (1900, Month::January, 1);
+/// Last day asked for when looking for vouchers after the end of the period.
+const PROBE_LATEST: (i32, Month, u8) = (2099, Month::December, 31);
 
 /// Something in Tally's export that was not imported, with where it was met.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -127,7 +166,11 @@ pub fn import_company(
 ) -> Result<Outcome<ImportedTally>, ImportError> {
     let _span = tracing::info_span!("tally_import").entered();
     let pulled = pull(t, company, range, capture_dir, cancel)?;
-    let mapped = match map_with_warnings(&pulled.masters, &pulled.vouchers) {
+    let (masters, openings) = match split_openings(&pulled.masters) {
+        Ok(split) => split,
+        Err(refusal) => return Ok(Outcome::Unsupported(refusal)),
+    };
+    let mut mapped = match map_with_warnings(&masters, &pulled.vouchers) {
         Ok(mapped) => mapped,
         Err(MapError::Unsupported { what, reason }) => {
             return Ok(Outcome::Unsupported(Unsupported {
@@ -136,6 +179,10 @@ pub fn import_company(
             }));
         }
         Err(other) => return Err(other.into()),
+    };
+    let opening_warnings = match apply_openings(&mut mapped.events, openings) {
+        Ok(found) => found,
+        Err(refusal) => return Ok(Outcome::Unsupported(refusal)),
     };
     let events = match align_voucher_types(mapped.events) {
         Ok(events) => events,
@@ -153,6 +200,8 @@ pub fn import_company(
         place: w.object,
         message: w.message,
     }));
+    warnings.extend(opening_warnings);
+    warnings.extend(probe_outside_period(t, company, range, capture_dir, cancel)?);
     Ok(Outcome::Value(ImportedTally {
         events,
         warnings,
@@ -276,4 +325,204 @@ fn master_kind(master: &TallyMaster) -> &'static str {
         TallyMaster::CostCategory(_) => "cost category",
         TallyMaster::StockGroup(_) => "stock group",
     }
+}
+
+/// Opening balances read from the ledgers, by ledger name, in document order.
+type Openings = Vec<(String, SignedAmount)>;
+
+/// Reads each ledger's non-zero `OPENINGBALANCE` and returns the masters with those openings
+/// replaced by `0`, so the mapping accepts them, together with the openings.
+///
+/// A ledger whose opening is absent, empty or not a plain decimal is passed on unchanged: the
+/// mapping refuses it with its own reason.
+///
+/// # Errors
+/// [`Unsupported`] for an opening with more than two decimal places or too large for paise.
+fn split_openings(masters: &[TallyMaster]) -> Result<(Vec<TallyMaster>, Openings), Unsupported> {
+    let mut out = masters.to_vec();
+    let mut openings = Openings::new();
+    for master in &mut out {
+        let TallyMaster::Ledger(rec) = master else {
+            continue;
+        };
+        let Some(element) = rec.extra.iter_mut().find(|e| e.name == "OPENINGBALANCE") else {
+            continue;
+        };
+        let text = element.text.trim();
+        let Ok(value) = Decimal::from_str(text) else {
+            continue;
+        };
+        if value.is_zero() {
+            continue;
+        }
+        let refuse = |reason: &str| Unsupported {
+            what: format!(
+                "Tally import: ledger '{}' has an opening balance of {text}",
+                rec.name
+            ),
+            reason: format!("{reason}. Nothing was imported."),
+        };
+        if value.normalize().scale() > 2 {
+            return Err(refuse("it has more than two decimal places"));
+        }
+        let amount = round_rupees_to_paise(value.abs(), RoundingRule::Truncate)
+            .map_err(|_| refuse("it is too large"))?;
+        // Tally: negative is a debit, positive is a credit (see the module documentation).
+        let side = if value.is_sign_negative() {
+            DrCr::Dr
+        } else {
+            DrCr::Cr
+        };
+        openings.push((rec.name.clone(), SignedAmount { amount, side }));
+        element.text = "0".to_owned();
+        element.children.clear();
+    }
+    Ok((out, openings))
+}
+
+/// Sets each opening on the ledger the mapping created for it, and returns the warnings: an
+/// opening whose ledger was not imported, and the "Difference in opening balances".
+///
+/// # Errors
+/// [`Unsupported`] when the openings add up to more than paise can hold.
+fn apply_openings(
+    events: &mut [Event],
+    openings: Openings,
+) -> Result<Vec<ImportWarning>, Unsupported> {
+    let mut warnings = Vec::new();
+    let mut net = Paise::ZERO;
+    for (name, opening) in openings {
+        let mut applied = false;
+        for event in events.iter_mut() {
+            if let Event::MasterCreated(MasterSnapshot::Ledger(ledger)) = event
+                && ledger.name == name
+            {
+                ledger.opening = opening;
+                applied = true;
+            }
+        }
+        if !applied {
+            warnings.push(ImportWarning {
+                place: format!("ledger '{name}'"),
+                message: "its opening balance was not imported because the ledger was not \
+                          imported"
+                    .to_owned(),
+            });
+            continue;
+        }
+        let overflow = || Unsupported {
+            what: "Tally import: the opening balances".to_owned(),
+            reason: "they add up to more than Ledgerly can hold. Nothing was imported.".to_owned(),
+        };
+        let signed = opening.to_signed().map_err(|_| overflow())?;
+        net = net.checked_add(signed).map_err(|_| overflow())?;
+    }
+    if !net.is_zero() {
+        let side = if net.is_negative() { "credit" } else { "debit" };
+        let shown = net.get().unsigned_abs();
+        warnings.push(ImportWarning {
+            place: "opening balances".to_owned(),
+            message: format!(
+                "the imported opening balances do not balance: the difference is {}.{:02} {side} \
+                 (Tally shows this as 'Difference in opening balances' in the Trial Balance)",
+                shown / 100,
+                shown % 100
+            ),
+        });
+    }
+    Ok(warnings)
+}
+
+/// Asks Tally for vouchers dated before the period and after it, and warns about any found.
+fn probe_outside_period(
+    t: &dyn TallyTransport,
+    company: &str,
+    range: Period,
+    capture_dir: &Path,
+    cancel: &CancelToken,
+) -> Result<Vec<ImportWarning>, ImportError> {
+    let (ey, em, ed) = PROBE_EARLIEST;
+    let (ly, lm, ld) = PROBE_LATEST;
+    let earliest = Date::from_calendar_date(ey, em, ed).map_err(|_| ImportError::DateRange)?;
+    let latest = Date::from_calendar_date(ly, lm, ld).map_err(|_| ImportError::DateRange)?;
+    let mut windows: Vec<(&'static str, Date, Date)> = Vec::new();
+    if let Some(day_before) = range.from().previous_day()
+        && earliest <= day_before
+    {
+        windows.push(("before", earliest, day_before));
+    }
+    if let Some(day_after) = range.to().next_day()
+        && day_after <= latest
+    {
+        windows.push(("after", day_after, latest));
+    }
+    let mut warnings = Vec::new();
+    for (which, from, to) in windows {
+        if cancel.is_cancelled() {
+            return Err(PullError::Cancelled {
+                master_files_done: 0,
+                batches_done: 0,
+            }
+            .into());
+        }
+        let file = format!("vouchers-outside-{which}.xml");
+        let request = try_vouchers_request(company, from, to).map_err(|error| {
+            PullError::Vouchers {
+                file: file.clone(),
+                error,
+            }
+        })?;
+        let raw = t.post(&request).map_err(PullError::from)?;
+        let path = capture_dir.join(&file);
+        std::fs::write(&path, &raw).map_err(|e| PullError::Io {
+            path: path.display().to_string(),
+            message: e.to_string(),
+        })?;
+        warnings.push(outside_warning(which, from, to, range, &file, &raw)?);
+    }
+    Ok(warnings.into_iter().flatten().collect())
+}
+
+/// The warning for one probe response, or `None` when Tally holds nothing there.
+fn outside_warning(
+    which: &str,
+    from: Date,
+    to: Date,
+    range: Period,
+    file: &str,
+    raw: &str,
+) -> Result<Option<ImportWarning>, ImportError> {
+    let place = format!("vouchers dated {which} the import period");
+    let header = raw.split_once("<BODY").map_or(raw, |(head, _)| head);
+    if !raw.contains("<ENVELOPE") || header.contains("<STATUS>0</STATUS>") {
+        return Ok(Some(ImportWarning {
+            place,
+            message: format!(
+                "Ledgerly could not check whether Tally holds vouchers from {from} to {to}: Tally \
+                 did not answer with data (see {file}). Vouchers outside {} to {} are not imported",
+                range.from(),
+                range.to()
+            ),
+        }));
+    }
+    let (vouchers, _) = parse_vouchers_xml(raw).map_err(|error| PullError::Vouchers {
+        file: file.to_owned(),
+        error,
+    })?;
+    let (Some(first), Some(last)) = (
+        vouchers.iter().map(|v| v.date).min(),
+        vouchers.iter().map(|v| v.date).max(),
+    ) else {
+        return Ok(None);
+    };
+    Ok(Some(ImportWarning {
+        place,
+        message: format!(
+            "{} voucher(s) dated {first} to {last} are outside the import period {} to {} and \
+             were not imported",
+            vouchers.len(),
+            range.from(),
+            range.to()
+        ),
+    }))
 }
