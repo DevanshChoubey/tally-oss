@@ -464,10 +464,10 @@ fn totals_that_disagree_with_the_party_posting_are_an_error() {
     let (mut v, gst) = igst_sale();
     // derived: the invoice is 11,800.00 but only 11,000.00 is posted to the party.
     v.ledger_lines[0].amount = SignedAmount::dr(rs(11_000));
-    match err(render_invoice(&template(FULL), &v, &b, &gst)) {
-        PrintError::Render { reason } => assert!(reason.contains("posted to the party ledger")),
-        other => panic!("expected a render error, got {other:?}"),
-    }
+    let PrintError::Render { reason } = err(render_invoice(&template(FULL), &v, &b, &gst)) else {
+        panic!("expected a render error");
+    };
+    assert!(reason.contains("posted to the party ledger"));
 }
 
 #[test]
@@ -634,7 +634,7 @@ fn a_long_invoice_continues_on_new_pages_with_the_heading_repeated() {
     }
     // derived: the item table heading is printed once per page that holds table rows.
     let headings = t.iter().filter(|s| *s == "Description").count();
-    assert!(headings >= 2 && headings <= pages);
+    assert!((2..=pages).contains(&headings));
     assert_eq!(t.iter().filter(|s| *s == "Widget").count(), 120);
     assert!(has(&t, "1,41,600.00"));
 }
