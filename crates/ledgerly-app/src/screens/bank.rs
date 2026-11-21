@@ -46,15 +46,20 @@
 
 use std::collections::BTreeSet;
 
-use egui::{Key, Modifiers, RichText, Ui};
-use ledgerly_core::format::format_inr;
+use egui::Ui;
 use ledgerly_core::{BankStatementId, Date, Outcome, Paise, VoucherId};
 use ledgerly_model::{BankMatch, MatchKind};
 use thiserror::Error;
 
+use crate::screen::KeyHint;
 use crate::{AppCtx, Screen, ScreenAction};
 
+mod import;
+mod view;
 mod worker;
+
+/// The page title of the screen, shown in the page head.
+pub const PAGE_TITLE: &str = "Bank reconciliation";
 
 // ---------------------------------------------------------------------------------------------
 // View types handed in by the host
@@ -289,6 +294,10 @@ pub struct BankScreen {
     notice: Option<String>,
     /// Present only in worker mode.
     run: Option<worker::Run>,
+    /// The registry id of the file layout the import reads, as the user last chose it.
+    import_layout: &'static str,
+    /// Why the last import was refused or the file could not be read. Cleared by the next import.
+    import_notice: Option<String>,
 }
 
 impl BankScreen {
@@ -362,6 +371,8 @@ impl BankScreen {
             brs_note: None,
             notice: None,
             run: None,
+            import_layout: import::DEFAULT_LAYOUT,
+            import_notice: None,
         })
     }
 
@@ -652,27 +663,109 @@ fn check_suggestion(
     Ok(())
 }
 
+impl BankScreen {
+    /// The ledger the statement belongs to, by name.
+    pub(super) fn ledger_name(&self) -> &str {
+        &self.ledger_name
+    }
+
+    /// Whether the screen is in worker mode, where the import and the reconciliation statement
+    /// come from the API.
+    pub(super) fn is_worker(&self) -> bool {
+        self.run.is_some()
+    }
+
+    /// The number of statement lines, zero when no statement is loaded.
+    pub(super) fn line_count(&self) -> usize {
+        self.lines.len()
+    }
+
+    /// The statement line at `index`, `None` past the end.
+    pub(super) fn line_at(&self, index: usize) -> Option<&LineState> {
+        self.lines.get(index)
+    }
+
+    /// The index of the focused statement line.
+    pub(super) fn focus_index(&self) -> usize {
+        self.focus
+    }
+
+    /// Moves the focus to the line at `index`.
+    pub(super) fn set_focus(&mut self, index: usize) {
+        self.focus = index;
+    }
+
+    /// Closes the manual match panel. Choices are kept until the match is confirmed.
+    pub(super) fn close_manual(&mut self) {
+        self.manual_open = false;
+    }
+
+    /// Moves the cursor of the manual panel down (`delta > 0`) or up (`delta < 0`), within the
+    /// vouchers it offers.
+    pub(super) fn move_manual_cursor(&mut self, delta: isize) {
+        let last = self.manual_candidates().len().saturating_sub(1);
+        self.manual_cursor = if delta < 0 {
+            self.manual_cursor.saturating_sub(1)
+        } else {
+            self.manual_cursor.saturating_add(1).min(last)
+        };
+    }
+
+    /// The position of the manual panel's cursor among the vouchers it offers.
+    pub(super) fn manual_cursor_index(&self) -> usize {
+        self.manual_cursor
+    }
+
+    /// The voucher under the manual panel's cursor, `None` when it offers none.
+    pub(super) fn manual_cursor_voucher(&self) -> Option<VoucherId> {
+        self.manual_candidates()
+            .get(self.manual_cursor)
+            .map(|v| v.voucher)
+    }
+
+    /// Whether the manual panel has `voucher` chosen.
+    pub(super) fn is_voucher_chosen(&self, voucher: VoucherId) -> bool {
+        self.manual_selected.contains(&voucher)
+    }
+
+    /// The reconciliation statement's note, when the statement side is missing.
+    pub(super) fn brs_note(&self) -> Option<&str> {
+        self.brs_note.as_deref()
+    }
+
+    /// The file layout the import reads.
+    pub(super) fn import_layout(&self) -> &'static str {
+        self.import_layout
+    }
+
+    /// Chooses the file layout the import reads.
+    pub(super) fn set_import_layout(&mut self, layout: &'static str) {
+        self.import_layout = layout;
+    }
+
+    /// Why the last import was refused, until the next import attempt.
+    pub(super) fn import_notice(&self) -> Option<&str> {
+        self.import_notice.as_deref()
+    }
+}
+
 // ---------------------------------------------------------------------------------------------
 // Text
 // ---------------------------------------------------------------------------------------------
 
-/// `20-11-2026`.
+/// The date as the app writes every date (B8): `5 Nov 2026`, from `ui::format::date`.
 pub fn format_line_date(date: Date) -> String {
-    format!(
-        "{:02}-{:02}-{}",
-        date.day(),
-        u8::from(date.month()),
-        date.year()
-    )
+    crate::ui::format::date(date)
 }
 
 /// The amount of a statement line with its direction: `+ 1,47,384.50` in, `- 50,000.00` out.
+/// The amount is `ui::format::amount`, the app's one amount format.
 pub fn format_flow(amount: Paise, flow: Flow) -> String {
     let sign = match flow {
         Flow::In => '+',
         Flow::Out => '-',
     };
-    format!("{sign} {}", format_inr(amount))
+    format!("{sign} {}", crate::ui::format::amount(amount))
 }
 
 /// The label of a match kind. An assistant suggestion is marked as the assistant's (spec 6.8).
@@ -701,312 +794,34 @@ fn status_label(s: LineStatus) -> &'static str {
     }
 }
 
-// ---------------------------------------------------------------------------------------------
-// Keys and drawing
-// ---------------------------------------------------------------------------------------------
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum KeyCmd {
-    Accept,
-    Skip,
-    Down,
-    Up,
-    Manual,
-    Statement,
-    Toggle,
-    CloseManual,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum UiEvent {
-    Focus(usize),
-    Accept(usize),
-    Skip(usize),
-    Tab(Tab),
-    Choose(VoucherId),
-    ConfirmManual,
-}
-
-fn read_keys(ui: &Ui, manual_open: bool) -> Vec<KeyCmd> {
-    let mut out = Vec::new();
-    ui.input_mut(|i| {
-        let none = Modifiers::NONE;
-        if i.consume_key(none, Key::Enter) {
-            out.push(KeyCmd::Accept);
-        }
-        if i.consume_key(none, Key::S) {
-            out.push(KeyCmd::Skip);
-        }
-        if i.consume_key(none, Key::J) || i.consume_key(none, Key::ArrowDown) {
-            out.push(KeyCmd::Down);
-        }
-        if i.consume_key(none, Key::K) || i.consume_key(none, Key::ArrowUp) {
-            out.push(KeyCmd::Up);
-        }
-        if i.consume_key(none, Key::M) {
-            out.push(KeyCmd::Manual);
-        }
-        if i.consume_key(none, Key::B) {
-            out.push(KeyCmd::Statement);
-        }
-        if manual_open && i.consume_key(none, Key::Space) {
-            out.push(KeyCmd::Toggle);
-        }
-        // Esc is the shell's "back" unless the manual panel is open.
-        if manual_open && i.consume_key(none, Key::Escape) {
-            out.push(KeyCmd::CloseManual);
-        }
-    });
-    out
-}
-
-impl BankScreen {
-    /// Applies a key. A refused action leaves its error in [`BankScreen::last_error`], which the
-    /// screen shows, so the `Result` is not needed here.
-    fn run_key(&mut self, cmd: KeyCmd) {
-        match cmd {
-            KeyCmd::Accept => {
-                if self.tab == Tab::Matching {
-                    let _ = if self.manual_open {
-                        self.confirm_manual()
-                    } else {
-                        self.accept_focused()
-                    };
-                }
-            }
-            KeyCmd::Skip => {
-                if self.tab == Tab::Matching && !self.manual_open {
-                    let _ = self.skip_focused();
-                }
-            }
-            // Moving the focus is for the Matching tab only: the Statement tab shows no focus, so
-            // a move there would change which line Enter accepts without the user seeing it.
-            KeyCmd::Down => {
-                if self.tab == Tab::Matching {
-                    if self.manual_open {
-                        let last = self.manual_candidates().len().saturating_sub(1);
-                        self.manual_cursor = self.manual_cursor.saturating_add(1).min(last);
-                    } else {
-                        self.focus_next();
-                    }
-                }
-            }
-            KeyCmd::Up => {
-                if self.tab == Tab::Matching {
-                    if self.manual_open {
-                        self.manual_cursor = self.manual_cursor.saturating_sub(1);
-                    } else {
-                        self.focus_prev();
-                    }
-                }
-            }
-            KeyCmd::Manual => {
-                if self.tab == Tab::Matching {
-                    self.toggle_manual();
-                }
-            }
-            KeyCmd::Statement => {
-                self.tab = match self.tab {
-                    Tab::Matching => Tab::Statement,
-                    Tab::Statement => Tab::Matching,
-                };
-            }
-            KeyCmd::Toggle => {
-                let id = self
-                    .manual_candidates()
-                    .get(self.manual_cursor)
-                    .map(|v| v.voucher);
-                if let Some(id) = id {
-                    let _ = self.toggle_voucher(id);
-                }
-            }
-            KeyCmd::CloseManual => self.manual_open = false,
-        }
-    }
-
-    fn run_event(&mut self, event: UiEvent) {
-        let last = self.lines.len().saturating_sub(1);
-        match event {
-            UiEvent::Focus(i) => self.focus = i.min(last),
-            UiEvent::Accept(i) => {
-                self.focus = i.min(last);
-                let _ = self.accept_focused();
-            }
-            UiEvent::Skip(i) => {
-                self.focus = i.min(last);
-                let _ = self.skip_focused();
-            }
-            UiEvent::Tab(tab) => self.tab = tab,
-            UiEvent::Choose(id) => {
-                let _ = self.toggle_voucher(id);
-            }
-            UiEvent::ConfirmManual => {
-                let _ = self.confirm_manual();
-            }
-        }
-    }
-
-    fn draw(&mut self, ui: &mut Ui) {
-        for cmd in read_keys(ui, self.manual_open) {
-            self.run_key(cmd);
-        }
-        let mut events = Vec::new();
-        ui.heading(self.title());
-        ui.horizontal(|ui| {
-            if ui
-                .selectable_label(self.tab == Tab::Matching, "Matching")
-                .clicked()
-            {
-                events.push(UiEvent::Tab(Tab::Matching));
-            }
-            if ui
-                .selectable_label(self.tab == Tab::Statement, "Statement (B)")
-                .clicked()
-            {
-                events.push(UiEvent::Tab(Tab::Statement));
-            }
-        });
-        ui.separator();
-        match self.tab {
-            Tab::Matching => self.draw_matching(ui, &mut events),
-            Tab::Statement => self.draw_statement(ui),
-        }
-        if let Some(err) = &self.error {
-            ui.colored_label(ui.visuals().error_fg_color, format!("Error: {err}"));
-        }
-        if let Some(text) = &self.notice {
-            ui.colored_label(ui.visuals().error_fg_color, format!("Error: {text}"));
-        }
-        for event in events {
-            self.run_event(event);
-        }
-    }
-
-    fn draw_matching(&self, ui: &mut Ui, events: &mut Vec<UiEvent>) {
-        if self.is_loading() {
-            ui.weak("Loading the statement and its suggestions.");
-        } else if self.lines.is_empty() {
-            ui.weak("No bank statement has been imported for this ledger.");
-        }
-        ui.weak(format!(
-            "{} of {} statement lines are not matched. Enter accepts the suggestion, S skips, \
-             M matches by hand, J and K move.",
-            self.pending_count(),
-            self.lines.len()
-        ));
-        if self.manual_open {
-            self.draw_manual(ui, events);
-        }
-        egui::ScrollArea::vertical().show(ui, |ui| {
-            for (i, line) in self.lines.iter().enumerate() {
-                self.draw_line(ui, i, line, events);
-            }
-        });
-    }
-
-    fn draw_line(&self, ui: &mut Ui, i: usize, line: &LineState, events: &mut Vec<UiEvent>) {
-        ui.group(|ui| {
-            ui.horizontal(|ui| {
-                let date = format_line_date(line.view.date);
-                if ui.selectable_label(i == self.focus, date).clicked() {
-                    events.push(UiEvent::Focus(i));
-                }
-                ui.label(RichText::new(format_flow(line.view.amount, line.view.flow)).strong());
-                ui.weak(status_label(line.status));
-            });
-            ui.weak(line.view.description.as_str());
-            if line.status != LineStatus::Pending {
-                return;
-            }
-            let Some(s) = self.suggestion_for(line.view.line_no) else {
-                ui.weak("No suggestion. Press M to match it by hand.");
-                if ui.button("Skip").clicked() {
-                    events.push(UiEvent::Skip(i));
-                }
-                return;
-            };
-            let together = s.lines.len() > 1 || s.vouchers.len() > 1;
-            ui.label(format!(
-                "{}: {} ({})",
-                if together { "Match together" } else { "Match" },
-                s.voucher_label,
-                kind_label(s.kind)
-            ));
-            ui.weak(format!(
-                "{}. Confidence {}.",
-                s.reason,
-                confidence_label(s.confidence)
-            ));
-            ui.horizontal(|ui| {
-                if ui.button("Match").clicked() {
-                    events.push(UiEvent::Accept(i));
-                }
-                if ui.button("Skip").clicked() {
-                    events.push(UiEvent::Skip(i));
-                }
-            });
-        });
-    }
-
-    fn draw_manual(&self, ui: &mut Ui, events: &mut Vec<UiEvent>) {
-        ui.group(|ui| {
-            ui.strong("Match by hand");
-            ui.weak(
-                "Choose the vouchers for the focused statement line (Space), then Enter. The \
-                 engine checks the amounts before the bank date is set. Esc closes.",
-            );
-            let candidates = self.manual_candidates();
-            if candidates.is_empty() {
-                ui.label("Every open voucher is matched.");
-            }
-            for (j, v) in candidates.iter().enumerate() {
-                let mut chosen = self.manual_selected.contains(&v.voucher);
-                let text = format!(
-                    "{}{}  {}  {}",
-                    if j == self.manual_cursor { "> " } else { "  " },
-                    format_line_date(v.date),
-                    v.label,
-                    format_flow(v.amount, v.flow),
-                );
-                if ui.checkbox(&mut chosen, text).changed() {
-                    events.push(UiEvent::Choose(v.voucher));
-                }
-            }
-            if ui.button("Match by hand").clicked() {
-                events.push(UiEvent::ConfirmManual);
-            }
-        });
-    }
-
-    fn draw_statement(&self, ui: &mut Ui) {
-        match &self.brs {
-            Outcome::Value(view) => {
-                ui.strong(format!(
-                    "Reconciliation statement as of {}",
-                    format_line_date(view.as_of)
-                ));
-                egui::Grid::new("bank-brs").show(ui, |ui| {
-                    for row in &view.rows {
-                        ui.label(row.label.as_str());
-                        ui.label(format_inr(row.amount));
-                        ui.end_row();
-                    }
-                });
-                if let Some(note) = &self.brs_note {
-                    ui.weak(note.as_str());
-                }
-            }
-            Outcome::Unsupported(u) => {
-                ui.strong("Reconciliation statement");
-                ui.label(format!("Unsupported: {}. {}", u.what, u.reason));
-            }
-        }
-    }
-}
-
 impl Screen for BankScreen {
     fn title(&self) -> String {
         format!("Bank reconciliation: {}", self.ledger_name)
+    }
+
+    fn page_title(&self) -> String {
+        PAGE_TITLE.to_owned()
+    }
+
+    fn subtitle(&self) -> Option<String> {
+        Some(self.ledger_name.clone())
+    }
+
+    fn keys(&self) -> Vec<KeyHint> {
+        match self.tab {
+            Tab::Matching => vec![
+                KeyHint::new("Enter", "Match"),
+                KeyHint::new("S", "Skip"),
+                KeyHint::new("J / K", "Move"),
+                KeyHint::new("M", "Match by hand"),
+                KeyHint::new("B", "Reconciliation statement"),
+                KeyHint::new("Ctrl+O", "Import statement"),
+            ],
+            Tab::Statement => vec![
+                KeyHint::new("B", "All lines"),
+                KeyHint::new("Ctrl+O", "Import statement"),
+            ],
+        }
     }
 
     fn ui(&mut self, ui: &mut Ui, ctx: &mut AppCtx) -> ScreenAction {
