@@ -87,6 +87,10 @@ fn sheet_err(context: &str, e: impl std::fmt::Display) -> FormatError {
     FormatError::Spreadsheet(format!("{context}: {e}"))
 }
 
+// Rule A3 (no floats for money): the only float here is the value handed to `rust_xlsxwriter`,
+// whose `write_number` takes an `f64`; an xlsx numeric cell is an IEEE double. The amount is
+// built from integer paise as decimal text (never by float arithmetic), and anything beyond
+// `MAX_EXACT_PAISE` (15 digits, exactly representable) is refused rather than rounded.
 fn money_number(p: Paise) -> Result<f64, FormatError> {
     let abs = p.get().unsigned_abs();
     if abs > MAX_EXACT_PAISE {

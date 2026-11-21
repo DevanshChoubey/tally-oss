@@ -200,7 +200,7 @@ fn template_check_accepts_matching_and_names_the_first_difference() {
 fn a_missing_template_is_an_error_never_a_pass() {
     // derived: the official template is not supplied yet, so the official-layout test is pending;
     // a missing template file must fail the check rather than skip it.
-    let written = out("roundtrip");
+    let written = out("missing_template_written");
     write_sheets(&sample(), &written).unwrap();
     let missing = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("templates/gstr1_offline.xlsx");
     assert!(matches!(
