@@ -259,7 +259,10 @@ fn worker_trial_balance_shows_a_group_with_both_sides_and_gross_totals() {
         vec![dr_cell(10_500_000), cr_cell(500_000)]
     );
     assert_eq!(row_cells(report, "Cash")[0], dr_cell(10_500_000));
-    assert_eq!(report.totals, vec![dr_cell(10_500_000), cr_cell(10_500_000)]);
+    assert_eq!(
+        report.totals,
+        vec![dr_cell(10_500_000), cr_cell(10_500_000)]
+    );
     assert_eq!(report.params.period, april());
 }
 
@@ -276,7 +279,8 @@ fn a_report_answer_for_an_older_request_is_dropped() {
     let _holding = worker.run(move |_api| {
         let _released = first_gate.recv();
     });
-    let mut screen = ReportViewScreen::worker(ReportSource::worker(trial_balance(april()))).unwrap();
+    let mut screen =
+        ReportViewScreen::worker(ReportSource::worker(trial_balance(april()))).unwrap();
 
     // Request A (period 1 to 15 April) is queued behind the first gate.
     screen.set_period(first_half_of_april());
@@ -314,9 +318,10 @@ fn a_report_answer_for_an_older_request_is_dropped() {
 fn a_report_request_without_a_company_says_so_and_runs_nothing() {
     // A worker-mode screen with no worker (no company open) shows an error and keeps the
     // placeholder; it never shows a figure.
-    let mut screen = ReportViewScreen::worker(ReportSource::worker(trial_balance(april()))).unwrap();
+    let mut screen =
+        ReportViewScreen::worker(ReportSource::worker(trial_balance(april()))).unwrap();
     screen.tick(None);
     assert!(!screen.is_loading());
-    assert!(screen.report().rows.is_empty());
+    assert_eq!(screen.report().rows.len(), 0);
     assert!(screen.notice().is_some());
 }

@@ -1,8 +1,6 @@
 //! Text for figures, dates and periods, and parsing of a typed period.
 
-use ledgerly_core::{
-    Date, DrCr, Month, Period, PeriodError, SignedAmount, Unsupported, format::format_inr,
-};
+use ledgerly_core::{Date, DrCr, Month, Period, PeriodError, SignedAmount, format::format_inr};
 use thiserror::Error;
 
 use super::ViewCell;
@@ -77,10 +75,6 @@ pub fn cell_text(cell: &ViewCell) -> String {
         }
         ViewCell::Unsupported(u) => format!("Unsupported: {} ({})", u.what, u.reason),
     }
-}
-
-pub(super) fn unsupported_text(u: &Unsupported) -> String {
-    format!("Not supported yet: {} ({})", u.what, u.reason)
 }
 
 // ---- period entry ----------------------------------------------------------------------------

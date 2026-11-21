@@ -11,14 +11,14 @@ use ledgerly_api::{
 use ledgerly_core::{Date, Outcome};
 
 use super::{
-    Notice, ReportToken, ViewCell, ViewDetail, ViewError, ViewKey, ViewParams, ViewReport,
-    ViewRow, ViewRowKind,
+    Notice, ReportToken, ViewCell, ViewDetail, ViewError, ViewKey, ViewParams, ViewReport, ViewRow,
+    ViewRowKind,
 };
 use crate::screens::wire::unsupported_message;
 
 /// The engine's detail level, as the screen names it.
 #[must_use]
-pub fn view_detail(detail: Detail) -> ViewDetail {
+pub(super) fn view_detail(detail: Detail) -> ViewDetail {
     match detail {
         Detail::Condensed => ViewDetail::Condensed,
         Detail::Detailed => ViewDetail::Detailed,
@@ -27,7 +27,7 @@ pub fn view_detail(detail: Detail) -> ViewDetail {
 
 /// The engine's detail level for a screen level.
 #[must_use]
-pub fn engine_detail(detail: ViewDetail) -> Detail {
+pub(super) fn engine_detail(detail: ViewDetail) -> Detail {
     match detail {
         ViewDetail::Condensed => Detail::Condensed,
         ViewDetail::Detailed => Detail::Detailed,
@@ -37,7 +37,7 @@ pub fn engine_detail(detail: ViewDetail) -> Detail {
 /// `base` with the period and detail the screen shows. `as_of` is the balance date the request
 /// uses; the caller decides it (the period end when the period changed, otherwise the old date).
 #[must_use]
-pub fn with_view(base: &ReportParams, p: ViewParams, as_of: Date) -> ReportParams {
+pub(super) fn with_view(base: &ReportParams, p: ViewParams, as_of: Date) -> ReportParams {
     ReportParams {
         period: p.period,
         as_of,
@@ -51,7 +51,7 @@ pub fn with_view(base: &ReportParams, p: ViewParams, as_of: Date) -> ReportParam
 /// # Errors
 /// The notice to show instead when `key` does not open a report: a voucher is a screen (not
 /// wired in worker mode yet), and a stock item or a bill has no report yet.
-pub fn drill_params(base: &ReportParams, key: &ViewKey) -> Result<ReportParams, Notice> {
+pub(super) fn drill_params(base: &ReportParams, key: &ViewKey) -> Result<ReportParams, Notice> {
     let kind = match key {
         ViewKey::Group(group) => ReportKind::GroupSummary(*group),
         ViewKey::Ledger(ledger) => ReportKind::LedgerVouchers(*ledger),
@@ -78,7 +78,10 @@ pub fn drill_params(base: &ReportParams, key: &ViewKey) -> Result<ReportParams, 
 ///
 /// # Errors
 /// [`ViewError::Source`] with the API's message when the engine refuses the report.
-pub fn run_report(api: &Api, params: &ReportParams) -> Result<Outcome<ViewReport>, ViewError> {
+pub(super) fn run_report(
+    api: &Api,
+    params: &ReportParams,
+) -> Result<Outcome<ViewReport>, ViewError> {
     match api.report(params) {
         Err(e) => Err(ViewError::Source {
             message: e.to_string(),
@@ -91,7 +94,7 @@ pub fn run_report(api: &Api, params: &ReportParams) -> Result<Outcome<ViewReport
 /// A report in the screen's model. The token is the title; the screen never reads it, it only
 /// keys the table's id.
 #[must_use]
-pub fn view_report(report: &Report) -> ViewReport {
+pub(super) fn view_report(report: &Report) -> ViewReport {
     ViewReport {
         token: ReportToken(report.title.clone()),
         title: report.title.clone(),
@@ -144,7 +147,7 @@ fn view_row_kind(kind: RowKind) -> ViewRowKind {
 
 /// A cell, copied as the engine gave it.
 #[must_use]
-pub fn view_cell(cell: &Cell) -> ViewCell {
+pub(super) fn view_cell(cell: &Cell) -> ViewCell {
     match cell {
         Cell::Amount(a) => ViewCell::Amount(*a),
         Cell::Signed(p) => ViewCell::Signed(*p),

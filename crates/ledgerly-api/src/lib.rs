@@ -18,14 +18,14 @@ mod tally_import;
 pub use command::{Command, CommandResult};
 // Report types the app names when it builds and reads reports (card W7). The app depends on this
 // crate only, so the report model is re-exported here instead of adding a manifest dependency.
-pub use ledgerly_reports::{
-    AuditReportKind, Cell, ColumnHeader, ColumnSpec, Detail, DrillKey, Report, ReportFilter,
-    ReportKind, ReportParams, ReportRow, RowKind,
-};
 pub use error::ApiError;
 pub use facade::Api;
 pub use gst::{Bucket, BucketedVoucher, Gstr1, Gstr1Return, Gstr3bWorking, RulePack};
 pub use ledgerly_model::{Address, Company, EntityKind, Features, NegativeStockPolicy, Voucher};
+pub use ledgerly_reports::{
+    AuditReportKind, Cell, ColumnHeader, ColumnSpec, Detail, DrillKey, Report, ReportFilter,
+    ReportKind, ReportParams, ReportRow, RowKind,
+};
 pub use ledgerly_store::backup::{RebuildOutcome, RebuildReport};
 pub use ledgerly_store::verify::{ChainProblem, VerifyReport};
 pub use maintenance::{VoucherCheck, verify_file};

@@ -52,12 +52,12 @@ pub use model::{
     DrillTarget, ReportSource, ReportToken, ViewCell, ViewDetail, ViewError, ViewKey, ViewParams,
     ViewReport, ViewRow, ViewRowKind,
 };
+use remote::{drill_params, run_report, view_detail, with_view};
+use text::numeric_date_text;
 pub use text::{
     PeriodTextError, amount_text, cell_text, date_text, parse_period_date, parse_period_text,
     period_text,
 };
-use remote::{drill_params, run_report, view_detail, with_view};
-use text::numeric_date_text;
 
 /// Height of one table row, in points.
 const ROW_HEIGHT: f32 = 22.0;
@@ -359,13 +359,14 @@ impl ReportViewScreen {
                 self.notice = Some(notice);
                 ScreenAction::Stay
             }
-            Ok(params) => match ReportViewScreen::worker(ReportSource::worker(params)) {
-                Some(screen) => ScreenAction::Push(Box::new(screen)),
-                None => {
+            Ok(params) => {
+                if let Some(screen) = ReportViewScreen::worker(ReportSource::worker(params)) {
+                    ScreenAction::Push(Box::new(screen))
+                } else {
                     self.fail("The drilled report could not be set up.");
                     ScreenAction::Stay
                 }
-            },
+            }
         }
     }
 
