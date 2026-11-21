@@ -1,38 +1,66 @@
-//! Command palette. **Card U2** implements this module.
+//! Command palette: one box for screens, reports, ledgers, vouchers, commands and settings
+//! (`design/mock-v2/DESIGN.md`, "Command palette"; `design/mock-v2/index.html:1108-1162`).
 //!
-//! Frozen interface (plan card U2):
+//! Frozen interface (plan card U2), kept as it was:
 //!
 //! ```text
 //! pub struct Palette { .. }   // results come from ledgerly-api search after W7
 //! ```
 //!
 //! The palette searches commands, reports, masters (name, alias, GSTIN), vouchers (number, party,
-//! amount, date), settings and AI intents (spec section 7). Until the API's search lands (W7) the
-//! host feeds it a list of [`PaletteEntry`] values with [`Palette::set_entries`]; the palette only
-//! ranks and shows them. It never computes a figure: an entry's `detail` is text the host got from
-//! the API.
+//! amount, date), settings and AI intents (spec section 7). The host feeds it a list of
+//! [`PaletteEntry`] values with [`Palette::set_entries`]; the API's hits come in through
+//! [`PaletteSearch`]. The palette only ranks and shows them. It never computes a figure: an entry's
+//! `detail` is text the host got from the API.
+//!
+//! The query may start with a prefix that narrows the rows (see [`PaletteScope`]): `#` vouchers,
+//! `@` ledgers and parties, `>` commands, `?` ask your books and `+` a plain-words entry. `?` and
+//! `+` are not answered in this version: their one row says so, and choosing it does nothing.
 //!
 //! Two ways to open it, as in the spec's screen-stack rule: [`PaletteMode::OnTop`] (the screen
 //! you came from is kept and Esc returns to it) and [`PaletteMode::Replace`] (the choice replaces
-//! the current screen). The palette reports which the user used; the host acts on it.
+//! the current screen). Enter chooses in the mode the palette was opened with, and Shift+Enter in
+//! the other one. The palette reports which the user used; the host acts on it.
 //!
 //! Ranking uses integer scores only. Every word the user typed must match the title, an alias or
 //! the detail: an exact match scores highest, then a prefix, a word prefix, a substring, and last
 //! a subsequence ("trbl" finds "Trial Balance"). Ties go to recently chosen entries, then to the
-//! host's order.
+//! host's order. The rows are then grouped under headings (see [`Section`] in the `scope` module),
+//! keeping their ranked order inside each heading.
+//!
+//! Recent choices are kept for this session only: they are held in memory and not saved, so a
+//! restart forgets them. The palette keeps the last eight.
 
 use std::cmp::Reverse;
 
-use ledgerly_api::SearchHit;
-
 use crate::keymap::{Action, Keymap};
-use crate::screens::report_view::date_text;
-use crate::screens::wire::{Done, Latest};
-use crate::shell::navigate::{ledger_key, report_key, voucher_key};
-use crate::worker::ApiWorker;
+use crate::screen::KeyHint;
 
-/// How many recent choices are remembered.
+mod draw;
+mod scope;
+mod search;
+
+pub use scope::PaletteScope;
+pub use search::{PaletteSearch, entries_from_hits, unavailable_reason};
+
+use scope::{Section, assistant_row};
+
+/// How many recent choices are remembered, for this session only (see the module docs).
 const MAX_RECENTS: usize = 8;
+
+/// The placeholder of the query box (`design/mock-v2/index.html:1136`).
+pub const PLACEHOLDER: &str =
+    "Search reports, ledgers, vouchers, or type ? to ask, + to enter";
+
+/// The prefix legend under the query box: each prefix and the word it finds, in the mock's order
+/// (`design/mock-v2/index.html:1138`).
+pub const LEGEND: [(&str, &str); 5] = [
+    ("#", "voucher"),
+    ("@", "party"),
+    (">", "command"),
+    ("?", "ask"),
+    ("+", "entry"),
+];
 
 /// What choosing an entry should do. The string is an opaque key the host understands (a report
 /// id, a ledger id, a voucher id, a setting name, an AI intent name).
@@ -61,7 +89,8 @@ pub struct PaletteEntry {
     pub title: String,
     /// Other words that find this row (an alias, a GSTIN, a voucher number).
     pub aliases: Vec<String>,
-    /// Secondary text shown beside the title, searched at lower weight (a key hint, a party).
+    /// Secondary text shown beside the title, searched at lower weight (a key hint, a party). For
+    /// a command it is the key, which is drawn as a keycap.
     pub detail: String,
 }
 
@@ -221,7 +250,33 @@ fn subsequence_gaps(term: &str, text: &str) -> Option<u32> {
     Some(u32::try_from(gaps).unwrap_or(u32::MAX))
 }
 
+/// A row as drawn: its heading, the entry, and whether it is inert (an `?` or `+` row, which
+/// chooses nothing).
+#[derive(Debug, Clone)]
+struct Row {
+    /// The heading the row sits under.
+    section: Section,
+    /// The entry the row shows and chooses.
+    entry: PaletteEntry,
+    /// Whether choosing the row does nothing (the assistant is not available yet).
+    inert: bool,
+}
+
+impl Row {
+    /// A row under `section` for `entry`.
+    fn new(section: Section, entry: PaletteEntry, inert: bool) -> Row {
+        Row {
+            section,
+            entry,
+            inert,
+        }
+    }
+}
+
 /// The palette's state: closed, or open with a query, a list and a selected row.
+///
+/// The rows shown are recomputed whenever the query, the entries or the recents change, so
+/// [`Palette::results`] is always the list the user sees, in the order it is drawn.
 #[derive(Debug, Clone, Default)]
 pub struct Palette {
     open: Option<PaletteMode>,
@@ -234,8 +289,15 @@ pub struct Palette {
     merged: Vec<PaletteEntry>,
     /// A line shown under the rows, for example why part of the books could not be searched.
     note: Option<String>,
+    /// The targets of the recent choices, most recent first (for ties and the Recent heading).
     recents: Vec<PaletteTarget>,
+    /// The recent choices as rows, parallel to `recents`. A row is kept even when the API search
+    /// that found it is gone, so a recent choice can still be shown.
+    recent_rows: Vec<PaletteEntry>,
+    /// The rows as drawn and chosen from, grouped by heading.
+    shown: Vec<Row>,
     selected: usize,
+    /// Whether the query box takes the focus on the next frame.
     focus_pending: bool,
 }
 
@@ -279,7 +341,7 @@ impl Palette {
             }
         }
         self.merged = merged;
-        self.clamp_selection();
+        self.refresh();
     }
 
     /// Is the palette showing?
@@ -323,9 +385,10 @@ impl Palette {
         self.open = None;
         self.query.clear();
         self.selected = 0;
+        self.refresh();
     }
 
-    /// The text typed so far.
+    /// The text typed so far, prefix included.
     #[must_use]
     pub fn query(&self) -> &str {
         &self.query
@@ -335,15 +398,23 @@ impl Palette {
     pub fn set_query(&mut self, query: impl Into<String>) {
         self.query = query.into();
         self.selected = 0;
+        self.refresh();
     }
 
-    /// The rows for the current query, best first.
+    /// The text the API search is asked for: the query after its prefix, trimmed, when the prefix
+    /// is searched (`#`, `@`, or none) and something is typed. `None` otherwise.
+    #[must_use]
+    pub fn search_text(&self) -> Option<&str> {
+        let (scope, body) = PaletteScope::of_query(&self.query);
+        let body = body.trim();
+        (scope.searches_api() && !body.is_empty()).then_some(body)
+    }
+
+    /// The rows for the current query, in the order they are drawn: recent choices first while the
+    /// query is empty, then grouped by heading, each heading in ranked order.
     #[must_use]
     pub fn results(&self) -> Vec<&PaletteEntry> {
-        rank(&self.query, &self.merged, &self.recents)
-            .into_iter()
-            .filter_map(|index| self.merged.get(index))
-            .collect()
+        self.shown.iter().map(|row| &row.entry).collect()
     }
 
     /// Index of the selected row within [`Palette::results`].
@@ -354,283 +425,115 @@ impl Palette {
 
     /// Moves the selection by `delta` rows, stopping at the first and last row.
     pub fn move_selection(&mut self, delta: isize) {
-        let count = self.results().len();
+        let count = self.shown.len();
         let last = count.saturating_sub(1);
         self.selected = self.selected.saturating_add_signed(delta).min(last);
     }
 
     /// Chooses the selected row: closes the palette, remembers the choice as recent, and returns
-    /// it. `None` when closed or when no row matches.
+    /// it. `None` when closed, when no row matches, or when the selected row is inert.
     pub fn accept(&mut self) -> Option<PaletteChoice> {
-        self.accept_at(self.selected)
+        let index = self.selected;
+        self.accept_at(index)
     }
 
-    /// Chooses the row at `index` of [`Palette::results`].
+    /// Chooses the row at `index` of [`Palette::results`], in the palette's own mode. See
+    /// [`Palette::accept`].
     pub fn accept_at(&mut self, index: usize) -> Option<PaletteChoice> {
-        let mode = self.open?;
-        let (target, title) = {
-            let row = *self.results().get(index)?;
-            (row.target.clone(), row.title.clone())
-        };
-        self.remember(target.clone());
+        self.choose(index, false)
+    }
+
+    /// Chooses the row at `index`. `other_mode` takes the other mode from the one the palette was
+    /// opened with (Shift+Enter). An inert row is not chosen, and the palette stays open.
+    fn choose(&mut self, index: usize, other_mode: bool) -> Option<PaletteChoice> {
+        let open = self.open?;
+        let row = self.shown.get(index)?;
+        if row.inert {
+            return None;
+        }
+        let entry = row.entry.clone();
+        let mode = if other_mode { draw::flipped(open) } else { open };
+        self.remember(entry.clone());
         self.close();
         Some(PaletteChoice {
-            target,
-            title,
+            target: entry.target,
+            title: entry.title,
             mode,
         })
     }
 
-    /// The recent choices, most recent first.
+    /// The recent choices (targets), most recent first. Session only: see the module docs.
     #[must_use]
     pub fn recents(&self) -> &[PaletteTarget] {
         &self.recents
     }
 
-    fn remember(&mut self, target: PaletteTarget) {
-        self.recents.retain(|r| *r != target);
-        self.recents.insert(0, target);
+    fn remember(&mut self, entry: PaletteEntry) {
+        self.recents.retain(|r| *r != entry.target);
+        self.recents.insert(0, entry.target.clone());
         self.recents.truncate(MAX_RECENTS);
+        self.recent_rows.retain(|e| e.target != entry.target);
+        self.recent_rows.insert(0, entry);
+        self.recent_rows.truncate(MAX_RECENTS);
     }
 
     fn clamp_selection(&mut self) {
-        let last = self.results().len().saturating_sub(1);
+        let last = self.shown.len().saturating_sub(1);
         self.selected = self.selected.min(last);
     }
 
-    /// Draws the palette in `ui` while it is open and handles its keys: Up and Down move, Enter
-    /// chooses, Esc closes. Returns the choice on the frame it is made. The host decides where
-    /// `ui` is (a floating area near the top of the window, for example).
-    pub fn ui(&mut self, ui: &mut egui::Ui) -> Option<PaletteChoice> {
-        self.open?;
-        let (down, up, enter, escape) = ui.input_mut(|i| {
-            (
-                i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowDown),
-                i.consume_key(egui::Modifiers::NONE, egui::Key::ArrowUp),
-                i.consume_key(egui::Modifiers::NONE, egui::Key::Enter),
-                i.consume_key(egui::Modifiers::NONE, egui::Key::Escape),
-            )
-        });
-        if escape {
-            self.close();
-            return None;
+    /// Recomputes the rows for the query: keeps the rows of its scope, ranks them, adds the
+    /// assistant's inert row when the prefix asks for it, and groups them under their headings.
+    fn refresh(&mut self) {
+        let (scope, body) = PaletteScope::of_query(&self.query);
+        let body = body.trim().to_owned();
+        let browsing = scope == PaletteScope::All && body.is_empty();
+        let mut rows: Vec<Row> = Vec::new();
+        if browsing {
+            rows.extend(
+                self.recent_rows
+                    .iter()
+                    .map(|entry| Row::new(Section::Recent, entry.clone(), false)),
+            );
         }
-        if down {
-            self.move_selection(1);
-        }
-        if up {
-            self.move_selection(-1);
-        }
-
-        let edit = ui.add(
-            egui::TextEdit::singleline(&mut self.query)
-                .hint_text("Search commands, reports, masters, vouchers")
-                .desired_width(f32::INFINITY),
-        );
-        if self.focus_pending {
-            edit.request_focus();
-            self.focus_pending = false;
-        }
-        if edit.changed() {
-            self.selected = 0;
-        }
-
-        let rows: Vec<String> = self
-            .results()
+        let pool: Vec<PaletteEntry> = self
+            .merged
             .iter()
-            .map(|e| {
-                if e.detail.is_empty() {
-                    e.title.clone()
-                } else {
-                    format!("{}    {}", e.title, e.detail)
-                }
-            })
+            .filter(|entry| scope.admits(&entry.target))
+            .filter(|entry| !(browsing && self.recents.contains(&entry.target)))
+            .cloned()
             .collect();
-        let mut clicked: Option<usize> = None;
-        egui::ScrollArea::vertical()
-            .max_height(320.0)
-            .show(ui, |ui| {
-                for (n, row) in rows.into_iter().enumerate() {
-                    if ui.selectable_label(n == self.selected, row).clicked() {
-                        clicked = Some(n);
-                    }
-                }
-            });
-
-        if let Some(note) = self.note.as_deref() {
-            ui.label(note);
-        }
-        if let Some(n) = clicked {
-            return self.accept_at(n);
-        }
-        if enter {
-            return self.accept();
-        }
-        None
-    }
-}
-
-// ---- API search through the worker -----------------------------------------------------------
-
-/// The palette rows for the hits `Api::search` returned for `query`.
-///
-/// The API decided that each hit matches, so the palette must not drop it again by its own
-/// ranking: a ledger found by alias or GSTIN, or a voucher found by party, amount or date, shows
-/// the query as an alias of its row, and every word of the query is then found in that alias. The
-/// order of the hits is kept (ties go to the host's order). A report the app cannot open by key
-/// still gets a row, and choosing it says it is not supported (see
-/// [`crate::shell::navigate::open_target`]). An [`SearchHit::Unavailable`] hit makes no row; it is
-/// returned by [`unavailable_reason`].
-#[must_use]
-pub fn entries_from_hits(query: &str, hits: &[SearchHit]) -> Vec<PaletteEntry> {
-    let query = query.trim();
-    hits.iter()
-        .filter_map(|hit| match hit {
-            SearchHit::Ledger { id, name, matched } => Some(
-                PaletteEntry::new(PaletteTarget::Master(ledger_key(*id)), name.as_str())
-                    .with_aliases([query])
-                    .with_detail(format!("Ledger, found by {}", matched_text(*matched))),
-            ),
-            SearchHit::Voucher {
-                id,
-                number,
-                date,
-                matched,
-            } => {
-                let title = number
-                    .clone()
-                    .unwrap_or_else(|| format!("Voucher #{}", id.0));
-                Some(
-                    PaletteEntry::new(PaletteTarget::Voucher(voucher_key(*id)), title)
-                        .with_aliases([query])
-                        .with_detail(format!(
-                            "Voucher, {}, found by {}",
-                            date_text(*date),
-                            matched_text(*matched)
-                        )),
-                )
+        for index in rank(&body, &pool, &self.recents) {
+            if let Some(entry) = pool.get(index) {
+                rows.push(Row::new(Section::of(&entry.target), entry.clone(), false));
             }
-            SearchHit::Report { title, kind } => {
-                let key = report_key(kind).unwrap_or_else(|| format!("unsupported-report:{title}"));
-                Some(PaletteEntry::new(PaletteTarget::Report(key), *title).with_detail("Report"))
-            }
-            SearchHit::Setting { name } => Some(
-                PaletteEntry::new(PaletteTarget::Setting((*name).to_owned()), *name)
-                    .with_detail("Setting"),
-            ),
-            SearchHit::Unavailable { .. } => None,
-        })
-        .collect()
-}
-
-/// What the API said it could not search, from the hits of one query.
-#[must_use]
-pub fn unavailable_reason(hits: &[SearchHit]) -> Option<&str> {
-    hits.iter().find_map(|hit| match hit {
-        SearchHit::Unavailable { reason } => Some(reason.as_str()),
-        SearchHit::Ledger { .. }
-        | SearchHit::Voucher { .. }
-        | SearchHit::Report { .. }
-        | SearchHit::Setting { .. } => None,
-    })
-}
-
-/// The field a hit matched on, in words.
-fn matched_text(matched: ledgerly_api::MatchedOn) -> &'static str {
-    use ledgerly_api::MatchedOn;
-    match matched {
-        MatchedOn::Name | MatchedOn::SettingName => "name",
-        MatchedOn::Alias => "alias",
-        MatchedOn::Gstin => "GSTIN",
-        MatchedOn::Number => "number",
-        MatchedOn::Party => "party",
-        MatchedOn::Amount => "amount",
-        MatchedOn::Date => "date",
-        MatchedOn::Title => "title",
+        }
+        if let Some((section, entry)) = assistant_row(scope, &body) {
+            rows.push(Row::new(section, entry, true));
+        }
+        rows.sort_by_key(|row| row.section);
+        self.shown = rows;
+        self.clamp_selection();
     }
-}
 
-/// The answer a search brings back: the query it ran for, and the hits.
-type SearchAnswer = (String, Vec<SearchHit>);
-
-/// Runs `Api::search` on the API worker for what the user types in a [`Palette`], one call at a
-/// time (a newer query drops the older call), and feeds the rows back with
-/// [`Palette::set_remote_entries`]. The UI thread never waits for the API (rule D1).
-///
-/// Call [`PaletteSearch::tick`] once per frame while the palette is drawn.
-#[derive(Debug, Default)]
-pub struct PaletteSearch {
-    /// The trimmed query last handled, so an unchanged query is not sent again.
-    handled: Option<String>,
-    /// The search in flight.
-    latest: Latest<SearchAnswer>,
-}
-
-impl PaletteSearch {
-    /// A search with nothing sent.
+    /// The keys this palette uses, for the shell's key bar while it is open. The first hint has no
+    /// key: it names the palette, as the mock's key bar does (`design/mock-v2/index.html:1159`).
+    /// Enter and Shift+Enter say which mode each one chooses in, for the mode the palette was
+    /// opened with.
     #[must_use]
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    /// Whether a search is running whose answer is still wanted.
-    #[must_use]
-    pub fn is_pending(&self) -> bool {
-        self.latest.is_pending()
-    }
-
-    /// Advances the search by one step: takes a finished answer, then starts a search when the
-    /// query changed. With the palette closed it forgets everything. Without a worker (no company
-    /// open) only the host's rows are searched, and the palette says so.
-    pub fn tick(&mut self, palette: &mut Palette, worker: Option<&ApiWorker>) {
-        if !palette.is_open() {
-            self.handled = None;
-            self.latest = Latest::default();
-            return;
-        }
-        let query = palette.query().trim().to_owned();
-        if let Some(done) = self.latest.poll() {
-            Self::apply(palette, &query, done);
-        }
-        if self.handled.as_deref() == Some(query.as_str()) {
-            return;
-        }
-        self.handled = Some(query.clone());
-        palette.set_remote_entries(Vec::new());
-        palette.set_note(None);
-        self.latest = Latest::default();
-        if query.is_empty() {
-            return;
-        }
-        match worker {
-            Some(worker) => {
-                let wanted = query;
-                self.latest
-                    .start(worker, move |api| (wanted.clone(), api.search(&wanted)));
-            }
-            None => palette.set_note(Some(
-                "No company is open, so ledgers and vouchers are not searched.".to_owned(),
-            )),
-        }
-    }
-
-    /// Shows a finished answer, if it is for the query now typed.
-    fn apply(palette: &mut Palette, query: &str, done: Done<SearchAnswer>) {
-        match done {
-            Done::Ready((asked, hits)) => {
-                if asked != query {
-                    return;
-                }
-                palette.set_remote_entries(entries_from_hits(&asked, &hits));
-                palette.set_note(
-                    unavailable_reason(&hits)
-                        .map(|reason| format!("Some of the books were not searched: {reason}")),
-                );
-            }
-            Done::Lost => palette.set_note(Some(
-                "The engine stopped before it answered the search; open the company again."
-                    .to_owned(),
-            )),
-        }
+    pub fn key_hints(&self) -> Vec<KeyHint> {
+        let replace_on_enter = self.open == Some(PaletteMode::Replace);
+        let (enter, shift_enter) = if replace_on_enter {
+            ("Replace screen", "Open on top")
+        } else {
+            ("Open on top", "Replace screen")
+        };
+        vec![
+            KeyHint::new("", "Go to"),
+            KeyHint::new("Up / Down", "Move"),
+            KeyHint::new("Enter", enter),
+            KeyHint::new("Shift+Enter", shift_enter),
+            KeyHint::new("Esc", "Close"),
+        ]
     }
 }
