@@ -305,6 +305,9 @@ fn cr(ledger: LedgerId, paise: i64) -> LedgerLine {
 }
 
 /// A voucher whose place of supply is `pos`. The number is left for the engine to allocate.
+/// Every GST voucher here is an accounting invoice (`VoucherMode::AccountingInvoice`): its taxable
+/// bases are the ledger lines whose ledger carries a GST classification (compute.rs). A plain
+/// Dr/Cr voucher has no tax computation and is refused as `Unsupported`.
 fn voucher(
     id: u64,
     base: BaseVoucherKind,
@@ -322,7 +325,7 @@ fn voucher(
         supply_date: None,
         payment_date: None,
         status: VoucherStatus::Regular,
-        mode: VoucherMode::AsVoucher,
+        mode: VoucherMode::AccountingInvoice,
         party: Some(party),
         place_of_supply: Some(state(pos)),
         reverse_charge: false,
