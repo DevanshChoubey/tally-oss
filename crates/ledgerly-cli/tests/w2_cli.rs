@@ -154,13 +154,16 @@ fn verify_exits_1_on_a_tampered_chain() {
 }
 
 #[test]
-fn rebuild_check_does_not_report_a_match_while_projections_are_not_maintained() {
+fn rebuild_check_passes_on_a_file_the_api_created() {
     let (_dir, path) = company_file();
     let out = ledgerly(&["rebuild-check", path.to_str().unwrap()]);
-    // Derived from the store rebuild contract: an event log with empty projection tables is
-    // NotMaintained, which the command reports as "could not run" (exit 2), never as a pass.
-    assert_eq!(exit_code(&out), 2);
-    assert!(stdout(&out).contains("This is not a match."));
+    // Updated with owner approval (2026-11-21). This test used to be
+    // `rebuild_check_does_not_report_a_match_while_projections_are_not_maintained` and expected
+    // exit 2 with "This is not a match.". That pinned the W2 gap "nothing maintains the projection
+    // tables", which Wave 3 C6 closed: `Api::create` switches maintenance on. Derived from the
+    // command's exit codes (0 pass, 1 check failed, 2 could not run): a Match is a pass.
+    assert_eq!(exit_code(&out), 0, "{}", stdout(&out));
+    assert!(!stdout(&out).contains("This is not a match."));
 }
 
 #[test]

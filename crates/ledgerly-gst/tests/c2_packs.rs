@@ -51,7 +51,10 @@ fn b2cl_threshold_is_one_lakh_from_1_august_2024() {
         panic!("the b2cl threshold must be verified");
     };
     assert_eq!(
-        entry.params().get("invoice_value_rupees").map(String::as_str),
+        entry
+            .params()
+            .get("invoice_value_rupees")
+            .map(String::as_str),
         Some("100000")
     );
     let legal = entry.legal_ref().unwrap();

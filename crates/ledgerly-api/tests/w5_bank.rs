@@ -89,7 +89,7 @@ const STATEMENT: &str = "{1:F01TESTINBBAXXX0000000000}{2:O9400000000000TESTINBBX
 -}\r\n";
 
 /// A fictional CSV statement in the generic split layout. It has no opening or closing balance
-/// line, which the CSV parser cannot supply.
+/// line; the parser derives both from the Balance column (card C3).
 const CSV: &str = "Date,Value Date,Narration,Ref,Withdrawal,Deposit,Balance\n05/04/2026,05/04/2026,NEFT RECEIPT,R1,,500.00,1500.00\n";
 
 fn company() -> Company {
@@ -444,7 +444,7 @@ fn brs_before_any_confirmation_has_balance_per_bank_equal_to_opening() {
 }
 
 #[test]
-fn brs_as_of_the_last_statement_line_leaves_the_statement_side_unsupported() {
+fn brs_as_of_the_stated_end_date_has_a_statement_side() {
     let (_dir, _path, mut api) = setup();
     let id = import_statement(&mut api);
     confirm_exact(&mut api, id);
@@ -457,11 +457,21 @@ fn brs_as_of_the_last_statement_line_leaves_the_statement_side_unsupported() {
     assert_eq!(brs.uncleared_deposits_total, Paise::new(20_000));
     assert_eq!(brs.uncleared_payments_total, Paise::new(25_000));
     assert_eq!(brs.balance_as_per_bank, Paise::new(272_000));
-    // The statement's last line is dated 3 May, and a date is covered only before it (the end
-    // date of the file is not stored). So the statement side is unsupported.
-    assert!(brs.statement_balance.is_unsupported());
-    assert!(brs.difference.is_unsupported());
-    assert_eq!(brs.is_reconciled().value(), None);
+    // Updated with owner approval (2026-11-21). This test used to be
+    // `brs_as_of_the_last_statement_line_leaves_the_statement_side_unsupported` and asserted an
+    // Unsupported statement side. That pinned the W5 gap "the statement end date is not stored",
+    // which Wave 3 C3 closed: the MT940 `:62F:` date (3 May here) is stored, and a statement with a
+    // stated end date covers every date up to and including it.
+    // derived: statement balance on 3 May = opening 1000,00 plus every line (all dated on or
+    // before 3 May) = the stated closing 2710,00 = 271_000 paise.
+    assert_eq!(
+        brs.statement_balance.clone().value(),
+        Some(Paise::new(271_000))
+    );
+    // derived: difference = statement - balance per bank = 271_000 - 272_000 = -1_000, the bank
+    // charges of row 10 that the books do not hold.
+    assert_eq!(brs.difference.clone().value(), Some(Paise::new(-1_000)));
+    assert_eq!(brs.is_reconciled().value(), Some(false));
 }
 
 #[test]
@@ -576,46 +586,58 @@ fn an_unknown_format_is_refused() {
 }
 
 #[test]
-fn a_csv_statement_is_refused_until_the_parser_states_the_balances() {
+fn a_csv_statement_takes_its_balances_from_the_balance_column() {
     let (_dir, _path, mut api) = setup();
-    // The CSV parser leaves opening and closing balances unset (ledgerly-bankfmt csv.rs), so the
-    // balance check (spec 6.5) cannot pass and the file is refused, not guessed at.
-    match api.import_bank_statement(CSV.as_bytes(), "generic-csv-split", BANK) {
-        Err(ApiError::StatementImport(StatementError::MissingBalance { which })) => {
-            assert_eq!(which, "opening");
-        }
-        other => panic!("expected MissingBalance, got {other:?}"),
-    }
+    // Updated with owner approval (2026-11-21). This test used to be
+    // `a_csv_statement_is_refused_until_the_parser_states_the_balances` and expected
+    // MissingBalance. That pinned the W5 gap "the CSV parser reads no balances", which Wave 3 C3
+    // closed: the parser reads them from the balance column.
+    let id = match api
+        .import_bank_statement(CSV.as_bytes(), "generic-csv-split", BANK)
+        .unwrap()
+    {
+        Outcome::Value(id) => id,
+        other @ Outcome::Unsupported(_) => panic!("expected an imported statement, got {other:?}"),
+    };
+    let statements = api.bank_statements(BANK);
+    let (_, statement) = statements.iter().find(|(sid, _)| *sid == id).unwrap();
+    // derived: the one row deposits 500.00 and leaves 1500.00, so the opening was
+    // 1500.00 - 500.00 = 1000.00 (100_000 paise) and the closing is 1500.00 (150_000 paise).
+    assert_eq!(statement.opening(), Paise::new(100_000));
+    assert_eq!(statement.closing(), Paise::new(150_000));
+    // A CSV file states no end date of its own.
+    assert_eq!(statement.end_date(), None);
 }
 
 #[test]
-fn reopening_keeps_confirmed_matches_but_not_the_statement() {
+fn reopening_keeps_the_statement_and_its_confirmed_matches() {
+    // Updated with owner approval (2026-11-21). This test used to be
+    // `reopening_keeps_confirmed_matches_but_not_the_statement`: it asserted that a reopened file
+    // had no statement and accepted the same file again as statement 2. That pinned the W5 gap
+    // "statements are held in memory per session", which Wave 3 C3 closed with the
+    // `BankStatementStored` event.
     let (_dir, path, mut api) = setup();
     let id = import_statement(&mut api);
     confirm_exact(&mut api, id);
     drop(api);
 
     let mut api = Api::open(&path).unwrap();
-    // The statement itself is not in the company file.
-    assert_eq!(api.bank_statements(BANK).len(), 0);
+    // The statement is in the company file.
+    let statements = api.bank_statements(BANK);
+    assert_eq!(statements.len(), 1);
+    assert_eq!(statements[0].0, id);
     let brs = brs_at(&api, date!(2026 - 04 - 30));
     // The confirmed bank dates were stored as events, so the books still show them cleared.
     assert_eq!(brs.uncleared_deposits_total, Paise::new(20_000));
     assert_eq!(brs.uncleared_payments_total, Paise::new(25_000));
-    assert!(brs.statement_balance.is_unsupported());
-
-    // Importing the file again is accepted (this session does not know it) and takes the next id.
-    let again = match api
-        .import_bank_statement(STATEMENT.as_bytes(), MT940, BANK)
-        .unwrap()
-    {
-        Outcome::Value(id) => id,
-        other @ Outcome::Unsupported(_) => {
-            panic!("expected an imported statement, got {other:?}")
-        }
-    };
-    assert_eq!(again, BankStatementId(2));
     // derived: the same statement gives the same difference as before the reopen: -1_000.
-    let brs = brs_at(&api, date!(2026 - 04 - 30));
     assert_eq!(brs.difference.clone().value(), Some(Paise::new(-1_000)));
+
+    // The file is known after the reopen, so importing it again is a duplicate.
+    match api.import_bank_statement(STATEMENT.as_bytes(), MT940, BANK) {
+        Err(ApiError::StatementImport(StatementError::Duplicate { file_hash })) => {
+            assert_eq!(file_hash.len(), 64);
+        }
+        other => panic!("expected Duplicate, got {other:?}"),
+    }
 }

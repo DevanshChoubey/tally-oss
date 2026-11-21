@@ -308,7 +308,7 @@ fn backup_refuses_to_overwrite_and_leaves_source_unchanged() {
 }
 
 #[test]
-fn rebuild_check_is_not_a_match_when_projections_are_not_maintained() {
+fn rebuild_check_matches_on_a_file_the_api_created() {
     let dir = tempfile::tempdir().unwrap();
     let (_path, mut api) = setup(dir.path());
     value(api.execute(Command::PostVoucher(payment(
@@ -317,10 +317,14 @@ fn rebuild_check_is_not_a_match_when_projections_are_not_maintained() {
         1000,
     ))));
     let report = api.rebuild_check().unwrap();
-    // Derived from the store's rebuild contract: the projection tables are never written, so a
-    // log with events and empty tables is NotMaintained, never Match and never Mismatch.
-    assert_eq!(report.outcome, RebuildOutcome::NotMaintained);
-    assert!(!report.is_match());
+    // Updated with owner approval (2026-11-21). This test used to be
+    // `rebuild_check_is_not_a_match_when_projections_are_not_maintained` and asserted
+    // NotMaintained. That pinned the W2 gap "nothing maintains the projection tables", which
+    // Wave 3 C6 closed: `Api::create` now switches maintenance on, so every commit writes the
+    // tables. Derived from the store's rebuild contract: tables maintained by the same events
+    // the replay reads agree with it, so the outcome is Match.
+    assert_eq!(report.outcome, RebuildOutcome::Match);
+    assert!(report.is_match());
     assert!(report.events_replayed > 0);
 }
 

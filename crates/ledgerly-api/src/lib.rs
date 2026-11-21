@@ -21,9 +21,8 @@ pub use command::{Command, CommandResult, CreatedId};
 // crate only, so the report model is re-exported here instead of adding a manifest dependency.
 pub use error::ApiError;
 pub use facade::Api;
-pub use ledgerly_gst::compute::GstBreakup;
-pub use voucher_gst::InvoiceGst;
 pub use gst::{Bucket, BucketedVoucher, Gstr1, Gstr1Return, Gstr3bWorking, RulePack};
+pub use ledgerly_gst::compute::GstBreakup;
 pub use ledgerly_model::{
     Address, Books, Company, EntityKind, Features, NegativeStockPolicy, Voucher,
 };
@@ -36,6 +35,7 @@ pub use ledgerly_store::verify::{ChainProblem, VerifyReport};
 pub use maintenance::{VoucherCheck, verify_file};
 pub use search::{MatchedOn, SearchHit};
 pub use tally_import::ImportSummary;
+pub use voucher_gst::InvoiceGst;
 
 pub use ledgerly_bank::brs::Brs;
 pub use ledgerly_bank::matcher::{Candidate, LineDirection, MatchRule};

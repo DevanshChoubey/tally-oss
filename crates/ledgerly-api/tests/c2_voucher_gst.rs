@@ -27,8 +27,8 @@ use std::fmt::Debug;
 
 use ledgerly_api::{Api, ApiError, Command};
 use ledgerly_core::{
-    Clock, CompanyId, Decimal, DrCr, GodownId, GroupId, Gstin, LedgerId, Outcome, Paise,
-    Period, Qty, Rate, SignedAmount, StateCode, StockItemId, UnitId, VoucherId, VoucherTypeId,
+    Clock, CompanyId, Decimal, DrCr, GodownId, GroupId, Gstin, LedgerId, Outcome, Paise, Period,
+    Qty, Rate, SignedAmount, StateCode, StockItemId, UnitId, VoucherId, VoucherTypeId,
     gstin_check_character,
 };
 use ledgerly_engine::EngineError;
@@ -62,10 +62,6 @@ const MAIN: GodownId = GodownId(1);
 
 fn state(code: u8) -> StateCode {
     StateCode::new(code).unwrap()
-}
-
-fn rs(rupees: i64) -> Paise {
-    Paise::new(rupees * 100)
 }
 
 fn gstin_of(first14: &str) -> Gstin {
@@ -166,9 +162,27 @@ fn company_file() -> (tempfile::TempDir, Api) {
     let clock = Clock::Fixed(OffsetDateTime::UNIX_EPOCH);
     let mut api = Api::create(&path, &company(), clock).unwrap();
     let ledgers = vec![
-        party(KA_BUYER, "Ka Buyer", ReservedGroup::SundryDebtors, "29FGHIJ5678K1Z", 29),
-        party(MH_BUYER, "Mh Buyer", ReservedGroup::SundryDebtors, BUYER_GSTIN, 27),
-        party(SUPPLIER, "Supplier", ReservedGroup::SundryCreditors, SUPPLIER_GSTIN, 29),
+        party(
+            KA_BUYER,
+            "Ka Buyer",
+            ReservedGroup::SundryDebtors,
+            "29FGHIJ5678K1Z",
+            29,
+        ),
+        party(
+            MH_BUYER,
+            "Mh Buyer",
+            ReservedGroup::SundryDebtors,
+            BUYER_GSTIN,
+            27,
+        ),
+        party(
+            SUPPLIER,
+            "Supplier",
+            ReservedGroup::SundryCreditors,
+            SUPPLIER_GSTIN,
+            29,
+        ),
         plain(SALES, "Sales", ReservedGroup::SalesAccounts),
         plain(PURCHASE, "Purchases", ReservedGroup::PurchaseAccounts),
         tax(CGST, "CGST", TaxLedgerKind::Cgst),
@@ -409,8 +423,20 @@ fn intra_state_item_invoice_posts_with_its_gst_block() {
     assert_eq!(
         by_ledger,
         vec![
-            (CGST, TaxLedgerKind::Cgst, Paise::new(1_000_000), nine, Paise::new(90_000)),
-            (SGST, TaxLedgerKind::Sgst, Paise::new(1_000_000), nine, Paise::new(90_000)),
+            (
+                CGST,
+                TaxLedgerKind::Cgst,
+                Paise::new(1_000_000),
+                nine,
+                Paise::new(90_000)
+            ),
+            (
+                SGST,
+                TaxLedgerKind::Sgst,
+                Paise::new(1_000_000),
+                nine,
+                Paise::new(90_000)
+            ),
         ]
     );
 }

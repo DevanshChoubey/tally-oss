@@ -175,12 +175,7 @@ fn setup(name: &str) -> (ApiWorker, Books) {
     if path.exists() {
         std::fs::remove_file(&path).unwrap();
     }
-    let mut api = Api::create(
-        &path,
-        &company(),
-        Clock::Fixed(OffsetDateTime::UNIX_EPOCH),
-    )
-    .unwrap();
+    let mut api = Api::create(&path, &company(), Clock::Fixed(OffsetDateTime::UNIX_EPOCH)).unwrap();
     let mut masters = Masters::default();
     for l in ledgers() {
         let out = api.execute(Command::CreateLedger(l.clone())).unwrap();
@@ -222,7 +217,7 @@ fn fill(s: &mut ItemInvoiceScreen, m: &Masters) {
     s.set_party_text("ka buyer");
     s.submit(m);
     assert_eq!(s.focus(), Field::Place);
-    s.draft_mut().place_text = "29".to_owned();
+    "29".clone_into(&mut s.draft_mut().place_text);
     s.submit(m);
     s.set_account_text("sales");
     s.submit(m);
@@ -230,9 +225,9 @@ fn fill(s: &mut ItemInvoiceScreen, m: &Masters) {
     assert_eq!(s.focus(), Field::Item(0));
     s.set_item_text(0, "widget");
     s.submit(m);
-    s.draft_mut().rows[0].qty_text = "10".to_owned();
+    "10".clone_into(&mut s.draft_mut().rows[0].qty_text);
     s.submit(m);
-    s.draft_mut().rows[0].rate_text = "1000".to_owned();
+    "1000".clone_into(&mut s.draft_mut().rows[0].rate_text);
     s.submit(m);
     s.submit(m);
 }
@@ -251,7 +246,10 @@ fn until(
         if done(screen, masters) {
             return;
         }
-        assert!(start.elapsed() < Duration::from_secs(10), "timed out: {what}");
+        assert!(
+            start.elapsed() < Duration::from_secs(10),
+            "timed out: {what}"
+        );
         std::thread::sleep(Duration::from_millis(5));
     }
 }

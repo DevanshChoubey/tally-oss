@@ -85,7 +85,8 @@ enum Cache {
 
 impl Api {
     /// Creates a company file at `path` holding `company`, and seeds it with the reserved groups
-    /// and the default voucher types. The file must not exist.
+    /// and the default voucher types, with projection maintenance switched on. The file must not
+    /// exist.
     ///
     /// # Errors
     /// [`ApiError::Store`] when the file cannot be created or seeded. A file left half-created by
@@ -94,7 +95,12 @@ impl Api {
         let mut store = SqliteStore::create(path, company, clock)?;
         let actor = default_actor();
         let meta = audit_meta(&actor, clock);
-        if let Err(e) = store.commit(&seed_events(), &meta) {
+        // Every file the API creates keeps its projection tables current from the first event
+        // (owner decision 2026-11-21), so `rebuild_check` can report a match on it.
+        let seeded = store
+            .enable_projections()
+            .and_then(|_| store.commit(&seed_events(), &meta));
+        if let Err(e) = seeded {
             drop(store);
             if let Err(remove) = std::fs::remove_file(path) {
                 tracing::warn!(error = %remove, "could not remove a half-created company file");

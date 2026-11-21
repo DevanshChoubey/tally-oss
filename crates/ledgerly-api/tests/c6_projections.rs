@@ -18,7 +18,7 @@
 
 use std::path::{Path, PathBuf};
 
-use ledgerly_api::{Api, ApiError, Command, CommandResult, RebuildOutcome, Voucher};
+use ledgerly_api::{Api, ApiError, Command, CommandResult, Voucher};
 use ledgerly_core::{
     Clock, CompanyId, Date, GroupId, LedgerId, Outcome, Paise, SignedAmount, StateCode, VoucherId,
     VoucherTypeId,
@@ -158,7 +158,7 @@ fn setup(dir: &Path) -> (PathBuf, Api) {
 }
 
 #[test]
-fn rebuild_check_matches_after_projections_are_switched_on() {
+fn rebuild_check_matches_on_a_file_the_api_created() {
     let dir = tempfile::tempdir().unwrap();
     let (_path, mut api) = setup(dir.path());
     value(api.execute(Command::PostVoucher(payment(
@@ -166,11 +166,10 @@ fn rebuild_check_matches_after_projections_are_switched_on() {
         date!(2026 - 06 - 10),
         1000,
     ))));
-    let before = api.rebuild_check().unwrap();
-    assert_eq!(before.outcome, RebuildOutcome::NotMaintained);
-
-    assert!(api.enable_projections().unwrap());
-    // Derived: a second call changes nothing.
+    // Updated with owner approval (2026-11-21). This test used to be
+    // `rebuild_check_matches_after_projections_are_switched_on` and first asserted NotMaintained,
+    // because C6 shipped the switch as opt-in. The owner then had `Api::create` switch it on, so
+    // the file already maintains its tables and switching it on again changes nothing.
     assert!(!api.enable_projections().unwrap());
     let built = api.rebuild_check().unwrap();
     assert!(built.is_match(), "{built:?}");

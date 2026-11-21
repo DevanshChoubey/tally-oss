@@ -33,7 +33,8 @@ pub use ledgerly_gst::pack::{RulePack, load_pack};
 pub use ledgerly_gst_formats::gstr1::Gstr1;
 
 /// The GST 2.0 slab pack bundled with the application.
-pub(crate) const BUNDLED_RATE_PACK: &str = include_str!("../../ledgerly-gst/packs/rates-slabs.toml");
+pub(crate) const BUNDLED_RATE_PACK: &str =
+    include_str!("../../ledgerly-gst/packs/rates-slabs.toml");
 
 /// A GSTR-1 return with the bucket of every in-period voucher.
 #[derive(Debug, Clone, PartialEq, Eq)]

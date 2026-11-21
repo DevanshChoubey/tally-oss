@@ -64,11 +64,10 @@ use ledgerly_gst_formats::gstr1::{B2bInvoice, B2bInvoiceType, Gstr1, ItemTax};
 use ledgerly_model::seed_groups::reserved_groups;
 use ledgerly_model::seed_voucher_types::default_voucher_types;
 use ledgerly_model::{
-    Address, BankDetails, BaseVoucherKind, Company, EntityKind, Features, Godown,
-    GodownAllocation, GstHistory, GstRegistration, InventoryLine, Ledger, LedgerLine,
-    NegativeStockPolicy, PartyDetails, RegistrationType, ReservedGroup, Scenario, StockItem,
-    TaxDetails, TaxLedgerKind, Taxability, Unit, UnitKind, ValuationMethod, Voucher, VoucherMode,
-    VoucherStatus,
+    Address, BankDetails, BaseVoucherKind, Company, EntityKind, Features, Godown, GodownAllocation,
+    GstHistory, GstRegistration, InventoryLine, Ledger, LedgerLine, NegativeStockPolicy,
+    PartyDetails, RegistrationType, ReservedGroup, Scenario, StockItem, TaxDetails, TaxLedgerKind,
+    Taxability, Unit, UnitKind, ValuationMethod, Voucher, VoucherMode, VoucherStatus,
 };
 use ledgerly_reports::{Cell, ColumnSpec, Detail, Report, ReportFilter, ReportKind, ReportParams};
 use time::OffsetDateTime;
@@ -91,9 +90,9 @@ const MT940: &str = "generic-mt940";
 /// - 2026-07-30 debit 1000,00 (the journal, voucher 19)
 /// - 2026-07-31 debit 50,00, "BANK CHARGES", which is in no voucher
 ///
-/// Derived. The opening balance is the books' bank balance on 30 June 2026: 500,000 (voucher 1)
-/// - 50,000 (voucher 2) - 5,000 (voucher 6) - 3,000 (voucher 8) = 442,000. Closing balance:
-/// 442,000 + 3,000 + 1,000 + 2,000 - 1,000 - 50 = 447,950, which is the stated `:62F:`.
+/// Derived. The opening balance is the books' bank balance on 30 June 2026: 500,000 (voucher 1) -
+/// 50,000 (voucher 2) - 5,000 (voucher 6) - 3,000 (voucher 8) = 442,000. Closing balance:
+/// 442,000 + 3,000 + 1,000 + 2,000 - 1,000 - 50 = 446,950, which is the stated `:62F:`.
 const STATEMENT: &str = "{1:F01TESTINBBAXXX0000000000}{2:O9400000000000TESTINBBXXXX00000000000000000000N}{4:\r\n\
 :20:STMT0001\r\n\
 :25:0123456789\r\n\
@@ -105,7 +104,7 @@ const STATEMENT: &str = "{1:F01TESTINBBAXXX0000000000}{2:O9400000000000TESTINBBX
 :61:260730D1000,00NTRFNONREF//BK4\r\n\
 :61:260731D50,00NTRFNONREF//BANKCHG\r\n\
 :86:BANK CHARGES\r\n\
-:62F:C260731INR447950,00\r\n\
+:62F:C260731INR446950,00\r\n\
 -}\r\n";
 
 /// The ids the API assigned to the masters.
@@ -304,8 +303,8 @@ fn create_masters(api: &mut Api) -> Ids {
     );
     let input_igst = create_ledger(api, tax_ledger("Input IGST", TaxLedgerKind::Igst, 18));
     let output_igst = create_ledger(api, tax_ledger("Output IGST", TaxLedgerKind::Igst, 18));
-    let output_cgst = create_ledger(api, tax_ledger("Output CGST", TaxLedgerKind::Cgst, 9));
-    let output_sgst = create_ledger(api, tax_ledger("Output SGST", TaxLedgerKind::Sgst, 9));
+    let central_out = create_ledger(api, tax_ledger("Output CGST", TaxLedgerKind::Cgst, 9));
+    let state_out = create_ledger(api, tax_ledger("Output SGST", TaxLedgerKind::Sgst, 9));
     let buyer = create_ledger(
         api,
         party_ledger(
@@ -358,8 +357,8 @@ fn create_masters(api: &mut Api) -> Ids {
         interest,
         input_igst,
         output_igst,
-        output_cgst,
-        output_sgst,
+        output_cgst: central_out,
+        output_sgst: state_out,
         buyer,
         walk_in,
         ka_customer,
@@ -725,13 +724,29 @@ fn july_settlements(ids: &Ids) -> Vec<Voucher> {
     ]
 }
 
+/// Vouchers whose GST the engine must refuse to compute: vouchers 3 and 7 are purchases from
+/// Gujarat Supplier, an unregistered supplier, who charges no GST (reverse charge applies only in notified cases), so
+/// the engine says `Unsupported` and each voucher posts with its typed lines and no GST block.
+const GST_NOT_COMPUTED: [u64; 2] = [3, 7];
+
 /// Posts every voucher in order. Each GST invoice (a voucher with stock lines) is first run
-/// through [`Api::voucher_gst`], which must give a value. Each post must commit.
+/// through [`Api::voucher_gst`], which must give a value, except the vouchers in
+/// [`GST_NOT_COMPUTED`], which must be `Unsupported`. Each post must commit.
 fn post_all(api: &mut Api, vouchers: Vec<Voucher>) {
     for v in vouchers {
         if !v.inventory_lines.is_empty() {
+            let refused = GST_NOT_COMPUTED.contains(&v.id.0);
             match api.voucher_gst(&v) {
-                Ok(Outcome::Value(_breakup)) => {}
+                Ok(Outcome::Value(_breakup)) if !refused => {}
+                Ok(Outcome::Unsupported(u)) if refused => {
+                    assert!(u.what.contains("Unregistered supplier"), "{u:?}");
+                }
+                Ok(Outcome::Value(_breakup)) => {
+                    panic!(
+                        "voucher {}: voucher_gst gave a value for an unregistered purchase",
+                        v.id.0
+                    )
+                }
                 Ok(Outcome::Unsupported(u)) => {
                     panic!("voucher {}: voucher_gst is Unsupported: {u:?}", v.id.0)
                 }
@@ -992,8 +1007,8 @@ fn check_cdnr(gstr1: &Gstr1) {
     assert_eq!(line.tax, ItemTax::Igst(rs(270)));
 }
 
-/// Derived, with the credit note netted (fixture treatment `net`). Taxable: 6,000 + 1,500 + 2,000
-/// + 4,500 - 1,500 = 12,500. IGST: 1,080 + 270 + 810 - 270 = 1,890. CGST 180, SGST 180. Value =
+/// Derived, with the credit note netted (fixture treatment `net`). Taxable: 6,000 + 1,500 + 2,000 +
+/// 4,500 - 1,500 = 12,500. IGST: 1,080 + 270 + 810 - 270 = 1,890. CGST 180, SGST 180. Value =
 /// 12,500 + 1,890 + 180 + 180 = 14,750. One HSN, unit PCS, rate 18.
 fn check_hsn(gstr1: &Gstr1) {
     assert_eq!(gstr1.hsn.len(), 1);
@@ -1083,7 +1098,7 @@ fn check_brs(brs: &Brs) {
 }
 
 /// The statement is held for the bank ledger under `id`, with the lines and balances of
-/// [`STATEMENT`]. Derived: five lines; opening 442,000; closing 447,950; first line 14 July, last
+/// [`STATEMENT`]. Derived: five lines; opening 442,000; closing 446,950; first line 14 July, last
 /// line 31 July.
 fn check_statement_held(api: &Api, ids: &Ids, id: BankStatementId) {
     let held = api.bank_statements(ids.bank);
@@ -1093,7 +1108,7 @@ fn check_statement_held(api: &Api, ids: &Ids, id: BankStatementId) {
     assert_eq!(statement.ledger(), ids.bank);
     assert_eq!(statement.lines().len(), 5);
     assert_eq!(statement.opening(), rs(442_000));
-    assert_eq!(statement.closing(), rs(447_950));
+    assert_eq!(statement.closing(), rs(446_950));
     assert_eq!(
         statement.period(),
         Some((date!(2026 - 07 - 14), date!(2026 - 07 - 31)))
@@ -1220,7 +1235,10 @@ fn company_from_masters_to_backup_keeps_statement_reports_and_chain() {
     let from_backup = Api::open(&backup).unwrap();
     assert_eq!(reports(&from_backup), before);
     check_statement_held(&from_backup, &ids, statement_id);
-    assert_eq!(brs_at(&from_backup, &ids, date!(2026 - 07 - 30)), brs_before);
+    assert_eq!(
+        brs_at(&from_backup, &ids, date!(2026 - 07 - 30)),
+        brs_before
+    );
     assert_rebuild_matches(&from_backup);
 }
 

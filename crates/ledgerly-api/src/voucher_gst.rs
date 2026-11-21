@@ -193,10 +193,7 @@ fn refused(reason: String) -> EngineError {
 }
 
 /// The ledger lines of `v` that post to a GST tax ledger, with the ledger.
-fn typed_tax_lines<'v>(
-    v: &'v Voucher,
-    books: &Books,
-) -> Vec<(&'v LedgerLine, TaxLedger)> {
+fn typed_tax_lines<'v>(v: &'v Voucher, books: &Books) -> Vec<(&'v LedgerLine, TaxLedger)> {
     v.ledger_lines
         .iter()
         .filter_map(|line| {
@@ -336,7 +333,10 @@ fn head_sum(lines: &[&LineTax], pick: impl Fn(&LineTax) -> Decimal) -> Result<De
 
 /// The block to store: one line per head and rate. `None` when a ledger cannot be chosen or the
 /// per-rate rounding does not add up to the engine's head totals (nothing is then stored).
-fn stored_gst(breakup: &GstBreakup, ledgers: &[TaxLedger]) -> Result<Option<StoredGst>, MoneyError> {
+fn stored_gst(
+    breakup: &GstBreakup,
+    ledgers: &[TaxLedger],
+) -> Result<Option<StoredGst>, MoneyError> {
     let mut by_rate: BTreeMap<Decimal, Vec<&LineTax>> = BTreeMap::new();
     for line in breakup.lines.iter().filter(|l| !l.rate_percent.is_zero()) {
         by_rate.entry(line.rate_percent).or_default().push(line);
