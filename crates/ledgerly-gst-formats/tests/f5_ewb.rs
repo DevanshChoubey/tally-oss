@@ -183,6 +183,46 @@ fn negative_other_value_and_leading_zero_hsn() {
 }
 
 #[test]
+fn leading_zero_hsn_is_refused_not_written_as_a_different_code() {
+    // provenance: derived. HSN 0101 is the code given; writing it as the number 101 would name a
+    // different code. Until the numeric field is confirmed, the bill is Unsupported, not written.
+    let mut e = sample();
+    e.items[0].hsn = Hsn::parse("0101").unwrap();
+    match ewb_to_json(&e) {
+        Err(FormatError::Unsupported { reason }) => assert!(reason.contains("0101"), "{reason}"),
+        other => panic!("expected Unsupported, got {other:?}"),
+    }
+}
+
+#[test]
+fn header_igst_that_is_not_the_items_tax_is_refused() {
+    // provenance: derived. 18% x 10,000.00 taxable = 1,800.00 IGST (180,000 paise). A header of
+    // 1,900.00 (190,000 paise) is outside rounding of that, and the total is kept consistent so
+    // that only the tax head is wrong.
+    let mut e = sample();
+    e.igst_value = Paise::new(190_000);
+    e.tot_inv_value = Paise::new(1_190_000);
+    assert_eq!(fields(validate_ewb(&e)), ["igstValue"]);
+}
+
+#[test]
+fn header_tax_within_one_paise_of_the_items_tax_is_accepted_and_two_paise_refused() {
+    // provenance: derived. 1,001 paise x 18 / 100 = 180.18 paise, so a whole-paise tax is 180 or
+    // 181 under any rounding. 182 is not, and 180 and 181 are both accepted.
+    let mut e = sample();
+    e.items[0].taxable_amount = Paise::new(1_001);
+    e.total_value = Paise::new(1_001);
+    for (igst, tot) in [(180, 1_181), (181, 1_182)] {
+        e.igst_value = Paise::new(igst);
+        e.tot_inv_value = Paise::new(tot);
+        assert!(validate_ewb(&e).is_ok(), "igst {igst} paise should pass");
+    }
+    e.igst_value = Paise::new(182);
+    e.tot_inv_value = Paise::new(1_183);
+    assert_eq!(fields(validate_ewb(&e)), ["igstValue"]);
+}
+
+#[test]
 fn sample_bill_is_valid() {
     assert!(validate_ewb(&sample()).is_ok());
 }
