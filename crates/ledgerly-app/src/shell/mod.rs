@@ -29,8 +29,10 @@ mod welcome;
 use egui::{Key, Modifiers};
 
 use crate::theme::{self, ThemeKind};
+use crate::worker::Ticket;
 use crate::{AppCtx, Screen};
 use chrome::ChromeCmd;
+use submit::BooksReply;
 
 pub use stack::{ScreenStack, StackChange, Tabs};
 pub use welcome::{WelcomeScreen, company_from_form};
@@ -41,6 +43,12 @@ pub struct Shell {
     app_ctx: AppCtx,
     theme: ThemeKind,
     applied_theme: Option<ThemeKind>,
+    /// The change count the books on screen were requested for.
+    books_seen: u64,
+    /// The books fetch in progress, if any.
+    books_ticket: Option<Ticket<BooksReply>>,
+    /// Why the books could not be read, when the last fetch failed.
+    books_problem: Option<String>,
 }
 
 impl Shell {
@@ -52,6 +60,60 @@ impl Shell {
             app_ctx: AppCtx::default(),
             theme: ThemeKind::default(),
             applied_theme: None,
+            books_seen: submit::change_count(),
+            books_ticket: None,
+            books_problem: None,
+        }
+    }
+
+    /// Why the books could not be read after the last fetch, or `None` when they were read (or
+    /// no company is open). Screens show no figure while this is set.
+    #[must_use]
+    pub fn books_problem(&self) -> Option<&str> {
+        self.books_problem.as_deref()
+    }
+
+    /// Keeps `AppCtx::books` current without blocking the UI thread: when a company was opened
+    /// or a command saved a change, a read of the books is queued on the worker, and the copy is
+    /// taken from its ticket once it arrives. A change that arrives while a read is running
+    /// replaces that read, so the books never show an older state than the last change.
+    pub fn sync_books(&mut self) {
+        let count = submit::change_count();
+        if count != self.books_seen {
+            self.books_seen = count;
+            self.books_problem = None;
+            self.books_ticket = self.app_ctx.api.as_ref().map(submit::fetch_books);
+            if self.books_ticket.is_none() {
+                self.app_ctx.books = None;
+            }
+        }
+        // A worker put into the context without a change note still gets its books.
+        if self.books_ticket.is_none()
+            && self.app_ctx.books.is_none()
+            && self.books_problem.is_none()
+        {
+            self.books_ticket = self.app_ctx.api.as_ref().map(submit::fetch_books);
+        }
+        let Some(ticket) = self.books_ticket.as_mut() else {
+            return;
+        };
+        let Some(reply) = submit::settle_books(ticket) else {
+            return;
+        };
+        self.books_ticket = None;
+        match reply {
+            BooksReply::Loaded(books) => {
+                self.app_ctx.books = Some(*books);
+                self.books_problem = None;
+            }
+            BooksReply::Unsupported(u) => {
+                self.app_ctx.books = None;
+                self.books_problem = Some(format!("{}: {}", u.what, u.reason));
+            }
+            BooksReply::Failed(reason) => {
+                self.app_ctx.books = None;
+                self.books_problem = Some(reason);
+            }
         }
     }
 
@@ -93,6 +155,10 @@ impl Shell {
         if self.applied_theme != Some(self.theme) {
             theme::apply(ui.ctx(), self.theme);
             self.applied_theme = Some(self.theme);
+        }
+        self.sync_books();
+        if self.books_ticket.is_some() {
+            ui.ctx().request_repaint();
         }
         let t = theme::tokens(self.theme);
         let trail = self

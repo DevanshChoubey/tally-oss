@@ -998,7 +998,7 @@ impl Screen for MastersScreen {
 /// What the screen says when it has no books to draw from.
 fn no_books_text(ctx: &AppCtx) -> &'static str {
     if ctx.api.is_some() {
-        "The company is open, but this screen cannot read its masters yet."
+        "The company is open. Its masters are being read, or could not be read."
     } else {
         "No company is open."
     }

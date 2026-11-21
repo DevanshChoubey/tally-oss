@@ -14,8 +14,8 @@ use ledgerly_core::{
 };
 use ledgerly_engine::{EngineError, locks, masters_accounts, masters_stock, vouchers};
 use ledgerly_model::{
-    BankMatch, Batch, Books, CostCategory, CostCentre, Godown, Group, Ledger, StockGroup,
-    StockItem, Unit, Voucher, VoucherStatus,
+    BankMatch, Batch, Books, CostCategory, CostCentre, Godown, Group, Ledger, MasterSnapshot,
+    StockGroup, StockItem, Unit, Voucher, VoucherStatus,
 };
 use ledgerly_store::{CommitReceipt, Event};
 
@@ -197,6 +197,155 @@ fn confirm_bank_match(
     Ok(Outcome::Value(vec![Event::MatchConfirmed(matched)]))
 }
 
+/// The id the API assigned to a master that a `Create*` command made.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CreatedId {
+    /// A new account group.
+    Group(GroupId),
+    /// A new ledger.
+    Ledger(LedgerId),
+    /// A new unit of measure.
+    Unit(UnitId),
+    /// A new stock group.
+    StockGroup(StockGroupId),
+    /// A new stock item.
+    StockItem(StockItemId),
+    /// A new godown.
+    Godown(GodownId),
+    /// A new batch.
+    Batch(BatchId),
+    /// A new cost category.
+    CostCategory(CostCategoryId),
+    /// A new cost centre.
+    CostCentre(CostCentreId),
+}
+
+/// The next free id after the largest id in use (`None` when there is none): one more than the largest id in use,
+/// and at least 1, because id 0 means "unassigned".
+fn next_id(largest: Option<u64>) -> Result<u64, EngineError> {
+    match largest {
+        None => Ok(1),
+        Some(last) => last.checked_add(1).ok_or_else(|| EngineError::Invalid {
+            field: "id".to_owned(),
+            reason: "the company file has no free master id left".to_owned(),
+        }),
+    }
+}
+
+/// Gives a `Create*` command whose id is 0 (unassigned) the next free id of its kind, taken from
+/// `books`. A non-zero id is kept as given (imports and tests name their ids). Other commands pass
+/// through unchanged.
+///
+/// # Errors
+/// [`EngineError::Invalid`] when the largest id in use leaves no next id.
+#[expect(
+    clippy::too_many_lines,
+    reason = "one arm per Create command, and every other command is listed so a new one fails to compile"
+)]
+pub(crate) fn assign_ids(cmd: Command, books: &Books) -> Result<Command, EngineError> {
+    let m = &books.masters;
+    Ok(match cmd {
+        Command::CreateGroup(mut g) => {
+            if g.id.0 == 0 {
+                g.id = GroupId(next_id(m.groups.keys().next_back().map(|k| k.0))?);
+            }
+            Command::CreateGroup(g)
+        }
+        Command::CreateLedger(mut l) => {
+            if l.id.0 == 0 {
+                l.id = LedgerId(next_id(m.ledgers.keys().next_back().map(|k| k.0))?);
+            }
+            Command::CreateLedger(l)
+        }
+        Command::CreateUnit(mut u) => {
+            if u.id.0 == 0 {
+                u.id = UnitId(next_id(m.units.keys().next_back().map(|k| k.0))?);
+            }
+            Command::CreateUnit(u)
+        }
+        Command::CreateStockGroup(mut g) => {
+            if g.id.0 == 0 {
+                g.id = StockGroupId(next_id(m.stock_groups.keys().next_back().map(|k| k.0))?);
+            }
+            Command::CreateStockGroup(g)
+        }
+        Command::CreateStockItem(mut i) => {
+            if i.id.0 == 0 {
+                i.id = StockItemId(next_id(m.stock_items.keys().next_back().map(|k| k.0))?);
+            }
+            Command::CreateStockItem(i)
+        }
+        Command::CreateGodown(mut g) => {
+            if g.id.0 == 0 {
+                g.id = GodownId(next_id(m.godowns.keys().next_back().map(|k| k.0))?);
+            }
+            Command::CreateGodown(g)
+        }
+        Command::CreateBatch(mut b) => {
+            if b.id.0 == 0 {
+                b.id = BatchId(next_id(m.batches.keys().next_back().map(|k| k.0))?);
+            }
+            Command::CreateBatch(b)
+        }
+        Command::CreateCostCategory(mut c) => {
+            if c.id.0 == 0 {
+                c.id = CostCategoryId(next_id(m.cost_categories.keys().next_back().map(|k| k.0))?);
+            }
+            Command::CreateCostCategory(c)
+        }
+        Command::CreateCostCentre(mut c) => {
+            if c.id.0 == 0 {
+                c.id = CostCentreId(next_id(m.cost_centres.keys().next_back().map(|k| k.0))?);
+            }
+            Command::CreateCostCentre(c)
+        }
+        other @ (Command::AlterGroup(_)
+        | Command::DeleteGroup(_)
+        | Command::AlterLedger(_)
+        | Command::DeleteLedger(_)
+        | Command::AlterUnit(_)
+        | Command::DeleteUnit(_)
+        | Command::AlterStockGroup(_)
+        | Command::DeleteStockGroup(_)
+        | Command::AlterStockItem(_)
+        | Command::DeleteStockItem(_)
+        | Command::AlterGodown(_)
+        | Command::DeleteGodown(_)
+        | Command::AlterBatch(_)
+        | Command::DeleteBatch(_)
+        | Command::AlterCostCategory(_)
+        | Command::DeleteCostCategory(_)
+        | Command::AlterCostCentre(_)
+        | Command::DeleteCostCentre(_)
+        | Command::PostVoucher(_)
+        | Command::AlterVoucher(_)
+        | Command::CancelVoucher(_)
+        | Command::DeleteVoucher(_)
+        | Command::LockPeriod(_)
+        | Command::ConfirmBankMatch(_)) => other,
+    })
+}
+
+/// The id of the master a committed `MasterCreated` event made, if it is one of the kinds a
+/// `Create*` command makes (voucher types are seeded, never created by a command).
+fn created_id(event: &Event) -> Option<CreatedId> {
+    let Event::MasterCreated(snapshot) = event else {
+        return None;
+    };
+    match snapshot {
+        MasterSnapshot::Group(g) => Some(CreatedId::Group(g.id)),
+        MasterSnapshot::Ledger(l) => Some(CreatedId::Ledger(l.id)),
+        MasterSnapshot::VoucherType(_) => None,
+        MasterSnapshot::Unit(u) => Some(CreatedId::Unit(u.id)),
+        MasterSnapshot::StockGroup(g) => Some(CreatedId::StockGroup(g.id)),
+        MasterSnapshot::StockItem(i) => Some(CreatedId::StockItem(i.id)),
+        MasterSnapshot::Godown(g) => Some(CreatedId::Godown(g.id)),
+        MasterSnapshot::Batch(b) => Some(CreatedId::Batch(b.id)),
+        MasterSnapshot::CostCategory(c) => Some(CreatedId::CostCategory(c.id)),
+        MasterSnapshot::CostCentre(c) => Some(CreatedId::CostCentre(c.id)),
+    }
+}
+
 /// What a successful [`crate::Api::execute`] did.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CommandResult {
@@ -205,6 +354,9 @@ pub struct CommandResult {
     pub receipt: Option<CommitReceipt>,
     /// The voucher a post created, exactly as stored (with the number the engine allocated).
     pub posted: Option<Voucher>,
+    /// The id of the master a `Create*` command made (the assigned one when the command carried
+    /// id 0).
+    pub created: Option<CreatedId>,
 }
 
 impl CommandResult {
@@ -213,6 +365,7 @@ impl CommandResult {
         Self {
             receipt: None,
             posted: None,
+            created: None,
         }
     }
 
@@ -228,6 +381,7 @@ impl CommandResult {
         Self {
             receipt: Some(receipt),
             posted,
+            created: events.iter().find_map(created_id),
         }
     }
 }

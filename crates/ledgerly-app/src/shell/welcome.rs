@@ -143,6 +143,10 @@ impl WelcomeScreen {
     fn install(&mut self, ctx: &mut AppCtx, api: Api) {
         match ApiWorker::spawn(api) {
             Ok(worker) => {
+                // The books on screen belong to the previous company; the shell fetches the new
+                // ones from the new worker.
+                ctx.books = None;
+                super::submit::note_changed();
                 if let Some(previous) = ctx.api.replace(worker) {
                     let _stopping = std::thread::spawn(move || drop(previous));
                 }

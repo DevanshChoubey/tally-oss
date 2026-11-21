@@ -31,11 +31,11 @@
 //! balances shown in the type-ahead are handed in by the host through
 //! [`VoucherEntryScreen::set_balances`]; a ledger without one shows no balance, never zero.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 use std::str::FromStr;
 
 use egui::{Id, Key, Modifiers, Ui};
-use ledgerly_api::Command;
+use ledgerly_api::{Command, CreatedId};
 use ledgerly_core::{
     Date, Decimal, DrCr, FinancialYear, GroupId, LedgerId, MoneyError, Month, Outcome, Paise,
     RoundingRule, SignedAmount, VoucherId, VoucherTypeId, round_rupees_to_paise,
@@ -1118,6 +1118,10 @@ pub struct VoucherEntryScreen {
     /// The post the worker is running for this screen, if any. While it runs the screen shows
     /// "Saving..." and takes no keys, so a second save cannot start.
     posting: Option<Ticket<CommandReply>>,
+    /// Ledgers asked for with Alt+C that are waiting for the worker, oldest first.
+    create_queue: VecDeque<CreateLedgerRequest>,
+    /// The ledger create the worker is running: the name asked for, and the ticket.
+    creating: Option<(String, Ticket<CommandReply>)>,
 }
 
 impl VoucherEntryScreen {
@@ -1161,6 +1165,8 @@ impl VoucherEntryScreen {
             outbox: None,
             master_requests: Vec::new(),
             posting: None,
+            create_queue: VecDeque::new(),
+            creating: None,
         }))
     }
 
@@ -1988,6 +1994,7 @@ impl Screen for VoucherEntryScreen {
     }
 
     fn ui(&mut self, ui: &mut Ui, ctx: &mut AppCtx) -> ScreenAction {
+        self.poll_ledger_create(ui);
         if self.posting.is_some() {
             self.wait_for_post(ui);
             return ScreenAction::Stay;
@@ -2000,7 +2007,7 @@ impl Screen for VoucherEntryScreen {
         };
         if ctx.api.is_some() {
             self.send_saves(ctx);
-            self.refuse_ledger_creates();
+            self.send_ledger_creates(ctx);
         }
         action
     }
@@ -2009,7 +2016,7 @@ impl Screen for VoucherEntryScreen {
 /// What the screen says when it has no books to draw from.
 fn no_books_text(ctx: &AppCtx) -> &'static str {
     if ctx.api.is_some() {
-        "The company is open, but this screen cannot read its masters yet."
+        "The company is open. Its masters are being read, or could not be read."
     } else {
         "No company is open."
     }
@@ -2055,15 +2062,77 @@ impl VoucherEntryScreen {
         }
     }
 
-    /// Inline ledger creation (Alt+C) needs a new ledger id, which the company file does not
-    /// assign yet (the app cannot read the masters to pick one). The request is refused with that
-    /// reason, so no line stays "pending" forever.
-    fn refuse_ledger_creates(&mut self) {
-        for request in self.take_master_requests() {
-            self.reject_created_ledger(
-                &request.name,
-                "a new ledger needs an id from the company file, which this build cannot assign yet",
-            );
+    /// Inline ledger creation (Alt+C): queues each request the user confirmed and sends the oldest
+    /// to the worker when none is running. The ledger goes out with id 0; the API assigns the real
+    /// id and reports it in `CommandResult::created`.
+    fn send_ledger_creates(&mut self, ctx: &AppCtx) {
+        let Some(worker) = ctx.api.as_ref() else {
+            return;
+        };
+        self.create_queue.extend(self.take_master_requests());
+        if self.creating.is_some() {
+            return;
         }
+        if let Some(request) = self.create_queue.pop_front() {
+            let ledger = Ledger {
+                ineligible_itc: None,
+                id: LedgerId(0),
+                name: request.name.clone(),
+                aliases: Vec::new(),
+                group: request.group,
+                opening: SignedAmount::dr(Paise::ZERO),
+                bill_wise: None,
+                cost_centres_applicable: false,
+                party: None,
+                bank: None,
+                tax: None,
+                gst: None,
+                reserved: None,
+                tally: None,
+            };
+            let ticket = submit::send(worker, Command::CreateLedger(ledger));
+            self.creating = Some((request.name, ticket));
+        }
+    }
+
+    /// Takes the answer of the ledger create in progress, if it has come. A created ledger fills
+    /// the lines waiting for it; a refusal clears them and says why.
+    fn poll_ledger_create(&mut self, ui: &Ui) {
+        let Some((name, ticket)) = self.creating.as_mut() else {
+            return;
+        };
+        let Some(reply) = submit::settle(ticket) else {
+            ui.ctx().request_repaint();
+            return;
+        };
+        let name = std::mem::take(name);
+        self.creating = None;
+        match reply {
+            CommandReply::Booked(result) => match result.created {
+                Some(CreatedId::Ledger(id)) => self.resolve_created_ledger(&name, id),
+                Some(
+                    other @ (CreatedId::Group(_)
+                    | CreatedId::Unit(_)
+                    | CreatedId::StockGroup(_)
+                    | CreatedId::StockItem(_)
+                    | CreatedId::Godown(_)
+                    | CreatedId::Batch(_)
+                    | CreatedId::CostCategory(_)
+                    | CreatedId::CostCentre(_)),
+                ) => self.reject_created_ledger(
+                    &name,
+                    &format!("the engine reported a different master ({other:?})"),
+                ),
+                None => {
+                    self.reject_created_ledger(&name, "the engine did not report the new ledger");
+                }
+            },
+            CommandReply::Unsupported(u) => {
+                let why = format!("not supported yet: {} ({})", u.what, u.reason);
+                self.reject_created_ledger(&name, &why);
+            }
+            CommandReply::Failed(reason) => self.reject_created_ledger(&name, &reason),
+        }
+        ui.ctx().request_repaint();
     }
 }
