@@ -10,10 +10,11 @@
 //!
 //! # Status
 //!
-//! * `parse_report(&Envelope, ..)` cannot be written yet: `Envelope` is card X1's type and
-//!   `envelope.rs` is still the Wave 0 contract text. [`parse_report_xml`] takes the decoded
-//!   document text and yields the same rows plus warnings; `parse_report` becomes a one-line
-//!   wrapper once X1 lands (same approach as `vouchers::parse_vouchers_xml`).
+//! * `parse_report(&Envelope, ..)` is not written. X1's `Envelope` keeps the header, the message
+//!   elements and the `extras`, but not the order of the envelope's own children that the row
+//!   reader walks, and it returns its warnings separately. A wrapper would need either a change to
+//!   X1's `Envelope` or a re-serialised text, so it is an interface request. [`parse_report_xml`]
+//!   takes the decoded document text and yields the same rows plus warnings.
 //! * The tag names this parser reads (`DSPACCNAME`, `DSPACCINFO`, `BSNAME`, `BSAMT`, `DSPSTKINFO`,
 //!   `BILLFIXED`, ...) and the report ids in [`report_request`] are **recalled, not observed**.
 //!   Research note R8 only documents the request shape (section 2.3(a)). The test fixtures are
@@ -361,6 +362,10 @@ fn parse_paise(tag: &str, raw: &str) -> Result<Paise, TallyXmlError> {
         .map_err(|_| value_err(tag, raw, "amount overflows"))
 }
 
+/// Whether a row is a totals row, by its label alone. Pending an observed capture: a structural
+/// marker for totals is not known yet, so a row named `Total` that is really a ledger is flagged
+/// here too. Reconciliation treats a flagged row that names one of our masters as that master
+/// (ambiguous, never green); see `ledgerly_tally_bridge::reconcile`.
 fn is_total_label(label: &str) -> bool {
     let t = label.trim();
     t.eq_ignore_ascii_case("Grand Total") || t.eq_ignore_ascii_case("Total")
@@ -471,7 +476,9 @@ fn columns(
     if dr.is_none() && cr.is_none() {
         return Ok(TReportAmount::Nil);
     }
-    // R8 2.3(e): a debit is written negative, so the debit column holds zero or a negative.
+    // Pending an observed capture: R8 2.3(e) writes a debit negative for voucher import lines only
+    // (tagged [vendor shape]). Applying it to report columns is recall, not a documented fact.
+    // A debit column that holds zero or a negative is read as a debit.
     let debit = match dr {
         None => Paise::ZERO,
         Some(p) if p.is_negative() => p

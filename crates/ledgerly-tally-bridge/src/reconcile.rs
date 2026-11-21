@@ -35,6 +35,10 @@
 //!   group row above it accounts for is listed as [`LineStatus::OnlyInOurs`].
 //! * If our own trial balance is unsupported or fails, the section says so and lists no lines.
 //! * A Tally export without a totals row is not an error: no totals line is invented.
+//! * Totals are recognised by label only (`pending` an observed capture of Tally's layout). A row
+//!   with that label that names one of our masters is that master: it is listed with the
+//!   master's comparison and marked [`LineStatus::Ambiguous`], so it is never green and is never
+//!   compared as the grand total.
 //!
 //! Provenance of the Tally layout: recalled, not observed (see `ledgerly_tally_xml::reports`).
 
@@ -537,9 +541,10 @@ fn compare_trial_balance(
     let index = Index::new(books);
     let difference_label = ours.difference.as_ref().map(|(label, _)| label.as_str());
 
+    // Every row is resolved, totals included: a row that names one of our masters accounts for it
+    // whatever its label says.
     let resolved: Vec<Resolved<'_>> = theirs
         .iter()
-        .filter(|row| !row.is_total)
         .map(|row| Resolved {
             row,
             resolution: index.resolve(row, difference_label),
@@ -554,12 +559,25 @@ fn compare_trial_balance(
     }
 
     let mut lines = Vec::new();
-    let mut detail = resolved.iter();
-    for row in theirs {
-        if row.is_total {
-            lines.push(their_line(row, LineKind::Total, ours.totals));
-        } else if let Some(r) = detail.next() {
-            lines.push(detail_line(r, &ours, &uses));
+    for r in &resolved {
+        match (r.row.is_total, &r.resolution) {
+            // Totals are recognised by label only (pending an observed capture). A row with that
+            // label that names one of our masters is that master, not the grand total: it is
+            // listed with the master's comparison, marked ambiguous (never green).
+            (true, Resolution::Found(_)) => {
+                let mut listed = detail_line(r, &ours, &uses);
+                listed.status = LineStatus::Ambiguous {
+                    reason: format!(
+                        "Tally's row '{}' is recognised as a total by its label only, and it \
+                         also names one of our masters; totals detection is pending an observed \
+                         capture, so it is not green",
+                        r.row.label
+                    ),
+                };
+                lines.push(listed);
+            }
+            (true, _) => lines.push(their_line(r.row, LineKind::Total, ours.totals)),
+            (false, _) => lines.push(detail_line(r, &ours, &uses)),
         }
     }
     lines.extend(only_in_ours(books, &ours, &resolved));
