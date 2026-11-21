@@ -204,6 +204,30 @@ pub enum BankScreenError {
         /// The line number.
         line_no: u32,
     },
+    /// A statement line carries a negative amount. The direction is the flow, never a sign, so
+    /// a negative amount would show the wrong direction of money.
+    #[error(
+        "statement line {line_no} has a negative amount; the amount must be zero or more and the direction comes from the flow"
+    )]
+    NegativeLineAmount {
+        /// The line number.
+        line_no: u32,
+    },
+    /// An open voucher carries a negative amount.
+    #[error(
+        "voucher {voucher:?} has a negative amount; the amount must be zero or more and the direction comes from the flow"
+    )]
+    NegativeVoucherAmount {
+        /// The voucher.
+        voucher: VoucherId,
+    },
+    /// A suggestion names a voucher that is not among the open vouchers, so accepting it would
+    /// match a voucher the bank ledger does not offer.
+    #[error("a suggestion names voucher {voucher:?}, which is not an open voucher")]
+    UnknownSuggestionVoucher {
+        /// The voucher.
+        voucher: VoucherId,
+    },
 }
 
 /// Where a statement line stands.
@@ -277,15 +301,23 @@ impl BankScreen {
                     line_no: line.line_no,
                 });
             }
-        }
-        for s in &suggestions {
-            check_suggestion(s, &numbers)?;
+            if line.amount.is_negative() {
+                return Err(BankScreenError::NegativeLineAmount {
+                    line_no: line.line_no,
+                });
+            }
         }
         let mut seen = BTreeSet::new();
         for v in &open_vouchers {
             if !seen.insert(v.voucher) {
                 return Err(BankScreenError::DuplicateVoucher { voucher: v.voucher });
             }
+            if v.amount.is_negative() {
+                return Err(BankScreenError::NegativeVoucherAmount { voucher: v.voucher });
+            }
+        }
+        for s in &suggestions {
+            check_suggestion(s, &numbers, &seen)?;
         }
         Ok(BankScreen {
             ledger_name: ledger_name.to_owned(),
@@ -574,7 +606,11 @@ impl BankScreen {
     }
 }
 
-fn check_suggestion(s: &SuggestionView, numbers: &BTreeSet<u32>) -> Result<(), BankScreenError> {
+fn check_suggestion(
+    s: &SuggestionView,
+    numbers: &BTreeSet<u32>,
+    open: &BTreeSet<VoucherId>,
+) -> Result<(), BankScreenError> {
     match s.kind {
         MatchKind::Manual => return Err(BankScreenError::ManualSuggestion),
         MatchKind::Exact | MatchKind::Rule | MatchKind::AiSuggested => {}
@@ -590,6 +626,9 @@ fn check_suggestion(s: &SuggestionView, numbers: &BTreeSet<u32>) -> Result<(), B
     }
     if let Some(line_no) = s.lines.iter().find(|n| !numbers.contains(*n)) {
         return Err(BankScreenError::UnknownLine { line_no: *line_no });
+    }
+    if let Some(voucher) = s.vouchers.iter().find(|v| !open.contains(*v)) {
+        return Err(BankScreenError::UnknownSuggestionVoucher { voucher: *voucher });
     }
     Ok(())
 }
@@ -721,19 +760,25 @@ impl BankScreen {
                     let _ = self.skip_focused();
                 }
             }
+            // Moving the focus is for the Matching tab only: the Statement tab shows no focus, so
+            // a move there would change which line Enter accepts without the user seeing it.
             KeyCmd::Down => {
-                if self.manual_open {
-                    let last = self.manual_candidates().len().saturating_sub(1);
-                    self.manual_cursor = self.manual_cursor.saturating_add(1).min(last);
-                } else {
-                    self.focus_next();
+                if self.tab == Tab::Matching {
+                    if self.manual_open {
+                        let last = self.manual_candidates().len().saturating_sub(1);
+                        self.manual_cursor = self.manual_cursor.saturating_add(1).min(last);
+                    } else {
+                        self.focus_next();
+                    }
                 }
             }
             KeyCmd::Up => {
-                if self.manual_open {
-                    self.manual_cursor = self.manual_cursor.saturating_sub(1);
-                } else {
-                    self.focus_prev();
+                if self.tab == Tab::Matching {
+                    if self.manual_open {
+                        self.manual_cursor = self.manual_cursor.saturating_sub(1);
+                    } else {
+                        self.focus_prev();
+                    }
                 }
             }
             KeyCmd::Manual => {

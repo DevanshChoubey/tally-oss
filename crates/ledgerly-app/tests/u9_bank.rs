@@ -261,6 +261,52 @@ fn construction_rejects_bad_input_with_a_typed_error() {
     );
 }
 
+#[test]
+fn a_suggestion_naming_a_voucher_the_bank_ledger_does_not_offer_is_refused_at_construction() {
+    // provenance: derived - spec 6.5: a match names vouchers the bank ledger offers. Voucher 99 is
+    // not among the open vouchers, so the screen refuses to be built with that suggestion and no
+    // Enter can ever record a match of it. The old code accepted it and recorded a BankMatch.
+    let bad = vec![suggestion(
+        &[1],
+        &[99],
+        MatchKind::Exact,
+        date!(2026 - 11 - 20),
+        Confidence::High,
+    )];
+    let err = BankScreen::new("B", STMT, lines(), bad, open_vouchers())
+        .err()
+        .unwrap();
+    assert_eq!(
+        err,
+        BankScreenError::UnknownSuggestionVoucher {
+            voucher: VoucherId(99)
+        }
+    );
+}
+
+#[test]
+fn a_negative_amount_is_refused_on_a_statement_line_and_on_an_open_voucher() {
+    // provenance: derived - the direction comes from the flow (Flow::In or Flow::Out), so an amount
+    // below zero would show the wrong direction. Refused at construction, in both places.
+    let mut negative_line = lines();
+    negative_line.get_mut(1).unwrap().amount = Paise::new(-5_000_000);
+    let err = BankScreen::new("B", STMT, negative_line, Vec::new(), Vec::new())
+        .err()
+        .unwrap();
+    assert_eq!(err, BankScreenError::NegativeLineAmount { line_no: 2 });
+
+    let negative_voucher = vec![open(9, "Payment/0009", -100, Flow::Out)];
+    let err = BankScreen::new("B", STMT, lines(), Vec::new(), negative_voucher)
+        .err()
+        .unwrap();
+    assert_eq!(
+        err,
+        BankScreenError::NegativeVoucherAmount {
+            voucher: VoucherId(9)
+        }
+    );
+}
+
 // ---- accepting --------------------------------------------------------------------------------
 
 #[test]
@@ -538,6 +584,27 @@ fn enter_accepts_and_s_skips_and_j_k_move() {
     assert_eq!(s.focused_line_no(), Some(4));
     frame(&ctx, &mut s, key(Key::K));
     assert_eq!(s.focused_line_no(), Some(3));
+}
+
+#[test]
+fn j_and_k_do_not_move_the_focus_on_the_statement_tab() {
+    // provenance: derived - the focused line is shown on the Matching tab only. J on the Statement
+    // tab must leave the focus where the user last saw it, so Enter on the Matching tab accepts
+    // the line the user looked at. The old code moved the hidden focus five lines down.
+    let ctx = egui::Context::default();
+    let mut s = screen();
+    frame(&ctx, &mut s, RawInput::default());
+    frame(&ctx, &mut s, key(Key::B));
+    assert_eq!(s.tab(), Tab::Statement);
+    for _ in 0..5 {
+        frame(&ctx, &mut s, key(Key::J));
+    }
+    assert_eq!(s.focused_line_no(), Some(1));
+    frame(&ctx, &mut s, key(Key::K));
+    assert_eq!(s.focused_line_no(), Some(1));
+    frame(&ctx, &mut s, key(Key::B));
+    frame(&ctx, &mut s, key(Key::J));
+    assert_eq!(s.focused_line_no(), Some(2), "J moves again on the Matching tab");
 }
 
 #[test]
