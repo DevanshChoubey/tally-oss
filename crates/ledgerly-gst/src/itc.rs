@@ -133,10 +133,6 @@ fn value(e: ItcEligibility) -> Result<Outcome<ItcEligibility>, GstError> {
     Ok(Outcome::Value(e))
 }
 
-#[expect(
-    clippy::unnecessary_wraps,
-    reason = "builds the Result<Outcome> every check returns, so callers can `return value(..)`"
-)]
 fn ineligible(reason: &str) -> Result<Outcome<ItcEligibility>, GstError> {
     value(ItcEligibility::Ineligible {
         reason: reason.to_owned(),
