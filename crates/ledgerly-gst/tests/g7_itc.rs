@@ -264,59 +264,44 @@ fn assert_unsupported(v: &Voucher, line: usize, m: &Masters, r: &RuleSet) {
 }
 
 #[test]
-fn motor_car_is_blocked_under_17_5_a() {
+fn motor_car_is_unsupported_under_17_5_a() {
     // provenance: derived — CGST Act s.17(5)(a) (research 04-gst 2.9: motor vehicles with 13 seats
-    // or fewer). Fixture pack: category `itc.blocked.motor_vehicles` lists HSN prefix 8703; the
-    // ledger's code 870321 starts with 8703, so the line is in the category and the section shown
-    // is the pack's "17(5)(a)".
-    let e = eligibility(
+    // or fewer; exceptions for further supply, passenger and goods transport, and driving training
+    // depend on use). Fixture pack: category `itc.blocked.motor_vehicles` lists HSN prefix 8703;
+    // the ledger's code 870321 starts with 8703, so the line is in the category. No use flag is
+    // recorded, so the answer is Unsupported naming the section, never Blocked or Eligible.
+    assert_unsupported(
         &purchase(PARTY, CAR),
         0,
         &masters(),
         &rules(purchase_date()),
     );
-    assert_eq!(
-        e,
-        ItcEligibility::Blocked {
-            section: "17(5)(a)".to_owned()
-        }
-    );
-    assert!(!e.is_claimable());
 }
 
 #[test]
-fn food_and_beverage_service_is_blocked_under_17_5_b() {
+fn food_and_beverage_service_is_unsupported_under_17_5_b() {
     // provenance: derived — CGST Act s.17(5)(b) (research 04-gst 2.9: food and beverages, outdoor
-    // catering). Fixture pack lists SAC prefix 9963; the ledger's code 996331 starts with 9963.
-    let e = eligibility(
+    // catering; exception for an obligation under law depends on use). Fixture pack lists SAC
+    // prefix 9963; the ledger's code 996331 starts with 9963, so the answer is Unsupported.
+    assert_unsupported(
         &purchase(PARTY, FOOD),
         0,
         &masters(),
         &rules(purchase_date()),
-    );
-    assert_eq!(
-        e,
-        ItcEligibility::Blocked {
-            section: "17(5)(b)".to_owned()
-        }
     );
 }
 
 #[test]
 fn aircraft_prefix_list_is_split_on_commas_and_trimmed() {
     // provenance: derived — CGST Act s.17(5)(aa) (vessels and aircraft). The fixture lists
-    // "8802, 8901" (with a space); 880240 starts with 8802, so it is blocked under "17(5)(aa)".
-    let e = eligibility(
+    // "8802, 8901" (with a space); 880240 starts with 8802, so it is in the category. The category
+    // is Unsupported (no use flag, and the exceptions are not in the research note), so a space
+    // in the list must not stop the match: the answer must not be Eligible.
+    assert_unsupported(
         &purchase(PARTY, AIRCRAFT),
         0,
         &masters(),
         &rules(purchase_date()),
-    );
-    assert_eq!(
-        e,
-        ItcEligibility::Blocked {
-            section: "17(5)(aa)".to_owned()
-        }
     );
 }
 
@@ -378,21 +363,15 @@ fn blocked_and_ineligible_credit_is_never_claimable() {
 fn the_rule_set_for_the_time_of_supply_decides() {
     // provenance: derived — engineering rule A8 (rules are effective-dated and picked by time of
     // supply). Fixture: the motor vehicle category ends 2025-12-31. A purchase with time of supply
-    // 2025-12-31 is blocked; one on 2026-01-15, after the entry ended, has no entry for that
-    // category in force, so the rule set has no such rule and the answer is Unsupported (never
-    // "eligible by default").
+    // 2025-12-31 is in the category, so it is Unsupported (no use flag); one on 2026-01-15, after
+    // the entry ended, has no entry for that category in force, so the rule set has no such rule
+    // and the answer is also Unsupported (never "eligible by default").
     let text = pack_text(Some("2025-12-31"), false);
-    let before = eligibility(
+    assert_unsupported(
         &purchase(PARTY, CAR),
         0,
         &masters(),
         &rules_from(&text, date!(2025 - 12 - 31)),
-    );
-    assert_eq!(
-        before,
-        ItcEligibility::Blocked {
-            section: "17(5)(a)".to_owned()
-        }
     );
     assert_unsupported(
         &purchase(PARTY, CAR),
@@ -470,15 +449,15 @@ fn unregistered_supplier_gives_no_credit_unless_reverse_charge() {
 }
 
 #[test]
-fn blocked_credit_stays_blocked_under_reverse_charge() {
+fn blocked_category_under_reverse_charge_is_unsupported() {
     // provenance: derived — s.17(5) applies to "input tax" however it was paid; a motor car
-    // bought under reverse charge is still in clause (a).
+    // bought under reverse charge is still in clause (a), so it is not Eligible. Its exceptions
+    // depend on use, which is not recorded, so the answer is Unsupported.
     let v = Voucher {
         reverse_charge: true,
         ..purchase(UNREGISTERED_PARTY, CAR)
     };
-    let e = eligibility(&v, 0, &masters(), &rules(purchase_date()));
-    assert!(matches!(e, ItcEligibility::Blocked { .. }));
+    assert_unsupported(&v, 0, &masters(), &rules(purchase_date()));
 }
 
 #[test]
@@ -513,10 +492,7 @@ fn hsn_comes_from_the_stock_items_when_the_ledger_has_none() {
         ..purchase(PARTY, BY_ITEM)
     };
     let car = masters_with(BaseVoucherKind::Purchase, Some("870321"));
-    assert!(matches!(
-        eligibility(&v, 0, &car, &r),
-        ItcEligibility::Blocked { .. }
-    ));
+    assert_unsupported(&v, 0, &car, &r);
     let office = masters_with(BaseVoucherKind::Purchase, Some("482010"));
     assert_eq!(eligibility(&v, 0, &office, &r), ItcEligibility::Eligible);
     // No code anywhere: Unsupported.
