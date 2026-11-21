@@ -1,8 +1,9 @@
 //! Commands (card W1): one typed variant for every engine command that exists today.
 //!
 //! The variants mirror the public command functions of `ledgerly-engine` (`masters_accounts`,
-//! `masters_stock`, `vouchers`, `locks`). Settings changes and bank match confirmation have no
-//! engine command yet, so they have no variant here; see the card report.
+//! `masters_stock`, `vouchers`, `locks`), plus the bank match confirmation (spec 6.5), which has
+//! no engine function and is checked here. Settings changes have no engine command yet, so they
+//! have no variant here; see the card report.
 //!
 //! [`run`] is the only place a command reaches the engine. Voucher commands always take the
 //! period lock (spec section 5, invariant 8) and never call the lock-less engine functions.
@@ -13,8 +14,8 @@ use ledgerly_core::{
 };
 use ledgerly_engine::{EngineError, locks, masters_accounts, masters_stock, vouchers};
 use ledgerly_model::{
-    Batch, Books, CostCategory, CostCentre, Godown, Group, Ledger, StockGroup, StockItem, Unit,
-    Voucher,
+    BankMatch, Batch, Books, CostCategory, CostCentre, Godown, Group, Ledger, StockGroup,
+    StockItem, Unit, Voucher, VoucherStatus,
 };
 use ledgerly_store::{CommitReceipt, Event};
 
@@ -85,6 +86,10 @@ pub enum Command {
     DeleteVoucher(VoucherId),
     /// Lock the books up to and including this date (an audited event; the lock date may move).
     LockPeriod(Date),
+    /// Confirm a bank match: the user accepts a suggested match, and its bank date is set on the
+    /// bank lines of the vouchers (spec 6.5: only a user-confirmed match sets the bank date). The
+    /// period lock applies to the vouchers, as for any voucher change.
+    ConfirmBankMatch(BankMatch),
 }
 
 /// Runs `cmd` against `books` with the period lock `lock` and returns the events to commit.
@@ -132,7 +137,64 @@ pub(crate) fn run(
         Command::CancelVoucher(id) => vouchers::cancel_voucher_with_lock(id, books, lock),
         Command::DeleteVoucher(id) => vouchers::delete_voucher_with_lock(id, books, lock),
         Command::LockPeriod(until) => locks::lock_period(until, books),
+        Command::ConfirmBankMatch(matched) => confirm_bank_match(matched, books, lock),
     }
+}
+
+/// Checks a confirmed bank match against the books and the period lock, and returns the
+/// `MatchConfirmed` event that the store applies (it sets the bank date on the bank lines).
+///
+/// Every voucher must exist, be `Regular` or `PostDated`, lie outside the lock, have at least one
+/// bank line and have no bank date yet. Nothing is changed here.
+fn confirm_bank_match(
+    matched: BankMatch,
+    books: &Books,
+    lock: Option<Date>,
+) -> Result<Outcome<Vec<Event>>, EngineError> {
+    if matched.vouchers.is_empty() {
+        return Err(EngineError::Invalid {
+            field: "bank match".to_owned(),
+            reason: "the match names no voucher".to_owned(),
+        });
+    }
+    for id in &matched.vouchers {
+        let voucher = books
+            .vouchers
+            .get(id)
+            .ok_or_else(|| EngineError::NotFound {
+                what: format!("voucher {}", id.0),
+            })?;
+        match voucher.status {
+            VoucherStatus::Regular | VoucherStatus::PostDated => {}
+            VoucherStatus::Optional | VoucherStatus::Cancelled => {
+                return Err(EngineError::Invalid {
+                    field: format!("voucher {}", id.0),
+                    reason: "only a regular or post-dated voucher can be matched to the bank"
+                        .to_owned(),
+                });
+            }
+        }
+        locks::check_unlocked(voucher.date, lock)?;
+        let allocations: Vec<_> = voucher
+            .ledger_lines
+            .iter()
+            .filter_map(|line| line.bank.as_ref())
+            .collect();
+        if allocations.is_empty() {
+            return Err(EngineError::Invalid {
+                field: format!("voucher {}", id.0),
+                reason: "the voucher has no bank line to match".to_owned(),
+            });
+        }
+        if allocations.iter().any(|a| a.bank_date.is_some()) {
+            return Err(EngineError::Invalid {
+                field: format!("voucher {}", id.0),
+                reason: "the bank has already cleared this voucher; a match cannot be changed here"
+                    .to_owned(),
+            });
+        }
+    }
+    Ok(Outcome::Value(vec![Event::MatchConfirmed(matched)]))
 }
 
 /// What a successful [`crate::Api::execute`] did.

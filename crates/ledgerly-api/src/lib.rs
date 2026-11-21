@@ -19,3 +19,7 @@ pub use command::{Command, CommandResult};
 pub use error::ApiError;
 pub use facade::Api;
 pub use search::{MatchedOn, SearchHit};
+
+pub use ledgerly_bank::brs::Brs;
+pub use ledgerly_bank::matcher::{Candidate, LineDirection, MatchRule};
+pub use ledgerly_bank::statement::BankStatement;
