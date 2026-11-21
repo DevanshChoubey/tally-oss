@@ -21,3 +21,7 @@ pub use facade::Api;
 pub use gst::{Bucket, BucketedVoucher, Gstr1, Gstr1Return, Gstr3bWorking, RulePack};
 pub use search::{MatchedOn, SearchHit};
 pub use tally_import::ImportSummary;
+
+pub use ledgerly_bank::brs::Brs;
+pub use ledgerly_bank::matcher::{Candidate, LineDirection, MatchRule};
+pub use ledgerly_bank::statement::BankStatement;

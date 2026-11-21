@@ -44,6 +44,7 @@ use ledgerly_model::{Books, Company, MasterSnapshot};
 use ledgerly_reports::{Report, ReportParams};
 use ledgerly_store::{Actor, AuditMeta, Event, SqliteStore, Store, StoreError};
 
+use crate::bank::Statements;
 use crate::command::{self, Command, CommandResult};
 use crate::error::ApiError;
 use crate::events::{lock_date, read_all};
@@ -66,6 +67,9 @@ pub struct Api {
     cache: Cache,
     /// The lock date in force, from the audit log.
     lock: Option<Date>,
+    /// Bank statements imported in this session (card W5). Not kept in the company file, which
+    /// records only the `StatementImported` id; see `bank.rs`.
+    pub(crate) bank: Statements,
 }
 
 /// The state of the books cache.
@@ -103,6 +107,7 @@ impl Api {
             actor,
             cache: Cache::Stale,
             lock: None,
+            bank: Statements::default(),
         };
         api.reload()?;
         Ok(api)
@@ -120,6 +125,7 @@ impl Api {
             actor: default_actor(),
             cache: Cache::Stale,
             lock: None,
+            bank: Statements::default(),
         };
         api.reload()?;
         Ok(api)

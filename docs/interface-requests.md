@@ -141,3 +141,22 @@ Filed from the r2/* fix branches. Each line names the card and the request; the 
   `itc_eligibility(v, line, company, masters, rules)`, plus the advisory `blocked_category_for`.
 - **G7** (tally-bridge): map Tally's ineligible-for-input-credit setting on import once an
   observed XML capture shows the tag.
+
+## Wave 2 W5 (bank statements, 2026-11-21)
+
+- **K3** (model, bank): a statement payload in the store. `Event::StatementImported(BankStatementId)`
+  carries only the id, so the parsed `BankStatement` is held in memory by `Api` for the session
+  (`crates/ledgerly-api/src/bank.rs`). Statements are not in the company file: after a reopen the
+  session does not know them, `Api::brs` gives no statement side, and a statement must be imported
+  again (`ApiError::UnknownBankStatement`). Duplicate-file detection is also per session. Requested:
+  an event that carries the parsed lines and file hash, so statements survive reopen.
+- **K3** (bankfmt, CSV): the CSV parser leaves `RawStatement.opening` and `closing` unset for the
+  generic split layout (`csv.rs`), so `check_statement` refuses every CSV file with
+  `StatementError::MissingBalance`. Requested: read the opening and closing balance from the file
+  (a balance column, or a header or footer line) so CSV statements can be verified.
+- **K3** (bank, BRS): `BankStatement` has no end date for the statement, so the statement side is
+  covered only for `as_of` strictly before the last line date. Requested: store the statement's
+  stated end date (`:62F:` date for MT940) so the statement side can cover the last day too.
+- **Facade** (W1, facade.rs): W5 added a `pub(crate) bank: Statements` field to `Api` and removed the
+  `allow(dead_code)` lines on `loaded_books`, `cached_books`, `store`, `commit_as` and `actor`. The
+  brief allowed removing the allow lines only; the field addition is outside that and is flagged here.
