@@ -18,6 +18,20 @@ rustdoc `-D warnings`, `cargo deny check`, and nextest with 634 of 634 tests pas
 assertion was loosened. The "Compiled" column below describes the cards before this build.
 Nothing is pushed or merged to `main`.
 
+**Wave 1 complete (2026-11-21).** The other 66 Wave 1 cards were written code-only and merged
+into `integration` with no conflicts. One controlled build then made all 93 cards green (commit
+00dcbba): `cargo fmt --check`, clippy `-D warnings`, rustdoc `-D warnings`, doctests,
+`cargo deny check`, and nextest with 2153 of 2153 tests passing. Four tests failed at first.
+None was loosened:
+- g5_rcm's expected value had a wrong hand derivation. It was corrected, and a case was added
+  that tells per-line rounding from per-head rounding.
+- u8_gst and u11_assist_panel kept the action from egui's second pass in a frame, not the first.
+- s3_verify assumed SQLite's foreign keys are off by default, but bundled libsqlite3-sys turns
+  them on.
+
+The 66 cards have not yet had the per-card review the pilot cards had. Nothing is pushed or
+merged to `main`.
+
 | Card | Status | Compiled | Review | Blocking | Fixed |
 |---|---|---|---|---|---|
 | C1 | done | yes | approve | 0 | - |
