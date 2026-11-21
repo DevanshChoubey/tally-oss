@@ -14,12 +14,15 @@ mod maintenance;
 mod report;
 mod search;
 mod tally_import;
+mod voucher_gst;
 
 pub use command::{Command, CommandResult};
 // Report types the app names when it builds and reads reports (card W7). The app depends on this
 // crate only, so the report model is re-exported here instead of adding a manifest dependency.
 pub use error::ApiError;
 pub use facade::Api;
+pub use ledgerly_gst::compute::GstBreakup;
+pub use voucher_gst::InvoiceGst;
 pub use gst::{Bucket, BucketedVoucher, Gstr1, Gstr1Return, Gstr3bWorking, RulePack};
 pub use ledgerly_model::{Address, Company, EntityKind, Features, NegativeStockPolicy, Voucher};
 pub use ledgerly_reports::{

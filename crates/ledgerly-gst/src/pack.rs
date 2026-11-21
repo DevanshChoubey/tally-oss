@@ -217,6 +217,22 @@ impl RulePack {
         &self.entries
     }
 
+    /// A pack holding the entries of `self` and then those of `other`, versioned
+    /// `"<self>+<other>"`. Used to read the rate slabs together with the GSTR-1 and input credit
+    /// rules, which ship in separate files.
+    ///
+    /// # Errors
+    /// [`GstError::Pack`] when two entries of one id have effective ranges that share a day.
+    pub fn merge(&self, other: &RulePack) -> Result<RulePack, GstError> {
+        let mut entries = self.entries.clone();
+        entries.extend(other.entries.iter().cloned());
+        check_no_overlap(&entries)?;
+        Ok(RulePack {
+            version: format!("{}+{}", self.version, other.version),
+            entries,
+        })
+    }
+
     /// The rules in force on `date`, which must be the time of supply (never the entry date).
     /// `Unsupported` when no entry of the pack covers that date.
     pub fn for_time_of_supply(&self, date: Date) -> Outcome<RuleSet> {
