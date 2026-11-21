@@ -29,7 +29,7 @@ pub(super) enum ChromeCmd {
 pub(super) fn tab_strip(ui: &mut Ui, tabs: &Tabs, theme: ThemeKind, t: &Tokens) -> Vec<ChromeCmd> {
     let mut cmds = Vec::new();
     ui.horizontal(|ui| {
-        ui.label(RichText::new("Ledgerly").strong().color(t.ink));
+        ui.label(RichText::new("Ledgerly").strong().color(t.text));
         ui.separator();
         let closable = tabs.len() > 1;
         for (i, title) in tabs.titles().into_iter().enumerate() {
@@ -70,12 +70,12 @@ pub(super) fn breadcrumbs(ui: &mut Ui, trail: &[String], t: &Tokens) -> Vec<Chro
         let last = trail.len().saturating_sub(1);
         for (i, title) in trail.iter().enumerate() {
             if i == last {
-                ui.label(RichText::new(title).strong().color(t.ink));
+                ui.label(RichText::new(title).strong().color(t.text));
             } else {
                 if ui.link(title).clicked() {
                     cmds.push(ChromeCmd::PopTo(i.saturating_add(1)));
                 }
-                ui.label(RichText::new("\u{203A}").color(t.ink_3));
+                ui.label(RichText::new("\u{203A}").color(t.text_3));
             }
         }
     });
@@ -90,6 +90,6 @@ pub(super) fn key_bar(ui: &mut Ui, can_go_back: bool, t: &Tokens) {
         } else {
             "Ctrl+T  New tab     Ctrl+W  Close tab"
         };
-        ui.label(RichText::new(hint).color(t.ink_2));
+        ui.label(RichText::new(hint).color(t.text_2));
     });
 }

@@ -1,11 +1,12 @@
-//! Card U1: theme tokens. Expected values are the mock's tokens (derived) and the WCAG 2.1
-//! contrast thresholds (derived); nothing here is copied from this crate's own output.
+//! Card U1: theme tokens. Expected values are the mock v2's tokens (derived from
+//! `design/mock-v2/index.html` `:root` at commit 2178293) and the WCAG 2.1 contrast thresholds
+//! (derived); nothing here is copied from this crate's own output.
 #![allow(
     clippy::float_arithmetic,
     reason = "WCAG contrast is defined on real numbers; no money is involved"
 )]
 
-use egui::Color32;
+use egui::{Color32, FontFamily, RawInput, TextStyle};
 use ledgerly_app::theme::{self, ThemeKind, Tokens};
 
 /// WCAG 2.1 relative luminance (definition in the "relative luminance" entry of the glossary):
@@ -34,6 +35,11 @@ fn hex(c: Color32) -> u32 {
     (u32::from(c.r()) << 16) | (u32::from(c.g()) << 8) | u32::from(c.b())
 }
 
+/// Two f32 values are the same to well within a pixel.
+fn same(a: f32, b: f32) -> bool {
+    (a - b).abs() < 1e-6
+}
+
 #[test]
 fn wcag_helper_matches_the_published_extremes() {
     // derived: WCAG 2.1 says black on white is 21:1 and identical colours are 1:1.
@@ -46,23 +52,32 @@ fn wcag_helper_matches_the_published_extremes() {
 
 #[test]
 fn light_tokens_are_the_mock_tokens() {
-    // derived: design/mock/index.html lines 13-28 (:root), spec 7 names the mock as the visual
-    // reference. ink_3 is a documented deviation, see below.
+    // derived: design/mock-v2/index.html `:root` (lines 30-36).
     let t = theme::tokens(ThemeKind::Light);
-    let expected: [(&str, Color32, u32); 13] = [
-        ("paper", t.paper, 0x00F2_F4F7),
-        ("sheet", t.sheet, 0x00FF_FFFF),
-        ("ink", t.ink, 0x0017_2033),
-        ("ink_2", t.ink_2, 0x0047_536A),
-        ("line", t.line, 0x00DC_E1E9),
-        ("ruling", t.ruling, 0x00CB_D6EC),
-        ("margin", t.margin, 0x00C2_3B35),
-        ("accent", t.accent, 0x0035_41A8),
-        ("accent_ink", t.accent_ink, 0x00FF_FFFF),
-        ("accent_soft", t.accent_soft, 0x00E5_E8FA),
-        ("haldi_soft", t.haldi_soft, 0x00FB_F0D8),
-        ("leaf_soft", t.leaf_soft, 0x00DD_F0E4),
-        ("focus_band", t.focus_band, 0x00FF_F7D6),
+    let expected: [(&str, Color32, u32); 23] = [
+        ("bg", t.bg, 0x00F6_F5F2),
+        ("surface", t.surface, 0x00FF_FFFF),
+        ("surface_2", t.surface_2, 0x00FB_FAF8),
+        ("sunken", t.sunken, 0x00EF_EDE8),
+        ("hover", t.hover, 0x00F1_EFEA),
+        ("border", t.border, 0x00E2_DFD8),
+        ("border_strong", t.border_strong, 0x008F_897E),
+        ("text", t.text, 0x001C_1B19),
+        ("text_2", t.text_2, 0x004A_4741),
+        ("text_3", t.text_3, 0x0061_5D55),
+        ("accent", t.accent, 0x006B_2D73),
+        ("on_accent", t.on_accent, 0x00FF_FFFF),
+        ("accent_soft", t.accent_soft, 0x00F3_E8F4),
+        ("accent_ink", t.accent_ink, 0x005A_2161),
+        ("ai", t.ai, 0x009A_4211),
+        ("ai_soft", t.ai_soft, 0x00FB_EDE3),
+        ("ai_ink", t.ai_ink, 0x0086_390D),
+        ("ok", t.ok, 0x001E_6E3F),
+        ("ok_soft", t.ok_soft, 0x00E3_F2E8),
+        ("warn", t.warn, 0x007E_4C00),
+        ("warn_soft", t.warn_soft, 0x00FB_F0DC),
+        ("bad", t.bad, 0x00B3_261E),
+        ("bad_soft", t.bad_soft, 0x00FC_E9E7),
     ];
     for (name, got, want) in expected {
         assert_eq!(hex(got), want, "light token {name}");
@@ -71,25 +86,32 @@ fn light_tokens_are_the_mock_tokens() {
 
 #[test]
 fn dark_tokens_are_the_mock_tokens() {
-    // derived: design/mock/index.html lines 38-41 and 45-48 (dark overrides).
+    // derived: design/mock-v2/index.html `:root[data-theme="dark"]` (lines 39-46).
     let t = theme::tokens(ThemeKind::Dark);
-    let expected: [(&str, Color32, u32); 16] = [
-        ("paper", t.paper, 0x000E_1320),
-        ("sheet", t.sheet, 0x0015_1B2A),
-        ("ink", t.ink, 0x00E5_E9F2),
-        ("ink_2", t.ink_2, 0x00A9_B3C6),
-        ("ink_3", t.ink_3, 0x007D_889D),
-        ("line", t.line, 0x0026_3049),
-        ("ruling", t.ruling, 0x0025_345A),
-        ("margin", t.margin, 0x00E4_6A5F),
-        ("accent", t.accent, 0x0097_A0F7),
-        ("accent_ink", t.accent_ink, 0x000E_1320),
-        ("accent_soft", t.accent_soft, 0x0023_2A5C),
-        ("haldi", t.haldi, 0x00E6_AE4E),
-        ("haldi_soft", t.haldi_soft, 0x003A_2C12),
-        ("leaf", t.leaf, 0x0062_C08A),
-        ("leaf_soft", t.leaf_soft, 0x0017_3726),
-        ("focus_band", t.focus_band, 0x002C_2A17),
+    let expected: [(&str, Color32, u32); 23] = [
+        ("bg", t.bg, 0x0014_1312),
+        ("surface", t.surface, 0x001C_1B19),
+        ("surface_2", t.surface_2, 0x0023_221F),
+        ("sunken", t.sunken, 0x000F_0E0D),
+        ("hover", t.hover, 0x002A_2825),
+        ("border", t.border, 0x0034_322E),
+        ("border_strong", t.border_strong, 0x0077_726A),
+        ("text", t.text, 0x00EE_EBE5),
+        ("text_2", t.text_2, 0x00C9_C4BA),
+        ("text_3", t.text_3, 0x00A8_A296),
+        ("accent", t.accent, 0x00D9_A6E0),
+        ("on_accent", t.on_accent, 0x002A_0F2E),
+        ("accent_soft", t.accent_soft, 0x003A_2340),
+        ("accent_ink", t.accent_ink, 0x00EB_CBEF),
+        ("ai", t.ai, 0x00F2_A36E),
+        ("ai_soft", t.ai_soft, 0x003D_2414),
+        ("ai_ink", t.ai_ink, 0x00F7_BE97),
+        ("ok", t.ok, 0x007F_CF9A),
+        ("ok_soft", t.ok_soft, 0x0017_3323),
+        ("warn", t.warn, 0x00E9_B860),
+        ("warn_soft", t.warn_soft, 0x003A_2A10),
+        ("bad", t.bad, 0x00F2_8B82),
+        ("bad_soft", t.bad_soft, 0x003E_1C1A),
     ];
     for (name, got, want) in expected {
         assert_eq!(hex(got), want, "dark token {name}");
@@ -97,56 +119,100 @@ fn dark_tokens_are_the_mock_tokens() {
 }
 
 #[test]
-fn light_ink_3_deviates_from_the_mock_because_the_mock_fails_wcag() {
-    // derived: the mock's #77839A on the sheet #FFFFFF. Linear channels:
+fn high_contrast_tokens_are_the_mock_tokens() {
+    // derived: design/mock-v2/index.html `:root[data-theme="high-contrast"]` (lines 49-56).
+    let t = theme::tokens(ThemeKind::HighContrast);
+    let expected: [(&str, Color32, u32); 23] = [
+        ("bg", t.bg, 0x0000_0000),
+        ("surface", t.surface, 0x0000_0000),
+        ("surface_2", t.surface_2, 0x0000_0000),
+        ("sunken", t.sunken, 0x0000_0000),
+        ("hover", t.hover, 0x001A_1A1A),
+        ("border", t.border, 0x00FF_FFFF),
+        ("border_strong", t.border_strong, 0x00FF_FFFF),
+        ("text", t.text, 0x00FF_FFFF),
+        ("text_2", t.text_2, 0x00FF_FFFF),
+        ("text_3", t.text_3, 0x00E6_E6E6),
+        ("accent", t.accent, 0x00F5_B8FF),
+        ("on_accent", t.on_accent, 0x0000_0000),
+        ("accent_soft", t.accent_soft, 0x002B_0A30),
+        ("accent_ink", t.accent_ink, 0x00F5_B8FF),
+        ("ai", t.ai, 0x00FF_B37A),
+        ("ai_soft", t.ai_soft, 0x002E_1606),
+        ("ai_ink", t.ai_ink, 0x00FF_C79E),
+        ("ok", t.ok, 0x008C_F5A9),
+        ("ok_soft", t.ok_soft, 0x0006_2612),
+        ("warn", t.warn, 0x00FF_D27A),
+        ("warn_soft", t.warn_soft, 0x002E_2000),
+        ("bad", t.bad, 0x00FF_9C94),
+        ("bad_soft", t.bad_soft, 0x0033_0B08),
+    ];
+    for (name, got, want) in expected {
+        assert_eq!(hex(got), want, "high contrast token {name}");
+    }
+}
+
+#[test]
+fn v1_text_3_failed_aa_and_the_v2_value_passes() {
+    // derived: the v1 mock's #77839A on the surface #FFFFFF. Linear channels:
     //   R 0x77 = 119/255 = 0.4667 -> ((0.4667+0.055)/1.055)^2.4 = 0.1845
     //   G 0x83 = 131/255 = 0.5137 -> 0.2270
     //   B 0x9A = 154/255 = 0.6039 -> 0.3231
     //   L = 0.2126*0.1845 + 0.7152*0.2270 + 0.0722*0.3231 = 0.2248
     //   ratio = (1 + 0.05) / (0.2248 + 0.05) = 3.82, below the 4.5 of WCAG 2.1 SC 1.4.3.
-    let mock = Color32::from_rgb(0x77, 0x83, 0x9A);
-    let sheet = Color32::from_rgb(0xFF, 0xFF, 0xFF);
-    assert!(contrast(mock, sheet) < 4.5);
-    assert_ne!(hex(theme::tokens(ThemeKind::Light).ink_3), 0x0077_839A);
+    // The v2 mock changed the value to #615D55 (6.55:1 on the surface), which is what we ship.
+    let v1 = Color32::from_rgb(0x77, 0x83, 0x9A);
+    let surface = Color32::from_rgb(0xFF, 0xFF, 0xFF);
+    assert!(contrast(v1, surface) < 4.5);
+    let t = theme::tokens(ThemeKind::Light);
+    assert_eq!(hex(t.text_3), 0x0061_5D55);
+    assert!(contrast(t.text_3, t.surface) >= 4.5);
 }
 
 #[test]
-fn light_haldi_and_leaf_deviate_from_the_mock_because_the_mock_fails_wcag() {
-    // derived: the mock's haldi #9A6410 on its own soft background #FBF0D8 and leaf #2C7A4B on
+fn v1_haldi_and_leaf_failed_aa_and_the_v2_warn_and_ok_pass() {
+    // derived: the v1 mock's haldi #9A6410 on its soft background #FBF0D8 and leaf #2C7A4B on
     // #DDF0E4 (hand-checkable with the helper above; WCAG 2.1 SC 1.4.3 wants 4.5:1) give
-    // 4.41:1 and 4.42:1. The shipped tokens are #8F5C0C and #286F45.
+    // 4.41:1 and 4.42:1. The v2 tokens are warn #7E4C00 and ok #1E6E3F.
     let haldi_soft = Color32::from_rgb(0xFB, 0xF0, 0xD8);
     let leaf_soft = Color32::from_rgb(0xDD, 0xF0, 0xE4);
     assert!(contrast(Color32::from_rgb(0x9A, 0x64, 0x10), haldi_soft) < 4.5);
     assert!(contrast(Color32::from_rgb(0x2C, 0x7A, 0x4B), leaf_soft) < 4.5);
     let t = theme::tokens(ThemeKind::Light);
-    assert_eq!(hex(t.haldi), 0x008F_5C0C);
-    assert_eq!(hex(t.leaf), 0x0028_6F45);
+    assert_eq!(hex(t.warn), 0x007E_4C00);
+    assert_eq!(hex(t.ok), 0x001E_6E3F);
+    assert!(contrast(t.warn, t.warn_soft) >= 4.5);
+    assert!(contrast(t.ok, t.ok_soft) >= 4.5);
 }
 
 /// Text pairs that screens draw: (name, foreground, background).
 fn text_pairs(t: &Tokens) -> Vec<(&'static str, Color32, Color32)> {
     vec![
-        ("ink on sheet", t.ink, t.sheet),
-        ("ink on paper", t.ink, t.paper),
-        ("ink_2 on sheet", t.ink_2, t.sheet),
-        ("ink_2 on paper", t.ink_2, t.paper),
-        ("ink_3 on sheet", t.ink_3, t.sheet),
-        ("ink_3 on paper", t.ink_3, t.paper),
-        ("accent on sheet", t.accent, t.sheet),
-        ("accent on paper", t.accent, t.paper),
-        ("margin on sheet", t.margin, t.sheet),
-        ("margin on paper", t.margin, t.paper),
-        ("haldi on sheet", t.haldi, t.sheet),
-        ("haldi on paper", t.haldi, t.paper),
-        ("leaf on sheet", t.leaf, t.sheet),
-        ("leaf on paper", t.leaf, t.paper),
-        ("accent_ink on accent", t.accent_ink, t.accent),
-        ("ink on accent_soft", t.ink, t.accent_soft),
-        ("accent on accent_soft", t.accent, t.accent_soft),
-        ("haldi on haldi_soft", t.haldi, t.haldi_soft),
-        ("leaf on leaf_soft", t.leaf, t.leaf_soft),
-        ("ink on focus_band", t.ink, t.focus_band),
+        ("text on bg", t.text, t.bg),
+        ("text on surface", t.text, t.surface),
+        ("text on surface_2", t.text, t.surface_2),
+        ("text on accent_soft", t.text, t.accent_soft),
+        ("text_2 on bg", t.text_2, t.bg),
+        ("text_2 on surface", t.text_2, t.surface),
+        ("text_2 on sunken", t.text_2, t.sunken),
+        ("text_3 on bg", t.text_3, t.bg),
+        ("text_3 on surface", t.text_3, t.surface),
+        ("text_3 on surface_2", t.text_3, t.surface_2),
+        ("text_3 on sunken", t.text_3, t.sunken),
+        ("accent on bg", t.accent, t.bg),
+        ("accent on surface", t.accent, t.surface),
+        ("accent_ink on accent_soft", t.accent_ink, t.accent_soft),
+        ("on_accent on accent", t.on_accent, t.accent),
+        ("ai on bg", t.ai, t.bg),
+        ("ai on surface", t.ai, t.surface),
+        ("ai_ink on ai_soft", t.ai_ink, t.ai_soft),
+        ("ok on surface", t.ok, t.surface),
+        ("ok on ok_soft", t.ok, t.ok_soft),
+        ("warn on surface", t.warn, t.surface),
+        ("warn on warn_soft", t.warn, t.warn_soft),
+        ("bad on bg", t.bad, t.bg),
+        ("bad on surface", t.bad, t.surface),
+        ("bad on bad_soft", t.bad, t.bad_soft),
     ]
 }
 
@@ -176,8 +242,8 @@ fn high_contrast_text_meets_wcag_aaa() {
 fn borders_and_focus_meet_the_non_text_minimum_in_high_contrast() {
     // derived: WCAG 2.1 SC 1.4.11 requires 3:1 for interface components and focus indicators.
     let t = theme::tokens(ThemeKind::HighContrast);
-    assert!(contrast(t.line, t.sheet) >= 3.0);
-    assert!(contrast(t.accent, t.sheet) >= 3.0);
+    assert!(contrast(t.border, t.surface) >= 3.0);
+    assert!(contrast(t.accent, t.surface) >= 3.0);
 }
 
 #[test]
@@ -185,8 +251,8 @@ fn accent_focus_indicator_meets_the_non_text_minimum_in_light_and_dark() {
     // derived: WCAG 2.1 SC 1.4.11, 3:1 against the surface it sits on.
     for kind in [ThemeKind::Light, ThemeKind::Dark] {
         let t = theme::tokens(kind);
-        assert!(contrast(t.accent, t.sheet) >= 3.0, "{kind:?} on sheet");
-        assert!(contrast(t.accent, t.paper) >= 3.0, "{kind:?} on paper");
+        assert!(contrast(t.accent, t.surface) >= 3.0, "{kind:?} on surface");
+        assert!(contrast(t.accent, t.bg) >= 3.0, "{kind:?} on bg");
     }
 }
 
@@ -227,14 +293,14 @@ fn labels_are_nonempty_and_unique() {
 
 #[test]
 fn apply_sets_the_context_visuals() {
-    // derived: the mock paints chrome with --paper and surfaces with --sheet.
+    // derived: the mock paints the page with --bg and surfaces with --surface.
     for kind in ThemeKind::ALL {
         let ctx = egui::Context::default();
         theme::apply(&ctx, kind);
         let t = theme::tokens(kind);
         let style = ctx.global_style();
-        assert_eq!(style.visuals.panel_fill, t.paper, "{kind:?} panel");
-        assert_eq!(style.visuals.window_fill, t.sheet, "{kind:?} window");
+        assert_eq!(style.visuals.panel_fill, t.bg, "{kind:?} panel");
+        assert_eq!(style.visuals.window_fill, t.surface, "{kind:?} window");
         assert_eq!(style.visuals.dark_mode, kind.is_dark(), "{kind:?} base");
     }
 }
@@ -245,13 +311,88 @@ fn apply_twice_switches_theme_in_place() {
     theme::apply(&ctx, ThemeKind::Dark);
     theme::apply(&ctx, ThemeKind::Light);
     let t = theme::tokens(ThemeKind::Light);
-    assert_eq!(ctx.global_style().visuals.panel_fill, t.paper);
+    assert_eq!(ctx.global_style().visuals.panel_fill, t.bg);
+}
+
+#[test]
+fn fonts_and_text_styles_are_installed_once_on_apply() {
+    // derived: Noto Sans is the UI face (design/mock-v2/index.html `font-family`), Noto Sans
+    // Devanagari is the fallback for Hindi names, and the bold face is its own family.
+    let ctx = egui::Context::default();
+    theme::apply(&ctx, ThemeKind::Light);
+    theme::apply(&ctx, ThemeKind::Dark);
+    let _ = ctx
+        .run_ui(
+            RawInput {
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::Vec2::new(800.0, 600.0),
+                )),
+                ..RawInput::default()
+            },
+            |_ui| {},
+        )
+        .drop_without_applying_deltas();
+    let families = ctx.fonts(|f| f.definitions().families.clone());
+    let chain = families
+        .get(&FontFamily::Proportional)
+        .cloned()
+        .unwrap_or_default();
+    assert_eq!(chain.first().map(String::as_str), Some("NotoSans-Regular"));
+    assert!(chain.iter().any(|name| name == "NotoSansDevanagari-Regular"));
+    let bold = families.get(&theme::bold_family()).cloned().unwrap_or_default();
+    assert_eq!(bold.first().map(String::as_str), Some("NotoSans-Bold"));
+}
+
+#[test]
+fn text_styles_follow_the_type_scale() {
+    // derived: design/mock-v2/index.html `--t-*` (lines 24): cap 11, meta 12, body 13, input 14,
+    // h2 16, h1 20, fig 26.
+    let ctx = egui::Context::default();
+    theme::apply(&ctx, ThemeKind::Light);
+    let styles = ctx.global_style().text_styles.clone();
+    let size = |style: TextStyle| styles.get(&style).map(|f| f.size).unwrap_or(0.0);
+    assert!(same(size(TextStyle::Small), 12.0));
+    assert!(same(size(TextStyle::Body), 13.0));
+    assert!(same(size(TextStyle::Button), 13.0));
+    assert!(same(size(TextStyle::Heading), 20.0));
+    assert!(same(size(TextStyle::Monospace), 13.0));
+    let named = |name: &str| size(TextStyle::Name(name.into()));
+    assert!(same(named(theme::STYLE_CAPTION), 11.0));
+    assert!(same(named(theme::STYLE_INPUT), 14.0));
+    assert!(same(named(theme::STYLE_SUBHEADING), 16.0));
+    assert!(same(named(theme::STYLE_FIGURE), 26.0));
+}
+
+#[test]
+fn spacing_and_radius_scales_follow_the_mock() {
+    // derived: design/mock-v2/index.html `--s1..--s8` and `--r-xs..--r-l` (lines 20-22).
+    let spaces = [
+        theme::SPACE_1,
+        theme::SPACE_2,
+        theme::SPACE_3,
+        theme::SPACE_4,
+        theme::SPACE_5,
+        theme::SPACE_6,
+        theme::SPACE_8,
+    ];
+    let want_spaces = [4.0, 8.0, 12.0, 16.0, 20.0, 24.0, 32.0];
+    for (got, want) in spaces.into_iter().zip(want_spaces) {
+        assert!(same(got, want), "space {got} != {want}");
+    }
+    let radii = [
+        theme::RADIUS_XS,
+        theme::RADIUS_S,
+        theme::RADIUS_M,
+        theme::RADIUS_L,
+    ];
+    assert_eq!(radii, [4, 6, 10, 14]);
 }
 
 #[test]
 fn focus_stroke_is_visible_and_thicker_in_high_contrast() {
     // derived: spec 7 asks for visible focus. The mock's focus ring is 2px
-    // (`:focus-visible{outline:2px solid var(--accent)}`, line 22); high contrast uses 3.
+    // (`:focus-visible{outline:2px solid var(--accent)}`); high contrast uses 3.
     let focus = |k| theme::visuals(k).selection.stroke.width;
     assert!((focus(ThemeKind::Light) - 2.0).abs() < f32::EPSILON);
     assert!((focus(ThemeKind::Dark) - 2.0).abs() < f32::EPSILON);
@@ -259,7 +400,7 @@ fn focus_stroke_is_visible_and_thicker_in_high_contrast() {
 }
 
 #[test]
-fn strong_text_is_readable_on_the_sheet_and_the_paper() {
+fn strong_text_is_readable_on_the_surface_and_the_page() {
     // derived: WCAG 2.1 SC 1.4.3, 4.5:1 for normal text (7:1, SC 1.4.6, in high contrast).
     // egui draws `RichText::strong()` in `Visuals::strong_text_color()`, which is the pressed
     // widget's text colour. KPI figures, report headers and totals use it. The UI comparison
@@ -272,11 +413,11 @@ fn strong_text_is_readable_on_the_sheet_and_the_paper() {
         } else {
             4.5
         };
-        for (surface, bg) in [("sheet", t.sheet), ("paper", t.paper)] {
+        for (place, bg) in [("surface", t.surface), ("bg", t.bg)] {
             let ratio = contrast(strong, bg);
             assert!(
                 ratio >= floor,
-                "{kind:?}: strong text on {surface} is {ratio:.2}:1"
+                "{kind:?}: strong text on {place} is {ratio:.2}:1"
             );
         }
     }

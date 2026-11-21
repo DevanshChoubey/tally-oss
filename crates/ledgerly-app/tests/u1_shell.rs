@@ -308,20 +308,20 @@ fn ctrl_t_opens_a_tab_and_ctrl_w_closes_it() {
 
 #[test]
 fn the_theme_is_applied_on_the_first_frame_and_follows_set_theme() {
-    // derived: the mock paints chrome with --paper (see u1_theme.rs for the hex values).
+    // derived: the mock paints the page with --bg (see u1_theme.rs for the hex values).
     let ctx = egui::Context::default();
     let mut shell = Shell::new(leaf("Home"));
     frame(&ctx, &mut shell, RawInput::default());
     assert_eq!(
         ctx.global_style().visuals.panel_fill,
-        theme::tokens(ThemeKind::Light).paper
+        theme::tokens(ThemeKind::Light).bg
     );
     shell.set_theme(ThemeKind::Dark);
     frame(&ctx, &mut shell, RawInput::default());
     assert_eq!(shell.theme(), ThemeKind::Dark);
     assert_eq!(
         ctx.global_style().visuals.panel_fill,
-        theme::tokens(ThemeKind::Dark).paper
+        theme::tokens(ThemeKind::Dark).bg
     );
 }
 

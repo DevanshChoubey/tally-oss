@@ -13,6 +13,7 @@ pub mod palette;
 pub mod screens;
 pub mod shell;
 pub mod theme;
+pub mod ui;
 pub mod worker;
 
 pub use screen::{AppCtx, Screen, ScreenAction};
