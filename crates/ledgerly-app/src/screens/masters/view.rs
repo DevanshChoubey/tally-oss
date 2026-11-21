@@ -218,7 +218,7 @@ fn address_text(ledger: &Ledger) -> String {
     let Some(party) = ledger.party.as_ref() else {
         return String::new();
     };
-    let mut parts: Vec<String> = party
+    let mut fields: Vec<String> = party
         .address
         .lines
         .iter()
@@ -226,7 +226,7 @@ fn address_text(ledger: &Ledger) -> String {
         .cloned()
         .collect();
     if let Some(pin) = party.address.pincode.as_ref() {
-        parts.push(pin.clone());
+        fields.push(pin.clone());
     }
-    parts.join(", ")
+    fields.join(", ")
 }

@@ -61,6 +61,10 @@ fn ledger(id: LedgerId, name: &str) -> Ledger {
     }
 }
 
+#[allow(
+    clippy::too_many_lines,
+    reason = "one fixture: the company, its ledgers and its stock item in one place"
+)]
 fn books() -> Books {
     let mut masters = Masters::default();
     let mut sharma = ledger(SHARMA, "Sharma Traders");
@@ -160,16 +164,16 @@ fn open(b: &Books) -> ItemInvoiceScreen {
 fn fill(s: &mut ItemInvoiceScreen, m: &Masters) {
     s.set_party_text("sharma");
     s.submit(m);
-    s.draft_mut().place_text = "27".to_owned();
+    "27".clone_into(&mut s.draft_mut().place_text);
     s.submit(m);
     s.set_account_text("sales");
     s.submit(m);
     s.submit(m);
     s.set_item_text(0, "widget");
     s.submit(m);
-    s.draft_mut().rows[0].qty_text = "100".to_owned();
+    "100".clone_into(&mut s.draft_mut().rows[0].qty_text);
     s.submit(m);
-    s.draft_mut().rows[0].rate_text = "100".to_owned();
+    "100".clone_into(&mut s.draft_mut().rows[0].rate_text);
     s.submit(m);
     s.submit(m);
     assert_eq!(s.focus(), Field::Item(1));
@@ -286,9 +290,9 @@ fn lines_show_no_figures_before_the_engine_answers() {
     assert_eq!(lines.len(), 2);
     assert_eq!(lines[0].number, 1);
     assert_eq!(lines[0].unit, "Nos");
-    assert!(lines[0].gst.is_empty());
-    assert!(lines[0].amount.is_empty());
-    assert!(lines[1].amount.is_empty());
+    assert_eq!(lines[0].gst, "");
+    assert_eq!(lines[0].amount, "");
+    assert_eq!(lines[1].amount, "");
 }
 
 #[test]
@@ -302,7 +306,7 @@ fn lines_take_gst_and_amount_from_the_engine_only() {
     assert_eq!(lines[0].amount, "10,000.00");
     assert!(lines[0].problem.is_none());
     // The blank row shows nothing.
-    assert!(lines[1].amount.is_empty());
+    assert_eq!(lines[1].amount, "");
     assert!(lines[1].problem.is_none());
 }
 

@@ -15,6 +15,9 @@ use super::draft::{Balance, DraftRow, LedgerRef, VoucherDraft, entry_support};
 use super::kind::EntryKind;
 use super::search::{PickerItem, search_ledgers};
 
+/// How many recently used ledgers are remembered.
+const RECENTS_LIMIT: usize = 20;
+
 /// Which field has the keyboard.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Field {

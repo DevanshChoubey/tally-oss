@@ -61,8 +61,8 @@ fn row(label: &str, cells: Vec<ViewCell>) -> ViewRow {
 /// liabilities column or the assets column, never both.
 ///
 /// Derivation of the totals: liabilities 5,00,000.00 + 27,000.00 + 1,25,000.00 = 6,52,000.00 Cr,
-/// that is 50_000_000 + 2_700_000 + 12_500_000 = 65_200_000 paise. Assets 6,52,000.00 Dr, which is
-/// 65_200_000 paise. The figures match the mock's condensed statement (balance-sheet.default).
+/// that is `50_000_000` + `2_700_000` + `12_500_000` = `65_200_000` paise. Assets 6,52,000.00 Dr, which is
+/// `65_200_000` paise. The figures match the mock's condensed statement (balance-sheet.default).
 fn balance_sheet() -> ViewReport {
     ViewReport {
         token: ReportToken("bs".to_owned()),

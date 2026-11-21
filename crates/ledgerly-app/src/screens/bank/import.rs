@@ -12,10 +12,22 @@ pub(super) const DEFAULT_LAYOUT: &str = "generic-csv-split";
 
 /// Every layout the import offers, as (registry id, label).
 pub(super) const LAYOUTS: [(&str, &str); 5] = [
-    ("generic-csv-split", "Generic CSV, separate withdrawal and deposit columns"),
-    ("generic-csv-signed", "Generic CSV, one signed amount column"),
-    ("generic-csv-indicator", "Generic CSV, amount with a Dr/Cr marker column"),
-    ("generic-xlsx-split", "Generic Excel, separate withdrawal and deposit columns"),
+    (
+        "generic-csv-split",
+        "Generic CSV, separate withdrawal and deposit columns",
+    ),
+    (
+        "generic-csv-signed",
+        "Generic CSV, one signed amount column",
+    ),
+    (
+        "generic-csv-indicator",
+        "Generic CSV, amount with a Dr/Cr marker column",
+    ),
+    (
+        "generic-xlsx-split",
+        "Generic Excel, separate withdrawal and deposit columns",
+    ),
     ("generic-mt940", "SWIFT MT940 statement"),
 ];
 

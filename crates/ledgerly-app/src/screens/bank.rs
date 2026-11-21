@@ -266,7 +266,7 @@ pub enum Tab {
 }
 
 #[derive(Debug, Clone)]
-struct LineState {
+pub(super) struct LineState {
     view: StatementLineView,
     status: LineStatus,
 }

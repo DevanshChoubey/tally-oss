@@ -9,7 +9,7 @@
 //!
 //! Here `<Name>` is `VoucherEntry`. The screen enters the vouchers that are plain debit and credit
 //! lines: Contra, Payment, Receipt, Journal, Memorandum and Reversing journal. Other voucher kinds
-//! answer [`Outcome::Unsupported`] from [`VoucherEntryScreen::open`] (sales, purchase and notes
+//! answer [`Outcome::Unsupported`](ledgerly_core::Outcome::Unsupported) from [`VoucherEntryScreen::open`] (sales, purchase and notes
 //! belong to the invoice screen, card U5; stock and order kinds hold no accounting lines).
 //!
 //! What spec 7 asks of an entry form, and where it lives:

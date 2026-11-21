@@ -1,15 +1,17 @@
 //! Drawing the palette and reading its keys. This is the inner layout only: the shell draws the
 //! popup frame around it (`shell/mod.rs`), so the palette adds no second frame.
 
+use egui::text::{CCursor, CCursorRange};
+use egui::text_edit::TextEditState;
 use egui::{
     Align, Align2, Context, FontId, Frame, Id, Key, Margin, Modifiers, Rect, Response, RichText,
     ScrollArea, Sense, Ui, pos2, vec2,
 };
-use egui::text::{CCursor, CCursorRange};
-use egui::text_edit::TextEditState;
 
 use super::scope::{Section, empty_scope_hint};
-use super::{LEGEND, PLACEHOLDER, Palette, PaletteChoice, PaletteMode, PaletteScope, PaletteTarget};
+use super::{
+    LEGEND, PLACEHOLDER, Palette, PaletteChoice, PaletteMode, PaletteScope, PaletteTarget,
+};
 use crate::theme::{RADIUS_S, SPACE_2, SPACE_3, TEXT_BODY, TEXT_CAP, TEXT_INPUT, TEXT_META};
 use crate::ui::keycap::{self, KEYCAP_HEIGHT};
 use crate::ui::{bold_font, tokens};
@@ -92,7 +94,7 @@ fn take_keys(ui: &mut Ui) -> Vec<KeyPress> {
 
 /// Moves the query box's cursor to the end of its text, after a suggestion has filled it.
 fn move_cursor_to_end(ctx: &Context, chars: usize) {
-    let id = Id::new(QUERY_ID);
+    let id = Id::unique(QUERY_ID);
     if let Some(mut state) = TextEditState::load(ctx, id) {
         state
             .cursor
@@ -152,7 +154,11 @@ impl Palette {
         let t = tokens(ui);
         let go_width = ui
             .painter()
-            .layout_no_wrap("Go to".to_owned(), FontId::proportional(TEXT_META), t.text_3)
+            .layout_no_wrap(
+                "Go to".to_owned(),
+                FontId::proportional(TEXT_META),
+                t.text_3,
+            )
             .size()
             .x;
         let focus = std::mem::take(&mut self.focus_pending);
@@ -163,7 +169,7 @@ impl Palette {
                     let width = ui.available_width() - go_width - SPACE_3;
                     let edit = ui.add(
                         egui::TextEdit::singleline(&mut self.query)
-                            .id(Id::new(QUERY_ID))
+                            .id(Id::unique(QUERY_ID))
                             .hint_text(PLACEHOLDER)
                             .frame(Frame::NONE)
                             .font(FontId::proportional(TEXT_INPUT))
@@ -199,13 +205,8 @@ impl Palette {
                     }
                     let selected = index == self.selected;
                     let keycap = matches!(row.entry.target, PaletteTarget::Command(_));
-                    let response = paint_line(
-                        ui,
-                        &row.entry.title,
-                        &row.entry.detail,
-                        keycap,
-                        selected,
-                    );
+                    let response =
+                        paint_line(ui, &row.entry.title, &row.entry.detail, keycap, selected);
                     if selected {
                         response.scroll_to_me(Some(Align::Center));
                     }
@@ -234,13 +235,7 @@ impl Palette {
             return None;
         }
         let title = format!("Search vouchers for \"{body}\"");
-        let response = paint_line(
-            ui,
-            &title,
-            "Number, party, amount or date",
-            false,
-            false,
-        );
+        let response = paint_line(ui, &title, "Number, party, amount or date", false, false);
         response.clicked().then_some(Click::SearchVouchers)
     }
 
@@ -264,13 +259,13 @@ impl Palette {
             .inner_margin(Margin::symmetric(EDGE_PAD, 8))
             .show(ui, |ui| {
                 ui.horizontal_wrapped(|ui| {
-                    for hint in self
-                        .key_hints()
-                        .iter()
-                        .filter(|hint| !hint.keys.is_empty())
-                    {
+                    for hint in self.key_hints().iter().filter(|hint| !hint.keys.is_empty()) {
                         keycap::keycap(ui, &hint.keys);
-                        ui.label(RichText::new(hint.label.as_str()).size(TEXT_META).color(t.text_3));
+                        ui.label(
+                            RichText::new(hint.label.as_str())
+                                .size(TEXT_META)
+                                .color(t.text_3),
+                        );
                         ui.add_space(SPACE_3);
                     }
                 });
@@ -315,16 +310,14 @@ fn section_heading(ui: &mut Ui, label: &str) {
 /// One clickable row: `title` on the first line; `detail` on a second line, or at the right as a
 /// keycap when `keycap` is set (a command shows its key there). The selected row is filled with
 /// the accent.
-fn paint_line(
-    ui: &mut Ui,
-    title: &str,
-    detail: &str,
-    keycap: bool,
-    selected: bool,
-) -> Response {
+fn paint_line(ui: &mut Ui, title: &str, detail: &str, keycap: bool, selected: bool) -> Response {
     let key_at_right = keycap && !detail.is_empty();
     let two_lines = !key_at_right && !detail.is_empty();
-    let height = if two_lines { ROW_TWO_LINES } else { ROW_ONE_LINE };
+    let height = if two_lines {
+        ROW_TWO_LINES
+    } else {
+        ROW_ONE_LINE
+    };
     let (rect, response) =
         ui.allocate_exact_size(vec2(ui.available_width(), height), Sense::click());
     let t = tokens(ui);

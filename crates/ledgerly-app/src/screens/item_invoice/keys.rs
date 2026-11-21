@@ -26,16 +26,24 @@ fn consume_exact(input: &mut InputState, key: Key, modifiers: Modifiers) -> bool
     input.events.len() != before
 }
 
+/// The questions the screen is asking, which change what Y, N and Enter do.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct Prompt {
+    /// "Discard this invoice?" is showing.
+    pub(super) discard: bool,
+    /// "Save this invoice?" is showing.
+    pub(super) save: bool,
+}
+
 pub(super) fn read_keys(
     ui: &Ui,
     picker_open: bool,
     escape_wanted: bool,
-    confirming: bool,
-    saving: bool,
+    prompt: Prompt,
 ) -> Vec<KeyCmd> {
     let mut out = Vec::new();
     ui.ctx().input_mut(|i| {
-        if confirming {
+        if prompt.discard {
             // Plain keys only: Shift+Y must not discard the invoice.
             if consume_exact(i, Key::Y, Modifiers::NONE) {
                 out.push(KeyCmd::DiscardYes);
@@ -44,7 +52,7 @@ pub(super) fn read_keys(
                 out.push(KeyCmd::DiscardNo);
             }
         }
-        if saving && consume_exact(i, Key::Enter, Modifiers::NONE) {
+        if prompt.save && consume_exact(i, Key::Enter, Modifiers::NONE) {
             out.push(KeyCmd::ConfirmSave);
         }
         let mut save = false;
@@ -75,8 +83,7 @@ impl ItemInvoiceScreen {
         list_len: usize,
     ) -> ScreenAction {
         match cmd {
-            KeyCmd::Save => self.save(masters),
-            KeyCmd::ConfirmSave => self.save(masters),
+            KeyCmd::Save | KeyCmd::ConfirmSave => self.save(masters),
             KeyCmd::PickUp => self.pick_index = self.pick_index.saturating_sub(1),
             KeyCmd::PickDown => {
                 let last = list_len.saturating_sub(1);

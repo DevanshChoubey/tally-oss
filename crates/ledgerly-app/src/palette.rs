@@ -25,7 +25,7 @@
 //! Ranking uses integer scores only. Every word the user typed must match the title, an alias or
 //! the detail: an exact match scores highest, then a prefix, a word prefix, a substring, and last
 //! a subsequence ("trbl" finds "Trial Balance"). Ties go to recently chosen entries, then to the
-//! host's order. The rows are then grouped under headings (see [`Section`] in the `scope` module),
+//! host's order. The rows are then grouped under headings (see `Section` in the `scope` module),
 //! keeping their ranked order inside each heading.
 //!
 //! Recent choices are kept for this session only: they are held in memory and not saved, so a
@@ -49,8 +49,7 @@ use scope::{Section, assistant_row};
 const MAX_RECENTS: usize = 8;
 
 /// The placeholder of the query box (`design/mock-v2/index.html:1136`).
-pub const PLACEHOLDER: &str =
-    "Search reports, ledgers, vouchers, or type ? to ask, + to enter";
+pub const PLACEHOLDER: &str = "Search reports, ledgers, vouchers, or type ? to ask, + to enter";
 
 /// The prefix legend under the query box: each prefix and the word it finds, in the mock's order
 /// (`design/mock-v2/index.html:1138`).
@@ -385,7 +384,8 @@ impl Palette {
         self.open = None;
         self.query.clear();
         self.selected = 0;
-        self.refresh();
+        // Closed, it lists nothing; `open` rebuilds the rows.
+        self.shown.clear();
     }
 
     /// The text typed so far, prefix included.
@@ -452,7 +452,11 @@ impl Palette {
             return None;
         }
         let entry = row.entry.clone();
-        let mode = if other_mode { draw::flipped(open) } else { open };
+        let mode = if other_mode {
+            draw::flipped(open)
+        } else {
+            open
+        };
         self.remember(entry.clone());
         self.close();
         Some(PaletteChoice {

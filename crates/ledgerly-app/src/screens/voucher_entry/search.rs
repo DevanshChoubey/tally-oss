@@ -5,6 +5,9 @@ use std::collections::BTreeMap;
 use ledgerly_core::{LedgerId, SignedAmount};
 use ledgerly_model::{Ledger, Masters};
 
+/// How many type-ahead items are listed at most.
+const PICKER_LIMIT: usize = 50;
+
 /// A ledger offered by the type-ahead.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LedgerHit {

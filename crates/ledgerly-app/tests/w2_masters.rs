@@ -143,7 +143,7 @@ fn books_with(masters: Masters) -> Books {
 }
 
 /// Two groups, three ledgers and two stock items. Ledgers: "Zeta Traders" (alias ZT, no party),
-/// "Alpha Stores" (party with GSTIN_VALID, bill-wise with 30 credit days), "Mid Co" (two aliases,
+/// "Alpha Stores" (party with `GSTIN_VALID`, bill-wise with 30 credit days), "Mid Co" (two aliases,
 /// no party). Items: "Pipe" (HSN 3917, two GST entries) and "Pickaxe" (no HSN, no GST entry).
 fn fixture() -> Masters {
     let mut m = Masters::default();
@@ -271,7 +271,9 @@ fn a_wrong_check_character_names_the_expected_one() {
         GstinCheck::Invalid(reason) => {
             assert!(reason.contains("expected W"), "reason was: {reason}");
         }
-        other => panic!("expected Invalid, got {other:?}"),
+        other @ (GstinCheck::Empty | GstinCheck::Valid) => {
+            panic!("expected Invalid, got {other:?}")
+        }
     }
 }
 
@@ -282,7 +284,9 @@ fn a_short_gstin_says_it_needs_fifteen_characters() {
         GstinCheck::Invalid(reason) => {
             assert!(reason.contains("15 characters"), "reason was: {reason}");
         }
-        other => panic!("expected Invalid, got {other:?}"),
+        other @ (GstinCheck::Empty | GstinCheck::Valid) => {
+            panic!("expected Invalid, got {other:?}")
+        }
     }
 }
 
@@ -497,8 +501,10 @@ fn a_gstin_that_fails_the_check_draws_its_reason_in_the_form() {
     let Some(MasterDraft::Ledger(d)) = s.draft_mut() else {
         panic!("no ledger form");
     };
-    let mut p = PartyDraft::default();
-    p.gstin = "29ABCDE1234F1ZX".to_owned();
+    let p = PartyDraft {
+        gstin: "29ABCDE1234F1ZX".to_owned(),
+        ..PartyDraft::default()
+    };
     d.party = Some(p);
     frame(&ctx, &mut s, &mut app, RawInput::default());
     assert!(s.is_form_open());

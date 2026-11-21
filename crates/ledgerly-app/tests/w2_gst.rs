@@ -178,11 +178,7 @@ fn the_keys_show_export_json_and_the_ims_keys_only_on_the_2b_tab() {
     // has Ctrl+E Export JSON and, on the 2B tab, A R P for the IMS actions.
     let mut s = GstScreen::new("November 2026", None);
     s.switch_tab(GstTab::Gstr1);
-    let keys: Vec<(String, String)> = s
-        .keys()
-        .into_iter()
-        .map(|k| (k.keys, k.label))
-        .collect();
+    let keys: Vec<(String, String)> = s.keys().into_iter().map(|k| (k.keys, k.label)).collect();
     assert!(keys.contains(&("Ctrl+E".to_owned(), "Export JSON".to_owned())));
     assert!(!keys.iter().any(|(k, _)| k == "A R P"));
     s.switch_tab(GstTab::Reconciliation);

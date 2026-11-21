@@ -1163,7 +1163,7 @@ fn ledger_table(
             table::header(&mut row, "GSTIN", false);
             hinted_header(&mut row, "Balance", true);
         })
-        .body(|mut body| {
+        .body(|body| {
             body.rows(table::ROW_HEIGHT, rows.len(), |mut row| {
                 let Some(item) = rows.get(row.index()) else {
                     return;
@@ -1204,7 +1204,7 @@ fn item_table(
             hinted_header(&mut row, "Stock", true);
             hinted_header(&mut row, "Value at average cost", true);
         })
-        .body(|mut body| {
+        .body(|body| {
             body.rows(table::ROW_HEIGHT, rows.len(), |mut row| {
                 let Some(item) = rows.get(row.index()) else {
                     return;
@@ -1241,7 +1241,7 @@ fn plain_table(ui: &mut Ui, rows: &[MasterRow], selected: Option<MasterRef>) -> 
             table::header(&mut row, "Name", false);
             table::header(&mut row, "Details", false);
         })
-        .body(|mut body| {
+        .body(|body| {
             body.rows(table::ROW_HEIGHT, rows.len(), |mut row| {
                 let Some(item) = rows.get(row.index()) else {
                     return;

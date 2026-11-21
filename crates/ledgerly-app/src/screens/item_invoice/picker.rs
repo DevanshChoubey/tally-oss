@@ -182,5 +182,4 @@ impl ItemInvoiceScreen {
             None => {}
         }
     }
-
 }

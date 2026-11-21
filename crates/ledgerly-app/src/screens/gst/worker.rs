@@ -87,7 +87,9 @@ impl GstScreen {
     #[must_use]
     pub fn export_blocked_reason(&self) -> Option<String> {
         if self.tab != GstTab::Gstr1 {
-            return Some("GSTR-1 JSON is exported from the GSTR-1 tab. Press 1 to open it.".to_owned());
+            return Some(
+                "GSTR-1 JSON is exported from the GSTR-1 tab. Press 1 to open it.".to_owned(),
+            );
         }
         if self.run.scope.is_none() {
             return Some("No return is loaded, so there is no JSON to export.".to_owned());

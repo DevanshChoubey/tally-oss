@@ -14,8 +14,8 @@
 //!
 //! * a page head with "Day book" (D) and "New sale" (F8) on the right. The title is "Home": the
 //!   mock's greeting needs a user name, which the app does not have yet.
-//! * the KPI row: "Cash and bank", "Receivables", "Payables" and "GST cash payable". Each figure is
-//!   an [`Outcome<Paise>`] from a report output. The screen never sums anything (rule C4), and a
+//! * the KPI row: "Cash in hand", "Bank accounts", "Receivables", "Payables" and "GST cash
+//!   payable". Each figure is an [`Outcome<Paise>`] from a report output. The screen never sums anything (rule C4), and a
 //!   figure the engine cannot give shows "Not supported yet" with its reason (rule A1).
 //! * the AI area. With AI off it shows the mock's note. Otherwise the plain-words line and the
 //!   review list come with the assistant, so each is a labelled placeholder that runs nothing.
@@ -61,7 +61,6 @@ pub const WIDE_MIN_WIDTH: f32 = 720.0;
 /// Text shown in place of a figure the engine cannot compute yet.
 const UNSUPPORTED_WORDS: &str = "Not supported yet";
 /// Reason the cash-and-bank tile is not a figure: the engine has the two groups, not their total.
-const CASH_AND_BANK_REASON: &str = "the engine gives cash in hand and bank accounts as two groups and has no combined total yet, and this screen does not add them";
 /// Reason the GST tile is not a figure: the engine has no payable after set-off.
 const GST_REASON: &str = "the engine gives the GSTR-3B working (tax and credit separately) but no payable after set-off, and this screen does not subtract";
 
@@ -292,12 +291,24 @@ struct Tile {
     node: &'static str,
 }
 
-/// The tiles that read a group balance. Receivables and payables are the two the engine gives as
-/// a single group balance. Tally's dashboard help page
+/// The tiles that read a group balance. Tally's dashboard help page
 /// (<https://help.tallysolutions.com/tally-prime/reports-in-tallyprime/dashboard/>, read
-/// 2026-11-21) lists receivables and payables among its default tiles; it does not define the
-/// figures, so each tile is the closing balance of one reserved group, taken from the group summary.
-const TILES: [Tile; 2] = [
+/// 2026-11-21) lists Cash/Bank Accounts and Receivables/Payables among its default tiles; it does
+/// not define the figures, so each tile is the closing balance of one reserved group, taken from
+/// the group summary.
+const TILES: [Tile; 4] = [
+    Tile {
+        label: "Cash in hand",
+        group: ReservedGroup::CashInHand,
+        normal: DrCr::Dr,
+        node: "Cash-in-hand",
+    },
+    Tile {
+        label: "Bank accounts",
+        group: ReservedGroup::BankAccounts,
+        normal: DrCr::Dr,
+        node: "Bank accounts",
+    },
     Tile {
         label: "Receivables",
         group: ReservedGroup::SundryDebtors,
@@ -312,28 +323,21 @@ const TILES: [Tile; 2] = [
     },
 ];
 
-/// The home KPI tiles as of `as_of`, in the mock's order: cash and bank, receivables, payables,
-/// GST. Runs on the API worker. A tile whose report fails or is unsupported carries `Unsupported`
+/// The home KPI tiles as of `as_of`: cash in hand, bank accounts, receivables, payables, GST.
+/// Runs on the API worker. A tile whose report fails or is unsupported carries `Unsupported`
 /// with the reason; no tile ever carries a guessed figure.
+///
+/// The mock merges cash and bank into one "Cash and bank" tile. The engine gives them as two
+/// groups and this screen does not add (rule C4), so both group figures are shown until the
+/// engine gives a combined total.
 #[must_use]
 pub fn home_kpis(api: &Api, as_of: Date) -> Vec<Kpi> {
-    let mut kpis = vec![cash_and_bank_kpi()];
-    kpis.extend(TILES.iter().map(|tile| tile_kpi(api, tile, as_of)));
+    let mut kpis: Vec<Kpi> = TILES
+        .iter()
+        .map(|tile| tile_kpi(api, tile, as_of))
+        .collect();
     kpis.push(gst_kpi());
     kpis
-}
-
-/// The cash-and-bank tile. The engine has no single figure for it, and this screen does not add
-/// the two groups, so it is unsupported until the engine gives a total.
-fn cash_and_bank_kpi() -> Kpi {
-    Kpi {
-        label: "Cash and bank".to_owned(),
-        value: Outcome::unsupported("Cash and bank", CASH_AND_BANK_REASON),
-        footnote: "Cash and bank accounts".to_owned(),
-        target: HomeTarget::BalanceSheet {
-            node: "Cash-in-hand".to_owned(),
-        },
-    }
 }
 
 /// The GST tile. It stays unsupported until the engine gives the net payable after set-off.

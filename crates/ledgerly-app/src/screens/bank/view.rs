@@ -153,7 +153,11 @@ impl BankScreen {
         self.draw_head(ui, &mut events);
         self.draw_tabs(ui, &mut events);
         if let Some(text) = self.import_notice() {
-            note(ui, NoteKind::Bad, &format!("Not imported. {text} Nothing was imported."));
+            note(
+                ui,
+                NoteKind::Bad,
+                &format!("Not imported. {text} Nothing was imported."),
+            );
         }
         match self.tab() {
             Tab::Matching => self.draw_matching(ui, &mut events),
@@ -264,7 +268,13 @@ impl BankScreen {
                 events.push(UiEvent::Tab(Tab::Statement));
             }
             if self.is_worker()
-                && button(ui, "Import statement", Some("Ctrl+O"), ButtonKind::Secondary).clicked()
+                && button(
+                    ui,
+                    "Import statement",
+                    Some("Ctrl+O"),
+                    ButtonKind::Secondary,
+                )
+                .clicked()
             {
                 events.push(UiEvent::Import);
             }
@@ -360,7 +370,7 @@ impl BankScreen {
                 table::header(&mut row, "Match", false);
                 table::header(&mut row, "Action", false);
             })
-            .body(|mut body| {
+            .body(|body| {
                 body.rows(table::ROW_HEIGHT, self.line_count(), |mut row| {
                     let i = row.index();
                     let Some(line) = self.line_at(i) else {
@@ -420,46 +430,43 @@ impl BankScreen {
         let Some(line) = self.line_at(index) else {
             return;
         };
-        match self.suggestion_for(line.view.line_no) {
-            Some(s) => {
-                let together = s.lines.len() > 1 || s.vouchers.len() > 1;
-                ui.horizontal(|ui| {
-                    badge(ui, suggestion_badge(s.kind), kind_label(s.kind));
-                });
-                ui.label(format!(
-                    "{}{}",
-                    if together {
-                        "Match together: "
-                    } else {
-                        "Match: "
-                    },
-                    s.voucher_label
-                ));
-                ui.weak(format!(
-                    "{}. Confidence {}.",
-                    s.reason,
-                    confidence_label(s.confidence)
-                ));
-                ui.horizontal(|ui| {
-                    if button(ui, "Match", Some("Enter"), ButtonKind::Primary).clicked() {
-                        events.push(UiEvent::Accept(index));
-                    }
-                    if button(ui, "Skip", Some("S"), ButtonKind::Secondary).clicked() {
-                        events.push(UiEvent::Skip(index));
-                    }
-                });
-            }
-            None => {
-                ui.weak("No suggestion. Press M to match it by hand.");
-                ui.horizontal(|ui| {
-                    if button(ui, "Match by hand", Some("M"), ButtonKind::Secondary).clicked() {
-                        events.push(UiEvent::ToggleManual);
-                    }
-                    if button(ui, "Skip", Some("S"), ButtonKind::Secondary).clicked() {
-                        events.push(UiEvent::Skip(index));
-                    }
-                });
-            }
+        if let Some(s) = self.suggestion_for(line.view.line_no) {
+            let together = s.lines.len() > 1 || s.vouchers.len() > 1;
+            ui.horizontal(|ui| {
+                badge(ui, suggestion_badge(s.kind), kind_label(s.kind));
+            });
+            ui.label(format!(
+                "{}{}",
+                if together {
+                    "Match together: "
+                } else {
+                    "Match: "
+                },
+                s.voucher_label
+            ));
+            ui.weak(format!(
+                "{}. Confidence {}.",
+                s.reason,
+                confidence_label(s.confidence)
+            ));
+            ui.horizontal(|ui| {
+                if button(ui, "Match", Some("Enter"), ButtonKind::Primary).clicked() {
+                    events.push(UiEvent::Accept(index));
+                }
+                if button(ui, "Skip", Some("S"), ButtonKind::Secondary).clicked() {
+                    events.push(UiEvent::Skip(index));
+                }
+            });
+        } else {
+            ui.weak("No suggestion. Press M to match it by hand.");
+            ui.horizontal(|ui| {
+                if button(ui, "Match by hand", Some("M"), ButtonKind::Secondary).clicked() {
+                    events.push(UiEvent::ToggleManual);
+                }
+                if button(ui, "Skip", Some("S"), ButtonKind::Secondary).clicked() {
+                    events.push(UiEvent::Skip(index));
+                }
+            });
         }
     }
 
@@ -511,7 +518,7 @@ impl BankScreen {
                             table::header(&mut row, "Line", false);
                             table::header(&mut row, "Amount", true);
                         })
-                        .body(|mut body| {
+                        .body(|body| {
                             body.rows(table::ROW_HEIGHT, view.rows.len(), |mut row| {
                                 let Some(r) = view.rows.get(row.index()) else {
                                     return;

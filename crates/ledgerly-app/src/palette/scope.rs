@@ -158,13 +158,7 @@ pub(crate) fn assistant_row(scope: PaletteScope, body: &str) -> Option<(Section,
 }
 
 /// One assistant row: `lead` and the typed text as its title, or `bare` when nothing is typed.
-fn assistant_entry(
-    name: &str,
-    bare: &str,
-    lead: &str,
-    body: &str,
-    detail: &str,
-) -> PaletteEntry {
+fn assistant_entry(name: &str, bare: &str, lead: &str, body: &str, detail: &str) -> PaletteEntry {
     let title = if body.is_empty() {
         bare.to_owned()
     } else {

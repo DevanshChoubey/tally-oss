@@ -4,13 +4,14 @@
 #![allow(
     clippy::unwrap_used,
     clippy::panic,
-    reason = "test code: rule B2 lets tests unwrap and panic"
+    clippy::float_arithmetic,
+    reason = "test code: rule B2 lets tests unwrap and panic; layout checks add points"
 )]
 
 use egui::{Pos2, RawInput, Rect, Vec2};
 use ledgerly_app::screens::home::{
-    AiPanel, AttentionItem, AttentionKind, HomeBody, HomeData, HomeScreen, HomeTarget, Kpi, ai_panel,
-    body, panel_row_is_wide, sub_line, tile_columns,
+    AiPanel, AttentionItem, AttentionKind, HomeBody, HomeData, HomeScreen, HomeTarget, Kpi,
+    ai_panel, body, panel_row_is_wide, sub_line, tile_columns,
 };
 use ledgerly_app::shell::AiTier;
 use ledgerly_app::{AppCtx, Screen};
@@ -114,7 +115,12 @@ fn books_without_vouchers() -> Books {
 /// Draws the home screen twice in a window `window_width` points wide, with its content
 /// `content_width` points wide (the window less the sidebar and margins), and returns the tile
 /// rectangles of the second frame. `app` supplies the rest of the context.
-fn drawn_tiles(window_width: f32, content_width: f32, data: HomeData, app: &mut AppCtx) -> Vec<Rect> {
+fn drawn_tiles(
+    window_width: f32,
+    content_width: f32,
+    data: HomeData,
+    app: &mut AppCtx,
+) -> Vec<Rect> {
     let ctx = egui::Context::default();
     let mut screen = HomeScreen::new(data);
     for _ in 0..2 {
@@ -125,10 +131,11 @@ fn drawn_tiles(window_width: f32, content_width: f32, data: HomeData, app: &mut 
             )),
             ..RawInput::default()
         };
-        let _output = ctx.run_ui(input, |ui| {
+        let output = ctx.run_ui(input, |ui| {
             ui.set_max_width(content_width);
             let _action = screen.ui(ui, app);
         });
+        output.drop_without_applying_deltas();
     }
     screen.tile_rects().to_vec()
 }
@@ -138,10 +145,7 @@ fn first_row_count(rects: &[Rect]) -> usize {
     let Some(first) = rects.first() else {
         panic!("no tiles were drawn");
     };
-    rects
-        .iter()
-        .filter(|r| r.min.y < first.min.y + 1.0)
-        .count()
+    rects.iter().filter(|r| r.min.y < first.min.y + 1.0).count()
 }
 
 // ---- layout: no tile clips (B2) ---------------------------------------------------------------
@@ -253,7 +257,7 @@ fn no_company_draws_no_tile() {
     // provenance: derived. With no company and no figures, the screen draws no tile.
     let mut app = AppCtx::default();
     let rects = drawn_tiles(1280.0, CONTENT_AT_1280, HomeData::default(), &mut app);
-    assert!(rects.is_empty());
+    assert_eq!(rects, [] as [egui::Rect; 0]);
 }
 
 // ---- AI panel ---------------------------------------------------------------------------------

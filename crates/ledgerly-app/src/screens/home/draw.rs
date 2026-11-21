@@ -30,7 +30,8 @@ const ENTRY_PLACEHOLDER: &str = "Plain-words entry is not built yet. This line r
 /// Placeholder for the review list, which needs the assistant and runs nothing.
 const REVIEW_PLACEHOLDER: &str = "Not built yet. Proposals from the assistant will be listed here, and nothing posts until you accept one.";
 /// The chart's state until the engine has a monthly sales series.
-const CHART_UNSUPPORTED: &str = "Not supported yet. The engine gives no monthly sales figures, so no bars are drawn.";
+const CHART_UNSUPPORTED: &str =
+    "Not supported yet. The engine gives no monthly sales figures, so no bars are drawn.";
 /// Placeholder for the nudges until their rules exist.
 const NUDGES_PLACEHOLDER: &str = "Nudges are not built yet. Due dates and possible duplicate entries will be listed here, each with the rule that raised it.";
 /// Shown when no company is open.
@@ -129,7 +130,11 @@ pub(super) fn welcome(ui: &mut Ui, begins: Date, chosen: &mut Option<HomeTarget>
             ui.add_space(SPACE_6);
             title(ui, "No vouchers yet");
             ui.add_space(SPACE_2);
-            ui.label(RichText::new(sentence.as_str()).size(TEXT_BODY).color(t.text_2));
+            ui.label(
+                RichText::new(sentence.as_str())
+                    .size(TEXT_BODY)
+                    .color(t.text_2),
+            );
             ui.add_space(SPACE_4);
             ui.horizontal(|ui| {
                 if button(ui, "Opening balances", None, ButtonKind::Primary).clicked() {
@@ -290,7 +295,7 @@ fn tile(ui: &mut Ui, index: usize, view: &KpiView) -> egui::Response {
                 .color(t.text_3),
         );
     });
-    let id = ui.id().with(("home-kpi", index));
+    let id = ui.scope_id().with(("home-kpi", index));
     let response = ui.interact(inner.response.rect, id, Sense::click());
     let spoken = format!(
         "{}, {}. {}",

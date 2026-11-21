@@ -15,7 +15,6 @@
     reason = "test code: rule B2 lets tests unwrap and panic"
 )]
 
-use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -28,8 +27,7 @@ use ledgerly_app::{AppCtx, Screen};
 use ledgerly_core::{Clock, CompanyId, GroupId, LedgerId, Outcome, SignedAmount, StateCode};
 use ledgerly_model::seed_groups::reserved_groups;
 use ledgerly_model::{
-    Address, BankDetails, Company, EntityKind, Features, Ledger, NegativeStockPolicy,
-    ReservedGroup,
+    Address, BankDetails, Company, EntityKind, Features, Ledger, NegativeStockPolicy, ReservedGroup,
 };
 use time::OffsetDateTime;
 use time::macros::date;
@@ -123,7 +121,17 @@ fn collect_text(shape: &Shape, out: &mut String) {
             out.push_str(text.galley.text());
             out.push('\n');
         }
-        _ => {}
+        Shape::Noop
+        | Shape::Circle(_)
+        | Shape::Ellipse(_)
+        | Shape::LineSegment { .. }
+        | Shape::Path(_)
+        | Shape::Band(_)
+        | Shape::Rect(_)
+        | Shape::Mesh(_)
+        | Shape::QuadraticBezier(_)
+        | Shape::CubicBezier(_)
+        | Shape::Callback(_) => {}
     }
 }
 

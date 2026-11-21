@@ -159,40 +159,33 @@ pub(super) fn draw(
         .body(|body| {
             body.rows(table::ROW_HEIGHT, total_rows, |mut row| {
                 let index = row.index();
-                match report.rows.get(index) {
-                    Some(data) => {
-                        row.set_selected(index == selected);
-                        let cell = |i: usize| report.rows.get(index).and_then(|r| r.cells.get(i));
-                        let text = |i: usize| cell(i).map(cell_text).unwrap_or_default();
-                        row.col(|ui| table::text(ui, &text(columns.date)));
-                        row.col(|ui| table::text(ui, &text(columns.kind)));
-                        row.col(|ui| table::text(ui, &text(columns.number)));
-                        row.col(|ui| table::text(ui, data.label.as_str()));
-                        row.col(|ui| table::numeric(ui, &text(columns.amount)));
-                        row.col(|ui| table::text(ui, &text(columns.status)));
-                        let response = row.response();
-                        if response.clicked() {
-                            events.clicked = Some(index);
-                        }
-                        if response.double_clicked() {
-                            events.opened = Some(index);
-                        }
+                if let Some(data) = report.rows.get(index) {
+                    row.set_selected(index == selected);
+                    let cell = |i: usize| report.rows.get(index).and_then(|r| r.cells.get(i));
+                    let text = |i: usize| cell(i).map_or_default(cell_text);
+                    row.col(|ui| table::text(ui, &text(columns.date)));
+                    row.col(|ui| table::text(ui, &text(columns.kind)));
+                    row.col(|ui| table::text(ui, &text(columns.number)));
+                    row.col(|ui| table::text(ui, data.label.as_str()));
+                    row.col(|ui| table::numeric(ui, &text(columns.amount)));
+                    row.col(|ui| table::text(ui, &text(columns.status)));
+                    let response = row.response();
+                    if response.clicked() {
+                        events.clicked = Some(index);
                     }
-                    None => {
-                        let amount = report
-                            .totals
-                            .get(columns.amount)
-                            .map(cell_text)
-                            .unwrap_or_default();
-                        row.col(|ui| {
-                            ui.label(egui::RichText::new("Total").strong());
-                        });
-                        row.col(|_ui| {});
-                        row.col(|_ui| {});
-                        row.col(|_ui| {});
-                        row.col(|ui| table::numeric(ui, &amount));
-                        row.col(|_ui| {});
+                    if response.double_clicked() {
+                        events.opened = Some(index);
                     }
+                } else {
+                    let amount = report.totals.get(columns.amount).map_or_default(cell_text);
+                    row.col(|ui| {
+                        ui.label(egui::RichText::new("Total").strong());
+                    });
+                    row.col(|_ui| {});
+                    row.col(|_ui| {});
+                    row.col(|_ui| {});
+                    row.col(|ui| table::numeric(ui, &amount));
+                    row.col(|_ui| {});
                 }
             });
         });

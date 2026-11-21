@@ -91,6 +91,16 @@ fn matched_text(matched: ledgerly_api::MatchedOn) -> &'static str {
 /// The answer a search brings back: the text it searched for, and the hits.
 type SearchAnswer = (String, Vec<SearchHit>);
 
+/// What [`PaletteSearch`] last handled.
+#[derive(Debug, Default, PartialEq, Eq)]
+enum Handled {
+    /// Nothing yet, or the palette was closed since.
+    #[default]
+    Nothing,
+    /// A query: `None` for one that searches nothing, else the searched text.
+    Query(Option<String>),
+}
+
 /// Runs `Api::search` on the API worker for what the user types in a [`Palette`], one call at a
 /// time (a newer query drops the older call), and feeds the rows back with
 /// [`Palette::set_remote_entries`]. The UI thread never waits for the API (rule D1).
@@ -101,9 +111,8 @@ type SearchAnswer = (String, Vec<SearchHit>);
 /// Call [`PaletteSearch::tick`] once per frame while the palette is drawn.
 #[derive(Debug, Default)]
 pub struct PaletteSearch {
-    /// The text last handled (`None` for a query that searches nothing), so an unchanged query is
-    /// not sent again. `None` outside this means nothing was handled yet.
-    handled: Option<Option<String>>,
+    /// The text last handled, so an unchanged query is not sent again.
+    handled: Handled,
     /// The search in flight.
     latest: Latest<SearchAnswer>,
 }
@@ -126,7 +135,7 @@ impl PaletteSearch {
     /// company open) only the host's rows are searched, and the palette says so.
     pub fn tick(&mut self, palette: &mut Palette, worker: Option<&ApiWorker>) {
         if !palette.is_open() {
-            self.handled = None;
+            self.handled = Handled::Nothing;
             self.latest = Latest::default();
             return;
         }
@@ -134,10 +143,10 @@ impl PaletteSearch {
         if let Some(done) = self.latest.poll() {
             Self::apply(palette, wanted.as_deref(), done);
         }
-        if self.handled.as_ref() == Some(&wanted) {
+        if matches!(&self.handled, Handled::Query(q) if *q == wanted) {
             return;
         }
-        self.handled = Some(wanted.clone());
+        self.handled = Handled::Query(wanted.clone());
         palette.set_remote_entries(Vec::new());
         palette.set_note(None);
         self.latest = Latest::default();

@@ -92,7 +92,7 @@ fn each_prefix_selects_its_scope_and_the_rest_is_the_body() {
     );
     assert_eq!(
         PaletteScope::of_query("?who owes"),
-        (PaletteScope::Ask, " who owes")
+        (PaletteScope::Ask, "who owes")
     );
     assert_eq!(
         PaletteScope::of_query("+paid rent"),
@@ -203,7 +203,7 @@ fn choosing_an_assistant_row_does_nothing_and_keeps_the_palette_open() {
     assert_eq!(titles(&p), ["Draft: paid rent 25k to Sharma Properties"]);
     assert!(p.accept().is_none());
     assert!(p.is_open());
-    assert!(p.recents().is_empty());
+    assert_eq!(p.recents(), []);
 }
 
 #[test]
@@ -320,8 +320,14 @@ fn recent_choices_come_first_and_survive_the_search_that_found_them() {
     p.set_remote_entries(vec![voucher("voucher:4", "0412")]);
     p.set_query("0412");
     let choice = p.accept().unwrap();
-    assert_eq!(choice.target, PaletteTarget::Voucher("voucher:4".to_owned()));
-    assert_eq!(p.recents(), [PaletteTarget::Voucher("voucher:4".to_owned())]);
+    assert_eq!(
+        choice.target,
+        PaletteTarget::Voucher("voucher:4".to_owned())
+    );
+    assert_eq!(
+        p.recents(),
+        [PaletteTarget::Voucher("voucher:4".to_owned())]
+    );
 
     p.open(PaletteMode::OnTop);
     assert_eq!(titles(&p), ["0412"]);
@@ -330,7 +336,7 @@ fn recent_choices_come_first_and_survive_the_search_that_found_them() {
 #[test]
 fn a_fresh_palette_remembers_nothing() {
     // provenance: derived — recents are session only (module docs): a new palette has none.
-    assert!(Palette::new().recents().is_empty());
+    assert_eq!(Palette::new().recents(), []);
 }
 
 // ---- no results ------------------------------------------------------------------------------
@@ -342,7 +348,7 @@ fn a_query_with_no_match_is_drawn_and_leaves_the_palette_open() {
     // so Enter keeps the palette open and chooses nothing.
     let mut p = open_with(vec![report("bs", "Balance Sheet")], PaletteMode::OnTop);
     p.set_query("zzqx");
-    assert!(titles(&p).is_empty());
+    assert_eq!(titles(&p), [] as [std::string::String; 0]);
     assert!(frame(&mut p, RawInput::default()).is_none());
     assert!(frame(&mut p, key_press(Key::Enter, Modifiers::NONE)).is_none());
     assert!(p.is_open());
@@ -440,7 +446,15 @@ fn every_mock_state_draws_without_choosing_anything() {
     // provenance: the seven states of design/mock-v2/states.json (palette.default, search,
     // voucher, ask, entry, commands, no-results). Drawing each must not panic or choose a row
     // when no key is pressed.
-    let queries = ["", "bal", "#0412", "?who owes us", "+paid rent 25k", ">", "zzqx"];
+    let queries = [
+        "",
+        "bal",
+        "#0412",
+        "?who owes us",
+        "+paid rent 25k",
+        ">",
+        "zzqx",
+    ];
     for query in queries {
         let mut p = open_with(
             vec![
@@ -451,7 +465,10 @@ fn every_mock_state_draws_without_choosing_anything() {
             PaletteMode::OnTop,
         );
         p.set_query(query);
-        assert!(frame(&mut p, RawInput::default()).is_none(), "query {query:?}");
+        assert!(
+            frame(&mut p, RawInput::default()).is_none(),
+            "query {query:?}"
+        );
         assert!(p.is_open(), "query {query:?}");
     }
 }
@@ -462,5 +479,5 @@ fn a_closed_palette_has_no_rows_to_draw() {
     // nothing (close clears the query).
     let mut p = open_with(vec![report("bs", "Balance Sheet")], PaletteMode::OnTop);
     p.close();
-    assert!(p.results().is_empty());
+    assert_eq!(p.results(), [] as [&ledgerly_app::palette::PaletteEntry; 0]);
 }

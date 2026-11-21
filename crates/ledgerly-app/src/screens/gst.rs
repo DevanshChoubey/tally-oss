@@ -956,7 +956,7 @@ impl GstScreen {
             GstTab::Gstr3b => {
                 self.draw_tiles(ui);
                 draw_figures(ui, &self.figures3b);
-                self.draw_3b_notes(ui);
+                Self::draw_3b_notes(ui);
                 self.draw_exceptions(ui, &self.gstr3b, want_scroll, &mut events);
             }
             GstTab::Reconciliation => self.draw_recon(ui, want_scroll, &mut events),
@@ -974,33 +974,31 @@ impl GstScreen {
     /// bucket (the screen only counts rows, rule C4). A figure that is not in the API says so
     /// rather than showing a number.
     fn draw_tiles(&self, ui: &mut Ui) {
-        ui.horizontal(|ui| {
-            match self.tab {
-                GstTab::Gstr1 => {
-                    for bucket in Bucket::ALL {
-                        let value = match self.bucket_count(GstTab::Gstr1, bucket) {
-                            Some(n) => n.to_string(),
-                            None => "Not loaded".to_owned(),
-                        };
-                        tile(ui, bucket.label(), &value, "vouchers");
-                    }
+        ui.horizontal(|ui| match self.tab {
+            GstTab::Gstr1 => {
+                for bucket in Bucket::ALL {
+                    let value = match self.bucket_count(GstTab::Gstr1, bucket) {
+                        Some(n) => n.to_string(),
+                        None => "Not loaded".to_owned(),
+                    };
+                    tile(ui, bucket.label(), &value, "vouchers");
                 }
-                GstTab::Gstr3b => {
-                    tile(
-                        ui,
-                        "Payable in cash after set-off",
-                        "Not supported yet",
-                        "the engine has no set-off figure",
-                    );
-                    tile(
-                        ui,
-                        "ITC accepted in IMS",
-                        "Not loaded",
-                        "2B and IMS import is not built",
-                    );
-                }
-                GstTab::Reconciliation => {}
             }
+            GstTab::Gstr3b => {
+                tile(
+                    ui,
+                    "Payable in cash after set-off",
+                    "Not supported yet",
+                    "the engine has no set-off figure",
+                );
+                tile(
+                    ui,
+                    "ITC accepted in IMS",
+                    "Not loaded",
+                    "2B and IMS import is not built",
+                );
+            }
+            GstTab::Reconciliation => {}
         });
         ui.add_space(8.0);
     }
@@ -1029,7 +1027,7 @@ impl GstScreen {
 
     /// The "Read this before filing" card of GSTR-3B, from the engine's own notes on what the
     /// working does and does not check.
-    fn draw_3b_notes(&self, ui: &mut Ui) {
+    fn draw_3b_notes(ui: &mut Ui) {
         crate::ui::card::card(ui, |ui| {
             ui.strong("Read this before filing");
             for line in GSTR3B_NOTES {

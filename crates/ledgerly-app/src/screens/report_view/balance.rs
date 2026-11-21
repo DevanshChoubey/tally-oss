@@ -177,6 +177,16 @@ fn items(balance: &VerticalBalance) -> Vec<Item> {
     out
 }
 
+/// The table row of report row `selected`, on whichever side it is.
+fn selected_position(list: &[Item], selected: usize) -> Option<usize> {
+    list.iter()
+        .position(|item| *item == Item::Line(Section::Liabilities, selected))
+        .or_else(|| {
+            list.iter()
+                .position(|item| *item == Item::Line(Section::Assets, selected))
+        })
+}
+
 /// Draws the statement as one table: the headings, the rows and the totals. Clicking or pressing
 /// Enter on a line selects or opens that report row.
 pub(super) fn draw(
@@ -196,17 +206,11 @@ pub(super) fn draw(
         .auto_shrink([false, false])
         .column(Column::remainder().at_least(160.0).clip(true))
         .column(Column::initial(200.0).at_least(140.0).clip(true));
-    if scroll_to_selected {
-        let position = list
-            .iter()
-            .position(|item| *item == Item::Line(Section::Liabilities, selected))
-            .or_else(|| {
-                list.iter()
-                    .position(|item| *item == Item::Line(Section::Assets, selected))
-            });
-        if let Some(row) = position {
-            builder = builder.scroll_to_row(row, None);
-        }
+    if let Some(row) = scroll_to_selected
+        .then(|| selected_position(&list, selected))
+        .flatten()
+    {
+        builder = builder.scroll_to_row(row, None);
     }
     builder
         .header(table::HEADER_HEIGHT, |mut header| {
@@ -239,11 +243,7 @@ pub(super) fn draw(
                             let label = RichText::new(data.label.as_str());
                             ui.label(if emphasised { label.strong() } else { label });
                         });
-                        let amount = data
-                            .cells
-                            .get(section.column())
-                            .map(cell_text)
-                            .unwrap_or_default();
+                        let amount = data.cells.get(section.column()).map_or_default(cell_text);
                         row.col(|ui| table::numeric(ui, &amount));
                         let response = row.response();
                         if response.clicked() {

@@ -551,15 +551,8 @@ impl ReportViewScreen {
         }
     }
 
-    fn draw(&mut self, ui: &mut Ui) -> ScreenAction {
-        let keys = read_keys(ui.ctx(), self.period_edit.is_some());
-        let mut action = ScreenAction::Stay;
-        for cmd in &keys {
-            if let ScreenAction::Push(screen) = self.run(*cmd) {
-                action = ScreenAction::Push(screen);
-            }
-        }
-        let look = self.look();
+    /// The page header, the day book's tabs, the loading line, the notice and the period editor.
+    fn draw_head(&mut self, ui: &mut Ui, look: Look) {
         let title = self.page_title();
         let subtitle = self.subtitle();
         let detail_switch = match self.report.params.detail {
@@ -580,10 +573,10 @@ impl ReportViewScreen {
         if toggle {
             self.toggle_detail();
         }
-        if let Some(tab) = tab_clicked {
-            if let Some(period) = day_book::period_of_tab(self.report.params.period, tab) {
-                self.set_period(period);
-            }
+        if let Some(tab) = tab_clicked
+            && let Some(period) = day_book::period_of_tab(self.report.params.period, tab)
+        {
+            self.set_period(period);
         }
         if self.is_loading() {
             ui.weak("Loading the report...");
@@ -599,6 +592,18 @@ impl ReportViewScreen {
             None => {}
         }
         self.draw_period_editor(ui);
+    }
+
+    fn draw(&mut self, ui: &mut Ui) -> ScreenAction {
+        let keys = read_keys(ui.ctx(), self.period_edit.is_some());
+        let mut action = ScreenAction::Stay;
+        for cmd in &keys {
+            if let ScreenAction::Push(screen) = self.run(*cmd) {
+                action = ScreenAction::Push(screen);
+            }
+        }
+        let look = self.look();
+        self.draw_head(ui, look);
 
         let balance = if look == Look::BalanceSheet {
             balance::vertical_balance(&self.report)
@@ -612,7 +617,7 @@ impl ReportViewScreen {
         };
         // The footnote is a bottom panel added before the table, so the table takes the space
         // left above it and the footnote stays inside the screen, above the key bar (B7).
-        let footer = egui::TopBottomPanel::bottom(ui.id().with("u7-footer"))
+        let footer = egui::Panel::bottom("u7-footer")
             .show(ui, |ui| self.draw_footer(ui, look, balance.as_ref()))
             .response
             .rect;
