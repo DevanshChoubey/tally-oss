@@ -92,6 +92,10 @@ pub struct ModelRequest {
 /// (card A4) are the planned real implementations; until one lands, the trait is public only
 /// because [`NlEntry`] is generic over it and must be nameable by those cards, and it is not
 /// part of the frozen interface (rule C7), which is `NlEntry` and its `Proposer` impl.
+///
+/// The cloud client (card A4) does not implement this trait. It implements [`Proposer`] directly,
+/// because its redaction of the typed text (spec 9) runs inside its own request path, and a
+/// `ModelClient` would be handed the unredacted [`ModelRequest`].
 pub trait ModelClient {
     /// Returns the model's raw output for the request.
     ///
@@ -282,6 +286,9 @@ impl<M: ModelClient> NlEntry<M> {
         let account =
             self.resolve_named(text, out.account_name.as_deref(), "account", confidence)?;
 
+        let narration = out.narration.trim().to_owned();
+        check_narration_words(text, &narration)?;
+
         let (party_side, account_side) = sides_for(kind)?;
 
         let mut lines = Vec::new();
@@ -311,7 +318,7 @@ impl<M: ModelClient> NlEntry<M> {
             document_total: Some(amount),
             document_tax: None,
             create_ledgers,
-            narration: out.narration.trim().to_owned(),
+            narration,
         })
     }
 
@@ -408,6 +415,28 @@ fn unsupported(what: impl Into<String>, reason: impl Into<String>) -> AssistErro
     })
 }
 
+/// The narration is the model's wording, so each of its words must be a whole word the person
+/// typed (case ignored). A word the person did not type is an error, never stored on the voucher.
+fn check_narration_words(text: &str, narration: &str) -> Result<(), AssistError> {
+    let lower = text.to_lowercase();
+    for word in narration.split_whitespace() {
+        let word = word.trim_matches(|c: char| c.is_ascii_punctuation());
+        if word.is_empty() {
+            continue;
+        }
+        let needle = word.to_lowercase();
+        let typed = lower
+            .match_indices(needle.as_str())
+            .any(|(at, _)| on_token_boundaries(&lower, at, &needle));
+        if !typed {
+            return Err(output_err(format!(
+                "the narration word \"{word}\" is not in the typed text, so it is not the person's wording"
+            )));
+        }
+    }
+    Ok(())
+}
+
 /// Finds `needle` verbatim in `text` and returns its character range as a source reference.
 fn typed_source(text: &str, needle: &str, role: &str) -> Result<SourceRef, AssistError> {
     let missing = || {
@@ -479,6 +508,9 @@ pub enum AmountTextError {
     /// Not a number (for example `1,,0` or `12abc3`).
     #[error("\"{0}\" is not a number")]
     NotANumber(String),
+    /// Commas that are not digit grouping (`1,5` or `12,3,4` instead of `1,25,000` or `25,000`).
+    #[error("\"{0}\" does not use digit grouping (write 1,25,000 or 25,000)")]
+    BadGrouping(String),
     /// A unit word that is not supported.
     #[error("unknown unit \"{0}\" (supported: k, thousand, lakh, lac, cr, crore)")]
     UnknownUnit(String),
@@ -535,6 +567,10 @@ pub fn parse_amount_text(text: &str) -> Result<Paise, AmountTextError> {
     {
         return Err(not_a_number());
     }
+    let whole = number.split('.').next().unwrap_or_default();
+    if !grouping_is_valid(whole) {
+        return Err(AmountTextError::BadGrouping(number.to_owned()));
+    }
     let digits: String = number.chars().filter(|c| *c != ',').collect();
     let value = Decimal::from_str(&digits).map_err(|_| not_a_number())?;
     let multiplier: u32 = match unit {
@@ -555,6 +591,35 @@ pub fn parse_amount_text(text: &str) -> Result<Paise, AmountTextError> {
     }
     // At most two decimal places, so the rounding rule changes nothing; it only converts.
     round_rupees_to_paise(rupees, RoundingRule::Truncate).map_err(|_| AmountTextError::Overflow)
+}
+
+/// Whether the commas in the whole-rupee digits of an amount are digit grouping: Indian
+/// (`1,25,000`, `12,34,567`) or thousands (`25,000`, `100,000`). The last group has three digits,
+/// the middle groups two, and the first group one or two digits (up to three when it is the only
+/// group before the last). Anything else, such as `1,5` or `12,3,4`, is refused, never read with
+/// the commas dropped.
+fn grouping_is_valid(whole: &str) -> bool {
+    if !whole.contains(',') {
+        return true;
+    }
+    let groups: Vec<&str> = whole.split(',').collect();
+    let last = groups.len().saturating_sub(1);
+    groups.iter().enumerate().all(|(i, group)| {
+        let digits = !group.is_empty() && group.chars().all(|c| c.is_ascii_digit());
+        let len = group.len();
+        let len_ok = if i == last {
+            len == 3
+        } else if i == 0 {
+            if groups.len() == 2 {
+                (1..=3).contains(&len)
+            } else {
+                (1..=2).contains(&len)
+            }
+        } else {
+            len == 2
+        };
+        digits && len_ok
+    })
 }
 
 /// Reads `DD/MM/YYYY`, `DD-MM-YYYY`, `DD.MM.YYYY` (day first, as written in India) or

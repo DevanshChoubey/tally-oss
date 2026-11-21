@@ -796,3 +796,87 @@ fn ocr_output_round_trips_through_json() {
     let back: OcrOutput = serde_json::from_str(&json).unwrap();
     assert_eq!(back, bill());
 }
+
+#[test]
+fn tax_line_without_a_rate_on_the_bill_never_takes_a_ledger_fixed_to_a_rate() {
+    // The bill's CGST line states no rate ("CGST 1,350.00"). The only CGST ledger is fixed to 9%,
+    // which the bill never states, so it cannot be shown to fit: no ledger is chosen and the
+    // head is suggested for creation. Before the fix, the 9% ledger was taken for any rate.
+    let m = masters(vec![
+        ledger(SUPPLIER, "Kaveri Stationers", Some(party(None)), None),
+        ledger(
+            CGST,
+            "CGST 9%",
+            None,
+            Some(tax(TaxLedgerKind::Cgst, Some(9))),
+        ),
+        ledger(
+            SGST,
+            "Input SGST",
+            None,
+            Some(tax(TaxLedgerKind::Sgst, None)),
+        ),
+    ]);
+    let ocr = replacing("CGST", "CGST 1,350.00");
+    let draft = read(&ocr, &m);
+    let cgst_line = draft
+        .lines
+        .iter()
+        .find(|l| l.ledger_name.value == "CGST")
+        .unwrap();
+    assert_eq!(cgst_line.ledger, None);
+    assert_eq!(cgst_line.amount.value, Paise::new(135_000));
+    assert_eq!(draft.create_ledgers, vec!["CGST".to_owned()]);
+}
+
+#[test]
+fn tax_line_without_a_rate_takes_the_one_ledger_with_no_fixed_rate() {
+    // provenance: derived - the rate-less CGST ledger is the only one that can fit a line with no
+    // rate, so it is chosen (same rule as the rate-less SGST ledger in the other tests).
+    let m = masters(vec![
+        ledger(SUPPLIER, "Kaveri Stationers", Some(party(None)), None),
+        ledger(CGST, "Input CGST", None, Some(tax(TaxLedgerKind::Cgst, None))),
+        ledger(
+            LedgerId(22),
+            "CGST 9%",
+            None,
+            Some(tax(TaxLedgerKind::Cgst, Some(9))),
+        ),
+    ]);
+    let ocr = replacing("CGST", "CGST 1,350.00");
+    let draft = read(&ocr, &m);
+    let cgst_line = draft
+        .lines
+        .iter()
+        .find(|l| l.ledger_name.value == "CGST")
+        .unwrap();
+    assert_eq!(cgst_line.ledger, Some(CGST));
+}
+
+#[test]
+fn an_unrecognised_tax_label_is_never_given_a_tax_ledger() {
+    // "Surcharge" is not a tax head the reader knows, so its line must not be mapped to any tax
+    // ledger. This is a regression guard: the unknown label never reaches the tax-ledger match,
+    // so it passes before and after the rate fix; the rate-less case above is the bug.
+    let m = masters(vec![
+        ledger(SUPPLIER, "Kaveri Stationers", Some(party(None)), None),
+        ledger(CGST, "Input CGST", None, Some(tax(TaxLedgerKind::Cgst, None))),
+        ledger(SGST, "Input SGST", None, Some(tax(TaxLedgerKind::Sgst, None))),
+    ]);
+    let draft = read(&with_extra("Surcharge 5% 750.00"), &m);
+    assert!(
+        draft
+            .lines
+            .iter()
+            .all(|l| l.ledger_name.value != "Surcharge"),
+        "{:?}",
+        draft.lines
+    );
+    let tax_ledgers: Vec<Option<LedgerId>> = draft
+        .lines
+        .iter()
+        .filter(|l| l.ledger_name.value.contains("GST"))
+        .map(|l| l.ledger)
+        .collect();
+    assert_eq!(tax_ledgers, vec![Some(CGST), Some(SGST)]);
+}

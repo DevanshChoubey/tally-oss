@@ -628,6 +628,8 @@ enum TaxMatch {
 
 /// Finds the tax ledger of this kind. With a rate read from the bill, a ledger fixed to that rate
 /// is preferred, else a ledger with no fixed rate; a ledger fixed to another rate never fits.
+/// Without a rate on the bill, only a ledger with no fixed rate can be chosen: a ledger fixed to a
+/// rate cannot be shown to fit a line that states no rate.
 fn resolve_tax(masters: &Masters, kind: TaxLedgerKind, rate: Option<Decimal>) -> TaxMatch {
     let of_kind: Vec<(LedgerId, Option<Rate>)> = masters
         .ledgers
@@ -654,7 +656,7 @@ fn resolve_tax(masters: &Masters, kind: TaxLedgerKind, rate: Option<Decimal>) ->
                 exact
             }
         }
-        None => ids_where(&|_| true),
+        None => ids_where(&|r| r.is_none()),
     };
     match pool.as_slice() {
         [one] => TaxMatch::One(*one),

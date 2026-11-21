@@ -35,7 +35,7 @@ mod data {
     use std::collections::BTreeSet;
 
     use ledgerly_core::format::{amount_in_words, format_inr};
-    use ledgerly_core::{Date, Decimal, Paise, Rate};
+    use ledgerly_core::{Date, Decimal, DrCr, Paise, Rate};
     use ledgerly_model::{
         Address, BaseVoucherKind, Books, GstLine, GstRegistration, InventoryLine, Ledger,
         RegistrationType, StockItem, StoredGst, TaxLedgerKind, Unit, Voucher, VoucherStatus,
@@ -184,9 +184,10 @@ mod data {
     /// Groups the stored tax lines into rows.
     ///
     /// Central and state (or union territory) lines with the same taxable value and rate make one
-    /// row; each integrated line is a row; a cess line joins the first row with the same taxable
-    /// value that has no cess. Anything that does not pair up is `Unsupported`: the stored lines
-    /// carry no HSN, so a different grouping cannot be proven right.
+    /// row; each integrated line is a row; a cess line joins the one row with the same taxable
+    /// value that has no cess. Two rows sharing that value make the cess ambiguous, and it is
+    /// `Unsupported`: the stored lines carry no HSN or item link that says which row it belongs
+    /// to. Anything else that does not pair up is `Unsupported` too.
     fn tax_rows(gst: &StoredGst) -> Result<Vec<TaxRow>, PrintError> {
         let mut central: Vec<&GstLine> = Vec::new();
         let mut state: Vec<&GstLine> = Vec::new();
@@ -243,10 +244,21 @@ mod data {
             });
         }
         for c in cess {
-            let Some(row) = rows
-                .iter_mut()
-                .find(|r| r.taxable == c.taxable && r.cess.is_none())
-            else {
+            let candidates: Vec<usize> = rows
+                .iter()
+                .enumerate()
+                .filter(|(_, r)| r.taxable == c.taxable && r.cess.is_none())
+                .map(|(at, _)| at)
+                .collect();
+            let [at] = candidates.as_slice() else {
+                return Err(unsupported(if candidates.is_empty() {
+                    "a cess line does not match the taxable value of any tax row"
+                } else {
+                    "a cess line matches more than one tax row of the same taxable value; \
+                     the stored lines do not say which row it belongs to"
+                }));
+            };
+            let Some(row) = rows.get_mut(*at) else {
                 return Err(unsupported(
                     "a cess line does not match the taxable value of any tax row",
                 ));
@@ -499,18 +511,27 @@ mod data {
                     self.label()
                 ))
             })?;
-            let posted = sum(self
-                .v
-                .ledger_lines
-                .iter()
-                .filter(|l| l.ledger == party)
-                .map(|l| l.amount.amount))?;
-            if posted != grand {
+            // Debits count plus and credits minus, so a balanced pair nets to nothing and a credit
+            // cannot stand in for the debit the invoice total needs.
+            let mut net: i64 = 0;
+            for l in self.v.ledger_lines.iter().filter(|l| l.ledger == party) {
+                let value = match l.amount.side {
+                    DrCr::Dr => l.amount.amount.get(),
+                    DrCr::Cr => l.amount.amount.get().checked_neg().ok_or_else(overflow)?,
+                };
+                net = net.checked_add(value).ok_or_else(overflow)?;
+            }
+            if net != grand.get() {
+                let posted = if net < 0 {
+                    "a net credit".to_owned()
+                } else {
+                    format_inr(Paise::new(net))
+                };
                 return Err(missing(format!(
-                    "{}: the invoice totals {} but {} is posted to the party ledger",
+                    "{}: the invoice totals {} but {} is posted to the party ledger (debits less credits)",
                     self.label(),
                     format_inr(grand),
-                    format_inr(posted)
+                    posted
                 )));
             }
             Ok(Totals {
@@ -1078,7 +1099,10 @@ mod page {
             let height = to_i32(lines)
                 .saturating_mul(leading(TABLE))
                 .saturating_add(PAD.saturating_mul(2));
-            if !heading && self.ensure(height.saturating_add(leading(TABLE))) {
+            // The heading is checked for room too, so it never ends a page with its rows on the
+            // next one. A data row that breaks the page repeats the heading on the new page.
+            let broke = self.ensure(height.saturating_add(leading(TABLE)));
+            if broke && !heading {
                 let titles: Vec<String> = cols.iter().map(|c| c.title.to_owned()).collect();
                 self.table_row(cols, widths, &titles, true)?;
             }
