@@ -68,20 +68,39 @@ fn company_file() -> (tempfile::TempDir, PathBuf) {
     (dir, path)
 }
 
-/// Rewrites the first occurrence of `from` in the file to `to` (same length), changing one stored
-/// event without touching the hash columns.
+/// Rewrites every occurrence of `from` in the company file, and in its `-wal` file when one is
+/// left, to `to` (same length). Each write to the company file leaves old copies of a page in
+/// free space, so only one occurrence may be the live event row. Changing all of them changes the
+/// live event bytes, and the chain hash over them then fails. The chain columns are untouched.
 fn rewrite_bytes_in_file(path: &Path, from: &str, to: &str) {
     assert_eq!(from.len(), to.len());
-    let mut bytes = std::fs::read(path).unwrap();
-    let position = bytes
-        .windows(from.len())
-        .position(|w| w == from.as_bytes())
-        .expect("the fixture text is stored in the company file");
-    bytes
-        .get_mut(position..position + to.len())
-        .unwrap()
-        .copy_from_slice(to.as_bytes());
-    std::fs::write(path, bytes).unwrap();
+    let mut wal = path.as_os_str().to_owned();
+    wal.push("-wal");
+    let mut changed = 0usize;
+    for file in [path.to_path_buf(), PathBuf::from(wal)] {
+        if !file.is_file() {
+            continue;
+        }
+        let mut bytes = std::fs::read(&file).unwrap();
+        let mut start = 0usize;
+        while let Some(offset) = bytes
+            .get(start..)
+            .and_then(|rest| rest.windows(from.len()).position(|w| w == from.as_bytes()))
+        {
+            let at = start + offset;
+            bytes
+                .get_mut(at..at + to.len())
+                .unwrap()
+                .copy_from_slice(to.as_bytes());
+            start = at + to.len();
+            changed += 1;
+        }
+        std::fs::write(&file, bytes).unwrap();
+    }
+    assert!(
+        changed > 0,
+        "the fixture text is stored in the company file"
+    );
 }
 
 #[test]
