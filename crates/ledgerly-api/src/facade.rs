@@ -1,4 +1,4 @@
-//! Api facade. **Card W1** implements this module.
+//! Api facade (card W1, Wave 2). The app, the CLI and the MCP server use only this module.
 //!
 //! Frozen interface (plan card W1):
 //!
@@ -6,3 +6,276 @@
 //! pub struct Api { .. }
 //! impl Api { pub fn execute(&mut self, cmd: Command) -> Result<Outcome<CommandResult>, ApiError>; pub fn report(&self, p: &ReportParams) -> Result<Outcome<Report>, ApiError>; pub fn search(&self, q: &str) -> Vec<SearchHit>; }
 //! ```
+//!
+//! # Construction
+//!
+//! [`Api::create`] makes a company file and seeds it with the reserved groups and the default
+//! voucher types, as audited master events. [`Api::open`] opens one. Both load the books into a
+//! cache, which every successful commit refreshes.
+//!
+//! # Changes
+//!
+//! [`Api::execute`] runs the engine on the cached books. The engine's events are committed in one
+//! store transaction, and the cache is reloaded from the store only after that commit. A refused
+//! command or a failed commit leaves the store and the cache unchanged. An unsupported command
+//! commits nothing.
+//!
+//! Changes are attributed to the actor set by [`Api::set_actor`]. Until it is called, the actor
+//! is user 1, the local user of a single-user company file. [`Api::open`] stamps audit records
+//! with the system clock until [`Api::set_clock`] is called.
+//!
+//! # Period lock
+//!
+//! The lock date is the last `PeriodLocked` event in the audit log (spec section 5, invariant 8).
+//! Every voucher command uses the lock-aware engine functions with it.
+//!
+//! # Unsupported input
+//!
+//! When the store cannot project a voucher (`StoreError::Unsupported`), the books cannot be
+//! read. [`Api::report`] and [`Api::execute`] then return `Outcome::Unsupported`, naming the
+//! voucher, and never an empty result.
+
+use std::path::Path;
+
+use ledgerly_core::{Clock, Date, Outcome, Unsupported, UserId, VoucherId};
+use ledgerly_model::seed_groups::reserved_groups;
+use ledgerly_model::seed_voucher_types::default_voucher_types;
+use ledgerly_model::{Books, Company, MasterSnapshot};
+use ledgerly_reports::{Report, ReportParams};
+use ledgerly_store::{Actor, AuditMeta, Event, SqliteStore, Store, StoreError};
+
+use crate::command::{self, Command, CommandResult};
+use crate::error::ApiError;
+use crate::events::{lock_date, read_all};
+use crate::report;
+use crate::search::{SearchHit, search_books, search_catalogue};
+
+/// The app version written to every audit record.
+const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+/// The command and query facade over one company file.
+#[derive(Debug)]
+pub struct Api {
+    /// The company file.
+    store: SqliteStore,
+    /// Source of the audit timestamps.
+    clock: Clock,
+    /// Who is making the changes.
+    actor: Actor,
+    /// The loaded books, or why they cannot be loaded.
+    cache: Cache,
+    /// The lock date in force, from the audit log.
+    lock: Option<Date>,
+}
+
+/// The state of the books cache.
+#[derive(Debug)]
+enum Cache {
+    /// The books, loaded from the store.
+    Ready(Books),
+    /// The store holds a voucher this build cannot project. Nothing is computed from the books.
+    Blocked(Unsupported),
+    /// A change was saved but the books could not be reloaded. The next command reloads them.
+    Stale,
+}
+
+impl Api {
+    /// Creates a company file at `path` holding `company`, and seeds it with the reserved groups
+    /// and the default voucher types. The file must not exist.
+    ///
+    /// # Errors
+    /// [`ApiError::Store`] when the file cannot be created or seeded. A file left half-created by
+    /// a failed seed is removed.
+    pub fn create(path: &Path, company: &Company, clock: Clock) -> Result<Self, ApiError> {
+        let mut store = SqliteStore::create(path, company, clock)?;
+        let actor = default_actor();
+        let meta = audit_meta(&actor, clock);
+        if let Err(e) = store.commit(&seed_events(), &meta) {
+            drop(store);
+            if let Err(remove) = std::fs::remove_file(path) {
+                tracing::warn!(error = %remove, "could not remove a half-created company file");
+            }
+            return Err(e.into());
+        }
+        let mut api = Self {
+            store,
+            clock,
+            actor,
+            cache: Cache::Stale,
+            lock: None,
+        };
+        api.reload()?;
+        Ok(api)
+    }
+
+    /// Opens the company file at `path`.
+    ///
+    /// # Errors
+    /// [`ApiError::Store`] when the file cannot be opened or read.
+    pub fn open(path: &Path) -> Result<Self, ApiError> {
+        let store = SqliteStore::open(path)?;
+        let mut api = Self {
+            store,
+            clock: Clock::System,
+            actor: default_actor(),
+            cache: Cache::Stale,
+            lock: None,
+        };
+        api.reload()?;
+        Ok(api)
+    }
+
+    /// Sets the actor recorded on later changes (the signed-in user).
+    pub fn set_actor(&mut self, actor: Actor) {
+        self.actor = actor;
+    }
+
+    /// Sets the clock that stamps later audit records.
+    pub fn set_clock(&mut self, clock: Clock) {
+        self.clock = clock;
+    }
+
+    /// Runs a command: the engine computes its events on the cached books, the events are
+    /// committed, and the cache is reloaded.
+    ///
+    /// # Errors
+    /// - [`ApiError::Engine`] when the engine refuses the command (nothing is written).
+    /// - [`ApiError::Store`] when the commit fails (nothing is written), or when the commit
+    ///   succeeded but the books could not be reloaded. In the second case the change is saved
+    ///   and the next command reloads the books.
+    pub fn execute(&mut self, cmd: Command) -> Result<Outcome<CommandResult>, ApiError> {
+        if matches!(self.cache, Cache::Stale) {
+            self.reload()?;
+        }
+        let books = match &self.cache {
+            Cache::Ready(books) => books,
+            Cache::Blocked(unsupported) => return Ok(Outcome::Unsupported(unsupported.clone())),
+            Cache::Stale => return Err(ApiError::Stale),
+        };
+        let events = match command::run(cmd, books, self.lock)? {
+            Outcome::Value(events) => events,
+            Outcome::Unsupported(unsupported) => return Ok(Outcome::Unsupported(unsupported)),
+        };
+        if events.is_empty() {
+            return Ok(Outcome::Value(CommandResult::unchanged()));
+        }
+        let meta = audit_meta(&self.actor, self.clock);
+        let receipt = self.store.commit(&events, &meta)?;
+        let result = CommandResult::committed(&events, receipt);
+        self.reload()?;
+        Ok(Outcome::Value(result))
+    }
+
+    /// Runs a report over the cached books.
+    ///
+    /// # Errors
+    /// - [`ApiError::Report`] when the report engine rejects `p`.
+    /// - [`ApiError::Store`] when the audit log cannot be read for an audit report.
+    /// - [`ApiError::Stale`] after a saved change whose reload failed; run a command to reload.
+    pub fn report(&self, p: &ReportParams) -> Result<Outcome<Report>, ApiError> {
+        match &self.cache {
+            Cache::Ready(books) => report::run(&self.store, books, p),
+            Cache::Blocked(unsupported) => Ok(Outcome::Unsupported(unsupported.clone())),
+            Cache::Stale => Err(ApiError::Stale),
+        }
+    }
+
+    /// Searches ledgers, vouchers, reports and settings. The matching rules and hit order are
+    /// described in `search.rs`. An empty query gives no hits.
+    ///
+    /// When the books cannot be loaded, the report and setting hits are still returned, followed
+    /// by one [`SearchHit::Unavailable`] that says why ledgers and vouchers are missing.
+    pub fn search(&self, q: &str) -> Vec<SearchHit> {
+        if q.trim().is_empty() {
+            return Vec::new();
+        }
+        let mut hits = match &self.cache {
+            Cache::Ready(books) => search_books(books, q),
+            Cache::Blocked(_) | Cache::Stale => search_catalogue(q),
+        };
+        if let Some(reason) = self.unavailable_reason() {
+            hits.push(SearchHit::Unavailable { reason });
+        }
+        hits
+    }
+
+    /// Why the books are not searchable, or `None` when they are.
+    fn unavailable_reason(&self) -> Option<String> {
+        match &self.cache {
+            Cache::Ready(_) => None,
+            Cache::Blocked(unsupported) => Some(format!(
+                "{}: {}",
+                unsupported.what, unsupported.reason
+            )),
+            Cache::Stale => Some(
+                "the books need reloading after a saved change; run a command to reload them"
+                    .to_owned(),
+            ),
+        }
+    }
+
+    /// Reloads the cache and the lock date from the store.
+    ///
+    /// # Errors
+    /// [`ApiError::Store`] on a read failure. The cache is then `Stale`.
+    fn reload(&mut self) -> Result<(), ApiError> {
+        let records = match read_all(&self.store) {
+            Ok(records) => records,
+            Err(e) => {
+                self.cache = Cache::Stale;
+                return Err(e.into());
+            }
+        };
+        let cache = match self.store.load_books(None) {
+            Ok(books) => Cache::Ready(books),
+            Err(StoreError::Unsupported { voucher, reason }) => {
+                Cache::Blocked(blocked(voucher, &reason))
+            }
+            Err(e) => {
+                self.cache = Cache::Stale;
+                return Err(e.into());
+            }
+        };
+        self.cache = cache;
+        self.lock = lock_date(&records);
+        Ok(())
+    }
+}
+
+/// Who changes are attributed to until [`Api::set_actor`] is called.
+fn default_actor() -> Actor {
+    Actor::User(UserId(1))
+}
+
+/// The audit metadata of a change made now.
+fn audit_meta(actor: &Actor, clock: Clock) -> AuditMeta {
+    AuditMeta {
+        actor: actor.clone(),
+        at: clock.now(),
+        reason: None,
+        app_version: APP_VERSION.to_owned(),
+    }
+}
+
+/// The reserved groups and default voucher types of a new company, as master creations.
+fn seed_events() -> Vec<Event> {
+    reserved_groups()
+        .into_iter()
+        .map(|group| Event::MasterCreated(MasterSnapshot::Group(group)))
+        .chain(
+            default_voucher_types()
+                .into_iter()
+                .map(|kind| Event::MasterCreated(MasterSnapshot::VoucherType(kind))),
+        )
+        .collect()
+}
+
+/// The unsupported state of a store that holds a voucher it cannot project.
+fn blocked(voucher: VoucherId, reason: &str) -> Unsupported {
+    Unsupported {
+        what: format!("voucher {}", voucher.0),
+        reason: format!(
+            "{reason}; no figures or changes are computed from the books until this is resolved"
+        ),
+    }
+}
