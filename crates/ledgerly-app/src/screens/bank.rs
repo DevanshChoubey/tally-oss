@@ -44,7 +44,6 @@ use ledgerly_core::{BankStatementId, Date, Outcome, Paise, VoucherId};
 use ledgerly_model::{BankMatch, MatchKind};
 use thiserror::Error;
 
-use crate::screens::report_view::wire::unsupported_text;
 use crate::{AppCtx, Screen, ScreenAction};
 
 // ---------------------------------------------------------------------------------------------
@@ -969,7 +968,7 @@ impl BankScreen {
             }
             Outcome::Unsupported(u) => {
                 ui.strong("Reconciliation statement");
-                ui.label(unsupported_text(u));
+                ui.label(format!("Unsupported: {}. {}", u.what, u.reason));
             }
         }
     }

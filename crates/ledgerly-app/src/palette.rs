@@ -3,16 +3,14 @@
 //! Frozen interface (plan card U2):
 //!
 //! ```text
-//! pub struct Palette { .. }
+//! pub struct Palette { .. }   // results come from ledgerly-api search after W7
 //! ```
 //!
 //! The palette searches commands, reports, masters (name, alias, GSTIN), vouchers (number, party,
-//! amount, date), settings and AI intents (spec section 7). The host feeds the commands and any
-//! other rows with [`Palette::set_entries`]. The API's search results (card W7) come in as
-//! [`SearchHit`]s: each query change is a [`SearchRequest`], run on the worker by
-//! [`Palette::pump_search`] or taken by the host with [`Palette::take_search_request`], and
-//! answered with [`Palette::answer_search`]. Only the answer to the newest query is kept. The
-//! palette only ranks and shows the rows; it never computes a figure.
+//! amount, date), settings and AI intents (spec section 7). Until the API's search lands (W7) the
+//! host feeds it a list of [`PaletteEntry`] values with [`Palette::set_entries`]; the palette only
+//! ranks and shows them. It never computes a figure: an entry's `detail` is text the host got from
+//! the API.
 //!
 //! Two ways to open it, as in the spec's screen-stack rule: [`PaletteMode::OnTop`] (the screen
 //! you came from is kept and Esc returns to it) and [`PaletteMode::Replace`] (the choice replaces
@@ -25,12 +23,7 @@
 
 use std::cmp::Reverse;
 
-use ledgerly_api::{MatchedOn, SearchHit};
-
 use crate::keymap::{Action, Keymap};
-use crate::screens::report_view::date_text;
-use crate::screens::report_view::wire::{Done, Latest};
-use crate::worker::ApiWorker;
 
 /// How many recent choices are remembered.
 const MAX_RECENTS: usize = 8;
@@ -115,66 +108,6 @@ pub struct PaletteChoice {
     pub title: String,
     /// Whether to stack on top of or replace the current screen.
     pub mode: PaletteMode,
-}
-
-/// A search the palette wants run: the answer must carry `seq`.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SearchRequest {
-    /// Number of the request. Only the answer to the newest one is kept.
-    pub seq: u64,
-    /// The query, as typed.
-    pub query: String,
-}
-
-/// The palette row for one search hit. `None` for [`SearchHit::Unavailable`], which is shown as
-/// a note instead ([`Palette::search_notice`]).
-#[must_use]
-pub fn search_entry(hit: &SearchHit) -> Option<PaletteEntry> {
-    match hit {
-        SearchHit::Ledger { id, name, matched } => Some(
-            PaletteEntry::new(PaletteTarget::Master(id.0.to_string()), name.clone())
-                .with_detail(matched_word(*matched)),
-        ),
-        SearchHit::Voucher {
-            id,
-            number,
-            date,
-            matched,
-        } => {
-            let title = match number {
-                Some(number) => format!("Voucher {number}"),
-                None => "Voucher (not numbered yet)".to_owned(),
-            };
-            Some(
-                PaletteEntry::new(PaletteTarget::Voucher(id.0.to_string()), title)
-                    .with_detail(format!("{}  {}", date_text(*date), matched_word(*matched))),
-            )
-        }
-        SearchHit::Report { title, .. } => Some(PaletteEntry::new(
-            PaletteTarget::Report((*title).to_owned()),
-            *title,
-        )),
-        SearchHit::Setting { name } => Some(PaletteEntry::new(
-            PaletteTarget::Setting((*name).to_owned()),
-            *name,
-        )),
-        SearchHit::Unavailable { .. } => None,
-    }
-}
-
-/// The word shown for the field a hit matched on.
-fn matched_word(matched: MatchedOn) -> &'static str {
-    match matched {
-        MatchedOn::Name => "name",
-        MatchedOn::Alias => "alias",
-        MatchedOn::Gstin => "GSTIN",
-        MatchedOn::Number => "number",
-        MatchedOn::Party => "party",
-        MatchedOn::Amount => "amount",
-        MatchedOn::Date => "date",
-        MatchedOn::Title => "report",
-        MatchedOn::SettingName => "setting",
-    }
 }
 
 /// One entry per keymap action, with the first chord as the detail text.
@@ -287,18 +220,7 @@ fn subsequence_gaps(term: &str, text: &str) -> Option<u32> {
 pub struct Palette {
     open: Option<PaletteMode>,
     query: String,
-    /// What the palette ranks: the host's rows, then the search rows.
     entries: Vec<PaletteEntry>,
-    /// The rows the host set with [`Palette::set_entries`].
-    base: Vec<PaletteEntry>,
-    /// The rows the newest search answer gave.
-    search_entries: Vec<PaletteEntry>,
-    /// The newest search answer's note (an unavailable part of the books), if any.
-    search_notice: Option<String>,
-    /// The query waiting for a search to run.
-    search_due: Option<String>,
-    /// The search running on the worker, if any.
-    search: Latest<Vec<SearchHit>>,
     recents: Vec<PaletteTarget>,
     selected: usize,
     focus_pending: bool,
@@ -311,84 +233,10 @@ impl Palette {
         Palette::default()
     }
 
-    /// Replaces the rows the host gives the palette (commands and the like). Search rows stay.
+    /// Replaces the list the palette searches (commands plus whatever the API returned).
     pub fn set_entries(&mut self, entries: Vec<PaletteEntry>) {
-        self.base = entries;
-        self.rebuild();
-    }
-
-    /// Rebuilds the ranked rows from the host's rows and the search rows.
-    fn rebuild(&mut self) {
-        self.entries = self
-            .base
-            .iter()
-            .chain(self.search_entries.iter())
-            .cloned()
-            .collect();
+        self.entries = entries;
         self.clamp_selection();
-    }
-
-    /// The search query the palette wants run, when the host runs searches itself (no worker).
-    /// Answer it with [`Palette::answer_search`] under the same sequence number.
-    pub fn take_search_request(&mut self) -> Option<SearchRequest> {
-        let query = self.search_due.take()?;
-        let seq = self.search.next_seq();
-        Some(SearchRequest { seq, query })
-    }
-
-    /// Answers a search. Ignored unless `seq` is the newest query's number.
-    pub fn answer_search(&mut self, seq: u64, hits: Vec<SearchHit>) {
-        if self.search.is_current(seq) {
-            self.set_search_hits(&hits);
-        }
-    }
-
-    /// Starts the search for a changed query on the worker when there is one, and applies a
-    /// finished search. Call it once per frame while the palette is open.
-    pub fn pump_search(&mut self, ctx: &egui::Context, worker: Option<&ApiWorker>) {
-        let Some(worker) = worker else {
-            return;
-        };
-        if let Some(query) = self.search_due.take() {
-            if query.trim().is_empty() {
-                self.search.cancel();
-                self.set_search_hits(&[]);
-            } else {
-                self.search.start(worker, move |api| api.search(&query));
-            }
-        }
-        match self.search.poll() {
-            Some(Done::Ready(_, hits)) => self.set_search_hits(&hits),
-            Some(Done::Lost(_)) => {
-                self.search_notice =
-                    Some("the API worker stopped; search is unavailable".to_owned());
-            }
-            None => {
-                if self.search.is_pending() {
-                    ctx.request_repaint();
-                }
-            }
-        }
-    }
-
-    /// The note from the last search: part of the books could not be searched, so some ledgers or
-    /// vouchers may be missing from the rows.
-    #[must_use]
-    pub fn search_notice(&self) -> Option<&str> {
-        self.search_notice.as_deref()
-    }
-
-    /// Replaces the search rows with the rows of `hits`, and keeps the note of an unavailable part.
-    fn set_search_hits(&mut self, hits: &[SearchHit]) {
-        self.search_entries = hits.iter().filter_map(search_entry).collect();
-        self.search_notice = hits.iter().find_map(|hit| match hit {
-            SearchHit::Unavailable { reason } => Some(reason.clone()),
-            SearchHit::Ledger { .. }
-            | SearchHit::Voucher { .. }
-            | SearchHit::Report { .. }
-            | SearchHit::Setting { .. } => None,
-        });
-        self.rebuild();
     }
 
     /// Is the palette showing?
@@ -409,9 +257,6 @@ impl Palette {
         self.query.clear();
         self.selected = 0;
         self.focus_pending = true;
-        self.search.cancel();
-        self.search_due = None;
-        self.set_search_hits(&[]);
     }
 
     /// Opens it if `action` is one of the two palette actions; returns whether it was.
@@ -444,7 +289,6 @@ impl Palette {
     pub fn set_query(&mut self, query: impl Into<String>) {
         self.query = query.into();
         self.selected = 0;
-        self.search_due = Some(self.query.clone());
     }
 
     /// The rows for the current query, best first.
@@ -543,10 +387,6 @@ impl Palette {
         }
         if edit.changed() {
             self.selected = 0;
-            self.search_due = Some(self.query.clone());
-        }
-        if let Some(note) = self.search_notice.as_deref() {
-            ui.weak(note);
         }
 
         let rows: Vec<String> = self

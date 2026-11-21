@@ -27,25 +27,17 @@
 //! # Running a report
 //!
 //! The screen never reads the audit log. When the user picks a kind or presses Run, the screen
-//! queues an [`AuditRequest`]. With an API worker in the context the screen runs it there and
-//! polls it each frame (card W7). Without one, the host takes it with
-//! [`AuditScreen::take_request`], runs the report, and answers with [`AuditScreen::set_table`],
-//! [`AuditScreen::set_unsupported`] or [`AuditScreen::set_failed`]. An `Unsupported` outcome from
-//! RP10 is shown as such, with its reason, never as an empty table.
-//!
-//! A run started while an earlier one is in flight drops the earlier one, so a late answer for a
-//! report the user has already left is never shown (review finding U12).
+//! queues an [`AuditRequest`]; the host takes it with [`AuditScreen::take_request`], runs the
+//! report, and answers with [`AuditScreen::set_table`], [`AuditScreen::set_unsupported`] or
+//! [`AuditScreen::set_failed`]. An `Unsupported` outcome from RP10 is shown as such, with its
+//! reason, never as an empty table.
 
 use std::collections::BTreeSet;
 
 use egui_extras::{Column, TableBuilder};
-use ledgerly_api::{Api, AuditReportKind, ReportKind};
-use ledgerly_core::{Date, Month, Outcome, Period, PeriodError};
+use ledgerly_core::{Date, Month, Period, PeriodError};
 use thiserror::Error;
 
-use crate::screens::report_view::convert::{audit_table_of, default_params};
-use crate::screens::report_view::wire::{Done, Latest, unsupported_message};
-use crate::worker::ApiWorker;
 use crate::{AppCtx, Screen, ScreenAction};
 
 /// Height of a table row in points.
@@ -74,19 +66,6 @@ pub enum AuditViewKind {
 }
 
 impl AuditViewKind {
-    /// The engine's report for this view.
-    #[must_use]
-    pub fn report_kind(self) -> AuditReportKind {
-        match self {
-            AuditViewKind::ObjectHistory => AuditReportKind::ObjectHistory,
-            AuditViewKind::EditLog => AuditReportKind::EditLog,
-            AuditViewKind::DeletedAltered => AuditReportKind::DeletedAltered,
-            AuditViewKind::BackDated => AuditReportKind::BackDated,
-            AuditViewKind::EditsAfterLock => AuditReportKind::EditsAfterLock,
-            AuditViewKind::IntegrityCertificate => AuditReportKind::IntegrityCertificate,
-        }
-    }
-
     /// Every kind, in the order the selector shows them.
     pub const ALL: [AuditViewKind; 6] = [
         AuditViewKind::ObjectHistory,
@@ -383,10 +362,6 @@ pub struct AuditScreen {
     state: AuditState,
     collapsed: BTreeSet<usize>,
     request: Option<AuditRequest>,
-    /// Sequence number of the queued request; answers to older runs are refused.
-    request_seq: u64,
-    /// The run on the API worker, if any.
-    latest: Latest<Result<Outcome<AuditTable>, String>>,
     input_error: Option<AuditInputError>,
 }
 
@@ -403,8 +378,6 @@ impl AuditScreen {
             state: AuditState::NotRun,
             collapsed: BTreeSet::new(),
             request: None,
-            request_seq: 0,
-            latest: Latest::default(),
             input_error: None,
         }
     }
@@ -490,7 +463,6 @@ impl AuditScreen {
         };
         self.input_error = None;
         self.state = AuditState::Running;
-        self.request_seq = self.latest.next_seq();
         self.request = Some(AuditRequest {
             kind: self.kind,
             period,
@@ -506,34 +478,6 @@ impl AuditScreen {
     pub fn set_table(&mut self, table: AuditTable) {
         self.collapsed.clear();
         self.state = AuditState::Loaded(table);
-    }
-
-    /// Starts the queued request on the worker when there is one, and applies a finished run.
-    fn pump(&mut self, ctx: &egui::Context, worker: Option<&ApiWorker>) {
-        let Some(worker) = worker else {
-            return;
-        };
-        if let Some(request) = self.request.take() {
-            let (kind, period) = (request.kind, request.period);
-            self.latest.start_as(self.request_seq, worker, move |api| {
-                run_audit(api, kind, period)
-            });
-        }
-        match self.latest.poll() {
-            Some(Done::Ready(_, Ok(Outcome::Value(table)))) => self.set_table(table),
-            Some(Done::Ready(_, Ok(Outcome::Unsupported(u)))) => {
-                self.set_unsupported(&u.what, &u.reason);
-            }
-            Some(Done::Ready(_, Err(message))) => self.set_failed(&message),
-            Some(Done::Lost(_)) => {
-                self.set_failed("the API worker stopped before the report ran");
-            }
-            None => {
-                if self.latest.is_pending() {
-                    ctx.request_repaint();
-                }
-            }
-        }
     }
 
     /// The host's answer: the report is `Unsupported` for this request.
@@ -637,10 +581,8 @@ impl AuditScreen {
                 ui.label("Reading the audit log...");
             }
             AuditState::Unsupported { what, reason } => {
-                ui.colored_label(
-                    ui.visuals().warn_fg_color,
-                    unsupported_message(what, reason),
-                );
+                ui.colored_label(ui.visuals().warn_fg_color, format!("Unsupported: {what}"));
+                ui.label(reason.as_str());
             }
             AuditState::Failed(message) => {
                 ui.colored_label(ui.visuals().error_fg_color, message.as_str());
@@ -747,22 +689,10 @@ impl Screen for AuditScreen {
         "Audit trail".to_owned()
     }
 
-    fn ui(&mut self, ui: &mut egui::Ui, ctx: &mut AppCtx) -> ScreenAction {
-        self.pump(ui.ctx(), ctx.api.as_ref());
+    fn ui(&mut self, ui: &mut egui::Ui, _ctx: &mut AppCtx) -> ScreenAction {
         self.controls_ui(ui);
         ui.separator();
         self.body_ui(ui);
         ScreenAction::Stay
-    }
-}
-
-/// Runs the auditor report for `kind` over `period` on the API thread and gives the table the
-/// screen shows. Plain data only, so it can cross back to the UI thread.
-fn run_audit(api: &Api, kind: AuditViewKind, period: Period) -> Result<Outcome<AuditTable>, String> {
-    let params = default_params(ReportKind::Audit(kind.report_kind()), period);
-    match api.report(&params) {
-        Err(e) => Err(e.to_string()),
-        Ok(Outcome::Unsupported(u)) => Ok(Outcome::Unsupported(u)),
-        Ok(Outcome::Value(report)) => Ok(Outcome::Value(audit_table_of(&report))),
     }
 }

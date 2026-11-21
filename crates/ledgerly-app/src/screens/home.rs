@@ -38,7 +38,6 @@ use egui::{Color32, Event, InputState, Key, Modifiers, RichText, Sense, Ui};
 use ledgerly_core::format::format_inr;
 use ledgerly_core::{Outcome, Paise};
 
-use crate::screens::report_view::wire::unsupported_text;
 use crate::{AppCtx, Screen, ScreenAction};
 
 /// Width of one KPI tile, in points.
@@ -171,7 +170,7 @@ pub fn value_text(value: &Outcome<Paise>) -> String {
 pub fn kpi_view(kpi: &Kpi) -> KpiView {
     let footnote_text = match &kpi.value {
         Outcome::Value(_) => kpi.footnote.clone(),
-        Outcome::Unsupported(u) => unsupported_text(u),
+        Outcome::Unsupported(u) => format!("{}: {}", u.what, u.reason),
     };
     KpiView {
         label: kpi.label.clone(),

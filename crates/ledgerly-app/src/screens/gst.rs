@@ -40,7 +40,6 @@ use ledgerly_core::format::format_inr;
 use ledgerly_core::{Date, Gstin, Paise, Unsupported, VoucherId};
 use thiserror::Error;
 
-use crate::screens::report_view::wire::unsupported_text;
 use crate::{AppCtx, Screen, ScreenAction};
 
 // ---------------------------------------------------------------------------------------------
@@ -1153,7 +1152,7 @@ fn draw_not_ready<T>(ui: &mut Ui, feed: &Feed<T>) {
         Feed::Unsupported(u) => {
             ui.colored_label(
                 ui.visuals().error_fg_color,
-                unsupported_text(u),
+                format!("Not supported yet: {}. {}", u.what, u.reason),
             );
         }
     }
