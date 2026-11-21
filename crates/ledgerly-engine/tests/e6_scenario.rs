@@ -6,6 +6,10 @@
 //! the doc comments on `Scenario` in ledgerly-model: `Actual` = "Regular vouchers, plus post-dated
 //! ones on or before the as-of date"; `Including(s)` = `Actual` plus vouchers with statuses `s`.
 //! Postings after `as_of` are out, so a balance is "as of" a date.
+//!
+//! The memorandum and reversing rules follow the review fix of round 2: a named scenario that
+//! lists statuses cannot include them, so the answer is `Unsupported`, never a silent drop. A
+//! voucher type missing from the masters is an error, never a silent exclusion.
 #![allow(
     clippy::unwrap_used,
     clippy::expect_used,
@@ -16,8 +20,9 @@
 use std::collections::BTreeMap;
 
 use ledgerly_core::{
-    CompanyId, LedgerId, Paise, SignedAmount, StateCode, VoucherId, VoucherTypeId,
+    CompanyId, LedgerId, Outcome, Paise, SignedAmount, StateCode, VoucherId, VoucherTypeId,
 };
+use ledgerly_engine::EngineError;
 use ledgerly_engine::scenario::effective_postings;
 use ledgerly_model::{
     Address, BaseVoucherKind, Books, Company, EntityKind, Features, Masters, NegativeStockPolicy,
@@ -97,7 +102,12 @@ fn books(postings: Vec<Posting>) -> Books {
     }
 }
 
-fn voucher_ids(found: &[&Posting]) -> Vec<u64> {
+/// Voucher numbers of the included postings. Fails the test on an error or an `Unsupported`.
+fn included(result: Result<Outcome<Vec<&Posting>>, EngineError>) -> Vec<u64> {
+    let outcome = result.expect("effective_postings should not return an error here");
+    let found = outcome
+        .value()
+        .expect("effective_postings should return a value here, not Unsupported");
     found.iter().map(|p| p.voucher.0).collect()
 }
 
@@ -111,8 +121,10 @@ fn optional_excluded_from_actual() {
         posting(1, date!(2026 - 05 - 01), VoucherStatus::Regular, T_SALES),
         posting(2, date!(2026 - 05 - 02), VoucherStatus::Optional, T_SALES),
     ]);
-    let found = effective_postings(&b, &Scenario::Actual, AS_OF);
-    assert_eq!(voucher_ids(&found), vec![1]);
+    assert_eq!(
+        included(effective_postings(&b, &Scenario::Actual, AS_OF)),
+        vec![1]
+    );
 }
 
 #[test]
@@ -123,12 +135,8 @@ fn optional_included_in_named_scenario() {
         posting(1, date!(2026 - 05 - 01), VoucherStatus::Regular, T_SALES),
         posting(2, date!(2026 - 05 - 02), VoucherStatus::Optional, T_SALES),
     ]);
-    let found = effective_postings(
-        &b,
-        &Scenario::Including(vec![VoucherStatus::Optional]),
-        AS_OF,
-    );
-    assert_eq!(voucher_ids(&found), vec![1, 2]);
+    let named = Scenario::Including(vec![VoucherStatus::Optional]);
+    assert_eq!(included(effective_postings(&b, &named, AS_OF)), vec![1, 2]);
 }
 
 #[test]
@@ -138,8 +146,8 @@ fn including_empty_list_equals_actual() {
         posting(1, date!(2026 - 05 - 01), VoucherStatus::Regular, T_SALES),
         posting(2, date!(2026 - 05 - 02), VoucherStatus::Optional, T_SALES),
     ]);
-    let found = effective_postings(&b, &Scenario::Including(Vec::new()), AS_OF);
-    assert_eq!(voucher_ids(&found), vec![1]);
+    let empty = Scenario::Including(Vec::new());
+    assert_eq!(included(effective_postings(&b, &empty, AS_OF)), vec![1]);
 }
 
 #[test]
@@ -152,8 +160,10 @@ fn post_dated_after_as_of_excluded() {
         posting(2, date!(2026 - 06 - 30), VoucherStatus::PostDated, T_SALES),
         posting(3, date!(2026 - 07 - 15), VoucherStatus::PostDated, T_SALES),
     ]);
-    let found = effective_postings(&b, &Scenario::Actual, AS_OF);
-    assert_eq!(voucher_ids(&found), vec![1, 2]);
+    assert_eq!(
+        included(effective_postings(&b, &Scenario::Actual, AS_OF)),
+        vec![1, 2]
+    );
 }
 
 #[test]
@@ -163,12 +173,11 @@ fn post_dated_after_as_of_excluded_in_named_scenario_too() {
         posting(1, date!(2026 - 07 - 15), VoucherStatus::PostDated, T_SALES),
         posting(2, date!(2026 - 07 - 15), VoucherStatus::Optional, T_SALES),
     ]);
-    let found = effective_postings(
-        &b,
-        &Scenario::Including(vec![VoucherStatus::Optional]),
-        AS_OF,
+    let named = Scenario::Including(vec![VoucherStatus::Optional]);
+    assert_eq!(
+        included(effective_postings(&b, &named, AS_OF)),
+        Vec::<u64>::new()
     );
-    assert_eq!(voucher_ids(&found), Vec::<u64>::new());
 }
 
 #[test]
@@ -178,43 +187,74 @@ fn regular_after_as_of_excluded() {
         posting(1, date!(2026 - 06 - 30), VoucherStatus::Regular, T_SALES),
         posting(2, date!(2026 - 07 - 01), VoucherStatus::Regular, T_SALES),
     ]);
-    let found = effective_postings(&b, &Scenario::Actual, AS_OF);
-    assert_eq!(voucher_ids(&found), vec![1]);
+    assert_eq!(
+        included(effective_postings(&b, &Scenario::Actual, AS_OF)),
+        vec![1]
+    );
 }
 
 #[test]
 fn memorandum_never_in_actual() {
     // Invariant 3: memorandum vouchers never affect base balances. Even with Regular status the
-    // Memorandum type keeps voucher 2 out.
+    // Memorandum type keeps voucher 2 out, and Actual has no Unsupported case.
     let b = books(vec![
         posting(1, date!(2026 - 05 - 01), VoucherStatus::Regular, T_SALES),
         posting(2, date!(2026 - 05 - 02), VoucherStatus::Regular, T_MEMO),
     ]);
-    let found = effective_postings(&b, &Scenario::Actual, AS_OF);
-    assert_eq!(voucher_ids(&found), vec![1]);
+    assert_eq!(
+        included(effective_postings(&b, &Scenario::Actual, AS_OF)),
+        vec![1]
+    );
 }
 
 #[test]
-fn memorandum_and_reversing_not_returned_in_named_scenario() {
-    // No rule defines how a named scenario would include memorandum or reversing vouchers, and
-    // this function cannot say "unsupported", so it never returns them (reports flag the
-    // scenario unsupported themselves). Expected: only voucher 1.
+fn memorandum_in_empty_named_scenario_is_excluded() {
+    // Scenario doc: Including(s) = Actual plus statuses in s. With s empty nothing is added, so
+    // a memorandum voucher stays out and the answer is a value, not Unsupported.
     let b = books(vec![
         posting(1, date!(2026 - 05 - 01), VoucherStatus::Regular, T_SALES),
         posting(2, date!(2026 - 05 - 02), VoucherStatus::Optional, T_MEMO),
-        posting(
-            3,
-            date!(2026 - 05 - 03),
-            VoucherStatus::Regular,
-            T_REVERSING,
-        ),
     ]);
-    let found = effective_postings(
-        &b,
-        &Scenario::Including(vec![VoucherStatus::Optional]),
-        AS_OF,
-    );
-    assert_eq!(voucher_ids(&found), vec![1]);
+    let empty = Scenario::Including(Vec::new());
+    assert_eq!(included(effective_postings(&b, &empty, AS_OF)), vec![1]);
+}
+
+#[test]
+fn memorandum_in_named_scenario_is_unsupported_not_dropped() {
+    // Review fix round 2: no rule says how a named scenario includes a memorandum voucher. The
+    // result is Unsupported for the whole computation. Silently dropping voucher 2 would make a
+    // total that is short by its amount. Same rule as the reports (balance sheet, ledger).
+    let b = books(vec![
+        posting(1, date!(2026 - 05 - 01), VoucherStatus::Regular, T_SALES),
+        posting(2, date!(2026 - 05 - 02), VoucherStatus::Optional, T_MEMO),
+    ]);
+    let named = Scenario::Including(vec![VoucherStatus::Optional]);
+    let result = effective_postings(&b, &named, AS_OF);
+    assert!(matches!(result, Ok(Outcome::Unsupported(_))));
+}
+
+#[test]
+fn reversing_journal_in_named_scenario_is_unsupported_not_dropped() {
+    // Same rule as the memorandum case, for a reversing journal (invariant 3).
+    let b = books(vec![
+        posting(1, date!(2026 - 05 - 01), VoucherStatus::Regular, T_SALES),
+        posting(2, date!(2026 - 05 - 03), VoucherStatus::Regular, T_REVERSING),
+    ]);
+    let named = Scenario::Including(vec![VoucherStatus::Optional]);
+    let result = effective_postings(&b, &named, AS_OF);
+    assert!(matches!(result, Ok(Outcome::Unsupported(_))));
+}
+
+#[test]
+fn memorandum_dated_after_as_of_does_not_block_named_scenario() {
+    // Rule 1 cuts by date before the type is examined: a memorandum voucher dated 1 Jul is after
+    // 30 Jun, so it cannot change the answer and the named scenario still returns a value.
+    let b = books(vec![
+        posting(1, date!(2026 - 05 - 01), VoucherStatus::Regular, T_SALES),
+        posting(2, date!(2026 - 07 - 01), VoucherStatus::Regular, T_MEMO),
+    ]);
+    let named = Scenario::Including(vec![VoucherStatus::Optional]);
+    assert_eq!(included(effective_postings(&b, &named, AS_OF)), vec![1]);
 }
 
 #[test]
@@ -226,22 +266,40 @@ fn cancelled_never_included() {
         posting(2, date!(2026 - 05 - 02), VoucherStatus::Regular, T_SALES),
     ]);
     assert_eq!(
-        voucher_ids(&effective_postings(&b, &Scenario::Actual, AS_OF)),
+        included(effective_postings(&b, &Scenario::Actual, AS_OF)),
         vec![2]
     );
     let named = Scenario::Including(vec![VoucherStatus::Cancelled]);
-    assert_eq!(voucher_ids(&effective_postings(&b, &named, AS_OF)), vec![2]);
+    assert_eq!(included(effective_postings(&b, &named, AS_OF)), vec![2]);
 }
 
 #[test]
-fn unknown_voucher_type_excluded() {
-    // A posting whose type is not in the masters might be a memorandum; never guess it in.
+fn unknown_voucher_type_is_an_error_not_a_silent_exclusion() {
+    // Review fix round 2 (rule A1): a posting dated on or before the as-of date whose voucher type
+    // is not in the masters cannot be classified. It is an error naming the type, never dropped.
     let b = books(vec![
         posting(1, date!(2026 - 05 - 01), VoucherStatus::Regular, T_UNKNOWN),
         posting(2, date!(2026 - 05 - 02), VoucherStatus::Regular, T_SALES),
     ]);
-    let found = effective_postings(&b, &Scenario::Actual, AS_OF);
-    assert_eq!(voucher_ids(&found), vec![2]);
+    let result = effective_postings(&b, &Scenario::Actual, AS_OF);
+    assert!(matches!(
+        result,
+        Err(EngineError::NotFound { ref what }) if what == "voucher type 99"
+    ));
+}
+
+#[test]
+fn unknown_voucher_type_after_as_of_is_not_checked() {
+    // Rule 1 applies first: a posting dated 1 Jul is out by date, so its unknown type is not an
+    // error and the result is the in-range sales voucher.
+    let b = books(vec![
+        posting(1, date!(2026 - 07 - 01), VoucherStatus::Regular, T_UNKNOWN),
+        posting(2, date!(2026 - 05 - 02), VoucherStatus::Regular, T_SALES),
+    ]);
+    assert_eq!(
+        included(effective_postings(&b, &Scenario::Actual, AS_OF)),
+        vec![2]
+    );
 }
 
 #[test]
@@ -252,6 +310,8 @@ fn order_of_books_is_kept() {
         posting(3, date!(2026 - 04 - 02), VoucherStatus::Regular, T_SALES),
         posting(4, date!(2026 - 04 - 02), VoucherStatus::Regular, T_SALES),
     ]);
-    let found = effective_postings(&b, &Scenario::Actual, AS_OF);
-    assert_eq!(voucher_ids(&found), vec![5, 3, 4]);
+    assert_eq!(
+        included(effective_postings(&b, &Scenario::Actual, AS_OF)),
+        vec![5, 3, 4]
+    );
 }
