@@ -1,0 +1,4 @@
+# MT940 is a standard message format; the parser reads its tags, so no column layout is needed.
+id = "generic-mt940"
+name = "SWIFT MT940 statement"
+kind = "mt940"
