@@ -671,7 +671,13 @@ fn add_purchase(
             Taxability::Exempt | Taxability::NilRated | Taxability::NonGst => continue,
         }
         let index = supported!(itc_line_index(v, k, *position));
-        let eligibility = supported!(itc_eligibility(v, index, &scope.books.company, masters)?);
+        let eligibility = supported!(itc_eligibility(
+            v,
+            index,
+            &scope.books.company,
+            masters,
+            &priced.rules,
+        )?);
         if eligibility.is_claimable() {
             eligible.add_line(line_tax)?;
         } else {
