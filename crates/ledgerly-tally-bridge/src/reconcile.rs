@@ -576,7 +576,9 @@ fn compare_trial_balance(
                 };
                 lines.push(listed);
             }
-            (true, _) => lines.push(their_line(r.row, LineKind::Total, ours.totals)),
+            (true, Resolution::Ambiguous(_) | Resolution::Unknown) => {
+                lines.push(their_line(r.row, LineKind::Total, ours.totals));
+            }
             (false, _) => lines.push(detail_line(r, &ours, &uses)),
         }
     }
