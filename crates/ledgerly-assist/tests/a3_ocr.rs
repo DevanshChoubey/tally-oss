@@ -619,6 +619,9 @@ fn amount_formats_are_read_exactly_or_rejected() {
     let bad = [
         "17,700.123", // a third decimal would need rounding
         "-500.00",    // negative
+        "- 500.00",   // minus separated by a space is still negative
+        ": - 500.00", // minus after a colon filler
+        "- 17,700.00",
         "1,2",        // bad grouping
         "12,34",      // last group must have 3 digits
         "1,2345,678", // bad grouping

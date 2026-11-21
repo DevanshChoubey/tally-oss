@@ -6,11 +6,12 @@ use std::str::FromStr;
 use ledgerly_core::{Date, Decimal, Paise};
 use time::Month;
 
-/// Tokens that may precede an amount and carry no information.
+/// Tokens that may precede an amount and carry no information. A lone `-` is not one: a minus
+/// sign is never dropped, so a separate dash token reaches `parse_amount` and is rejected.
 fn is_filler(token: &str) -> bool {
     matches!(
         token.to_ascii_lowercase().as_str(),
-        "@" | ":" | "-" | "rs" | "rs." | "inr" | "\u{20b9}"
+        "@" | ":" | "rs" | "rs." | "inr" | "\u{20b9}"
     )
 }
 
