@@ -32,7 +32,7 @@ use ledgerly_model::{BankMatch, MatchKind};
 
 use super::{
     BankScreen, BrsRow, BrsView, Confidence, Flow, LineState, LineStatus, StatementLineView,
-    SuggestionView,
+    SuggestionView, import,
 };
 use crate::screens::wire::{Done, Latest, unsupported_text};
 use crate::worker::ApiWorker;
@@ -49,6 +49,17 @@ pub(super) struct Loaded {
 type LoadAnswer = Result<Outcome<Option<Loaded>>, String>;
 type BrsAnswer = (Date, Result<Outcome<Brs>, String>);
 type ConfirmAnswer = (BankMatch, Result<Outcome<()>, String>);
+/// The new statement's id, or the text of the refusal.
+type ImportAnswer = Result<Outcome<BankStatementId>, String>;
+
+/// A statement file the user picked, waiting for the worker to import it.
+#[derive(Debug)]
+pub(super) struct PendingImport {
+    /// The bytes of the file, read on the UI thread when it was picked.
+    bytes: Vec<u8>,
+    /// The registry id of the layout to parse the file with.
+    layout: &'static str,
+}
 
 /// What a worker-mode screen waits for.
 #[derive(Debug)]
@@ -62,6 +73,10 @@ pub(super) struct Run {
     confirm: Latest<ConfirmAnswer>,
     queue: VecDeque<(BankMatch, Candidate)>,
     in_flight: bool,
+    /// A picked file that the next tick sends to the worker.
+    import_pending: Option<PendingImport>,
+    /// The import the worker is running.
+    import: Latest<ImportAnswer>,
     /// The matcher's candidates behind `BankScreen::suggestions`, in the same order.
     candidates: Vec<Candidate>,
     /// Statement lines the user matched in this session; kept across a reload.
@@ -102,9 +117,13 @@ impl BankScreen {
                 confirm: Latest::default(),
                 queue: VecDeque::new(),
                 in_flight: false,
+                import_pending: None,
+                import: Latest::default(),
                 candidates: Vec::new(),
                 matched: BTreeSet::new(),
             }),
+            import_layout: import::DEFAULT_LAYOUT,
+            import_notice: None,
         }
     }
 
@@ -131,6 +150,8 @@ impl BankScreen {
                 || run.load.is_pending()
                 || run.brs.is_pending()
                 || run.confirm.is_pending()
+                || run.import.is_pending()
+                || run.import_pending.is_some()
                 || !run.queue.is_empty()
         })
     }
@@ -148,16 +169,33 @@ impl BankScreen {
             return;
         };
         self.send_confirm(handle);
+        self.send_import(handle);
         self.send_load(handle);
     }
 
+    /// Queues a statement file the user picked. The next tick sends it to the worker. A file
+    /// picked earlier and not yet sent is replaced.
+    pub(super) fn queue_import(&mut self, bytes: Vec<u8>, layout: &'static str) {
+        self.import_notice = None;
+        if let Some(run) = self.run.as_mut() {
+            run.import_pending = Some(PendingImport { bytes, layout });
+        }
+    }
+
     fn fail_without_worker(&mut self) {
-        let waiting = self
-            .run
-            .as_ref()
-            .is_some_and(|run| run.want_load || !run.queue.is_empty());
+        let waiting = self.run.as_ref().is_some_and(|run| {
+            run.want_load || !run.queue.is_empty() || run.import_pending.is_some()
+        });
         if waiting {
             self.notice = Some("No company is open, so the bank request cannot run.".to_owned());
+            let had_import = self
+                .run
+                .as_mut()
+                .is_some_and(|run| run.import_pending.take().is_some());
+            if had_import {
+                self.import_notice =
+                    Some("No company is open, so the statement cannot be imported.".to_owned());
+            }
             if let Some(run) = self.run.as_mut() {
                 run.want_load = false;
             }
@@ -191,6 +229,27 @@ impl BankScreen {
                 self.release_in_flight();
             }
             None => {}
+        }
+        let finished = self.run.as_mut().and_then(|run| run.import.poll());
+        match finished {
+            Some(Done::Ready(answer)) => self.apply_import(answer),
+            Some(Done::Lost) => self.notice = Some(LOST.to_owned()),
+            None => {}
+        }
+    }
+
+    /// Shows why the import was refused, or asks for the statement again when it worked.
+    fn apply_import(&mut self, answer: ImportAnswer) {
+        match answer {
+            Ok(Outcome::Value(_)) => {
+                self.import_notice = None;
+                self.notice = None;
+                if let Some(run) = self.run.as_mut() {
+                    run.want_load = true;
+                }
+            }
+            Ok(Outcome::Unsupported(u)) => self.import_notice = Some(unsupported_text(&u)),
+            Err(text) => self.import_notice = Some(text),
         }
     }
 
@@ -359,13 +418,38 @@ impl BankScreen {
         });
     }
 
+    /// Sends the picked statement file to the worker, once no confirmation is running or waiting
+    /// and no other import is running.
+    fn send_import(&mut self, handle: &ApiWorker) {
+        let Some(run) = self.run.as_mut() else {
+            return;
+        };
+        if run.in_flight || !run.queue.is_empty() || run.import.is_pending() {
+            return;
+        }
+        let Some(PendingImport { bytes, layout }) = run.import_pending.take() else {
+            return;
+        };
+        let ledger = run.ledger;
+        run.import.start(handle, move |api| {
+            api.import_bank_statement(&bytes, layout, ledger)
+                .map_err(|e| e.to_string())
+        });
+    }
+
     /// Sends the statement, suggestions and reconciliation statement requests, once the
-    /// confirmations ahead of them have finished (so they see the new bank dates).
+    /// confirmations ahead of them have finished (so they see the new bank dates) and no
+    /// statement file is waiting to be imported.
     fn send_load(&mut self, handle: &ApiWorker) {
         let Some(run) = self.run.as_mut() else {
             return;
         };
-        if !run.want_load || run.in_flight || !run.queue.is_empty() {
+        if !run.want_load
+            || run.in_flight
+            || !run.queue.is_empty()
+            || run.import.is_pending()
+            || run.import_pending.is_some()
+        {
             return;
         }
         run.want_load = false;

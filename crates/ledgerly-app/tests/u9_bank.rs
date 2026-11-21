@@ -528,7 +528,9 @@ fn amounts_and_dates_are_formatted_the_indian_way() {
     );
     // 5_000_000 paise = Rs 50000.00: 50,000.00.
     assert_eq!(format_flow(Paise::new(5_000_000), Flow::Out), "- 50,000.00");
-    assert_eq!(format_line_date(date!(2026 - 11 - 05)), "05-11-2026");
+    // B8: the app's one date format, `5 Nov 2026` (ui::format::date, mock format). Changed from
+    // the old `05-11-2026`; the expectation is derived from the mock's date format.
+    assert_eq!(format_line_date(date!(2026 - 11 - 05)), "5 Nov 2026");
 }
 
 // ---- keys and drawing -------------------------------------------------------------------------
