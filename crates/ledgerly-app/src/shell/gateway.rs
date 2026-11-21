@@ -28,6 +28,7 @@ use ledgerly_core::{Date, FinancialYear, Outcome, VoucherId};
 use ledgerly_model::{BaseVoucherKind, Books};
 
 use super::navigate::{self, NavError};
+use crate::screens::gst::{GstScreen, GstTab};
 use crate::screens::home::{HomeData, HomeScreen, HomeTarget};
 use crate::screens::item_invoice::ItemInvoiceScreen;
 use crate::screens::masters::MastersScreen;
@@ -113,9 +114,9 @@ impl GatewayScreen {
                 .and_then(|b| entry_screen(b, BaseVoucherKind::Payment, navigate::today())),
             HomeTarget::BalanceSheet { .. } => navigate::open_report(ReportKind::BalanceSheet, ctx),
             HomeTarget::DayBook => navigate::open_report(ReportKind::DayBook, ctx),
-            HomeTarget::GstReturns { .. } => {
-                books(ctx).and_then(|b| Ok(Box::new(navigate::gst_screen(b)?) as Box<dyn Screen>))
-            }
+            HomeTarget::GstReturns { .. } => books(ctx).and_then(|b| {
+                Ok(Box::new(gst_screen_for_target(b, target)?) as Box<dyn Screen>)
+            }),
             HomeTarget::Masters => Ok(Box::new(MastersScreen::new()) as Box<dyn Screen>),
             HomeTarget::Palette => {
                 super::ask_for_palette();
@@ -211,6 +212,42 @@ fn sales_screen(books: &Books, today: Date) -> Result<Box<dyn Screen>, NavError>
             reason: e.to_string(),
         }),
     }
+}
+
+/// The GST screen a Home link to GST returns opens, on the tab the link names.
+///
+/// The tab names are the ones the Home tiles put in [`HomeTarget::GstReturns`]: `"gstr1"`
+/// (GSTR-1), `"gstr3b"` (GSTR-3B) and `"gstr2b-ims"` (2B and IMS reconciliation). The empty name
+/// is the list: the screen opens on its default tab. Any other name is refused rather than
+/// opened on a guessed tab.
+///
+/// # Errors
+/// [`NavError::Unsupported`] for an unknown tab name or for a target that is not GST returns;
+/// otherwise the errors of [`navigate::gst_screen`].
+pub fn gst_screen_for_target(books: &Books, target: &HomeTarget) -> Result<GstScreen, NavError> {
+    let HomeTarget::GstReturns { tab } = target else {
+        return Err(NavError::Unsupported {
+            what: "GST returns".to_owned(),
+            reason: "the link does not name GST returns".to_owned(),
+        });
+    };
+    let wanted = match tab.as_str() {
+        "" => None,
+        "gstr1" => Some(GstTab::Gstr1),
+        "gstr3b" => Some(GstTab::Gstr3b),
+        "gstr2b-ims" => Some(GstTab::Reconciliation),
+        other => {
+            return Err(NavError::Unsupported {
+                what: format!("the GST return tab '{other}'"),
+                reason: "the GST screen has no tab with this name".to_owned(),
+            });
+        }
+    };
+    let mut screen = navigate::gst_screen(books)?;
+    if let Some(tab) = wanted {
+        screen.switch_tab(tab);
+    }
+    Ok(screen)
 }
 
 /// The bank reconciliation of the company's only bank ledger.

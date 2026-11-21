@@ -200,7 +200,7 @@ impl ImportWizard {
         match result {
             Ok(list) if list.is_empty() => {
                 self.detect = DetectState::Failed(
-                    "the source lists no company; open a company in Tally, or choose another file"
+                    "the source lists no company; open a company in the other app, or choose another file"
                         .to_owned(),
                 );
             }

@@ -185,7 +185,7 @@ impl ImportScreen {
 
 impl Screen for ImportScreen {
     fn title(&self) -> String {
-        "Import from Tally".to_owned()
+        "Import from another app".to_owned()
     }
 
     fn ui(&mut self, ui: &mut Ui, ctx: &mut AppCtx) -> ScreenAction {
@@ -262,18 +262,18 @@ fn draw_detect(
     export_path: &mut String,
     clicks: &mut Vec<Click>,
 ) {
-    ui.heading("Import from Tally");
+    ui.heading("Import from another app");
     ui.label(format!(
-        "Ledgerly looks for Tally on this computer, port {TALLY_PORT}. Nothing is sent anywhere else."
+        "Ledgerly looks for a running accounting app on this computer, port {TALLY_PORT}. Nothing is sent anywhere else."
     ));
     let checking = *wizard.detect_state() == DetectState::Checking;
     if ui
-        .add_enabled(!checking, egui::Button::new("Look for Tally"))
+        .add_enabled(!checking, egui::Button::new("Look for a running app"))
         .clicked()
     {
         clicks.push(Click::Detect);
     }
-    ui.label("Or read a file you exported from Tally:");
+    ui.label("Or read an XML file exported from your previous accounting app:");
     ui.horizontal(|ui| {
         ui.text_edit_singleline(export_path);
         if ui
@@ -292,7 +292,7 @@ fn draw_detect(
             ui.colored_label(
                 ui.visuals().error_fg_color,
                 format!(
-                    "Tally is not running or not accepting connections on port {port}. Start Tally, enable its XML interface, and try again."
+                    "The other app is not running or not accepting connections on port {port}. Start it, enable its XML interface, and try again."
                 ),
             );
         }
@@ -305,13 +305,13 @@ fn draw_detect(
 /// The one-call import form. Returns `true` when the user pressed the button.
 fn draw_direct(ui: &mut Ui, direct: &mut DirectImport) -> bool {
     ui.heading("Import in one step");
-    ui.label("Reads the whole company from a running Tally into the open, empty company file.");
+    ui.label("Reads the whole company from a running app into the open, empty company file.");
     // Plain rows, not an `egui::Grid`: a grid's first layout asks egui to run the frame again,
     // and the second pass would no longer see a key (Esc) the first pass consumed.
     for (label, text) in [
         ("Host", &mut direct.host),
         ("Port", &mut direct.port),
-        ("Tally company", &mut direct.company),
+        ("Company in the other app", &mut direct.company),
     ] {
         ui.horizontal(|ui| {
             ui.label(label);
@@ -320,7 +320,7 @@ fn draw_direct(ui: &mut Ui, direct: &mut DirectImport) -> bool {
     }
     let running = direct.state == DirectState::Running;
     let pressed = ui
-        .add_enabled(!running, egui::Button::new("Import from Tally"))
+        .add_enabled(!running, egui::Button::new("Import from another app"))
         .clicked();
     if let Some(text) = direct.state.text() {
         match &direct.state {
@@ -561,7 +561,7 @@ fn draw_reconcile(
             }
         }
         ReconState::Reconciling => {
-            ui.label("Imported. Comparing with Tally's own reports...");
+            ui.label("Imported. Comparing with the source app's own reports...");
         }
         ReconState::Failed(reason) => {
             ui.colored_label(
@@ -585,14 +585,14 @@ fn draw_report(ui: &mut Ui, report: &ReconReport, differences_only: &mut bool) {
     let summary = report.summary();
     if summary.all_match() {
         ui.strong(format!(
-            "All {} figures match Tally's own reports.",
+            "All {} figures match the source app's own reports.",
             summary.rows
         ));
     } else {
         ui.colored_label(
             ui.visuals().error_fg_color,
             format!(
-                "{} of {} figures differ from Tally's own reports. {} sections were not compared.",
+                "{} of {} figures differ from the source app's own reports. {} sections were not compared.",
                 summary.differing_rows,
                 summary.rows,
                 summary.not_compared.len()
@@ -622,7 +622,7 @@ fn draw_section(ui: &mut Ui, n: usize, section: &ReconSectionReport, differences
                 .show(ui, |ui| {
                     ui.strong("Item");
                     ui.strong("Ledgerly");
-                    ui.strong("Tally");
+                    ui.strong("Source app");
                     ui.strong("Result");
                     ui.end_row();
                     for row in rows {

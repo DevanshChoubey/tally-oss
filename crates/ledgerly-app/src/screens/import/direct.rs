@@ -35,7 +35,7 @@ impl DirectState {
     pub fn text(&self) -> Option<String> {
         match self {
             DirectState::Idle => None,
-            DirectState::Running => Some("Importing from Tally...".to_owned()),
+            DirectState::Running => Some("Importing...".to_owned()),
             DirectState::Imported(summary) => Some(summary.to_string()),
             DirectState::Refused(u) => Some(unsupported_text(u)),
             DirectState::Failed(message) => Some(format!("Error: {message}")),
@@ -71,11 +71,11 @@ impl DirectImport {
         let host = self.host.trim().to_owned();
         let company = self.company.trim().to_owned();
         if host.is_empty() {
-            self.state = DirectState::Failed("enter the host Tally runs on".to_owned());
+            self.state = DirectState::Failed("enter the host the other app runs on".to_owned());
             return;
         }
         if company.is_empty() {
-            self.state = DirectState::Failed("enter the name of the Tally company".to_owned());
+            self.state = DirectState::Failed("enter the name of the company in the other app".to_owned());
             return;
         }
         let Ok(port) = self.port.trim().parse::<u16>() else {
@@ -92,7 +92,7 @@ impl DirectImport {
         self.state = DirectState::Running;
         self.latest.start(handle, move |api| {
             api.import_tally_http(&host, port, &company).map_err(|e| {
-                format!("could not import company \"{company}\" from Tally at {host}:{port}: {e}")
+                format!("could not import company \"{company}\" from the other app at {host}:{port}: {e}")
             })
         });
     }
