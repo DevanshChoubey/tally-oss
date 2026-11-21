@@ -12,7 +12,7 @@
 //!
 //! The events assume a company that holds only what `ledgerly-api` seeds when it creates a
 //! company: the 28 reserved groups (ids 1 to 28) and the 18 default voucher types (ids 1 to 18).
-//! The mapping numbers voucher types from 1, so [`align_voucher_types`] gives each one the id of
+//! The mapping numbers voucher types from 1, so `align_voucher_types` gives each one the id of
 //! the default type of the same name, when the behaviour agrees, and a new id after 18 otherwise.
 //! Vouchers are re-pointed to the aligned ids. A Tally voucher type named like a default type but
 //! with another behaviour is refused, never merged.
