@@ -479,10 +479,14 @@ fn a_rule_suggestion_cannot_be_confirmed() {
     let (_dir, _path, mut api) = setup();
     let id = import_statement(&mut api);
     let rule_candidate = rule(10, CHARGES, date!(2026 - 04 - 28));
+    // The listing also holds the exact matches (lines 6, 7, 8, 9, 12), so compare whole lists:
+    // the rule is listed, and refusing it must leave the listing exactly as it was.
+    let before = suggestions(&api, id);
+    assert!(before.contains(&rule_candidate));
     let out = api.confirm_bank_match(id, &rule_candidate).unwrap();
     assert!(out.is_unsupported());
-    // Nothing was written: the rule is still the only suggestion.
-    assert_eq!(suggestions(&api, id), vec![rule_candidate]);
+    // Nothing was written: the listing is unchanged.
+    assert_eq!(suggestions(&api, id), before);
 }
 
 #[test]
