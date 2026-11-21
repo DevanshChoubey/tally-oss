@@ -753,6 +753,7 @@ fn delete_item_blocked_by_vouchers_moves_and_batches() {
         qty_in: qty(1, 0),
         qty_out: Qty::ZERO,
         value: Paise::new(1000),
+        status: ledgerly_model::VoucherStatus::Regular,
     });
     assert!(is_invalid(&delete_stock_item(StockItemId(3), &b)), "move");
     assert!(matches!(
@@ -796,6 +797,7 @@ fn deleting_a_godown_with_stock_errors() {
         qty_in: qty(1, 0),
         qty_out: Qty::ZERO,
         value: Paise::new(1000),
+        status: ledgerly_model::VoucherStatus::Regular,
     });
     assert!(is_invalid(&delete_godown(GodownId(4), &b)), "movement");
 }
@@ -930,6 +932,7 @@ fn batch_with_stock_cannot_be_deleted() {
         qty_in: qty(1, 0),
         qty_out: Qty::ZERO,
         value: Paise::new(1000),
+        status: ledgerly_model::VoucherStatus::Regular,
     });
     assert!(is_invalid(&delete_batch(BatchId(3), &b)), "movement");
     assert_eq!(

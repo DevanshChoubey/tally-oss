@@ -26,16 +26,20 @@
 //! - `period` keeps only vouchers (and their postings) dated inside it; masters are always all
 //!   loaded.
 //!
-//! `Books::stock_moves` is filled from the same vouchers by card S5's projection
-//! ([`crate::stock_load::moves_from_vouchers`]). A voucher that cannot be projected to stock
-//! movements fails the load with [`StoreError::Encoding`] naming it: its stock is never left out,
-//! because an empty or partial list would understate stock and skip the stock guards in reports.
+//! `Books::stock_moves` holds the actual (`Regular`) stock movements of the same vouchers, from card
+//! S5's projection ([`crate::stock_load::moves_from_vouchers`]). Optional movements are carried for
+//! scenarios by [`crate::stock_load::stock_moves`] and are not in `Books`. A voucher whose stock
+//! effect is not handled fails the load with [`StoreError::Unsupported`], and stored data that does
+//! not fit the model fails it with [`StoreError::Encoding`], both naming the voucher: an empty or
+//! partial list would understate stock and skip the stock guards in reports.
+//! The stock of every voucher is projected, even outside `period`, because a physical count needs
+//! the movements before it.
 
 use std::collections::BTreeMap;
 use std::collections::btree_map::Entry;
 use std::fmt::Debug;
 
-use ledgerly_core::{EventSeq, Period, VoucherId};
+use ledgerly_core::{Date, EventSeq, Period, VoucherId};
 use ledgerly_model::{BankMatch, Books, MasterSnapshot, Masters, Posting, Voucher, VoucherStatus};
 
 use crate::commit::read_events;
@@ -50,6 +54,20 @@ const PAGE: usize = 1000;
 /// [`StoreError`] on a read failure; [`StoreError::Encoding`] when an event cannot be decoded or
 /// does not fit the state built from the events before it (see the module documentation).
 pub fn load_books(store: &SqliteStore, period: Option<Period>) -> Result<Books, StoreError> {
+    let (company, state) = load_all(store)?;
+    state.into_books(company, period)
+}
+
+/// Whether `date` lies inside `period`; with no period every date does.
+pub(crate) fn in_period(date: Date, period: Option<Period>) -> bool {
+    match period {
+        Some(p) => p.contains(date),
+        None => true,
+    }
+}
+
+/// Replays the whole event log into the company and the masters and vouchers it builds.
+pub(crate) fn load_all(store: &SqliteStore) -> Result<(ledgerly_model::Company, Replay), StoreError> {
     let company = store.company()?;
     let mut state = Replay::default();
     let mut from = EventSeq(1);
@@ -71,14 +89,14 @@ pub fn load_books(store: &SqliteStore, period: Option<Period>) -> Result<Books, 
         }
         from = EventSeq(next);
     }
-    state.into_books(company, period)
+    Ok((company, state))
 }
 
 /// Masters and vouchers rebuilt from the events read so far.
 #[derive(Default)]
-struct Replay {
-    masters: Masters,
-    vouchers: BTreeMap<VoucherId, Voucher>,
+pub(crate) struct Replay {
+    pub(crate) masters: Masters,
+    pub(crate) vouchers: BTreeMap<VoucherId, Voucher>,
 }
 
 impl Replay {
@@ -174,6 +192,9 @@ impl Replay {
         company: ledgerly_model::Company,
         period: Option<Period>,
     ) -> Result<Books, StoreError> {
+        // Stock is projected from every voucher before the period applies: a physical count needs
+        // the movements before the period too.
+        let carried = crate::stock_load::moves_from_vouchers(&self.masters, &self.vouchers)?;
         let mut vouchers = self.vouchers;
         if let Some(p) = period {
             vouchers.retain(|_, v| p.contains(v.date));
@@ -184,8 +205,11 @@ impl Replay {
         }
         // Stable sort: the lines of one voucher keep their line order.
         postings.sort_by_key(|p| (p.date, p.voucher));
-        // The same vouchers as the postings, so `period` limits both alike.
-        let stock_moves = crate::stock_load::moves_from_vouchers(&self.masters, &vouchers)?;
+        // Actual stock only: optional movements are carried for scenarios, not counted here.
+        let stock_moves = carried
+            .into_iter()
+            .filter(|m| m.status == VoucherStatus::Regular && in_period(m.date, period))
+            .collect();
         Ok(Books {
             company,
             masters: self.masters,

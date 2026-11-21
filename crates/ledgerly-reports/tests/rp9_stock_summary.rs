@@ -87,6 +87,7 @@ fn mv(
         qty_in: Qty(d(qty_in)),
         qty_out: Qty(d(qty_out)),
         value,
+        status: ledgerly_model::VoucherStatus::Regular,
     }
 }
 

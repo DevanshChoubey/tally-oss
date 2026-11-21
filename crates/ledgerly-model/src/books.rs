@@ -46,6 +46,10 @@ pub struct StockMove {
     pub qty_out: Qty,
     /// Value of the movement at voucher rate.
     pub value: Paise,
+    /// Status of the source voucher. `Books::stock_moves` holds only `Regular` moves (the actual
+    /// stock); `Optional` moves are carried by the store's projection for a scenario and are
+    /// never counted as actual stock.
+    pub status: VoucherStatus,
 }
 
 /// The read model every pure domain function consumes.

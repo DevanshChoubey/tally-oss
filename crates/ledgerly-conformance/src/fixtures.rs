@@ -1294,6 +1294,7 @@ fn line_moves(
             qty_in,
             qty_out,
             value: alloc.amount,
+            status: ledgerly_model::VoucherStatus::Regular,
         });
     }
     Ok(out)

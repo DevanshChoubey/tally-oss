@@ -3,8 +3,10 @@
 //! Provenance for every expected value: `derived` from spec section 5 (docs/specs/
 //! 2026-11-20-ledgerly-design.md): "Feature flags are a typed struct with dependency rules".
 //! The card text fixes two rules: batches without inventory is an error, and GST without a GSTIN
-//! on the company is an error. Godowns requiring inventory is a judgment, not a cited rule: its
-//! tests are labelled `pending` (owner decision), not `derived`.
+//! on the company is an error. Godowns do not require inventory: the round-2 default (godowns need
+//! inventory, a judgment) was replaced in round 3 because the TallyPrime godowns page
+//! (https://help.tallysolutions.com/tally-prime/inventory/inventory-storage-using-godowns-locations-tally/,
+//! read 2026-11-21) states no such prerequisite. Those tests are `derived` from that page.
 #![allow(
     clippy::unwrap_used,
     clippy::expect_used,
@@ -73,20 +75,17 @@ fn batches_with_inventory_is_ok() {
 }
 
 #[test]
-fn godowns_without_inventory_is_an_error() {
-    // provenance: pending - a judgment, not a cited rule: godowns hold stock items, so they are
-    // taken to need inventory as batches do. The owner has not yet confirmed this rule.
+fn godowns_without_inventory_is_ok() {
+    // provenance: derived. Replaces the round-2 default ("godowns need inventory", pending): the
+    // TallyPrime godowns page (https://help.tallysolutions.com/tally-prime/inventory/inventory-
+    // storage-using-godowns-locations-tally/, read 2026-11-21) states no inventory prerequisite;
+    // its only stated prerequisite is an F12 option for storage of materials. So the godowns flag
+    // on its own is valid.
     let f = Features {
         godowns: true,
         ..Features::default()
     };
-    assert_eq!(
-        f.validate(&company(false)),
-        Err(FeatureError::MissingRequirement {
-            flag: Flag::Godowns,
-            requires: Flag::Inventory
-        })
-    );
+    assert_eq!(f.validate(&company(false)), Ok(()));
 }
 
 #[test]
@@ -135,17 +134,18 @@ fn requires_lists_direct_prerequisites() {
 }
 
 #[test]
-fn requires_godowns_lists_inventory() {
-    // provenance: pending - a judgment, not a cited rule (see
-    // `godowns_without_inventory_is_an_error`); the owner has not yet confirmed it.
-    assert_eq!(Features::requires(Flag::Godowns), vec![Flag::Inventory]);
+fn requires_godowns_lists_nothing() {
+    // provenance: derived. Replaces the round-2 default (godowns require inventory, pending): the
+    // godowns page named in the module doc states no prerequisite.
+    assert_eq!(Features::requires(Flag::Godowns), Vec::<Flag>::new());
 }
 
 #[test]
 fn first_violation_is_reported_in_flag_order() {
-    // provenance: pending - the expected flag depends on the godowns rule, which is a judgment
-    // (see `godowns_without_inventory_is_an_error`); the ordering itself is derived from the
-    // `Flag` declaration order.
+    // provenance: derived. With godowns and batches on and inventory off, the godowns rule no
+    // longer fails, so the first violation in `Flag` declaration order is Batches, which requires
+    // Inventory (card text, see `batches_without_inventory_is_an_error`). Replaces the round-2
+    // expectation (Godowns reported first), which depended on the pending godowns rule.
     let f = Features {
         godowns: true,
         batches: true,
@@ -154,7 +154,7 @@ fn first_violation_is_reported_in_flag_order() {
     assert_eq!(
         f.validate(&company(false)),
         Err(FeatureError::MissingRequirement {
-            flag: Flag::Godowns,
+            flag: Flag::Batches,
             requires: Flag::Inventory
         })
     );

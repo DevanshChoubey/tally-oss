@@ -16,7 +16,7 @@ pub mod verify;
 pub use event::{Actor, AuditMeta, AuditRecord, CommitReceipt, Event};
 pub use sqlite::SqliteStore;
 
-use ledgerly_core::{EventSeq, Period};
+use ledgerly_core::{EventSeq, Period, VoucherId};
 use ledgerly_model::Books;
 use thiserror::Error;
 
@@ -56,9 +56,18 @@ pub enum StoreError {
         /// Cause.
         source: std::io::Error,
     },
-    /// Serialising or deserialising an event failed.
+    /// Serialising or deserialising an event failed, or stored data does not fit the replay.
     #[error("event encoding error: {0}")]
     Encoding(String),
+    /// A voucher uses a feature whose effect is not documented, so no figure is computed for it.
+    /// This is valid input that Ledgerly does not handle yet, not corrupt data.
+    #[error("voucher {voucher:?} is unsupported: {reason}")]
+    Unsupported {
+        /// The voucher that cannot be projected.
+        voucher: VoucherId,
+        /// What is not handled.
+        reason: String,
+    },
     /// The file was written by a newer version of Ledgerly.
     #[error("this company file uses schema version {found}; this build supports up to {supported}")]
     SchemaTooNew {

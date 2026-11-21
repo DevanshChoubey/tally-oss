@@ -1026,6 +1026,7 @@ fn stock_moved_before_books_begin_is_unsupported() {
         qty_in: Qty(Decimal::from(5)),
         qty_out: Qty::ZERO,
         value: rs(500),
+        status: ledgerly_model::VoucherStatus::Regular,
     });
     let out = balance_sheet(&books, &params(Detail::Condensed), &stock(rs(500))).unwrap();
     assert!(out.is_unsupported());
