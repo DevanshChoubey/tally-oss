@@ -513,8 +513,14 @@ fn stock_group_with_children_or_items_cannot_be_deleted() {
     let mut it = item(1, "Pen", 1);
     it.group = Some(StockGroupId(2));
     put_item(&mut b, it);
-    assert!(is_in_use_by_master(&delete_stock_group(StockGroupId(1), &b)));
-    assert!(is_in_use_by_master(&delete_stock_group(StockGroupId(2), &b)));
+    assert!(is_in_use_by_master(&delete_stock_group(
+        StockGroupId(1),
+        &b
+    )));
+    assert!(is_in_use_by_master(&delete_stock_group(
+        StockGroupId(2),
+        &b
+    )));
     b.masters.stock_items.clear();
     assert!(delete_stock_group(StockGroupId(2), &b).is_ok());
 }
@@ -746,7 +752,10 @@ fn delete_item_blocked_by_vouchers_moves_and_batches() {
     put_item(&mut b, item(3, "Ink", 1));
     put_item(&mut b, item(4, "Free", 1));
     put_batch(&mut b, batch(1, 1, "B1"));
-    assert!(is_in_use_by_master(&delete_stock_item(StockItemId(1), &b)), "batch");
+    assert!(
+        is_in_use_by_master(&delete_stock_item(StockItemId(1), &b)),
+        "batch"
+    );
     put_voucher(
         &mut b,
         voucher(vec![inv_line(2, 1, None, None)], Vec::new()),
@@ -788,7 +797,10 @@ fn deleting_a_godown_with_stock_errors() {
     let mut pen = item(1, "Pen", 1);
     pen.opening = vec![opening(2, None, qty(5, 0))];
     put_item(&mut b, pen);
-    assert!(is_in_use_by_master(&delete_godown(GodownId(2), &b)), "opening stock");
+    assert!(
+        is_in_use_by_master(&delete_godown(GodownId(2), &b)),
+        "opening stock"
+    );
 
     put_voucher(
         &mut b,
@@ -925,7 +937,10 @@ fn batch_with_stock_cannot_be_deleted() {
     tablet.batches_enabled = true;
     tablet.opening = vec![opening(1, Some(1), qty(5, 0))];
     put_item(&mut b, tablet);
-    assert!(is_in_use_by_master(&delete_batch(BatchId(1), &b)), "opening");
+    assert!(
+        is_in_use_by_master(&delete_batch(BatchId(1), &b)),
+        "opening"
+    );
     put_voucher(
         &mut b,
         voucher(vec![inv_line(1, 1, Some(1), Some(2))], Vec::new()),
@@ -989,7 +1004,10 @@ fn cost_category_names_unique_and_delete_blocked_by_centres_and_vouchers() {
         Err(EngineError::Duplicate { .. })
     ));
     assert!(is_invalid(&create_cost_category(category(9, ""), &b)));
-    assert!(is_in_use_by_master(&delete_cost_category(CostCategoryId(1), &b)));
+    assert!(is_in_use_by_master(&delete_cost_category(
+        CostCategoryId(1),
+        &b
+    )));
     put_voucher(&mut b, voucher(Vec::new(), vec![cost_line(2, 7)]));
     assert_eq!(
         delete_cost_category(CostCategoryId(2), &b),
@@ -1220,7 +1238,10 @@ fn cost_category_with_a_centre_is_in_use_by_master() {
     put_centre(&mut b, centre(1, "Sales", 1, None));
     assert_eq!(
         delete_cost_category(CostCategoryId(1), &b),
-        Err(in_use_by_master("cost category 'Department'", "cost centre 'Sales'"))
+        Err(in_use_by_master(
+            "cost category 'Department'",
+            "cost centre 'Sales'"
+        ))
     );
 }
 
@@ -1235,6 +1256,9 @@ fn cost_centre_with_a_sub_centre_is_in_use_by_master() {
     put_centre(&mut b, centre(2, "North", 1, Some(1)));
     assert_eq!(
         delete_cost_centre(CostCentreId(1), &b),
-        Err(in_use_by_master("cost centre 'Sales'", "sub-centre 'North'"))
+        Err(in_use_by_master(
+            "cost centre 'Sales'",
+            "sub-centre 'North'"
+        ))
     );
 }

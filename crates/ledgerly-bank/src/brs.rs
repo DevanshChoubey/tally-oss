@@ -115,7 +115,7 @@ impl Brs {
     /// `Value(true)` when the statement is known and agrees with the books; `Value(false)` when
     /// it is known and differs; `Unsupported` when the statement-side balance is not known.
     pub fn is_reconciled(&self) -> Outcome<bool> {
-        self.difference.clone().map(|d| d.is_zero())
+        self.difference.clone().map(ledgerly_core::Paise::is_zero)
     }
 }
 
@@ -306,7 +306,10 @@ fn statement_side(statements: &[BankStatement], as_of: Date) -> Result<Outcome<P
         } else {
             "no imported statement covers the as-of date: a statement covers a date from its first line up to, but not including, its last line, because the file's own end date is not stored; import a statement that runs past this date"
         };
-        return Ok(Outcome::unsupported("BRS balance per imported statement", reason));
+        return Ok(Outcome::unsupported(
+            "BRS balance per imported statement",
+            reason,
+        ));
     };
     if covering.iter().any(|balance| *balance != first) {
         return Ok(Outcome::unsupported(

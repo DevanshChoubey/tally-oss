@@ -67,7 +67,9 @@ pub(crate) fn in_period(date: Date, period: Option<Period>) -> bool {
 }
 
 /// Replays the whole event log into the company and the masters and vouchers it builds.
-pub(crate) fn load_all(store: &SqliteStore) -> Result<(ledgerly_model::Company, Replay), StoreError> {
+pub(crate) fn load_all(
+    store: &SqliteStore,
+) -> Result<(ledgerly_model::Company, Replay), StoreError> {
     let company = store.company()?;
     let mut state = Replay::default();
     let mut from = EventSeq(1);

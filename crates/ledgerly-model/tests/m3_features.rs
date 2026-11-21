@@ -5,7 +5,7 @@
 //! The card text fixes two rules: batches without inventory is an error, and GST without a GSTIN
 //! on the company is an error. Godowns do not require inventory: the round-2 default (godowns need
 //! inventory, a judgment) was replaced in round 3 because the TallyPrime godowns page
-//! (https://help.tallysolutions.com/tally-prime/inventory/inventory-storage-using-godowns-locations-tally/,
+//! (<https://help.tallysolutions.com/tally-prime/inventory/inventory-storage-using-godowns-locations-tally/>,
 //! read 2026-11-21) states no such prerequisite. Those tests are `derived` from that page.
 #![allow(
     clippy::unwrap_used,

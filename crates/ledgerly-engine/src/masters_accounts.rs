@@ -188,12 +188,7 @@ pub fn delete_group(id: GroupId, books: &Books) -> Result<Outcome<Vec<Event>>, E
     if let Some(reserved) = group.reserved {
         return Err(EngineError::ReservedGroup(reserved));
     }
-    if let Some(child) = books
-        .masters
-        .groups
-        .values()
-        .find(|g| g.parent == Some(id))
-    {
+    if let Some(child) = books.masters.groups.values().find(|g| g.parent == Some(id)) {
         return Err(EngineError::InUseByMaster {
             what: format!("group '{}'", group.name),
             by: format!("sub-group '{}'", child.name),

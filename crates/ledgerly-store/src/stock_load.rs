@@ -248,7 +248,7 @@ fn moves_of(
 ) -> Result<Vec<StockMove>, Reject> {
     let mut out = Vec::new();
     for (index, line) in voucher.inventory_lines.iter().enumerate() {
-        for alloc in allocations(masters, line).map_err(|m| line_error(voucher, index, m))? {
+        for alloc in allocations(masters, line).map_err(|m| line_error(voucher, index, &m))? {
             let (qty_in, qty_out) = match direction {
                 Direction::In => (Qty(alloc.qty), Qty::ZERO),
                 Direction::Out => (Qty::ZERO, Qty(alloc.qty)),
@@ -273,7 +273,7 @@ fn moves_of(
 fn count_of(masters: &Masters, voucher: &Voucher) -> Result<PhysicalCount, Reject> {
     let mut lines = Vec::new();
     for (index, line) in voucher.inventory_lines.iter().enumerate() {
-        for alloc in allocations(masters, line).map_err(|m| line_error(voucher, index, m))? {
+        for alloc in allocations(masters, line).map_err(|m| line_error(voucher, index, &m))? {
             lines.push(CountLine {
                 item: alloc.item,
                 godown: alloc.godown,
@@ -289,7 +289,7 @@ fn count_of(masters: &Masters, voucher: &Voucher) -> Result<PhysicalCount, Rejec
     })
 }
 
-fn line_error(voucher: &Voucher, index: usize, message: String) -> Reject {
+fn line_error(voucher: &Voucher, index: usize, message: &str) -> Reject {
     Reject::Invalid(format!(
         "voucher {:?} inventory line {}: {message}",
         voucher.id,
@@ -322,7 +322,11 @@ fn check_counts(
     let mut book: BTreeMap<BookKey, Decimal> = BTreeMap::new();
     for item in masters.stock_items.values() {
         for opening in &item.opening {
-            add_to(&mut book, (item.id, opening.godown, opening.batch), opening.qty.0)?;
+            add_to(
+                &mut book,
+                (item.id, opening.godown, opening.batch),
+                opening.qty.0,
+            )?;
         }
     }
 
@@ -375,7 +379,11 @@ fn bump<K: Ord>(counter: &mut BTreeMap<K, usize>, key: K) {
     *slot = slot.saturating_add(1);
 }
 
-fn add_to(book: &mut BTreeMap<BookKey, Decimal>, key: BookKey, delta: Decimal) -> Result<(), StoreError> {
+fn add_to(
+    book: &mut BTreeMap<BookKey, Decimal>,
+    key: BookKey,
+    delta: Decimal,
+) -> Result<(), StoreError> {
     let slot = book.entry(key).or_insert(Decimal::ZERO);
     *slot = slot.checked_add(delta).ok_or_else(overflow)?;
     Ok(())

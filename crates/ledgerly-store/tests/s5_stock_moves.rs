@@ -671,7 +671,12 @@ fn credit_note_with_items_is_a_stock_in_move() {
     let line = inv_line(PCS, 3, 1_000, vec![alloc(1, None, 3, 1_000)]);
     post(
         &mut store,
-        vec![voucher(1, CREDIT_NOTE, date(2026, Month::April, 5), vec![line])],
+        vec![voucher(
+            1,
+            CREDIT_NOTE,
+            date(2026, Month::April, 5),
+            vec![line],
+        )],
     );
     assert_eq!(
         stock_moves(&store, None).unwrap(),
@@ -742,7 +747,10 @@ fn memorandum_with_items_is_excluded_and_does_not_fail_the_load() {
     );
     post(&mut store, vec![memo]);
     assert_eq!(stock_moves(&store, None).unwrap(), Vec::<StockMove>::new());
-    assert!(store.load_books(None).unwrap().stock_moves.is_empty());
+    assert_eq!(
+        store.load_books(None).unwrap().stock_moves,
+        Vec::<StockMove>::new()
+    );
 }
 
 // provenance: derived. The physical-stock page (https://help.tallysolutions.com/physical-stock/,
@@ -957,13 +965,16 @@ fn load_books_fails_when_a_voucher_cannot_be_projected_instead_of_leaving_its_st
             vec![line],
         )],
     );
+    // Round 3: the error class is now the typed StoreError::Unsupported (replaces the round-2
+    // Encoding error, which the review found hid unsupported input behind "corrupt data").
     let result = store.load_books(None);
-    let message = match &result {
-        Err(StoreError::Encoding(m)) => m.clone(),
-        other => panic!("expected an encoding error, got {:?}", other.as_ref().err()),
+    let (voucher, reason) = match &result {
+        Err(StoreError::Unsupported { voucher, reason }) => (*voucher, reason.clone()),
+        other => panic!(
+            "expected an unsupported error, got {:?}",
+            other.as_ref().err()
+        ),
     };
-    assert!(
-        message.contains("VoucherId(1)") && message.contains("stock journal"),
-        "{message}"
-    );
+    assert_eq!(voucher, VoucherId(1));
+    assert!(reason.contains("stock journal"), "{reason}");
 }

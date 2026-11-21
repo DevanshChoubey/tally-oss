@@ -262,7 +262,7 @@ const LOOKUP_ROWS: [EntryRow; 5] = [
 type Shortcut = (Key, Modifiers, bool, fn() -> HomeTarget);
 
 /// The home-screen keys. Checked on 2026-11-21 against Tally's keyboard shortcut page
-/// (https://help.tallysolutions.com/tally-prime/keyboard-shortcuts/keyboard-shortcuts-tally-prime/):
+/// (<https://help.tallysolutions.com/tally-prime/keyboard-shortcuts/keyboard-shortcuts-tally-prime/>):
 /// Ctrl+J is the report exceptions key there, so it is not used here. Ctrl+Shift+J is not listed
 /// anywhere on that page. The describe row is our own key, since Tally has no assistant.
 const SHORTCUTS: [Shortcut; 10] = [
@@ -281,9 +281,12 @@ const SHORTCUTS: [Shortcut; 10] = [
     }),
     (Key::M, Modifiers::NONE, true, || HomeTarget::Masters),
     (Key::K, Modifiers::COMMAND, false, || HomeTarget::Palette),
-    (Key::J, Modifiers::COMMAND.plus(Modifiers::SHIFT), false, || {
-        HomeTarget::DescribeTransaction
-    }),
+    (
+        Key::J,
+        Modifiers::COMMAND.plus(Modifiers::SHIFT),
+        false,
+        || HomeTarget::DescribeTransaction,
+    ),
 ];
 
 /// The target a key opens from the home screen, or `None` for a key it does not handle.

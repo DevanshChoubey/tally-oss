@@ -280,7 +280,6 @@ fn scenario_vouchers() -> Vec<Voucher> {
     ]
 }
 
-
 // Provenance for every test below: derived. The rule is TallyPrime's documented bank
 // reconciliation model (https://help.tallysolutions.com/docs/te9rel65/Reports/Display_Registers_Ledgers/Bank_Reconciliation.htm,
 // accessed 2026-11-21): balance as per books on the as-of date; vouchers with a blank or later
