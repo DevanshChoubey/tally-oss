@@ -1,4 +1,4 @@
-use ledgerly_core::{BankStatementId, Date, EventSeq, OffsetDateTime, UserId};
+use ledgerly_core::{BankStatementId, Date, EventSeq, LedgerId, OffsetDateTime, Paise, UserId};
 use ledgerly_model::{BankMatch, MasterSnapshot, ProposalRecord, Voucher};
 use serde::{Deserialize, Serialize};
 
@@ -60,6 +60,52 @@ pub enum Event {
     MatchConfirmed(BankMatch),
     /// An assistant proposal and the user's response.
     AiProposalRecorded(ProposalRecord),
+    /// A bank statement file was imported and verified, with everything needed to rebuild it
+    /// when the company file is reopened (card C3). Replaces `StatementImported` for new imports.
+    BankStatementStored {
+        /// The statement id.
+        id: BankStatementId,
+        /// The bank ledger the statement was imported for.
+        ledger: LedgerId,
+        /// Lower-case hex SHA-256 of the imported file, for duplicate detection.
+        file_hash: String,
+        /// Format registry id the file was parsed with.
+        format_id: String,
+        /// Account number or name found in the file, if any.
+        account_hint: Option<String>,
+        /// Opening balance, credit positive.
+        opening: Paise,
+        /// Closing balance, credit positive.
+        closing: Paise,
+        /// The statement's stated end date (`:62F:` date for MT940), if the file has one.
+        end_date: Option<Date>,
+        /// The lines in file order.
+        lines: Vec<StoredStatementLine>,
+    },
+}
+
+/// One bank statement line as stored by `Event::BankStatementStored`. Balances are credit
+/// positive, as in the parsed file.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StoredStatementLine {
+    /// Row or record number in the file (1-based).
+    pub row: u32,
+    /// Transaction date.
+    pub date: Date,
+    /// Value date.
+    pub value_date: Option<Date>,
+    /// Description.
+    pub description: String,
+    /// Cheque or reference number.
+    pub reference: Option<String>,
+    /// Money out; zero when none.
+    pub debit: Paise,
+    /// Money in; zero when none.
+    pub credit: Paise,
+    /// Running balance after the line, when the file has one.
+    pub balance: Option<Paise>,
+    /// The raw cells, kept for audit.
+    pub raw: Vec<String>,
 }
 
 /// Who did it, when and why.

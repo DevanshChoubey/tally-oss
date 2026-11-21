@@ -9,18 +9,14 @@
 //!
 //! # Where statements are held
 //!
-//! The store's `StatementImported` event carries only the statement id, so the rows and the file
-//! hash of an imported statement are not in the company file. This session holds them in
-//! [`Statements`], which [`Api`] keeps. After the company file is reopened:
-//!
-//! - the confirmed matches remain, because `MatchConfirmed` events are applied when the books load;
-//! - the statements are gone, so the BRS statement side is `Unsupported` until the statement is
-//!   imported again, and a file imported before the reopen is not recognised as a duplicate;
-//! - ids are not reused: the next id is one more than the largest `StatementImported` id in the
-//!   audit log.
-//!
-//! Interface request: a statement payload (hash and rows) in the store, in
-//! `docs/interface-requests.md`.
+//! Each import commits one `Event::BankStatementStored` event: the verified statement (its lines,
+//! balances, end date and file hash) is in the company file. [`Statements`] is a cache of those
+//! events, read from the audit log the first time a statement is needed after the file is opened
+//! (`Api::open` is not owned by this card, so the read is lazy). After a reopen the statements,
+//! the duplicate-file check and the BRS statement side are all as they were. Every stored
+//! statement is verified again when it is read back; one that no longer balances is an error, not
+//! a quiet omission. A file written before this change holds only `StatementImported` ids: those
+//! statements have no rows to rebuild, and their ids are never reused.
 //!
 //! # Confirmation
 //!
@@ -32,74 +28,142 @@
 //! # Import
 //!
 //! A statement is parsed with its format from the built-in registry and checked by
-//! `check_statement` (ledgerly-bank). A failed check keeps nothing. CSV formats are parsed but
-//! refused for now: the CSV parser does not state an opening or closing balance (see
-//! `docs/interface-requests.md`), so the balance check cannot pass.
+//! `check_statement_with_end` (ledgerly-bank). A failed check keeps nothing. A CSV statement gets
+//! its opening and closing balance from its balance column (ledgerly-bankfmt); a CSV without one
+//! is refused with `MissingBalance`. An MT940 statement keeps its `:62F:` date as the end date.
 
 use std::collections::BTreeMap;
+use std::sync::OnceLock;
 
 use ledgerly_bank::BankError;
 use ledgerly_bank::brs::Brs;
 use ledgerly_bank::matcher::{Candidate, MatchRule, suggest_matches};
-use ledgerly_bank::statement::{BankStatement, check_statement};
+use ledgerly_bank::statement::{BankStatement, check_statement_with_end, restore_statement};
 use ledgerly_bankfmt::csv::parse_csv_with_layout;
-use ledgerly_bankfmt::mt940::parse_mt940;
+use ledgerly_bankfmt::mt940::parse_mt940_with_end;
 use ledgerly_bankfmt::registry::{FileKind, builtin_registry};
 use ledgerly_bankfmt::xlsx::parse_xlsx;
-use ledgerly_bankfmt::{BankFmtError, RawStatement};
+use ledgerly_bankfmt::{BankFmtError, ParsedStatement, RawLine, RawStatement};
 use ledgerly_core::{BankStatementId, Date, LedgerId, Outcome};
 use ledgerly_model::{BankMatch, Books, MatchKind};
-use ledgerly_store::Event;
+use ledgerly_store::{AuditRecord, Event, StoredStatementLine};
 
 use crate::command::{Command, CommandResult};
 use crate::error::ApiError;
 use crate::events::read_all;
 use crate::facade::Api;
 
-/// The bank statements this session holds, by id. See the module docs for why they are not in the
-/// company file.
+/// The bank statements of the open company file, by id, read from the audit log on first use.
 #[derive(Debug, Default)]
 pub(crate) struct Statements {
-    /// Statements by id, in id order.
-    by_id: BTreeMap<BankStatementId, BankStatement>,
+    /// Statements by id, in id order. Unset until the audit log has been read.
+    by_id: OnceLock<BTreeMap<BankStatementId, BankStatement>>,
 }
 
 impl Statements {
-    /// The statement with this id.
+    /// The statements, reading them from the audit log the first time.
     ///
     /// # Errors
-    /// [`ApiError::UnknownBankStatement`] when this session does not hold it.
-    fn get(&self, id: BankStatementId) -> Result<&BankStatement, ApiError> {
-        self.by_id
-            .get(&id)
-            .ok_or(ApiError::UnknownBankStatement { id: id.0 })
+    /// [`ApiError::Store`] when the log cannot be read; [`ApiError::StatementImport`] when a
+    /// stored statement no longer passes its checks.
+    fn all(
+        &self,
+        records: impl FnOnce() -> Result<Vec<AuditRecord>, ApiError>,
+    ) -> Result<&BTreeMap<BankStatementId, BankStatement>, ApiError> {
+        if let Some(loaded) = self.by_id.get() {
+            return Ok(loaded);
+        }
+        let mut by_id = BTreeMap::new();
+        for record in records()? {
+            if matches!(record.event, Event::BankStatementStored { .. }) {
+                let (id, statement) = rebuild(record.event)?;
+                by_id.insert(id, statement);
+            }
+        }
+        Ok(self.by_id.get_or_init(|| by_id))
     }
 
-    /// Stores a verified statement under its id.
+    /// Stores a verified, just-committed statement. The cache must already be loaded.
     fn insert(&mut self, id: BankStatementId, statement: BankStatement) {
-        self.by_id.insert(id, statement);
+        if let Some(loaded) = self.by_id.get_mut() {
+            loaded.insert(id, statement);
+        }
     }
+}
 
-    /// The lower-case hex SHA-256 of every held statement, for the duplicate check.
-    fn hashes(&self) -> Vec<String> {
-        self.by_id
-            .values()
-            .map(|statement| statement.file_hash().to_owned())
-            .collect()
+/// The statement an `Event::BankStatementStored` holds, verified again.
+///
+/// # Errors
+/// [`ApiError::StatementImport`] when the stored statement fails its checks.
+fn rebuild(event: Event) -> Result<(BankStatementId, BankStatement), ApiError> {
+    let Event::BankStatementStored {
+        id,
+        ledger,
+        file_hash,
+        format_id,
+        account_hint,
+        opening,
+        closing,
+        end_date,
+        lines,
+    } = event
+    else {
+        return Err(BankError::Invalid {
+            field: "audit log".to_owned(),
+            reason: "expected a stored bank statement event".to_owned(),
+        }
+        .into());
+    };
+    let raw = RawStatement {
+        format_id,
+        account_hint,
+        opening: Some(opening),
+        closing: Some(closing),
+        lines: lines.into_iter().map(raw_line).collect(),
+    };
+    Ok((id, restore_statement(raw, end_date, file_hash, ledger)?))
+}
+
+fn raw_line(line: StoredStatementLine) -> RawLine {
+    RawLine {
+        row: line.row,
+        date: line.date,
+        value_date: line.value_date,
+        description: line.description,
+        reference: line.reference,
+        debit: line.debit,
+        credit: line.credit,
+        balance: line.balance,
+        raw: line.raw,
     }
+}
 
-    /// The largest id held, if any.
-    fn largest_id(&self) -> Option<u64> {
-        self.by_id.keys().map(|id| id.0).max()
+fn stored_line(line: &RawLine) -> StoredStatementLine {
+    StoredStatementLine {
+        row: line.row,
+        date: line.date,
+        value_date: line.value_date,
+        description: line.description.clone(),
+        reference: line.reference.clone(),
+        debit: line.debit,
+        credit: line.credit,
+        balance: line.balance,
+        raw: line.raw.clone(),
     }
+}
 
-    /// Copies of the statements of `ledger`, in id order.
-    fn for_ledger(&self, ledger: LedgerId) -> Vec<BankStatement> {
-        self.by_id
-            .values()
-            .filter(|statement| statement.ledger() == ledger)
-            .cloned()
-            .collect()
+/// The event that stores `statement` under `id`.
+fn stored_event(id: BankStatementId, statement: &BankStatement) -> Event {
+    Event::BankStatementStored {
+        id,
+        ledger: statement.ledger(),
+        file_hash: statement.file_hash().to_owned(),
+        format_id: statement.format_id().to_owned(),
+        account_hint: statement.account_hint().map(str::to_owned),
+        opening: statement.opening(),
+        closing: statement.closing(),
+        end_date: statement.end_date(),
+        lines: statement.lines().iter().map(stored_line).collect(),
     }
 }
 
@@ -126,28 +190,44 @@ impl Api {
         format_id: &str,
         ledger: LedgerId,
     ) -> Result<Outcome<BankStatementId>, ApiError> {
-        let raw = parse_statement(file, format_id)?;
+        let parsed = parse_statement(file, format_id)?;
         let books = match self.loaded_books()? {
             Outcome::Value(books) => books,
             Outcome::Unsupported(unsupported) => return Ok(Outcome::Unsupported(unsupported)),
         };
         require_bank_ledger(books, ledger)?;
-        let statement = check_statement(raw, file, ledger, &self.bank.hashes())?;
+        let hashes = self.known_hashes()?;
+        let statement =
+            check_statement_with_end(parsed.raw, parsed.end_date, file, ledger, &hashes)?;
         let id = self.next_statement_id()?;
         let actor = self.actor().clone();
-        self.commit_as(&[Event::StatementImported(id)], &actor)?;
+        self.commit_as(&[stored_event(id, &statement)], &actor)?;
         self.bank.insert(id, statement);
         Ok(Outcome::Value(id))
     }
 
-    /// The statements of `ledger` that this session holds, in id order.
+    /// The statements of `ledger` stored in the company file, in id order. They are there after a
+    /// reopen too. The list is empty when the stored statements cannot be read; use
+    /// [`Api::stored_bank_statements`] to see why.
     pub fn bank_statements(&self, ledger: LedgerId) -> Vec<(BankStatementId, &BankStatement)> {
-        self.bank
-            .by_id
+        self.stored_bank_statements(ledger).unwrap_or_default()
+    }
+
+    /// The statements of `ledger` stored in the company file, in id order.
+    ///
+    /// # Errors
+    /// [`ApiError::Store`] when the audit log cannot be read; [`ApiError::StatementImport`] when a
+    /// stored statement no longer passes its checks.
+    pub fn stored_bank_statements(
+        &self,
+        ledger: LedgerId,
+    ) -> Result<Vec<(BankStatementId, &BankStatement)>, ApiError> {
+        Ok(self
+            .held()?
             .iter()
             .filter(|(_, statement)| statement.ledger() == ledger)
             .map(|(id, statement)| (*id, statement))
-            .collect()
+            .collect())
     }
 
     /// Suggests matches between the lines of a held statement and the vouchers in the books, plus
@@ -163,7 +243,7 @@ impl Api {
         statement: BankStatementId,
         rules: &[MatchRule],
     ) -> Result<Outcome<Vec<Candidate>>, ApiError> {
-        let held = self.bank.get(statement)?;
+        let held = self.held_statement(statement)?;
         match self.cached_books()? {
             Outcome::Value(books) => Ok(Outcome::Value(suggest_matches(held, books, rules))),
             Outcome::Unsupported(unsupported) => Ok(Outcome::Unsupported(unsupported)),
@@ -210,7 +290,7 @@ impl Api {
                 "a rule suggests a ledger for this statement line, but no voucher exists to date yet; post the voucher, then match it",
             ));
         }
-        let held = self.bank.get(statement)?;
+        let held = self.held_statement(statement)?;
         let books = match self.cached_books()? {
             Outcome::Value(books) => books,
             Outcome::Unsupported(unsupported) => return Ok(Outcome::Unsupported(unsupported)),
@@ -252,12 +332,42 @@ impl Api {
             Outcome::Value(books) => books,
             Outcome::Unsupported(unsupported) => return Ok(Outcome::Unsupported(unsupported)),
         };
-        let statements = self.bank.for_ledger(ledger);
+        let statements: Vec<BankStatement> = self
+            .held()?
+            .values()
+            .filter(|statement| statement.ledger() == ledger)
+            .cloned()
+            .collect();
         Ok(ledgerly_bank::brs::brs(books, ledger, as_of, &statements)?)
     }
 
-    /// The id for a new statement: one more than the largest id in the audit log or held here, so
-    /// an id is not reused after the file is reopened.
+    /// The statements in the company file, read from the audit log on first use.
+    fn held(&self) -> Result<&BTreeMap<BankStatementId, BankStatement>, ApiError> {
+        self.bank
+            .all(|| read_all(self.store()).map_err(ApiError::from))
+    }
+
+    /// The stored statement `id`.
+    ///
+    /// # Errors
+    /// [`ApiError::UnknownBankStatement`] when the company file holds no such statement.
+    fn held_statement(&self, id: BankStatementId) -> Result<&BankStatement, ApiError> {
+        self.held()?
+            .get(&id)
+            .ok_or(ApiError::UnknownBankStatement { id: id.0 })
+    }
+
+    /// The file hash of every stored statement, for the duplicate check.
+    fn known_hashes(&self) -> Result<Vec<String>, ApiError> {
+        Ok(self
+            .held()?
+            .values()
+            .map(|statement| statement.file_hash().to_owned())
+            .collect())
+    }
+
+    /// The id for a new statement: one more than the largest id stored, or logged by an older
+    /// build as `StatementImported`, so an id is never reused.
     fn next_statement_id(&self) -> Result<BankStatementId, ApiError> {
         let records = read_all(self.store())?;
         let logged = records.iter().filter_map(|record| {
@@ -267,7 +377,8 @@ impl Api {
                 None
             }
         });
-        let largest = logged.chain(self.bank.largest_id()).max().unwrap_or(0);
+        let stored = self.held()?.keys().map(|id| id.0);
+        let largest = logged.chain(stored).max().unwrap_or(0);
         let next = largest.checked_add(1).ok_or_else(|| BankError::Invalid {
             field: "bank statement id".to_owned(),
             reason: "no bank statement id is left in this company file".to_owned(),
@@ -282,17 +393,23 @@ impl Api {
 /// # Errors
 /// [`ApiError::UnknownBankFormat`] when the id is not registered; [`ApiError::BankFormat`] when
 /// the registry or the file cannot be read in that format.
-fn parse_statement(file: &[u8], format_id: &str) -> Result<RawStatement, ApiError> {
+fn parse_statement(file: &[u8], format_id: &str) -> Result<ParsedStatement, ApiError> {
     let registry = builtin_registry()?;
     let spec = registry
         .get(format_id)
         .ok_or_else(|| ApiError::UnknownBankFormat(format_id.to_owned()))?;
-    let raw = match spec.kind {
-        FileKind::Csv => parse_csv_with_layout(file, &spec.csv_layout()?)?,
-        FileKind::Xlsx => parse_xlsx(file, spec)?,
-        FileKind::Mt940 => parse_mt940(mt940_text(file)?)?,
+    let parsed = match spec.kind {
+        FileKind::Csv => ParsedStatement {
+            raw: parse_csv_with_layout(file, &spec.csv_layout()?)?,
+            end_date: None,
+        },
+        FileKind::Xlsx => ParsedStatement {
+            raw: parse_xlsx(file, spec)?,
+            end_date: None,
+        },
+        FileKind::Mt940 => parse_mt940_with_end(mt940_text(file)?)?,
     };
-    Ok(raw)
+    Ok(parsed)
 }
 
 /// The text of an MT940 file.

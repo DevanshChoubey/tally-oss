@@ -57,6 +57,14 @@ pub enum StatementError {
         /// Lower-case hex SHA-256 of the file.
         file_hash: String,
     },
+    /// The statement's stated end date is before its last line.
+    #[error("the statement states end date {end} but has a line dated {last_line}, after it")]
+    EndBeforeLastLine {
+        /// The stated end date.
+        end: Date,
+        /// The date of the latest line.
+        last_line: Date,
+    },
     /// The file does not state an opening or closing balance, so it cannot be verified.
     #[error("the file states no {which} balance, so the statement cannot be verified")]
     MissingBalance {
@@ -86,6 +94,7 @@ pub struct BankStatement {
     opening: Paise,
     closing: Paise,
     period: Option<(Date, Date)>,
+    end_date: Option<Date>,
     lines: Vec<RawLine>,
 }
 
@@ -125,6 +134,12 @@ impl BankStatement {
         self.period
     }
 
+    /// The end date the file itself states (the `:62F:` date for MT940), if any. When set, the
+    /// statement lists every transaction up to and including that day.
+    pub fn end_date(&self) -> Option<Date> {
+        self.end_date
+    }
+
     /// The lines in file order, exactly as parsed.
     pub fn lines(&self) -> &[RawLine] {
         &self.lines
@@ -146,6 +161,21 @@ pub fn check_statement(
     ledger: LedgerId,
     known_hashes: &[String],
 ) -> Result<BankStatement, StatementError> {
+    check_statement_with_end(raw, None, file_bytes, ledger, known_hashes)
+}
+
+/// [`check_statement`] for a file that states its own end date. The end date must not be before
+/// the latest line.
+///
+/// # Errors
+/// Those of [`check_statement`], and [`StatementError::EndBeforeLastLine`].
+pub fn check_statement_with_end(
+    raw: RawStatement,
+    end_date: Option<Date>,
+    file_bytes: &[u8],
+    ledger: LedgerId,
+    known_hashes: &[String],
+) -> Result<BankStatement, StatementError> {
     let file_hash = hex::encode(Sha256::digest(file_bytes));
     if known_hashes
         .iter()
@@ -153,6 +183,30 @@ pub fn check_statement(
     {
         return Err(StatementError::Duplicate { file_hash });
     }
+    verify_statement(raw, end_date, file_hash, ledger)
+}
+
+/// Rebuilds a statement that was stored earlier, from its parts and the file hash recorded at
+/// import. Every check except the duplicate test is run again, so a stored statement that does
+/// not balance is refused, not trusted.
+///
+/// # Errors
+/// Those of [`check_statement_with_end`] other than [`StatementError::Duplicate`].
+pub fn restore_statement(
+    raw: RawStatement,
+    end_date: Option<Date>,
+    file_hash: String,
+    ledger: LedgerId,
+) -> Result<BankStatement, StatementError> {
+    verify_statement(raw, end_date, file_hash, ledger)
+}
+
+fn verify_statement(
+    raw: RawStatement,
+    end_date: Option<Date>,
+    file_hash: String,
+    ledger: LedgerId,
+) -> Result<BankStatement, StatementError> {
     let opening = raw
         .opening
         .ok_or(StatementError::MissingBalance { which: "opening" })?;
@@ -187,6 +241,11 @@ pub fn check_statement(
         None => Some((l.date, l.date)),
         Some((lo, hi)) => Some((lo.min(l.date), hi.max(l.date))),
     });
+    if let (Some(end), Some((_, last_line))) = (end_date, period)
+        && end < last_line
+    {
+        return Err(StatementError::EndBeforeLastLine { end, last_line });
+    }
     Ok(BankStatement {
         ledger,
         file_hash,
@@ -195,6 +254,7 @@ pub fn check_statement(
         opening,
         closing: stated_closing,
         period,
+        end_date,
         lines: raw.lines,
     })
 }

@@ -93,6 +93,7 @@ pub(super) fn changes_of(rec: &AuditRecord) -> Result<Vec<Change>, ReportError> 
         | Event::VoucherDeleted { .. }
         | Event::PeriodLocked { .. }
         | Event::StatementImported(_)
+        | Event::BankStatementStored { .. }
         | Event::MatchConfirmed(_)
         | Event::AiProposalRecorded(_) => {}
     }

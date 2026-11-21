@@ -29,7 +29,7 @@
 //! The parser does not check balances; call [`verify_balances`] (spec 6.5: an import is rejected
 //! unless opening + sum of lines = closing).
 
-use crate::{BankFmtError, RawLine, RawStatement};
+use crate::{BankFmtError, ParsedStatement, RawLine, RawStatement};
 use ledgerly_core::{Date, Month, Paise};
 
 /// Registry id stored in `RawStatement::format_id`: the id of `formats/generic-mt940.toml`.
@@ -72,6 +72,8 @@ struct Builder {
     account: Option<String>,
     opening: Option<Paise>,
     closing: Option<Paise>,
+    /// The `:62F:` date, the statement's stated end date.
+    end_date: Option<Date>,
     seen_reference: bool,
     lines: Vec<RawLine>,
     /// The `:61:` line still waiting for its optional `:86:`.
@@ -108,7 +110,7 @@ impl Builder {
                 if self.opening.is_some() {
                     return Err(format_err(format!("line {}: second :60F:", field.line)));
                 }
-                self.opening = Some(parse_balance(field)?);
+                self.opening = Some(parse_balance(field)?.0);
             }
             "61" => self.accept_61(field)?,
             "86" => self.accept_86(field)?,
@@ -117,7 +119,9 @@ impl Builder {
                     return Err(format_err(format!("line {}: second :62F:", field.line)));
                 }
                 self.flush();
-                self.closing = Some(parse_balance(field)?);
+                let (closing, end) = parse_balance(field)?;
+                self.closing = Some(closing);
+                self.end_date = Some(end);
             }
             "21" | "28" | "28C" | "64" | "65" => {}
             other => {
@@ -165,7 +169,7 @@ impl Builder {
         Ok(())
     }
 
-    fn finish(mut self) -> Result<RawStatement, BankFmtError> {
+    fn finish(mut self) -> Result<ParsedStatement, BankFmtError> {
         self.flush();
         let opening = self
             .opening
@@ -173,12 +177,15 @@ impl Builder {
         let closing = self
             .closing
             .ok_or_else(|| format_err("missing closing balance :62F:"))?;
-        Ok(RawStatement {
-            format_id: FORMAT_ID.to_owned(),
-            account_hint: self.account,
-            opening: Some(opening),
-            closing: Some(closing),
-            lines: self.lines,
+        Ok(ParsedStatement {
+            raw: RawStatement {
+                format_id: FORMAT_ID.to_owned(),
+                account_hint: self.account,
+                opening: Some(opening),
+                closing: Some(closing),
+                lines: self.lines,
+            },
+            end_date: self.end_date,
         })
     }
 }
@@ -190,6 +197,16 @@ impl Builder {
 /// [`BankFmtError::Row`] for a bad `:61:` (with its line number) and [`BankFmtError::Format`] for
 /// anything else that is malformed or not supported (see the module docs).
 pub fn parse_mt940(text: &str) -> Result<RawStatement, BankFmtError> {
+    parse_mt940_with_end(text).map(|parsed| parsed.raw)
+}
+
+/// Parses an MT940 statement and keeps the `:62F:` date as the statement's stated end date
+/// (card C3). [`parse_mt940`] is this without the end date.
+///
+/// # Errors
+///
+/// Exactly those of [`parse_mt940`].
+pub fn parse_mt940_with_end(text: &str) -> Result<ParsedStatement, BankFmtError> {
     let mut builder = Builder::default();
     for field in &tokenise(text)? {
         builder.accept(field)?;
@@ -380,8 +397,9 @@ fn parse_swift_amount(text: &str) -> Result<Paise, String> {
         .ok_or_else(|| format!("amount '{text}' is too large"))
 }
 
-/// `:60F:` / `:62F:` value: `C|D`, `YYMMDD`, currency, amount.
-fn parse_balance(field: &Field) -> Result<Paise, BankFmtError> {
+/// `:60F:` / `:62F:` value: `C|D`, `YYMMDD`, currency, amount. Returns the signed amount and the
+/// date.
+fn parse_balance(field: &Field) -> Result<(Paise, Date), BankFmtError> {
     let wrap =
         |reason: String| format_err(format!("line {}: :{}: {reason}", field.line, field.tag));
     let value = first_value(field).trim();
@@ -390,7 +408,7 @@ fn parse_balance(field: &Field) -> Result<Paise, BankFmtError> {
         .ok_or_else(|| wrap("empty balance".to_owned()))?;
     let (date, rest) =
         take_digits(rest, 6).ok_or_else(|| wrap("date must be 6 digits YYMMDD".to_owned()))?;
-    parse_yymmdd(date).map_err(wrap)?;
+    let balance_date = parse_yymmdd(date).map_err(wrap)?;
     let (currency, amount_text) = rest
         .split_at_checked(3)
         .ok_or_else(|| wrap("missing currency".to_owned()))?;
@@ -401,8 +419,11 @@ fn parse_balance(field: &Field) -> Result<Paise, BankFmtError> {
     }
     let amount = parse_swift_amount(amount_text).map_err(wrap)?;
     match mark {
-        "C" => Ok(amount),
-        "D" => amount.checked_neg().map_err(|e| wrap(e.to_string())),
+        "C" => Ok((amount, balance_date)),
+        "D" => amount
+            .checked_neg()
+            .map(|negated| (negated, balance_date))
+            .map_err(|e| wrap(e.to_string())),
         other => Err(wrap(format!("mark '{other}' is not C or D"))),
     }
 }
