@@ -288,3 +288,42 @@ fn attention_kinds_carry_distinct_words() {
     assert_eq!(AttentionKind::Due.word(), "Due");
     assert_eq!(AttentionKind::Done.word(), "Done");
 }
+
+#[test]
+fn ctrl_j_is_listed_for_describe_a_transaction() {
+    // provenance: derived from the home screen's own "Describe a transaction" row, which shows the
+    // key "Ctrl J" (home.rs ENTER_ROWS). The row's hint must name a key the screen really handles.
+    assert_eq!(
+        shortcut_target(Key::J, Modifiers::COMMAND),
+        Some(HomeTarget::DescribeTransaction)
+    );
+}
+
+#[test]
+fn ctrl_j_in_a_frame_requests_describe_a_transaction() {
+    let ctx = egui::Context::default();
+    let mut screen = HomeScreen::new(sample());
+    frame(&ctx, &mut screen, key(Key::J, Modifiers::COMMAND));
+    assert_eq!(screen.take_request(), Some(HomeTarget::DescribeTransaction));
+}
+
+#[test]
+fn alt_d_in_a_frame_does_not_open_the_day_book() {
+    // provenance: derived. The home key for the day book is the plain D (mock help table). With
+    // Alt also held the press is Alt+D, which is delete in the classic keymap (spec 7), so the home
+    // screen must not treat it as D.
+    let ctx = egui::Context::default();
+    let mut screen = HomeScreen::new(sample());
+    frame(&ctx, &mut screen, key(Key::D, Modifiers::ALT));
+    assert_eq!(screen.take_request(), None);
+}
+
+#[test]
+fn shift_f5_in_a_frame_does_not_open_a_payment() {
+    // provenance: derived. F5 opens a payment (mock help table). Shift+F5 is a different chord and
+    // must not open one; the frame path has to match modifiers exactly, as shortcut_target does.
+    let ctx = egui::Context::default();
+    let mut screen = HomeScreen::new(sample());
+    frame(&ctx, &mut screen, key(Key::F5, Modifiers::SHIFT));
+    assert_eq!(screen.take_request(), None);
+}

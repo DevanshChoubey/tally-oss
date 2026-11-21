@@ -26,13 +26,14 @@
 //!
 //! Keys handled here, from the mock: F8 sales invoice, F6 receipt, F5 payment, F9 purchase from a
 //! bill, B balance sheet, D day book, G GST returns, M masters, Ctrl+K search. The letters are
-//! ignored while a text field has focus. The key map of card U2 is not wired in yet (Wave 2), so
-//! the keys are read directly, as the shell does for Ctrl+T.
+//! ignored while a text field has focus. Ctrl+J opens the describe-a-transaction row. Modifiers
+//! match exactly: Alt+D or Shift+F5 is not D or F5. The key map of card U2 is not wired in yet
+//! (Wave 2), so the keys are read directly, as the shell does for Ctrl+T.
 //!
 //! Not built here: the mock's "engine" badge tooltip text and the narrow-width reflow to one
 //! column; the tiles wrap instead.
 
-use egui::{Color32, Key, Modifiers, RichText, Sense, Ui};
+use egui::{Color32, Event, InputState, Key, Modifiers, RichText, Sense, Ui};
 use ledgerly_core::format::format_inr;
 use ledgerly_core::{Outcome, Paise};
 
@@ -259,7 +260,7 @@ const LOOKUP_ROWS: [EntryRow; 5] = [
 /// One home-screen shortcut: key, modifiers, whether it is a plain letter, and its target.
 type Shortcut = (Key, Modifiers, bool, fn() -> HomeTarget);
 
-const SHORTCUTS: [Shortcut; 9] = [
+const SHORTCUTS: [Shortcut; 10] = [
     (Key::F8, Modifiers::NONE, false, || HomeTarget::SalesInvoice),
     (Key::F6, Modifiers::NONE, false, || HomeTarget::Receipt),
     (Key::F5, Modifiers::NONE, false, || HomeTarget::Payment),
@@ -275,6 +276,7 @@ const SHORTCUTS: [Shortcut; 9] = [
     }),
     (Key::M, Modifiers::NONE, true, || HomeTarget::Masters),
     (Key::K, Modifiers::COMMAND, false, || HomeTarget::Palette),
+    (Key::J, Modifiers::COMMAND, false, || HomeTarget::DescribeTransaction),
 ];
 
 /// The target a key opens from the home screen, or `None` for a key it does not handle.
@@ -284,6 +286,21 @@ pub fn shortcut_target(key: Key, modifiers: Modifiers) -> Option<HomeTarget> {
         .iter()
         .find(|(k, m, _, _)| *k == key && *m == modifiers)
         .map(|(_, _, _, target)| target())
+}
+
+/// Consumes the press of exactly `key` with exactly `modifiers` held, and reports whether there was
+/// one. egui's `consume_key` also accepts extra Alt or Shift, so it would let Alt+D open the day
+/// book; this matches the modifiers the same way [`shortcut_target`] does.
+fn consume_exact(input: &mut InputState, key: Key, modifiers: Modifiers) -> bool {
+    let before = input.events.len();
+    input.events.retain(|event| {
+        !matches!(
+            event,
+            Event::Key { key: pressed_key, modifiers: held, pressed: true, .. }
+                if *pressed_key == key && held.matches_exact(modifiers)
+        )
+    });
+    input.events.len() != before
 }
 
 /// The home screen.
@@ -338,7 +355,7 @@ impl HomeScreen {
             SHORTCUTS
                 .iter()
                 .filter(|(_, _, plain_letter, _)| !(*plain_letter && typing))
-                .find(|(key, modifiers, _, _)| i.consume_key(*modifiers, *key))
+                .find(|(key, modifiers, _, _)| consume_exact(i, *key, *modifiers))
                 .map(|(_, _, _, target)| target())
         });
         if let Some(target) = hit {
