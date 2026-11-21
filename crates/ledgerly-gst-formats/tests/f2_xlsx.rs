@@ -175,7 +175,7 @@ fn template_check_accepts_matching_and_names_the_first_difference() {
     write_sheets(&bad_header, &p).unwrap();
     match check_against_template(&p, &template, 0).unwrap_err() {
         FormatError::Field { field, .. } => assert_eq!(field, "alpha"),
-        other @ (FormatError::Json { .. } | FormatError::Spreadsheet(_)) => {
+        other @ (FormatError::Json { .. } | FormatError::Spreadsheet(_) | FormatError::Unsupported { .. }) => {
             panic!("unexpected error {other:?}")
         }
     }
@@ -187,7 +187,7 @@ fn template_check_accepts_matching_and_names_the_first_difference() {
     write_sheets(&bad_name, &p).unwrap();
     match check_against_template(&p, &template, 0).unwrap_err() {
         FormatError::Field { field, .. } => assert_eq!(field, "sheet name"),
-        other @ (FormatError::Json { .. } | FormatError::Spreadsheet(_)) => {
+        other @ (FormatError::Json { .. } | FormatError::Spreadsheet(_) | FormatError::Unsupported { .. }) => {
             panic!("unexpected error {other:?}")
         }
     }

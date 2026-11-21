@@ -169,6 +169,7 @@ fn field_names(errs: &[FormatError]) -> Vec<String> {
             FormatError::Field { field, .. } => field.clone(),
             FormatError::Json { path, .. } => path.clone(),
             FormatError::Spreadsheet(s) => s.clone(),
+            FormatError::Unsupported { reason } => reason.clone(),
         })
         .collect()
 }

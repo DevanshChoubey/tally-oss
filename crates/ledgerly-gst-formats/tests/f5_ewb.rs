@@ -99,6 +99,7 @@ fn fields(r: Result<(), Vec<FormatError>>) -> Vec<String> {
             FormatError::Field { field, .. } => field,
             FormatError::Json { path, .. } => path,
             FormatError::Spreadsheet(s) => s,
+            FormatError::Unsupported { reason } => reason,
         })
         .collect()
 }

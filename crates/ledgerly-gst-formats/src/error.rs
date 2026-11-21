@@ -22,4 +22,10 @@ pub enum FormatError {
     /// Writing a spreadsheet failed.
     #[error("spreadsheet error: {0}")]
     Spreadsheet(String),
+    /// The input is well formed but this crate does not handle it (rule A1). Nothing was written.
+    #[error("unsupported: {reason}")]
+    Unsupported {
+        /// What is not handled and why, for the user.
+        reason: String,
+    },
 }
