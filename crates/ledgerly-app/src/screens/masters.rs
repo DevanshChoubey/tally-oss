@@ -49,8 +49,10 @@ mod command;
 mod draft;
 mod form_ui;
 mod list;
+pub mod view;
 
-use egui::{Key, Modifiers, Ui};
+use egui::{Align, Key, Layout, Modifiers, RichText, Sense, Ui};
+use egui_extras::{Column, Size, StripBuilder, TableRow};
 use ledgerly_core::{Outcome, Unsupported};
 use ledgerly_model::{Books, MasterSnapshot, Masters};
 
@@ -58,7 +60,17 @@ use command::command_for;
 use list::snapshot_name;
 use thiserror::Error;
 
+use crate::screen::KeyHint;
 use crate::shell::submit::{self, CommandReply};
+use crate::theme::{SPACE_2, SPACE_3, TEXT_BODY, TEXT_H2, TEXT_META};
+use crate::ui::badge::{BadgeKind, badge};
+use crate::ui::button::{ButtonKind, button};
+use crate::ui::card::card;
+use crate::ui::empty::empty_state;
+use crate::ui::note::{NoteKind, note};
+use crate::ui::page_head::page_head;
+use crate::ui::tabs::tabs;
+use crate::ui::{bold_font, table, tokens};
 use crate::worker::{ApiWorker, Ticket};
 use crate::{AppCtx, Screen, ScreenAction};
 use ledgerly_api::Command;
@@ -800,86 +812,204 @@ fn read_keys(ui: &Ui, tag: ModeTag) -> Vec<KeyCmd> {
     out
 }
 
+/// The subtitle under the page title (mock v2).
+const SUBTITLE: &str = "Ledgers and stock items. Type to filter. Alt+C creates anywhere.";
+/// Width of the ledger detail panel beside the ledger table, in points.
+const DETAIL_WIDTH: f32 = 300.0;
+/// Height of a table body before it scrolls, in points.
+const TABLE_MAX_HEIGHT: f32 = 460.0;
+/// What a cell shows where a figure is not available yet.
+const NOT_AVAILABLE: &str = "\u{2014}";
+/// The header tooltip of a column whose figures the engine does not supply to this screen yet.
+const NOT_AVAILABLE_HINT: &str = "Not available yet: the engine does not give this screen this figure. Nothing is estimated here.";
+
+/// The search hint for a kind. It names only what the search really matches.
+fn filter_hint(kind: MasterKind) -> String {
+    match kind {
+        MasterKind::Ledger => "Filter ledgers: name, GSTIN or alias".to_owned(),
+        MasterKind::StockItem => "Filter stock items: name or alias".to_owned(),
+        MasterKind::Group
+        | MasterKind::VoucherType
+        | MasterKind::Unit
+        | MasterKind::StockGroup
+        | MasterKind::Godown
+        | MasterKind::Batch
+        | MasterKind::CostCategory
+        | MasterKind::CostCentre => {
+            format!("Filter {}: name or alias", kind.plural().to_lowercase())
+        }
+    }
+}
+
+/// `text`, or the not-available dash when it is empty.
+fn or_dash(text: &str) -> &str {
+    if text.is_empty() { NOT_AVAILABLE } else { text }
+}
+
 impl MastersScreen {
+    /// The primary tabs (Ledgers, Stock items). A kind behind "More master kinds" selects no tab.
     fn draw_tabs(&mut self, ui: &mut Ui) {
         let enabled = matches!(self.mode, Mode::List);
-        let mut chosen = None;
+        let selected = view::primary_tab(self.kind).unwrap_or(view::PRIMARY_KINDS.len());
+        let labels: Vec<&str> = view::PRIMARY_KINDS.iter().map(|k| k.plural()).collect();
+        let mut chosen: Option<MasterKind> = None;
         ui.add_enabled_ui(enabled, |ui| {
-            ui.horizontal_wrapped(|ui| {
-                for k in MasterKind::ALL {
-                    if ui.selectable_label(self.kind == k, k.plural()).clicked() {
-                        chosen = Some(k);
-                    }
-                }
-            });
+            let response = tabs(ui, &labels, selected);
+            chosen = response
+                .clicked
+                .and_then(|i| view::PRIMARY_KINDS.get(i).copied());
         });
-        if let Some(k) = chosen {
-            self.select_kind(k);
+        if let Some(kind) = chosen {
+            self.select_kind(kind);
         }
     }
 
-    fn draw_list(&mut self, ui: &mut Ui, books: &Books) {
-        ui.horizontal(|ui| {
-            ui.label("Search");
-            ui.add(egui::TextEdit::singleline(&mut self.filter).desired_width(280.0));
-        });
-        let rows = self.rows(&books.masters);
-        let selected = self.selected;
-        let mut clicked = None;
-        let row_height = ui.text_style_height(&egui::TextStyle::Body);
-        egui::ScrollArea::vertical().max_height(360.0).show_rows(
-            ui,
-            row_height,
-            rows.len(),
-            |ui, range| {
-                for row in rows.iter().skip(range.start).take(range.len()) {
-                    let text = if row.detail.is_empty() {
-                        row.name.clone()
-                    } else {
-                        format!("{}    {}", row.name, row.detail)
-                    };
-                    if ui
-                        .selectable_label(selected == Some(row.master), text)
-                        .clicked()
-                    {
-                        clicked = Some(row.master);
+    /// The secondary control for the eight kinds that live under Settings (decision 8).
+    fn draw_more_kinds(&mut self, ui: &mut Ui) {
+        let enabled = matches!(self.mode, Mode::List);
+        let shown = if view::primary_tab(self.kind).is_some() {
+            "More master kinds".to_owned()
+        } else {
+            self.kind.plural().to_owned()
+        };
+        let current = self.kind;
+        let mut chosen: Option<MasterKind> = None;
+        ui.add_enabled_ui(enabled, |ui| {
+            egui::ComboBox::from_id_salt("masters-more-kinds")
+                .selected_text(shown.as_str())
+                .show_ui(ui, |ui| {
+                    for kind in view::MORE_KINDS {
+                        if ui
+                            .selectable_label(current == kind, kind.plural())
+                            .clicked()
+                        {
+                            chosen = Some(kind);
+                        }
                     }
-                }
-            },
-        );
-        if rows.is_empty() {
-            ui.weak("Nothing to list.");
+                });
+        });
+        if let Some(kind) = chosen {
+            self.select_kind(kind);
         }
+    }
+
+    /// The list for the kind being shown: the search box, then the table.
+    fn draw_list(&mut self, ui: &mut Ui, books: &Books) {
+        ui.add(
+            egui::TextEdit::singleline(&mut self.filter)
+                .hint_text(filter_hint(self.kind))
+                .desired_width(f32::INFINITY),
+        );
+        ui.add_space(SPACE_3);
+        let kind = self.kind;
+        match kind {
+            MasterKind::Ledger => self.draw_ledgers(ui, books),
+            MasterKind::StockItem => self.draw_items(ui, books),
+            MasterKind::Group
+            | MasterKind::VoucherType
+            | MasterKind::Unit
+            | MasterKind::StockGroup
+            | MasterKind::Godown
+            | MasterKind::Batch
+            | MasterKind::CostCategory
+            | MasterKind::CostCentre => self.draw_plain(ui, books),
+        }
+    }
+
+    /// What a list with no rows shows: the empty state with its one action when the search is
+    /// empty, or a line saying nothing matches.
+    fn draw_no_rows(&mut self, ui: &mut Ui, books: &Books) {
+        if self.filter.trim().is_empty() {
+            let title = format!("No {} yet", self.kind.plural().to_lowercase());
+            let sentence = format!("Create the first {} with Alt+C.", self.kind.label());
+            let label = format!("Create {}", self.kind.label());
+            if empty_state(ui, &title, &sentence, Some((label.as_str(), "Alt+C"))) {
+                drop(self.begin_create(books));
+            }
+        } else {
+            ui.weak(format!(
+                "No {} matches '{}'.",
+                self.kind.plural().to_lowercase(),
+                self.filter
+            ));
+        }
+    }
+
+    /// The ledger table with the party detail panel beside it.
+    fn draw_ledgers(&mut self, ui: &mut Ui, books: &Books) {
+        let rows = view::ledger_rows(&books.masters, &self.filter);
+        if rows.is_empty() {
+            self.draw_no_rows(ui, books);
+            return;
+        }
+        let selected = self.selected;
+        let detail = selected.and_then(|s| view::ledger_detail(&books.masters, s.id));
+        let mut clicked: Option<MasterRef> = None;
+        StripBuilder::new(ui)
+            .size(Size::remainder())
+            .size(Size::exact(DETAIL_WIDTH))
+            .horizontal(|mut strip| {
+                strip.cell(|ui| {
+                    clicked = ledger_table(ui, &rows, selected);
+                });
+                strip.cell(|ui| {
+                    ledger_detail_card(ui, detail.as_ref());
+                });
+            });
+        self.list_footer(ui, books, clicked);
+    }
+
+    /// The stock item table.
+    fn draw_items(&mut self, ui: &mut Ui, books: &Books) {
+        let rows = view::item_rows(&books.masters, &self.filter);
+        if rows.is_empty() {
+            self.draw_no_rows(ui, books);
+            return;
+        }
+        let clicked = item_table(ui, &rows, self.selected);
+        self.list_footer(ui, books, clicked);
+    }
+
+    /// The table of a kind with no detail panel: the name and a short description.
+    fn draw_plain(&mut self, ui: &mut Ui, books: &Books) {
+        let rows = list_rows(&books.masters, self.kind, &self.filter);
+        if rows.is_empty() {
+            self.draw_no_rows(ui, books);
+            return;
+        }
+        let clicked = plain_table(ui, &rows, self.selected);
+        self.list_footer(ui, books, clicked);
+    }
+
+    /// Puts the cursor on a row the user clicked, then draws the Alter and Delete buttons under
+    /// the list and runs the one that was clicked.
+    fn list_footer(&mut self, ui: &mut Ui, books: &Books, clicked: Option<MasterRef>) {
         if let Some(target) = clicked {
             self.selected = Some(target);
         }
         let has = self.selected.is_some();
-        let (mut create, mut alter, mut delete, mut close) = (false, false, false, false);
+        let kind_label = self.kind.label();
+        let alter_label = format!("Alter {kind_label}");
+        let delete_label = format!("Delete {kind_label}");
+        let (mut alter, mut delete) = (false, false);
+        ui.add_space(SPACE_3);
         ui.horizontal(|ui| {
-            create = ui.button("Create (Alt+C)").clicked();
-            alter = ui
-                .add_enabled(has, egui::Button::new("Alter (Ctrl+Enter)"))
-                .clicked();
-            delete = ui
-                .add_enabled(has, egui::Button::new("Delete (Alt+D)"))
-                .clicked();
-            close = ui.button("Close (Esc)").clicked();
+            ui.add_enabled_ui(has, |ui| {
+                alter =
+                    button(ui, &alter_label, Some("Ctrl+Enter"), ButtonKind::Secondary).clicked();
+                delete = button(ui, &delete_label, Some("Alt+D"), ButtonKind::Danger).clicked();
+            });
         });
         // A failed command leaves its message in the notice.
-        if create {
-            drop(self.begin_create(books));
-        }
         if alter {
             drop(self.begin_alter(books));
         }
         if delete {
             drop(self.request_delete(books));
         }
-        if close {
-            self.filter.clear();
-        }
     }
 
+    /// The create or alter form, in a card, with Save and Cancel.
     fn draw_form_panel(&mut self, ui: &mut Ui, books: &Books) {
         let (mut save, mut cancel) = (false, false);
         if let Mode::Form(form) = &mut self.mode {
@@ -889,13 +1019,17 @@ impl MastersScreen {
                 "Create"
             };
             let editing = form.editing;
-            let kind = form.draft.kind();
-            ui.group(|ui| {
-                ui.label(format!("{verb} {}", kind.label()));
+            let heading = format!("{verb} {}", form.draft.kind().label());
+            card(ui, |ui| {
+                let t = tokens(ui);
+                let h2 = bold_font(ui, TEXT_H2);
+                ui.label(RichText::new(heading.as_str()).font(h2).color(t.text));
+                ui.add_space(SPACE_2);
                 form_ui::draw_form(ui, &books.masters, &mut form.draft, editing);
+                ui.add_space(SPACE_3);
                 ui.horizontal(|ui| {
-                    save = ui.button("Save (Ctrl+A)").clicked();
-                    cancel = ui.button("Cancel (Esc)").clicked();
+                    save = button(ui, "Save", Some("Ctrl+A"), ButtonKind::Primary).clicked();
+                    cancel = button(ui, "Cancel", Some("Esc"), ButtonKind::Secondary).clicked();
                 });
             });
         }
@@ -907,6 +1041,7 @@ impl MastersScreen {
         }
     }
 
+    /// The delete question, in a card, with Delete and Keep.
     fn draw_confirm(&mut self, ui: &mut Ui, books: &Books) {
         let Mode::ConfirmDelete(target) = self.mode else {
             return;
@@ -915,14 +1050,18 @@ impl MastersScreen {
             || "this master".to_owned(),
             |s| snapshot_name(&s).to_owned(),
         );
-        ui.colored_label(
-            ui.visuals().warn_fg_color,
-            format!("Warning: delete '{name}'? Press Y to delete, N to keep it."),
-        );
         let (mut yes, mut no) = (false, false);
-        ui.horizontal(|ui| {
-            yes = ui.button("Delete (Y)").clicked();
-            no = ui.button("Keep (N)").clicked();
+        card(ui, |ui| {
+            note(
+                ui,
+                NoteKind::Warn,
+                &format!("Delete '{name}'? Press Y to delete, N to keep it."),
+            );
+            ui.add_space(SPACE_2);
+            ui.horizontal(|ui| {
+                yes = button(ui, "Delete", Some("Y"), ButtonKind::Danger).clicked();
+                no = button(ui, "Keep", Some("N"), ButtonKind::Secondary).clicked();
+            });
         });
         if yes {
             drop(self.confirm_delete(books));
@@ -932,18 +1071,42 @@ impl MastersScreen {
         }
     }
 
+    /// The message from the last command, as a note.
     fn draw_notice(&self, ui: &mut Ui) {
         match &self.notice {
             Some(Notice::Error(s)) => {
-                ui.colored_label(ui.visuals().error_fg_color, format!("Error: {s}"));
+                note(ui, NoteKind::Bad, s);
             }
             Some(Notice::Warn(s)) => {
-                ui.colored_label(ui.visuals().warn_fg_color, format!("Warning: {s}"));
+                note(ui, NoteKind::Warn, s);
             }
             Some(Notice::Info(s)) => {
-                ui.label(format!("Note: {s}"));
+                note(ui, NoteKind::Info, s);
             }
             None => {}
+        }
+    }
+
+    /// The key bar hints for the mode now showing.
+    fn key_hints(&self) -> Vec<KeyHint> {
+        match self.mode_tag() {
+            ModeTag::List => vec![
+                KeyHint::new("Up / Down", "Move"),
+                KeyHint::new("Alt+C", "Create"),
+                KeyHint::new("Ctrl+Enter", "Alter"),
+                KeyHint::new("Alt+D", "Delete"),
+                KeyHint::new("Alt+Left / Right", "Change kind"),
+                KeyHint::new("Esc", "Back"),
+            ],
+            ModeTag::Form => vec![
+                KeyHint::new("Ctrl+A", "Save"),
+                KeyHint::new("Esc", "Cancel"),
+            ],
+            ModeTag::Confirm => vec![
+                KeyHint::new("Y", "Delete"),
+                KeyHint::new("N", "Keep"),
+                KeyHint::new("Esc", "Back"),
+            ],
         }
     }
 
@@ -955,14 +1118,23 @@ impl MastersScreen {
                 action = ScreenAction::Pop;
             }
         }
-        ui.heading(self.title());
+        let create_label = format!("Create {}", self.kind.label());
+        let mut create = false;
+        page_head(ui, "Masters", Some(SUBTITLE), |ui| {
+            create = button(ui, &create_label, Some("Alt+C"), ButtonKind::Primary).clicked();
+        });
+        if create {
+            drop(self.begin_create(books));
+        }
+        ui.add_space(SPACE_2);
         self.draw_tabs(ui);
+        self.draw_more_kinds(ui);
+        self.draw_notice(ui);
         match self.mode_tag() {
             ModeTag::List => self.draw_list(ui, books),
             ModeTag::Form => self.draw_form_panel(ui, books),
             ModeTag::Confirm => self.draw_confirm(ui, books),
         }
-        self.draw_notice(ui);
         if !keys.is_empty() {
             ui.ctx().request_repaint();
         }
@@ -970,9 +1142,245 @@ impl MastersScreen {
     }
 }
 
+/// The ledger table: name with its alias, group, GSTIN, and the balance column, which shows
+/// "not available" until the engine supplies balances. Returns the row clicked this frame.
+fn ledger_table(
+    ui: &mut Ui,
+    rows: &[view::LedgerRow],
+    selected: Option<MasterRef>,
+) -> Option<MasterRef> {
+    let mut clicked = None;
+    table::builder(ui)
+        .sense(Sense::click())
+        .max_scroll_height(TABLE_MAX_HEIGHT)
+        .column(Column::remainder().at_least(160.0))
+        .column(Column::initial(170.0).at_least(120.0))
+        .column(Column::exact(150.0))
+        .column(Column::exact(130.0))
+        .header(table::HEADER_HEIGHT, |mut row| {
+            table::header(&mut row, "Ledger", false);
+            table::header(&mut row, "Group", false);
+            table::header(&mut row, "GSTIN", false);
+            hinted_header(&mut row, "Balance", true);
+        })
+        .body(|mut body| {
+            body.rows(table::ROW_HEIGHT, rows.len(), |mut row| {
+                let Some(item) = rows.get(row.index()) else {
+                    return;
+                };
+                row.set_selected(selected == Some(item.master));
+                row.col(|ui| name_cell(ui, &item.name, &item.alias));
+                row.col(|ui| table::text(ui, &item.group));
+                row.col(|ui| table::text(ui, or_dash(&item.gstin)));
+                row.col(|ui| table::numeric(ui, NOT_AVAILABLE));
+                if row.response().clicked() {
+                    clicked = Some(item.master);
+                }
+            });
+        });
+    clicked
+}
+
+/// The stock item table: item, HSN (with a warning when it is missing), GST rate, and the stock
+/// and value columns, which show "not available" until the engine supplies them.
+fn item_table(
+    ui: &mut Ui,
+    rows: &[view::ItemRow],
+    selected: Option<MasterRef>,
+) -> Option<MasterRef> {
+    let mut clicked = None;
+    table::builder(ui)
+        .sense(Sense::click())
+        .max_scroll_height(TABLE_MAX_HEIGHT)
+        .column(Column::remainder().at_least(200.0))
+        .column(Column::exact(150.0))
+        .column(Column::exact(90.0))
+        .column(Column::exact(120.0))
+        .column(Column::exact(170.0))
+        .header(table::HEADER_HEIGHT, |mut row| {
+            table::header(&mut row, "Item", false);
+            table::header(&mut row, "HSN", false);
+            table::header(&mut row, "GST", true);
+            hinted_header(&mut row, "Stock", true);
+            hinted_header(&mut row, "Value at average cost", true);
+        })
+        .body(|mut body| {
+            body.rows(table::ROW_HEIGHT, rows.len(), |mut row| {
+                let Some(item) = rows.get(row.index()) else {
+                    return;
+                };
+                row.set_selected(selected == Some(item.master));
+                row.col(|ui| table::text(ui, &item.name));
+                row.col(|ui| {
+                    if item.hsn.is_empty() {
+                        badge(ui, BadgeKind::Bad, "Missing: add HSN");
+                    } else {
+                        table::text(ui, &item.hsn);
+                    }
+                });
+                row.col(|ui| table::numeric(ui, or_dash(&item.gst_rate)));
+                row.col(|ui| table::numeric(ui, NOT_AVAILABLE));
+                row.col(|ui| table::numeric(ui, NOT_AVAILABLE));
+                if row.response().clicked() {
+                    clicked = Some(item.master);
+                }
+            });
+        });
+    clicked
+}
+
+/// The table of a kind with no detail panel: name and description.
+fn plain_table(ui: &mut Ui, rows: &[MasterRow], selected: Option<MasterRef>) -> Option<MasterRef> {
+    let mut clicked = None;
+    table::builder(ui)
+        .sense(Sense::click())
+        .max_scroll_height(TABLE_MAX_HEIGHT)
+        .column(Column::remainder().at_least(220.0))
+        .column(Column::remainder())
+        .header(table::HEADER_HEIGHT, |mut row| {
+            table::header(&mut row, "Name", false);
+            table::header(&mut row, "Details", false);
+        })
+        .body(|mut body| {
+            body.rows(table::ROW_HEIGHT, rows.len(), |mut row| {
+                let Some(item) = rows.get(row.index()) else {
+                    return;
+                };
+                row.set_selected(selected == Some(item.master));
+                row.col(|ui| table::text(ui, &item.name));
+                row.col(|ui| table::text(ui, &item.detail));
+                if row.response().clicked() {
+                    clicked = Some(item.master);
+                }
+            });
+        });
+    clicked
+}
+
+/// A table header whose figures are not available yet: the label carries the tooltip that says
+/// why.
+fn hinted_header(row: &mut TableRow<'_, '_>, label: &str, numeric: bool) {
+    row.col(|ui| {
+        let t = tokens(ui);
+        let text = RichText::new(label)
+            .size(TEXT_META)
+            .strong()
+            .color(t.text_3);
+        let layout = if numeric {
+            Layout::right_to_left(Align::Center)
+        } else {
+            Layout::left_to_right(Align::Center)
+        };
+        ui.with_layout(layout, |ui| {
+            ui.label(text).on_hover_text(NOT_AVAILABLE_HINT);
+        });
+    });
+}
+
+/// A name cell: the name, and the alias in small type after it.
+fn name_cell(ui: &mut Ui, name: &str, alias: &str) {
+    ui.horizontal(|ui| {
+        table::text(ui, name);
+        if !alias.is_empty() {
+            let t = tokens(ui);
+            ui.label(
+                RichText::new(format!("alias {alias}"))
+                    .size(TEXT_META)
+                    .color(t.text_3),
+            );
+        }
+    });
+}
+
+/// The party detail panel for the selected ledger. It shows the fields as stored, the GSTIN check,
+/// and the balance and open bills as not available yet.
+fn ledger_detail_card(ui: &mut Ui, detail: Option<&view::LedgerDetail>) {
+    card(ui, |ui| {
+        let Some(d) = detail else {
+            ui.weak("Select a ledger to see its details.");
+            return;
+        };
+        let t = tokens(ui);
+        let h2 = bold_font(ui, TEXT_H2);
+        ui.label(RichText::new(d.name.as_str()).font(h2).color(t.text));
+        ui.add_space(SPACE_2);
+        egui::Grid::new("masters-ledger-detail")
+            .num_columns(2)
+            .spacing([SPACE_3, SPACE_2])
+            .show(ui, |ui| {
+                detail_label(ui, "Under");
+                detail_value(ui, &d.group);
+                ui.end_row();
+
+                detail_label(ui, "GSTIN");
+                ui.vertical(|ui| {
+                    ui.label(or_dash(&d.gstin));
+                    form_ui::draw_gstin_check(ui, &d.gstin_check);
+                });
+                ui.end_row();
+
+                detail_label(ui, "State");
+                detail_value(ui, or_dash(&d.state));
+                ui.end_row();
+
+                detail_label(ui, "Credit days");
+                let credit = d
+                    .credit_days
+                    .map_or_else(|| "Not set".to_owned(), |n| n.to_string());
+                detail_value(ui, &credit);
+                ui.end_row();
+
+                detail_label(ui, "Bill-wise");
+                if d.bill_wise {
+                    badge(ui, BadgeKind::Ok, "On");
+                } else {
+                    badge(ui, BadgeKind::Neutral, "Off");
+                }
+                ui.end_row();
+
+                detail_label(ui, "Address");
+                detail_value(ui, or_dash(&d.address));
+                ui.end_row();
+
+                detail_label(ui, "Balance");
+                ui.label(RichText::new(NOT_AVAILABLE).color(t.text))
+                    .on_hover_text(NOT_AVAILABLE_HINT);
+                ui.end_row();
+            });
+        ui.add_space(SPACE_3);
+        let bills = bold_font(ui, TEXT_BODY);
+        ui.label(RichText::new("Open bills").font(bills).color(t.text));
+        ui.weak("Not available yet: open bills need bill-wise allocation, which the engine does not give this screen.");
+    });
+}
+
+/// A label cell in the detail grid.
+fn detail_label(ui: &mut Ui, label: &str) {
+    let t = tokens(ui);
+    ui.label(RichText::new(label).size(TEXT_META).color(t.text_3));
+}
+
+/// A value cell in the detail grid.
+fn detail_value(ui: &mut Ui, value: &str) {
+    let t = tokens(ui);
+    ui.label(RichText::new(value).size(TEXT_BODY).color(t.text));
+}
+
 impl Screen for MastersScreen {
     fn title(&self) -> String {
         format!("Masters: {}", self.kind.plural())
+    }
+
+    fn page_title(&self) -> String {
+        "Masters".to_owned()
+    }
+
+    fn subtitle(&self) -> Option<String> {
+        Some(SUBTITLE.to_owned())
+    }
+
+    fn keys(&self) -> Vec<KeyHint> {
+        self.key_hints()
     }
 
     fn ui(&mut self, ui: &mut Ui, ctx: &mut AppCtx) -> ScreenAction {
