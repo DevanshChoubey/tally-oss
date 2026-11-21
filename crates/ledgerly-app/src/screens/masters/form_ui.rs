@@ -3,7 +3,7 @@
 //! Drawing only: every edit goes straight into the draft, and nothing is checked here. The
 //! checks live in [`super::draft`], so the same rules apply to a click and to a test.
 
-use egui::Ui;
+use egui::{RichText, Ui};
 use ledgerly_core::{DrCr, StateCode};
 use ledgerly_model::{
     Masters, Nature, RegistrationType, TaxLedgerKind, Taxability, ValuationMethod,
@@ -13,8 +13,29 @@ use super::draft::{
     BankDraft, CostCentreDraft, GroupDraft, GstDraft, LedgerDraft, MasterDraft, PartyDraft,
     StockItemDraft, TaxDraft, TreeDraft, UnitDraft,
 };
+use super::view::{GstinCheck, check_gstin};
+use crate::theme::TEXT_META;
+use crate::ui::badge::{BadgeKind, badge};
+use crate::ui::tokens;
 
 const FIELD_WIDTH: f32 = 320.0;
+
+/// Draws the result of the GSTIN check under the GSTIN field: nothing when the field is empty, a
+/// green check when every test passes, or a red badge with the reason when one fails. The check
+/// is [`check_gstin`], the same one the detail panel uses.
+pub(crate) fn draw_gstin_check(ui: &mut Ui, check: &GstinCheck) {
+    match check {
+        GstinCheck::Empty => {}
+        GstinCheck::Valid => {
+            badge(ui, BadgeKind::Ok, "Check character OK");
+        }
+        GstinCheck::Invalid(reason) => {
+            badge(ui, BadgeKind::Bad, "Not a valid GSTIN");
+            let t = tokens(ui);
+            ui.label(RichText::new(reason.as_str()).size(TEXT_META).color(t.bad));
+        }
+    }
+}
 
 fn registration_label(r: RegistrationType) -> &'static str {
     match r {
@@ -387,6 +408,7 @@ fn draw_party(ui: &mut Ui, p: &mut PartyDraft) {
         &labelled(&REGISTRATIONS, registration_label),
     );
     text_row(ui, "GSTIN", &mut p.gstin);
+    draw_gstin_check(ui, &check_gstin(&p.gstin));
     text_row(ui, "PAN", &mut p.pan);
     let states: Vec<(StateCode, String)> = StateCode::all()
         .map(|s| (s, format!("{:02} {}", s.get(), s.name())))
