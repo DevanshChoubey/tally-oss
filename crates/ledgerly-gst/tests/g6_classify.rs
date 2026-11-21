@@ -720,6 +720,35 @@ fn purchase_from_other_suppliers_is_unsupported() {
 }
 
 #[test]
+fn sales_to_a_party_without_details_is_unsupported_not_domestic() {
+    // provenance: rule A1 — a customer ledger with no party details does not say whether the
+    // customer is domestic, overseas or in an SEZ, so the supply is not classified. On the old
+    // code this sale was read as a domestic other-party sale and came out Taxable (18% item).
+    let m = sales(taxable18(), Some("8501"));
+    assert_unsupported(&item_voucher(NO_DETAILS_PARTY), 0, &m);
+    let accounting = accounting_voucher(NO_DETAILS_PARTY, SALES_LEDGER);
+    assert_unsupported(&accounting, 0, &m);
+}
+
+#[test]
+fn credit_note_to_a_party_without_details_is_unsupported_not_domestic() {
+    // provenance: rule A1 — as the sales case: a credit note reverses a supply to a customer whose
+    // registration is not on the ledger, so the reversal cannot be placed either.
+    let m = masters(BaseVoucherKind::CreditNote, taxable18(), Some("8501"));
+    assert_unsupported(&item_voucher(NO_DETAILS_PARTY), 0, &m);
+}
+
+#[test]
+fn receipt_advance_from_a_party_without_details_is_unsupported() {
+    // provenance: rule A1 — an advance from a payer whose registration is not on the ledger
+    // cannot be classified, because the payer's registration decides the advance's treatment.
+    let m = masters(BaseVoucherKind::Receipt, vec![], None);
+    let mut v = receipt_voucher(vec![bill(BillRefKind::Advance)], true);
+    v.ledger_lines.get_mut(1).unwrap().ledger = NO_DETAILS_PARTY;
+    assert_unsupported(&v, 1, &m);
+}
+
+#[test]
 fn receipt_lines_that_are_not_clean_advances_are_unsupported() {
     // provenance: derived — only a credit to the party with only advance allocations is an
     // advance; a line settling bills, mixing both, or on the debit side is not classified.
