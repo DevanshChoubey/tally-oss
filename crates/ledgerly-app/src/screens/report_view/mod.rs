@@ -35,19 +35,28 @@
 //!
 //! Dr and Cr are written as words next to each amount, so no meaning rests on colour alone.
 
+pub mod balance;
+pub mod day_book;
 mod model;
 mod remote;
 mod text;
 mod voucher_view;
 
-use egui::{Align, Context, Key, Layout, Modifiers, RichText, Ui};
+use egui::{Align, Context, Key, Layout, Modifiers, Rect, RichText, Ui};
 use egui_extras::{Column, TableBuilder, TableRow};
-use ledgerly_api::ReportParams;
+use ledgerly_api::{ReportKind, ReportParams};
 use ledgerly_core::{Outcome, Period};
 
+use crate::screen::KeyHint;
 use crate::screens::wire::{Done, Latest, unsupported_text};
+use crate::ui::badge::{BadgeKind, badge};
+use crate::ui::button::{ButtonKind, button};
+use crate::ui::note::{NoteKind, note};
+use crate::ui::page_head::page_head;
+use crate::ui::tabs::tabs;
 use crate::worker::ApiWorker;
 use crate::{AppCtx, Screen, ScreenAction};
+use balance::VerticalBalance;
 
 pub use model::{
     DrillTarget, ReportSource, ReportToken, ViewCell, ViewDetail, ViewError, ViewKey, ViewParams,
@@ -132,6 +141,35 @@ struct WorkerRun {
     latest: Latest<Answer>,
 }
 
+/// The layout a report is drawn in. It is read from the engine's report kind, which a worker-mode
+/// screen holds; a host-mode screen has no kind and draws the generic table.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Look {
+    /// The generic table: particulars, then one column per engine column.
+    Generic,
+    /// The balance sheet, drawn one section under the other (see [`balance`]).
+    BalanceSheet,
+    /// The day book: vouchers with a period tab (see [`day_book`]).
+    DayBook,
+}
+
+/// The look for an engine report kind. Every kind is listed, so a new kind fails to compile until
+/// it has a look.
+fn look_of(kind: &ReportKind) -> Look {
+    match kind {
+        ReportKind::BalanceSheet => Look::BalanceSheet,
+        ReportKind::DayBook => Look::DayBook,
+        ReportKind::TrialBalance
+        | ReportKind::ProfitAndLoss
+        | ReportKind::GroupSummary(_)
+        | ReportKind::LedgerVouchers(_)
+        | ReportKind::Register(_)
+        | ReportKind::Outstanding { .. }
+        | ReportKind::StockSummary
+        | ReportKind::Audit(_) => Look::Generic,
+    }
+}
+
 /// Shows one report, with row selection, drill-down, the detail toggle and the period editor.
 pub struct ReportViewScreen {
     report: ViewReport,
@@ -142,6 +180,8 @@ pub struct ReportViewScreen {
     notice: Option<Notice>,
     /// Present only for a worker-mode screen (see [`ReportSource::worker`]).
     worker: Option<WorkerRun>,
+    /// The footnote area's rectangle in the last frame drawn (see [`ReportViewScreen::footer_rect`]).
+    footer: Option<Rect>,
 }
 
 impl ReportViewScreen {
@@ -159,7 +199,16 @@ impl ReportViewScreen {
             period_edit: None,
             notice: None,
             worker: None,
+            footer: None,
         })
+    }
+
+    /// The rectangle of the footnote area (the report's notes, and the day book's and balance
+    /// sheet's lines under the table) in the last frame drawn. The area is pinned to the bottom of
+    /// the screen, so it stays above the key bar; `None` before the first frame.
+    #[must_use]
+    pub fn footer_rect(&self) -> Option<Rect> {
+        self.footer
     }
 
     /// A worker-mode screen for the report `source` describes. The report is requested from the
@@ -185,6 +234,7 @@ impl ReportViewScreen {
                 want: Some(want),
                 latest: Latest::default(),
             }),
+            footer: None,
         })
     }
 
@@ -493,6 +543,14 @@ impl ReportViewScreen {
         ScreenAction::Stay
     }
 
+    /// The layout this screen draws in.
+    fn look(&self) -> Look {
+        match self.worker.as_ref() {
+            Some(run) => look_of(&run.engine.kind),
+            None => Look::Generic,
+        }
+    }
+
     fn draw(&mut self, ui: &mut Ui) -> ScreenAction {
         let keys = read_keys(ui.ctx(), self.period_edit.is_some());
         let mut action = ScreenAction::Stay;
@@ -501,12 +559,32 @@ impl ReportViewScreen {
                 action = ScreenAction::Push(screen);
             }
         }
-        ui.heading(self.report.title.as_str());
-        ui.label(format!(
-            "{}  |  {}",
-            period_text(self.report.params.period),
-            self.report.params.detail.label()
-        ));
+        let look = self.look();
+        let title = self.page_title();
+        let subtitle = self.subtitle();
+        let detail_switch = match self.report.params.detail {
+            ViewDetail::Condensed => "Detailed",
+            ViewDetail::Detailed => "Condensed",
+        };
+        let mut toggle = false;
+        page_head(ui, &title, subtitle.as_deref(), |ui| {
+            if look == Look::BalanceSheet {
+                toggle = button(ui, detail_switch, Some("Alt+F1"), ButtonKind::Secondary).clicked();
+            }
+        });
+        let mut tab_clicked = None;
+        if look == Look::DayBook {
+            let selected = day_book::tab_of(self.report.params.period);
+            tab_clicked = tabs(ui, &["Day", "Month to date"], selected).clicked;
+        }
+        if toggle {
+            self.toggle_detail();
+        }
+        if let Some(tab) = tab_clicked {
+            if let Some(period) = day_book::period_of_tab(self.report.params.period, tab) {
+                self.set_period(period);
+            }
+        }
         if self.is_loading() {
             ui.weak("Loading the report...");
             ui.ctx().request_repaint();
@@ -521,11 +599,42 @@ impl ReportViewScreen {
             None => {}
         }
         self.draw_period_editor(ui);
-        let events = self.draw_table(ui);
-        for note in &self.report.notes {
-            ui.label(note.as_str());
-        }
-        ui.weak("Enter: open   Esc: back   Alt+F1: condensed or detailed   F2: period");
+
+        let balance = if look == Look::BalanceSheet {
+            balance::vertical_balance(&self.report)
+        } else {
+            None
+        };
+        let day_cols = if look == Look::DayBook {
+            day_book::day_columns(&self.report.columns)
+        } else {
+            None
+        };
+        // The footnote is a bottom panel added before the table, so the table takes the space
+        // left above it and the footnote stays inside the screen, above the key bar (B7).
+        let footer = egui::TopBottomPanel::bottom(ui.id().with("u7-footer"))
+            .show(ui, |ui| self.draw_footer(ui, look, balance.as_ref()))
+            .response
+            .rect;
+        self.footer = Some(footer);
+
+        let (selected, scroll) = (self.selected, self.scroll_pending);
+        let empty_day = look == Look::DayBook && self.report.rows.is_empty();
+        let events = egui::CentralPanel::default()
+            .show(ui, |ui| {
+                if empty_day {
+                    let title = day_book::empty_title(self.report.params.period);
+                    crate::ui::empty::empty_state(ui, &title, day_book::EMPTY_SENTENCE, None);
+                    TableEvents::default()
+                } else if let Some(b) = &balance {
+                    balance::draw(ui, &self.report, b, selected, scroll)
+                } else if let Some(cols) = day_cols {
+                    day_book::draw(ui, &self.report, cols, selected, scroll)
+                } else {
+                    self.draw_table(ui)
+                }
+            })
+            .inner;
         self.scroll_pending = false;
         if let Some(i) = events.clicked {
             self.selected = i.min(self.last_row());
@@ -540,6 +649,28 @@ impl ReportViewScreen {
             ui.ctx().request_repaint();
         }
         action
+    }
+
+    /// The footnote: a balance check for the balance sheet, the report's notes, and what the day
+    /// book does not show yet.
+    fn draw_footer(&self, ui: &mut Ui, look: Look, balance: Option<&VerticalBalance>) {
+        if let Some(b) = balance {
+            match balance::sides_agree(b) {
+                Some(true) => {
+                    badge(ui, BadgeKind::Ok, "Both sides agree");
+                }
+                Some(false) => {
+                    badge(ui, BadgeKind::Bad, "Sides differ");
+                }
+                None => {}
+            }
+        }
+        for line in &self.report.notes {
+            ui.label(line.as_str());
+        }
+        if look == Look::DayBook {
+            note(ui, NoteKind::Info, day_book::NOT_RECORDED);
+        }
     }
 
     fn draw_period_editor(&mut self, ui: &mut Ui) {
@@ -589,7 +720,7 @@ impl ReportViewScreen {
             .rows
             .len()
             .saturating_add(usize::from(!report.totals.is_empty()));
-        let height = (ui.available_height() - 48.0).max(120.0);
+        let height = ui.available_height().max(120.0);
         let mut table = TableBuilder::new(ui)
             .id_salt(("u7-report-table", report.token.0.as_str()))
             .striped(true)
@@ -710,6 +841,61 @@ fn read_keys(ctx: &Context, editing: bool) -> Vec<KeyCmd> {
 impl Screen for ReportViewScreen {
     fn title(&self) -> String {
         self.report.title.clone()
+    }
+
+    fn page_title(&self) -> String {
+        match self.look() {
+            Look::BalanceSheet => "Balance sheet".to_owned(),
+            Look::DayBook => "Day book".to_owned(),
+            Look::Generic => self.report.title.clone(),
+        }
+    }
+
+    fn subtitle(&self) -> Option<String> {
+        let period = self.report.params.period;
+        match self.look() {
+            Look::BalanceSheet => {
+                let as_of = self
+                    .worker
+                    .as_ref()
+                    .map_or(period.to(), |run| run.engine.as_of);
+                Some(format!(
+                    "As at {} · Enter opens a row, Esc goes back up",
+                    crate::ui::format::date(as_of)
+                ))
+            }
+            Look::DayBook => Some(day_book::subtitle(period)),
+            Look::Generic => Some(format!(
+                "{}  |  {}",
+                period_text(period),
+                self.report.params.detail.label()
+            )),
+        }
+    }
+
+    fn keys(&self) -> Vec<KeyHint> {
+        match self.look() {
+            Look::BalanceSheet => vec![
+                KeyHint::new("Up / Down", "Move"),
+                KeyHint::new("Enter", "Drill in"),
+                KeyHint::new("Esc", "Back up"),
+                KeyHint::new("Alt+F1", "Detailed or condensed"),
+                KeyHint::new("F2", "Period"),
+            ],
+            Look::DayBook => vec![
+                KeyHint::new("Up / Down", "Move"),
+                KeyHint::new("Enter", "Open voucher"),
+                KeyHint::new("F2", "Period"),
+                KeyHint::new("Esc", "Back"),
+            ],
+            Look::Generic => vec![
+                KeyHint::new("Up / Down", "Move"),
+                KeyHint::new("Enter", "Open"),
+                KeyHint::new("Esc", "Back up"),
+                KeyHint::new("Alt+F1", "Condensed or detailed"),
+                KeyHint::new("F2", "Period"),
+            ],
+        }
     }
 
     fn ui(&mut self, ui: &mut Ui, ctx: &mut AppCtx) -> ScreenAction {
