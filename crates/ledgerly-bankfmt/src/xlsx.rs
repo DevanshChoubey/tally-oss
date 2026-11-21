@@ -41,9 +41,10 @@
 //! - Exactly one of debit and credit is non-zero on every line.
 //!
 //! Opening and closing balances and the account number live in the letterhead or footer, not in
-//! the table, and registry formats do not describe them yet. [`BalanceLabels`] supplies them: the
-//! caller names the label text of each (for example `Opening Balance`), and the value is the first
-//! non-blank cell to the right of the one cell in the sheet that holds that label. With no labels
+//! the table. [`BalanceLabels`] supplies them: the caller names the label text of each (for
+//! example `Opening Balance`), and the value is the first non-blank cell to the right of the one
+//! cell in the sheet that holds that label. A registry format names its labels in its TOML
+//! (`opening_label`, `closing_label`, `account_label`) and [`parse_xlsx`] uses them. With no labels
 //! given, `opening`, `closing` and `account_hint` are `None`, and the balance check (spec 6.5) then
 //! reports the missing balance rather than guessing one.
 
@@ -189,15 +190,17 @@ const MONTHS: [(&str, Month); 12] = [
     ("dec", Month::December),
 ];
 
-/// Parse an XLSX bank statement described by a registry format. Opening and closing balances and
-/// the account hint are not read (use [`parse_xlsx_with_labels`] to read them).
+/// Parse an XLSX bank statement described by a registry format. The opening balance, closing
+/// balance and account hint are read through the format's balance labels; a format that names none
+/// yields `None` for them, and the balance check then reports the missing balance.
 ///
 /// # Errors
 /// [`BankFmtError::Format`] when the format is not an XLSX format, the file is not a readable
 /// workbook, or the sheet or header row cannot be found; [`BankFmtError::Row`] naming the sheet
 /// row for any cell that cannot be read exactly.
 pub fn parse_xlsx(bytes: &[u8], spec: &FormatSpec) -> Result<RawStatement, BankFmtError> {
-    parse_xlsx_with_labels(bytes, spec, &BalanceLabels::default())
+    let labels = xlsx_table(spec)?.balance_labels.clone();
+    parse_xlsx_with_labels(bytes, spec, &labels)
 }
 
 /// [`parse_xlsx`], also reading the opening balance, closing balance and account hint from the

@@ -532,3 +532,78 @@ fn shipped_files_on_disk_match_the_compiled_in_copy() {
         .collect();
     assert_eq!(names, ids);
 }
+
+#[test]
+fn xlsx_balance_labels_load_from_the_toml() {
+    // derived: the three label keys are copied to the table's balance labels as written.
+    let text = r#"
+id = "x-labels"
+name = "X"
+kind = "xlsx"
+header_cells = ["Date", "Narration"]
+date_format = "dd/mm/yyyy"
+amounts = "signed"
+opening_label = "Opening Balance"
+closing_label = "Closing Balance"
+account_label = "Account Number"
+[columns]
+date = 0
+description = 1
+amount = 2
+"#;
+    let reg = load("x-labels.toml", text).unwrap();
+    let table = reg.get("x-labels").unwrap().table.as_ref().unwrap();
+    assert_eq!(
+        table.balance_labels.opening.as_deref(),
+        Some("Opening Balance")
+    );
+    assert_eq!(
+        table.balance_labels.closing.as_deref(),
+        Some("Closing Balance")
+    );
+    assert_eq!(
+        table.balance_labels.account.as_deref(),
+        Some("Account Number")
+    );
+}
+
+#[test]
+fn balance_labels_are_xlsx_only_and_never_blank() {
+    // derived: a CSV file has no labelled cells, so a balance label key is an error for it; and a
+    // label that is only spaces names no cell, so it is an error for xlsx too.
+    let csv = r#"
+id = "c-labels"
+name = "C"
+kind = "csv"
+delimiter = ","
+skip_rows = 1
+date_format = "dd/mm/yyyy"
+amounts = "split"
+opening_label = "Opening Balance"
+[columns]
+date = 0
+description = 1
+debit = 2
+credit = 3
+"#;
+    let err = load("c-labels.toml", csv).unwrap_err();
+    let reason = registry_reason(err, "c-labels");
+    assert!(reason.contains("'opening_label' applies to xlsx only"), "{reason}");
+
+    let blank = r#"
+id = "x-blank"
+name = "X"
+kind = "xlsx"
+header_cells = ["Date", "Narration"]
+date_format = "dd/mm/yyyy"
+amounts = "signed"
+closing_label = "   "
+[columns]
+date = 0
+description = 1
+amount = 2
+"#;
+    let err = load("x-blank.toml", blank).unwrap_err();
+    let reason = registry_reason(err, "x-blank");
+    assert!(reason.contains("'closing_label' must not be empty"), "{reason}");
+}

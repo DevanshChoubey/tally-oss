@@ -331,13 +331,34 @@ fn non_numeric_or_empty_number_errors() {
 
 #[test]
 fn number_too_large_for_u64_errors_not_panics() {
-    // provenance: derived - 20 digits exceed u64::MAX (1.8e19, 20 digits max 18446744073709551615
-    // but 99999999999999999999 is larger), so it parses to nothing and is rejected.
+    // provenance: derived - u64::MAX is 18_446_744_073_709_551_615. 99_999_999_999_999_999_999 is
+    // all digits (20 of them) and larger than u64::MAX, so it is not a non-digit error: the reason
+    // must say the number has too many digits, not that it is not digits.
     let books = books_with(vec![]);
     leaf_err(
         "99999999999999999999",
-        "digits only",
+        "too many digits",
         check_leaf(&book(), "99999999999999999999", &books).unwrap_err(),
+    );
+}
+
+#[test]
+fn used_number_with_a_suffix_blocks_the_leaf_check_instead_of_being_skipped() {
+    // provenance: derived - voucher P-1 is a payment by cheque "123451/25" on the book's bank
+    // ledger. "123451/25" is not digits only, so it cannot be read as leaf 123451. The old code
+    // skipped it and reported 123451 free. Now the check fails and names P-1, because the leaf
+    // cannot be confirmed free. Leaf 123455 is blocked too: it is inside the book, and the
+    // unreadable number could be a leaf that is in use.
+    let books = books_with(vec![payment(1, BANK, "123451/25")]);
+    leaf_err(
+        "123451",
+        "cannot be read",
+        check_leaf(&book(), "123451", &books).unwrap_err(),
+    );
+    leaf_err(
+        "123455",
+        "P-1",
+        check_leaf(&book(), "123455", &books).unwrap_err(),
     );
 }
 
@@ -471,7 +492,9 @@ fn bounce_is_a_draft_not_a_posting() {
     assert_eq!(p.reference.as_deref(), Some("R-7"));
     assert_eq!(p.reference_date, Some(date!(2026 - 05 - 01)));
     assert_eq!(p.party, Some(LedgerId(CUSTOMER)));
-    assert_eq!(p.type_id, v.type_id);
+    // The draft's type is not asserted: it still carries the original voucher's type, which is
+    // wrong for a journal. The caller must set a journal type (interface request, K4 in
+    // docs/interface-requests.md).
     assert!(p.narration.contains("654321"), "narration: {}", p.narration);
     assert!(p.narration.contains("R-7"), "narration: {}", p.narration);
     // The original is untouched.
@@ -496,9 +519,11 @@ fn bounce_does_not_copy_the_cheque_instrument() {
 
 #[test]
 fn bounce_reverses_bill_allocations() {
-    // provenance: derived - the original settles INV-1 with Cr 1_000_000 paise; the reversal
-    // carries Dr 1_000_000 against INV-1, so the bill's net settlement is 1_000_000 - 1_000_000 = 0
-    // and the bill is open again for its full amount.
+    // provenance: pending - the reversal rule (a New or Advance bill allocation becomes an Against
+    // of the opposite side) is a netting design choice. No Act, rule, notification, accounting
+    // standard or format spec is cited for it, and the owner has not confirmed it. The arithmetic
+    // below is the rule as written: the original settles INV-1 with Cr 1_000_000 paise and the
+    // reversal carries Dr 1_000_000 against INV-1.
     let v = receipt();
     let p = bounce_proposal(&v, Paise::ZERO, LedgerId(CHARGES), date!(2026 - 05 - 09)).unwrap();
     let bills = &p.ledger_lines[1].bills;
@@ -512,8 +537,9 @@ fn bounce_reverses_bill_allocations() {
 
 #[test]
 fn bounce_new_and_advance_references_reverse_as_against() {
-    // provenance: derived - a New or Advance reference created a balance on the bill; an Against
-    // of the opposite side and equal amount returns it to zero. OnAccount stays OnAccount.
+    // provenance: pending - the reversal of New and Advance references as Against of the opposite
+    // side is a design choice, not a cited rule; the owner must confirm it before this is derived.
+    // OnAccount stays OnAccount (the same design choice).
     let mut v = receipt();
     v.ledger_lines[1].bills = vec![
         BillAllocation {
