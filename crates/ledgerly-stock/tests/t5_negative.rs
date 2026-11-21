@@ -52,6 +52,7 @@ fn mv(v: u64, on: Date, item: StockItemId, qty_in: i64, qty_out: i64) -> StockMo
         qty_in: Qty(d(qty_in)),
         qty_out: Qty(d(qty_out)),
         value: Paise::new(100),
+        status: ledgerly_model::VoucherStatus::Regular,
     }
 }
 

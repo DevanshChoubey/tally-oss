@@ -102,6 +102,7 @@ impl SqliteStore {
             StoreError::Sqlite(_)
             | StoreError::Io { .. }
             | StoreError::Encoding(_)
+            | StoreError::Unsupported { .. }
             | StoreError::SchemaTooNew { .. }
             | StoreError::NotACompanyFile(_)
             | StoreError::ChainBroken(_)

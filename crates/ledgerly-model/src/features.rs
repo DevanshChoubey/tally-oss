@@ -13,8 +13,8 @@
 //! Rules (spec section 5: "Feature flags are a typed struct with dependency rules"):
 //!
 //! - Batches are properties of stock items, so they require inventory (card text).
-//! - Godowns also require inventory. This is a judgment (godowns hold stock items), not a rule
-//!   the spec or the card states; it is kept, and its test is pending the owner's decision.
+//! - Godowns have no prerequisite. The round-2 rule (godowns require inventory, a judgment) was
+//!   dropped in round 3: the TallyPrime godowns page states no such prerequisite (read 2026-11-21).
 //! - GST needs at least one GST registration (a GSTIN) on the company.
 //!
 //! The remaining flags (cost centres, bill-wise, bank reconciliation, optional vouchers,
@@ -101,8 +101,9 @@ impl Features {
     #[must_use]
     pub fn requires(flag: Flag) -> Vec<Flag> {
         match flag {
-            Flag::Godowns | Flag::Batches => vec![Flag::Inventory],
+            Flag::Batches => vec![Flag::Inventory],
             Flag::Inventory
+            | Flag::Godowns
             | Flag::CostCentres
             | Flag::BillWise
             | Flag::Gst

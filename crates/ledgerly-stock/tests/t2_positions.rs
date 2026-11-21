@@ -78,6 +78,7 @@ fn mv(
         qty_in: q(qty_in),
         qty_out: q(qty_out),
         value: ledgerly_core::Paise::new(0),
+        status: ledgerly_model::VoucherStatus::Regular,
     }
 }
 

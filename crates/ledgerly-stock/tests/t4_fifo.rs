@@ -49,6 +49,7 @@ fn buy(v: u64, d: Date, qty: i64, value_paise: i64) -> StockMove {
         qty_in: q(qty),
         qty_out: Qty::ZERO,
         value: Paise::new(value_paise),
+        status: ledgerly_model::VoucherStatus::Regular,
     }
 }
 
@@ -62,6 +63,7 @@ fn sell(v: u64, d: Date, qty: i64, value_paise: i64) -> StockMove {
         qty_in: Qty::ZERO,
         qty_out: q(qty),
         value: Paise::new(value_paise),
+        status: ledgerly_model::VoucherStatus::Regular,
     }
 }
 

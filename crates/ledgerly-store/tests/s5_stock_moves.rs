@@ -11,9 +11,14 @@
 //!   "Goods returned by a customer", "Goods returned to a supplier").
 //! - Unit conversion: `UnitKind::Compound { factor: 12 }` is "1 first = 12 second", so 2 boxes =
 //!   2 x 12 = 24 pcs; `AltUnit { base_per_alt: 12 }` makes 3 alternate units = 3 x 12 = 36 pcs.
-//! - Cases the module documents as unsupported (credit/debit note, stock journal, optional
-//!   voucher, ...) assert an error that names the voucher: the direction cannot be derived, so
-//!   there is no expected number to check.
+//! - Round 3 (documented behaviour, pages read 2026-11-21): a credit note with items is a sales
+//!   return and brings goods in; optional and memorandum vouchers never count as actual stock; a
+//!   physical count equal to the book quantity gives no movement. Cases whose stock effect is not
+//!   documented (debit note with items, stock journal, post-dated, non-zero physical adjustment,
+//!   physical count sharing a day with another movement) assert the typed
+//!   `StoreError::Unsupported` naming the voucher; they have no expected number to check.
+//! - Errors in the data itself (unknown ids, sums that disagree, unit not convertible) remain
+//!   `StoreError::Encoding`.
 
 #![allow(
     clippy::unwrap_used,
@@ -31,8 +36,8 @@ use ledgerly_core::{
 use ledgerly_model::{
     Address, AltUnit, BaseVoucherKind, Batch, Company, EntityKind, Features, Godown,
     GodownAllocation, GstRegistration, InventoryLine, MasterSnapshot, NegativeStockPolicy,
-    NumberingConfig, NumberingMethod, RestartPeriod, StockItem, StockMove, Unit, UnitKind,
-    ValuationMethod, Voucher, VoucherMode, VoucherStatus, VoucherType,
+    NumberingConfig, NumberingMethod, OpeningStock, RestartPeriod, StockItem, StockMove, Unit,
+    UnitKind, ValuationMethod, Voucher, VoucherMode, VoucherStatus, VoucherType,
 };
 use ledgerly_store::stock_load::stock_moves;
 use ledgerly_store::{Actor, AuditMeta, Event, SqliteStore, Store, StoreError};
@@ -45,6 +50,10 @@ const STOCK_JOURNAL: u64 = 5;
 const CREDIT_NOTE: u64 = 6;
 const REJECTION_IN: u64 = 7;
 const DELIVERY_NOTE: u64 = 8;
+const JOURNAL: u64 = 9;
+const DEBIT_NOTE: u64 = 10;
+const MEMORANDUM: u64 = 11;
+const PHYSICAL_STOCK: u64 = 12;
 
 const PCS: u64 = 1;
 const BOX: u64 = 2;
@@ -172,6 +181,10 @@ fn masters_events() -> Vec<Event> {
         (CREDIT_NOTE, BaseVoucherKind::CreditNote),
         (REJECTION_IN, BaseVoucherKind::RejectionIn),
         (DELIVERY_NOTE, BaseVoucherKind::DeliveryNote),
+        (JOURNAL, BaseVoucherKind::Journal),
+        (DEBIT_NOTE, BaseVoucherKind::DebitNote),
+        (MEMORANDUM, BaseVoucherKind::Memorandum),
+        (PHYSICAL_STOCK, BaseVoucherKind::PhysicalStock),
     ];
     let mut events = vec![
         Event::MasterCreated(unit(PCS, "pcs", UnitKind::Simple)),
@@ -265,6 +278,18 @@ fn assert_error_names(result: &Result<Vec<StockMove>, StoreError>, voucher: u64,
     );
 }
 
+/// Asserts a typed `StoreError::Unsupported` naming `voucher` whose reason contains `needle`.
+fn assert_unsupported(result: &Result<Vec<StockMove>, StoreError>, voucher: u64, needle: &str) {
+    assert!(
+        matches!(
+            result,
+            Err(StoreError::Unsupported { voucher: v, reason })
+                if *v == VoucherId(voucher) && reason.contains(needle)
+        ),
+        "{result:?}"
+    );
+}
+
 #[test]
 fn empty_log_has_no_moves() {
     let dir = tempfile::tempdir().unwrap();
@@ -298,6 +323,7 @@ fn item_invoice_with_two_godown_allocations_gives_two_out_moves() {
             qty_in: Qty::ZERO,
             qty_out: qty(6),
             value: Paise::new(30_000),
+            status: VoucherStatus::Regular,
         },
         StockMove {
             voucher: VoucherId(1),
@@ -308,6 +334,7 @@ fn item_invoice_with_two_godown_allocations_gives_two_out_moves() {
             qty_in: Qty::ZERO,
             qty_out: qty(4),
             value: Paise::new(20_000),
+            status: VoucherStatus::Regular,
         },
     ];
     assert_eq!(stock_moves(&store, None).unwrap(), want);
@@ -599,27 +626,240 @@ fn unknown_unit_item_godown_batch_and_voucher_type_are_errors() {
     }
 }
 
+// Replaces the round-2 default, under which these vouchers failed the load with StoreError::Encoding.
+// Each case is refused with the typed StoreError::Unsupported because its stock effect is not
+// documented or the model cannot express it. Provenance (derived, read 2026-11-21):
+// - stock journal: a journal line has no source or destination side in `InventoryLine`, so the
+//   stock-transfer page (https://help.tallysolutions.com/stock-transfer-between-godowns/) cannot be
+//   applied to the stored data; interface request filed.
+// - debit note with items: the purchase-return page
+//   (https://help.tallysolutions.com/tally-prime/purchase-process/purchase-returns-tally/) names no
+//   quantity effect.
+// - post-dated: the post-dated page body was not returned by the fetch; no read page states its
+//   stock effect.
+// - journal (a non-stock kind): BaseVoucherKind docs say a journal does not move stock; a journal
+//   with items is therefore refused rather than ignored.
 #[test]
-fn unsupported_kinds_and_statuses_are_errors_that_name_the_voucher() {
+fn unsupported_vouchers_are_typed_unsupported_errors_that_name_the_voucher() {
     let on = date(2026, Month::April, 5);
     let line = || inv_line(PCS, 1, 100, vec![alloc(1, None, 1, 100)]);
-    let mut optional = voucher(3, SALES, on, vec![line()]);
-    optional.status = VoucherStatus::Optional;
     let mut post_dated = voucher(4, SALES, on, vec![line()]);
     post_dated.status = VoucherStatus::PostDated;
     let cases = [
         (voucher(1, STOCK_JOURNAL, on, vec![line()]), "stock journal"),
-        (voucher(2, CREDIT_NOTE, on, vec![line()]), "credit or debit"),
-        (optional, "status"),
-        (post_dated, "status"),
+        (voucher(2, DEBIT_NOTE, on, vec![line()]), "debit note"),
+        (post_dated, "post-dated"),
+        (voucher(5, JOURNAL, on, vec![line()]), "does not move stock"),
     ];
     for (v, needle) in cases {
         let id = v.id.0;
         let dir = tempfile::tempdir().unwrap();
         let mut store = new_store(dir.path());
         post(&mut store, vec![v]);
-        assert_error_names(&stock_moves(&store, None), id, needle);
+        assert_unsupported(&stock_moves(&store, None), id, needle);
     }
+}
+
+// provenance: derived. Replaces the round-2 default (credit note with items refused). The
+// sales-return page (https://help.tallysolutions.com/tally-prime/sales-process/sales-return-tally/,
+// read 2026-11-21) states in its Q&A that a sales return increases stock by the returned quantity.
+// The godown is the one the voucher allocates. 3 pcs returned for 1,000 paise: qty_in 3, value 1,000.
+#[test]
+fn credit_note_with_items_is_a_stock_in_move() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut store = new_store(dir.path());
+    let line = inv_line(PCS, 3, 1_000, vec![alloc(1, None, 3, 1_000)]);
+    post(
+        &mut store,
+        vec![voucher(1, CREDIT_NOTE, date(2026, Month::April, 5), vec![line])],
+    );
+    assert_eq!(
+        stock_moves(&store, None).unwrap(),
+        vec![StockMove {
+            voucher: VoucherId(1),
+            date: date(2026, Month::April, 5),
+            item: StockItemId(1),
+            godown: GodownId(1),
+            batch: None,
+            qty_in: qty(3),
+            qty_out: Qty::ZERO,
+            value: Paise::new(1_000),
+            status: VoucherStatus::Regular,
+        }]
+    );
+}
+
+// provenance: derived. The optional-voucher page (https://help.tallysolutions.com/create-optional-voucher/,
+// read 2026-11-21) says an optional voucher records transactions "without affecting" the books. It
+// is silent on stock, so the exclusion from actual stock is this card's rule (owner brief), applied
+// to that statement. Expected: purchase 5 pcs regular (qty_in 5, value 500) and optional sale 2 pcs
+// (qty_out 2, value 200). The carried list has both; actual stock (load_books) has only the purchase.
+#[test]
+fn optional_sale_is_carried_but_is_not_actual_stock() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut store = new_store(dir.path());
+    let purchase = voucher(
+        1,
+        PURCHASE,
+        date(2026, Month::April, 4),
+        vec![inv_line(PCS, 5, 500, vec![alloc(1, None, 5, 500)])],
+    );
+    let mut optional = voucher(
+        2,
+        SALES,
+        date(2026, Month::April, 5),
+        vec![inv_line(PCS, 2, 200, vec![alloc(1, None, 2, 200)])],
+    );
+    optional.status = VoucherStatus::Optional;
+    post(&mut store, vec![purchase, optional]);
+
+    let carried = stock_moves(&store, None).unwrap();
+    assert_eq!(carried.len(), 2);
+    assert_eq!(carried[1].voucher, VoucherId(2));
+    assert_eq!(carried[1].status, VoucherStatus::Optional);
+    assert_eq!(carried[1].qty_out, qty(2));
+    assert_eq!(carried[1].value, Paise::new(200));
+
+    let actual = store.load_books(None).unwrap().stock_moves;
+    assert_eq!(actual.len(), 1);
+    assert_eq!(actual[0].voucher, VoucherId(1));
+    assert_eq!(actual[0].status, VoucherStatus::Regular);
+}
+
+// provenance: derived. The memorandum page (https://help.tallysolutions.com/?p=193988, read
+// 2026-11-21) says a memorandum voucher does not affect the books of accounts; it is silent on
+// stock. Its direction is not decided, so it is neither carried nor counted: the load must succeed
+// and actual stock must be empty.
+#[test]
+fn memorandum_with_items_is_excluded_and_does_not_fail_the_load() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut store = new_store(dir.path());
+    let memo = voucher(
+        1,
+        MEMORANDUM,
+        date(2026, Month::April, 5),
+        vec![inv_line(PCS, 1, 100, vec![alloc(1, None, 1, 100)])],
+    );
+    post(&mut store, vec![memo]);
+    assert_eq!(stock_moves(&store, None).unwrap(), Vec::<StockMove>::new());
+    assert!(store.load_books(None).unwrap().stock_moves.is_empty());
+}
+
+// provenance: derived. The physical-stock page (https://help.tallysolutions.com/physical-stock/,
+// read 2026-11-21) says the books are adjusted to match the physical count. Book quantity: 5 pcs
+// received on 4 Apr, no other movement. Count 5 pcs on 6 Apr: adjustment 5 - 5 = 0, so no move.
+#[test]
+fn physical_stock_equal_to_the_book_quantity_gives_no_move() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut store = new_store(dir.path());
+    let purchase = voucher(
+        1,
+        PURCHASE,
+        date(2026, Month::April, 4),
+        vec![inv_line(PCS, 5, 500, vec![alloc(1, None, 5, 500)])],
+    );
+    let count = voucher(
+        2,
+        PHYSICAL_STOCK,
+        date(2026, Month::April, 6),
+        vec![inv_line(PCS, 5, 500, vec![alloc(1, None, 5, 500)])],
+    );
+    post(&mut store, vec![purchase, count]);
+    let got: Vec<u64> = stock_moves(&store, None)
+        .unwrap()
+        .iter()
+        .map(|m| m.voucher.0)
+        .collect();
+    assert_eq!(got, vec![1]);
+}
+
+// provenance: derived. Book quantity 5 pcs (receipt on 4 Apr), count 3 pcs on 6 Apr: the adjustment
+// is 3 - 5 = -2 pcs. The physical-stock page does not state the value of an adjustment, so a
+// non-zero adjustment is refused as unsupported rather than valued by a guessed rule.
+#[test]
+fn physical_stock_that_differs_from_the_book_is_unsupported() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut store = new_store(dir.path());
+    let purchase = voucher(
+        1,
+        PURCHASE,
+        date(2026, Month::April, 4),
+        vec![inv_line(PCS, 5, 500, vec![alloc(1, None, 5, 500)])],
+    );
+    let count = voucher(
+        2,
+        PHYSICAL_STOCK,
+        date(2026, Month::April, 6),
+        vec![inv_line(PCS, 3, 300, vec![alloc(1, None, 3, 300)])],
+    );
+    post(&mut store, vec![purchase, count]);
+    assert_unsupported(&stock_moves(&store, None), 2, "adjustment");
+}
+
+// provenance: derived. The page does not say whether a count is applied before or after another
+// movement on the same date, so a count sharing item and godown with another movement that day is
+// refused. Purchase 5 pcs and count 5 pcs both on 4 Apr in godown 1.
+#[test]
+fn physical_stock_on_the_same_day_as_another_movement_is_unsupported() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut store = new_store(dir.path());
+    let purchase = voucher(
+        1,
+        PURCHASE,
+        date(2026, Month::April, 4),
+        vec![inv_line(PCS, 5, 500, vec![alloc(1, None, 5, 500)])],
+    );
+    let count = voucher(
+        2,
+        PHYSICAL_STOCK,
+        date(2026, Month::April, 4),
+        vec![inv_line(PCS, 5, 500, vec![alloc(1, None, 5, 500)])],
+    );
+    post(&mut store, vec![purchase, count]);
+    assert_unsupported(&stock_moves(&store, None), 2, "same date");
+}
+
+// provenance: derived. Opening stock is the book quantity at books-begin. Opening 4 pcs in godown 1
+// (set by an alter of the item), count 4 pcs on 5 Apr: adjustment 0, so no move. Without the opening
+// stock the book would be 0 and the count would be refused, so this checks that opening is counted.
+#[test]
+fn physical_stock_counts_opening_stock_as_the_book_quantity() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut store = new_store(dir.path());
+    let before = store
+        .load_books(None)
+        .unwrap()
+        .masters
+        .stock_items
+        .get(&StockItemId(1))
+        .unwrap()
+        .clone();
+    let after = StockItem {
+        opening: vec![OpeningStock {
+            godown: GodownId(1),
+            batch: None,
+            qty: qty(4),
+            rate: Rate(Decimal::ONE),
+        }],
+        ..before.clone()
+    };
+    store
+        .commit(
+            &[Event::MasterAltered {
+                before: MasterSnapshot::StockItem(before),
+                after: MasterSnapshot::StockItem(after),
+            }],
+            &meta(),
+        )
+        .unwrap();
+    let count = voucher(
+        1,
+        PHYSICAL_STOCK,
+        date(2026, Month::April, 5),
+        vec![inv_line(PCS, 4, 400, vec![alloc(1, None, 4, 400)])],
+    );
+    post(&mut store, vec![count]);
+    assert_eq!(stock_moves(&store, None).unwrap(), Vec::<StockMove>::new());
 }
 
 #[test]
@@ -683,6 +923,7 @@ fn load_books_reports_the_same_stock_moves_as_stock_moves() {
             qty_in: Qty::ZERO,
             qty_out: qty(6),
             value: Paise::new(30_000),
+            status: VoucherStatus::Regular,
         },
         StockMove {
             voucher: VoucherId(1),
@@ -693,6 +934,7 @@ fn load_books_reports_the_same_stock_moves_as_stock_moves() {
             qty_in: Qty::ZERO,
             qty_out: qty(4),
             value: Paise::new(20_000),
+            status: VoucherStatus::Regular,
         },
     ];
     assert_eq!(stock_moves(&store, None).unwrap(), want);
