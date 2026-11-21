@@ -185,3 +185,12 @@ Filed from the r2/* fix branches. Each line names the card and the request; the 
 ## W6: the save path for item invoices and masters, and the welcome screen's file dialog
 
 - The app opens and creates company files by typed path (`shell/welcome.rs`). A file-picker dialog (`rfd`) would block the UI thread while open, so it is not used. Pending: a non-blocking dialog, if the owner wants one.
+
+## C5: palette wiring, report menu and the voucher drill
+
+- Crate/file: `ledgerly-app/src/shell/mod.rs` (card C1 owns it), `ledgerly-app/src/screens/report_view/voucher_view.rs`.
+- Done in C5: `shell::navigate` (report menu, palette pick to screen), `ScreenStack::open_choice` and `open_report` (and the same on `Tabs`), `PaletteSearch` (the palette's `Api::search` through the worker), and the read-only `VoucherViewScreen` for a voucher drill. The only edit to `shell/mod.rs` is the line `pub mod navigate;`.
+- Requested (host, `Shell`): `Shell` has no palette yet. It needs a `Palette`, a `PaletteSearch`, and per frame: open on `Action::OpenPalette` / `Action::SwitchPalette` (`Palette::open_for`), `palette.set_entries(navigate::host_entries(&keymap))` once, `search.tick(&mut palette, self.app_ctx.api.as_ref())`, draw `palette.ui(ui)`, and on `Some(choice)` call `tabs.open_choice(&choice, &self.app_ctx)`. `Err(NavError::NotNavigation)` means the choice is a `Command` or `AiIntent`, which the shell runs itself. Any other `Err` is shown to the user as text (never swallowed).
+- Pending (alteration): Tally opens a voucher from the last level of a report with Enter, and "for display" with Ctrl+Enter (<https://help.tallysolutions.com/keyboard-shortcuts-tally-prime/>, read 2026-11-21). Ledgerly has no screen that alters an existing voucher, so Enter opens a display-only screen. Requested: an alteration screen (an entry screen that takes an existing `Voucher` and sends `Command::AlterVoucher`), then Enter opens it and Ctrl+Enter opens the display screen.
+- Pending: the voucher screen reads `AppCtx::books` (set by C1). It shows no stock lines or stored GST yet and says so on screen.
+- Pending: the default report period follows the Trial Balance page of Tally (last voucher date, condensed). The other reports use the same default without a source of their own.

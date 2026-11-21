@@ -1,6 +1,10 @@
 //! Screen stack and tab set: the state behind the breadcrumbs and the open-screen tabs.
 
-use crate::{Screen, ScreenAction};
+use ledgerly_api::ReportKind;
+
+use super::navigate::{self, NavError};
+use crate::palette::{PaletteChoice, PaletteMode};
+use crate::{AppCtx, Screen, ScreenAction};
 
 /// What applying a [`ScreenAction`] did to a stack.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -88,6 +92,50 @@ impl ScreenStack {
                 }
             }
         }
+    }
+
+    /// Opens `screen` the way the palette was opened: on top of the current one, or in its place.
+    pub fn open_screen(&mut self, screen: Box<dyn Screen>, mode: PaletteMode) -> StackChange {
+        match mode {
+            PaletteMode::OnTop => {
+                self.push(screen);
+                StackChange::Pushed
+            }
+            PaletteMode::Replace => {
+                self.replace(screen);
+                StackChange::Replaced
+            }
+        }
+    }
+
+    /// Opens what a palette pick names (a ledger report, a voucher, a report), on top or in place
+    /// as the palette was opened. Nothing changes when it fails.
+    ///
+    /// # Errors
+    /// [`NavError`] when the pick opens no screen: a command or assistant request
+    /// ([`NavError::NotNavigation`], which the host handles), a setting, or no books to open from.
+    pub fn open_choice(
+        &mut self,
+        choice: &PaletteChoice,
+        ctx: &AppCtx,
+    ) -> Result<StackChange, NavError> {
+        let screen = navigate::open_target(&choice.target, ctx)?;
+        Ok(self.open_screen(screen, choice.mode))
+    }
+
+    /// Opens a report menu entry as a worker-mode report screen. Nothing changes when it fails.
+    ///
+    /// # Errors
+    /// [`NavError::NoCompany`] when no books are loaded, otherwise as
+    /// [`navigate::report_screen`].
+    pub fn open_report(
+        &mut self,
+        kind: ReportKind,
+        ctx: &AppCtx,
+        mode: PaletteMode,
+    ) -> Result<StackChange, NavError> {
+        let screen = navigate::open_report(kind, ctx)?;
+        Ok(self.open_screen(screen, mode))
     }
 
     /// Titles from the root to the top screen: the breadcrumb trail.
@@ -189,5 +237,36 @@ impl Tabs {
     /// The active tab's stack, mutably.
     pub fn active_stack_mut(&mut self) -> Option<&mut ScreenStack> {
         self.stacks.get_mut(self.active)
+    }
+
+    /// [`ScreenStack::open_choice`] on the active tab.
+    ///
+    /// # Errors
+    /// As [`ScreenStack::open_choice`].
+    pub fn open_choice(
+        &mut self,
+        choice: &PaletteChoice,
+        ctx: &AppCtx,
+    ) -> Result<StackChange, NavError> {
+        match self.active_stack_mut() {
+            Some(stack) => stack.open_choice(choice, ctx),
+            None => Ok(StackChange::None),
+        }
+    }
+
+    /// [`ScreenStack::open_report`] on the active tab.
+    ///
+    /// # Errors
+    /// As [`ScreenStack::open_report`].
+    pub fn open_report(
+        &mut self,
+        kind: ReportKind,
+        ctx: &AppCtx,
+        mode: PaletteMode,
+    ) -> Result<StackChange, NavError> {
+        match self.active_stack_mut() {
+            Some(stack) => stack.open_report(kind, ctx, mode),
+            None => Ok(StackChange::None),
+        }
     }
 }

@@ -23,7 +23,13 @@
 
 use std::cmp::Reverse;
 
+use ledgerly_api::SearchHit;
+
 use crate::keymap::{Action, Keymap};
+use crate::screens::report_view::date_text;
+use crate::screens::wire::{Done, Latest};
+use crate::shell::navigate::{ledger_key, report_key, voucher_key};
+use crate::worker::ApiWorker;
 
 /// How many recent choices are remembered.
 const MAX_RECENTS: usize = 8;
@@ -220,7 +226,14 @@ fn subsequence_gaps(term: &str, text: &str) -> Option<u32> {
 pub struct Palette {
     open: Option<PaletteMode>,
     query: String,
+    /// The rows the host fed in ([`Palette::set_entries`]).
     entries: Vec<PaletteEntry>,
+    /// The rows the API search found for the current query ([`Palette::set_remote_entries`]).
+    remote: Vec<PaletteEntry>,
+    /// `entries` then `remote` (without rows the host already has): what is ranked and shown.
+    merged: Vec<PaletteEntry>,
+    /// A line shown under the rows, for example why part of the books could not be searched.
+    note: Option<String>,
     recents: Vec<PaletteTarget>,
     selected: usize,
     focus_pending: bool,
@@ -236,6 +249,36 @@ impl Palette {
     /// Replaces the list the palette searches (commands plus whatever the API returned).
     pub fn set_entries(&mut self, entries: Vec<PaletteEntry>) {
         self.entries = entries;
+        self.rebuild();
+    }
+
+    /// Replaces the rows the API search found (see [`PaletteSearch`]). They are kept apart from
+    /// the host's rows, so [`Palette::set_entries`] never wipes them. A row whose target the
+    /// host already lists is not shown twice.
+    pub fn set_remote_entries(&mut self, entries: Vec<PaletteEntry>) {
+        self.remote = entries;
+        self.rebuild();
+    }
+
+    /// Sets the line shown under the rows; `None` clears it.
+    pub fn set_note(&mut self, note: Option<String>) {
+        self.note = note;
+    }
+
+    /// The line shown under the rows, if any.
+    #[must_use]
+    pub fn note(&self) -> Option<&str> {
+        self.note.as_deref()
+    }
+
+    fn rebuild(&mut self) {
+        let mut merged = self.entries.clone();
+        for row in &self.remote {
+            if !self.entries.iter().any(|host| host.target == row.target) {
+                merged.push(row.clone());
+            }
+        }
+        self.merged = merged;
         self.clamp_selection();
     }
 
@@ -257,6 +300,9 @@ impl Palette {
         self.query.clear();
         self.selected = 0;
         self.focus_pending = true;
+        self.remote.clear();
+        self.note = None;
+        self.rebuild();
     }
 
     /// Opens it if `action` is one of the two palette actions; returns whether it was.
@@ -294,9 +340,9 @@ impl Palette {
     /// The rows for the current query, best first.
     #[must_use]
     pub fn results(&self) -> Vec<&PaletteEntry> {
-        rank(&self.query, &self.entries, &self.recents)
+        rank(&self.query, &self.merged, &self.recents)
             .into_iter()
-            .filter_map(|index| self.entries.get(index))
+            .filter_map(|index| self.merged.get(index))
             .collect()
     }
 
@@ -411,6 +457,9 @@ impl Palette {
                 }
             });
 
+        if let Some(note) = self.note.as_deref() {
+            ui.label(note);
+        }
         if let Some(n) = clicked {
             return self.accept_at(n);
         }
@@ -418,5 +467,172 @@ impl Palette {
             return self.accept();
         }
         None
+    }
+}
+
+// ---- API search through the worker -----------------------------------------------------------
+
+/// The palette rows for the hits `Api::search` returned for `query`.
+///
+/// The API decided that each hit matches, so the palette must not drop it again by its own
+/// ranking: a ledger found by alias or GSTIN, or a voucher found by party, amount or date, shows
+/// the query as an alias of its row, and every word of the query is then found in that alias. The
+/// order of the hits is kept (ties go to the host's order). A report the app cannot open by key
+/// still gets a row, and choosing it says it is not supported (see
+/// [`crate::shell::navigate::open_target`]). An [`SearchHit::Unavailable`] hit makes no row; it is
+/// returned by [`unavailable_reason`].
+#[must_use]
+pub fn entries_from_hits(query: &str, hits: &[SearchHit]) -> Vec<PaletteEntry> {
+    let query = query.trim();
+    hits.iter()
+        .filter_map(|hit| match hit {
+            SearchHit::Ledger { id, name, matched } => Some(
+                PaletteEntry::new(PaletteTarget::Master(ledger_key(*id)), name.as_str())
+                    .with_aliases([query])
+                    .with_detail(format!("Ledger, found by {}", matched_text(*matched))),
+            ),
+            SearchHit::Voucher {
+                id,
+                number,
+                date,
+                matched,
+            } => {
+                let title = number
+                    .clone()
+                    .unwrap_or_else(|| format!("Voucher #{}", id.0));
+                Some(
+                    PaletteEntry::new(PaletteTarget::Voucher(voucher_key(*id)), title)
+                        .with_aliases([query])
+                        .with_detail(format!(
+                            "Voucher, {}, found by {}",
+                            date_text(*date),
+                            matched_text(*matched)
+                        )),
+                )
+            }
+            SearchHit::Report { title, kind } => {
+                let key = report_key(kind)
+                    .unwrap_or_else(|| format!("unsupported-report:{title}"));
+                Some(PaletteEntry::new(PaletteTarget::Report(key), *title).with_detail("Report"))
+            }
+            SearchHit::Setting { name } => Some(
+                PaletteEntry::new(PaletteTarget::Setting((*name).to_owned()), *name)
+                    .with_detail("Setting"),
+            ),
+            SearchHit::Unavailable { .. } => None,
+        })
+        .collect()
+}
+
+/// What the API said it could not search, from the hits of one query.
+#[must_use]
+pub fn unavailable_reason(hits: &[SearchHit]) -> Option<&str> {
+    hits.iter().find_map(|hit| match hit {
+        SearchHit::Unavailable { reason } => Some(reason.as_str()),
+        SearchHit::Ledger { .. }
+        | SearchHit::Voucher { .. }
+        | SearchHit::Report { .. }
+        | SearchHit::Setting { .. } => None,
+    })
+}
+
+/// The field a hit matched on, in words.
+fn matched_text(matched: ledgerly_api::MatchedOn) -> &'static str {
+    use ledgerly_api::MatchedOn;
+    match matched {
+        MatchedOn::Name => "name",
+        MatchedOn::Alias => "alias",
+        MatchedOn::Gstin => "GSTIN",
+        MatchedOn::Number => "number",
+        MatchedOn::Party => "party",
+        MatchedOn::Amount => "amount",
+        MatchedOn::Date => "date",
+        MatchedOn::Title => "title",
+        MatchedOn::SettingName => "name",
+    }
+}
+
+/// The answer a search brings back: the query it ran for, and the hits.
+type SearchAnswer = (String, Vec<SearchHit>);
+
+/// Runs `Api::search` on the API worker for what the user types in a [`Palette`], one call at a
+/// time (a newer query drops the older call), and feeds the rows back with
+/// [`Palette::set_remote_entries`]. The UI thread never waits for the API (rule D1).
+///
+/// Call [`PaletteSearch::tick`] once per frame while the palette is drawn.
+#[derive(Debug, Default)]
+pub struct PaletteSearch {
+    /// The trimmed query last handled, so an unchanged query is not sent again.
+    handled: Option<String>,
+    /// The search in flight.
+    latest: Latest<SearchAnswer>,
+}
+
+impl PaletteSearch {
+    /// A search with nothing sent.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Whether a search is running whose answer is still wanted.
+    #[must_use]
+    pub fn is_pending(&self) -> bool {
+        self.latest.is_pending()
+    }
+
+    /// Advances the search by one step: takes a finished answer, then starts a search when the
+    /// query changed. With the palette closed it forgets everything. Without a worker (no company
+    /// open) only the host's rows are searched, and the palette says so.
+    pub fn tick(&mut self, palette: &mut Palette, worker: Option<&ApiWorker>) {
+        if !palette.is_open() {
+            self.handled = None;
+            self.latest = Latest::default();
+            return;
+        }
+        let query = palette.query().trim().to_owned();
+        if let Some(done) = self.latest.poll() {
+            Self::apply(palette, &query, done);
+        }
+        if self.handled.as_deref() == Some(query.as_str()) {
+            return;
+        }
+        self.handled = Some(query.clone());
+        palette.set_remote_entries(Vec::new());
+        palette.set_note(None);
+        self.latest = Latest::default();
+        if query.is_empty() {
+            return;
+        }
+        match worker {
+            Some(worker) => {
+                let wanted = query;
+                self.latest
+                    .start(worker, move |api| (wanted.clone(), api.search(&wanted)));
+            }
+            None => palette.set_note(Some(
+                "No company is open, so ledgers and vouchers are not searched.".to_owned(),
+            )),
+        }
+    }
+
+    /// Shows a finished answer, if it is for the query now typed.
+    fn apply(palette: &mut Palette, query: &str, done: Done<SearchAnswer>) {
+        match done {
+            Done::Ready((asked, hits)) => {
+                if asked != query {
+                    return;
+                }
+                palette.set_remote_entries(entries_from_hits(&asked, &hits));
+                palette.set_note(
+                    unavailable_reason(&hits)
+                        .map(|reason| format!("Some of the books were not searched: {reason}")),
+                );
+            }
+            Done::Lost => palette.set_note(Some(
+                "The engine stopped before it answered the search; open the company again."
+                    .to_owned(),
+            )),
+        }
     }
 }
