@@ -45,7 +45,9 @@
 //! # Not decided (returns `Unsupported`)
 //!
 //! Cancelled vouchers and reverse charge; voucher kinds other than the five above; plain Dr/Cr
-//! entry; UIN recipients; services to an overseas recipient (s.13 and the s.2(6) conditions);
+//! entry; UIN recipients; a customer ledger with no party details (not defaulted to a domestic
+//! recipient; a voucher with no party at all is still read as a domestic cash sale); services to
+//! an overseas recipient (s.13 and the s.2(6) conditions);
 //! exempt or nil-rated supplies to an overseas or SEZ recipient; a supplier whose SEZ status
 //! matters (the company's SEZ status is not modelled); inward supplies from a party that is not a
 //! regular taxpayer; an option on an inward or advance line; payment before invoice without an
@@ -430,8 +432,13 @@ fn recipient_of(v: &Voucher, masters: &Masters) -> Result<Outcome<Recipient>, Gs
         .ledgers
         .get(&party_id)
         .ok_or_else(|| not_found(format!("party ledger {}", party_id.0)))?;
+    // A party ledger without details is not known to be domestic: it could be an overseas or SEZ
+    // recipient, which changes the kind of every line. It is not defaulted to a domestic recipient.
     let Some(details) = &party.party else {
-        return Ok(Outcome::Value(Recipient::OtherDomestic));
+        return unsupported(
+            "classification of a supply to a ledger without party details",
+            "the customer's registration is not on the party ledger, so the supply cannot be told apart as domestic, zero-rated or a deemed export; add the registration to the ledger",
+        );
     };
     match details.registration {
         RegistrationType::Regular => Ok(Outcome::Value(Recipient::Regular)),

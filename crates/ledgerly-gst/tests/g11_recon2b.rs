@@ -666,3 +666,48 @@ fn portal_documents_order_is_b2b_then_cdnr() {
         .collect();
     assert_eq!(numbers, vec!["A1", "B1", "C1"]);
 }
+
+/// Bug fix: a portal document that is ambiguous at an earlier level must still reserve the books it
+/// fits, so a later document cannot take one of them uniquely.
+///
+/// derived: the matching levels are product policy (spec 6.3, module docs); the arithmetic is by hand.
+/// Books: `INV-1` (reference date 15 Oct 2026) and `INV/1` (reference date 1 Oct 2026), both from
+/// the same supplier with IGST 180000 paise (10,000.00 x 18 percent).
+/// Portal `INV1` (IGST 180000): at Normalised it fits both books and is ambiguous, so it is matched
+/// to neither. Portal `INV-ZZ` (IGST 180000, dated 15 Oct 2026) fits no number level; at
+/// DateTolerance it fits only `INV-1` (same date, no tax difference). `INV1` also fits `INV-1` at
+/// DateTolerance, so `INV-1` is claimed twice and `INV-ZZ` must stay unmatched. On the old code
+/// `INV-ZZ` was matched to `INV-1` (Tolerance, suggested Pending) because `INV1` was skipped.
+#[test]
+fn an_ambiguous_document_reserves_its_books_at_later_levels() {
+    let b = books(vec![
+        purchase(1, PARTY_A, "INV-1", 180_000),
+        Voucher {
+            reference_date: Some(date!(2026 - 10 - 01)),
+            ..purchase(2, PARTY_A, "INV/1", 180_000)
+        },
+    ]);
+    let d = statement(
+        vec![group(
+            SUPPLIER_A,
+            vec![
+                doc(InwardDocKind::Invoice, "INV1", 180_000),
+                doc(InwardDocKind::Invoice, "INV-ZZ", 180_000),
+            ],
+        )],
+        vec![],
+    );
+    let lines = run(&b, &d, 100);
+    assert_eq!(lines.len(), 2);
+    let ambiguous = lines.first().unwrap();
+    assert_eq!(ambiguous.portal_index, 0);
+    assert_eq!(ambiguous.voucher, None);
+    assert_eq!(ambiguous.level, MatchLevel::Unmatched);
+    assert_eq!(ambiguous.suggested, ImsAction::Pending);
+    let other = lines.get(1).unwrap();
+    assert_eq!(other.portal_index, 1);
+    assert_eq!(other.voucher, None, "INV-ZZ must not take INV-1");
+    assert_eq!(other.level, MatchLevel::Unmatched);
+    assert_ne!(other.suggested, ImsAction::Accept);
+    assert!(lines.iter().all(|l| !l.confirmed));
+}

@@ -7,6 +7,7 @@
 //! the paisa (G4's product policy). Table meanings: 3.1(a) is outward taxable supplies other than
 //! zero rated, nil rated and exempted; 4(A)(5) is all other ITC (GSTR-3B form). Blocked credit:
 //! CGST Act s.17(5)(a) motor vehicles; which codes are blocked is fixture pack data (prefix 8703).
+//! A line in a blocked category makes the working Unsupported, because its exceptions depend on use.
 //! The portal values in the comparison tests are typed in the test, as a user would type them; they
 //! are not observed portal output. No test here is `observed`.
 
@@ -375,8 +376,6 @@ fn january_books() -> Books {
     };
     // Eligible accounting-invoice purchase, intra-state.
     let p11 = ledger_purchase(11, jan, SUPPLIER_KA, PURCHASE18, 5_000_000);
-    // Motor car: blocked under s.17(5)(a).
-    let p12 = ledger_purchase(12, jan, SUPPLIER_KA, CAR, 10_000_000);
     // Eligible item-invoice purchase, inter-state supplier.
     let p13 = Voucher {
         party: Some(SUPPLIER_MH),
@@ -397,7 +396,13 @@ fn january_books() -> Books {
         PURCHASE18,
         6_000_000,
     );
-    books_with(vec![s1, s2, s3, s4, s5, s6, s7, p11, p12, p13, p14, p15])
+    books_with(vec![s1, s2, s3, s4, s5, s6, s7, p11, p13, p14, p15])
+}
+
+/// A motor car purchase in January 2026. Its s.17(5)(a) exceptions depend on use, so the working
+/// is Unsupported whenever it is in the period. It is kept out of [`january_books`] for that reason.
+fn car_purchase() -> Voucher {
+    ledger_purchase(12, date!(2026 - 01 - 15), SUPPLIER_KA, CAR, 10_000_000)
 }
 
 fn run(
@@ -475,19 +480,41 @@ fn table_3_1_a_tax_is_per_head_over_the_taxable_vouchers() {
 #[test]
 fn table_4_a_5_is_the_tax_on_eligible_purchases_only() {
     // provenance: derived — 3B table 4(A)(5) = all other ITC; CGST Act s.16(1) allows credit of
-    // tax on inputs, s.17(5)(a) blocks motor vehicles (fixture category prefix 8703).
+    // tax on inputs. The motor car is not in january_books (see a_blocked_motor_car_...).
     //   P11 purchase 50,000.00 (HSN 482010) from a Karnataka supplier: CGST 4,500.00, SGST 4,500.00
     //       -> 450,000 + 450,000 paise, eligible.
-    //   P12 motor car 100,000.00 (HSN 870321): CGST 9,000.00, SGST 9,000.00, blocked, so it is
-    //       not in 4(A)(5) and is reported as not claimable (900,000 + 900,000 paise).
     //   P13 item purchase 20,000.50 from a Maharashtra supplier (item HSN 847130): IGST
     //       20,000.50 x 18% = 3,600.09 -> 360,009 paise, eligible.
     // Left out: P14 (reverse charge), P15 (dated February).
     // 4(A)(5): integrated 360,009; central 450,000; state 450,000.
+    // Nothing is in the not-claimable row: a line that is blocked or ineligible makes the working
+    // Unsupported (blocked) or is rejected by compute (composition and unregistered suppliers),
+    // so no line can be reported as a known, not-claimable amount.
     let w = value(&january_books(), None);
     assert_eq!(w.itc_all_other, amounts(360_009, 450_000, 450_000));
     assert_eq!(w.itc_vouchers, vec![VoucherId(11), VoucherId(13)]);
-    assert_eq!(w.itc_not_claimable, amounts(0, 900_000, 900_000));
+    assert_eq!(w.itc_not_claimable, Gstr3bTaxAmounts::default());
+}
+
+#[test]
+fn a_blocked_motor_car_makes_the_working_unsupported_not_an_understated_4_a_5() {
+    // provenance: derived — CGST Act s.17(5)(a): a motor car's exceptions (further supply,
+    // passenger or goods transport, driving training) depend on use, which is not recorded. The
+    // credit cannot be called blocked, so the working is Unsupported. A silent 4(A)(5) of zero
+    // would be a wrong number, because the car may be claimable.
+    let books = books_with(vec![car_purchase()]);
+    assert_unsupported(&books);
+}
+
+#[test]
+fn a_blocked_motor_car_is_unsupported_even_next_to_eligible_purchases() {
+    // provenance: derived — the same rule with an eligible purchase in the period: the working as
+    // a whole is Unsupported, so the eligible line's credit is not shown as the full 4(A)(5).
+    let books = books_with(vec![
+        ledger_purchase(11, date!(2026 - 01 - 15), SUPPLIER_KA, PURCHASE18, 5_000_000),
+        car_purchase(),
+    ]);
+    assert_unsupported(&books);
 }
 
 #[test]
@@ -561,23 +588,6 @@ fn an_empty_period_is_a_zero_working() {
     assert_eq!(w.outward_tax, Gstr3bTaxAmounts::default());
     assert_eq!(w.itc_all_other, Gstr3bTaxAmounts::default());
     assert_eq!(w.outward_vouchers, [] as [ledgerly_core::VoucherId; 0]);
-}
-
-#[test]
-fn a_blocked_only_purchase_adds_nothing_to_4_a_5() {
-    // provenance: derived — CGST Act s.17(5)(a): the only purchase is a motor car (HSN 870321,
-    // fixture prefix 8703), so 4(A)(5) is 0 and the voucher is not listed as contributing.
-    let books = books_with(vec![ledger_purchase(
-        1,
-        date!(2026 - 01 - 15),
-        SUPPLIER_KA,
-        CAR,
-        10_000_000,
-    )]);
-    let w = value(&books, None);
-    assert_eq!(w.itc_all_other, Gstr3bTaxAmounts::default());
-    assert_eq!(w.itc_vouchers, [] as [ledgerly_core::VoucherId; 0]);
-    assert_eq!(w.itc_not_claimable, amounts(0, 900_000, 900_000));
 }
 
 #[test]

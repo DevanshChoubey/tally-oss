@@ -730,3 +730,52 @@ fn a_company_with_two_registrations_is_unsupported() {
     let out = build_gstr1(&b, &gstin(OWN_GSTIN), january(), &full_pack()).unwrap();
     assert!(matches!(out, Outcome::Unsupported(_)));
 }
+
+fn february() -> Period {
+    Period::new(date!(2026 - 02 - 01), date!(2026 - 02 - 28)).unwrap()
+}
+
+#[test]
+fn a_sale_is_reported_in_the_period_of_its_time_of_supply_not_its_voucher_date() {
+    // provenance: derived — the product rule shared with GSTR-3B (card G10): a sale is reported in
+    // the period of its time of supply, which is the supply date when it is set. Hand arithmetic:
+    //   V1 dated 31 Jan 2026, supply date 1 Feb 2026: February's return, not January's.
+    //   V2 dated 3 Feb 2026, supply date 31 Jan 2026: January's return, not February's.
+    // Old code selected by voucher date, so V1 was in January and V2 in February, and the same
+    // invoice could sit in GSTR-1 for one month and GSTR-3B for the other. The invoice date on the
+    // return stays the voucher date.
+    let v1 = Voucher {
+        date: date!(2026 - 01 - 31),
+        supply_date: Some(date!(2026 - 02 - 01)),
+        ..sale(1, "INV-1", REGISTERED, GUJARAT, &[1_000_000])
+    };
+    let v2 = Voucher {
+        date: date!(2026 - 02 - 03),
+        supply_date: Some(date!(2026 - 01 - 31)),
+        ..sale(2, "INV-2", REGISTERED, GUJARAT, &[1_000_000])
+    };
+    let b = books(vec![v1, v2]);
+
+    let (jan, jan_buckets) = build(&b, &full_pack());
+    assert!(jan_buckets.iter().all(|x| x.voucher != VoucherId(1)));
+    assert_eq!(bucket_of(&jan_buckets, 2).bucket, Bucket::Ready);
+    assert_eq!(jan.b2b.first().unwrap().invoices.len(), 1);
+    assert_eq!(jan.b2b.first().unwrap().invoices.first().unwrap().num, "INV-2");
+    assert_eq!(
+        jan.b2b.first().unwrap().invoices.first().unwrap().date,
+        date!(2026 - 02 - 03)
+    );
+
+    let feb = match build_gstr1(&b, &gstin(OWN_GSTIN), february(), &full_pack()).unwrap() {
+        Outcome::Value(v) => v,
+        Outcome::Unsupported(u) => panic!("unexpected Unsupported: {u:?}"),
+    };
+    let (feb_r, feb_buckets) = feb;
+    assert!(feb_buckets.iter().all(|x| x.voucher != VoucherId(2)));
+    assert_eq!(bucket_of(&feb_buckets, 1).bucket, Bucket::Ready);
+    assert_eq!(feb_r.b2b.first().unwrap().invoices.first().unwrap().num, "INV-1");
+    assert_eq!(
+        feb_r.b2b.first().unwrap().invoices.first().unwrap().date,
+        date!(2026 - 01 - 31)
+    );
+}

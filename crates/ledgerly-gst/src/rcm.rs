@@ -209,8 +209,11 @@ fn pack_err(reason: String) -> GstError {
 ///
 /// `rules` must be the rule set selected for the voucher's time of supply (`supply_date`, which
 /// must be set), see [`crate::pack::RulePack::for_time_of_supply`]. This function cannot see the
-/// company, so it does not check that the recipient is a registered regular taxpayer; use
-/// [`reverse_charge_for_company`] to have that checked as well.
+/// company, so it cannot check that the recipient is a registered regular taxpayer. A composition
+/// recipient (or one with no registration in force) must not be charged under reverse charge, so
+/// wherever the answer would be [`RcmLiability::Payable`] this function returns `Unsupported`
+/// instead. [`RcmLiability::NotApplicable`] does not depend on the recipient and is still returned.
+/// Use [`reverse_charge_for_company`] to get the `Payable` answer.
 ///
 /// # Errors
 /// * [`GstError::NotFound`] when the voucher refers to a voucher type, party, ledger or stock item
@@ -282,6 +285,14 @@ fn evaluate(
     };
     if class.unregistered_only && supplier.registered {
         return Ok(not_applicable(v, NoRcmReason::SupplierRegistered));
+    }
+    // Every path above that reaches here answers `Payable`, which depends on the recipient's
+    // registration. Without a company that is unknown, so the answer is not given.
+    if company.is_none() {
+        return unsupported(
+            "reverse charge without the recipient's registration",
+            "reverse_charge has no company argument, so a composition recipient cannot be excluded; use reverse_charge_for_company, which checks the company's registration",
+        );
     }
     let heads = supported!(supply_heads(v, supplier.state));
     let mut lines = Vec::with_capacity(taxable.len());

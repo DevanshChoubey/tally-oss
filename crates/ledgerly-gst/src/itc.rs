@@ -20,7 +20,7 @@
 //! per blocked category, with the ids in [`BLOCKED_RULE_IDS`] and these params (strings):
 //!
 //! ```text
-//! section      = "17(5)(a)"        # shown to the user in `Blocked { section }`
+//! section      = "17(5)(a)"        # named in the `Unsupported` reason for a line in the category
 //! hsn_prefixes = "8703,8702"       # comma separated; a code is in the category when it starts with one
 //! ```
 //!
@@ -34,24 +34,29 @@
 //! * `Ineligible`: the ledger is exempt, nil-rated or non-GST (no tax was charged), or the supplier
 //!   is a composition dealer, or is unregistered/a consumer and the voucher is not under reverse
 //!   charge (no tax invoice with tax, CGST Act s.16(2)(a), s.10(4)).
-//! * `Blocked`: the HSN/SAC is in a blocked category of the pack.
 //! * `Eligible`: taxable purchase from a registered (or SEZ) supplier, or a reverse-charge
 //!   purchase, whose HSN/SAC is in no blocked category of the pack.
+//! * `Unsupported`: the HSN/SAC is in a blocked category of the pack. Every blocked category has
+//!   exceptions that depend on use (further supply, transport, training, obligation under law), and
+//!   no use flag is recorded, so neither "blocked" nor "eligible" can be claimed.
+//!
+//! The `Blocked` variant is kept for the public enum but this function never returns it: a
+//! blocked category is never reported as a decided answer while no use flag exists.
 //!
 //! # Not decided (the result is not a claim about these)
 //!
 //! `Eligible` means "not blocked by an HSN/SAC based category and no ineligibility found". It does
 //! not check the conditions of s.16(2) (2B match, receipt, supplier payment, 180 days), Rules 42
 //! and 43, or the s.17(5) clauses that depend on use or events the books do not record: (c) and
-//! (d) construction, (e), (f), (fa), (g) personal consumption, (h) lost or gifted goods, (i). The
-//! exceptions to (a) and (b) (further supply, passenger transport, mandatory by law and so on)
-//! depend on use too, so a vehicle bought by a transport business is reported `Blocked` until a
-//! use flag exists (see `docs/interface-requests.md`). Callers must treat the result as a
-//! first-pass classification, shown to the user for confirmation.
+//! (d) construction, (e), (f), (fa), (g) personal consumption, (h) lost or gifted goods, (i). A
+//! vehicle bought by a transport business is therefore `Unsupported` until a use flag exists (see
+//! `docs/interface-requests.md`). Callers must treat the result as a first-pass classification,
+//! shown to the user for confirmation.
 //!
 //! `Unsupported` is returned for: a voucher that is not a regular purchase, a cancelled voucher,
 //! an overseas or UIN supplier (imports are not handled), a line without a classification or
-//! HSN/SAC, a ledger line mixing categories, and the missing/pending pack entries above.
+//! HSN/SAC, a ledger line mixing categories, a line in a blocked category, and the missing/pending
+//! pack entries above.
 //!
 //! Only claimable credit may reach GSTR-3B table 4(A): use [`ItcEligibility::is_claimable`].
 //!
@@ -82,7 +87,8 @@ pub const BLOCKED_RULE_IDS: [&str; 3] = [
 pub enum ItcEligibility {
     /// No blocking or ineligibility found (see the module docs for what is not checked).
     Eligible,
-    /// Credit blocked by CGST Act s.17(5).
+    /// Credit blocked by CGST Act s.17(5). Not returned by [`itc_eligibility`]: a blocked category
+    /// is `Unsupported` until a use flag exists (see the module docs).
     Blocked {
         /// The clause, as written in the pack, for example `17(5)(a)`.
         section: String,
@@ -356,12 +362,22 @@ fn codes_for<'a>(
 }
 
 /// Looks `code` up in every blocked category of the rule set.
+///
+/// A code in a blocked category is `Unsupported`, never `Blocked`: each category is a clause of
+/// s.17(5) whose exceptions depend on how the goods or services are used (further supply,
+/// transport, training, an obligation under law), and the books record no use. The section is
+/// still read on a hit, so a malformed entry is reported as a pack error.
 fn classify(code: &Hsn, rules: &RuleSet) -> Result<Outcome<ItcEligibility>, GstError> {
     for id in BLOCKED_RULE_IDS {
         let entry = supported!(rules.get(id));
         if category_contains(entry, code)? {
             let section = param(entry, "section")?.trim().to_owned();
-            return value(ItcEligibility::Blocked { section });
+            return unsupported(
+                format!("ITC on HSN/SAC {} under s.{section}", code.as_str()),
+                format!(
+                    "s.{section} blocks this category except where an exception applies; the exceptions depend on how the goods or services are used, which the books do not record, so the credit is neither blocked nor eligible"
+                ),
+            );
         }
     }
     value(ItcEligibility::Eligible)

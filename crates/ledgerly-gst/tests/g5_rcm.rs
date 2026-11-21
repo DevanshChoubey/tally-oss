@@ -316,8 +316,15 @@ fn gta_purchase(party: LedgerId, place: Option<u8>) -> Voucher {
     purchase(party, place, vec![line(GTA_LEDGER, 1_000_000)])
 }
 
+/// The company-aware call with a registered regular recipient: the default for every test below
+/// that expects a `Payable` answer. The frozen `reverse_charge` is tested on its own below.
 fn run(v: &Voucher, m: &Masters) -> Result<Outcome<RcmLiability>, GstError> {
-    reverse_charge(v, m, &rules_on(v.supply_date.unwrap_or(v.date)))
+    reverse_charge_for_company(
+        v,
+        m,
+        &rules_on(v.supply_date.unwrap_or(v.date)),
+        &company(false, true),
+    )
 }
 
 fn liability(v: &Voucher, m: &Masters) -> RcmLiability {
@@ -625,8 +632,13 @@ supplier = "any"
         supply_date: Some(date!(2026 - 02 - 15)),
         ..before
     };
-    let l = reverse_charge(&after, &m, &rules_with(pack, date!(2026 - 02 - 15)))
-        .unwrap()
+    let l = reverse_charge_for_company(
+        &after,
+        &m,
+        &rules_with(pack, date!(2026 - 02 - 15)),
+        &company(false, true),
+    )
+    .unwrap()
         .value()
         .unwrap();
     match l {
@@ -863,7 +875,6 @@ fn recipient_checks_with_the_company() {
     let v = gta_purchase(UNREG_KA, Some(KARNATAKA));
     let rules = rules_on(date!(2026 - 01 - 15));
     let ok = reverse_charge_for_company(&v, &m, &rules, &company(false, true)).unwrap();
-    assert_eq!(ok, reverse_charge(&v, &m, &rules).unwrap());
     assert!(matches!(ok, Outcome::Value(RcmLiability::Payable(_))));
     let composition = reverse_charge_for_company(&v, &m, &rules, &company(true, true)).unwrap();
     assert!(composition.is_unsupported());
@@ -873,6 +884,59 @@ fn recipient_checks_with_the_company() {
     unregistered.registrations.clear();
     let r = reverse_charge_for_company(&v, &m, &rules, &unregistered).unwrap();
     assert!(r.is_unsupported());
+}
+
+#[test]
+fn frozen_reverse_charge_is_unsupported_where_the_answer_would_be_payable() {
+    // provenance: derived — the frozen `reverse_charge` has no company argument, so it cannot see
+    // that a composition recipient must not be charged (CGST Act s.9(3) speaks of a registered
+    // recipient; research 04-gst 2.5). A Payable answer from it could be a wrong number, so it is
+    // Unsupported. Bug fix: on the old code this same voucher returned Payable.
+    let m = purchase_masters();
+    let v = gta_purchase(UNREG_KA, Some(KARNATAKA));
+    let rules = rules_on(date!(2026 - 01 - 15));
+    let frozen = reverse_charge(&v, &m, &rules).unwrap();
+    assert!(
+        frozen.is_unsupported(),
+        "frozen call must not answer Payable without the recipient's registration, got {frozen:?}"
+    );
+}
+
+#[test]
+fn frozen_reverse_charge_still_answers_not_applicable_whatever_the_recipient() {
+    // provenance: derived — NotApplicable does not depend on the recipient's registration, so the
+    // frozen call still gives it: `NotNotified` for SAC 998313, which no fixture class lists.
+    let m = purchase_masters();
+    let v = purchase(
+        UNREG_KA,
+        Some(KARNATAKA),
+        vec![line(OTHER_LEDGER, 1_000_000)],
+    );
+    let rules = rules_on(date!(2026 - 01 - 15));
+    assert_eq!(
+        reverse_charge(&v, &m, &rules).unwrap(),
+        Outcome::Value(RcmLiability::NotApplicable(NoRcmReason::NotNotified))
+    );
+}
+
+#[test]
+fn cess_ledger_on_an_item_invoice_is_unsupported() {
+    // provenance: rule A1/A8 — no verified cess rate exists in the packs; a cess ledger posted by
+    // an item invoice (the cess line is an accounting line of the voucher) is Unsupported as well.
+    // Confirms the behaviour of the cess check on the item-invoice path (it already holds).
+    let mut v = purchase(UNREG_KA, Some(KARNATAKA), vec![line(CESS_LEDGER, 100)]);
+    v.mode = VoucherMode::ItemInvoice;
+    v.inventory_lines = vec![InventoryLine {
+        item: ITEM,
+        qty: Qty(Decimal::ONE),
+        unit: UnitId(1),
+        rate: Rate(Decimal::new(1_000_000, 2)),
+        discount_percent: None,
+        amount: Paise::new(1_000_000),
+        ledger: Some(GTA_LEDGER),
+        godowns: vec![],
+    }];
+    assert_unsupported(&v, &purchase_masters());
 }
 
 #[test]
