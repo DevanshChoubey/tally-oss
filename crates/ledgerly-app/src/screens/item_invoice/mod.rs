@@ -17,6 +17,9 @@
 //!   the user typed, done with checked decimals. The product is exact in rupees only when it has
 //!   at most two decimals; otherwise the screen says so and asks for the amount to be typed
 //!   (no rounding rule for a line amount has provenance yet, so none is applied silently).
+//!   A typed amount that is a plain number with more than two decimals is refused
+//!   (`draft::typed_amount`). A typed expression such as `10/3` is still rounded half up to paise
+//!   by `eval_amount` in `voucher_entry.rs`; that rounding is an open item, not refused here.
 //! * Tax, round-off, the invoice total and the accounting lines all come from the engine. This
 //!   crate cannot call the GST engine (it depends on neither `ledgerly-gst` nor
 //!   `ledgerly-engine`), so the host does: it takes [`ItemInvoiceScreen::take_compute_request`],

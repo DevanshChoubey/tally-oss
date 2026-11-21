@@ -725,6 +725,21 @@ impl MastersScreen {
     }
 }
 
+/// Consumes the press of exactly `key` with exactly `modifiers` held, and reports whether there was
+/// one. egui's `consume_key` also accepts extra Alt or Shift, so a plain-Y question would take
+/// Shift+Y as a yes.
+fn consume_exact(input: &mut egui::InputState, key: Key, modifiers: Modifiers) -> bool {
+    let before = input.events.len();
+    input.events.retain(|event| {
+        !matches!(
+            event,
+            egui::Event::Key { key: pressed_key, modifiers: held, pressed: true, .. }
+                if *pressed_key == key && held.matches_exact(modifiers)
+        )
+    });
+    input.events.len() != before
+}
+
 fn read_keys(ui: &Ui, tag: ModeTag) -> Vec<KeyCmd> {
     let mut out = Vec::new();
     ui.ctx().input_mut(|i| match tag {
@@ -742,13 +757,14 @@ fn read_keys(ui: &Ui, tag: ModeTag) -> Vec<KeyCmd> {
             }
         }
         ModeTag::Confirm => {
-            if i.consume_key(Modifiers::NONE, Key::Y) {
+            // Plain keys only: a Shift+Y or Alt+Y must not answer a permanent delete.
+            if consume_exact(i, Key::Y, Modifiers::NONE) {
                 out.push(KeyCmd::Yes);
             }
-            if i.consume_key(Modifiers::NONE, Key::N) {
+            if consume_exact(i, Key::N, Modifiers::NONE) {
                 out.push(KeyCmd::No);
             }
-            if i.consume_key(Modifiers::NONE, Key::Escape) {
+            if consume_exact(i, Key::Escape, Modifiers::NONE) {
                 out.push(KeyCmd::Escape);
             }
         }

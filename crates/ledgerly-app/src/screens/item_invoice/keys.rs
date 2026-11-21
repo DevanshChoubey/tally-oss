@@ -2,13 +2,28 @@
 
 use super::{Field, ItemInvoiceScreen, KeyCmd, UiEvent};
 use crate::ScreenAction;
-use egui::{Key, Modifiers, Ui};
+use egui::{Event, InputState, Key, Modifiers, Ui};
 use ledgerly_model::Masters;
 
 /// Save: Ctrl+A and Ctrl+S (spec 7 names Ctrl+A). Ctrl+Enter is not here: spec 7 gives it to
 /// "alter master". Hard-coded until the keymap card U2 is wired (see `docs/interface-requests.md`).
 const SAVE_KEYS: [(Modifiers, Key); 2] =
     [(Modifiers::COMMAND, Key::A), (Modifiers::COMMAND, Key::S)];
+
+/// Consumes the press of exactly `key` with exactly `modifiers` held, and reports whether there was
+/// one. egui's `consume_key` also accepts extra Alt or Shift, so the discard question would take
+/// Shift+Y as a yes.
+fn consume_exact(input: &mut InputState, key: Key, modifiers: Modifiers) -> bool {
+    let before = input.events.len();
+    input.events.retain(|event| {
+        !matches!(
+            event,
+            Event::Key { key: pressed_key, modifiers: held, pressed: true, .. }
+                if *pressed_key == key && held.matches_exact(modifiers)
+        )
+    });
+    input.events.len() != before
+}
 
 pub(super) fn read_keys(
     ui: &Ui,
@@ -19,10 +34,11 @@ pub(super) fn read_keys(
     let mut out = Vec::new();
     ui.ctx().input_mut(|i| {
         if confirming {
-            if i.consume_key(Modifiers::NONE, Key::Y) {
+            // Plain keys only: Shift+Y must not discard the invoice.
+            if consume_exact(i, Key::Y, Modifiers::NONE) {
                 out.push(KeyCmd::DiscardYes);
             }
-            if i.consume_key(Modifiers::NONE, Key::N) {
+            if consume_exact(i, Key::N, Modifiers::NONE) {
                 out.push(KeyCmd::DiscardNo);
             }
         }

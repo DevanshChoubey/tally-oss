@@ -37,6 +37,22 @@ impl InvoiceRow {
     }
 }
 
+/// Evaluates a line amount the user typed. A plain number with more than two decimals (for
+/// example `100.005`) is refused: [`eval_amount`] would round it to paise with no notice, and no
+/// rounding rule for a typed line amount has provenance. Expressions (for example `10/3`) go to
+/// [`eval_amount`], which rounds half up to paise; that rounding is not refused here.
+pub(super) fn typed_amount(text: &str) -> Result<Paise, String> {
+    if let Ok(plain) = parse_decimal(text)
+        && plain.normalize().scale() > 2
+    {
+        return Err(format!(
+            "'{}' has more than two decimal places; type the amount in whole paise",
+            text.trim()
+        ));
+    }
+    eval_amount(text).map_err(|e| e.to_string())
+}
+
 /// The amount of one line: quantity x rate less discount, or the amount the user typed.
 pub(super) fn line_amount(
     masters: &Masters,
@@ -73,7 +89,7 @@ pub(super) fn line_amount(
         return Err(bad("discount cannot be more than 100%".to_owned()));
     }
     if !row.amount_text.trim().is_empty() {
-        return eval_amount(&row.amount_text).map_err(|e| bad(format!("amount: {e}")));
+        return typed_amount(&row.amount_text).map_err(|e| bad(format!("amount: {e}")));
     }
     let exact = Decimal::ONE_HUNDRED
         .checked_sub(discount)
