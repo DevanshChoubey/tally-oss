@@ -229,10 +229,13 @@ pub fn visuals(kind: ThemeKind) -> Visuals {
     v.widgets.hovered.bg_stroke = Stroke::new(1.0, t.accent);
     v.widgets.hovered.fg_stroke = Stroke::new(1.5, t.ink);
     v.widgets.hovered.corner_radius = radius;
-    v.widgets.active.bg_fill = t.accent;
-    v.widgets.active.weak_bg_fill = t.accent;
+    // egui draws `RichText::strong()` in the pressed widget's text colour, so that colour must
+    // read on the sheet and the paper as well as on the pressed fill: ink on the soft accent,
+    // with the accent kept on the border.
+    v.widgets.active.bg_fill = t.accent_soft;
+    v.widgets.active.weak_bg_fill = t.accent_soft;
     v.widgets.active.bg_stroke = Stroke::new(focus_width, t.accent);
-    v.widgets.active.fg_stroke = Stroke::new(2.0, t.accent_ink);
+    v.widgets.active.fg_stroke = Stroke::new(2.0, t.ink);
     v.widgets.active.corner_radius = radius;
     v.widgets.open.bg_fill = t.accent_soft;
     v.widgets.open.weak_bg_fill = t.accent_soft;

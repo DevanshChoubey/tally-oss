@@ -17,7 +17,7 @@
     reason = "developer tool, not product code: it stops on any setup failure"
 )]
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
@@ -356,7 +356,10 @@ struct Snapshots {
     index: usize,
     stage: Stage,
     frames: u32,
-    inject: Vec<(Key, Modifiers)>,
+    /// Keys still to press, one per frame with a gap, so the screen reacts to each before the next.
+    inject: VecDeque<(Key, Modifiers)>,
+    /// Frames to wait before the next queued key.
+    gap: u32,
     image: Arc<Mutex<Option<Arc<egui::ColorImage>>>>,
 }
 
@@ -383,14 +386,21 @@ impl Snapshots {
 
 impl eframe::App for Snapshots {
     fn raw_input_hook(&mut self, _ctx: &egui::Context, raw_input: &mut egui::RawInput) {
-        for (key, modifiers) in self.inject.drain(..) {
-            raw_input.events.push(Event::Key {
-                key,
-                physical_key: None,
-                pressed: true,
-                repeat: false,
-                modifiers,
-            });
+        if self.gap > 0 {
+            self.gap -= 1;
+            return;
+        }
+        if let Some((key, modifiers)) = self.inject.pop_front() {
+            for pressed in [true, false] {
+                raw_input.events.push(Event::Key {
+                    key,
+                    physical_key: None,
+                    pressed,
+                    repeat: false,
+                    modifiers,
+                });
+            }
+            self.gap = 6;
         }
     }
 
@@ -409,11 +419,11 @@ impl eframe::App for Snapshots {
                 if let Some(theme) = current.theme {
                     self.shell.set_theme(theme);
                 }
-                self.inject = current.keys.clone();
+                self.inject = current.keys.iter().copied().collect();
                 self.next_stage(Stage::Query);
             }
             Stage::Query => {
-                if self.frames > 5 {
+                if self.inject.is_empty() && self.gap == 0 && self.frames > 5 {
                     if let Some(query) = self.shots[self.index].query {
                         self.shell.palette_mut().set_query(query);
                     }
@@ -422,12 +432,12 @@ impl eframe::App for Snapshots {
             }
             Stage::After => {
                 if self.frames > 5 {
-                    self.inject = self.shots[self.index].after.clone();
+                    self.inject = self.shots[self.index].after.iter().copied().collect();
                     self.next_stage(Stage::Settle);
                 }
             }
             Stage::Settle => {
-                if self.frames > 60 {
+                if self.inject.is_empty() && self.frames > 60 {
                     let slot = Arc::clone(&self.image);
                     ui.ctx().request_screenshot(move |image| {
                         if let Ok(mut held) = slot.lock() {
@@ -475,7 +485,8 @@ fn main() -> eframe::Result<()> {
         index: 0,
         stage: Stage::Warm,
         frames: 0,
-        inject: Vec::new(),
+        inject: VecDeque::new(),
+        gap: 0,
         image: Arc::new(Mutex::new(None)),
     };
     let options = eframe::NativeOptions {

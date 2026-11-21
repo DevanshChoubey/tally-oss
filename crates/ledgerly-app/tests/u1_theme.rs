@@ -257,3 +257,43 @@ fn focus_stroke_is_visible_and_thicker_in_high_contrast() {
     assert!((focus(ThemeKind::Dark) - 2.0).abs() < f32::EPSILON);
     assert!((focus(ThemeKind::HighContrast) - 3.0).abs() < f32::EPSILON);
 }
+
+#[test]
+fn strong_text_is_readable_on_the_sheet_and_the_paper() {
+    // derived: WCAG 2.1 SC 1.4.3, 4.5:1 for normal text (7:1, SC 1.4.6, in high contrast).
+    // egui draws `RichText::strong()` in `Visuals::strong_text_color()`, which is the pressed
+    // widget's text colour. KPI figures, report headers and totals use it. The UI comparison
+    // with the mock (2026-11-21) found it white on white in light and near-black on navy in dark.
+    for kind in [ThemeKind::Light, ThemeKind::Dark, ThemeKind::HighContrast] {
+        let t = theme::tokens(kind);
+        let strong = theme::visuals(kind).strong_text_color();
+        let floor = if kind == ThemeKind::HighContrast {
+            7.0
+        } else {
+            4.5
+        };
+        for (surface, bg) in [("sheet", t.sheet), ("paper", t.paper)] {
+            let ratio = contrast(strong, bg);
+            assert!(
+                ratio >= floor,
+                "{kind:?}: strong text on {surface} is {ratio:.2}:1"
+            );
+        }
+    }
+}
+
+#[test]
+fn pressed_widget_text_is_readable_on_its_own_fill() {
+    // derived: WCAG 2.1 SC 1.4.3 (SC 1.4.6 in high contrast), the label of a pressed button
+    // against the pressed fill.
+    for kind in [ThemeKind::Light, ThemeKind::Dark, ThemeKind::HighContrast] {
+        let active = theme::visuals(kind).widgets.active;
+        let floor = if kind == ThemeKind::HighContrast {
+            7.0
+        } else {
+            4.5
+        };
+        let ratio = contrast(active.fg_stroke.color, active.bg_fill);
+        assert!(ratio >= floor, "{kind:?}: pressed text is {ratio:.2}:1");
+    }
+}
