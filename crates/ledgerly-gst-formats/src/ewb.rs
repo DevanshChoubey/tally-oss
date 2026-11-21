@@ -25,7 +25,7 @@
 //! `tests/f5_ewb.rs` is marked accordingly. Nothing here computes a tax or a value to write: the
 //! writer checks that the bill is internally consistent (its totals add up, and each header tax
 //! head lies within rounding of the items' own tax, see `check_tax_heads`) and prints what it was
-//! given. An HSN code with a leading zero is refused as [`FormatError::Unsupported`] until the
+//! given. An HSN code with a leading zero is refused as `FormatError::Unsupported` until the
 //! numeric `hsnCode` field is confirmed against the official schema, rather than written as a
 //! different code.
 //!
