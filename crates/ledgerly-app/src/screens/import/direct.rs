@@ -86,8 +86,7 @@ impl DirectImport {
             return;
         };
         let Some(handle) = worker else {
-            self.state =
-                DirectState::Failed("no company file is open to import into".to_owned());
+            self.state = DirectState::Failed("no company file is open to import into".to_owned());
             return;
         };
         self.state = DirectState::Running;

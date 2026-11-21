@@ -21,9 +21,7 @@ use std::time::Duration;
 use ledgerly_api::{Api, Command};
 use ledgerly_app::screens::import::{DirectState, ImportScreen};
 use ledgerly_app::worker::ApiWorker;
-use ledgerly_core::{
-    Clock, CompanyId, GroupId, LedgerId, Outcome, Paise, SignedAmount, StateCode,
-};
+use ledgerly_core::{Clock, CompanyId, GroupId, LedgerId, Outcome, Paise, SignedAmount, StateCode};
 use ledgerly_model::seed_groups::reserved_groups;
 use ledgerly_model::{
     Address, Company, EntityKind, Features, Ledger, NegativeStockPolicy, ReservedGroup,
@@ -52,12 +50,7 @@ fn company() -> Company {
 fn empty_company(name: &str) -> Api {
     let path = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(name);
     let _removed = std::fs::remove_file(&path);
-    Api::create(
-        &path,
-        &company(),
-        Clock::Fixed(OffsetDateTime::UNIX_EPOCH),
-    )
-    .unwrap()
+    Api::create(&path, &company(), Clock::Fixed(OffsetDateTime::UNIX_EPOCH)).unwrap()
 }
 
 fn cash_group() -> GroupId {

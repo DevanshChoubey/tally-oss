@@ -306,17 +306,18 @@ fn draw_detect(
 fn draw_direct(ui: &mut Ui, direct: &mut DirectImport) -> bool {
     ui.heading("Import in one step");
     ui.label("Reads the whole company from a running Tally into the open, empty company file.");
-    egui::Grid::new("u10-direct-form").show(ui, |ui| {
-        ui.label("Host");
-        ui.text_edit_singleline(&mut direct.host);
-        ui.end_row();
-        ui.label("Port");
-        ui.text_edit_singleline(&mut direct.port);
-        ui.end_row();
-        ui.label("Tally company");
-        ui.text_edit_singleline(&mut direct.company);
-        ui.end_row();
-    });
+    // Plain rows, not an `egui::Grid`: a grid's first layout asks egui to run the frame again,
+    // and the second pass would no longer see a key (Esc) the first pass consumed.
+    for (label, text) in [
+        ("Host", &mut direct.host),
+        ("Port", &mut direct.port),
+        ("Tally company", &mut direct.company),
+    ] {
+        ui.horizontal(|ui| {
+            ui.label(label);
+            ui.text_edit_singleline(text);
+        });
+    }
     let running = direct.state == DirectState::Running;
     let pressed = ui
         .add_enabled(!running, egui::Button::new("Import from Tally"))

@@ -232,8 +232,16 @@ fn gstr1_figures(ret: &Gstr1Return) -> Figures {
     note_if_present(&mut notes, "Table 9B CDNR", ret.gstr1.cdnr.len());
     note_if_present(&mut notes, "Table 9B CDNUR", ret.gstr1.cdnur.len());
     note_if_present(&mut notes, "Table 6A exports", ret.gstr1.exp.len());
-    note_if_present(&mut notes, "Table 8 nil, exempt and non-GST", ret.gstr1.nil.len());
-    note_if_present(&mut notes, "Table 13 documents issued", ret.gstr1.doc_issue.len());
+    note_if_present(
+        &mut notes,
+        "Table 8 nil, exempt and non-GST",
+        ret.gstr1.nil.len(),
+    );
+    note_if_present(
+        &mut notes,
+        "Table 13 documents issued",
+        ret.gstr1.doc_issue.len(),
+    );
     Figures { rows, notes }
 }
 

@@ -139,12 +139,7 @@ fn committed(out: Result<Outcome<ledgerly_api::CommandResult>, ApiError>) {
 fn setup(name: &str, extra: bool) -> Api {
     let path = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(name);
     let _removed = std::fs::remove_file(&path);
-    let mut api = Api::create(
-        &path,
-        &company(),
-        Clock::Fixed(OffsetDateTime::UNIX_EPOCH),
-    )
-    .unwrap();
+    let mut api = Api::create(&path, &company(), Clock::Fixed(OffsetDateTime::UNIX_EPOCH)).unwrap();
     let mut ledgers = vec![
         plain(CASH, "Cash", ReservedGroup::CashInHand),
         plain(CAPITAL, "Capital", ReservedGroup::CapitalAccount),
@@ -238,7 +233,10 @@ fn home_kpis_are_the_closing_group_balances_derived_by_hand() {
     let worker = ApiWorker::spawn(setup("c4_home_kpis.ledgerly", true)).unwrap();
     let views = refreshed(&worker);
 
-    assert_eq!(view(&views, "Cash in hand").value_text, "\u{20B9}1,05,000.00");
+    assert_eq!(
+        view(&views, "Cash in hand").value_text,
+        "\u{20B9}1,05,000.00"
+    );
     assert_eq!(view(&views, "Bank accounts").value_text, "\u{20B9}0.00");
     assert_eq!(view(&views, "Receivables").value_text, "\u{20B9}25,000.00");
     assert_eq!(view(&views, "Payables").value_text, "\u{20B9}8,000.00");
@@ -261,7 +259,10 @@ fn a_balance_on_the_unusual_side_is_not_shown_as_a_plain_figure() {
         receivables.footnote_text
     );
     // The cash tile is still its own hand-derived figure: Dr 1,00,000 + 5,000.
-    assert_eq!(view(&views, "Cash in hand").value_text, "\u{20B9}1,05,000.00");
+    assert_eq!(
+        view(&views, "Cash in hand").value_text,
+        "\u{20B9}1,05,000.00"
+    );
 }
 
 #[test]

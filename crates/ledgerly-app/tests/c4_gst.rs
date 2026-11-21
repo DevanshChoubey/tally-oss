@@ -291,8 +291,11 @@ fn gstr1_shows_hand_derived_figures_from_the_worker() {
     // Table 12 HSN 998313 at 18%: taxable 1,00,000 + 50,000 = 15,000,000 paise; IGST 9,000 (V3)
     // = 900,000; CGST 9,000 (V1) = 900,000; SGST 9,000 (V1) = 900,000; cess nil.
     // Both vouchers are outward supplies with every master present, so both are Ready.
-    let worker = ApiWorker::spawn(setup("c4_gst_oct.ledgerly", vec![registration(COMPANY, 29)]))
-        .unwrap();
+    let worker = ApiWorker::spawn(setup(
+        "c4_gst_oct.ledgerly",
+        vec![registration(COMPANY, 29)],
+    ))
+    .unwrap();
     let screen = loaded(&worker);
 
     assert_eq!(screen.load_error(), None);
@@ -337,8 +340,8 @@ fn gstr3b_shows_hand_derived_figures_from_the_worker() {
     // provenance: derived. Same two sales, no purchases in October, so no input credit.
     // Table 3.1(a): taxable 1,00,000 + 50,000 = 15,000,000 paise; integrated 900,000 (V3);
     // central 900,000 and state/UT 900,000 (V1); cess nil. Table 4(A)(5): no purchase, so nil.
-    let worker = ApiWorker::spawn(setup("c4_gst_3b.ledgerly", vec![registration(COMPANY, 29)]))
-        .unwrap();
+    let worker =
+        ApiWorker::spawn(setup("c4_gst_3b.ledgerly", vec![registration(COMPANY, 29)])).unwrap();
     let screen = loaded(&worker);
 
     assert_eq!(screen.unsupported_line(GstTab::Gstr3b), None);

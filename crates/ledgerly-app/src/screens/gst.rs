@@ -906,7 +906,7 @@ impl GstScreen {
         self.draw_chips(ui, &mut events);
         ui.separator();
         let want_scroll = self.scroll_pending;
-        if let Some(error) = &self.run.error {
+        if let Some(error) = self.load_error() {
             ui.colored_label(ui.visuals().error_fg_color, format!("Error: {error}"));
         }
         match self.tab {
