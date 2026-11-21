@@ -407,7 +407,10 @@ fn key(key: Key, modifiers: Modifiers) -> RawInput {
 }
 
 fn app_with(books: Books) -> AppCtx {
-    AppCtx { books: Some(books) }
+    AppCtx {
+        books: Some(books),
+        api: None,
+    }
 }
 
 // ---- listing ---------------------------------------------------------------------------------

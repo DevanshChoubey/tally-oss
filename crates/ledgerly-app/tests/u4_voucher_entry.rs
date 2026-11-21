@@ -1176,7 +1176,10 @@ fn the_screen_draws_with_and_without_a_company() {
         frame(&ctx, &mut s, &mut closed, RawInput::default()),
         ScreenAction::Stay
     ));
-    let mut app = AppCtx { books: Some(b) };
+    let mut app = AppCtx {
+        books: Some(b),
+        api: None,
+    };
     assert!(matches!(
         frame(&ctx, &mut s, &mut app, RawInput::default()),
         ScreenAction::Stay
@@ -1188,7 +1191,10 @@ fn ctrl_a_saves_and_reports_an_empty_voucher() {
     let b = books();
     let ctx = egui::Context::default();
     let mut s = open(&b, T_JOURNAL);
-    let mut app = AppCtx { books: Some(b) };
+    let mut app = AppCtx {
+        books: Some(b),
+        api: None,
+    };
     frame(&ctx, &mut s, &mut app, RawInput::default());
     frame(&ctx, &mut s, &mut app, key(Key::A, Modifiers::COMMAND));
     // spec 5 invariant 1 and VoucherError::Empty: nothing entered cannot be saved.
@@ -1201,7 +1207,10 @@ fn escape_on_a_started_voucher_asks_then_y_closes_the_screen() {
     let ctx = egui::Context::default();
     let mut s = open(&b, T_JOURNAL);
     s.draft_mut().narration = "x".to_owned();
-    let mut app = AppCtx { books: Some(b) };
+    let mut app = AppCtx {
+        books: Some(b),
+        api: None,
+    };
     frame(&ctx, &mut s, &mut app, RawInput::default());
     let action = frame(&ctx, &mut s, &mut app, key(Key::Escape, Modifiers::NONE));
     assert!(matches!(action, ScreenAction::Stay));
@@ -1217,7 +1226,10 @@ fn escape_on_a_blank_voucher_is_left_for_the_shell() {
     let b = books();
     let ctx = egui::Context::default();
     let mut s = open(&b, T_JOURNAL);
-    let mut app = AppCtx { books: Some(b) };
+    let mut app = AppCtx {
+        books: Some(b),
+        api: None,
+    };
     frame(&ctx, &mut s, &mut app, RawInput::default());
     let action = frame(&ctx, &mut s, &mut app, key(Key::Escape, Modifiers::NONE));
     assert!(matches!(action, ScreenAction::Stay));
@@ -1241,7 +1253,10 @@ fn alt_s_does_not_switch_the_side() {
     let b = books();
     let ctx = egui::Context::default();
     let mut s = open(&b, T_JOURNAL);
-    let mut app = AppCtx { books: Some(b) };
+    let mut app = AppCtx {
+        books: Some(b),
+        api: None,
+    };
     frame(&ctx, &mut s, &mut app, RawInput::default());
     frame(&ctx, &mut s, &mut app, key(Key::S, Modifiers::ALT));
     assert_eq!(s.draft().rows[0].side, DrCr::Dr);
@@ -1253,7 +1268,10 @@ fn alt_c_opens_the_create_form_from_the_keyboard() {
     let ctx = egui::Context::default();
     let mut s = open(&b, T_JOURNAL);
     s.set_ledger_text(0, "Gupta Hardware");
-    let mut app = AppCtx { books: Some(b) };
+    let mut app = AppCtx {
+        books: Some(b),
+        api: None,
+    };
     frame(&ctx, &mut s, &mut app, RawInput::default());
     assert!(!s.is_creating());
     frame(&ctx, &mut s, &mut app, key(Key::C, Modifiers::ALT));
@@ -1266,7 +1284,10 @@ fn ctrl_s_saves_like_ctrl_a() {
     let b = books();
     let ctx = egui::Context::default();
     let mut s = open(&b, T_JOURNAL);
-    let mut app = AppCtx { books: Some(b) };
+    let mut app = AppCtx {
+        books: Some(b),
+        api: None,
+    };
     frame(&ctx, &mut s, &mut app, RawInput::default());
     frame(&ctx, &mut s, &mut app, key(Key::S, Modifiers::COMMAND));
     // Nothing entered: the same "no lines" refusal as Ctrl+A (spec 5 invariant 1).
@@ -1281,7 +1302,10 @@ fn ctrl_enter_does_not_save() {
     let b = books();
     let ctx = egui::Context::default();
     let mut s = open(&b, T_JOURNAL);
-    let mut app = AppCtx { books: Some(b) };
+    let mut app = AppCtx {
+        books: Some(b),
+        api: None,
+    };
     frame(&ctx, &mut s, &mut app, RawInput::default());
     frame(&ctx, &mut s, &mut app, key(Key::Enter, Modifiers::COMMAND));
     assert!(s.take_save_request().is_none());
@@ -1294,7 +1318,10 @@ fn arrow_down_and_up_move_the_highlight_in_a_frame() {
     let ctx = egui::Context::default();
     let mut s = open(&b, T_JOURNAL);
     s.set_ledger_text(0, "s");
-    let mut app = AppCtx { books: Some(b) };
+    let mut app = AppCtx {
+        books: Some(b),
+        api: None,
+    };
     frame(&ctx, &mut s, &mut app, RawInput::default());
     assert_eq!(s.pick_index(), 0);
     frame(&ctx, &mut s, &mut app, key(Key::ArrowDown, Modifiers::NONE));

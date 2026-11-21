@@ -27,4 +27,7 @@ pub enum ScreenAction {
 pub struct AppCtx {
     /// The open company's books, when one is open.
     pub books: Option<Books>,
+    /// The worker that runs every `ledgerly-api` call off the UI thread, when a company file is
+    /// open. Wave 2 wiring (W6, W7) moves screens from `books` to this.
+    pub api: Option<crate::worker::ApiWorker>,
 }

@@ -948,7 +948,10 @@ fn the_screen_draws_with_and_without_a_company() {
         frame(&ctx, &mut s, &mut closed, RawInput::default()),
         ScreenAction::Stay
     ));
-    let mut app = AppCtx { books: Some(b) };
+    let mut app = AppCtx {
+        books: Some(b),
+        api: None,
+    };
     assert!(matches!(
         frame(&ctx, &mut s, &mut app, RawInput::default()),
         ScreenAction::Stay
@@ -961,6 +964,7 @@ fn the_screen_draws_every_gst_state() {
     let ctx = egui::Context::default();
     let mut app = AppCtx {
         books: Some(b.clone()),
+        api: None,
     };
     let m = &b.masters;
     let mut s = open(&b, T_SALES);
@@ -990,6 +994,7 @@ fn ctrl_a_saves_and_ctrl_enter_does_not() {
     let ctx = egui::Context::default();
     let mut app = AppCtx {
         books: Some(b.clone()),
+        api: None,
     };
     let (mut s, _) = answered(&b);
     frame(&ctx, &mut s, &mut app, RawInput::default());
@@ -1009,7 +1014,10 @@ fn ctrl_a_on_an_incomplete_invoice_says_what_is_missing() {
     let b = books();
     let ctx = egui::Context::default();
     let mut s = open(&b, T_SALES);
-    let mut app = AppCtx { books: Some(b) };
+    let mut app = AppCtx {
+        books: Some(b),
+        api: None,
+    };
     frame(&ctx, &mut s, &mut app, RawInput::default());
     frame(&ctx, &mut s, &mut app, key(Key::A, Modifiers::COMMAND));
     assert!(s.error_text().unwrap().contains("Customer is required"));
@@ -1021,6 +1029,7 @@ fn escape_on_a_started_invoice_asks_then_y_closes_and_a_blank_one_is_left_to_the
     let ctx = egui::Context::default();
     let mut app = AppCtx {
         books: Some(b.clone()),
+        api: None,
     };
     // Blank: Esc is not consumed and no question is asked.
     let mut blank = open(&b, T_SALES);
@@ -1086,6 +1095,7 @@ fn shift_y_does_not_discard_a_started_invoice() {
     let ctx = egui::Context::default();
     let mut app = AppCtx {
         books: Some(b.clone()),
+        api: None,
     };
     let mut s = open(&b, T_SALES);
     s.draft_mut().narration = "x".to_owned();
