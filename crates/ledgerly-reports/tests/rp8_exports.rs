@@ -7,10 +7,10 @@
 //!   doubled);
 //! - Excel's worksheet-name rules (at most 31 characters, none of `\ / ? * [ ] :`).
 //!
-//! The plan names an `insta` snapshot of the CSV for the RP2 fixture. A snapshot file has to be
-//! produced by running the test, which this card was not allowed to do, so the CSV is asserted
-//! against a hand-derived string instead. Swapping it for `insta::assert_snapshot!` is a mechanical
-//! follow-up once the build is allowed.
+//! The plan names an `insta` snapshot of the CSV for the RP2 fixture. The hand-derived string is
+//! asserted by `csv_of_trial_balance_fixture`, and `csv_snapshot_of_trial_balance_fixture` keeps the
+//! same text as an `insta` snapshot (`tests/snapshots/`). That snapshot file was written by hand
+//! to hold the hand-derived text, and the first `cargo insta` run must confirm it.
 #![allow(
     clippy::unwrap_used,
     clippy::panic,
@@ -146,6 +146,14 @@ Total,1000.00,-1000.00
 Note: Actual vouchers as of 2026-03-31
 ";
     assert_eq!(to_csv(&trial_balance_fixture()).unwrap(), expected);
+}
+
+#[test]
+fn csv_snapshot_of_trial_balance_fixture() {
+    // provenance: derived. The snapshot holds the text that `csv_of_trial_balance_fixture` derives
+    // by hand. A change to CSV layout shows up as a snapshot diff, which needs a reason in the
+    // commit (rule E6).
+    insta::assert_snapshot!(to_csv(&trial_balance_fixture()).unwrap());
 }
 
 #[test]

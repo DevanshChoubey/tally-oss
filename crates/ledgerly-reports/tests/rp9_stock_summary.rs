@@ -862,3 +862,35 @@ fn a_godown_transfer_makes_item_consumption_unsupported() {
     assert_eq!(annexe.cells.get(2), Some(&qty(30)));
     assert_eq!(annexe.cells.get(6), Some(&qty(30)));
 }
+
+#[test]
+fn a_godown_transfer_makes_inwards_values_unsupported() {
+    // provenance: derived. The movements of the transfer test above: on 10-Apr 30 leave Main and
+    // 30 arrive in Annexe, each side valued at 300.00. The 300.00 on the receiving side is a
+    // transfer value, not a purchase value, so the inwards value is Unsupported at item level and
+    // in both godown rows. The quantities are unchanged: item inwards 30.
+    let b = books(
+        vec![item(
+            1,
+            "Widget",
+            ValuationMethod::AverageCost,
+            &[(1, 100, 10)],
+        )],
+        vec![
+            mv(1, date!(2026 - 04 - 10), 1, 1, 0, 30, rs(300)),
+            mv(1, date!(2026 - 04 - 10), 1, 2, 30, 0, rs(300)),
+        ],
+    );
+    let mut p = params(date!(2026 - 04 - 01), date!(2026 - 04 - 30));
+    p.detail = Detail::Detailed;
+    let r = run(
+        &b,
+        &p,
+        vec![valuation(1, date!(2026 - 04 - 30), 100, rs(1300))],
+    );
+    let cells = &r.rows[0].cells;
+    assert_eq!(cells.get(2), Some(&qty(30)));
+    assert!(is_unsupported(&cells[3]));
+    assert!(is_unsupported(&row_of(&r, "Main godown").cells[3]));
+    assert!(is_unsupported(&row_of(&r, "Annexe").cells[3]));
+}
