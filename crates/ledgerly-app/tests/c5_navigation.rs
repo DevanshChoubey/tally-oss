@@ -644,3 +644,266 @@ fn a_voucher_that_is_not_in_the_books_is_an_error_not_a_blank_screen() {
         Err(VoucherViewError::NotFound { id: 99 })
     );
 }
+
+// ---- the mock's screens: palette rows, stubs and the sidebar (card U4) ------------------------
+
+/// The fixture books plus one bank ledger, so the bank reconciliation has a screen to open.
+fn books_with_bank() -> Books {
+    let mut fixture = books();
+    let mut bank = plain(LedgerId(4), "HDFC Current", ReservedGroup::BankAccounts);
+    bank.bank = Some(ledgerly_model::BankDetails {
+        account_number: "000123456789".to_owned(),
+        ifsc: "FIC0000001".to_owned(),
+        bank_name: "Fictional Bank".to_owned(),
+        branch: "Test Branch".to_owned(),
+    });
+    fixture.masters.ledgers.insert(bank.id, bank);
+    fixture
+}
+
+fn books_ctx(books: Books) -> AppCtx {
+    AppCtx {
+        books: Some(books),
+        ..AppCtx::default()
+    }
+}
+
+fn report(key: &str) -> PaletteTarget {
+    PaletteTarget::Report(key.to_owned())
+}
+
+#[test]
+fn the_mock_screens_have_palette_rows_that_open_them_with_their_titles() {
+    // provenance: derived. The titles are the mock's (design/mock-v2/index.html, SCREENS[...].title
+    // and the NAV list): "Review queue", "Ask your books", "Plain-words entry", "Purchase from bill
+    // photo", "Keyboard map", "AI and privacy", "Company setup". The masters screen titles itself
+    // with the kind it shows, "Masters: Ledgers" by default (masters.rs). The bank screen titles
+    // itself "Bank reconciliation: <ledger>", so with the one bank ledger of the fixture (HDFC
+    // Current) the row opens it. The import row opens the import screen, whose own title stays
+    // "Import from Tally" (a factual interop label, pinned by u10_import_wizard.rs).
+    let ctx = books_ctx(books_with_bank());
+    let rows = navigate::screen_entries(ctx.books.as_ref());
+    let cases = [
+        ("Review queue", "Review queue"),
+        ("Ask your books", "Ask your books"),
+        ("Plain-words entry", "Plain-words entry"),
+        ("Purchase from bill photo", "Purchase from bill photo"),
+        ("Keyboard map", "Keyboard map"),
+        ("AI and privacy", "AI and privacy"),
+        ("Company setup", "Company setup"),
+        ("Masters", "Masters: Ledgers"),
+        ("Bank reconciliation", "Bank reconciliation: HDFC Current"),
+        ("Import from another app", "Import from Tally"),
+    ];
+    for (row_title, expected) in cases {
+        let row = rows
+            .iter()
+            .find(|e| e.title == row_title)
+            .unwrap_or_else(|| panic!("no palette row \"{row_title}\""));
+        match open_target(&row.target, &ctx) {
+            Ok(screen) => assert_eq!(screen.title(), expected, "row \"{row_title}\""),
+            Err(err) => panic!("row \"{row_title}\" did not open: {err}"),
+        }
+    }
+}
+
+#[test]
+fn the_stubs_open_with_their_titles_and_need_no_company() {
+    // provenance: derived. A stub reads no books, so its key opens with no company open.
+    let cases = [
+        ("review", "Review queue"),
+        ("ask", "Ask your books"),
+        ("quick-entry", "Plain-words entry"),
+        ("purchase-bill", "Purchase from bill photo"),
+        ("keys", "Keyboard map"),
+        ("ai-settings", "AI and privacy"),
+        ("setup", "Company setup"),
+    ];
+    for (key, expected) in cases {
+        match open_target(&report(key), &AppCtx::default()) {
+            Ok(screen) => assert_eq!(screen.title(), expected, "stub \"{key}\""),
+            Err(err) => panic!("stub \"{key}\" did not open: {err}"),
+        }
+    }
+}
+
+#[test]
+fn the_bank_row_says_why_it_cannot_open_without_one_bank_ledger() {
+    // provenance: derived. The fixture has no bank ledger, so the row names the reason rather
+    // than opening a screen for a ledger it cannot choose (spec 6.5 screens are per bank ledger).
+    match open_target(&report("bank-reconciliation"), &books_ctx(books())) {
+        Err(NavError::Unsupported { what, reason }) => {
+            assert_eq!(what, "Bank reconciliation");
+            assert_eq!(reason, "the company has no bank ledger");
+        }
+        other => panic!("expected the reason, got {:?}", other.map(|s| s.title())),
+    }
+}
+
+#[test]
+fn the_sidebar_has_the_mock_groups_and_entries_in_order() {
+    // provenance: derived. design/mock-v2/DESIGN.md, "Side bar groups", in order: Overview (Home,
+    // Review queue), Enter (Sales, Purchase, Payment, Receipt, Plain-words entry), Books (Day
+    // book, Balance sheet, Masters), Compliance (GST returns, Bank reconciliation), Settings (AI
+    // and privacy, Keyboard map, Company setup). 2 + 5 + 3 + 2 + 3 = 15 rows.
+    let groups: Vec<(&str, Vec<&str>)> = navigate::sidebar()
+        .iter()
+        .map(|g| {
+            (
+                g.title,
+                g.entries.iter().map(|e| e.label).collect::<Vec<_>>(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        groups,
+        vec![
+            ("Overview", vec!["Home", "Review queue"]),
+            (
+                "Enter",
+                vec![
+                    "Sales",
+                    "Purchase",
+                    "Payment",
+                    "Receipt",
+                    "Plain-words entry"
+                ]
+            ),
+            ("Books", vec!["Day book", "Balance sheet", "Masters"]),
+            ("Compliance", vec!["GST returns", "Bank reconciliation"]),
+            (
+                "Settings",
+                vec!["AI and privacy", "Keyboard map", "Company setup"]
+            ),
+        ]
+    );
+}
+
+#[test]
+fn the_sidebar_shows_the_mock_key_hints_and_no_guessed_count() {
+    // provenance: derived. The mock's key hints (DESIGN.md): Sales F8, Purchase F9, Payment F5,
+    // Receipt F6, Keyboard map ?. The classic keymap binds the same keys (keymap-classic.toml:
+    // new-sales F8, new-purchase F9, new-payment F5, new-receipt F6). The Review queue count is
+    // not guessed: it stays None until the shell reads it from the API.
+    let groups = navigate::sidebar();
+    let flat: Vec<&navigate::SidebarEntry> =
+        groups.iter().flat_map(|g| g.entries.iter()).collect();
+    let hints: Vec<(&str, &str)> = flat
+        .iter()
+        .filter_map(|e| e.hint.map(|h| (e.label, h)))
+        .collect();
+    assert_eq!(
+        hints,
+        vec![
+            ("Sales", "F8"),
+            ("Purchase", "F9"),
+            ("Payment", "F5"),
+            ("Receipt", "F6"),
+            ("Keyboard map", "?"),
+        ]
+    );
+    assert!(flat.iter().all(|e| e.count.is_none()));
+}
+
+#[test]
+fn every_sidebar_target_resolves_to_a_screen_or_a_keymap_command() {
+    // provenance: derived. A command target is a keymap action (the host opens it); every other
+    // target opens a screen with the fixture books plus one bank ledger.
+    let groups = navigate::sidebar();
+    let ctx = books_ctx(books_with_bank());
+    for entry in groups.iter().flat_map(|g| g.entries.iter()) {
+        match &entry.target {
+            PaletteTarget::Command(action) => assert!(
+                ledgerly_app::keymap::Action::ALL.contains(action),
+                "\"{}\" is not a keymap action",
+                entry.label
+            ),
+            target => {
+                if let Err(err) = open_target(target, &ctx) {
+                    panic!("sidebar row \"{}\" did not open: {err}", entry.label);
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn every_sidebar_row_has_the_same_target_as_a_palette_row() {
+    // provenance: derived. The sidebar and the palette share each target value (card U4).
+    let groups = navigate::sidebar();
+    let keymap = ledgerly_app::keymap::classic();
+    let mut rows = navigate::host_entries(&keymap);
+    rows.extend(navigate::screen_entries(Some(&books_with_bank())));
+    for entry in groups.iter().flat_map(|g| g.entries.iter()) {
+        assert!(
+            rows.iter().any(|r| r.target == entry.target),
+            "\"{}\" has no palette row with its target",
+            entry.label
+        );
+    }
+}
+
+#[test]
+fn the_reports_the_mock_does_not_show_stay_in_the_palette() {
+    // provenance: derived. The report menu keeps all eight reports (Trial Balance, Balance Sheet,
+    // Profit and Loss, Day Book, Stock Summary, Receivables and Payables Outstanding, Integrity
+    // Certificate: the menu has eight entries). The sidebar names none of the five that the mock
+    // does not show.
+    let titles: Vec<String> = menu_entries().into_iter().map(|e| e.title).collect();
+    assert_eq!(
+        titles,
+        vec![
+            "Trial Balance",
+            "Balance Sheet",
+            "Profit and Loss",
+            "Day Book",
+            "Stock Summary",
+            "Receivables Outstanding",
+            "Payables Outstanding",
+            "Integrity Certificate",
+        ]
+    );
+    let groups = navigate::sidebar();
+    let labels: Vec<&str> = groups
+        .iter()
+        .flat_map(|g| g.entries.iter())
+        .map(|e| e.label)
+        .collect();
+    for hidden in [
+        "Trial Balance",
+        "Profit and Loss",
+        "Stock Summary",
+        "Receivables Outstanding",
+        "Payables Outstanding",
+        "Integrity Certificate",
+    ] {
+        assert!(!labels.contains(&hidden), "\"{hidden}\" is in the sidebar");
+    }
+}
+
+#[test]
+fn the_import_row_has_the_new_label_and_no_row_names_another_product() {
+    // provenance: derived. Owner decision (U4 item): the palette row "Import from Tally" becomes
+    // "Import from another app". No palette row or sidebar label names another accounting
+    // product (engineering rules F5 allow the product name only as a factual interop label).
+    let keymap = ledgerly_app::keymap::classic();
+    let mut rows = navigate::host_entries(&keymap);
+    rows.extend(navigate::screen_entries(Some(&books_with_bank())));
+    let import = rows
+        .iter()
+        .find(|e| e.target == report("import-tally"))
+        .unwrap_or_else(|| panic!("no import row"));
+    assert_eq!(import.title, "Import from another app");
+    assert!(rows.iter().all(|e| e.title != "Import from Tally"));
+
+    let mut titles: Vec<String> = rows.iter().map(|e| e.title.clone()).collect();
+    for group in navigate::sidebar() {
+        titles.extend(group.entries.iter().map(|e| e.label.to_owned()));
+    }
+    for title in &titles {
+        let lower = title.to_lowercase();
+        for product in ["tally", "busy", "zoho", "vyapar", "quickbooks"] {
+            assert!(!lower.contains(product), "\"{title}\" names {product}");
+        }
+    }
+}

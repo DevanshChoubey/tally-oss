@@ -9,8 +9,11 @@
 //! | `Voucher("voucher:N")` | the read-only [`VoucherViewScreen`] |
 //! | `Report("home")` | the home screen of the open company ([`super::gateway::GatewayScreen`]) |
 //! | `Report("gst-returns")` | the GST screen for the company's one GST registration |
-//! | `Report("import-tally")` | the import screen |
+//! | `Report("import-tally")` | the import screen (its palette row reads "Import from another app") |
+//! | `Report("bank-reconciliation")` | the bank reconciliation of the company's one bank ledger (a stated reason when there are none or several) |
 //! | `Report("bank:N")` | the bank reconciliation of bank ledger N |
+//! | `Report("masters")` | the masters screen, showing ledgers |
+//! | `Report("review")`, `"ask"`, `"quick-entry"`, `"purchase-bill"`, `"keys"`, `"ai-settings"`, `"setup"` | a stub screen: its title and a "not supported yet" line ([`crate::screens::draw_stub`]) |
 //! | `Setting(name)` | nothing: there is no settings screen yet, so it says so |
 //! | `Command`, `AiIntent` | nothing: the host handles them ([`NavError::NotNavigation`]) |
 //!
@@ -39,12 +42,20 @@ use ledgerly_core::{Date, FinancialYear, GroupId, LedgerId, Period, PeriodError,
 use ledgerly_model::{Books, Scenario};
 use thiserror::Error;
 
-use crate::keymap::Keymap;
+use crate::keymap::{Action, Keymap};
 use crate::palette::{PaletteEntry, PaletteTarget, command_entries};
+use crate::screens::ai_settings::AiSettingsScreen;
+use crate::screens::ask::AskScreen;
 use crate::screens::bank::BankScreen;
 use crate::screens::gst::GstScreen;
 use crate::screens::import::ImportScreen;
+use crate::screens::keymap_map::KeymapScreen;
+use crate::screens::masters::MastersScreen;
+use crate::screens::purchase_bill::PurchaseBillScreen;
+use crate::screens::quick_entry::QuickEntryScreen;
 use crate::screens::report_view::{ReportSource, ReportViewScreen, VoucherViewScreen};
+use crate::screens::review::ReviewScreen;
+use crate::screens::setup::SetupScreen;
 use crate::{AppCtx, Screen};
 
 /// Why a pick or a menu entry did not open a screen.
@@ -212,6 +223,24 @@ pub const HOME_KEY: &str = "home";
 pub const GST_KEY: &str = "gst-returns";
 /// The palette key of the import screen.
 pub const IMPORT_KEY: &str = "import-tally";
+/// The palette key of the masters screen (ledgers).
+pub const MASTERS_KEY: &str = "masters";
+/// The palette key of the bank reconciliation of the company's one bank ledger.
+pub const BANK_RECON_KEY: &str = "bank-reconciliation";
+/// The palette key of the Review queue stub.
+pub const REVIEW_KEY: &str = "review";
+/// The palette key of the Ask your books stub.
+pub const ASK_KEY: &str = "ask";
+/// The palette key of the Plain-words entry stub.
+pub const QUICK_ENTRY_KEY: &str = "quick-entry";
+/// The palette key of the Purchase from bill photo stub.
+pub const PURCHASE_BILL_KEY: &str = "purchase-bill";
+/// The palette key of the Keyboard map stub.
+pub const KEYS_KEY: &str = "keys";
+/// The palette key of the AI and privacy stub.
+pub const AI_SETTINGS_KEY: &str = "ai-settings";
+/// The palette key of the Company setup stub.
+pub const SETUP_KEY: &str = "setup";
 
 /// The palette key of the bank reconciliation of `ledger`.
 #[must_use]
@@ -219,8 +248,9 @@ pub fn bank_key(ledger: LedgerId) -> String {
     format!("bank:{}", ledger.0)
 }
 
-/// The palette rows for the screens that are not reports: Home, GST returns, Import, and one
-/// bank reconciliation per bank ledger of `books` (none while no books are loaded).
+/// The palette rows for the screens that are not reports: Home, the Review queue, GST returns,
+/// the import, the masters, the bank reconciliation, the stubs of the mock's screens, and one bank
+/// reconciliation per bank ledger of `books` (none while no books are loaded).
 #[must_use]
 pub fn screen_entries(books: Option<&Books>) -> Vec<PaletteEntry> {
     let screen = |key: &str, title: &str| {
@@ -228,8 +258,17 @@ pub fn screen_entries(books: Option<&Books>) -> Vec<PaletteEntry> {
     };
     let mut entries = vec![
         screen(HOME_KEY, "Home"),
+        screen(REVIEW_KEY, "Review queue"),
         screen(GST_KEY, "GST Returns"),
-        screen(IMPORT_KEY, "Import from Tally"),
+        screen(IMPORT_KEY, "Import from another app"),
+        screen(MASTERS_KEY, "Masters"),
+        screen(BANK_RECON_KEY, "Bank reconciliation"),
+        screen(QUICK_ENTRY_KEY, "Plain-words entry"),
+        screen(ASK_KEY, "Ask your books"),
+        screen(PURCHASE_BILL_KEY, "Purchase from bill photo"),
+        screen(KEYS_KEY, "Keyboard map"),
+        screen(AI_SETTINGS_KEY, "AI and privacy"),
+        screen(SETUP_KEY, "Company setup"),
     ];
     if let Some(books) = books {
         for ledger in books.masters.ledgers.values() {
@@ -245,6 +284,96 @@ pub fn screen_entries(books: Option<&Books>) -> Vec<PaletteEntry> {
         }
     }
     entries
+}
+
+// ---- the sidebar -----------------------------------------------------------------------------
+
+/// One row of the sidebar.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SidebarEntry {
+    /// The label shown in the sidebar, in the mock's words.
+    pub label: &'static str,
+    /// The key hint shown beside the label (classic preset keys, as the mock shows them), if any.
+    pub hint: Option<&'static str>,
+    /// The count shown beside the label (open proposals in the Review queue). `None` until the
+    /// shell fills it from the API; no count is guessed here.
+    pub count: Option<u64>,
+    /// What choosing the row does: the same target the palette uses for it.
+    pub target: PaletteTarget,
+}
+
+/// A titled group of sidebar rows.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SidebarGroup {
+    /// The group's title.
+    pub title: &'static str,
+    /// The rows, in display order.
+    pub entries: Vec<SidebarEntry>,
+}
+
+/// One sidebar row with no count.
+fn row(label: &'static str, hint: Option<&'static str>, target: PaletteTarget) -> SidebarEntry {
+    SidebarEntry {
+        label,
+        hint,
+        count: None,
+        target,
+    }
+}
+
+/// The sidebar routes, as the mock's side bar shows them (`design/mock-v2/DESIGN.md`, "Side bar
+/// groups"): Overview, Enter, Books, Compliance and Settings, in that order. The reports the app
+/// has and the mock does not (Trial Balance, Profit and Loss, Stock Summary, the receivables and
+/// payables reports, the Integrity Certificate) are not here; they stay in the palette.
+///
+/// Sales, Purchase, Payment and Receipt are [`PaletteTarget::Command`] rows: the host opens the
+/// voucher they name. Every other row is a report-key row that [`open_target`] opens. The count of
+/// the Review queue is left `None` for the shell to fill.
+#[must_use]
+pub fn sidebar() -> Vec<SidebarGroup> {
+    let screen = |key: &str| PaletteTarget::Report(key.to_owned());
+    vec![
+        SidebarGroup {
+            title: "Overview",
+            entries: vec![
+                row("Home", None, screen(HOME_KEY)),
+                row("Review queue", None, screen(REVIEW_KEY)),
+            ],
+        },
+        SidebarGroup {
+            title: "Enter",
+            entries: vec![
+                row("Sales", Some("F8"), PaletteTarget::Command(Action::NewSales)),
+                row("Purchase", Some("F9"), PaletteTarget::Command(Action::NewPurchase)),
+                row("Payment", Some("F5"), PaletteTarget::Command(Action::NewPayment)),
+                row("Receipt", Some("F6"), PaletteTarget::Command(Action::NewReceipt)),
+                row("Plain-words entry", None, screen(QUICK_ENTRY_KEY)),
+            ],
+        },
+        SidebarGroup {
+            title: "Books",
+            entries: vec![
+                row("Day book", None, screen("day-book")),
+                row("Balance sheet", None, screen("balance-sheet")),
+                row("Masters", None, screen(MASTERS_KEY)),
+            ],
+        },
+        SidebarGroup {
+            title: "Compliance",
+            entries: vec![
+                row("GST returns", None, screen(GST_KEY)),
+                row("Bank reconciliation", None, screen(BANK_RECON_KEY)),
+            ],
+        },
+        SidebarGroup {
+            title: "Settings",
+            entries: vec![
+                row("AI and privacy", None, screen(AI_SETTINGS_KEY)),
+                row("Keyboard map", Some("?"), screen(KEYS_KEY)),
+                row("Company setup", None, screen(SETUP_KEY)),
+            ],
+        },
+    ]
 }
 
 /// Today's date in India (UTC+05:30), which the import screen and new vouchers start from.
@@ -308,6 +437,37 @@ pub fn bank_screen(books: &Books, ledger: LedgerId) -> Result<BankScreen, NavErr
     Ok(BankScreen::worker(&found.name, ledger, as_of))
 }
 
+/// The bank reconciliation of the company's only bank ledger.
+///
+/// # Errors
+/// [`NavError::Unsupported`] when the company has no bank ledger, or more than one (the screen
+/// cannot choose between them; the palette's "Bank Reconciliation: name" rows open each one).
+/// Otherwise as [`bank_screen`].
+pub fn sole_bank_screen(books: &Books) -> Result<BankScreen, NavError> {
+    let banks: Vec<LedgerId> = books
+        .masters
+        .ledgers
+        .values()
+        .filter(|ledger| ledger.bank.is_some())
+        .map(|ledger| ledger.id)
+        .collect();
+    match banks.as_slice() {
+        [only] => bank_screen(books, *only),
+        [] => Err(NavError::Unsupported {
+            what: "Bank reconciliation".to_owned(),
+            reason: "the company has no bank ledger".to_owned(),
+        }),
+        many => Err(NavError::Unsupported {
+            what: "Bank reconciliation".to_owned(),
+            reason: format!(
+                "the company has {} bank ledgers and this screen cannot choose one; \
+                 pick one by name in the palette",
+                many.len()
+            ),
+        }),
+    }
+}
+
 /// The screen a non-report key names, or `None` when `key` is not one of them.
 fn screen_for_key(key: &str, ctx: &AppCtx) -> Option<Result<Box<dyn Screen>, NavError>> {
     let built: Result<Box<dyn Screen>, NavError> = match key {
@@ -316,6 +476,17 @@ fn screen_for_key(key: &str, ctx: &AppCtx) -> Option<Result<Box<dyn Screen>, Nav
         IMPORT_KEY => ImportScreen::new(today())
             .map(|s| Box::new(s) as Box<dyn Screen>)
             .map_err(NavError::from),
+        MASTERS_KEY => Ok(Box::new(MastersScreen::new())),
+        BANK_RECON_KEY => {
+            books_of(ctx).and_then(|b| Ok(Box::new(sole_bank_screen(b)?) as Box<dyn Screen>))
+        }
+        REVIEW_KEY => Ok(Box::new(ReviewScreen)),
+        ASK_KEY => Ok(Box::new(AskScreen)),
+        QUICK_ENTRY_KEY => Ok(Box::new(QuickEntryScreen)),
+        PURCHASE_BILL_KEY => Ok(Box::new(PurchaseBillScreen)),
+        KEYS_KEY => Ok(Box::new(KeymapScreen)),
+        AI_SETTINGS_KEY => Ok(Box::new(AiSettingsScreen)),
+        SETUP_KEY => Ok(Box::new(SetupScreen)),
         other => {
             let id = parse_id(other, "bank:")?;
             books_of(ctx)
