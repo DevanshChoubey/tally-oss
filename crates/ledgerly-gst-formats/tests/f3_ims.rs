@@ -6,6 +6,9 @@
 //! pin the documented working shapes, the "user confirms every action" rule of spec section 6.3,
 //! and determinism. Every expected string is written by hand from the documented shape and the
 //! record values in the test, never copied from the writer's output.
+//!
+//! Every test in this file depends on the recalled IMS key names and action file shape, so every
+//! test is `pending` until a capture exists, whatever its arithmetic provenance says.
 
 #![allow(
     clippy::unwrap_used,
@@ -128,7 +131,7 @@ fn field_name(err: FormatError) -> String {
 #[test]
 fn parses_documents_with_their_actions() {
     let ims = parse_ims(SAMPLE).unwrap();
-    // provenance: derived - read off the fixture: A accept, R reject, N and absent mean no
+    // provenance: pending (key names recalled, not observed) - read off the fixture: A accept, R reject, N and absent mean no
     // action, P pending; val 1180.00 rupees = 118000 paise; 236.00 = 23600; 59.00 = 5900.
     assert_eq!(ims.gstin.as_deref(), Some("29ABCDE1234F1ZW"));
     let rp = ims.return_period.unwrap();
@@ -155,7 +158,7 @@ fn parses_documents_with_their_actions() {
 #[test]
 fn unknown_fields_are_preserved_in_extra() {
     let ims = parse_ims(SAMPLE).unwrap();
-    // provenance: derived - the fixture's keys the reader has no field for.
+    // provenance: pending (key names recalled, not observed) - the fixture's keys the reader has no field for.
     assert_eq!(
         serde_json::Value::Object(ims.extra.clone()),
         json!({ "ims_flag": true })
@@ -210,7 +213,7 @@ fn malformed_json_and_mistyped_fields_name_the_path() {
 
 #[test]
 fn writes_confirmed_actions_grouped_and_sorted() {
-    // provenance: derived - the documented action file shape (module doc of `ims.rs`), written by
+    // provenance: pending (key names recalled, not observed) - the documented action file shape (module doc of `ims.rs`), written by
     // hand: suppliers sorted by GSTIN text ("07..." before "24..." in each section; here each
     // section has one), documents sorted by number (INV-001 before INV-002), dates dd-mm-yyyy,
     // key order inum/ntnum, dt, typ (notes), action, rmrk. Pending observed against the portal.
@@ -255,7 +258,7 @@ fn credit_and_debit_notes_with_one_number_are_two_documents() {
             None,
         ),
     ];
-    // provenance: derived - C sorts before D in the (number, type) key; typ codes C and D.
+    // provenance: pending (key names recalled, not observed) - C sorts before D in the (number, type) key; typ codes C and D.
     let expected = concat!(
         r#"{"cdnr":[{"ctin":"07AAACL0000A1ZP","nt":["#,
         r#"{"ntnum":"N-1","dt":"09-04-2024","typ":"C","action":"A"},"#,
@@ -366,7 +369,7 @@ fn the_same_number_from_two_suppliers_is_not_a_duplicate() {
             None,
         ),
     ];
-    // provenance: derived - suppliers sorted by GSTIN text: "07..." then "24...".
+    // provenance: pending (key names recalled, not observed) - suppliers sorted by GSTIN text: "07..." then "24...".
     let expected = concat!(
         r#"{"b2b":[{"ctin":"07AAACL0000A1ZP","inv":[{"inum":"1","dt":"01-04-2024","action":"A"}]},"#,
         r#"{"ctin":"24AAACB1111C1ZT","inv":[{"inum":"1","dt":"01-04-2024","action":"A"}]}]}"#
