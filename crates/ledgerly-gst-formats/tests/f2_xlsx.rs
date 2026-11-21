@@ -14,8 +14,9 @@ use std::path::PathBuf;
 use calamine::{Data, DataType, Reader, Xlsx, open_workbook};
 use ledgerly_core::Paise;
 use ledgerly_gst_formats::FormatError;
+use ledgerly_gst_formats::gstr1::Gstr1;
 use ledgerly_gst_formats::gstr1_xlsx::{
-    Cell, SheetData, SheetSpec, check_against_template, read_layout, write_sheets,
+    Cell, SheetData, SheetSpec, check_against_template, gstr1_to_xlsx, read_layout, write_sheets,
 };
 
 fn out(name: &str) -> PathBuf {
@@ -85,7 +86,7 @@ fn gstr1_to_xlsx_is_unsupported_until_the_official_template_is_supplied() {
     // public writer must answer Unsupported with a reason, never a Field error on a template
     // field that a caller could mistake for a mismatch.
     let day = |d: u8| time::Date::from_calendar_date(2025, time::Month::October, d).unwrap();
-    let gstr1 = ledgerly_gst_formats::gstr1::Gstr1 {
+    let gstr1 = Gstr1 {
         gstin: ledgerly_core::Gstin::parse("29ABCDE1234F1ZW").unwrap(),
         period: ledgerly_core::Period::new(day(1), day(31)).unwrap(),
         aggregate_turnover: None,
@@ -100,11 +101,11 @@ fn gstr1_to_xlsx_is_unsupported_until_the_official_template_is_supplied() {
         hsn: vec![],
         doc_issue: vec![],
     };
-    let err = ledgerly_gst_formats::gstr1_xlsx::gstr1_to_xlsx(&gstr1, &out("gstr1_public")).unwrap_err();
+    let err = gstr1_to_xlsx(&gstr1, &out("gstr1_public")).unwrap_err();
     match err {
         FormatError::Unsupported { reason } => assert!(reason.contains("template"), "{reason}"),
-        other @ (FormatError::Json { .. } | FormatError::Field { .. } | FormatError::Spreadsheet(_)) => {
-            panic!("expected Unsupported, got {other:?}")
+        FormatError::Json { .. } | FormatError::Field { .. } | FormatError::Spreadsheet(_) => {
+            panic!("expected Unsupported, got a different error")
         }
     }
 }

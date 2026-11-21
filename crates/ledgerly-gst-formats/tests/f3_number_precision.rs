@@ -101,7 +101,8 @@ fn long_fraction_on_a_rate_is_refused_even_after_trailing_zeros_are_dropped() {
 fn long_number_in_an_unknown_field_is_refused_too() {
     // provenance: derived - 12345678901234567 has 17 significant digits. The field is not read by
     // the reader, but it is kept in `extra`, so the text is refused before parsing.
-    let err = parse_gstr2b(&gstr2b_with("0", r#""zz_count": 12345678901234567,"#, "18")).unwrap_err();
+    let text = gstr2b_with("0", r#""zz_count": 12345678901234567,"#, "18");
+    let err = parse_gstr2b(&text).unwrap_err();
     assert!(first_error_reason(err).contains("17 significant digits"));
 }
 
