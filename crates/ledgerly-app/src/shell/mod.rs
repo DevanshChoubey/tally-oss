@@ -1,4 +1,6 @@
-//! Window, theme switching, screen stack, breadcrumbs and tabs. **Card U1** implements this module.
+//! Window, theme switching, screen stack, breadcrumbs, tabs, top bar, sidebar and key bar. **Card
+//! U1** implements the stack and the tabs; **U3** (shell chrome) the top bar, the sidebar and the
+//! key bar.
 //!
 //! Frozen interface (plan card U1):
 //!
@@ -8,31 +10,46 @@
 //! pub fn run() -> eframe::Result<()>;   // called from main.rs (U1 also owns main.rs)
 //! ```
 //!
+//! Layout (`design/mock-v2/index.html`, the `.app` grid at lines 80-82):
+//!
+//! * a 48 px top bar ([`TOP_BAR_HEIGHT`]): brand, company, date, lock, search, AI tier, theme and
+//!   keyboard map ([`topbar`]);
+//! * a 32 px key bar at the bottom ([`KEY_BAR_HEIGHT`]): the active screen's keys
+//!   ([`crate::Screen::keys`]) and the shell's own keys ([`chrome::key_hints`]);
+//! * a sidebar on the left, 208 px, or a 60 px rail after Ctrl+\ ([`sidebar`]);
+//! * above the page: the tab strip and the breadcrumbs ([`chrome`]). The tab strip is under the
+//!   top bar, not in it, so the top bar keeps the mock's chips.
+//!
 //! What the shell does (spec 7):
 //!
 //! * Every tab is a screen stack. A screen asks for [`crate::ScreenAction::Push`] ("open on top",
 //!   resumable) or [`crate::ScreenAction::Replace`]; Esc, or a click on an earlier breadcrumb, goes back.
 //! * Esc is handled after the screen has drawn, and only when the screen did not consume it, so a
 //!   screen can keep Esc for its own pop-ups and fields.
-//! * Ctrl+T opens a tab, Ctrl+W closes the active one. The key map of card U2 is not wired in
-//!   here: the shell reads these three keys directly until Wave 2 wiring.
-//! * The shell sums nothing and shows no figures (rule C4).
+//! * Ctrl+T opens a tab, Ctrl+W closes the active one, Ctrl+\ shows or hides the sidebar's labels.
+//!   The key map of card U2 is not wired in here: the shell reads these keys directly until Wave 2
+//!   wiring.
+//! * The shell sums nothing and shows no figures (rule C4). Its chips show only what is known.
 //! * The command palette (Wave 3): the keymap's open-palette chords (Ctrl+K, Alt+G) open it on
 //!   top of the current screen, and switch-palette (Ctrl+G) opens it so the choice replaces the
 //!   screen. While it is open it takes every key, so the screen under it reacts to none. A pick
-//!   opens its screen through [`navigate::open_target`]; a pick that opens nothing leaves a
-//!   notice in the key bar ([`Shell::notice`]), never silence.
+//!   opens its screen through [`sidebar::screen_for`]; a pick that opens nothing leaves a
+//!   notice in the key bar ([`Shell::notice`]), never silence. The palette lists only the commands
+//!   that have a route ([`palette_rows`], rule B3).
+//! * The sidebar's entry for the screen on top of the stack is selected ([`Shell::selected_sidebar`]).
 //! * Opening a company replaces the welcome screen with the company's home screen
 //!   ([`GatewayScreen`]), and Ctrl+T then opens a new tab on that home screen.
 //!
-//! Not built here: split view (report beside voucher), remembering the theme between runs, and
-//! scalable fonts. They need storage or screens that other cards own.
+//! Not built here: split view (report beside voucher), remembering the theme or the rail between
+//! runs, and scalable fonts. They need storage or screens that other cards own.
 
-mod chrome;
+pub mod chrome;
 pub mod gateway;
 pub mod navigate;
+pub mod sidebar;
 mod stack;
 pub mod submit;
+pub mod topbar;
 mod welcome;
 
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -40,17 +57,25 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use egui::{Key, Modifiers};
 
 use crate::keymap::{self, Action, Keymap};
-use crate::palette::{Palette, PaletteChoice, PaletteSearch, PaletteTarget};
-use crate::theme::{self, ThemeKind};
+use crate::palette::{
+    Palette, PaletteChoice, PaletteEntry, PaletteMode, PaletteSearch, PaletteTarget,
+};
+use crate::theme::{self, ThemeKind, Tokens};
 use crate::worker::Ticket;
-use crate::{AppCtx, Screen};
+use crate::{AppCtx, Screen, ScreenAction};
 use chrome::ChromeCmd;
-use navigate::NavError;
+use sidebar::CommandRoute;
 use submit::BooksReply;
 
+pub use crate::screen::{AiTier, KeyHint};
 pub use gateway::GatewayScreen;
 pub use stack::{ScreenStack, StackChange, Tabs};
 pub use welcome::{WelcomeScreen, company_from_form};
+
+/// Height of the top bar, in points (`design/mock-v2/index.html:80`, `grid-template-rows: 48px`).
+pub const TOP_BAR_HEIGHT: f32 = 48.0;
+/// Height of the key bar, in points (`design/mock-v2/index.html:80`, `grid-template-rows: 32px`).
+pub const KEY_BAR_HEIGHT: f32 = 32.0;
 
 /// Set by a screen that wants the palette opened (the home screen's Ctrl+K link); the shell
 /// takes it on its next frame.
@@ -61,12 +86,25 @@ pub(crate) fn ask_for_palette() {
     PALETTE_WANTED.store(true, Ordering::SeqCst);
 }
 
+/// The palette rows the shell offers: every keymap command that has a route (see
+/// [`sidebar::command_route`]), then the report menu. A command with no route is left out, so no
+/// row is a dead command (rule B3).
+#[must_use]
+pub fn palette_rows(keymap: &Keymap) -> Vec<PaletteEntry> {
+    navigate::host_entries(keymap)
+        .into_iter()
+        .filter(|entry| sidebar::target_is_shown(&entry.target))
+        .collect()
+}
+
 /// The application: tabs of screen stacks, the active theme and the shared screen context.
 pub struct Shell {
     tabs: Tabs,
     app_ctx: AppCtx,
     theme: ThemeKind,
     applied_theme: Option<ThemeKind>,
+    /// Whether the sidebar is the 60 px rail (Ctrl+\) rather than the full 208 px.
+    rail: bool,
     /// The change count the books on screen were requested for.
     books_seen: u64,
     /// The books fetch in progress, if any.
@@ -79,12 +117,12 @@ pub struct Shell {
     palette: Palette,
     /// The palette's search through the API worker.
     search: PaletteSearch,
-    /// Why the last palette pick opened nothing, or why the key map could not be read.
+    /// Why the last pick or chip opened nothing, or why the key map could not be read.
     notice: Option<String>,
 }
 
 impl Shell {
-    /// A shell with one tab showing `root`, in the light theme.
+    /// A shell with one tab showing `root`, in the light theme, with the full sidebar.
     #[must_use]
     pub fn new(root: Box<dyn Screen>) -> Self {
         let (keymap, notice) = match keymap::try_classic() {
@@ -101,6 +139,7 @@ impl Shell {
             app_ctx: AppCtx::default(),
             theme: ThemeKind::default(),
             applied_theme: None,
+            rail: false,
             books_seen: submit::change_count(),
             books_ticket: None,
             books_problem: None,
@@ -122,15 +161,28 @@ impl Shell {
         &mut self.palette
     }
 
-    /// Why the last palette pick opened nothing, when it did not.
+    /// Why the last pick or chip opened nothing, when it did not.
     #[must_use]
     pub fn notice(&self) -> Option<&str> {
         self.notice.as_deref()
     }
 
+    /// Whether the sidebar is the 60 px rail.
+    #[must_use]
+    pub fn rail(&self) -> bool {
+        self.rail
+    }
+
+    /// The sidebar entry selected for the screen on top of the active stack, if one names it.
+    #[must_use]
+    pub fn selected_sidebar(&self) -> Option<&'static str> {
+        let title = self.tabs.active_stack()?.top_title();
+        sidebar::selected_label(&title)
+    }
+
     /// Opens the palette for `action` (open-palette or switch-palette) with today's rows.
     fn open_palette(&mut self, action: Action) {
-        let mut entries = navigate::host_entries(&self.keymap);
+        let mut entries = palette_rows(&self.keymap);
         entries.extend(navigate::screen_entries(self.app_ctx.books.as_ref()));
         self.palette.set_entries(entries);
         if self.palette.open_for(action) {
@@ -165,7 +217,7 @@ impl Shell {
         }
         let choice = egui::Area::new(egui::Id::unique("ledgerly-palette"))
             .order(egui::Order::Foreground)
-            .anchor(egui::Align2::CENTER_TOP, [0.0, 48.0])
+            .anchor(egui::Align2::CENTER_TOP, [0.0, TOP_BAR_HEIGHT])
             .show(ui.ctx(), |ui| {
                 egui::Frame::popup(ui.style())
                     .show(ui, |ui| {
@@ -184,51 +236,87 @@ impl Shell {
         }
     }
 
-    /// Opens what the palette pick names, or says why it opens nothing.
+    /// Runs a palette pick: a screen opens in the active tab, a shell command runs, and an
+    /// assistant request says it is not connected yet.
     fn pick(&mut self, choice: &PaletteChoice) {
-        match self.tabs.open_choice(choice, &self.app_ctx) {
-            Ok(_) => self.notice = None,
-            Err(NavError::NotNavigation) => self.run_pick(&choice.target),
-            Err(e) => self.notice = Some(e.to_string()),
-        }
-    }
-
-    /// A command or assistant pick: the shell's own commands run; any other says it cannot run
-    /// from the palette yet.
-    fn run_pick(&mut self, target: &PaletteTarget) {
-        let cmd = match target {
-            PaletteTarget::Command(Action::NewTab) => Some(ChromeCmd::NewTab),
-            PaletteTarget::Command(Action::CloseTab) => Some(ChromeCmd::CloseActiveTab),
-            PaletteTarget::Command(Action::Back) => Some(ChromeCmd::Back),
-            PaletteTarget::Command(action @ (Action::OpenPalette | Action::SwitchPalette)) => {
-                self.open_palette(*action);
-                return;
-            }
-            PaletteTarget::Command(action) => {
-                self.notice = Some(format!(
-                    "\"{}\" runs on the screen it belongs to; the palette cannot run it yet.",
-                    action.label()
-                ));
-                None
-            }
+        match &choice.target {
+            PaletteTarget::Command(action) => self.pick_command(*action, choice),
             PaletteTarget::AiIntent(name) => {
                 self.notice = Some(format!(
                     "Not supported yet: the assistant request \"{name}\" (the assistant is not \
                      connected to the app yet)."
                 ));
-                None
             }
             PaletteTarget::Report(_)
             | PaletteTarget::Master(_)
             | PaletteTarget::Voucher(_)
-            | PaletteTarget::Setting(_) => {
-                self.notice = Some("This choice opened nothing.".to_owned());
-                None
+            | PaletteTarget::Setting(_) => self.open_in_tab(&choice.target, choice.mode),
+        }
+    }
+
+    /// A command pick: the shell's own commands run here, a command with a screen opens it, and
+    /// any other command says it is not available (the palette does not list those).
+    fn pick_command(&mut self, action: Action, choice: &PaletteChoice) {
+        match action {
+            Action::NewTab => self.run_shell_cmd(ChromeCmd::NewTab),
+            Action::CloseTab => self.run_shell_cmd(ChromeCmd::CloseActiveTab),
+            Action::Back => self.run_shell_cmd(ChromeCmd::Back),
+            Action::OpenPalette | Action::SwitchPalette => self.open_palette(action),
+            other @ (Action::NewContra
+            | Action::NewPayment
+            | Action::NewReceipt
+            | Action::NewJournal
+            | Action::NewSales
+            | Action::Help
+            | Action::NewPurchase
+            | Action::ChangePeriod
+            | Action::SwitchCompany
+            | Action::CompanyFeatures
+            | Action::Configure
+            | Action::Save
+            | Action::CreateMaster
+            | Action::AlterMaster
+            | Action::MoreDetails
+            | Action::DeleteLine
+            | Action::SwitchSide
+            | Action::DeleteVoucher
+            | Action::CancelVoucher
+            | Action::DuplicateVoucher
+            | Action::InsertVoucher
+            | Action::Undo
+            | Action::ToggleDetail
+            | Action::Print
+            | Action::Export
+            | Action::Email) => match sidebar::command_route(other) {
+                CommandRoute::Screen => self.open_in_tab(&choice.target, choice.mode),
+                CommandRoute::Shell | CommandRoute::Hidden => {
+                    self.notice = Some(format!(
+                        "\"{}\" is not available from the palette.",
+                        other.label()
+                    ));
+                }
+            },
+        }
+    }
+
+    /// Runs a shell command that the palette picked, clearing the notice first.
+    fn run_shell_cmd(&mut self, cmd: ChromeCmd) {
+        self.notice = None;
+        self.run_cmd(cmd);
+    }
+
+    /// Opens `target` in the active tab: on top of the stack for [`PaletteMode::OnTop`], in place
+    /// of the top screen for [`PaletteMode::Replace`]. Nothing changes when it cannot open; the
+    /// reason goes to the notice.
+    fn open_in_tab(&mut self, target: &PaletteTarget, mode: PaletteMode) {
+        match sidebar::screen_for(target, &self.app_ctx) {
+            Ok(screen) => {
+                if let Some(stack) = self.tabs.active_stack_mut() {
+                    stack.open_screen(screen, mode);
+                }
+                self.notice = None;
             }
-        };
-        if let Some(cmd) = cmd {
-            self.notice = None;
-            self.run_cmd(cmd);
+            Err(e) => self.notice = Some(e.to_string()),
         }
     }
 
@@ -316,7 +404,8 @@ impl Shell {
         &mut self.app_ctx
     }
 
-    /// Draws one frame into `ui`: chrome, the top screen of the active tab, then key handling.
+    /// Draws one frame into `ui`: the top bar, the key bar, the sidebar, the tab strip and
+    /// breadcrumbs, the palette, the top screen of the active tab, then key handling.
     pub fn show(&mut self, ui: &mut egui::Ui) {
         if self.applied_theme != Some(self.theme) {
             theme::apply(ui.ctx(), self.theme);
@@ -332,21 +421,57 @@ impl Shell {
             .active_stack()
             .map_or_default(ScreenStack::breadcrumbs);
         let can_go_back = trail.len() > 1;
+        let keys = self
+            .tabs
+            .active_stack_mut()
+            .and_then(ScreenStack::top_mut)
+            .map_or_default(|screen| screen.keys());
+        let hints = chrome::key_hints(&keys, can_go_back);
+        let rail = self.rail;
+        let selected = self.selected_sidebar();
 
         let mut cmds = Vec::new();
+        egui::Panel::top("topbar")
+            .exact_size(TOP_BAR_HEIGHT)
+            .frame(panel_frame(&t, egui::Margin::symmetric(12, 0)))
+            .show(ui, |ui| {
+                cmds.extend(topbar::top_bar(
+                    ui,
+                    &self.app_ctx,
+                    navigate::today(),
+                    self.theme,
+                    &t,
+                ));
+            });
+        egui::Panel::bottom("keys")
+            .exact_size(KEY_BAR_HEIGHT)
+            .frame(panel_frame(&t, egui::Margin::symmetric(12, 0)))
+            .show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    if let Some(notice) = &self.notice {
+                        ui.colored_label(ui.visuals().error_fg_color, notice.as_str());
+                    }
+                    chrome::key_bar(ui, &hints, &t);
+                });
+            });
+        let width = if rail {
+            sidebar::RAIL_WIDTH
+        } else {
+            sidebar::WIDTH
+        };
+        egui::Panel::left("sidebar")
+            .exact_size(width)
+            .frame(panel_frame(&t, egui::Margin::symmetric(8, 4)))
+            .show(ui, |ui| {
+                cmds.extend(sidebar::sidebar(ui, rail, selected, &t));
+            });
         egui::Panel::top("tabs").show(ui, |ui| {
-            cmds.extend(chrome::tab_strip(ui, &self.tabs, self.theme, &t));
+            cmds.extend(chrome::tab_strip(ui, &self.tabs));
             cmds.extend(chrome::breadcrumbs(ui, &trail, &t));
-        });
-        egui::Panel::bottom("keys").show(ui, |ui| {
-            if let Some(notice) = &self.notice {
-                ui.colored_label(ui.visuals().error_fg_color, notice.as_str());
-            }
-            chrome::key_bar(ui, can_go_back, &t);
         });
         self.palette_frame(ui);
 
-        let mut screen_action = crate::ScreenAction::Stay;
+        let mut screen_action = ScreenAction::Stay;
         egui::CentralPanel::default_margins().show(ui, |ui| {
             let top = self.tabs.active_stack_mut().and_then(ScreenStack::top_mut);
             if let Some(screen) = top {
@@ -363,7 +488,7 @@ impl Shell {
         }
     }
 
-    /// Reads Esc, Ctrl+T and Ctrl+W. Esc counts only if no screen consumed it this frame.
+    /// Reads Esc, Ctrl+T, Ctrl+W and Ctrl+\. Esc counts only if no screen consumed it this frame.
     fn key_cmds(ui: &egui::Ui, can_go_back: bool) -> Vec<ChromeCmd> {
         let mut cmds = Vec::new();
         ui.input_mut(|i| {
@@ -372,6 +497,9 @@ impl Shell {
             }
             if i.consume_key(Modifiers::COMMAND, Key::W) {
                 cmds.push(ChromeCmd::CloseActiveTab);
+            }
+            if i.consume_key(Modifiers::COMMAND, Key::Backslash) {
+                cmds.push(ChromeCmd::ToggleRail);
             }
             if can_go_back && i.consume_key(Modifiers::NONE, Key::Escape) {
                 cmds.push(ChromeCmd::Back);
@@ -384,9 +512,6 @@ impl Shell {
         match cmd {
             ChromeCmd::SelectTab(i) => {
                 self.tabs.select(i);
-            }
-            ChromeCmd::CloseTab(i) => {
-                self.tabs.close(i);
             }
             ChromeCmd::CloseActiveTab => {
                 self.tabs.close(self.tabs.active_index());
@@ -409,8 +534,18 @@ impl Shell {
                 }
             }
             ChromeCmd::CycleTheme => self.theme = self.theme.next(),
+            ChromeCmd::OpenPalette => self.open_palette(Action::OpenPalette),
+            ChromeCmd::ToggleRail => self.rail = !self.rail,
+            ChromeCmd::OpenOnTop(target) => self.open_in_tab(&target, PaletteMode::OnTop),
+            ChromeCmd::Replace(target) => self.open_in_tab(&target, PaletteMode::Replace),
+            ChromeCmd::Say(text) => self.notice = Some(text),
         }
     }
+}
+
+/// A panel frame filled with the surface colour, with `margin` inside it.
+fn panel_frame(t: &Tokens, margin: egui::Margin) -> egui::Frame {
+    egui::Frame::NONE.fill(t.surface).inner_margin(margin)
 }
 
 impl eframe::App for Shell {

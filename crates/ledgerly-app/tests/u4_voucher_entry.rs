@@ -1179,6 +1179,8 @@ fn the_screen_draws_with_and_without_a_company() {
     let mut app = AppCtx {
         books: Some(b),
         api: None,
+        lock_date: None,
+        ai_tier: None,
     };
     assert!(matches!(
         frame(&ctx, &mut s, &mut app, RawInput::default()),
@@ -1194,6 +1196,8 @@ fn ctrl_a_saves_and_reports_an_empty_voucher() {
     let mut app = AppCtx {
         books: Some(b),
         api: None,
+        lock_date: None,
+        ai_tier: None,
     };
     frame(&ctx, &mut s, &mut app, RawInput::default());
     frame(&ctx, &mut s, &mut app, key(Key::A, Modifiers::COMMAND));
@@ -1210,6 +1214,8 @@ fn escape_on_a_started_voucher_asks_then_y_closes_the_screen() {
     let mut app = AppCtx {
         books: Some(b),
         api: None,
+        lock_date: None,
+        ai_tier: None,
     };
     frame(&ctx, &mut s, &mut app, RawInput::default());
     let action = frame(&ctx, &mut s, &mut app, key(Key::Escape, Modifiers::NONE));
@@ -1229,6 +1235,8 @@ fn escape_on_a_blank_voucher_is_left_for_the_shell() {
     let mut app = AppCtx {
         books: Some(b),
         api: None,
+        lock_date: None,
+        ai_tier: None,
     };
     frame(&ctx, &mut s, &mut app, RawInput::default());
     let action = frame(&ctx, &mut s, &mut app, key(Key::Escape, Modifiers::NONE));
@@ -1256,6 +1264,8 @@ fn alt_s_does_not_switch_the_side() {
     let mut app = AppCtx {
         books: Some(b),
         api: None,
+        lock_date: None,
+        ai_tier: None,
     };
     frame(&ctx, &mut s, &mut app, RawInput::default());
     frame(&ctx, &mut s, &mut app, key(Key::S, Modifiers::ALT));
@@ -1271,6 +1281,8 @@ fn alt_c_opens_the_create_form_from_the_keyboard() {
     let mut app = AppCtx {
         books: Some(b),
         api: None,
+        lock_date: None,
+        ai_tier: None,
     };
     frame(&ctx, &mut s, &mut app, RawInput::default());
     assert!(!s.is_creating());
@@ -1287,6 +1299,8 @@ fn ctrl_s_saves_like_ctrl_a() {
     let mut app = AppCtx {
         books: Some(b),
         api: None,
+        lock_date: None,
+        ai_tier: None,
     };
     frame(&ctx, &mut s, &mut app, RawInput::default());
     frame(&ctx, &mut s, &mut app, key(Key::S, Modifiers::COMMAND));
@@ -1305,6 +1319,8 @@ fn ctrl_enter_does_not_save() {
     let mut app = AppCtx {
         books: Some(b),
         api: None,
+        lock_date: None,
+        ai_tier: None,
     };
     frame(&ctx, &mut s, &mut app, RawInput::default());
     frame(&ctx, &mut s, &mut app, key(Key::Enter, Modifiers::COMMAND));
@@ -1321,6 +1337,8 @@ fn arrow_down_and_up_move_the_highlight_in_a_frame() {
     let mut app = AppCtx {
         books: Some(b),
         api: None,
+        lock_date: None,
+        ai_tier: None,
     };
     frame(&ctx, &mut s, &mut app, RawInput::default());
     assert_eq!(s.pick_index(), 0);
