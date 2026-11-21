@@ -4,9 +4,14 @@
 //! says which sentence it checks. No test here involves a number.
 
 use egui::{Event, Key, Modifiers, RawInput};
-use ledgerly_app::shell::{ScreenStack, Shell, StackChange, Tabs};
+use ledgerly_app::shell::chrome::key_hints;
+use ledgerly_app::shell::topbar::{ai_chip, company_chip, date_chip, lock_chip};
+use ledgerly_app::shell::{AiTier, KeyHint, ScreenStack, Shell, StackChange, Tabs};
 use ledgerly_app::theme::{self, ThemeKind};
 use ledgerly_app::{AppCtx, Screen, ScreenAction};
+use ledgerly_core::{CompanyId, StateCode};
+use ledgerly_model::{Address, Books, Company, EntityKind, Features, Masters, NegativeStockPolicy};
+use time::macros::date;
 
 /// Does nothing but have a title.
 struct Leaf(&'static str);
@@ -332,4 +337,96 @@ fn the_welcome_screen_shows_no_company_without_books() {
     frame(&ctx, &mut shell, RawInput::default());
     assert_eq!(titles(&shell), ["Home"]);
     assert!(shell.app_ctx_mut().books.is_none());
+}
+
+// ---- top bar and key bar (card U3) ----------------------------------------------------------
+
+/// Books of a fictional company, with no vouchers, under the name `name`.
+fn books_named(name: &str) -> Books {
+    Books {
+        company: Company {
+            ineligible_itc_default: None,
+            id: CompanyId(1),
+            name: name.to_owned(),
+            mailing_name: None,
+            address: Address::default(),
+            state: StateCode::new(29).unwrap(),
+            pan: None,
+            registrations: Vec::new(),
+            fy_start: date!(2026 - 04 - 01),
+            books_begin: date!(2026 - 04 - 01),
+            entity_kind: EntityKind::Company,
+            features: Features::default(),
+            negative_stock: NegativeStockPolicy::Block,
+        },
+        masters: Masters::default(),
+        vouchers: std::collections::BTreeMap::new(),
+        postings: Vec::new(),
+        stock_moves: Vec::new(),
+    }
+}
+
+#[test]
+fn the_top_bar_shows_the_company_name_and_year_from_the_books() {
+    // provenance: derived. The top bar's company chip is `company_chip`, which the bar draws. The
+    // name is the fixture's, and FY 2026-27 follows from the fixture's start date 1 April 2026.
+    // Catches a chip that shows no name, or one that shows a name other than the books'.
+    let ctx = AppCtx {
+        books: Some(books_named("Fictional Traders")),
+        ..AppCtx::default()
+    };
+    assert_eq!(company_chip(&ctx), "Fictional Traders FY 2026-27");
+}
+
+#[test]
+fn the_chips_say_not_known_when_the_data_is_missing() {
+    // provenance: derived. With no books and no stored AI tier, the chips say so in words; they
+    // never show a name, a tier or a lock date that is not known. Catches a chip that shows an
+    // invented value (the default would then not say "not").
+    assert_eq!(company_chip(&AppCtx::default()), "No company open");
+    assert_eq!(ai_chip(None), "AI: not set up");
+    assert_eq!(lock_chip(None), None, "no lock date means no lock chip");
+    assert_eq!(ai_chip(Some(AiTier::Local)), "AI on this computer");
+    assert_eq!(date_chip(date!(2026 - 11 - 21)), "21 Nov 2026");
+    assert_eq!(
+        lock_chip(Some(date!(2026 - 03 - 31)))
+            .unwrap_or_default()
+            .as_str(),
+        "Locked to 31 Mar 2026"
+    );
+}
+
+#[test]
+fn the_key_bar_shows_the_screen_keys_before_the_shells_own() {
+    // provenance: derived. The key bar lists the screen's keys first, then Esc (only when the stack
+    // can go back) and the shell's four keys. Catches a key bar that ignores the screen's keys,
+    // or lists Esc on a root screen.
+    let screen = [KeyHint::new("Ctrl+A", "Save")];
+    assert_eq!(
+        key_hints(&screen, true),
+        vec![
+            ("Ctrl+A".to_owned(), "Save".to_owned()),
+            ("Esc".to_owned(), "Back".to_owned()),
+            ("Ctrl+K".to_owned(), "Search".to_owned()),
+            ("Ctrl+T".to_owned(), "New tab".to_owned()),
+            ("Ctrl+W".to_owned(), "Close tab".to_owned()),
+            ("Ctrl+\\".to_owned(), "Sidebar".to_owned()),
+        ]
+    );
+    assert_eq!(
+        key_hints(&[], false).first(),
+        Some(&("Ctrl+K".to_owned(), "Search".to_owned())),
+        "a root screen with no keys starts with the shell's keys"
+    );
+}
+
+#[test]
+fn a_screen_has_no_keys_and_its_title_as_page_title_unless_it_says_so() {
+    // provenance: derived. The defaults of `Screen::page_title`, `subtitle` and `keys` are the
+    // title, none and none, so a screen that has not opted in is drawn as before. Catches a
+    // default that invents a subtitle or a key.
+    let screen = Leaf("Home");
+    assert_eq!(screen.page_title(), "Home");
+    assert_eq!(screen.subtitle(), None);
+    assert!(screen.keys().is_empty());
 }
