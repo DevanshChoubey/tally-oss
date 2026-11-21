@@ -49,7 +49,7 @@ fn ok_check() -> EngineCheck {
     EngineCheck::Ok {
         figures: vec![ComputedFigure {
             label: "Total".to_owned(),
-            amount: Paise::new(25_000_00),
+            amount: Paise::new(2_500_000),
         }],
     }
 }
@@ -148,7 +148,7 @@ fn a_draft_is_drawn_under_both_labels() {
 
 #[test]
 fn engine_figures_are_drawn_in_indian_grouping_as_given() {
-    // Derived: Paise 25_000_00 is 25,000 rupees; Indian grouping of 25000 is "25,000", then ".00".
+    // Derived: Paise 2_500_000 is 25,000 rupees; Indian grouping of 25000 is "25,000", then ".00".
     let mut s = screen_with(ok_check());
     let (_, texts) = frames(&mut s, &RawInput::default());
     assert!(has(&texts, "25,000.00"));
@@ -171,8 +171,8 @@ fn a_report_answer_shows_the_query_with_it() {
         query: "trial_balance, April 2025".to_owned(),
         answer: ReportAnswer::Computed(vec![ComputedFigure {
             label: "Debit total".to_owned(),
-            // Derived: 1_00_000 rupees = 1_00_000_00 paise; Indian grouping "1,00,000.00".
-            amount: Paise::new(1_00_000_00),
+            // Derived: 1_00_000 rupees = 10_000_000 paise; Indian grouping "1,00,000.00".
+            amount: Paise::new(10_000_000),
         }]),
     }));
     let (_, texts) = frames(&mut s, &RawInput::default());

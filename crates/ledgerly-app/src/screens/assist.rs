@@ -332,6 +332,11 @@ impl AssistScreen {
     }
 
     /// Why Accept is disabled, or `None` when it is enabled.
+    ///
+    /// For a voucher draft this follows the engine's verdict alone. Blank fields (below the
+    /// confidence threshold) and ledgers still to be created are the engine check's business:
+    /// the host must answer `Blocked` for a draft with either, and only an `Ok` verdict enables
+    /// Accept. The panel does not second-guess the engine with rules of its own.
     #[must_use]
     pub fn accept_blocked_reason(&self) -> Option<String> {
         if self.tier == Tier::Off {
