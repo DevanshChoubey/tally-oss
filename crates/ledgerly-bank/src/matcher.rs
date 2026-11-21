@@ -38,11 +38,11 @@
 //! A search that would be unbounded is bounded (at most [`POOL_CAP`] vouchers nearest in date are
 //! considered for a group, and at most [`MAX_ALTERNATIVES`] alternatives are returned). Omitting a
 //! suggestion is safe; stating a wrong one is not, so no case is guessed.
-
-A candidate is ambiguous when another candidate uses one of its vouchers or lines, when its line
-or voucher has more than one candidate, or when its search was cut short by [`POOL_CAP`]. Every
-candidate of a pass, ambiguous or not, reserves its lines and vouchers, so a later pass never
-offers them again: an ambiguous candidate is shown, and nothing else is claimed on its items.
+//!
+//! A candidate is ambiguous when another candidate uses one of its vouchers or lines, when its line
+//! or voucher has more than one candidate, or when its search was cut short by [`POOL_CAP`]. Every
+//! candidate of a pass, ambiguous or not, reserves its lines and vouchers, so a later pass never
+//! offers them again: an ambiguous candidate is shown, and nothing else is claimed on its items.
 
 use std::collections::{BTreeMap, BTreeSet};
 

@@ -396,10 +396,6 @@ fn is_https(endpoint: &str) -> bool {
 }
 
 /// Builds the redacted message for an input (rule: redaction before any send).
-#[expect(
-    clippy::too_many_lines,
-    reason = "one match over every ProposalInput kind; splitting it hides the redaction order"
-)]
 fn prepare(input: &ProposalInput) -> Result<Prepared, AssistError> {
     let mut redactor = Redactor::default();
     let (task, input_text) = match input {
@@ -721,7 +717,9 @@ fn date_in_text(text: &str, date: Date) -> bool {
         .split(|c: char| !c.is_ascii_digit())
         .filter(|p| !p.is_empty())
         .collect();
-    parts.windows(3).any(|window| date_in(&window.join("-"), date))
+    parts
+        .windows(3)
+        .any(|window| date_in(&window.join("-"), date))
 }
 
 /// A value type that can be compared with the text it claims to be read from.
@@ -882,7 +880,11 @@ fn numbers(text: &str, with_units: bool) -> Vec<Decimal> {
             continue;
         };
         let after = text.get(e..).unwrap_or_default();
-        let multiplier = if with_units { unit_multiplier(after) } else { 1 };
+        let multiplier = if with_units {
+            unit_multiplier(after)
+        } else {
+            1
+        };
         if !number_token_ends(after, multiplier) {
             continue;
         }

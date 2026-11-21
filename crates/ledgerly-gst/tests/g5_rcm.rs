@@ -639,8 +639,8 @@ supplier = "any"
         &company(false, true),
     )
     .unwrap()
-        .value()
-        .unwrap();
+    .value()
+    .unwrap();
     match l {
         RcmLiability::Payable(p) => assert_eq!(p.class_id, "gta"),
         RcmLiability::NotApplicable(r) => panic!("expected Payable, got {r:?}"),

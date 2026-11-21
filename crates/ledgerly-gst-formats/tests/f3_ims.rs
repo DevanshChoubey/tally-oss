@@ -120,7 +120,9 @@ fn three_records() -> Vec<ImsActionRecord> {
 fn field_name(err: FormatError) -> String {
     match err {
         FormatError::Field { field, .. } => field,
-        other @ (FormatError::Json { .. } | FormatError::Spreadsheet(_) | FormatError::Unsupported { .. }) => {
+        other @ (FormatError::Json { .. }
+        | FormatError::Spreadsheet(_)
+        | FormatError::Unsupported { .. }) => {
             panic!("expected FormatError::Field, got {other:?}")
         }
     }
@@ -184,7 +186,9 @@ fn an_unknown_action_code_is_an_error_with_its_path() {
             assert_eq!(path, "$.data.docdata.b2b[0].inv[1].action");
             assert!(reason.contains('Z'), "reason was: {reason}");
         }
-        other @ (FormatError::Field { .. } | FormatError::Spreadsheet(_) | FormatError::Unsupported { .. }) => {
+        other @ (FormatError::Field { .. }
+        | FormatError::Spreadsheet(_)
+        | FormatError::Unsupported { .. }) => {
             panic!("expected FormatError::Json, got {other:?}")
         }
     }
@@ -194,7 +198,9 @@ fn an_unknown_action_code_is_an_error_with_its_path() {
 fn malformed_json_and_mistyped_fields_name_the_path() {
     match parse_ims("{\"data\": ").unwrap_err() {
         FormatError::Json { path, .. } => assert_eq!(path, "$"),
-        other @ (FormatError::Field { .. } | FormatError::Spreadsheet(_) | FormatError::Unsupported { .. }) => {
+        other @ (FormatError::Field { .. }
+        | FormatError::Spreadsheet(_)
+        | FormatError::Unsupported { .. }) => {
             panic!("expected FormatError::Json, got {other:?}")
         }
     }
@@ -203,7 +209,9 @@ fn malformed_json_and_mistyped_fields_name_the_path() {
         FormatError::Json { path, .. } => {
             assert_eq!(path, "$.data.docdata.b2b[0].inv[1].val");
         }
-        other @ (FormatError::Field { .. } | FormatError::Spreadsheet(_) | FormatError::Unsupported { .. }) => {
+        other @ (FormatError::Field { .. }
+        | FormatError::Spreadsheet(_)
+        | FormatError::Unsupported { .. }) => {
             panic!("expected FormatError::Json, got {other:?}")
         }
     }

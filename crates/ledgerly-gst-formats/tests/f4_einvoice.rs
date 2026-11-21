@@ -509,9 +509,9 @@ fn output_is_deterministic() {
 /// Intra-state sample with item 1's CGST one paise above `rate x AssAmt / 2`, the item total and
 /// the CGST total moved with it so that only the item head is wrong.
 ///
-/// provenance: pending — CGST = AssAmt x GstRt / 2 rounded to whole paise is recalled from the
+/// provenance: pending — CGST = `AssAmt` x `GstRt` / 2 rounded to whole paise is recalled from the
 /// schema, not yet quoted from it (rule A5). Hand arithmetic: 1000.00 x 18% / 2 = 90.00 exactly,
-/// so 9_000 paise is the only acceptable CGST and 9_001 must be refused.
+/// so `9_000` paise is the only acceptable CGST and `9_001` must be refused.
 #[test]
 fn item_cgst_is_checked_against_rate_times_assessable() {
     let mut e = intra_sample();
@@ -541,13 +541,16 @@ fn inter_item_of(taxable: i64, igst: i64) -> EInvoice {
     e
 }
 
-/// provenance: pending — IGST = AssAmt x GstRt / 100 rounded to whole paise is recalled from the
-/// schema, not yet quoted from it (rule A5). Hand arithmetic: 10_001 paise x 12% = 1_200.12
-/// paise, so 1_200 and 1_201 are the two whole-paise roundings and 1_202 is not.
+/// provenance: pending — IGST = `AssAmt` x `GstRt` / 100 rounded to whole paise is recalled from the
+/// schema, not yet quoted from it (rule A5). Hand arithmetic: `10_001` paise x 12% = `1_200.12`
+/// paise, so `1_200` and `1_201` are the two whole-paise roundings and `1_202` is not.
 #[test]
 fn item_igst_accepts_the_paise_either_side_of_the_exact_tax() {
     for ok in [1_200, 1_201] {
-        assert!(validate_einvoice(&inter_item_of(10_001, ok)).is_ok(), "{ok}");
+        assert!(
+            validate_einvoice(&inter_item_of(10_001, ok)).is_ok(),
+            "{ok}"
+        );
     }
     assert_eq!(
         invalid_fields(&inter_item_of(10_001, 1_202)),
@@ -555,8 +558,8 @@ fn item_igst_accepts_the_paise_either_side_of_the_exact_tax() {
     );
 }
 
-/// provenance: pending — TotAmt = Qty x UnitPrice is recalled from the schema, not yet quoted from
-/// it (rule A5). Hand arithmetic: 2 x 250.50 = 501.00 = 50_100 paise; 50_101 is not a whole-paise
+/// provenance: pending — `TotAmt` = Qty x `UnitPrice` is recalled from the schema, not yet quoted from
+/// it (rule A5). Hand arithmetic: 2 x 250.50 = 501.00 = `50_100` paise; `50_101` is not a whole-paise
 /// rounding of that exact product.
 #[test]
 fn item_gross_amount_is_qty_times_unit_price() {

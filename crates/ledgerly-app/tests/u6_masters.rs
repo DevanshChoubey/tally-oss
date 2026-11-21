@@ -1316,7 +1316,10 @@ fn shift_y_does_not_confirm_a_master_delete() {
     // draw_confirm). Shift+Y is not that key, so the question stays open and nothing is queued.
     frame(&ctx, &mut s, &mut app, key(Key::Y, Modifiers::SHIFT));
     assert_eq!(s.pending_delete().map(|t| t.id), Some(RENT.0));
-    assert!(s.take_requests().is_empty());
+    assert_eq!(
+        s.take_requests(),
+        [] as [ledgerly_app::screens::masters::MasterRequest; 0]
+    );
     frame(&ctx, &mut s, &mut app, key(Key::Y, Modifiers::NONE));
     assert_eq!(s.take_requests().len(), 1);
 }

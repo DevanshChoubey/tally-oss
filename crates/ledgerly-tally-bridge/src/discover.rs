@@ -18,17 +18,14 @@
 //! casing Tally uses in replies has not been observed, and the names involved cannot collide.
 //! Whether Tally accepts a UTF-8 request body is also unobserved.
 //!
-//! The request is the one builder of card X1, `ledgerly_tally_xml::request::list_companies_request`
-//! (a `List of Companies` export). That report name is **pending an observed capture**, and it is
-//! not the inline `Company` collection (research R8 section 2.3 example (b)) that this reply
-//! reader was first written for. The reply is expected to list each company as
-//! `<COMPANY NAME="..."><NAME>...</NAME></COMPANY>` inside `<COLLECTION>`; both the attribute and
-//! the child element are accepted. Until a real TallyPrime reply to the X1 request is captured,
-//! the reply shape is `pending`, and a reply of any other shape returns
-//! [`BridgeError::UnexpectedResponse`].
+//! Shape assumption, **not yet observed**: the request is an inline collection over `Company`
+//! (research R8 section 2.3 example (b)), and the reply lists each company as
+//! `<COMPANY NAME="..."><NAME>...</NAME></COMPANY>` inside `<COLLECTION>`. Both the attribute and
+//! the child element are accepted. Until a real TallyPrime reply is captured the reply shape is
+//! `pending`; a reply of any other shape returns [`BridgeError::UnexpectedResponse`].
+//! Card X1 builds a different request (`List of Companies`); which one to keep is open.
 
 use ledgerly_tally_xml::TallyXmlError;
-use ledgerly_tally_xml::request::list_companies_request;
 use thiserror::Error;
 
 use crate::pull::PullError;
@@ -85,6 +82,16 @@ pub enum BridgeError {
         /// What failed.
         reason: String,
     },
+}
+
+/// The request sent to Tally to list its loaded companies.
+fn list_companies_request() -> String {
+    "<ENVELOPE><HEADER><VERSION>1</VERSION><TALLYREQUEST>Export</TALLYREQUEST>\
+     <TYPE>Collection</TYPE><ID>LedgerlyCompanies</ID></HEADER>\
+     <BODY><DESC><STATICVARIABLES><SVEXPORTFORMAT>$$SysName:XML</SVEXPORTFORMAT></STATICVARIABLES>\
+     <TDL><TDLMESSAGE><COLLECTION NAME=\"LedgerlyCompanies\"><TYPE>Company</TYPE>\
+     <FETCH>Name</FETCH></COLLECTION></TDLMESSAGE></TDL></DESC></BODY></ENVELOPE>"
+        .to_owned()
 }
 
 /// Lists the names of the companies Tally has loaded, in the order Tally gives them, each once.
@@ -518,18 +525,11 @@ mod tests {
     }
 
     #[test]
-    fn request_is_the_request_builder_of_card_x1() {
-        // provenance: derived: the request is the one builder of card X1 (one place for the
-        // request text, so the two cannot drift). The X1 request itself is pending an observed
-        // capture; this test pins only that it is the shared builder's text.
-        let sent = list_companies_request();
-        assert!(sent.starts_with("<ENVELOPE>"));
-        assert!(sent.contains("<TALLYREQUEST>Export</TALLYREQUEST>"));
-        assert_eq!(
-            sent,
-            ledgerly_tally_xml::request::list_companies_request(),
-            "discover must send the X1 builder's text"
-        );
+    fn request_is_an_export_of_the_company_collection() {
+        let r = list_companies_request();
+        assert!(r.starts_with("<ENVELOPE>"));
+        assert!(r.contains("<TALLYREQUEST>Export</TALLYREQUEST>"));
+        assert!(r.contains("<TYPE>Company</TYPE>"));
     }
 
     #[test]

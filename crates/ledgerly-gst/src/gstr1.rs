@@ -178,7 +178,11 @@ pub fn build_gstr1(
         ));
     }
     let mut evals = Vec::new();
-    for v in books.vouchers.values().filter(|v| in_return_period(v, period)) {
+    for v in books
+        .vouchers
+        .values()
+        .filter(|v| in_return_period(v, period))
+    {
         evals.push(evaluate(books, v, pack)?);
     }
     flag_duplicates(&mut evals);

@@ -108,6 +108,9 @@ fn tax_bounds(items: &[EwayItem], rate: fn(&EwayItem) -> Decimal) -> Option<(Dec
     Some((low, high))
 }
 
+/// A tax head: its JSON name, its stated value and the item rate it is checked against.
+type TaxHead = (&'static str, Paise, fn(&EwayItem) -> Decimal);
+
 /// Each header tax head (CGST, SGST, IGST, cess) must lie within rounding of the sum of the
 /// items' tax for that head (CGST Act s.15 and the rate in percent: tax is value times rate).
 ///
@@ -122,7 +125,7 @@ fn check_tax_heads(e: &EwayBill, errs: &mut Vec<FormatError>) {
     if !rates_defined {
         return;
     }
-    let heads: [(&str, Paise, fn(&EwayItem) -> Decimal); 4] = [
+    let heads: [TaxHead; 4] = [
         ("cgstValue", e.cgst_value, |it| it.cgst_rate),
         ("sgstValue", e.sgst_value, |it| it.sgst_rate),
         ("igstValue", e.igst_value, |it| it.igst_rate),

@@ -791,7 +791,10 @@ fn a_report_query_that_moves_the_period_or_names_an_unstated_ledger_is_rejected(
     };
     let faithful = query("2026-04-01", &["HDFC Bank"]);
     assert!(
-        matches!(propose_with_reply(&faithful, &input), Ok(Proposal::ReportQuery(_))),
+        matches!(
+            propose_with_reply(&faithful, &input),
+            Ok(Proposal::ReportQuery(_))
+        ),
         "the faithful query was refused"
     );
     let moved_period = query("2026-07-01", &["HDFC Bank"]);

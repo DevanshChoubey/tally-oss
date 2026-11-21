@@ -391,11 +391,11 @@ mod tests {
 
     #[test]
     fn paise_in_an_element_added_to_a_changed_length_array_is_shown_in_rupees() {
-        // derived: 150000 paise = Rs 1,500.00 (100 paise to the rupee; Indian grouping 1,500).
+        // derived: 150_000 paise = Rs 1,500.00 (100 paise to the rupee; Indian grouping 1,500).
         // The second element is new, so its amount is "(absent)" before and Rs 1,500.00 after.
         let got = changes(
-            &json!({"lines": [{"amount": 150000}]}),
-            &json!({"lines": [{"amount": 150000}, {"amount": 150000}]}),
+            &json!({"lines": [{"amount": 150_000}]}),
+            &json!({"lines": [{"amount": 150_000}, {"amount": 150_000}]}),
         );
         assert_eq!(
             got,
@@ -424,10 +424,10 @@ mod tests {
 
     #[test]
     fn null_to_a_struct_with_paise_is_shown_field_by_field_in_rupees() {
-        // derived: 150000 paise = Rs 1,500.00. The optional struct was null (None) and is now
+        // derived: 150_000 paise = Rs 1,500.00. The optional struct was null (None) and is now
         // present, so its taxable amount is "(absent)" before and Rs 1,500.00 after.
         let before = json!({"gst": null});
-        let after = json!({"gst": {"taxable": 150000}});
+        let after = json!({"gst": {"taxable": 150_000}});
         let got = changes(&before, &after);
         assert_eq!(got, vec![triple("gst.taxable", "(absent)", "Rs 1,500.00")]);
     }

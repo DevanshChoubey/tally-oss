@@ -675,8 +675,8 @@ fn portal_documents_order_is_b2b_then_cdnr() {
 /// the same supplier with IGST 180000 paise (10,000.00 x 18 percent).
 /// Portal `INV1` (IGST 180000): at Normalised it fits both books and is ambiguous, so it is matched
 /// to neither. Portal `INV-ZZ` (IGST 180000, dated 15 Oct 2026) fits no number level; at
-/// DateTolerance it fits only `INV-1` (same date, no tax difference). `INV1` also fits `INV-1` at
-/// DateTolerance, so `INV-1` is claimed twice and `INV-ZZ` must stay unmatched. On the old code
+/// `DateTolerance` it fits only `INV-1` (same date, no tax difference). `INV1` also fits `INV-1` at
+/// `DateTolerance`, so `INV-1` is claimed twice and `INV-ZZ` must stay unmatched. On the old code
 /// `INV-ZZ` was matched to `INV-1` (Tolerance, suggested Pending) because `INV1` was skipped.
 #[test]
 fn an_ambiguous_document_reserves_its_books_at_later_levels() {

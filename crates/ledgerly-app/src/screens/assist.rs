@@ -415,7 +415,10 @@ fn voucher_blocked_reason(draft: &DraftView) -> Option<String> {
         return Some(reason);
     }
     if let Some(field) = draft.fields.iter().find(|f| f.is_blank()) {
-        return Some(format!("{} is blank. Type it in before accepting.", field.label));
+        return Some(format!(
+            "{} is blank. Type it in before accepting.",
+            field.label
+        ));
     }
     if draft
         .lines

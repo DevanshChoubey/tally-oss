@@ -595,7 +595,9 @@ fn with_wal(path: &Path) -> std::path::PathBuf {
 fn flip_first_byte_of_event(path: &Path, seq: i64) {
     let conn = Connection::open(path).unwrap();
     let mut event: Vec<u8> = conn
-        .query_row("SELECT event FROM events WHERE seq = ?1", [seq], |r| r.get(0))
+        .query_row("SELECT event FROM events WHERE seq = ?1", [seq], |r| {
+            r.get(0)
+        })
         .unwrap();
     if let Some(byte) = event.first_mut() {
         *byte ^= 0x01;
@@ -622,7 +624,11 @@ fn backup_refuses_a_company_file_whose_audit_chain_is_altered() {
         matches!(&result, Err(StoreError::ChainBroken(EventSeq(2)))),
         "{result:?}"
     );
-    assert!(!backups.join("books-backup-19700101T000000Z.ledgerly").exists());
+    assert!(
+        !backups
+            .join("books-backup-19700101T000000Z.ledgerly")
+            .exists()
+    );
 }
 
 #[test]

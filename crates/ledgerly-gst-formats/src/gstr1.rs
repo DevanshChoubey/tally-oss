@@ -31,13 +31,13 @@ mod emit;
 mod notes;
 mod other;
 
-use ledgerly_core::{Date, Gstin, Hsn, Paise, Period, Qty, Rate, StateCode};
-use crate::FormatError;
 use self::b2b::{b2b_json, b2ba_json, gstin_json};
 use self::b2c::{b2cl_json, b2cs_json};
 use self::emit::{amt, fp, kv, obj};
 use self::notes::{cdnr_json, cdnur_json};
 use self::other::{doc_issue_json, exp_json, hsn_json, nil_json};
+use crate::FormatError;
+use ledgerly_core::{Date, Gstin, Hsn, Paise, Period, Qty, Rate, StateCode};
 
 /// How the tax on a line is split.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

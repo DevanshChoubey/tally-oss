@@ -195,7 +195,7 @@ fn apply_migrations(tx: &Transaction<'_>, from: u32) -> Result<(), StoreError> {
 }
 
 /// Reads the schema version, rejecting files that are not Ledgerly company files.
-fn read_version(conn: &Connection, path: &Path) -> Result<u32, StoreError> {
+pub(crate) fn read_version(conn: &Connection, path: &Path) -> Result<u32, StoreError> {
     let not_ours = || StoreError::NotACompanyFile(path.display().to_string());
     let app_id: i32 = conn
         .pragma_query_value(None, "application_id", |r| r.get(0))

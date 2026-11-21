@@ -507,7 +507,10 @@ fn a_failed_refresh_keeps_the_confirmed_actions_for_the_next_loaded_feed() {
     assert_eq!(s.decision(0), Some(ImsAction::Accept));
     assert_eq!(s.decision(1), Some(ImsAction::Reject));
     assert_eq!(s.confirmed_actions().len(), 2);
-    assert!(s.notice().is_none(), "the same rows came back, nothing dropped");
+    assert!(
+        s.notice().is_none(),
+        "the same rows came back, nothing dropped"
+    );
 }
 
 #[test]
@@ -521,7 +524,11 @@ fn a_not_loaded_feed_then_a_loaded_feed_without_a_row_drops_only_that_row() {
     let mut rest = rows();
     rest.remove(0);
     s.set_recon(Feed::Loaded(rest));
-    assert_eq!(s.decision(0), Some(ImsAction::Reject), "VL-3381 is now row 0");
+    assert_eq!(
+        s.decision(0),
+        Some(ImsAction::Reject),
+        "VL-3381 is now row 0"
+    );
     assert_eq!(s.confirmed_actions().len(), 1);
     assert!(
         s.notice()

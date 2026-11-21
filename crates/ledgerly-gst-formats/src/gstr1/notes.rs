@@ -1,21 +1,11 @@
 //! GSTR-1 table 9B (credit and debit notes, CDNR and CDNUR) JSON.
 
-use crate::FormatError;
-use super::{CdnrParty, CdnurNote, CdnurType, NoteKind};
 use super::b2b::{gstin_json, inv_type_code};
 use super::emit::{
-    amt,
-    date_str,
-    doc_number,
-    flag,
-    items_json,
-    kv,
-    map_arr,
-    obj,
-    pos_str,
-    require_some,
-    text,
+    amt, date_str, doc_number, flag, items_json, kv, map_arr, obj, pos_str, require_some, text,
 };
+use super::{CdnrParty, CdnurNote, CdnurType, NoteKind};
+use crate::FormatError;
 
 pub(super) fn note_code(k: NoteKind) -> &'static str {
     match k {

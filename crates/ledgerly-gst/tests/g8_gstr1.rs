@@ -760,7 +760,10 @@ fn a_sale_is_reported_in_the_period_of_its_time_of_supply_not_its_voucher_date()
     assert!(jan_buckets.iter().all(|x| x.voucher != VoucherId(1)));
     assert_eq!(bucket_of(&jan_buckets, 2).bucket, Bucket::Ready);
     assert_eq!(jan.b2b.first().unwrap().invoices.len(), 1);
-    assert_eq!(jan.b2b.first().unwrap().invoices.first().unwrap().num, "INV-2");
+    assert_eq!(
+        jan.b2b.first().unwrap().invoices.first().unwrap().num,
+        "INV-2"
+    );
     assert_eq!(
         jan.b2b.first().unwrap().invoices.first().unwrap().date,
         date!(2026 - 02 - 03)
@@ -773,7 +776,10 @@ fn a_sale_is_reported_in_the_period_of_its_time_of_supply_not_its_voucher_date()
     let (feb_r, feb_buckets) = feb;
     assert!(feb_buckets.iter().all(|x| x.voucher != VoucherId(2)));
     assert_eq!(bucket_of(&feb_buckets, 1).bucket, Bucket::Ready);
-    assert_eq!(feb_r.b2b.first().unwrap().invoices.first().unwrap().num, "INV-1");
+    assert_eq!(
+        feb_r.b2b.first().unwrap().invoices.first().unwrap().num,
+        "INV-1"
+    );
     assert_eq!(
         feb_r.b2b.first().unwrap().invoices.first().unwrap().date,
         date!(2026 - 01 - 31)

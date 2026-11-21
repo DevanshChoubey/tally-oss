@@ -604,7 +604,11 @@ fn j_and_k_do_not_move_the_focus_on_the_statement_tab() {
     assert_eq!(s.focused_line_no(), Some(1));
     frame(&ctx, &mut s, key(Key::B));
     frame(&ctx, &mut s, key(Key::J));
-    assert_eq!(s.focused_line_no(), Some(2), "J moves again on the Matching tab");
+    assert_eq!(
+        s.focused_line_no(),
+        Some(2),
+        "J moves again on the Matching tab"
+    );
 }
 
 #[test]

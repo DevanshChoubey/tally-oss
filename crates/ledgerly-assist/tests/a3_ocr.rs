@@ -835,7 +835,12 @@ fn tax_line_without_a_rate_takes_the_one_ledger_with_no_fixed_rate() {
     // rate, so it is chosen (same rule as the rate-less SGST ledger in the other tests).
     let m = masters(vec![
         ledger(SUPPLIER, "Kaveri Stationers", Some(party(None)), None),
-        ledger(CGST, "Input CGST", None, Some(tax(TaxLedgerKind::Cgst, None))),
+        ledger(
+            CGST,
+            "Input CGST",
+            None,
+            Some(tax(TaxLedgerKind::Cgst, None)),
+        ),
         ledger(
             LedgerId(22),
             "CGST 9%",
@@ -860,8 +865,18 @@ fn an_unrecognised_tax_label_is_never_given_a_tax_ledger() {
     // so it passes before and after the rate fix; the rate-less case above is the bug.
     let m = masters(vec![
         ledger(SUPPLIER, "Kaveri Stationers", Some(party(None)), None),
-        ledger(CGST, "Input CGST", None, Some(tax(TaxLedgerKind::Cgst, None))),
-        ledger(SGST, "Input SGST", None, Some(tax(TaxLedgerKind::Sgst, None))),
+        ledger(
+            CGST,
+            "Input CGST",
+            None,
+            Some(tax(TaxLedgerKind::Cgst, None)),
+        ),
+        ledger(
+            SGST,
+            "Input SGST",
+            None,
+            Some(tax(TaxLedgerKind::Sgst, None)),
+        ),
     ]);
     let draft = read(&with_extra("Surcharge 5% 750.00"), &m);
     assert!(

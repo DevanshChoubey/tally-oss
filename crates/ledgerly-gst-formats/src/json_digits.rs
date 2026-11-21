@@ -85,7 +85,7 @@ fn significant_digits(token: &[u8]) -> usize {
     let digits: Vec<u8> = mantissa
         .iter()
         .copied()
-        .filter(|b| b.is_ascii_digit())
+        .filter(u8::is_ascii_digit)
         .collect();
     match (
         digits.iter().position(|&d| d != b'0'),
@@ -96,9 +96,17 @@ fn significant_digits(token: &[u8]) -> usize {
     }
 }
 
+#[expect(
+    clippy::naive_bytecount,
+    reason = "error path only, run once per refused number; not worth a new dependency"
+)]
 fn too_long(bytes: &[u8], start: usize, digits: usize) -> FormatError {
     let before = bytes.get(..start).unwrap_or(&[]);
-    let line = before.iter().filter(|&&b| b == b'\n').count().saturating_add(1);
+    let line = before
+        .iter()
+        .filter(|&&b| b == b'\n')
+        .count()
+        .saturating_add(1);
     let line_start = before
         .iter()
         .rposition(|&b| b == b'\n')

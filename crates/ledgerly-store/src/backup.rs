@@ -404,7 +404,11 @@ fn application_id(conn: &Connection) -> Result<i64, StoreError> {
 fn copy_and_open(backup: &Path, target: &Path) -> Result<SqliteStore, StoreError> {
     // Read before copying: the backup's newest event, WAL included. `fs::copy` copies only the
     // main database file, so events still in a `-wal` file next to the backup are not in `target`.
-    let source_head = chain_head(&open_read_only(backup)?)?;
+    let source = open_read_only(backup)?;
+    // A file that is not a company file has no events table; say so before reading it.
+    crate::schema::read_version(&source, backup)?;
+    let source_head = chain_head(&source)?;
+    drop(source);
     std::fs::copy(backup, target).map_err(|source| io_error(target, source))?;
     let restored = SqliteStore::open(target)?;
     let restored_head = chain_head(&restored.conn)?;

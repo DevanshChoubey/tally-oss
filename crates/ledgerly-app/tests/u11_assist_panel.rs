@@ -360,9 +360,14 @@ fn a_bank_match_and_a_mapping_are_accepted_only_when_the_engine_check_is_ok() {
     s.set_proposal(ProposalView::BankMatch(suggestion_with(blocked_check())));
     assert!(!s.can_accept());
     let reason = s.accept_blocked_reason().unwrap();
-    assert!(reason.contains("the engine computed a different total"), "{reason}");
+    assert!(
+        reason.contains("the engine computed a different total"),
+        "{reason}"
+    );
 
-    s.set_proposal(ProposalView::Mapping(suggestion_with(EngineCheck::NotChecked)));
+    s.set_proposal(ProposalView::Mapping(suggestion_with(
+        EngineCheck::NotChecked,
+    )));
     assert!(!s.can_accept());
     assert!(!s.accept());
     assert_eq!(s.take_action(), None);
@@ -373,7 +378,9 @@ fn set_check_re_enables_accept_on_a_bank_match() {
     // provenance: derived - the engine's verdict arrives after the match is shown; set_check
     // updates it on the bank match on show, as it does on a voucher draft.
     let mut s = AssistScreen::new(Tier::Cloud);
-    s.set_proposal(ProposalView::BankMatch(suggestion_with(EngineCheck::NotChecked)));
+    s.set_proposal(ProposalView::BankMatch(suggestion_with(
+        EngineCheck::NotChecked,
+    )));
     assert!(!s.can_accept());
     s.set_check(ok_check());
     assert!(s.can_accept());

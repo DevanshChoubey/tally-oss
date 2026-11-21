@@ -532,10 +532,14 @@ fn a_pass_two_claim_cannot_take_a_voucher_that_an_ambiguous_line_offers() {
         &[],
     );
     assert!(out.iter().any(|c| c.statement_lines == vec![1]));
-    for c in out.iter().filter(|c| {
-        c.vouchers.contains(&VoucherId(1)) || c.vouchers.contains(&VoucherId(2))
-    }) {
-        assert!(c.ambiguous, "unambiguous claim on a contested voucher: {c:?}");
+    for c in out
+        .iter()
+        .filter(|c| c.vouchers.contains(&VoucherId(1)) || c.vouchers.contains(&VoucherId(2)))
+    {
+        assert!(
+            c.ambiguous,
+            "unambiguous claim on a contested voucher: {c:?}"
+        );
     }
 }
 
@@ -555,10 +559,8 @@ fn a_pair_found_while_the_search_pool_was_cut_short_is_ambiguous() {
     }
     vouchers.push(receipt(id, 8, 30_000));
     vouchers.push(receipt(id + 1, 8, 70_000));
-    let mut later = id + 2;
-    for k in 0..4_i64 {
+    for (later, k) in (id + 2..).zip(0..4_i64) {
         vouchers.push(receipt(later, 8, 80_000 + k));
-        later += 1;
     }
     let out = run(vec![line(1, 5, 0, 100_000, "IN")], vouchers, &[]);
     assert_eq!(out.len(), 1, "{out:?}");

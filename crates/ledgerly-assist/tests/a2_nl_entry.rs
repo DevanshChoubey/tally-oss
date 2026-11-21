@@ -698,7 +698,11 @@ fn a_model_amount_with_malformed_grouping_is_an_output_error_not_a_draft() {
     );
     match err {
         AssistError::Output { reason } => assert!(reason.contains("grouping"), "{reason}"),
-        other => panic!("expected an output error, got {other:?}"),
+        other @ (AssistError::Cancelled
+        | AssistError::Disabled
+        | AssistError::Network { .. }
+        | AssistError::Key { .. }
+        | AssistError::Unsupported(_)) => panic!("expected an output error, got {other:?}"),
     }
 }
 

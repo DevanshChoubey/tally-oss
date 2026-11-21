@@ -1,9 +1,9 @@
 //! Shared JSON text helpers for the GSTR-1 writer. Everything is built as text so that
 //! amounts keep two decimals.
 
-use ledgerly_core::{Date, Decimal, Paise, Period, StateCode};
-use crate::FormatError;
 use super::{ItemTax, LineItem};
+use crate::FormatError;
+use ledgerly_core::{Date, Decimal, Paise, Period, StateCode};
 
 pub(super) fn field_err(field: &str, reason: &str) -> FormatError {
     FormatError::Field {

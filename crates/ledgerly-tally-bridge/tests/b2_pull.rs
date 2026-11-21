@@ -379,7 +379,10 @@ fn voucher_request_fetches_the_status_and_invoice_flags() {
         .find(|r| r.contains("<TYPE>Voucher</TYPE>"))
         .expect("a voucher request");
     for flag in ["ISCANCELLED", "ISOPTIONAL", "ISPOSTDATED", "ISINVOICE"] {
-        assert!(voucher.contains(flag), "voucher request lacks {flag}: {voucher}");
+        assert!(
+            voucher.contains(flag),
+            "voucher request lacks {flag}: {voucher}"
+        );
     }
 }
 

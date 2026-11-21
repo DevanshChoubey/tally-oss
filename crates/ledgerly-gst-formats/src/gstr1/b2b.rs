@@ -1,21 +1,11 @@
 //! GSTR-1 table 4 (B2B) and table 9A (amended B2B, B2BA) JSON.
 
-use ledgerly_core::Gstin;
-use crate::FormatError;
-use super::{B2bInvoice, B2bInvoiceType, B2bParty, B2baParty};
 use super::emit::{
-    amt,
-    date_str,
-    doc_number,
-    flag,
-    items_json,
-    kv,
-    map_arr,
-    obj,
-    pos_str,
-    require_some,
-    text,
+    amt, date_str, doc_number, flag, items_json, kv, map_arr, obj, pos_str, require_some, text,
 };
+use super::{B2bInvoice, B2bInvoiceType, B2bParty, B2baParty};
+use crate::FormatError;
+use ledgerly_core::Gstin;
 
 pub(super) fn inv_type_code(t: B2bInvoiceType) -> &'static str {
     match t {

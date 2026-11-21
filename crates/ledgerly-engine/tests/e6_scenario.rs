@@ -238,7 +238,12 @@ fn reversing_journal_in_named_scenario_is_unsupported_not_dropped() {
     // Same rule as the memorandum case, for a reversing journal (invariant 3).
     let b = books(vec![
         posting(1, date!(2026 - 05 - 01), VoucherStatus::Regular, T_SALES),
-        posting(2, date!(2026 - 05 - 03), VoucherStatus::Regular, T_REVERSING),
+        posting(
+            2,
+            date!(2026 - 05 - 03),
+            VoucherStatus::Regular,
+            T_REVERSING,
+        ),
     ]);
     let named = Scenario::Including(vec![VoucherStatus::Optional]);
     let result = effective_postings(&b, &named, AS_OF);

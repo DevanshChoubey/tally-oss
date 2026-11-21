@@ -647,7 +647,12 @@ fn compound_unit_is_converted_only_when_it_is_defined_on_that_unit() {
     let line = inv_line(5, 2, 4_800, vec![alloc(1, None, 2, 4_800)]);
     post(
         &mut store,
-        vec![voucher(1, PURCHASE, date(2026, Month::April, 5), vec![line])],
+        vec![voucher(
+            1,
+            PURCHASE,
+            date(2026, Month::April, 5),
+            vec![line],
+        )],
     );
     assert_error_names(&stock_moves(&store, None), 1, "cannot be converted");
 }
@@ -703,7 +708,12 @@ fn load_books_fails_when_a_voucher_cannot_be_projected_instead_of_leaving_its_st
     let line = inv_line(PCS, 1, 100, vec![alloc(1, None, 1, 100)]);
     post(
         &mut store,
-        vec![voucher(1, STOCK_JOURNAL, date(2026, Month::April, 5), vec![line])],
+        vec![voucher(
+            1,
+            STOCK_JOURNAL,
+            date(2026, Month::April, 5),
+            vec![line],
+        )],
     );
     let result = store.load_books(None);
     let message = match &result {

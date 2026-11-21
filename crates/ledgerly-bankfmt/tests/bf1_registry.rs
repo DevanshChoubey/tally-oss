@@ -588,7 +588,10 @@ credit = 3
 "#;
     let err = load("c-labels.toml", csv).unwrap_err();
     let reason = registry_reason(err, "c-labels");
-    assert!(reason.contains("'opening_label' applies to xlsx only"), "{reason}");
+    assert!(
+        reason.contains("'opening_label' applies to xlsx only"),
+        "{reason}"
+    );
 
     let blank = r#"
 id = "x-blank"
@@ -605,5 +608,8 @@ amount = 2
 "#;
     let err = load("x-blank.toml", blank).unwrap_err();
     let reason = registry_reason(err, "x-blank");
-    assert!(reason.contains("'closing_label' must not be empty"), "{reason}");
+    assert!(
+        reason.contains("'closing_label' must not be empty"),
+        "{reason}"
+    );
 }

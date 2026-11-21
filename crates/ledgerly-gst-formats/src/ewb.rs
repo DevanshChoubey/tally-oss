@@ -37,7 +37,6 @@ use time::Date;
 
 use ledgerly_core::{Gstin, Hsn, Paise, StateCode};
 
-
 /// `version` written to the bulk-generation upload file. Recalled, see the module docs.
 pub const EWB_BULK_VERSION: &str = "1.0.0621";
 

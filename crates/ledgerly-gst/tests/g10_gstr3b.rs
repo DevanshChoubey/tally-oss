@@ -511,7 +511,13 @@ fn a_blocked_motor_car_is_unsupported_even_next_to_eligible_purchases() {
     // provenance: derived — the same rule with an eligible purchase in the period: the working as
     // a whole is Unsupported, so the eligible line's credit is not shown as the full 4(A)(5).
     let books = books_with(vec![
-        ledger_purchase(11, date!(2026 - 01 - 15), SUPPLIER_KA, PURCHASE18, 5_000_000),
+        ledger_purchase(
+            11,
+            date!(2026 - 01 - 15),
+            SUPPLIER_KA,
+            PURCHASE18,
+            5_000_000,
+        ),
         car_purchase(),
     ]);
     assert_unsupported(&books);

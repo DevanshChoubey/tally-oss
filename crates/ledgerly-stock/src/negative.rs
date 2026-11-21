@@ -208,13 +208,7 @@ fn voucher_issues(
         }
         // Compound units (1 box = 12 pcs) convert through the unit chain, as in every other
         // quantity conversion; an unrelated unit or an overflow is an error, never a guess.
-        let base = crate::units::to_base_units(
-            Qty(line.qty.0),
-            line.unit,
-            item,
-            &books.masters,
-        )?
-        .0;
+        let base = crate::units::to_base_units(Qty(line.qty.0), line.unit, item, &books.masters)?.0;
         issues.entry(item.id).or_default().push(Step {
             date: v.date,
             voucher: v.id,

@@ -1,21 +1,11 @@
 //! GSTR-1 exports (table 6), nil-rated (table 8), HSN summary (table 12) and documents
 //! issued (table 13) JSON.
 
-use crate::FormatError;
-use super::{DocIssue, DocType, ExpGroup, ExpInvoice, ExpItem, HsnRow, NilRow, NilSupplyKind};
 use super::emit::{
-    amt,
-    arr,
-    date_str,
-    dec,
-    doc_number,
-    field_err,
-    kv,
-    map_arr,
-    obj,
-    require_some,
-    text,
+    amt, arr, date_str, dec, doc_number, field_err, kv, map_arr, obj, require_some, text,
 };
+use super::{DocIssue, DocType, ExpGroup, ExpInvoice, ExpItem, HsnRow, NilRow, NilSupplyKind};
+use crate::FormatError;
 
 pub(super) fn exp_item_json(item: &ExpItem) -> String {
     let mut f = vec![

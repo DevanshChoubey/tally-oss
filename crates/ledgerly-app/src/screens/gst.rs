@@ -528,7 +528,7 @@ impl GstScreen {
             }
             Feed::NotLoaded | Feed::Unsupported(_) => {
                 self.decisions.clear();
-                self.held = before.clone();
+                self.held.clone_from(&before);
             }
         }
         self.recon = feed;

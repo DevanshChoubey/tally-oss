@@ -102,7 +102,9 @@ fn date(y: i32, m: Month, d: u8) -> Date {
 fn json_path(err: FormatError) -> String {
     match err {
         FormatError::Json { path, .. } => path,
-        other @ (FormatError::Field { .. } | FormatError::Spreadsheet(_) | FormatError::Unsupported { .. }) => {
+        other @ (FormatError::Field { .. }
+        | FormatError::Spreadsheet(_)
+        | FormatError::Unsupported { .. }) => {
             panic!("expected FormatError::Json, got {other:?}")
         }
     }
@@ -322,7 +324,9 @@ fn text_that_is_not_json_is_an_error_at_the_root_with_line_and_column() {
             assert!(reason.contains("line"), "reason was: {reason}");
             assert!(reason.contains("column"), "reason was: {reason}");
         }
-        other @ (FormatError::Field { .. } | FormatError::Spreadsheet(_) | FormatError::Unsupported { .. }) => {
+        other @ (FormatError::Field { .. }
+        | FormatError::Spreadsheet(_)
+        | FormatError::Unsupported { .. }) => {
             panic!("expected FormatError::Json, got {other:?}")
         }
     }

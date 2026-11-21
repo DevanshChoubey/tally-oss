@@ -540,7 +540,11 @@ fn with_default_flags(flags: &str) -> String {
     let mut out = String::from(flags);
     for tag in ["ISCANCELLED", "ISOPTIONAL", "ISPOSTDATED", "ISINVOICE"] {
         if !flags.contains(&format!("<{tag}>")) {
-            out.push_str(&format!("<{tag}>No</{tag}>"));
+            out.push('<');
+            out.push_str(tag);
+            out.push_str(">No</");
+            out.push_str(tag);
+            out.push('>');
         }
     }
     out

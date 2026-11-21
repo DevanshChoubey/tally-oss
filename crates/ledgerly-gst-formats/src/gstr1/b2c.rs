@@ -1,21 +1,11 @@
 //! GSTR-1 table 5 (B2C large, B2CL) and table 7 (B2C small, B2CS) JSON.
 
-use crate::FormatError;
-use super::{B2clGroup, B2csKind, B2csRow};
 use super::b2b::gstin_json;
 use super::emit::{
-    amt,
-    date_str,
-    dec,
-    doc_number,
-    items_json,
-    kv,
-    map_arr,
-    obj,
-    pos_str,
-    require_some,
-    tax_fields,
+    amt, date_str, dec, doc_number, items_json, kv, map_arr, obj, pos_str, require_some, tax_fields,
 };
+use super::{B2clGroup, B2csKind, B2csRow};
+use crate::FormatError;
 
 pub(super) fn b2cl_json(list: &[B2clGroup]) -> Result<String, FormatError> {
     map_arr(list, |i, group| {
