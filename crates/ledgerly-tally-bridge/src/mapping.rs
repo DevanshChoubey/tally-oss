@@ -19,12 +19,15 @@
 //! * **Ledgers.** Name, group, Tally identity, bill-wise and cost-centre flags. An opening balance
 //!   other than zero is [`MapError::Unsupported`]: the sign convention of a master's
 //!   `OPENINGBALANCE` is documented nowhere in the research (R8 documents voucher lines only), so
-//!   the value stays pending instead of being guessed.
+//!   the value stays pending instead of being guessed. An `OPENINGBALANCE` that is absent (or
+//!   empty) is [`MapError::Unsupported`] too: an absent value is unknown, never zero.
 //! * **Voucher types.** The base kind comes from the `PARENT` (a custom type) or the name (a
 //!   built-in one), matched against the names in research note R1.
 //! * **Vouchers.** Accounting vouchers with ledger lines and bill allocations. Inventory lines are
-//!   [`MapError::Unsupported`]. Every element the mapping does not model is kept in
-//!   `Voucher::extra` (rule A9).
+//!   [`MapError::Unsupported`]. The `ISCANCELLED`, `ISOPTIONAL`, `ISPOSTDATED` and `ISINVOICE`
+//!   flags must each be present: a flag absent from the response is unknown, so the voucher is
+//!   [`MapError::Unsupported`] rather than read as regular or as a plain accounting voucher.
+//!   Every element the mapping does not model is kept in `Voucher::extra` (rule A9).
 //! * **Other masters** (stock items, units, godowns, cost centres and categories, stock groups)
 //!   are not mapped yet: each one raises a [`MapWarning`] saying so. Vouchers that use them are
 //!   refused, so no number depends on a master that was skipped.
@@ -647,7 +650,7 @@ impl State {
             ledger_lines.push(self.map_line(&label, entry)?);
         }
         let status = status_of(&label, &v.extra)?;
-        let invoice = node_flag(&label, &v.extra, "ISINVOICE")?.unwrap_or(false);
+        let invoice = required_node_flag(&label, &v.extra, "ISINVOICE")?;
         self.register_guid(guid)?;
         let id = VoucherId(self.next_voucher.take("vouchers")?);
         self.events.push(Event::VoucherPosted(Voucher {
@@ -859,9 +862,28 @@ fn node_flag(object: &str, extra: &[RawNode], tag: &str) -> Result<Option<bool>,
     }
 }
 
+/// A Yes/No child of a voucher that must be present. An absent flag is unknown, not `No`: the
+/// pull requests every such flag, so a response without one is refused (rule A1).
+fn required_node_flag(object: &str, extra: &[RawNode], tag: &str) -> Result<bool, MapError> {
+    node_flag(object, extra, tag)?.ok_or_else(|| MapError::Unsupported {
+        what: format!("{object} has no <{tag}> in the export"),
+        reason: format!(
+            "an absent <{tag}> is unknown, not No, so the voucher is refused until the flag is \
+             read (pending an observed capture)"
+        ),
+    })
+}
+
 fn check_opening_is_zero(object: &str, extra: &[RawElement]) -> Result<(), MapError> {
+    // An absent or empty OPENINGBALANCE is unknown, not zero: the pull requests the field, so a
+    // ledger without it is refused rather than imported with an opening of zero (rule A1).
     let Some(text) = extra_text(extra, "OPENINGBALANCE") else {
-        return Ok(());
+        return Err(MapError::Unsupported {
+            what: format!("{object} has no OPENINGBALANCE in the export"),
+            reason: "an absent opening balance is unknown, not zero; whether Tally omits zero \
+                     openings is pending an observed capture"
+                .to_owned(),
+        });
     };
     let value = Decimal::from_str(text).map_err(|_| {
         bad_value(
@@ -917,8 +939,8 @@ fn voucher_label(v: &TVoucher) -> String {
     )
 }
 
-/// Status from the `ISCANCELLED`, `ISOPTIONAL` and `ISPOSTDATED` flags. A voucher with none of
-/// them set is regular; with more than one set it is refused.
+/// Status from the `ISCANCELLED`, `ISOPTIONAL` and `ISPOSTDATED` flags, all three of which must be
+/// present. A voucher with none of them set is regular; with more than one set it is refused.
 fn status_of(label: &str, extra: &[RawNode]) -> Result<VoucherStatus, MapError> {
     let flags = [
         ("ISCANCELLED", VoucherStatus::Cancelled),
@@ -927,7 +949,7 @@ fn status_of(label: &str, extra: &[RawNode]) -> Result<VoucherStatus, MapError> 
     ];
     let mut set: Vec<VoucherStatus> = Vec::new();
     for (tag, status) in flags {
-        if node_flag(label, extra, tag)? == Some(true) {
+        if required_node_flag(label, extra, tag)? {
             set.push(status);
         }
     }
