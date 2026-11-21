@@ -16,9 +16,11 @@
 //!   as blank ([`BLANK_TEXT`]), never as a guess (spec 6.8: "below threshold -> blank").
 //! * Every number the engine recomputed sits under the label [`LABEL_ENGINE_COMPUTED`]. The panel
 //!   never adds, subtracts or rounds anything (rule C4): it draws the `Paise` it was handed.
-//! * Accept is disabled unless the engine's check of a voucher draft is [`EngineCheck::Ok`]. A
-//!   blocked, unsupported or not-yet-checked draft cannot be accepted. A question about the books
-//!   is an answer, not a proposal to accept, so it has no Accept at all.
+//! * Accept is disabled unless the engine's check is [`EngineCheck::Ok`]: for a voucher draft, a
+//!   bank match and a mapping alike. A blocked, unsupported or not-yet-checked proposal cannot be
+//!   accepted. A voucher draft also needs every field and line filled and no ledger still to be
+//!   created. A question about the books is an answer, not a proposal to accept, so it has no
+//!   Accept at all.
 //! * The panel never posts anything. Accept and Reject are recorded as a [`PanelAction`] that the
 //!   Wave 2 wiring takes with [`AssistScreen::take_action`]; the engine posts, after a person
 //!   confirms (spec 6.8, rule A10).
@@ -181,6 +183,10 @@ pub struct SuggestionView {
     pub reason: Option<String>,
     /// Confidence in per-mille.
     pub confidence_permille: u16,
+    /// The engine's verdict on the match or mapping. Accept is enabled only on
+    /// [`EngineCheck::Ok`], as for a voucher draft: a match whose amounts disagree is `Blocked`
+    /// (spec 6.8). Until the engine has checked it, it is [`EngineCheck::NotChecked`].
+    pub check: EngineCheck,
 }
 
 /// What a question about the books came to.
@@ -277,11 +283,15 @@ impl AssistScreen {
         self.action = None;
     }
 
-    /// Updates the engine's verdict on the voucher draft on show. Does nothing when the proposal
-    /// on show is not a voucher.
+    /// Updates the engine's verdict on the proposal on show: the voucher draft, or the bank match
+    /// or mapping. Does nothing for an answer to a question, which has no verdict to update.
     pub fn set_check(&mut self, check: EngineCheck) {
-        if let Some(ProposalView::Voucher(draft)) = self.proposal.as_mut() {
-            draft.check = check;
+        match self.proposal.as_mut() {
+            Some(ProposalView::Voucher(draft)) => draft.check = check,
+            Some(ProposalView::BankMatch(view) | ProposalView::Mapping(view)) => {
+                view.check = check;
+            }
+            Some(ProposalView::Report(_)) | None => {}
         }
     }
 
@@ -333,10 +343,10 @@ impl AssistScreen {
 
     /// Why Accept is disabled, or `None` when it is enabled.
     ///
-    /// For a voucher draft this follows the engine's verdict alone. Blank fields (below the
-    /// confidence threshold) and ledgers still to be created are the engine check's business:
-    /// the host must answer `Blocked` for a draft with either, and only an `Ok` verdict enables
-    /// Accept. The panel does not second-guess the engine with rules of its own.
+    /// A voucher draft needs an engine verdict of `Ok` and also no blank field or line and no
+    /// ledger still to be created: a posting with any of those would carry an unresolved value.
+    /// A bank match or a mapping needs `Ok` on its own [`SuggestionView::check`]. An answer to a
+    /// question has nothing to accept.
     #[must_use]
     pub fn accept_blocked_reason(&self) -> Option<String> {
         if self.tier == Tier::Off {
@@ -344,19 +354,9 @@ impl AssistScreen {
         }
         match self.proposal.as_ref() {
             None => Some("Nothing has been proposed.".to_owned()),
-            Some(ProposalView::Voucher(draft)) => match &draft.check {
-                EngineCheck::Ok { .. } => None,
-                EngineCheck::NotChecked => {
-                    Some("The engine has not checked this draft yet.".to_owned())
-                }
-                EngineCheck::Blocked { field, reason } => {
-                    Some(format!("Blocked at {field}: {reason}"))
-                }
-                EngineCheck::Unsupported { what, reason } => {
-                    Some(format!("Not supported yet ({what}): {reason}"))
-                }
-            },
-            Some(ProposalView::BankMatch(_) | ProposalView::Mapping(_)) => None,
+            Some(ProposalView::Voucher(draft)) => voucher_blocked_reason(draft),
+            Some(ProposalView::BankMatch(view)) => check_blocked_reason(&view.check, "match"),
+            Some(ProposalView::Mapping(view)) => check_blocked_reason(&view.check, "mapping"),
             Some(ProposalView::Report(_)) => Some("An answer has nothing to accept.".to_owned()),
         }
     }
@@ -394,6 +394,43 @@ impl AssistScreen {
 // ---------------------------------------------------------------------------------------------
 // Drawing
 // ---------------------------------------------------------------------------------------------
+
+/// Why an engine verdict blocks Accept, or `None` for `Ok`. `noun` names the thing checked.
+fn check_blocked_reason(check: &EngineCheck, noun: &str) -> Option<String> {
+    match check {
+        EngineCheck::Ok { .. } => None,
+        EngineCheck::NotChecked => Some(format!("The engine has not checked this {noun} yet.")),
+        EngineCheck::Blocked { field, reason } => Some(format!("Blocked at {field}: {reason}")),
+        EngineCheck::Unsupported { what, reason } => {
+            Some(format!("Not supported yet ({what}): {reason}"))
+        }
+    }
+}
+
+/// Why a voucher draft cannot be accepted, or `None`. The engine's verdict comes first. Then a
+/// blank field or line (below the confidence threshold) and a ledger still to be created block
+/// Accept: the posting path would otherwise get a value nobody confirmed.
+fn voucher_blocked_reason(draft: &DraftView) -> Option<String> {
+    if let Some(reason) = check_blocked_reason(&draft.check, "draft") {
+        return Some(reason);
+    }
+    if let Some(field) = draft.fields.iter().find(|f| f.is_blank()) {
+        return Some(format!("{} is blank. Type it in before accepting.", field.label));
+    }
+    if draft
+        .lines
+        .iter()
+        .any(|line| line.ledger.is_blank() || line.amount.is_blank())
+    {
+        return Some(
+            "A line has a blank ledger or amount. Fill it in before accepting.".to_owned(),
+        );
+    }
+    draft
+        .create_ledgers
+        .first()
+        .map(|name| format!("Create the ledger \"{name}\" before accepting."))
+}
 
 fn draw_field_row(ui: &mut Ui, field: &ProposedField) {
     ui.label(&field.label);
@@ -508,6 +545,8 @@ fn draw_suggestion(ui: &mut Ui, view: &SuggestionView, id: &str) {
         view.confidence_permille / 10,
         view.confidence_permille % 10
     ));
+    ui.separator();
+    draw_check(ui, &view.check);
 }
 
 fn draw_report(ui: &mut Ui, view: &ReportView) {
