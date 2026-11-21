@@ -1,9 +1,10 @@
 //! Card B4: reconciliation report tests.
 //!
-//! Provenance. Every figure is `derived` by hand from the scenario below; none is taken from our
-//! engine's output. The Tally side is hand-built `TReportRow`s (and one recalled-layout XML
-//! document), NOT an observed capture: the Tally export layout is `pending` an `observed`
-//! capture (plan Prerequisite 4), so these tests say nothing about what TallyPrime writes.
+//! Provenance. Our-side figures are `derived` by hand from the scenario below; none is taken from
+//! our engine's output. The Tally side is hand-built `TReportRow`s (and one recalled-layout XML
+//! document), NOT an observed capture. Every expected value that depends on a Tally row, its
+//! columns or the sign convention is therefore `pending` an `observed` capture (plan Prerequisite
+//! 4): these tests say nothing about what TallyPrime writes.
 //!
 //! Scenario (all names fictional), the card's sale on 10-Apr-2026:
 //!
@@ -247,7 +248,7 @@ fn find<'a>(lines: &'a [ReconLine], label: &str) -> &'a ReconLine {
 
 #[test]
 fn equal_trial_balance_is_all_green() {
-    // provenance: derived — the scenario in the module comment; every Tally row equals the
+    // provenance: pending (Tally side, layout not observed) — the scenario in the module comment; every Tally row equals the
     // hand-derived closing balance, and the totals are 1,11,800 on each side.
     let r = reconcile(&card_books(), &reports(tally_tb()), period()).unwrap();
 
@@ -272,7 +273,7 @@ fn equal_trial_balance_is_all_green() {
 
 #[test]
 fn a_one_rupee_difference_is_listed_with_both_values() {
-    // provenance: derived — ours Customer One is Dr 11,800.00 = 1,180,000 paise; Tally's row says
+    // provenance: pending (Tally side, layout not observed) — ours Customer One is Dr 11,800.00 = 1,180,000 paise; Tally's row says
     // 11,801.00 = 1,180,100 paise. ours - theirs = 1,180,000 - 1,180,100 = -100 paise.
     let mut tb = tally_tb();
     tb[1] = row("Customer One", 11_801, 0);
@@ -299,7 +300,7 @@ fn a_one_rupee_difference_is_listed_with_both_values() {
 
 #[test]
 fn a_totals_difference_is_listed() {
-    // provenance: derived — ours credit total 1,11,800.00; Tally's 1,11,801.00; difference
+    // provenance: pending (Tally side, layout not observed) — ours credit total 1,11,800.00; Tally's 1,11,801.00; difference
     // -100 paise on the credit side, none on the debit side.
     let mut tb = tally_tb();
     tb.pop();
@@ -319,7 +320,7 @@ fn a_totals_difference_is_listed() {
 
 #[test]
 fn a_tally_row_with_no_master_is_listed_and_not_green() {
-    // provenance: derived — "Ghost Ledger" is not a name in the chart above.
+    // provenance: pending (Tally side, layout not observed) — "Ghost Ledger" is not a name in the chart above.
     let mut tb = tally_tb();
     tb.insert(0, row("Ghost Ledger", 5, 0));
     let r = reconcile(&card_books(), &reports(tb), period()).unwrap();
@@ -334,7 +335,7 @@ fn a_tally_row_with_no_master_is_listed_and_not_green() {
 
 #[test]
 fn a_ledger_of_ours_that_tally_omits_is_listed() {
-    // provenance: derived — SGST closes at Cr 900 (see the scenario); Tally's export leaves it
+    // provenance: pending (Tally side, layout not observed) — SGST closes at Cr 900 (see the scenario); Tally's export leaves it
     // out and has no group row above it.
     let mut tb = tally_tb();
     tb.retain(|r| r.label != "SGST");
@@ -349,7 +350,7 @@ fn a_ledger_of_ours_that_tally_omits_is_listed() {
 
 #[test]
 fn a_group_row_accounts_for_the_ledgers_under_it() {
-    // provenance: derived — Duties & Taxes holds CGST Cr 900 + SGST Cr 900 = Cr 1,800. A Tally
+    // provenance: pending (Tally side, layout not observed) — Duties & Taxes holds CGST Cr 900 + SGST Cr 900 = Cr 1,800. A Tally
     // export that lists the group instead of its two ledgers is complete and equal.
     let mut tb = tally_tb();
     tb.retain(|r| r.label != "CGST" && r.label != "SGST");
@@ -365,7 +366,7 @@ fn a_group_row_accounts_for_the_ledgers_under_it() {
 
 #[test]
 fn a_tally_amount_without_a_side_is_unreadable() {
-    // provenance: derived — a trial balance row carrying one signed amount has no column that
+    // provenance: pending (Tally side, layout not observed) — a trial balance row carrying one signed amount has no column that
     // names its side (X5: sign kept as written), so the side is not guessed.
     let mut tb = tally_tb();
     tb[0].amount = TReportAmount::Signed(rs(-100_000));
@@ -380,7 +381,7 @@ fn a_tally_amount_without_a_side_is_unreadable() {
 
 #[test]
 fn a_name_matching_a_group_and_a_ledger_is_ambiguous() {
-    // provenance: derived — with a group also named "Cash", the label "Cash" names two masters.
+    // provenance: pending (Tally side, layout not observed) — with a group also named "Cash", the label "Cash" names two masters.
     let mut b = card_books();
     let g = group(8, "Cash", Some(2), None);
     b.masters.groups.insert(g.id, g);
@@ -393,7 +394,7 @@ fn a_name_matching_a_group_and_a_ledger_is_ambiguous() {
 
 #[test]
 fn a_master_listed_twice_by_tally_is_ambiguous() {
-    // provenance: derived — two Tally rows both resolve to ledger Cash.
+    // provenance: pending (Tally side, layout not observed) — two Tally rows both resolve to ledger Cash.
     let mut tb = tally_tb();
     tb.insert(1, row("Cash", 100_000, 0));
     let r = reconcile(&card_books(), &reports(tb), period()).unwrap();
@@ -414,7 +415,7 @@ fn a_master_listed_twice_by_tally_is_ambiguous() {
 
 #[test]
 fn guid_match_beats_a_different_name() {
-    // provenance: derived — the ledger carries Tally GUID g-cash; Tally's row names it
+    // provenance: pending (Tally side, layout not observed) — the ledger carries Tally GUID g-cash; Tally's row names it
     // "Cash (renamed in Tally)" with the same GUID, so it is the same ledger.
     let mut b = card_books();
     if let Some(l) = b.masters.ledgers.get_mut(&LedgerId(CASH)) {
@@ -437,8 +438,30 @@ fn guid_match_beats_a_different_name() {
 }
 
 #[test]
+fn a_ledger_named_total_is_compared_as_that_ledger_not_as_the_grand_total() {
+    // provenance: pending (Tally side, layout not observed) — a Tally row labelled "Total" with the
+    // total flag set by label only. Our ledger "Total" (zero) carries the row, so the row is that
+    // ledger: it is listed as a ledger line, marked ambiguous, and the report is not green.
+    let mut b = card_books();
+    b.masters
+        .ledgers
+        .insert(LedgerId(99), ledger(99, "Total", 4, zero()));
+    let mut tb = tally_tb();
+    tb.push(TReportRow {
+        is_total: true,
+        ..row("Total", 0, 0)
+    });
+    let r = reconcile(&b, &reports(tb), period()).unwrap();
+
+    let l = find(&r.trial_balance.lines, "Total");
+    assert_eq!(l.kind, LineKind::Ledger);
+    assert!(matches!(l.status, LineStatus::Ambiguous { .. }));
+    assert!(!r.is_green());
+}
+
+#[test]
 fn unequal_opening_balances_reconcile_through_the_difference_row() {
-    // provenance: derived — Capital Cr 90,000 and Cash Dr 1,00,000 open unequal; opening debits
+    // provenance: pending (Tally side, layout not observed) — Capital Cr 90,000 and Cash Dr 1,00,000 open unequal; opening debits
     // exceed credits by 10,000, so the explicit difference line is a Cr 10,000 (spec invariant 4)
     // and both columns total 1,00,000.
     let b = books(SignedAmount::cr(rs(90_000)), SignedAmount::dr(rs(100_000)));
@@ -468,7 +491,7 @@ fn unequal_opening_balances_reconcile_through_the_difference_row() {
 
 #[test]
 fn exports_that_are_not_compared_are_unsupported_and_block_green() {
-    // provenance: derived — the balance sheet rows are supplied, but their amounts are signed
+    // provenance: pending (Tally side, layout not observed) — the balance sheet rows are supplied, but their amounts are signed
     // with an unestablished side and our balance sheet needs valuations: nothing is compared,
     // and the report says so instead of passing.
     let mut rep = reports(tally_tb());
@@ -527,7 +550,7 @@ fn a_failure_on_our_side_is_reported_not_hidden() {
 
 #[test]
 fn parsed_tally_xml_reconciles_green() {
-    // provenance: derived — the XML is hand-built in the recalled layout (X5), debit written
+    // provenance: pending (Tally side, layout not observed) — the XML is hand-built in the recalled layout (X5), debit written
     // negative (R8 2.3(e)); its amounts are the hand-derived closing balances above.
     let xml = r"<ENVELOPE>
   <DSPACCNAME><DSPDISPNAME>Cash</DSPDISPNAME></DSPACCNAME>

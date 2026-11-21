@@ -58,10 +58,17 @@ fn group_xml(name: &str, guid: &str, alter: u64, parent: &str, extra: &str) -> S
     )
 }
 
+/// A ledger as the pull receives it. The pull requests `OPENINGBALANCE`, so the fixture carries a
+/// zero opening unless `extra` supplies one (an absent opening is refused by the mapper).
 fn ledger_xml(name: &str, guid: &str, parent: &str, extra: &str) -> String {
+    let opening = if extra.contains("<OPENINGBALANCE>") {
+        ""
+    } else {
+        "<OPENINGBALANCE>0.00</OPENINGBALANCE>"
+    };
     format!(
         "<LEDGER NAME=\"{name}\"><GUID>{guid}</GUID><ALTERID>1</ALTERID><NAME>{name}</NAME>\
-         <PARENT>{parent}</PARENT>{extra}</LEDGER>"
+         <PARENT>{parent}</PARENT>{opening}{extra}</LEDGER>"
     )
 }
 
@@ -498,11 +505,11 @@ fn unsupported_master_kinds_are_reported() {
 
 const BASE_MASTERS: &str = "\
 <LEDGER NAME=\"Sharma Hardware\"><GUID>g-l1</GUID><ALTERID>1</ALTERID><NAME>Sharma Hardware</NAME>\
-<PARENT>Sundry Debtors</PARENT><ISBILLWISEON>Yes</ISBILLWISEON></LEDGER>\
+<PARENT>Sundry Debtors</PARENT><ISBILLWISEON>Yes</ISBILLWISEON><OPENINGBALANCE>0.00</OPENINGBALANCE></LEDGER>\
 <LEDGER NAME=\"Sales @18%\"><GUID>g-l2</GUID><ALTERID>1</ALTERID><NAME>Sales @18%</NAME>\
-<PARENT>Sales Accounts</PARENT></LEDGER>\
+<PARENT>Sales Accounts</PARENT><OPENINGBALANCE>0.00</OPENINGBALANCE></LEDGER>\
 <LEDGER NAME=\"Output IGST\"><GUID>g-l3</GUID><ALTERID>1</ALTERID><NAME>Output IGST</NAME>\
-<PARENT>Duties &amp; Taxes</PARENT></LEDGER>\
+<PARENT>Duties &amp; Taxes</PARENT><OPENINGBALANCE>0.00</OPENINGBALANCE></LEDGER>\
 <VOUCHERTYPE NAME=\"Sales\"><GUID>g-vt</GUID><ALTERID>1</ALTERID><NAME>Sales</NAME>\
 <PARENT>Sales</PARENT></VOUCHERTYPE>";
 
@@ -511,7 +518,9 @@ const SALES: &str = "\
 <VOUCHER VCHTYPE=\"Sales\" ACTION=\"Create\"><GUID>guid-v1</GUID><ALTERID>42</ALTERID>\
 <DATE>20261115</DATE><VOUCHERTYPENAME>Sales</VOUCHERTYPENAME>\
 <VOUCHERNUMBER>S-0042</VOUCHERNUMBER><PARTYLEDGERNAME>Sharma Hardware</PARTYLEDGERNAME>\
-<NARRATION>Bolts &amp; nuts</NARRATION><PERSISTEDVIEW>Accounting Voucher View</PERSISTEDVIEW>\
+<NARRATION>Bolts &amp; nuts</NARRATION><ISCANCELLED>No</ISCANCELLED>\
+<ISOPTIONAL>No</ISOPTIONAL><ISPOSTDATED>No</ISPOSTDATED><ISINVOICE>No</ISINVOICE>\
+<PERSISTEDVIEW>Accounting Voucher View</PERSISTEDVIEW>\
 <ALLLEDGERENTRIES.LIST><LEDGERNAME>Sharma Hardware</LEDGERNAME>\
 <ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-11800.00</AMOUNT>\
 <BILLALLOCATIONS.LIST><NAME>S-0042</NAME><BILLTYPE>New Ref</BILLTYPE>\
@@ -526,7 +535,19 @@ fn map_sales(voucher_xml: &str) -> Result<Vec<Event>, MapError> {
     map_to_events(&masters(BASE_MASTERS), &vouchers(voucher_xml))
 }
 
+/// The status and invoice flags the pull requests. A flag the caller does not set is `No`.
+fn with_default_flags(flags: &str) -> String {
+    let mut out = String::from(flags);
+    for tag in ["ISCANCELLED", "ISOPTIONAL", "ISPOSTDATED", "ISINVOICE"] {
+        if !flags.contains(&format!("<{tag}>")) {
+            out.push_str(&format!("<{tag}>No</{tag}>"));
+        }
+    }
+    out
+}
+
 fn plain_voucher(guid: &str, flags: &str, lines: &str) -> String {
+    let flags = with_default_flags(flags);
     format!(
         "<VOUCHER><GUID>{guid}</GUID><ALTERID>5</ALTERID><DATE>20261116</DATE>\
          <VOUCHERTYPENAME>Sales</VOUCHERTYPENAME><VOUCHERNUMBER>S-1</VOUCHERNUMBER>{flags}{lines}\
@@ -755,6 +776,45 @@ fn invoice_flag_selects_accounting_invoice_mode() {
     let xml = plain_voucher("g-i", "<ISINVOICE>Yes</ISINVOICE>", "");
     let events = map_sales(&xml).unwrap();
     assert_eq!(as_voucher(&events[4]).mode, VoucherMode::AccountingInvoice);
+}
+
+#[test]
+fn absent_opening_balance_is_unsupported_not_zero() {
+    // provenance: derived: rule A1, an absent OPENINGBALANCE is unknown. The raw ledger below has
+    // no OPENINGBALANCE element, as a response to a request without that field would.
+    let raw = "<LEDGER NAME=\"Sharma Hardware\"><GUID>g-l1</GUID><ALTERID>1</ALTERID>\
+               <NAME>Sharma Hardware</NAME><PARENT>Sundry Debtors</PARENT></LEDGER>";
+    assert!(matches!(
+        map_to_events(&masters(raw), &[]).unwrap_err(),
+        MapError::Unsupported { .. }
+    ));
+}
+
+#[test]
+fn absent_status_flag_is_unsupported_not_regular() {
+    // provenance: derived: rule A1, a voucher whose ISCANCELLED is not in the response is not
+    // known to be live. The voucher below has no ISCANCELLED element.
+    let raw = "<VOUCHER><GUID>g-abs</GUID><ALTERID>5</ALTERID><DATE>20261116</DATE>\
+               <VOUCHERTYPENAME>Sales</VOUCHERTYPENAME><VOUCHERNUMBER>S-1</VOUCHERNUMBER>\
+               <ISOPTIONAL>No</ISOPTIONAL><ISPOSTDATED>No</ISPOSTDATED><ISINVOICE>No</ISINVOICE>\
+               </VOUCHER>";
+    assert!(matches!(
+        map_sales(raw).unwrap_err(),
+        MapError::Unsupported { .. }
+    ));
+}
+
+#[test]
+fn absent_invoice_flag_is_unsupported_not_accounting_voucher() {
+    // provenance: derived: rule A1, a voucher without ISINVOICE has no known mode.
+    let raw = "<VOUCHER><GUID>g-inv</GUID><ALTERID>5</ALTERID><DATE>20261116</DATE>\
+               <VOUCHERTYPENAME>Sales</VOUCHERTYPENAME><VOUCHERNUMBER>S-1</VOUCHERNUMBER>\
+               <ISCANCELLED>No</ISCANCELLED><ISOPTIONAL>No</ISOPTIONAL>\
+               <ISPOSTDATED>No</ISPOSTDATED></VOUCHER>";
+    assert!(matches!(
+        map_sales(raw).unwrap_err(),
+        MapError::Unsupported { .. }
+    ));
 }
 
 #[test]

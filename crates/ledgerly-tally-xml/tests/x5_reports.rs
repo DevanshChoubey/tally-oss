@@ -95,8 +95,9 @@ fn trial_balance_rows_and_totals_are_kept_apart() {
     assert_eq!(totals.len(), 1);
     let labels: Vec<&str> = details.iter().map(|r| r.label.as_str()).collect();
     assert_eq!(labels, ["Cash", "Capital", "Sales"]);
-    // derived: Cash closing column is -50000.00 in the debit column; R8 2.3(e) negative = Dr;
-    // 50000.00 rupees = 5,000,000 paise.
+    // pending: the debit-negative column convention is R8 2.3(e) for voucher import lines only
+    // (tagged [vendor shape]); its use for report columns is unobserved. Cash closing column is
+    // -50000.00 in the debit column; 50000.00 rupees = 5,000,000 paise (arithmetic derived).
     assert_eq!(details[0].dr_cr(), Some((DrCr::Dr, Paise::new(5_000_000))));
     assert_eq!(details[0].guid.as_deref(), Some("g-cash"));
     // derived: Capital 30000.00 in the credit column = 3,000,000 paise Cr.
@@ -132,7 +133,8 @@ fn trial_balance_empty_columns_are_nil() {
 
 #[test]
 fn trial_balance_sign_that_contradicts_its_column_is_an_error() {
-    // derived: R8 2.3(e) debit is negative, so a positive amount in the debit column is refused.
+    // pending: the sign rule applied here is R8 2.3(e), documented for voucher import lines only;
+    // for report columns it awaits an observed capture. The refusal is what this code does.
     let dr = "<ENVELOPE><DSPACCNAME><DSPDISPNAME>X</DSPDISPNAME></DSPACCNAME><DSPACCINFO>\
               <DSPCLDRAMT><DSPCLDRAMTA>10.00</DSPCLDRAMTA></DSPCLDRAMT></DSPACCINFO></ENVELOPE>";
     assert!(matches!(

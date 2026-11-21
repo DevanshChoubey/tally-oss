@@ -165,14 +165,22 @@ pub enum WriteError {
     },
 }
 
-/// Writes masters as an "All Masters" import document. Infallible: see the module doc for how
-/// input that cannot be written faithfully is rendered; [`try_write_masters`] reports it instead.
+/// Writes masters as an "All Masters" import document.
+///
+/// **Lossy: not for export.** Input that cannot be written faithfully is rendered without an error
+/// (see the module doc), so the text may not read back to the same masters. Every export and CA
+/// hand-off must use [`try_write_masters`], which refuses such input. This function stays only
+/// because its signature is frozen; an interface request asks for it to become fallible.
 pub fn write_masters(m: &[TallyMaster]) -> String {
     build_masters(m).0
 }
 
-/// Writes vouchers as a "Vouchers" import document. Infallible: see the module doc for how input
-/// that cannot be written faithfully is rendered; [`try_write_vouchers`] reports it instead.
+/// Writes vouchers as a "Vouchers" import document.
+///
+/// **Lossy: not for export.** A negative ledger magnitude is written as its absolute value, and a
+/// character XML forbids is written as a numeric reference that is not well-formed XML 1.0. Every
+/// export and CA hand-off must use [`try_write_vouchers`], which refuses such input. This function
+/// stays only because its signature is frozen; an interface request asks for it to become fallible.
 pub fn write_vouchers(v: &[TVoucher]) -> String {
     build_vouchers(v).0
 }

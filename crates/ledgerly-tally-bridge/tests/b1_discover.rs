@@ -136,7 +136,9 @@ fn truncated_reply_is_an_error_with_a_position() {
         | BridgeError::UnexpectedResponse { .. }
         | BridgeError::TallyReported { .. }
         | BridgeError::Cancelled
-        | BridgeError::Io { .. }) => panic!("expected MalformedResponse, got {other:?}"),
+        | BridgeError::Io { .. }
+        | BridgeError::Pull(_)
+        | BridgeError::Report { .. }) => panic!("expected MalformedResponse, got {other:?}"),
     }
 }
 
