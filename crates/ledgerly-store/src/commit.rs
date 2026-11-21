@@ -13,18 +13,34 @@
 //! with the same encoding, so a verifier can decode them, re-encode the tuple with
 //! [`record_hash`] and compare.
 
-use ledgerly_core::EventSeq;
+use ledgerly_core::{EventSeq, VoucherId};
+use ledgerly_model::{Posting, Voucher};
 use rusqlite::{Connection, OptionalExtension, TransactionBehavior};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use sha2::{Digest, Sha256};
 
+use crate::backup::{master_key, side_text};
+use crate::load::{Replay, postings_of};
 use crate::{AuditMeta, AuditRecord, CommitReceipt, Event, SqliteStore, StoreError};
 
 /// `prev_hash` of the first record: 32 zero bytes.
 pub const GENESIS_HASH: [u8; 32] = [0; 32];
 
+/// Key in `meta` that marks a file whose projection tables are maintained by `commit`.
+const PROJECTION_FLAG: &str = "projections";
+
+/// Events read per query while projections are built from the log.
+const PAGE: usize = 1000;
+
 /// Appends events in one transaction. See [`crate::Store::commit`].
+///
+/// When the file's projections are switched on ([`SqliteStore::enable_projections`], card C6),
+/// the `masters`, `vouchers` and `postings` rows are updated in the same transaction, event by
+/// event, with the replay rules of [`crate::load`]. An event that does not fit the stored state
+/// (create of an existing id, alter of a missing one, ...) then fails the whole commit with
+/// [`StoreError::Encoding`] naming the event, and nothing is written: such a file can never hold
+/// a log that cannot be replayed. A file without the switch commits events only, as before.
 ///
 /// Every event of the batch shares `meta`. The write lock is taken before the chain head is read,
 /// so two writers can never assign the same sequence number. An empty batch writes nothing and
@@ -43,6 +59,7 @@ pub fn commit_events(
         .conn
         .transaction_with_behavior(TransactionBehavior::Immediate)?;
     let (mut last_seq, mut last_hash) = read_head(&tx)?;
+    let project = projections_enabled(&tx)?;
     let mut seqs = Vec::with_capacity(events.len());
     {
         let mut insert = tx.prepare_cached(
@@ -61,6 +78,9 @@ pub fn commit_events(
                 meta_blob,
                 encode(event, "event")?
             ])?;
+            if project {
+                project_event(&tx, seq, event)?;
+            }
             seqs.push(seq_id);
             last_seq = seq;
             last_hash = hash;
@@ -178,4 +198,236 @@ fn encode<T: Serialize + ?Sized>(value: &T, what: &str) -> Result<Vec<u8>, Store
 
 fn decode<T: DeserializeOwned>(bytes: &[u8], what: &str) -> Result<T, StoreError> {
     ciborium::from_reader(bytes).map_err(|e| StoreError::Encoding(format!("{what}: {e}")))
+}
+
+// ---------------------------------------------------------------------------------------------
+// Projections (card C6)
+// ---------------------------------------------------------------------------------------------
+
+/// Whether the file's projection tables are maintained by `commit`.
+pub(crate) fn projections_enabled(conn: &Connection) -> Result<bool, StoreError> {
+    let found: Option<i64> = conn
+        .query_row(
+            "SELECT 1 FROM meta WHERE key = ?1",
+            [PROJECTION_FLAG],
+            |r| r.get(0),
+        )
+        .optional()?;
+    Ok(found.is_some())
+}
+
+/// Builds the projection tables from the whole log and switches maintenance on. See
+/// [`SqliteStore::enable_projections`].
+pub(crate) fn enable_projections(store: &SqliteStore) -> Result<bool, StoreError> {
+    let conn = &store.conn;
+    conn.execute_batch("BEGIN IMMEDIATE")?;
+    match backfill(store) {
+        Ok(changed) => {
+            conn.execute_batch("COMMIT")?;
+            Ok(changed)
+        }
+        Err(e) => {
+            if let Err(rollback) = conn.execute_batch("ROLLBACK") {
+                tracing::warn!(error = %rollback, "could not roll back the projection build");
+            }
+            Err(e)
+        }
+    }
+}
+
+fn backfill(store: &SqliteStore) -> Result<bool, StoreError> {
+    let conn = &store.conn;
+    if projections_enabled(conn)? {
+        return Ok(false);
+    }
+    for table in ["masters", "vouchers", "postings"] {
+        // `table` is one of our own constant names, never user input.
+        let rows: i64 =
+            conn.query_row(&format!("SELECT count(*) FROM {table}"), [], |r| r.get(0))?;
+        if rows != 0 {
+            return Err(StoreError::Encoding(format!(
+                "projection table {table} already holds rows that no writer of this build made; \
+                 refusing to overwrite them"
+            )));
+        }
+    }
+    let mut from = EventSeq(1);
+    loop {
+        let page = read_events(store, from, PAGE)?;
+        let Some(last) = page.last().map(|r| r.seq) else {
+            break;
+        };
+        for record in &page {
+            project_event(conn, record.seq.0, &record.event)?;
+        }
+        if page.len() < PAGE {
+            break;
+        }
+        from =
+            EventSeq(last.0.checked_add(1).ok_or_else(|| {
+                StoreError::Encoding("event sequence number overflow".to_owned())
+            })?);
+    }
+    conn.execute(
+        "INSERT INTO meta(key, value) VALUES (?1, ?2)",
+        rusqlite::params![PROJECTION_FLAG, b"maintained".as_slice()],
+    )?;
+    Ok(true)
+}
+
+fn projection_error(seq: u64, message: &str) -> StoreError {
+    StoreError::Encoding(format!(
+        "projection update failed at event {seq}: {message}"
+    ))
+}
+
+fn id_sql(id: u64) -> Result<i64, StoreError> {
+    i64::try_from(id).map_err(|_| StoreError::Encoding(format!("id {id} does not fit a row")))
+}
+
+/// Applies one event to the projection rows, with the same rules as the replay in [`crate::load`].
+fn project_event(conn: &Connection, seq: u64, event: &Event) -> Result<(), StoreError> {
+    match event {
+        Event::MasterCreated(snapshot) => {
+            let (kind, id) = master_key(snapshot);
+            conn.execute(
+                "INSERT INTO masters(kind, id, snapshot) VALUES (?1, ?2, ?3)",
+                rusqlite::params![kind, id_sql(id)?, encode(snapshot, "master")?],
+            )
+            .map_err(|e| projection_error(seq, &format!("{kind} {id} cannot be created: {e}")))?;
+            Ok(())
+        }
+        Event::MasterAltered { before, after } => {
+            if master_key(before) != master_key(after) {
+                return Err(projection_error(
+                    seq,
+                    &format!(
+                        "master alter changes identity from {:?} to {:?}",
+                        master_key(before),
+                        master_key(after)
+                    ),
+                ));
+            }
+            let (kind, id) = master_key(after);
+            let changed = conn.execute(
+                "UPDATE masters SET snapshot = ?3 WHERE kind = ?1 AND id = ?2",
+                rusqlite::params![kind, id_sql(id)?, encode(after, "master")?],
+            )?;
+            require_one(seq, changed, "alter", kind, id)
+        }
+        Event::MasterDeleted(snapshot) => {
+            let (kind, id) = master_key(snapshot);
+            let changed = conn.execute(
+                "DELETE FROM masters WHERE kind = ?1 AND id = ?2",
+                rusqlite::params![kind, id_sql(id)?],
+            )?;
+            require_one(seq, changed, "delete", kind, id)
+        }
+        Event::VoucherPosted(voucher) => project_vouchers(conn, seq, event, &[voucher.id]),
+        Event::VoucherAltered { after, .. } => project_vouchers(conn, seq, event, &[after.id]),
+        Event::VoucherCancelled { before } | Event::VoucherDeleted { before } => {
+            project_vouchers(conn, seq, event, &[before.id])
+        }
+        Event::MatchConfirmed(matched) => project_vouchers(conn, seq, event, &matched.vouchers),
+        Event::SettingChanged { .. }
+        | Event::PeriodLocked { .. }
+        | Event::StatementImported(_)
+        | Event::AiProposalRecorded(_) => Ok(()),
+    }
+}
+
+fn require_one(
+    seq: u64,
+    changed: usize,
+    what: &str,
+    kind: &str,
+    id: u64,
+) -> Result<(), StoreError> {
+    if changed == 1 {
+        Ok(())
+    } else {
+        Err(projection_error(
+            seq,
+            &format!("{what} of {kind} {id} which does not exist"),
+        ))
+    }
+}
+
+/// Applies a voucher event to the vouchers it names: load their rows, run the replay rule, write
+/// back (or remove) each row and its postings.
+fn project_vouchers(
+    conn: &Connection,
+    seq: u64,
+    event: &Event,
+    ids: &[VoucherId],
+) -> Result<(), StoreError> {
+    let mut replay = Replay::default();
+    for id in ids {
+        if let Some(voucher) = stored_voucher(conn, *id)? {
+            replay.vouchers.insert(*id, voucher);
+        }
+    }
+    replay
+        .apply(event.clone())
+        .map_err(|message| projection_error(seq, &message))?;
+    for id in ids {
+        match replay.vouchers.get(id) {
+            Some(voucher) => write_voucher(conn, seq, voucher)?,
+            None => {
+                // The postings rows go with it (ON DELETE CASCADE).
+                conn.execute("DELETE FROM vouchers WHERE id = ?1", [id_sql(id.0)?])?;
+            }
+        }
+    }
+    Ok(())
+}
+
+fn stored_voucher(conn: &Connection, id: VoucherId) -> Result<Option<Voucher>, StoreError> {
+    let blob: Option<Vec<u8>> = conn
+        .query_row(
+            "SELECT snapshot FROM vouchers WHERE id = ?1",
+            [id_sql(id.0)?],
+            |r| r.get(0),
+        )
+        .optional()?;
+    blob.map(|b| decode(&b, "stored voucher snapshot"))
+        .transpose()
+}
+
+fn write_voucher(conn: &Connection, seq: u64, voucher: &Voucher) -> Result<(), StoreError> {
+    let id = id_sql(voucher.id.0)?;
+    conn.execute(
+        "INSERT INTO vouchers(id, date, status, snapshot) VALUES (?1, ?2, ?3, ?4) \
+         ON CONFLICT(id) DO UPDATE SET date = excluded.date, status = excluded.status, \
+         snapshot = excluded.snapshot",
+        rusqlite::params![
+            id,
+            voucher.date.to_string(),
+            format!("{:?}", voucher.status),
+            encode(voucher, "voucher")?
+        ],
+    )?;
+    conn.execute("DELETE FROM postings WHERE voucher_id = ?1", [id])?;
+    let mut postings: Vec<Posting> = Vec::new();
+    postings_of(voucher, &mut postings).map_err(|m| projection_error(seq, &m))?;
+    let mut insert = conn.prepare_cached(
+        "INSERT INTO postings(voucher_id, line_no, date, ledger_id, paise, side, snapshot) \
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+    )?;
+    for (index, posting) in postings.iter().enumerate() {
+        let line_no = i64::try_from(index)
+            .ok()
+            .and_then(|n| n.checked_add(1))
+            .ok_or_else(|| projection_error(seq, "too many ledger lines"))?;
+        insert.execute(rusqlite::params![
+            id,
+            line_no,
+            posting.date.to_string(),
+            id_sql(posting.ledger.0)?,
+            posting.amount.amount.get(),
+            side_text(posting.amount.side),
+            encode(posting, "posting")?
+        ])?;
+    }
+    Ok(())
 }

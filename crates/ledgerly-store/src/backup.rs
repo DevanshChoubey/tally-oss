@@ -29,10 +29,13 @@
 //!
 //! The event log is the source of truth. [`rebuild_projections_and_compare`] replays it (through
 //! [`crate::load::load_books`]) and compares the result with the `masters`, `vouchers` and
-//! `postings` projection tables. As of wave 1 nothing writes those tables (see the module
-//! documentation of [`crate::load`]), so a store with events and empty projection tables reports
-//! [`RebuildOutcome::NotMaintained`] rather than a match or a mismatch: nobody can say the tables
-//! are right, and calling them wrong would blame a writer that does not exist.
+//! `postings` projection tables. A file whose projections were never switched on
+//! ([`SqliteStore::enable_projections`], card C6) has no writer for those tables, so a store with
+//! events and empty projection tables reports [`RebuildOutcome::NotMaintained`] rather than a
+//! match or a mismatch: nobody can say the tables are right, and calling them wrong would blame a
+//! writer that does not exist. On a file with projections switched on, `commit` keeps the tables
+//! current in the same transaction as the events, so a clean file reports a match and any change
+//! made outside `commit` is a mismatch.
 //!
 //! What is compared:
 //! - `masters`: the decoded `snapshot` of every row against the rebuilt masters, keyed by master
@@ -249,7 +252,11 @@ pub fn rebuild_projections_and_compare(store: &SqliteStore) -> Result<RebuildRep
         postings: stored_posting_rows,
     };
 
-    let outcome = if stored.is_empty() && !rebuilt.is_empty() {
+    // A file whose projections were switched on (`SqliteStore::enable_projections`, or the commit
+    // path after it) is maintained: empty tables next to a non-empty log are then a mismatch, not
+    // "never maintained".
+    let maintained = crate::commit::projections_enabled(&store.conn)?;
+    let outcome = if !maintained && stored.is_empty() && !rebuilt.is_empty() {
         RebuildOutcome::NotMaintained
     } else {
         diff_maps(
@@ -458,12 +465,12 @@ fn io_error(path: &Path, source: std::io::Error) -> StoreError {
 // ---------------------------------------------------------------------------------------------
 
 /// Key of a master: kind name and raw id.
-type MasterKey = (&'static str, u64);
+pub(crate) type MasterKey = (&'static str, u64);
 
 /// One posting row as compared: `(date, ledger, paise, side)`.
 type PostingRow = (String, u64, i64, &'static str);
 
-fn master_key(snapshot: &MasterSnapshot) -> MasterKey {
+pub(crate) fn master_key(snapshot: &MasterSnapshot) -> MasterKey {
     match snapshot {
         MasterSnapshot::Group(v) => ("group", v.id.0),
         MasterSnapshot::Ledger(v) => ("ledger", v.id.0),
@@ -517,7 +524,7 @@ fn rebuilt_masters(books: &Books) -> BTreeMap<MasterKey, MasterSnapshot> {
     out
 }
 
-fn side_text(side: DrCr) -> &'static str {
+pub(crate) fn side_text(side: DrCr) -> &'static str {
     match side {
         DrCr::Dr => "Dr",
         DrCr::Cr => "Cr",

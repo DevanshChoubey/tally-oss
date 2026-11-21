@@ -185,3 +185,18 @@ Filed from the r2/* fix branches. Each line names the card and the request; the 
 ## W6: the save path for item invoices and masters, and the welcome screen's file dialog
 
 - The app opens and creates company files by typed path (`shell/welcome.rs`). A file-picker dialog (`rfd`) would block the UI thread while open, so it is not used. Pending: a non-blocking dialog, if the owner wants one.
+
+## C6: projections and rebuild check (Wave 3)
+
+- Added `SqliteStore::enable_projections(&self) -> Result<bool, StoreError>`,
+  `SqliteStore::projections_enabled(&self) -> Result<bool, StoreError>` and
+  `Api::enable_projections(&self) -> Result<bool, ApiError>`. Once on (flag `projections` in
+  `meta`), `Store::commit` writes the `masters`, `vouchers` and `postings` rows in the same
+  transaction and refuses an event that does not fit the stored state.
+- Not switched on automatically. The retained tests `ledgerly-api/tests/w2_maintenance.rs`
+  (`rebuild_check_is_not_a_match_when_projections_are_not_maintained`), `ledgerly-cli/tests/w2_cli.rs`
+  and `ledgerly-store/tests/s6_backup.rs` (`unmaintained_projection_tables_are_reported_not_matched`,
+  and the tests that hand-insert projection rows) require `NotMaintained` or empty tables for files
+  written through `create` plus `commit`. To make `Api::create` switch it on (so `rebuild_check`
+  matches on every new file), `facade.rs` needs `store.enable_projections()?` after the seed commit,
+  and those retained tests need an owner decision.

@@ -64,14 +64,29 @@ impl Api {
     /// Replays the event log and compares the result with the stored projection tables.
     ///
     /// The report is a match only when the stored projections were compared and equal the rebuild
-    /// ([`RebuildReport::is_match`]). A log with empty projection tables is reported as
-    /// `RebuildOutcome::NotMaintained`, which is not a match.
+    /// ([`RebuildReport::is_match`]). A file whose projections were never switched on
+    /// ([`Api::enable_projections`]) and whose projection tables are empty is reported as
+    /// `RebuildOutcome::NotMaintained`, which is not a match and is never reported as a mismatch
+    /// with figures. After the switch, empty or altered tables are a mismatch.
     ///
     /// # Errors
     /// [`ApiError::Store`] when the log cannot be read or replayed. A voucher this build cannot
     /// project is named in the error (`StoreError::Unsupported`).
     pub fn rebuild_check(&self) -> Result<RebuildReport, ApiError> {
         Ok(rebuild_projections_and_compare(self.store())?)
+    }
+
+    /// Switches on maintenance of the projection tables (card C6): builds them from the event log
+    /// and, from then on, every commit updates them in the same transaction as its events, so
+    /// [`Api::rebuild_check`] reports a match. Returns `true` when this call switched it on and
+    /// `false` when it already was. Opening a file never switches it on, so a file written
+    /// before this existed stays `NotMaintained` until this is called.
+    ///
+    /// # Errors
+    /// [`ApiError::Store`] when the log cannot be replayed, when the projection tables already
+    /// hold rows that no writer of this build made, or when the file cannot be written.
+    pub fn enable_projections(&self) -> Result<bool, ApiError> {
+        Ok(self.store().enable_projections()?)
     }
 
     /// Checks a voucher proposal against the books with the engine, without posting it.
