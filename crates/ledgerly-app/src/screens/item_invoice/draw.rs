@@ -343,15 +343,12 @@ impl ItemInvoiceScreen {
         let Some(ticket) = self.posting.as_mut() else {
             return;
         };
-        match submit::settle(ticket) {
-            Some(reply) => {
-                self.posting = None;
-                self.finish_post(reply);
-            }
-            None => {
-                ui.label("Saving...");
-                ui.ctx().request_repaint();
-            }
+        if let Some(reply) = submit::settle(ticket) {
+            self.posting = None;
+            self.finish_post(reply);
+        } else {
+            ui.label("Saving...");
+            ui.ctx().request_repaint();
         }
     }
 

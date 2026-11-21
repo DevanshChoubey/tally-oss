@@ -99,10 +99,7 @@ fn incomplete(ret: &Gstr1Return) -> Option<Unsupported> {
 /// supply is checked, and every entry in [`BLOCKED_RULE_IDS`] must be usable on it.
 fn blocked_credit_rules(books: &Books, period: Period, pack: &RulePack) -> Outcome<()> {
     for v in books.vouchers.values() {
-        let live = matches!(
-            v.status,
-            VoucherStatus::Regular | VoucherStatus::PostDated
-        );
+        let live = matches!(v.status, VoucherStatus::Regular | VoucherStatus::PostDated);
         if !live || !period.contains(v.date) {
             continue;
         }
@@ -185,7 +182,11 @@ impl Api {
     ///
     /// # Errors
     /// As [`Api::gstr1`].
-    pub fn gstr3b(&self, gstin: &Gstin, period: Period) -> Result<Outcome<Gstr3bWorking>, ApiError> {
+    pub fn gstr3b(
+        &self,
+        gstin: &Gstin,
+        period: Period,
+    ) -> Result<Outcome<Gstr3bWorking>, ApiError> {
         self.gstr3b_with_pack(gstin, period, &bundled_pack()?)
     }
 

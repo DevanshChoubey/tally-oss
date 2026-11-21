@@ -207,7 +207,11 @@ fn company() -> Company {
 /// The masters of the test company. `car_ineligible` is the setting on the car purchase ledger:
 /// `None` leaves it unmarked, so only the HSN rules decide.
 fn ledgers(car_ineligible: Option<bool>) -> Vec<Ledger> {
-    let mut car = classified(ledger(CAR, "Car", ReservedGroup::PurchaseAccounts), "8703", 18);
+    let mut car = classified(
+        ledger(CAR, "Car", ReservedGroup::PurchaseAccounts),
+        "8703",
+        18,
+    );
     car.ineligible_itc = car_ineligible;
     vec![
         party(
@@ -250,7 +254,11 @@ fn ledgers(car_ineligible: Option<bool>) -> Vec<Ledger> {
             Some(SUPPLIER_GSTIN),
             29,
         ),
-        classified(ledger(SALES, "Sales", ReservedGroup::SalesAccounts), "998313", 18),
+        classified(
+            ledger(SALES, "Sales", ReservedGroup::SalesAccounts),
+            "998313",
+            18,
+        ),
         classified(
             ledger(PURCHASE, "Purchases", ReservedGroup::PurchaseAccounts),
             "998313",
@@ -376,7 +384,11 @@ fn v3_gamma_b2b() -> Voucher {
         date!(2026 - 10 - 07),
         GAMMA,
         27,
-        vec![dr(GAMMA, 5_900_000), cr(SALES, 5_000_000), cr(OUT_IGST, 900_000)],
+        vec![
+            dr(GAMMA, 5_900_000),
+            cr(SALES, 5_000_000),
+            cr(OUT_IGST, 900_000),
+        ],
     )
 }
 
@@ -495,6 +507,10 @@ fn igst(tax: &ItemTax) -> Paise {
 /// 5,900,000 = 17,936,000, which also equals taxable plus tax. Purchases (V4, V6) are not
 /// outward supplies (CGST Act s.37), so they land in no table and are `NotRelevant`.
 #[test]
+#[expect(
+    clippy::cognitive_complexity,
+    reason = "one hand-derived table check per GSTR-1 section, kept together for review"
+)]
 fn gstr1_october_tables_match_hand_derivation() {
     let (_dir, mut api) = company_file(Some(true));
     for v in [
@@ -707,5 +723,5 @@ fn gstr3b_blocked_category_with_nothing_marked_is_unsupported() {
     post(&mut api, v6_car_purchase());
 
     let u = unsupported(api.gstr3b_with_pack(&gstin_of(COMPANY), oct(), &fixture_pack()));
-    assert!(!u.reason.is_empty());
+    assert_ne!(u.reason, "");
 }

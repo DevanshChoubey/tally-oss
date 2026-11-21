@@ -35,6 +35,7 @@ use std::collections::BTreeMap;
 use std::str::FromStr;
 
 use egui::{Id, Key, Modifiers, Ui};
+use ledgerly_api::Command;
 use ledgerly_core::{
     Date, Decimal, DrCr, FinancialYear, GroupId, LedgerId, MoneyError, Month, Outcome, Paise,
     RoundingRule, SignedAmount, VoucherId, VoucherTypeId, round_rupees_to_paise,
@@ -43,7 +44,6 @@ use ledgerly_model::{
     BaseVoucherKind, Books, Ledger, LedgerLine, Masters, Voucher, VoucherError, VoucherMode,
     VoucherStatus,
 };
-use ledgerly_api::Command;
 use thiserror::Error;
 
 use crate::shell::submit::{self, CommandReply};
@@ -2034,15 +2034,12 @@ impl VoucherEntryScreen {
         let Some(ticket) = self.posting.as_mut() else {
             return;
         };
-        match submit::settle(ticket) {
-            Some(reply) => {
-                self.posting = None;
-                self.finish_post(reply);
-            }
-            None => {
-                ui.label("Saving...");
-                ui.ctx().request_repaint();
-            }
+        if let Some(reply) = submit::settle(ticket) {
+            self.posting = None;
+            self.finish_post(reply);
+        } else {
+            ui.label("Saving...");
+            ui.ctx().request_repaint();
         }
     }
 

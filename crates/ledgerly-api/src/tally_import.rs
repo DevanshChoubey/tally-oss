@@ -161,7 +161,7 @@ impl Api {
         let path = self.store().path();
         let mut name: OsString = path
             .file_name()
-            .map_or_else(|| OsString::from("company"), |n| n.to_os_string());
+            .map_or_else(|| OsString::from("company"), std::ffi::OsStr::to_os_string);
         name.push(CAPTURE_SUFFIX);
         path.parent().unwrap_or_else(|| Path::new("")).join(name)
     }
@@ -193,8 +193,7 @@ fn is_seed_only(books: &Books) -> bool {
 fn import_actor(actor: &Actor, today: Date) -> Actor {
     let on_behalf_of = match actor.clone() {
         Actor::User(user) => user,
-        Actor::Import { on_behalf_of, .. } => on_behalf_of,
-        Actor::Assistant { on_behalf_of, .. } => on_behalf_of,
+        Actor::Import { on_behalf_of, .. } | Actor::Assistant { on_behalf_of, .. } => on_behalf_of,
     };
     Actor::Import {
         job: format!("tally-import {today}"),

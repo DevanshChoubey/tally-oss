@@ -1036,18 +1036,15 @@ impl MastersScreen {
         let Some(ticket) = self.posting.as_mut() else {
             return;
         };
-        match submit::settle(ticket) {
-            Some(reply) => {
-                self.posting = None;
-                self.finish_post(reply);
-                if !self.commands.is_empty() {
-                    ui.ctx().request_repaint();
-                }
-            }
-            None => {
-                ui.label("Saving...");
+        if let Some(reply) = submit::settle(ticket) {
+            self.posting = None;
+            self.finish_post(reply);
+            if !self.commands.is_empty() {
                 ui.ctx().request_repaint();
             }
+        } else {
+            ui.label("Saving...");
+            ui.ctx().request_repaint();
         }
     }
 

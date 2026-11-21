@@ -12,15 +12,15 @@
 //!
 //! | Voucher | Date       | Kind     | Amount |
 //! |---------|------------|----------|--------|
-//! | 1       | 2026-04-05 | receipt  | 50_000 |
-//! | 2       | 2026-04-10 | receipt  | 120_000 |
-//! | 3       | 2026-04-12 | payment  | 30_000 |
-//! | 4       | 2026-04-20 | payment  | 45_000 |
-//! | 5       | 2026-04-25 | receipt  | 20_000 |
-//! | 6       | 2026-05-02 | receipt  | 77_000 |
-//! | 7       | 2026-04-27 | payment  | 25_000 |
+//! | 1       | 2026-04-05 | receipt  | `50_000` |
+//! | 2       | 2026-04-10 | receipt  | `120_000` |
+//! | 3       | 2026-04-12 | payment  | `30_000` |
+//! | 4       | 2026-04-20 | payment  | `45_000` |
+//! | 5       | 2026-04-25 | receipt  | `20_000` |
+//! | 6       | 2026-05-02 | receipt  | `77_000` |
+//! | 7       | 2026-04-27 | payment  | `25_000` |
 //!
-//! The bank ledger opens with a debit balance of 100_000 (Rs 1,000.00).
+//! The bank ledger opens with a debit balance of `100_000` (Rs 1,000.00).
 
 #![allow(
     clippy::unwrap_used,
@@ -300,9 +300,14 @@ fn setup() -> (tempfile::TempDir, PathBuf, Api) {
 
 /// Imports [`STATEMENT`] for the bank ledger and returns its id.
 fn import_statement(api: &mut Api) -> BankStatementId {
-    match api.import_bank_statement(STATEMENT.as_bytes(), MT940, BANK).unwrap() {
+    match api
+        .import_bank_statement(STATEMENT.as_bytes(), MT940, BANK)
+        .unwrap()
+    {
         Outcome::Value(id) => id,
-        other => panic!("expected an imported statement, got {other:?}"),
+        other @ Outcome::Unsupported(_) => {
+            panic!("expected an imported statement, got {other:?}")
+        }
     }
 }
 
@@ -411,7 +416,10 @@ fn confirmed_matches_set_bank_dates_and_brs_follows() {
     assert_eq!(brs.balance_as_per_bank, Paise::new(195_000));
     // derived: statement balance at 30 Apr = opening 100_000 + 500,00 + 1200,00 - 300,00 - 450,00
     // - 10,00 (lines dated 5 Apr to 28 Apr) = 194_000. Covered: 5 Apr <= 30 Apr < 3 May.
-    assert_eq!(brs.statement_balance.clone().value(), Some(Paise::new(194_000)));
+    assert_eq!(
+        brs.statement_balance.clone().value(),
+        Some(Paise::new(194_000))
+    );
     // derived: difference = 194_000 - 195_000 = -1_000 (Rs 10.00: the bank charges are not in the
     // books yet, which is what the rule suggestion would fix).
     assert_eq!(brs.difference.clone().value(), Some(Paise::new(-1_000)));
@@ -585,7 +593,7 @@ fn reopening_keeps_confirmed_matches_but_not_the_statement() {
 
     let mut api = Api::open(&path).unwrap();
     // The statement itself is not in the company file.
-    assert!(api.bank_statements(BANK).is_empty());
+    assert_eq!(api.bank_statements(BANK).len(), 0);
     let brs = brs_at(&api, date!(2026 - 04 - 30));
     // The confirmed bank dates were stored as events, so the books still show them cleared.
     assert_eq!(brs.uncleared_deposits_total, Paise::new(20_000));
@@ -593,9 +601,14 @@ fn reopening_keeps_confirmed_matches_but_not_the_statement() {
     assert!(brs.statement_balance.is_unsupported());
 
     // Importing the file again is accepted (this session does not know it) and takes the next id.
-    let again = match api.import_bank_statement(STATEMENT.as_bytes(), MT940, BANK).unwrap() {
+    let again = match api
+        .import_bank_statement(STATEMENT.as_bytes(), MT940, BANK)
+        .unwrap()
+    {
         Outcome::Value(id) => id,
-        other => panic!("expected an imported statement, got {other:?}"),
+        other @ Outcome::Unsupported(_) => {
+            panic!("expected an imported statement, got {other:?}")
+        }
     };
     assert_eq!(again, BankStatementId(2));
     // derived: the same statement gives the same difference as before the reopen: -1_000.

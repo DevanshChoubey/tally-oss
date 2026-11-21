@@ -66,7 +66,8 @@ fn ledgers_xml() -> String {
              <OPENINGBALANCE>0</OPENINGBALANCE></LEDGER>"
         )
     })
-    .collect()
+    .collect::<Vec<String>>()
+    .concat()
 }
 
 fn voucher_types_xml() -> String {
@@ -78,7 +79,7 @@ fn voucher_types_xml() -> String {
 /// A journal voucher. Each entry is (ledger, `Yes` for a debit or `No` for a credit, amount in
 /// Tally's signed text: negative for a debit).
 fn journal(guid: &str, yyyymmdd: &str, number: &str, entries: &[(&str, &str, &str)]) -> String {
-    let lines: String = entries
+    let lines = entries
         .iter()
         .map(|(ledger, positive, amount)| {
             format!(
@@ -87,7 +88,8 @@ fn journal(guid: &str, yyyymmdd: &str, number: &str, entries: &[(&str, &str, &st
                  </ALLLEDGERENTRIES.LIST>"
             )
         })
-        .collect();
+        .collect::<Vec<String>>()
+        .concat();
     format!(
         "<VOUCHER VCHTYPE=\"Journal\" ACTION=\"Create\"><GUID>{guid}</GUID><ALTERID>9</ALTERID>\
          <DATE>{yyyymmdd}</DATE><VOUCHERTYPENAME>Journal</VOUCHERTYPENAME>\
@@ -279,8 +281,9 @@ fn imported_events_match_a_hand_derivation_of_the_fixture() {
         .iter()
         .filter_map(|e| match e {
             Event::MasterAltered { after, .. } => Some(after),
-            Event::MasterCreated(_) | Event::VoucherPosted(_) => None,
-            Event::MasterDeleted(_)
+            Event::MasterCreated(_)
+            | Event::VoucherPosted(_)
+            | Event::MasterDeleted(_)
             | Event::VoucherAltered { .. }
             | Event::VoucherCancelled { .. }
             | Event::VoucherDeleted { .. }
@@ -309,7 +312,14 @@ fn a_tally_voucher_type_with_a_default_name_and_other_behaviour_is_refused() {
          <NAME>Sales</NAME><PARENT>Journal</PARENT></VOUCHERTYPE>"
             .to_owned(),
     );
-    match import_company(&tally, "Test Traders", period(), dir.path(), &CancelToken::new()).unwrap()
+    match import_company(
+        &tally,
+        "Test Traders",
+        period(),
+        dir.path(),
+        &CancelToken::new(),
+    )
+    .unwrap()
     {
         Outcome::Unsupported(u) => assert!(u.what.contains("Sales"), "{}", u.what),
         Outcome::Value(_) => panic!("a clashing voucher type must refuse the import"),
@@ -320,7 +330,7 @@ fn a_tally_voucher_type_with_a_default_name_and_other_behaviour_is_refused() {
 fn an_inventory_line_refuses_the_whole_import() {
     let dir = tmp();
     let mut tally = FakeTally::standard();
-    let with_stock = format!(
+    let with_stock = String::from(
         "<VOUCHER VCHTYPE=\"Journal\" ACTION=\"Create\"><GUID>v-stock</GUID><ALTERID>9</ALTERID>\
          <DATE>20260410</DATE><VOUCHERTYPENAME>Journal</VOUCHERTYPENAME>\
          <VOUCHERNUMBER>J-9</VOUCHERNUMBER>\
@@ -328,10 +338,17 @@ fn an_inventory_line_refuses_the_whole_import() {
          <ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>100.00</AMOUNT>\
          </ALLINVENTORYENTRIES.LIST>\
          <ISCANCELLED>No</ISCANCELLED><ISOPTIONAL>No</ISOPTIONAL>\
-         <ISPOSTDATED>No</ISPOSTDATED><ISINVOICE>No</ISINVOICE></VOUCHER>"
+         <ISPOSTDATED>No</ISPOSTDATED><ISINVOICE>No</ISINVOICE></VOUCHER>",
     );
     tally.vouchers.push(("20260410", with_stock));
-    match import_company(&tally, "Test Traders", period(), dir.path(), &CancelToken::new()).unwrap()
+    match import_company(
+        &tally,
+        "Test Traders",
+        period(),
+        dir.path(),
+        &CancelToken::new(),
+    )
+    .unwrap()
     {
         Outcome::Unsupported(u) => {
             assert!(u.what.contains("inventory"), "{}", u.what);
@@ -363,8 +380,14 @@ fn a_cancel_before_the_first_request_stops_the_pull_with_nothing_read() {
 #[test]
 fn tally_not_running_is_an_error_naming_the_port() {
     let dir = tmp();
-    let err = import_company(&Down, "Test Traders", period(), dir.path(), &CancelToken::new())
-        .unwrap_err();
+    let err = import_company(
+        &Down,
+        "Test Traders",
+        period(),
+        dir.path(),
+        &CancelToken::new(),
+    )
+    .unwrap_err();
     assert_eq!(
         err,
         ImportError::Pull(PullError::Transport(TransportError::TallyNotRunning {
@@ -377,8 +400,14 @@ fn tally_not_running_is_an_error_naming_the_port() {
 fn raw_responses_are_captured_beside_the_import() {
     let dir = tmp();
     let tally = FakeTally::standard();
-    let _ = import_company(&tally, "Test Traders", period(), dir.path(), &CancelToken::new())
-        .unwrap();
+    let _ = import_company(
+        &tally,
+        "Test Traders",
+        period(),
+        dir.path(),
+        &CancelToken::new(),
+    )
+    .unwrap();
     // provenance: derived — spec 6.7 step 2: the capture directory holds the manifest that lists
     // the accepted files.
     assert!(dir.path().join(MANIFEST_FILE).is_file());

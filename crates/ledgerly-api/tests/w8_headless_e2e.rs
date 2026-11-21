@@ -34,7 +34,7 @@ use std::path::{Path, PathBuf};
 
 use ledgerly_api::{Api, ApiError, Command, CommandResult};
 use ledgerly_core::{
-    Clock, CompanyId, Date, Decimal, GodownId, Gstin, GroupId, Hsn, LedgerId, Outcome, Paise,
+    Clock, CompanyId, Date, Decimal, GodownId, GroupId, Gstin, Hsn, LedgerId, Outcome, Paise,
     Period, Qty, Rate, SignedAmount, StateCode, StockItemId, UnitId, VoucherId, VoucherTypeId,
 };
 use ledgerly_gst::gstr1::{Bucket, BucketedVoucher, build_gstr1};
@@ -218,7 +218,11 @@ fn ledgers() -> Vec<Ledger> {
         plain(PURCHASE, "Purchase", ReservedGroup::PurchaseAccounts),
         plain(RENT, "Rent", ReservedGroup::IndirectExpenses),
         plain(ELECTRICITY, "Electricity", ReservedGroup::IndirectExpenses),
-        plain(INTEREST, "Interest Received", ReservedGroup::IndirectIncomes),
+        plain(
+            INTEREST,
+            "Interest Received",
+            ReservedGroup::IndirectIncomes,
+        ),
         tax_ledger(INPUT_IGST, "Input IGST", TaxLedgerKind::Igst, 18),
         tax_ledger(OUTPUT_IGST, "Output IGST", TaxLedgerKind::Igst, 18),
         tax_ledger(OUTPUT_CGST, "Output CGST", TaxLedgerKind::Cgst, 9),
@@ -652,17 +656,21 @@ fn assert_tb_row(tb: &Report, label: &str, debit: bool, rupees: i64) {
     } else {
         vec![Cell::Empty, Cell::Amount(SignedAmount::cr(rs(rupees)))]
     };
-    assert_eq!(row_cells(tb, label), Some(cells), "trial balance row {label}");
+    assert_eq!(
+        row_cells(tb, label),
+        Some(cells),
+        "trial balance row {label}"
+    );
 }
 
 /// Derived. Each ledger's closing balance, summed from the vouchers above (Dr positive):
-/// Cash 50,000 - 20,000 + 5,000 - 1,000 - 4,000 + 1,770 = Dr 31,770. Bank 500,000 - 50,000
-/// - 5,000 - 3,000 + 3,000 + 1,000 + 2,000 - 1,000 = Dr 447,000. Capital 500,000 - 1,000 =
+/// Cash 50,000 - 20,000 + 5,000 - 1,000 - 4,000 + 1,770 = Dr 31,770. Bank 500,000 - 50,000 -
+/// 5,000 - 3,000 + 3,000 + 1,000 + 2,000 - 1,000 = Dr 447,000. Capital 500,000 - 1,000 =
 /// Cr 499,000. Purchase 10,000 + 5,000 = Dr 15,000. Rent 20,000 - 1,000 = Dr 19,000.
 /// Electricity 3,000 + 1,000 = Dr 4,000. Interest 5,000 + 2,000 = Cr 7,000. Input IGST 1,800 +
 /// 900 = Dr 2,700. Output IGST 1,080 + 270 + 810 - 270 = Cr 1,890. Output CGST 180 and SGST 180
-/// (Cr). Sales 6,000 + 1,500 + 2,000 + 4,500 - 1,500 = Cr 12,500. Gujarat Buyer 7,080 + 5,310
-/// - 1,770 - 3,000 = Dr 7,620. Walk-in 1,770 - 1,770 = nil. Karnataka Customer Dr 2,360.
+/// (Cr). Sales 6,000 + 1,500 + 2,000 + 4,500 - 1,500 = Cr 12,500. Gujarat Buyer 7,080 + 5,310 -
+/// 1,770 - 3,000 = Dr 7,620. Walk-in 1,770 - 1,770 = nil. Karnataka Customer Dr 2,360.
 /// Gujarat Supplier 11,800 + 5,900 - 5,000 - 4,000 = Cr 8,700.
 /// Totals: Dr 31,770 + 447,000 + 15,000 + 19,000 + 4,000 + 2,700 + 7,620 + 2,360 = 529,450;
 /// Cr 499,000 + 12,500 + 7,000 + 1,890 + 180 + 180 + 8,700 = 529,450.
@@ -694,8 +702,8 @@ fn check_trial_balance(tb: &Report) {
 /// Derived. Closing stock is 6 units. The average-cost pool holds 10 units bought at 1,000
 /// (10,000), 5 at 1,000 (5,000) and the returned unit at 1,500 (1,500): value 16,500 over 16
 /// units. Closing value = 6 x 16,500 / 16 = 6,187.50. Liabilities are capital 499,000 + supplier
-/// 8,700 + output tax 2,250 = Cr 509,950. Assets are cash 31,770 + bank 447,000 + buyer 7,620
-/// + karnataka customer 2,360 + input IGST 2,700 + stock 6,187.50 + the loss of 12,312.50 shown
+/// 8,700 + output tax 2,250 = Cr 509,950. Assets are cash 31,770 + bank 447,000 + buyer 7,620 +
+/// karnataka customer 2,360 + input IGST 2,700 + stock 6,187.50 + the loss of 12,312.50 shown
 /// on the asset side = Dr 509,950.
 fn check_balance_sheet(bs: &Report) {
     assert_eq!(
@@ -727,15 +735,16 @@ fn check_profit_and_loss(pl: &Report) {
 /// The real slab pack, plus the two GSTR-1 fixture parameters (see the module note).
 fn fixture_pack() -> RulePack {
     let mut text = include_str!("../../ledgerly-gst/packs/rates-slabs.toml").to_owned();
-    let legal_ref = "legal_ref = \"fixture for the W8 test; not verified\"";
-    text.push_str(&format!(
+    text.push_str(
         "\n[[entry]]\nid = \"gstr1.b2cl_threshold\"\neffective_from = \"2024-08-01\"\n\
-         {legal_ref}\n[entry.params]\ninvoice_value_rupees = \"100000\"\n"
-    ));
-    text.push_str(&format!(
+         legal_ref = \"fixture for the W8 test; not verified\"\n\
+         [entry.params]\ninvoice_value_rupees = \"100000\"\n",
+    );
+    text.push_str(
         "\n[[entry]]\nid = \"gstr1.hsn_credit_notes\"\neffective_from = \"2024-08-01\"\n\
-         {legal_ref}\n[entry.params]\ntreatment = \"net\"\n"
-    ));
+         legal_ref = \"fixture for the W8 test; not verified\"\n\
+         [entry.params]\ntreatment = \"net\"\n",
+    );
     load_pack(&text).unwrap()
 }
 
@@ -771,7 +780,11 @@ fn check_buckets(buckets: &[BucketedVoucher]) {
             .iter()
             .find(|b| b.voucher == VoucherId(id))
             .unwrap_or_else(|| panic!("voucher {id} has no bucket"));
-        assert_eq!(found.bucket, bucket, "voucher {id}: reason {:?}", found.reason);
+        assert_eq!(
+            found.bucket, bucket,
+            "voucher {id}: reason {:?}",
+            found.reason
+        );
     }
 }
 
@@ -837,8 +850,8 @@ fn check_cdnr(gstr1: &Gstr1) {
     assert_eq!(item.tax, ItemTax::Igst(rs(270)));
 }
 
-/// Derived, with the credit note netted (fixture treatment `net`). Taxable: 6,000 + 1,500 + 2,000
-/// + 4,500 - 1,500 = 12,500. IGST: 1,080 + 270 + 810 - 270 = 1,890. CGST 180, SGST 180. Value =
+/// Derived, with the credit note netted (fixture treatment `net`). Taxable: 6,000 + 1,500 + 2,000 +
+/// 4,500 - 1,500 = 12,500. IGST: 1,080 + 270 + 810 - 270 = 1,890. CGST 180, SGST 180. Value =
 /// 12,500 + 1,890 + 180 + 180 = 14,750. One HSN, unit PCS, rate 18.
 fn check_hsn(gstr1: &Gstr1) {
     assert_eq!(gstr1.hsn.len(), 1);

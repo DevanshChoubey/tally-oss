@@ -183,14 +183,27 @@ fn align_voucher_types(events: Vec<Event>) -> Result<Vec<Event>, Unsupported> {
                 out.push(aligned);
             }
             Event::VoucherPosted(mut voucher) => {
-                let new = remap.get(&voucher.type_id).copied().ok_or_else(|| Unsupported {
-                    what: format!("Tally voucher dated {}", voucher.date),
-                    reason: "its voucher type is not in the export".to_owned(),
-                })?;
+                let new = remap
+                    .get(&voucher.type_id)
+                    .copied()
+                    .ok_or_else(|| Unsupported {
+                        what: format!("Tally voucher dated {}", voucher.date),
+                        reason: "its voucher type is not in the export".to_owned(),
+                    })?;
                 voucher.type_id = new;
                 out.push(Event::VoucherPosted(voucher));
             }
-            other => out.push(other),
+            other @ (Event::MasterCreated(_)
+            | Event::MasterAltered { .. }
+            | Event::MasterDeleted(_)
+            | Event::VoucherAltered { .. }
+            | Event::VoucherCancelled { .. }
+            | Event::VoucherDeleted { .. }
+            | Event::SettingChanged { .. }
+            | Event::PeriodLocked { .. }
+            | Event::StatementImported(_)
+            | Event::MatchConfirmed(_)
+            | Event::AiProposalRecorded(_)) => out.push(other),
         }
     }
     Ok(out)
@@ -216,11 +229,7 @@ fn align_voucher_type(
         let seed_id = seed.id;
         let before = MasterSnapshot::VoucherType(seed.clone());
         let after = MasterSnapshot::VoucherType(VoucherType { id: seed_id, ..vt });
-        return Ok((
-            Event::MasterAltered { before, after },
-            old,
-            seed_id,
-        ));
+        return Ok((Event::MasterAltered { before, after }, old, seed_id));
     }
     let next = last_id.checked_add(1).ok_or_else(|| Unsupported {
         what: format!("Tally voucher type '{}'", vt.name),

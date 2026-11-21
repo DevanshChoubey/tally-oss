@@ -128,9 +128,9 @@ impl WelcomeScreen {
         let answer = match rx.try_recv() {
             Ok(answer) => answer,
             Err(TryRecvError::Empty) => return,
-            Err(TryRecvError::Disconnected) => Err(
-                "the company file could not be read; try again or check the path".to_owned(),
-            ),
+            Err(TryRecvError::Disconnected) => {
+                Err("the company file could not be read; try again or check the path".to_owned())
+            }
         };
         self.job = None;
         match answer {
@@ -217,10 +217,7 @@ impl Screen for WelcomeScreen {
                     .hint_text("path to a .ledgerly file")
                     .desired_width(360.0),
             );
-            if ui
-                .add_enabled(!busy, egui::Button::new("Open"))
-                .clicked()
-            {
+            if ui.add_enabled(!busy, egui::Button::new("Open")).clicked() {
                 self.start_open();
             }
         });
@@ -252,10 +249,7 @@ impl Screen for WelcomeScreen {
             );
             ui.end_row();
         });
-        if ui
-            .add_enabled(!busy, egui::Button::new("Create"))
-            .clicked()
-        {
+        if ui.add_enabled(!busy, egui::Button::new("Create")).clicked() {
             self.start_create();
         }
         if let Some(notice) = &self.notice {

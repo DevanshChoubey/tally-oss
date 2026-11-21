@@ -22,8 +22,8 @@
 //! scalable fonts. They need storage or screens that other cards own.
 
 mod chrome;
-pub mod submit;
 mod stack;
+pub mod submit;
 mod welcome;
 
 use egui::{Key, Modifiers};

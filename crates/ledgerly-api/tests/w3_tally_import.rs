@@ -84,7 +84,7 @@ fn between<'a>(text: &'a str, tag: &str) -> Option<&'a str> {
 /// A journal voucher. Each entry is (ledger, `Yes` for a debit or `No` for a credit, amount in
 /// Tally's signed text: negative for a debit).
 fn journal(guid: &str, yyyymmdd: &str, number: &str, entries: &[(&str, &str, &str)]) -> String {
-    let lines: String = entries
+    let lines = entries
         .iter()
         .map(|(ledger, positive, amount)| {
             format!(
@@ -93,7 +93,8 @@ fn journal(guid: &str, yyyymmdd: &str, number: &str, entries: &[(&str, &str, &st
                  </ALLLEDGERENTRIES.LIST>"
             )
         })
-        .collect();
+        .collect::<Vec<String>>()
+        .concat();
     format!(
         "<VOUCHER VCHTYPE=\"Journal\" ACTION=\"Create\"><GUID>{guid}</GUID><ALTERID>9</ALTERID>\
          <DATE>{yyyymmdd}</DATE><VOUCHERTYPENAME>Journal</VOUCHERTYPENAME>\
@@ -126,7 +127,7 @@ impl FakeTally {
                       <NAME>Current Assets</NAME></GROUP>\
                       <GROUP NAME=\"Cash-in-Hand\"><GUID>g-cih</GUID><ALTERID>2</ALTERID>\
                       <NAME>Cash-in-Hand</NAME><PARENT>Current Assets</PARENT></GROUP>";
-        let ledgers: String = [
+        let ledgers = [
             ("Cash", "Cash-in-Hand", "l-cash"),
             ("Rent", "Indirect Expenses", "l-rent"),
             ("Capital", "Capital Account", "l-capital"),
@@ -139,7 +140,8 @@ impl FakeTally {
                  <OPENINGBALANCE>0</OPENINGBALANCE></LEDGER>"
             )
         })
-        .collect();
+        .collect::<Vec<String>>()
+        .concat();
         let voucher_types = "<VOUCHERTYPE NAME=\"Journal\"><GUID>vt-journal</GUID>\
                              <ALTERID>4</ALTERID><NAME>Journal</NAME></VOUCHERTYPE>";
         FakeTally {

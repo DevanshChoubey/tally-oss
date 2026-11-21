@@ -13,7 +13,7 @@ use crate::worker::{ApiWorker, Poll, Ticket};
 #[derive(Debug)]
 pub enum CommandReply {
     /// The engine computed the change and the store saved it.
-    Booked(CommandResult),
+    Booked(Box<CommandResult>),
     /// The engine does not handle this case yet. Nothing was saved.
     Unsupported(Unsupported),
     /// The engine refused the change, or the store failed. Nothing was saved. The text says why.
@@ -24,7 +24,7 @@ pub enum CommandReply {
 #[must_use]
 pub fn send(worker: &ApiWorker, cmd: Command) -> Ticket<CommandReply> {
     worker.run(move |api| match api.execute(cmd) {
-        Ok(Outcome::Value(result)) => CommandReply::Booked(result),
+        Ok(Outcome::Value(result)) => CommandReply::Booked(Box::new(result)),
         Ok(Outcome::Unsupported(unsupported)) => CommandReply::Unsupported(unsupported),
         Err(e) => CommandReply::Failed(e.to_string()),
     })

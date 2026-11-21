@@ -253,12 +253,7 @@ impl Api {
             Outcome::Unsupported(unsupported) => return Ok(Outcome::Unsupported(unsupported)),
         };
         let statements = self.bank.for_ledger(ledger);
-        Ok(ledgerly_bank::brs::brs(
-            books,
-            ledger,
-            as_of,
-            &statements,
-        )?)
+        Ok(ledgerly_bank::brs::brs(books, ledger, as_of, &statements)?)
     }
 
     /// The id for a new statement: one more than the largest id in the audit log or held here, so
