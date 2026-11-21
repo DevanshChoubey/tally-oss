@@ -6,11 +6,9 @@
 //! pub fn serve(api: &Api, input: impl BufRead, output: impl Write) -> Result<(), McpError>;
 //! ```
 //!
-//! `ledgerly_api::facade::Api` is built by card W1 (Wave 2) and does not exist in this tree yet, so
-//! `serve` cannot be written against it. This module implements everything that does not need it:
-//! the MCP protocol loop, [`serve_with`], and the tool list, over the [`ToolBackend`] seam. The
-//! Wave 2 wiring adds `impl ToolBackend for Api` and `serve` as a one-line call to [`serve_with`]
-//! (recorded as an interface request).
+//! This module holds the MCP protocol loop, [`serve_with`], and the tool list, over the
+//! [`ToolBackend`] seam. [`serve`] runs the loop over the open company file; its
+//! `ToolBackend` implementation for `Api` is in `crate::backend`.
 //!
 //! The wire format is MCP revision 2024-11-05 over stdio: one JSON-RPC 2.0 message per line.
 //!
@@ -20,6 +18,7 @@
 
 use std::io::{BufRead, Read, Write};
 
+use ledgerly_api::Api;
 use serde_json::{Map, Value, json};
 
 /// MCP protocol revision this server speaks.
@@ -394,4 +393,14 @@ pub fn serve_with<B: ToolBackend + ?Sized>(
         }
     }
     Ok(())
+}
+
+/// Run the MCP server over the open company file until the client closes its input. The tools are
+/// those of [`ToolBackend`] for [`Api`]: `search`, `report` and `propose_voucher`.
+///
+/// # Errors
+/// Returns [`McpError`] when reading or writing the stream fails, or a line is over
+/// [`MAX_MESSAGE_BYTES`].
+pub fn serve(api: &Api, input: impl BufRead, output: impl Write) -> Result<(), McpError> {
+    serve_with(api, input, output)
 }

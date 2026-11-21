@@ -241,10 +241,6 @@ impl Api {
     ///
     /// # Errors
     /// [`ApiError::Stale`] after a saved change whose reload failed.
-    #[allow(
-        dead_code,
-        reason = "crate-internal seam for the Wave 2 extensions; remove once used"
-    )]
     pub(crate) fn cached_books(&self) -> Result<Outcome<&Books>, ApiError> {
         match &self.cache {
             Cache::Ready(books) => Ok(Outcome::Value(books)),
@@ -254,19 +250,11 @@ impl Api {
     }
 
     /// The company file, for read-only store calls (verify, backup, audit reads).
-    #[allow(
-        dead_code,
-        reason = "crate-internal seam for the Wave 2 extensions; remove once used"
-    )]
     pub(crate) fn store(&self) -> &SqliteStore {
         &self.store
     }
 
     /// The lock date in force, from the audit log.
-    #[allow(
-        dead_code,
-        reason = "crate-internal seam for the Wave 2 extensions; remove once used"
-    )]
     pub(crate) fn lock(&self) -> Option<Date> {
         self.lock
     }
