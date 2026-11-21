@@ -4,6 +4,8 @@
 //! error: it is `Ok(Outcome::Unsupported(..))` (rule A1).
 
 use ledgerly_engine::EngineError;
+use ledgerly_gst::GstError;
+use ledgerly_gst_formats::FormatError;
 use ledgerly_reports::ReportError;
 use ledgerly_store::StoreError;
 use thiserror::Error;
@@ -20,6 +22,13 @@ pub enum ApiError {
     /// A report engine rejected its parameters or its input.
     #[error(transparent)]
     Report(#[from] ReportError),
+    /// A GST computation failed: a rule pack is malformed, a master is missing or arithmetic
+    /// overflowed.
+    #[error(transparent)]
+    Gst(#[from] GstError),
+    /// The GST format writer refused a value (for example a document number of the wrong length).
+    #[error(transparent)]
+    Format(#[from] FormatError),
     /// A change was saved, but the books could not be reloaded afterwards, so figures are not
     /// computed until a command or [`crate::Api::open`] reloads them.
     #[error(
