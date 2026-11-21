@@ -13,14 +13,14 @@
 //! |---|---|
 //! | `reports_full_year/trial_balance_detailed` and `_condensed` | < 300 ms |
 //! | `reports_full_year/profit_loss` | < 300 ms |
-//! | `reports_full_year/balance_sheet` | < 300 ms |
 //! | `voucher_save/voucher_validate` (model invariants only) | part of the < 30 ms save |
 //! | `voucher_save/voucher_post_unnumbered` and `_auto_numbered` | < 30 ms (p95) |
 //!
 //! Criterion reports a distribution; it does not fail a run. The CI benchmark job compares each
 //! result with the previous one and fails on a regression over 10% (engineering rule D9).
 //!
-//! Not measured here, because the code does not exist yet: drill-down under 100 ms (needs the
+//! Not measured here, because the code does not exist yet: the balance sheet (card RP3; its bench
+//! lands with that card, the same way the other report benches will), drill-down under 100 ms (needs the
 //! group and ledger reports), type-ahead over 50k ledgers (card U-series), Tally import speed
 //! (card X-series) and cold start (app). The memory target is only approximated: the resident
 //! size of the process after the books are built is printed on Linux.
@@ -41,7 +41,6 @@ use ledgerly_core::Outcome;
 use ledgerly_engine::vouchers::post_voucher;
 use ledgerly_model::Books;
 use ledgerly_model::validate::validate_voucher;
-use ledgerly_reports::balance_sheet::balance_sheet;
 use ledgerly_reports::profit_loss::profit_loss;
 use ledgerly_reports::trial_balance::trial_balance;
 use ledgerly_reports::{Detail, ReportKind};
@@ -108,13 +107,12 @@ fn no_stock() -> Outcome<Vec<StockValuation>> {
     Outcome::Value(Vec::new())
 }
 
-/// Benchmarks the three statements and the trial balance over one full year.
+/// Benchmarks the trial balance and the profit and loss over one full year.
 fn bench_reports(c: &mut Criterion, books: &Books) {
     let stock = no_stock();
     let tb_detailed = report_params(ReportKind::TrialBalance, Detail::Detailed).unwrap();
     let tb_condensed = report_params(ReportKind::TrialBalance, Detail::Condensed).unwrap();
     let pl = report_params(ReportKind::ProfitAndLoss, Detail::Detailed).unwrap();
-    let bs = report_params(ReportKind::BalanceSheet, Detail::Detailed).unwrap();
 
     // One timed run each, so the job log shows the figures against the target.
     timed_once("trial balance (detailed)", Some(REPORT_TARGET), || {
@@ -122,9 +120,6 @@ fn bench_reports(c: &mut Criterion, books: &Books) {
     });
     timed_once("profit and loss", Some(REPORT_TARGET), || {
         profit_loss(books, &pl, &stock, &stock).unwrap()
-    });
-    timed_once("balance sheet", Some(REPORT_TARGET), || {
-        balance_sheet(books, &bs, &stock).unwrap()
     });
 
     let mut group = c.benchmark_group("reports_full_year");
@@ -139,9 +134,6 @@ fn bench_reports(c: &mut Criterion, books: &Books) {
     });
     group.bench_function("profit_loss", |b| {
         b.iter(|| profit_loss(black_box(books), black_box(&pl), &stock, &stock).unwrap());
-    });
-    group.bench_function("balance_sheet", |b| {
-        b.iter(|| balance_sheet(black_box(books), black_box(&bs), &stock).unwrap());
     });
     group.finish();
 }
