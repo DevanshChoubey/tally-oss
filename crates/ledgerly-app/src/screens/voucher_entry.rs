@@ -35,6 +35,7 @@ use std::collections::BTreeMap;
 use std::str::FromStr;
 
 use egui::{Id, Key, Modifiers, Ui};
+use ledgerly_api::Command;
 use ledgerly_core::{
     Date, Decimal, DrCr, FinancialYear, GroupId, LedgerId, MoneyError, Month, Outcome, Paise,
     RoundingRule, SignedAmount, VoucherId, VoucherTypeId, round_rupees_to_paise,
@@ -45,6 +46,8 @@ use ledgerly_model::{
 };
 use thiserror::Error;
 
+use crate::shell::submit::{self, CommandReply};
+use crate::worker::Ticket;
 use crate::{AppCtx, Screen, ScreenAction};
 
 /// How many type-ahead items are listed at most.
@@ -1112,6 +1115,9 @@ pub struct VoucherEntryScreen {
     notice: Option<Notice>,
     outbox: Option<Voucher>,
     master_requests: Vec<CreateLedgerRequest>,
+    /// The post the worker is running for this screen, if any. While it runs the screen shows
+    /// "Saving..." and takes no keys, so a second save cannot start.
+    posting: Option<Ticket<CommandReply>>,
 }
 
 impl VoucherEntryScreen {
@@ -1154,6 +1160,7 @@ impl VoucherEntryScreen {
             notice: None,
             outbox: None,
             master_requests: Vec::new(),
+            posting: None,
         }))
     }
 
@@ -1981,11 +1988,82 @@ impl Screen for VoucherEntryScreen {
     }
 
     fn ui(&mut self, ui: &mut Ui, ctx: &mut AppCtx) -> ScreenAction {
-        if let Some(books) = ctx.books.as_ref() {
+        if self.posting.is_some() {
+            self.wait_for_post(ui);
+            return ScreenAction::Stay;
+        }
+        let action = if let Some(books) = ctx.books.as_ref() {
             self.draw(ui, &books.masters)
         } else {
-            ui.label("No company is open.");
+            ui.label(no_books_text(ctx));
             ScreenAction::Stay
+        };
+        if ctx.api.is_some() {
+            self.send_saves(ctx);
+            self.refuse_ledger_creates();
+        }
+        action
+    }
+}
+
+/// What the screen says when it has no books to draw from.
+fn no_books_text(ctx: &AppCtx) -> &'static str {
+    if ctx.api.is_some() {
+        "The company is open, but this screen cannot read its masters yet."
+    } else {
+        "No company is open."
+    }
+}
+
+impl VoucherEntryScreen {
+    /// Sends the voucher the user asked to save to the worker. Without a worker nothing can be
+    /// posted, and the screen says so.
+    fn send_saves(&mut self, ctx: &AppCtx) {
+        // Without a worker the host takes the request itself, so it stays in the outbox.
+        let Some(worker) = ctx.api.as_ref() else {
+            return;
+        };
+        if let Some(voucher) = self.take_save_request() {
+            self.posting = Some(submit::send(worker, Command::PostVoucher(voucher)));
+            self.notice = Some(Notice::Info("Saving...".to_owned()));
+        }
+    }
+
+    /// Polls the post in progress and shows "Saving..." until the worker answers.
+    fn wait_for_post(&mut self, ui: &mut Ui) {
+        let Some(ticket) = self.posting.as_mut() else {
+            return;
+        };
+        if let Some(reply) = submit::settle(ticket) {
+            self.posting = None;
+            self.finish_post(reply);
+        } else {
+            ui.label("Saving...");
+            ui.ctx().request_repaint();
+        }
+    }
+
+    /// Shows the engine's answer. A booked voucher starts a fresh one; anything else keeps the
+    /// draft and says why nothing was saved.
+    fn finish_post(&mut self, reply: CommandReply) {
+        match reply {
+            CommandReply::Booked(_) => self.confirm_saved(),
+            CommandReply::Unsupported(u) => {
+                self.save_failed(&format!("not supported yet: {} ({})", u.what, u.reason));
+            }
+            CommandReply::Failed(reason) => self.save_failed(&reason),
+        }
+    }
+
+    /// Inline ledger creation (Alt+C) needs a new ledger id, which the company file does not
+    /// assign yet (the app cannot read the masters to pick one). The request is refused with that
+    /// reason, so no line stays "pending" forever.
+    fn refuse_ledger_creates(&mut self) {
+        for request in self.take_master_requests() {
+            self.reject_created_ledger(
+                &request.name,
+                "a new ledger needs an id from the company file, which this build cannot assign yet",
+            );
         }
     }
 }

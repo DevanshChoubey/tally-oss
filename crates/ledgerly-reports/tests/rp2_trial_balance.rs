@@ -369,6 +369,42 @@ fn group_rows_hold_the_net_of_their_ledgers() {
 }
 
 #[test]
+fn a_group_with_debit_and_credit_ledgers_shows_both_sides_and_totals_are_gross() {
+    // provenance: derived — Tally's own Trial Balance screenshots in
+    // <https://help.tallysolutions.com/article/Tally.ERP9/Reports/Display_Financial_Statements/Display_Trial_Balance.htm>
+    // (image 3._Trial_Balance-1.gif, read 2026-11-21): the Current Liabilities group row shows a
+    // Debit amount (5,45,257.50) and a Credit amount (2,38,27,223.75) on the same row, and the
+    // Grand Total adds both columns (credits 24,00,000 + 12,00,000 + 2,38,27,223.75 + 8,600 +
+    // 3,90,55,008.75 + 2,26,300 = 6,67,17,132.50, the Grand Total shown). In the detailed image
+    // (3._Trial_Balance-7.gif) every sub-group of Current Liabilities is Cr, so the debit side
+    // comes from ledgers, not sub-groups: a group's columns are its debit-balance ledgers and its
+    // credit-balance ledgers.
+    // Here: an advance of 5,000 from Customer One into Cash. Cash Dr 1,05,000; Customer One
+    // Cr 5,000 (both in Current Assets); Capital Cr 1,00,000.
+    // Current Assets row: Dr 1,05,000 and Cr 5,000. Totals: Dr 1,05,000; Cr 5,000 + 1,00,000 =
+    // 1,05,000. (Netting the group would give Dr 1,00,000 and totals of 1,00,000.)
+    let mut b = books(SignedAmount::cr(rs(100_000)), SignedAmount::dr(rs(100_000)));
+    two_line(
+        &mut b,
+        1,
+        date!(2026 - 04 - 10),
+        CASH,
+        DEBTOR,
+        rs(5_000),
+        VoucherStatus::Regular,
+        JOURNAL_TYPE,
+    );
+    for detail in [Detail::Detailed, Detail::Condensed] {
+        let r = run(&b, &params(date!(2026 - 04 - 30), detail));
+        assert_eq!(
+            dr_cr(&row(&r, "Current Assets").cells),
+            (Some(rs(105_000)), Some(rs(5_000)))
+        );
+        assert_eq!(totals(&r), (rs(105_000), rs(105_000)));
+    }
+}
+
+#[test]
 fn condensed_lists_primary_groups_only() {
     // provenance: derived — ReportParams docs: Condensed = primary groups only.
     // Primary groups with a non-zero balance: Capital Account, Current Assets, Sales Accounts,

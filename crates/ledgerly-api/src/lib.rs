@@ -8,9 +8,9 @@ mod bank;
 mod command;
 mod error;
 mod events;
+pub mod facade;
 mod gst;
 mod maintenance;
-pub mod facade;
 mod report;
 mod search;
 mod tally_import;
@@ -24,4 +24,15 @@ pub use ledgerly_reports::{
 };
 pub use error::ApiError;
 pub use facade::Api;
+pub use gst::{Bucket, BucketedVoucher, Gstr1, Gstr1Return, Gstr3bWorking, RulePack};
+pub use ledgerly_model::{Address, Company, EntityKind, Features, NegativeStockPolicy, Voucher};
+pub use ledgerly_reports::{Report, ReportParams};
+pub use ledgerly_store::backup::{RebuildOutcome, RebuildReport};
+pub use ledgerly_store::verify::{ChainProblem, VerifyReport};
+pub use maintenance::{VoucherCheck, verify_file};
 pub use search::{MatchedOn, SearchHit};
+pub use tally_import::ImportSummary;
+
+pub use ledgerly_bank::brs::Brs;
+pub use ledgerly_bank::matcher::{Candidate, LineDirection, MatchRule};
+pub use ledgerly_bank::statement::BankStatement;

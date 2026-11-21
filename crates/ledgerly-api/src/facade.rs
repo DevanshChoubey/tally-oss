@@ -44,6 +44,7 @@ use ledgerly_model::{Books, Company, MasterSnapshot};
 use ledgerly_reports::{Report, ReportParams};
 use ledgerly_store::{Actor, AuditMeta, Event, SqliteStore, Store, StoreError};
 
+use crate::bank::Statements;
 use crate::command::{self, Command, CommandResult};
 use crate::error::ApiError;
 use crate::events::{lock_date, read_all};
@@ -66,6 +67,9 @@ pub struct Api {
     cache: Cache,
     /// The lock date in force, from the audit log.
     lock: Option<Date>,
+    /// Bank statements imported in this session (card W5). Not kept in the company file, which
+    /// records only the `StatementImported` id; see `bank.rs`.
+    pub(crate) bank: Statements,
 }
 
 /// The state of the books cache.
@@ -103,6 +107,7 @@ impl Api {
             actor,
             cache: Cache::Stale,
             lock: None,
+            bank: Statements::default(),
         };
         api.reload()?;
         Ok(api)
@@ -120,6 +125,7 @@ impl Api {
             actor: default_actor(),
             cache: Cache::Stale,
             lock: None,
+            bank: Statements::default(),
         };
         api.reload()?;
         Ok(api)
@@ -221,10 +227,6 @@ impl Api {
     ///
     /// # Errors
     /// [`ApiError::Store`] when a needed reload fails.
-    #[allow(
-        dead_code,
-        reason = "crate-internal seam for the Wave 2 extensions; remove once used"
-    )]
     pub(crate) fn loaded_books(&mut self) -> Result<Outcome<&Books>, ApiError> {
         if matches!(self.cache, Cache::Stale) {
             self.reload()?;
@@ -241,10 +243,6 @@ impl Api {
     ///
     /// # Errors
     /// [`ApiError::Stale`] after a saved change whose reload failed.
-    #[allow(
-        dead_code,
-        reason = "crate-internal seam for the Wave 2 extensions; remove once used"
-    )]
     pub(crate) fn cached_books(&self) -> Result<Outcome<&Books>, ApiError> {
         match &self.cache {
             Cache::Ready(books) => Ok(Outcome::Value(books)),
@@ -254,19 +252,11 @@ impl Api {
     }
 
     /// The company file, for read-only store calls (verify, backup, audit reads).
-    #[allow(
-        dead_code,
-        reason = "crate-internal seam for the Wave 2 extensions; remove once used"
-    )]
     pub(crate) fn store(&self) -> &SqliteStore {
         &self.store
     }
 
     /// The lock date in force, from the audit log.
-    #[allow(
-        dead_code,
-        reason = "crate-internal seam for the Wave 2 extensions; remove once used"
-    )]
     pub(crate) fn lock(&self) -> Option<Date> {
         self.lock
     }
@@ -277,10 +267,6 @@ impl Api {
     /// # Errors
     /// [`ApiError::Store`] when the commit fails (nothing is written) or the reload fails (the
     /// change is saved and the cache is stale).
-    #[allow(
-        dead_code,
-        reason = "crate-internal seam for the Wave 2 extensions; remove once used"
-    )]
     pub(crate) fn commit_as(
         &mut self,
         events: &[Event],
@@ -296,12 +282,14 @@ impl Api {
     }
 
     /// The actor changes are attributed to.
-    #[allow(
-        dead_code,
-        reason = "crate-internal seam for the Wave 2 extensions; remove once used"
-    )]
     pub(crate) fn actor(&self) -> &Actor {
         &self.actor
+    }
+
+    /// The clock that stamps audit records. Used by the Tally import to find the current
+    /// financial year without reading the system clock itself.
+    pub(crate) fn clock(&self) -> Clock {
+        self.clock
     }
 
     /// Reloads the cache and the lock date from the store.

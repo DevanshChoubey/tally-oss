@@ -45,6 +45,7 @@
 //! cached (not asked for yet, nothing to key a cache on).
 
 mod check;
+mod command;
 mod draft;
 mod form_ui;
 mod list;
@@ -53,10 +54,14 @@ use egui::{Key, Modifiers, Ui};
 use ledgerly_core::{Outcome, Unsupported};
 use ledgerly_model::{Books, MasterSnapshot, Masters};
 
+use command::command_for;
 use list::snapshot_name;
 use thiserror::Error;
 
+use crate::shell::submit::{self, CommandReply};
+use crate::worker::{ApiWorker, Ticket};
 use crate::{AppCtx, Screen, ScreenAction};
+use ledgerly_api::Command;
 
 pub use draft::{
     BankDraft, CostCentreDraft, GroupDraft, GstDraft, LedgerDraft, MasterDraft, PartyDraft,
@@ -354,6 +359,10 @@ pub struct MastersScreen {
     mode: Mode,
     notice: Option<Notice>,
     requests: Vec<MasterRequest>,
+    /// Commands waiting to be sent, oldest first. One runs at a time.
+    commands: std::collections::VecDeque<Command>,
+    /// The command the worker is running, if any. While it runs the screen takes no keys.
+    posting: Option<Ticket<CommandReply>>,
 }
 
 impl Default for MastersScreen {
@@ -379,6 +388,8 @@ impl MastersScreen {
             mode: Mode::List,
             notice: None,
             requests: Vec::new(),
+            commands: std::collections::VecDeque::new(),
+            posting: None,
         }
     }
 
@@ -965,11 +976,82 @@ impl Screen for MastersScreen {
     }
 
     fn ui(&mut self, ui: &mut Ui, ctx: &mut AppCtx) -> ScreenAction {
-        if let Some(books) = ctx.books.as_ref() {
+        if self.posting.is_some() {
+            self.wait_for_post(ui);
+            return ScreenAction::Stay;
+        }
+        let action = if let Some(books) = ctx.books.as_ref() {
             self.draw(ui, books)
         } else {
-            ui.label("No company is open.");
+            ui.label(no_books_text(ctx));
             ScreenAction::Stay
+        };
+        // Without a worker the requests stay with the screen for the host to take.
+        if let Some(worker) = ctx.api.as_ref() {
+            self.queue_requests();
+            self.send_next(worker);
         }
+        action
+    }
+}
+
+/// What the screen says when it has no books to draw from.
+fn no_books_text(ctx: &AppCtx) -> &'static str {
+    if ctx.api.is_some() {
+        "The company is open, but this screen cannot read its masters yet."
+    } else {
+        "No company is open."
+    }
+}
+
+impl MastersScreen {
+    /// Turns the requests a confirmed form or delete queued into commands. A request with no
+    /// command in this build is refused with its reason.
+    fn queue_requests(&mut self) {
+        for request in self.take_requests() {
+            match command_for(request) {
+                Ok(cmd) => self.commands.push_back(cmd),
+                Err(reason) => self.notice = Some(Notice::Error(reason)),
+            }
+        }
+    }
+
+    /// Sends the oldest queued command to the worker, when none is running.
+    fn send_next(&mut self, worker: &ApiWorker) {
+        if self.posting.is_some() {
+            return;
+        }
+        if let Some(cmd) = self.commands.pop_front() {
+            self.posting = Some(submit::send(worker, cmd));
+            self.notice = Some(Notice::Info("Saving...".to_owned()));
+        }
+    }
+
+    /// Polls the command in progress and shows "Saving..." until the worker answers.
+    fn wait_for_post(&mut self, ui: &mut Ui) {
+        let Some(ticket) = self.posting.as_mut() else {
+            return;
+        };
+        if let Some(reply) = submit::settle(ticket) {
+            self.posting = None;
+            self.finish_post(reply);
+            if !self.commands.is_empty() {
+                ui.ctx().request_repaint();
+            }
+        } else {
+            ui.label("Saving...");
+            ui.ctx().request_repaint();
+        }
+    }
+
+    /// Shows the engine's answer for the command that ran.
+    fn finish_post(&mut self, reply: CommandReply) {
+        self.notice = Some(match reply {
+            CommandReply::Booked(_) => Notice::Info("Saved.".to_owned()),
+            CommandReply::Unsupported(u) => {
+                Notice::Warn(format!("Not supported yet: {} ({})", u.what, u.reason))
+            }
+            CommandReply::Failed(reason) => Notice::Error(format!("Not saved: {reason}")),
+        });
     }
 }

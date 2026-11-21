@@ -257,9 +257,17 @@ struct Builder<'a> {
     placed_ledgers: BTreeSet<LedgerId>,
 }
 
-/// One group's roll-up.
+/// One group's roll-up. Tally does not net a group whose ledgers sit on both sides: its row shows
+/// the total of its debit-balance ledgers and the total of its credit-balance ledgers, and the
+/// grand total adds those columns. Source: the Trial Balance screenshots in
+/// <https://help.tallysolutions.com/article/Tally.ERP9/Reports/Display_Financial_Statements/Display_Trial_Balance.htm>,
+/// read 2026-11-21 (see the rp2 test for the arithmetic).
 struct GroupOut {
-    net: Paise,
+    /// Sum of the debit balances of every ledger in the group and its sub-groups.
+    dr: Paise,
+    /// Sum of the credit balances (as positive amounts) of every ledger in the group and its
+    /// sub-groups.
+    cr: Paise,
     rows: Vec<ReportRow>,
     shown: bool,
 }
@@ -294,7 +302,8 @@ impl<'a> Builder<'a> {
             Detail::Detailed => true,
             Detail::Condensed => false,
         };
-        let mut net = Paise::ZERO;
+        let mut dr = Paise::ZERO;
+        let mut cr = Paise::ZERO;
         let mut shown = false;
         let mut body = Vec::new();
 
@@ -302,9 +311,13 @@ impl<'a> Builder<'a> {
         for l in own_ledgers {
             self.placed_ledgers.insert(l.id);
             let balance = self.balances.get(&l.id).copied().unwrap_or(Paise::ZERO);
-            net = net.checked_add(balance)?;
             if balance.is_zero() {
                 continue;
+            }
+            if balance.is_negative() {
+                cr = cr.checked_add(balance.checked_neg()?)?;
+            } else {
+                dr = dr.checked_add(balance)?;
             }
             shown = true;
             if detailed {
@@ -324,7 +337,8 @@ impl<'a> Builder<'a> {
             .unwrap_or_default();
         for sub in subgroups {
             let out = self.group(sub, depth.saturating_add(1))?;
-            net = net.checked_add(out.net)?;
+            dr = dr.checked_add(out.dr)?;
+            cr = cr.checked_add(out.cr)?;
             if out.shown {
                 shown = true;
                 if detailed {
@@ -338,10 +352,15 @@ impl<'a> Builder<'a> {
             label: group.name.clone(),
             depth,
             kind: RowKind::Group,
-            cells: balance_cells(net)?,
+            cells: side_cells(dr, cr),
         });
         rows.extend(body);
-        Ok(GroupOut { net, rows, shown })
+        Ok(GroupOut {
+            dr,
+            cr,
+            rows,
+            shown,
+        })
     }
 }
 
@@ -357,6 +376,19 @@ fn balance_cells(balance: Paise) -> Result<Vec<Cell>, ReportError> {
     } else {
         Ok(vec![Cell::Amount(SignedAmount::dr(balance)), Cell::Empty])
     }
+}
+
+/// `[Debit, Credit]` cells for a group: each side shows its own total, so a group with ledgers on
+/// both sides shows both.
+fn side_cells(dr: Paise, cr: Paise) -> Vec<Cell> {
+    let side = |amount: Paise, cell: fn(Paise) -> SignedAmount| {
+        if amount.is_zero() {
+            Cell::Empty
+        } else {
+            Cell::Amount(cell(amount))
+        }
+    };
+    vec![side(dr, SignedAmount::dr), side(cr, SignedAmount::cr)]
 }
 
 /// The explicit opening-difference row.
@@ -403,11 +435,8 @@ fn build_report(
     let mut cr_total = Paise::ZERO;
     for primary in primaries {
         let out = builder.group(primary, 0)?;
-        if out.net.is_negative() {
-            cr_total = cr_total.checked_add(out.net.checked_neg()?)?;
-        } else {
-            dr_total = dr_total.checked_add(out.net)?;
-        }
+        dr_total = dr_total.checked_add(out.dr)?;
+        cr_total = cr_total.checked_add(out.cr)?;
         if out.shown {
             rows.extend(out.rows);
         }
