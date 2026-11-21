@@ -154,13 +154,13 @@ pub fn rate_change_rule(d: &SupplyDates, change_date: Date) -> Outcome<RateSide>
         match pair {
             (Some(RateSide::Before), _) | (_, Some(RateSide::Before)) => Some(RateSide::Before),
             (Some(RateSide::After), Some(RateSide::After)) => Some(RateSide::After),
-            (Some(RateSide::After), None) | (None, Some(RateSide::After)) | (None, None) => None,
+            (Some(RateSide::After) | None, None) | (None, Some(RateSide::After)) => None,
         }
     } else {
         match pair {
             (Some(RateSide::After), _) | (_, Some(RateSide::After)) => Some(RateSide::After),
             (Some(RateSide::Before), Some(RateSide::Before)) => Some(RateSide::Before),
-            (Some(RateSide::Before), None) | (None, Some(RateSide::Before)) | (None, None) => None,
+            (Some(RateSide::Before) | None, None) | (None, Some(RateSide::Before)) => None,
         }
     };
     match decided {
