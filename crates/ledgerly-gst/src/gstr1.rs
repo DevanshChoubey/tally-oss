@@ -10,8 +10,10 @@
 //!
 //! # What is built
 //!
-//! Every voucher dated inside `period` gets exactly one [`BucketedVoucher`]; vouchers dated
-//! outside it are not part of this return and get none. The return holds Table 4 (B2B), 5
+//! Every voucher whose time of supply (its supply date, else its voucher date) falls inside
+//! `period` gets exactly one [`BucketedVoucher`]; vouchers outside it are not part of this return
+//! and get none. The same date selects the period in GSTR-3B (card G10) for sales. A voucher whose
+//! time of supply cannot be decided is placed by its voucher date and listed as `NeedsCorrection`. The return holds Table 4 (B2B), 5
 //! (B2CL), 7 (B2CS), 8 (nil, exempt, non-GST), 9B for registered recipients (CDNR), 12 (HSN) and
 //! 13 (documents issued). `cdnur` and `exp` are always empty (see below).
 //!
@@ -176,7 +178,7 @@ pub fn build_gstr1(
         ));
     }
     let mut evals = Vec::new();
-    for v in books.vouchers.values().filter(|v| period.contains(v.date)) {
+    for v in books.vouchers.values().filter(|v| in_return_period(v, period)) {
         evals.push(evaluate(books, v, pack)?);
     }
     flag_duplicates(&mut evals);
@@ -497,6 +499,17 @@ fn time_of_supply(v: &Voucher) -> Outcome<Date> {
             "set the supply date explicitly; the time-of-supply rules are not applied here",
         ),
         (None, Some(_) | None) => Outcome::Value(v.date),
+    }
+}
+
+/// Whether `v` is reported in `period`: by its time of supply, the same date G10 uses for sales,
+/// so an invoice dated 31 Jan and supplied on 1 Feb is in February's return and not January's. A
+/// voucher whose time of supply is `Unsupported` is placed by its voucher date instead, so it is
+/// listed (as `NeedsCorrection`) in exactly one period rather than in none.
+fn in_return_period(v: &Voucher, period: Period) -> bool {
+    match time_of_supply(v) {
+        Outcome::Value(d) => period.contains(d),
+        Outcome::Unsupported(_) => period.contains(v.date),
     }
 }
 
