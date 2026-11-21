@@ -36,12 +36,16 @@
 //! Dr and Cr are written as words next to each amount, so no meaning rests on colour alone.
 
 mod model;
+mod remote;
 mod text;
 
 use egui::{Align, Context, Key, Layout, Modifiers, RichText, Ui};
 use egui_extras::{Column, TableBuilder, TableRow};
+use ledgerly_api::ReportParams;
 use ledgerly_core::{Outcome, Period};
 
+use crate::screens::wire::{Done, Latest, unsupported_text};
+use crate::worker::ApiWorker;
 use crate::{AppCtx, Screen, ScreenAction};
 
 pub use model::{
@@ -52,7 +56,8 @@ pub use text::{
     PeriodTextError, amount_text, cell_text, date_text, parse_period_date, parse_period_text,
     period_text,
 };
-use text::{numeric_date_text, unsupported_text};
+use remote::{drill_params, run_report, view_detail, with_view};
+use text::numeric_date_text;
 
 /// Height of one table row, in points.
 const ROW_HEIGHT: f32 = 22.0;
@@ -109,6 +114,20 @@ struct TableEvents {
     opened: Option<usize>,
 }
 
+/// The answer a worker-mode request brings back: the parameters it ran with, and the report.
+type Answer = (ReportParams, Result<Outcome<ViewReport>, ViewError>);
+
+/// What a worker-mode screen sends to the API worker and waits for.
+struct WorkerRun {
+    /// The engine parameters of the report on show. Its balance date is kept across period and
+    /// detail changes.
+    engine: ReportParams,
+    /// A period or detail change the worker has not been asked for yet.
+    want: Option<ViewParams>,
+    /// The request in flight. A newer request drops the older one's ticket.
+    latest: Latest<Answer>,
+}
+
 /// Shows one report, with row selection, drill-down, the detail toggle and the period editor.
 pub struct ReportViewScreen {
     report: ViewReport,
@@ -117,6 +136,8 @@ pub struct ReportViewScreen {
     scroll_pending: bool,
     period_edit: Option<PeriodEdit>,
     notice: Option<Notice>,
+    /// Present only for a worker-mode screen (see [`ReportSource::worker`]).
+    worker: Option<WorkerRun>,
 }
 
 impl ReportViewScreen {
@@ -133,7 +154,94 @@ impl ReportViewScreen {
             scroll_pending: false,
             period_edit: None,
             notice: None,
+            worker: None,
         })
+    }
+
+    /// A worker-mode screen for the report `source` describes. The report is requested from the
+    /// API worker on the first frame; until it arrives the screen shows "Loading the report".
+    ///
+    /// Returns `None` when `source` is not a worker source.
+    #[must_use]
+    pub fn worker(source: ReportSource) -> Option<Self> {
+        let engine = source.worker_base()?.clone();
+        let want = ViewParams {
+            period: engine.period,
+            detail: view_detail(engine.detail),
+        };
+        Some(Self {
+            report: pending_report(want),
+            source,
+            selected: 0,
+            scroll_pending: false,
+            period_edit: None,
+            notice: None,
+            worker: Some(WorkerRun {
+                engine,
+                want: Some(want),
+                latest: Latest::default(),
+            }),
+        })
+    }
+
+    /// Advances a worker-mode screen by one step: applies a finished report and sends a waiting
+    /// period or detail change to `worker`. Does nothing in host mode. A change with no worker
+    /// shows an error and sends nothing.
+    pub fn tick(&mut self, worker: Option<&ApiWorker>) {
+        let finished = self.worker.as_mut().and_then(|run| run.latest.poll());
+        match finished {
+            Some(Done::Ready((params, answer))) => self.apply(params, answer),
+            Some(Done::Lost) => self.fail(
+                "the engine stopped before it answered; check the books and open the report again",
+            ),
+            None => {}
+        }
+        let Some(view) = self.worker.as_mut().and_then(|run| run.want.take()) else {
+            return;
+        };
+        let Some(handle) = worker else {
+            self.fail("No company is open, so the report cannot run.");
+            return;
+        };
+        let Some(run) = self.worker.as_mut() else {
+            return;
+        };
+        let as_of = if view.period == run.engine.period {
+            run.engine.as_of
+        } else {
+            view.period.to()
+        };
+        let params = with_view(&run.engine, view, as_of);
+        run.latest.start(handle, move |api| {
+            let answer = run_report(api, &params);
+            (params, answer)
+        });
+    }
+
+    /// Shows the answer to a worker request. A failed or unsupported answer keeps the previous
+    /// report on screen, with the reason.
+    fn apply(&mut self, params: ReportParams, answer: Result<Outcome<ViewReport>, ViewError>) {
+        match answer {
+            Err(e) => self.fail(e.to_string()),
+            Ok(Outcome::Unsupported(u)) => self.fail(unsupported_text(&u)),
+            Ok(Outcome::Value(report)) => match report.check_shape() {
+                Ok(()) => {
+                    if let Some(run) = self.worker.as_mut() {
+                        run.engine = params;
+                    }
+                    self.replace_report(report);
+                }
+                Err(e) => self.fail(e.to_string()),
+            },
+        }
+    }
+
+    /// `true` while a worker-mode screen waits for a report.
+    #[must_use]
+    pub fn is_loading(&self) -> bool {
+        self.worker
+            .as_ref()
+            .is_some_and(|run| run.want.is_some() || run.latest.is_pending())
     }
 
     /// The report on show.
@@ -210,7 +318,10 @@ impl ReportViewScreen {
             self.info(format!("\"{label}\" has nothing to open."));
             return ScreenAction::Stay;
         };
-        match (self.source.drill)(&self.report.token, &key, self.report.params) {
+        let Some(drill) = self.source.host_drill() else {
+            return self.drill_worker(&key);
+        };
+        match drill(&self.report.token, &key, self.report.params) {
             Err(e) => {
                 self.fail(e.to_string());
                 ScreenAction::Stay
@@ -229,6 +340,32 @@ impl ReportViewScreen {
                     }
                 }
             }
+        }
+    }
+
+    /// Drill in worker mode: a group or ledger opens a new worker-mode report with the same
+    /// period and detail. The new screen asks the worker itself on its first frame.
+    fn drill_worker(&mut self, key: &ViewKey) -> ScreenAction {
+        let base = self
+            .worker
+            .as_ref()
+            .map(|run| with_view(&run.engine, self.report.params, run.engine.as_of));
+        let Some(base) = base else {
+            self.fail("This report has no worker to run a drill with.");
+            return ScreenAction::Stay;
+        };
+        match drill_params(&base, key) {
+            Err(notice) => {
+                self.notice = Some(notice);
+                ScreenAction::Stay
+            }
+            Ok(params) => match ReportViewScreen::worker(ReportSource::worker(params)) {
+                Some(screen) => ScreenAction::Push(Box::new(screen)),
+                None => {
+                    self.fail("The drilled report could not be set up.");
+                    ScreenAction::Stay
+                }
+            },
         }
     }
 
@@ -291,7 +428,15 @@ impl ReportViewScreen {
 
     fn refresh(&mut self, params: ViewParams) {
         self.notice = None;
-        match (self.source.refresh)(&self.report.token, params) {
+        if let Some(run) = self.worker.as_mut() {
+            run.want = Some(params);
+            return;
+        }
+        let Some(refresh) = self.source.host_refresh() else {
+            self.fail("This report has no source to run it with.");
+            return;
+        };
+        match refresh(&self.report.token, params) {
             Err(e) => self.fail(e.to_string()),
             Ok(Outcome::Unsupported(u)) => self.fail(unsupported_text(&u)),
             Ok(Outcome::Value(report)) => match report.check_shape() {
@@ -353,6 +498,10 @@ impl ReportViewScreen {
             period_text(self.report.params.period),
             self.report.params.detail.label()
         ));
+        if self.is_loading() {
+            ui.weak("Loading the report...");
+            ui.ctx().request_repaint();
+        }
         match &self.notice {
             Some(Notice::Error(s)) => {
                 ui.colored_label(ui.visuals().error_fg_color, format!("Error: {s}"));
@@ -554,7 +703,22 @@ impl Screen for ReportViewScreen {
         self.report.title.clone()
     }
 
-    fn ui(&mut self, ui: &mut Ui, _ctx: &mut AppCtx) -> ScreenAction {
+    fn ui(&mut self, ui: &mut Ui, ctx: &mut AppCtx) -> ScreenAction {
+        self.tick(ctx.api.as_ref());
         self.draw(ui)
+    }
+}
+
+/// The placeholder a worker-mode screen shows until its first report arrives: no rows, no
+/// figures.
+fn pending_report(params: ViewParams) -> ViewReport {
+    ViewReport {
+        token: ReportToken("pending".to_owned()),
+        title: "Report".to_owned(),
+        params,
+        columns: Vec::new(),
+        rows: Vec::new(),
+        totals: Vec::new(),
+        notes: Vec::new(),
     }
 }
