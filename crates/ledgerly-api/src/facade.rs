@@ -213,6 +213,97 @@ impl Api {
         }
     }
 
+    /// Crate-internal access for the Wave 2 extensions in other modules of this crate (bridge
+    /// import, GST, banking, maintenance). Reloads first when a saved change left the cache stale.
+    ///
+    /// Returns the cached books, or `Unsupported` when the store holds a voucher this build cannot
+    /// project.
+    ///
+    /// # Errors
+    /// [`ApiError::Store`] when a needed reload fails.
+    #[allow(
+        dead_code,
+        reason = "crate-internal seam for the Wave 2 extensions; remove once used"
+    )]
+    pub(crate) fn loaded_books(&mut self) -> Result<Outcome<&Books>, ApiError> {
+        if matches!(self.cache, Cache::Stale) {
+            self.reload()?;
+        }
+        match &self.cache {
+            Cache::Ready(books) => Ok(Outcome::Value(books)),
+            Cache::Blocked(unsupported) => Ok(Outcome::Unsupported(unsupported.clone())),
+            Cache::Stale => Err(ApiError::Stale),
+        }
+    }
+
+    /// The cached books without reloading, or `Unsupported` / [`ApiError::Stale`] as in
+    /// [`Api::report`]. For read-only extensions that take `&self`.
+    ///
+    /// # Errors
+    /// [`ApiError::Stale`] after a saved change whose reload failed.
+    #[allow(
+        dead_code,
+        reason = "crate-internal seam for the Wave 2 extensions; remove once used"
+    )]
+    pub(crate) fn cached_books(&self) -> Result<Outcome<&Books>, ApiError> {
+        match &self.cache {
+            Cache::Ready(books) => Ok(Outcome::Value(books)),
+            Cache::Blocked(unsupported) => Ok(Outcome::Unsupported(unsupported.clone())),
+            Cache::Stale => Err(ApiError::Stale),
+        }
+    }
+
+    /// The company file, for read-only store calls (verify, backup, audit reads).
+    #[allow(
+        dead_code,
+        reason = "crate-internal seam for the Wave 2 extensions; remove once used"
+    )]
+    pub(crate) fn store(&self) -> &SqliteStore {
+        &self.store
+    }
+
+    /// The lock date in force, from the audit log.
+    #[allow(
+        dead_code,
+        reason = "crate-internal seam for the Wave 2 extensions; remove once used"
+    )]
+    pub(crate) fn lock(&self) -> Option<Date> {
+        self.lock
+    }
+
+    /// Commits `events` attributed to `actor` with the current clock, then reloads the books.
+    /// An empty list commits nothing and returns `None`.
+    ///
+    /// # Errors
+    /// [`ApiError::Store`] when the commit fails (nothing is written) or the reload fails (the
+    /// change is saved and the cache is stale).
+    #[allow(
+        dead_code,
+        reason = "crate-internal seam for the Wave 2 extensions; remove once used"
+    )]
+    pub(crate) fn commit_as(
+        &mut self,
+        events: &[Event],
+        actor: &Actor,
+    ) -> Result<Option<ledgerly_store::CommitReceipt>, ApiError> {
+        if events.is_empty() {
+            return Ok(None);
+        }
+        let meta = audit_meta(actor, self.clock);
+        let receipt = self.store.commit(events, &meta)?;
+        self.reload()?;
+        Ok(Some(receipt))
+    }
+
+    /// The actor changes are attributed to.
+    #[allow(
+        dead_code,
+        reason = "crate-internal seam for the Wave 2 extensions; remove once used"
+    )]
+    pub(crate) fn actor(&self) -> &Actor {
+        &self.actor
+    }
+
     /// Reloads the cache and the lock date from the store.
     ///
     /// # Errors
