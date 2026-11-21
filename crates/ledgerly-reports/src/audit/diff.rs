@@ -217,6 +217,13 @@ pub(super) fn diff_values(path: &str, before: &Value, after: &Value, out: &mut V
                 diff_slot(&sub, old.get(index), new.get(index), out);
             }
         }
+        // An optional struct (`None` serialises as null) that appears or disappears.
+        (Value::Null, container) if is_container(container) => {
+            absent_changes(path, container, false, out);
+        }
+        (container, Value::Null) if is_container(container) => {
+            absent_changes(path, container, true, out);
+        }
         _ => out.push(Change {
             field: path.to_owned(),
             before: render(path, before),
@@ -243,8 +250,10 @@ fn render(path: &str, v: &Value) -> String {
             return rupees_text(paise);
         }
         if let Some(items) = v.as_array() {
-            let amounts: Option<Vec<String>> =
-                items.iter().map(|item| item.as_i64().map(rupees_text)).collect();
+            let amounts: Option<Vec<String>> = items
+                .iter()
+                .map(|item| item.as_i64().map(rupees_text))
+                .collect();
             if let Some(list) = amounts {
                 return format!("[{}]", list.join(","));
             }
@@ -388,7 +397,10 @@ mod tests {
             &json!({"lines": [{"amount": 150000}]}),
             &json!({"lines": [{"amount": 150000}, {"amount": 150000}]}),
         );
-        assert_eq!(got, vec![triple("lines[1].amount", "(absent)", "Rs 1,500.00")]);
+        assert_eq!(
+            got,
+            vec![triple("lines[1].amount", "(absent)", "Rs 1,500.00")]
+        );
     }
 
     #[test]
@@ -408,5 +420,15 @@ mod tests {
         // field, so the array is a list of rupee amounts, and it changed length.
         let got = changes(&json!({"tax": [100, 250]}), &json!({"tax": [100]}));
         assert_eq!(got, vec![triple("tax", "[Rs 1.00,Rs 2.50]", "[Rs 1.00]")]);
+    }
+
+    #[test]
+    fn null_to_a_struct_with_paise_is_shown_field_by_field_in_rupees() {
+        // derived: 150000 paise = Rs 1,500.00. The optional struct was null (None) and is now
+        // present, so its taxable amount is "(absent)" before and Rs 1,500.00 after.
+        let before = json!({"gst": null});
+        let after = json!({"gst": {"taxable": 150000}});
+        let got = changes(&before, &after);
+        assert_eq!(got, vec![triple("gst.taxable", "(absent)", "Rs 1,500.00")]);
     }
 }
