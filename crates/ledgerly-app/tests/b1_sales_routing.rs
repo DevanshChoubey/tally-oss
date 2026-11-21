@@ -33,7 +33,7 @@ use time::OffsetDateTime;
 use time::macros::date;
 
 fn company() -> Company {
-    let first14 = "29ABCDE1234F1";
+    let first14 = "29ABCDE1234F1Z";
     let check = gstin_check_character(first14).unwrap();
     let gstin = ledgerly_core::Gstin::parse(&format!("{first14}{check}")).unwrap();
     Company {
