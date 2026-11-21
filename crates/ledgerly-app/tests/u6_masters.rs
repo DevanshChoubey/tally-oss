@@ -410,6 +410,8 @@ fn app_with(books: Books) -> AppCtx {
     AppCtx {
         books: Some(books),
         api: None,
+        lock_date: None,
+        ai_tier: None,
     }
 }
 

@@ -110,7 +110,11 @@ pub(super) fn key_bar(ui: &mut Ui, hints: &[(String, String)], t: &Tokens) {
     ui.horizontal(|ui| {
         for (keys, label) in hints {
             keycap::keycap(ui, keys);
-            ui.label(RichText::new(label.as_str()).size(TEXT_META).color(t.text_2));
+            ui.label(
+                RichText::new(label.as_str())
+                    .size(TEXT_META)
+                    .color(t.text_2),
+            );
             ui.add_space(SPACE_3);
         }
     });

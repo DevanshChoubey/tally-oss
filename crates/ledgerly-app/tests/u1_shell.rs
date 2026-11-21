@@ -3,6 +3,8 @@
 //! (resumable) vs 'replace'", "Esc back") and the `ScreenAction` docs in `screen.rs`; each test
 //! says which sentence it checks. No test here involves a number.
 
+#![allow(clippy::unwrap_used, reason = "test code: rule B2 lets tests unwrap")]
+
 use egui::{Event, Key, Modifiers, RawInput};
 use ledgerly_app::shell::chrome::key_hints;
 use ledgerly_app::shell::topbar::{ai_chip, company_chip, date_chip, lock_chip};
@@ -428,5 +430,5 @@ fn a_screen_has_no_keys_and_its_title_as_page_title_unless_it_says_so() {
     let screen = Leaf("Home");
     assert_eq!(screen.page_title(), "Home");
     assert_eq!(screen.subtitle(), None);
-    assert!(screen.keys().is_empty());
+    assert_eq!(screen.keys().len(), 0, "no keys by default");
 }

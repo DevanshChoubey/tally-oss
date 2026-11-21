@@ -53,9 +53,11 @@ pub enum CommandRoute {
 #[must_use]
 pub fn command_route(action: Action) -> CommandRoute {
     match action {
-        Action::NewTab | Action::CloseTab | Action::Back | Action::OpenPalette | Action::SwitchPalette => {
-            CommandRoute::Shell
-        }
+        Action::NewTab
+        | Action::CloseTab
+        | Action::Back
+        | Action::OpenPalette
+        | Action::SwitchPalette => CommandRoute::Shell,
         Action::NewContra
         | Action::NewPayment
         | Action::NewReceipt
@@ -138,7 +140,9 @@ fn command_screen(action: Action, ctx: &AppCtx) -> Result<Box<dyn Screen>, NavEr
         Action::NewPayment => entry_screen(ctx, BaseVoucherKind::Payment),
         Action::NewReceipt => entry_screen(ctx, BaseVoucherKind::Receipt),
         Action::NewJournal => entry_screen(ctx, BaseVoucherKind::Journal),
-        Action::Help => navigate::open_target(&PaletteTarget::Report(navigate::KEYS_KEY.to_owned()), ctx),
+        Action::Help => {
+            navigate::open_target(&PaletteTarget::Report(navigate::KEYS_KEY.to_owned()), ctx)
+        }
         Action::NewTab
         | Action::CloseTab
         | Action::Back
@@ -180,10 +184,7 @@ fn year_of(books: &Books) -> FinancialYear {
 }
 
 /// The first active voucher type of `kind`, by id.
-fn type_of(
-    books: &Books,
-    kind: BaseVoucherKind,
-) -> Result<ledgerly_core::VoucherTypeId, NavError> {
+fn type_of(books: &Books, kind: BaseVoucherKind) -> Result<ledgerly_core::VoucherTypeId, NavError> {
     books
         .masters
         .voucher_types

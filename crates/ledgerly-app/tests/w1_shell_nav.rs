@@ -223,17 +223,9 @@ fn ctrl_backslash_toggles_the_rail() {
     let ctx = egui::Context::default();
     let mut shell = Shell::new(leaf("Home"));
     assert!(!shell.rail(), "the full sidebar is the default");
-    frame(
-        &ctx,
-        &mut shell,
-        key(Key::Backslash, Modifiers::COMMAND),
-    );
+    frame(&ctx, &mut shell, key(Key::Backslash, Modifiers::COMMAND));
     assert!(shell.rail(), "Ctrl+\\ shows the rail");
-    frame(
-        &ctx,
-        &mut shell,
-        key(Key::Backslash, Modifiers::COMMAND),
-    );
+    frame(&ctx, &mut shell, key(Key::Backslash, Modifiers::COMMAND));
     assert!(!shell.rail(), "Ctrl+\\ again shows the full sidebar");
 }
 

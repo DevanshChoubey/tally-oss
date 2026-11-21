@@ -281,6 +281,8 @@ fn the_screen_gets_its_tax_block_from_the_worker_and_accept_posts() {
     let mut app = AppCtx {
         books: Some(books),
         api: Some(worker),
+        lock_date: None,
+        ai_tier: None,
     };
 
     until(&mut screen, &mut app, "tax block", |s, m| {
@@ -347,6 +349,8 @@ fn an_invoice_with_a_round_off_shows_unsupported_and_does_not_save() {
     let mut app = AppCtx {
         books: Some(books),
         api: Some(worker),
+        lock_date: None,
+        ai_tier: None,
     };
     until(&mut screen, &mut app, "answer", |s, m| {
         matches!(s.gst_status(m), GstStatus::Unsupported(_))

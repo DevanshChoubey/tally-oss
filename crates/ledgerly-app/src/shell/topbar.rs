@@ -20,11 +20,11 @@ use ledgerly_core::{Date, FinancialYear};
 
 use super::chrome::ChromeCmd;
 use super::navigate::{AI_SETTINGS_KEY, KEYS_KEY};
+use crate::AppCtx;
 use crate::palette::PaletteTarget;
 use crate::screen::AiTier;
 use crate::theme::{TEXT_H2, ThemeKind, Tokens};
 use crate::ui::{chip, format};
-use crate::AppCtx;
 
 /// The company chip's words: the open company's name and financial year (`Name FY 2026-27`), or
 /// "No company open" while no books are loaded.
@@ -77,7 +77,12 @@ pub(super) fn top_bar(
 ) -> Vec<ChromeCmd> {
     let mut cmds = Vec::new();
     ui.with_layout(Layout::left_to_right(egui::Align::Center), |ui| {
-        ui.label(RichText::new("Ledgerly").strong().size(TEXT_H2).color(t.text));
+        ui.label(
+            RichText::new("Ledgerly")
+                .strong()
+                .size(TEXT_H2)
+                .color(t.text),
+        );
         ui.add_space(8.0);
 
         if chip::chip(ui, &company_chip(ctx))
@@ -98,9 +103,8 @@ pub(super) fn top_bar(
             ));
         }
         if let Some(text) = lock_chip(ctx.lock_date) {
-            chip::chip(ui, &text).on_hover_text(
-                "Period lock: no create, alter or delete on or before this date",
-            );
+            chip::chip(ui, &text)
+                .on_hover_text("Period lock: no create, alter or delete on or before this date");
         }
 
         if chip::chip(ui, "Search or jump \u{00B7} Ctrl+K")

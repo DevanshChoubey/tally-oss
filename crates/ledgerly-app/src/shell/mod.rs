@@ -57,7 +57,9 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use egui::{Key, Modifiers};
 
 use crate::keymap::{self, Action, Keymap};
-use crate::palette::{Palette, PaletteChoice, PaletteEntry, PaletteMode, PaletteSearch, PaletteTarget};
+use crate::palette::{
+    Palette, PaletteChoice, PaletteEntry, PaletteMode, PaletteSearch, PaletteTarget,
+};
 use crate::theme::{self, ThemeKind, Tokens};
 use crate::worker::Ticket;
 use crate::{AppCtx, Screen, ScreenAction};
@@ -65,10 +67,10 @@ use chrome::ChromeCmd;
 use sidebar::CommandRoute;
 use submit::BooksReply;
 
+pub use crate::screen::{AiTier, KeyHint};
 pub use gateway::GatewayScreen;
 pub use stack::{ScreenStack, StackChange, Tabs};
 pub use welcome::{WelcomeScreen, company_from_form};
-pub use crate::screen::{AiTier, KeyHint};
 
 /// Height of the top bar, in points (`design/mock-v2/index.html:80`, `grid-template-rows: 48px`).
 pub const TOP_BAR_HEIGHT: f32 = 48.0;
@@ -260,7 +262,32 @@ impl Shell {
             Action::CloseTab => self.run_shell_cmd(ChromeCmd::CloseActiveTab),
             Action::Back => self.run_shell_cmd(ChromeCmd::Back),
             Action::OpenPalette | Action::SwitchPalette => self.open_palette(action),
-            other => match sidebar::command_route(other) {
+            other @ (Action::NewContra
+            | Action::NewPayment
+            | Action::NewReceipt
+            | Action::NewJournal
+            | Action::NewSales
+            | Action::Help
+            | Action::NewPurchase
+            | Action::ChangePeriod
+            | Action::SwitchCompany
+            | Action::CompanyFeatures
+            | Action::Configure
+            | Action::Save
+            | Action::CreateMaster
+            | Action::AlterMaster
+            | Action::MoreDetails
+            | Action::DeleteLine
+            | Action::SwitchSide
+            | Action::DeleteVoucher
+            | Action::CancelVoucher
+            | Action::DuplicateVoucher
+            | Action::InsertVoucher
+            | Action::Undo
+            | Action::ToggleDetail
+            | Action::Print
+            | Action::Export
+            | Action::Email) => match sidebar::command_route(other) {
                 CommandRoute::Screen => self.open_in_tab(&choice.target, choice.mode),
                 CommandRoute::Shell | CommandRoute::Hidden => {
                     self.notice = Some(format!(
