@@ -425,8 +425,45 @@ fn xlsx_write_replaces_atomically_and_leaves_no_temp_file() {
     let mut book: Xlsx<_> = open_workbook(&path).unwrap();
     let range = book.worksheet_range("Cells").unwrap();
     assert_eq!(cell_string(range.get((1, 1))), "number 2.00");
-    let temp = path.with_file_name(".atomic.xlsx.ledgerly-tmp");
-    assert!(!temp.exists());
+    let leftovers = std::fs::read_dir(path.parent().unwrap())
+        .unwrap()
+        .filter_map(|entry| entry.ok())
+        .filter(|entry| {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            name.starts_with(".atomic.xlsx.") && name.ends_with(".ledgerly-tmp")
+        })
+        .count();
+    assert_eq!(leftovers, 0);
+}
+
+#[test]
+fn xlsx_amount_above_2_pow_53_paise_is_refused_not_rounded() {
+    // derived: 2^53 = 9_007_199_254_740_992, so 9_007_199_254_740_993 paise (90071992547409.93
+    // rupees) has no exact f64 cell; the export must fail with a typed error and write nothing.
+    let report = one_cell(dr(Paise::new(9_007_199_254_740_993)));
+    let path = scratch("too_big.xlsx");
+    let _ = std::fs::remove_file(&path);
+    let result = to_xlsx(&report, &path);
+    assert!(
+        matches!(&result, Err(ReportError::Export { .. })),
+        "{result:?}"
+    );
+    assert!(!path.exists());
+}
+
+#[test]
+fn xlsx_quantity_with_more_than_15_significant_digits_is_refused() {
+    // derived: 1234567890123456789 has 19 significant digits; an f64 holds about 15-17, and the
+    // neighbouring doubles near 1.2e18 are 256 apart, so the cell cannot be exact.
+    let report = one_cell(Cell::Qty(Qty(Decimal::new(1_234_567_890_123_456_789, 0))));
+    let path = scratch("big_qty.xlsx");
+    let _ = std::fs::remove_file(&path);
+    let result = to_xlsx(&report, &path);
+    assert!(
+        matches!(&result, Err(ReportError::Export { .. })),
+        "{result:?}"
+    );
+    assert!(!path.exists());
 }
 
 #[test]

@@ -17,7 +17,7 @@
 //!
 //! # Cell conventions
 //!
-//! Money is never rounded or passed through a float on the way out:
+//! Money is never rounded on the way out, and the only float is the one the XLSX format forces:
 //!
 //! - [`Cell::Amount`] is written as a signed rupee amount with two decimals, **debit positive,
 //!   credit negative** (`500.00` is a debit of 500 rupees, `-500.00` a credit). In XLSX the cell
@@ -30,8 +30,13 @@
 //!   bare number, so a figure that is not final cannot be summed by mistake.
 //! - [`Cell::Unsupported`] is written as text (`UNSUPPORTED what: reason`), never blank or zero.
 //!
-//! The XLSX number is the decimal text of the paise (`Decimal::new(paise, 2)`) parsed to the
-//! nearest `f64`; no arithmetic is done on floats. CSV text cells that start with `=`, `+`, `-`,
+//! An XLSX number cell is an IEEE double (a `rust_xlsxwriter` / file format limit, the recorded
+//! exception to rule A3). The cell is written from the decimal text of the paise
+//! (`Decimal::new(paise, 2)`) parsed to `f64`, no arithmetic is done on floats, and the number is
+//! written **only if it round-trips exactly**: the double's shortest decimal text must equal the
+//! original decimal. A figure that does not (an amount above 2^53 paise, a quantity with more than
+//! about 15 significant digits) is a [`ReportError::Export`], never a silently rounded cell. CSV
+//! carries every digit and has no such limit. CSV text cells that start with `=`, `+`, `-`,
 //! `@`, tab or carriage return get a leading `'` so a spreadsheet does not run them as formulas.
 //!
 //! JSON is the serde form of [`Report`] (pretty printed), so it round-trips exactly, including
@@ -41,8 +46,10 @@ use std::ffi::OsString;
 use std::fs;
 use std::io::Write;
 use std::path::Path;
+use std::str::FromStr;
+use std::sync::atomic::{AtomicU64, Ordering};
 
-use ledgerly_core::{DrCr, SignedAmount};
+use ledgerly_core::{Decimal, DrCr, SignedAmount};
 use rust_xlsxwriter::{Format, Workbook, Worksheet};
 
 use crate::{Cell, Report, ReportError, ReportRow};
@@ -277,9 +284,7 @@ fn fill_sheet(sheet: &mut Worksheet, lines: &[Vec<Value>]) -> Result<(), String>
                     written.map_err(|e| e.to_string())?;
                 }
                 Value::Number { text, style } => {
-                    let number: f64 = text
-                        .parse()
-                        .map_err(|e| format!("number '{text}' is not a valid number: {e}"))?;
+                    let number = exact_f64(text)?;
                     let written = match style {
                         NumStyle::Money => sheet.write_number_with_format(row, col, number, &money),
                         NumStyle::TwoDp => {
@@ -295,6 +300,31 @@ fn fill_sheet(sheet: &mut Worksheet, lines: &[Vec<Value>]) -> Result<(), String>
     Ok(())
 }
 
+/// Parses decimal text to the `f64` a spreadsheet cell stores, and refuses when the double does
+/// not stand for exactly the same decimal (the only float in this crate; see the module docs).
+fn exact_f64(text: &str) -> Result<f64, String> {
+    let not_exact = || {
+        format!(
+            "number '{text}' cannot be stored exactly in a spreadsheet cell (more than about 15 \
+             significant digits); export it as CSV instead"
+        )
+    };
+    let number: f64 = text
+        .parse()
+        .map_err(|e| format!("number '{text}' is not a valid number: {e}"))?;
+    let original = Decimal::from_str(text)
+        .map_err(|e| format!("number '{text}' is not a valid decimal: {e}"))?;
+    let back = Decimal::from_str(&number.to_string()).map_err(|_| not_exact())?;
+    if back == original {
+        Ok(number)
+    } else {
+        Err(not_exact())
+    }
+}
+
+/// Distinguishes temp files of exports in the same process.
+static TEMP_COUNTER: AtomicU64 = AtomicU64::new(0);
+
 /// Temp file in the same directory, flush to disk, rename over the target.
 fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), ReportError> {
     let name = path
@@ -302,7 +332,8 @@ fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), ReportError> {
         .ok_or_else(|| export_error(path, "the path has no file name"))?;
     let mut temp_name = OsString::from(".");
     temp_name.push(name);
-    temp_name.push(".ledgerly-tmp");
+    let unique = TEMP_COUNTER.fetch_add(1, Ordering::Relaxed);
+    temp_name.push(format!(".{}-{unique}.ledgerly-tmp", std::process::id()));
     let temp = path.with_file_name(temp_name);
     let result = write_then_rename(&temp, path, bytes);
     if let Err(e) = result {
@@ -317,5 +348,27 @@ fn write_then_rename(temp: &Path, path: &Path, bytes: &[u8]) -> std::io::Result<
     file.write_all(bytes)?;
     file.sync_all()?;
     drop(file);
-    fs::rename(temp, path)
+    fs::rename(temp, path)?;
+    sync_parent(path);
+    Ok(())
 }
+
+/// Best effort: flush the directory entry so the rename survives a crash. The file is already in
+/// place, so a failure here is not reported as an export failure.
+#[cfg(unix)]
+fn sync_parent(path: &Path) {
+    if let Some(parent) = path.parent() {
+        let dir = if parent.as_os_str().is_empty() {
+            Path::new(".")
+        } else {
+            parent
+        };
+        if let Ok(handle) = fs::File::open(dir) {
+            let _ = handle.sync_all();
+        }
+    }
+}
+
+/// No portable directory fsync off Unix.
+#[cfg(not(unix))]
+fn sync_parent(_path: &Path) {}
