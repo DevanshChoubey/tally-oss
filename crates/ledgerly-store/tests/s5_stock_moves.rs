@@ -621,3 +621,97 @@ fn unsupported_kinds_and_statuses_are_errors_that_name_the_voucher() {
         assert_error_names(&stock_moves(&store, None), id, needle);
     }
 }
+
+#[test]
+fn compound_unit_is_converted_only_when_it_is_defined_on_that_unit() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut store = new_store(dir.path());
+    // Unit 5 is a compound record whose first unit is Dozen (1 Dozen = 12 pcs). It describes
+    // dozens, not unit 5, so a line in unit 5 must not be converted with its factor.
+    // provenance: derived; the record's own `first` must be the unit being converted (the BOX
+    // fixture has first = BOX), so the conversion of unit 5 is not defined by the data.
+    store
+        .commit(
+            &[Event::MasterCreated(unit(
+                5,
+                "xbox",
+                UnitKind::Compound {
+                    first: UnitId(DOZEN),
+                    factor: Decimal::from(12),
+                    second: UnitId(PCS),
+                },
+            ))],
+            &meta(),
+        )
+        .unwrap();
+    let line = inv_line(5, 2, 4_800, vec![alloc(1, None, 2, 4_800)]);
+    post(
+        &mut store,
+        vec![voucher(1, PURCHASE, date(2026, Month::April, 5), vec![line])],
+    );
+    assert_error_names(&stock_moves(&store, None), 1, "cannot be converted");
+}
+
+#[test]
+fn load_books_reports_the_same_stock_moves_as_stock_moves() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut store = new_store(dir.path());
+    // provenance: derived; the item invoice fixture of `item_invoice_with_two_godown_allocations`:
+    // 6 pcs from godown 1 (Rs 300 = 30,000 paise) and 4 pcs from godown 2 batch 1 (20,000 paise).
+    let line = inv_line(
+        PCS,
+        10,
+        50_000,
+        vec![alloc(1, None, 6, 30_000), alloc(2, Some(1), 4, 20_000)],
+    );
+    post(
+        &mut store,
+        vec![voucher(1, SALES, date(2026, Month::April, 5), vec![line])],
+    );
+    let want = vec![
+        StockMove {
+            voucher: VoucherId(1),
+            date: date(2026, Month::April, 5),
+            item: StockItemId(1),
+            godown: GodownId(1),
+            batch: None,
+            qty_in: Qty::ZERO,
+            qty_out: qty(6),
+            value: Paise::new(30_000),
+        },
+        StockMove {
+            voucher: VoucherId(1),
+            date: date(2026, Month::April, 5),
+            item: StockItemId(1),
+            godown: GodownId(2),
+            batch: Some(BatchId(1)),
+            qty_in: Qty::ZERO,
+            qty_out: qty(4),
+            value: Paise::new(20_000),
+        },
+    ];
+    assert_eq!(stock_moves(&store, None).unwrap(), want);
+    assert_eq!(store.load_books(None).unwrap().stock_moves, want);
+}
+
+#[test]
+fn load_books_fails_when_a_voucher_cannot_be_projected_instead_of_leaving_its_stock_out() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut store = new_store(dir.path());
+    // provenance: derived; a stock journal has no direction per line, so the projection is
+    // unsupported (module documentation); load_books must fail naming it, not return no moves.
+    let line = inv_line(PCS, 1, 100, vec![alloc(1, None, 1, 100)]);
+    post(
+        &mut store,
+        vec![voucher(1, STOCK_JOURNAL, date(2026, Month::April, 5), vec![line])],
+    );
+    let result = store.load_books(None);
+    let message = match &result {
+        Err(StoreError::Encoding(m)) => m.clone(),
+        other => panic!("expected an encoding error, got {:?}", other.as_ref().err()),
+    };
+    assert!(
+        message.contains("VoucherId(1)") && message.contains("stock journal"),
+        "{message}"
+    );
+}

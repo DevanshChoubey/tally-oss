@@ -11,7 +11,7 @@
 //!   audit records (same hashes) and the same company as the file it was backed up from (card
 //!   text, spec 6.6: restore preserves events and hashes).
 //! - Snapshot isolation: a backup holds the events committed before it was taken and none that
-//!   come later (a copy, not a link): 2 events before, 1 more after, so the backup has 2.
+//!   come later (a copy, not a link): 3 events before, 1 more after, so the backup has 3.
 //! - Rebuild: the projection tables are filled by hand here with rows that agree with the events
 //!   (same ids, dates, ledgers, paise and sides as the fixture voucher lines written below), so a
 //!   match is expected; each mismatch test changes exactly one stored value by hand.
@@ -555,7 +555,7 @@ fn a_missing_and_an_extra_stored_row_are_both_reported() {
 }
 
 #[test]
-fn a_voucher_id_column_that_disagrees_with_its_snapshot_is_reported() {
+fn a_voucher_date_column_that_disagrees_with_its_snapshot_is_reported() {
     let dir = tempfile::tempdir().unwrap();
     let store = populated(dir.path());
     fill_matching_projections(store.path());
@@ -582,4 +582,70 @@ fn rebuild_after_restore_gives_the_same_report() {
         rebuild_projections_and_compare(&restored).unwrap(),
         rebuild_projections_and_compare(&store).unwrap()
     );
+}
+
+/// The `-wal` side file of a database path.
+fn with_wal(path: &Path) -> std::path::PathBuf {
+    let mut name = path.as_os_str().to_owned();
+    name.push("-wal");
+    std::path::PathBuf::from(name)
+}
+
+/// Flips the lowest bit of the first byte of stored event `seq`, leaving its hash untouched.
+fn flip_first_byte_of_event(path: &Path, seq: i64) {
+    let conn = Connection::open(path).unwrap();
+    let mut event: Vec<u8> = conn
+        .query_row("SELECT event FROM events WHERE seq = ?1", [seq], |r| r.get(0))
+        .unwrap();
+    if let Some(byte) = event.first_mut() {
+        *byte ^= 0x01;
+    }
+    conn.execute(
+        "UPDATE events SET event = ?1 WHERE seq = ?2",
+        rusqlite::params![event, seq],
+    )
+    .unwrap();
+}
+
+#[test]
+fn backup_refuses_a_company_file_whose_audit_chain_is_altered() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = populated(dir.path());
+    // Hand change: event 2 (the first voucher) has one stored byte flipped; its hash column still
+    // matches the old head, so the head comparison alone would call the copy good.
+    flip_first_byte_of_event(store.path(), 2);
+    let backups = dir.path().join("backups");
+    let result = backup_to(&store, &backups, epoch());
+    // Derived: populated() commits event 1 (group) and events 2 and 3 (vouchers 1 and 2), so the
+    // first broken record is event 2.
+    assert!(
+        matches!(&result, Err(StoreError::ChainBroken(EventSeq(2)))),
+        "{result:?}"
+    );
+    assert!(!backups.join("books-backup-19700101T000000Z.ledgerly").exists());
+}
+
+#[test]
+fn restore_of_a_backup_with_events_in_its_wal_file_fails_instead_of_losing_them() {
+    let dir = tempfile::tempdir().unwrap();
+    let store = populated(dir.path());
+    // A company file copied while it is open: the main file and its -wal side file are copied,
+    // and the newest events live only in the -wal file.
+    let live = dir.path().join("live");
+    std::fs::create_dir_all(&live).unwrap();
+    let input = live.join("books-live.ledgerly");
+    std::fs::copy(store.path(), &input).unwrap();
+    std::fs::copy(with_wal(store.path()), with_wal(&input)).unwrap();
+    // Derived: populated() has 3 events, all visible through the -wal file.
+    let conn =
+        Connection::open_with_flags(&input, rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY).unwrap();
+    let visible: i64 = conn
+        .query_row("SELECT count(*) FROM events", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(visible, 3);
+    drop(conn);
+    let target = dir.path().join("restored.ledgerly");
+    let result = restore_from(&input, &target);
+    assert!(result.is_err(), "{:?}", result.as_ref().err());
+    assert!(!target.exists(), "failed restore must remove its target");
 }

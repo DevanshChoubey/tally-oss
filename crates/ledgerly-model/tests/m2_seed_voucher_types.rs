@@ -57,7 +57,10 @@ fn one_type_per_base_kind_with_ids_1_to_18() {
 
 #[test]
 fn names_follow_research_list() {
-    // provenance: derived - R1 "Reserved voucher types" reconstructed list names.
+    // provenance: pending - the names follow the R1 "Reserved voucher types" list, which
+    // docs/research/01-core-accounting.md (lines 136-144) says is reconstructed from scattered
+    // pages and not checked against one official enumeration. Until an official or observed
+    // source confirms them, they are product choices and this test is unverified.
     let expected = [
         (K::Contra, "Contra"),
         (K::Payment, "Payment"),

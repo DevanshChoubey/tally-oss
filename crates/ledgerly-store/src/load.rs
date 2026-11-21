@@ -26,7 +26,10 @@
 //! - `period` keeps only vouchers (and their postings) dated inside it; masters are always all
 //!   loaded.
 //!
-//! `Books::stock_moves` is left empty: card S5 ([`crate::stock_load`]) fills it.
+//! `Books::stock_moves` is filled from the same vouchers by card S5's projection
+//! ([`crate::stock_load::moves_from_vouchers`]). A voucher that cannot be projected to stock
+//! movements fails the load with [`StoreError::Encoding`] naming it: its stock is never left out,
+//! because an empty or partial list would understate stock and skip the stock guards in reports.
 
 use std::collections::BTreeMap;
 use std::collections::btree_map::Entry;
@@ -181,12 +184,14 @@ impl Replay {
         }
         // Stable sort: the lines of one voucher keep their line order.
         postings.sort_by_key(|p| (p.date, p.voucher));
+        // The same vouchers as the postings, so `period` limits both alike.
+        let stock_moves = crate::stock_load::moves_from_vouchers(&self.masters, &vouchers)?;
         Ok(Books {
             company,
             masters: self.masters,
             vouchers,
             postings,
-            stock_moves: Vec::new(),
+            stock_moves,
         })
     }
 }

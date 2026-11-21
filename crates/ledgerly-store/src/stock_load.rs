@@ -16,8 +16,9 @@
 //!   `RejectionIn` bring goods in (`qty_in`); `Sales`, `DeliveryNote` and `RejectionOut` send
 //!   goods out (`qty_out`). Orders (`SalesOrder`, `PurchaseOrder`) never move stock.
 //! - Quantities are converted from the line's unit to the item's base unit: the base unit itself,
-//!   the item's alternate unit (`base_per_alt`), or a compound unit whose `second` is the base
-//!   unit (`factor`). Any other unit is an error, not a guess.
+//!   the item's alternate unit (`base_per_alt`), or a compound unit defined on that unit (its
+//!   `first` is the unit itself) whose `second` is the base unit (`factor`). Any other unit is an
+//!   error, not a guess.
 //! - `value` is the allocation amount ("value of the movement at voucher rate").
 //! - Vouchers that cannot be projected without guessing make the call fail naming the voucher and
 //!   the reason (rule A1: no silent default). These are: inventory lines on a credit or debit
@@ -44,9 +45,8 @@ use crate::{SqliteStore, StoreError};
 /// Stock movements of the company, optionally limited to vouchers dated inside `period`,
 /// sorted by `(date, voucher)`.
 ///
-/// This replays the event log through [`load_books`] and then calls [`moves_from_vouchers`]; it
-/// does not read `Books::stock_moves` (which `load_books` may leave empty), so it never recurses
-/// into a loader that calls it.
+/// This is the same list as `load_books(period)?.stock_moves`: it replays the event log through
+/// [`load_books`] and then calls [`moves_from_vouchers`] on the loaded vouchers.
 ///
 /// # Errors
 /// [`StoreError`] on a read failure; [`StoreError::Encoding`] when a voucher cannot be projected
@@ -260,7 +260,11 @@ fn base_factor(masters: &Masters, item: &StockItem, unit: UnitId) -> Result<Deci
             .get(&unit)
             .ok_or_else(|| format!("unit {unit:?} does not exist"))?;
         match &master.kind {
-            UnitKind::Compound { factor, second, .. } if *second == item.unit => *factor,
+            UnitKind::Compound {
+                first,
+                factor,
+                second,
+            } if *first == unit && *second == item.unit => *factor,
             UnitKind::Compound { .. } | UnitKind::Simple => {
                 return Err(format!(
                     "unit {unit:?} is neither the base unit {:?} of item {:?}, its alternate unit, \
