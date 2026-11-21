@@ -9,5 +9,6 @@ pub mod gstr1_xlsx;
 pub mod gstr2b;
 pub mod gstr3b;
 pub mod ims;
+mod json_digits;
 
 pub use error::FormatError;
