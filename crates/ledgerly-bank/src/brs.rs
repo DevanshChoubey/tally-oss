@@ -1,41 +1,62 @@
 //! Bank reconciliation statement (spec 6.5). **Card K3.**
 //!
-//! Frozen interface (plan card K3):
+//! Frozen interface (plan card K3, signature kept in round 3):
 //!
 //! ```text
 //! pub fn brs(books: &Books, ledger: LedgerId, as_of: Date, statements: &[BankStatement]) -> Result<Outcome<Brs>, BankError>;
 //! ```
 //!
-//! The statement lists the balance as per books on the as-of date, the entries in the books that
-//! the bank has not yet cleared on that date, and the balance as per the bank statements:
+//! Round 3 (owner decision 2026-11-21: copy TallyPrime's documented model). Source:
+//! <https://help.tallysolutions.com/docs/te9rel65/Reports/Display_Registers_Ledgers/Bank_Reconciliation.htm>
+//! (accessed 2026-11-21). It replaces the round-2 policy, under which any missing, short or
+//! overlapping statement made the whole BRS `Unsupported`.
 //!
-//! ```text
-//! balance as per books
-//!   - deposits recorded in the books but not yet credited by the bank (debits to the bank ledger)
-//!   + payments recorded in the books but not yet debited by the bank (credits to the bank ledger)
-//!   = balance as per bank
-//! ```
+//! The book-derived part is always a value:
 //!
-//! Conventions:
+//! - *Balance as per company books* is the ledger's book balance on `as_of` (opening balance plus
+//!   the postings dated on or before `as_of`). Balance is debit-positive: a bank ledger that holds
+//!   money has a positive balance.
+//! - *Amounts not reflected in bank* are the voucher lines on the bank ledger, dated on or before
+//!   `as_of`, whose bank date is blank or later than `as_of`. They are split into deposits (debit
+//!   lines to the bank ledger) and payments (credit lines). Which vouchers count: `Regular` and
+//!   `PostDated` only (optional and cancelled vouchers are left out; spec invariant 3).
+//! - *Balance as per bank* = books balance - uncleared deposits + uncleared payments. Sign rule
+//!   for a debit-balance bank ledger: a deposit is debited in the books but not yet credited by
+//!   the bank, so the bank's balance is still lower; it is subtracted. A payment is credited in
+//!   the books but not yet debited by the bank, so the bank's balance is still higher; it is
+//!   added back. The page states the rule in words only, so this follows from the identity.
+//! - The ledger's opening balance is treated as cleared. Items the bank had not cleared at the
+//!   start of the books surface in [`Brs::difference`], not hidden.
 //!
-//! - Books balance is debit-positive (an asset); statement balances are credit-positive from the
-//!   account holder's view (see `ledgerly_bankfmt::RawLine`). Both are positive when the business
-//!   holds money, so they are directly comparable.
-//! - Which vouchers count: [`VoucherStatus::Regular`] and [`VoucherStatus::PostDated`] vouchers
-//!   dated on or before `as_of` (spec invariant 3, scenario `Actual`). Optional and cancelled
-//!   vouchers are left out.
-//! - A bank line is cleared on `as_of` only when it carries a bank date on or before `as_of`; the
-//!   bank date is set only by a user-confirmed match (spec 6.5). A bank line with no bank
-//!   allocation has no bank date and is reported as not cleared.
-//! - The ledger's opening balance is treated as cleared. If it contains items the bank had not
-//!   cleared at the start of the books, they surface in [`Brs::difference`], not hidden.
-//! - [`Brs::difference`] is `bank balance - (books balance - deposits + payments)`. It is zero
-//!   exactly when every statement line up to `as_of` is accounted for in the books. A non-zero
-//!   difference (a bank charge not yet booked, for example) is reported, never absorbed.
-//! - The bank balance at `as_of` is the first statement's opening balance plus every statement
-//!   line dated on or before `as_of`. Statements must chain (each opening equals the previous
-//!   closing) and must not overlap; otherwise the result is `Unsupported`. A statement that ends
-//!   before `as_of` is taken to be the latest the bank has given us; nothing is assumed after it.
+//! The statement-side figure is different. A statement is an imported fact that lists its own
+//! opening balance, closing balance and dated lines ([`BankStatement`]). The file does not store
+//! its own start and end dates, only the first and last line dates. The balance at `as_of` is
+//! exactly known from one statement only when:
+//!
+//! - `as_of` is on or after the statement's first line date and strictly before its last line
+//!   date (the file lists every transaction on dates up to a later line, so the lines on `as_of`
+//!   are complete); and
+//! - the balance is the statement's opening balance plus its lines dated on or before `as_of`
+//!   (the opening is the balance at the start of the file, checked by K1).
+//!
+//! Consequences:
+//!
+//! - Gaps between statements matter only for dates inside a gap (no statement covers them, so
+//!   `Unsupported`). A covered date does not care about other statements.
+//! - Overlap: when two statements cover `as_of`, the figure is given only if they agree on the
+//!   balance at `as_of`; otherwise `Unsupported`.
+//! - A statement's last line date is never a covered date, so a statement ending on `as_of`
+//!   gives `Unsupported` until the end date (`:62F:` or the sheet label) is carried through
+//!   `RawStatement`. That interface request is open in `docs/interface-requests.md`.
+//! - No statement, no lines, or `as_of` outside every statement: `Unsupported` for the statement
+//!   side only.
+//!
+//! [`Brs::difference`] is `balance as per statement - balance as per bank`. The page shows the
+//! difference as the gap between the two figures but does not say which one is subtracted, so the
+//! direction is our convention and is not Tally-documented.
+//!
+//! The statement-side figure and the difference are [`Outcome`]s, so an `Unsupported` statement
+//! side never hides the books-derived figures.
 
 use std::collections::BTreeSet;
 
@@ -69,7 +90,8 @@ pub struct Brs {
     pub ledger: LedgerId,
     /// The as-of date.
     pub as_of: Date,
-    /// Balance as per books, debit-positive (positive when the business holds money).
+    /// Balance as per company books on `as_of`, debit-positive (positive when the business holds
+    /// money). Always a value.
     pub books_balance: Paise,
     /// Debits to the bank ledger the bank had not credited by `as_of`, to be deducted.
     pub uncleared_deposits: Vec<BrsItem>,
@@ -79,26 +101,28 @@ pub struct Brs {
     pub uncleared_deposits_total: Paise,
     /// Total of [`Brs::uncleared_payments`].
     pub uncleared_payments_total: Paise,
-    /// `books_balance - uncleared_deposits_total + uncleared_payments_total`.
-    pub expected_bank_balance: Paise,
-    /// Balance as per the bank statements at `as_of`, credit-positive.
-    pub bank_balance: Paise,
-    /// `bank_balance - expected_bank_balance`; zero when the statement reconciles.
-    pub difference: Paise,
+    /// Balance as per bank, computed from the books:
+    /// `books_balance - uncleared_deposits_total + uncleared_payments_total`. Always a value.
+    pub balance_as_per_bank: Paise,
+    /// Balance as per the imported statements at `as_of`, credit-positive. `Unsupported` unless
+    /// exactly known from the statements (see the module docs for the rule).
+    pub statement_balance: Outcome<Paise>,
+    /// `statement_balance - balance_as_per_bank`; `Unsupported` when `statement_balance` is.
+    pub difference: Outcome<Paise>,
 }
 
 impl Brs {
-    /// `true` when the books, the uncleared items and the bank statements agree exactly.
-    pub fn is_reconciled(&self) -> bool {
-        self.difference.is_zero()
+    /// `Value(true)` when the statement is known and agrees with the books; `Value(false)` when
+    /// it is known and differs; `Unsupported` when the statement-side balance is not known.
+    pub fn is_reconciled(&self) -> Outcome<bool> {
+        self.difference.clone().map(|d| d.is_zero())
     }
 }
 
 /// Builds the bank reconciliation statement of `ledger` as of `as_of`.
 ///
-/// Returns `Unsupported` when no bank statement covers the date: no statements, a statement with
-/// no lines, `as_of` before the first statement line, statements that overlap, or statements that
-/// do not chain (a gap).
+/// The result is always `Outcome::Value`: the books-derived figures never depend on the
+/// statements. The statement side is `Unsupported` inside the [`Brs`] when it is not exactly known.
 ///
 /// # Errors
 /// - [`BankError::NotABankLedger`] when the ledger has no bank details.
@@ -137,15 +161,15 @@ pub fn brs(
             ),
         });
     }
-    let bank_balance = match bank_balance(statements, as_of)? {
-        Outcome::Value(balance) => balance,
-        Outcome::Unsupported(unsupported) => return Ok(Outcome::Unsupported(unsupported)),
-    };
 
-    let expected_bank_balance = books_balance
+    let balance_as_per_bank = books_balance
         .checked_sub(items.deposits_total)?
         .checked_add(items.payments_total)?;
-    let difference = bank_balance.checked_sub(expected_bank_balance)?;
+    let statement_balance = statement_side(statements, as_of)?;
+    let difference = match &statement_balance {
+        Outcome::Value(statement) => Outcome::Value(statement.checked_sub(balance_as_per_bank)?),
+        Outcome::Unsupported(unsupported) => Outcome::Unsupported(unsupported.clone()),
+    };
     Ok(Outcome::Value(Brs {
         ledger,
         as_of,
@@ -154,8 +178,8 @@ pub fn brs(
         uncleared_payments: items.payments,
         uncleared_deposits_total: items.deposits_total,
         uncleared_payments_total: items.payments_total,
-        expected_bank_balance,
-        bank_balance,
+        balance_as_per_bank,
+        statement_balance,
         difference,
     }))
 }
@@ -264,81 +288,40 @@ fn uncleared_items(books: &Books, ledger: LedgerId, as_of: Date) -> Result<Items
     Ok(items)
 }
 
-/// The statements' balance at `as_of`, or `Unsupported` when they do not cover it.
-fn bank_balance(statements: &[BankStatement], as_of: Date) -> Result<Outcome<Paise>, BankError> {
-    if statements.is_empty() {
-        return Ok(Outcome::unsupported(
-            "BRS without a bank statement",
-            "import the bank statement for the period; the balance as per bank comes only from a verified statement",
-        ));
-    }
-    let mut dated: Vec<(&BankStatement, Date, Date)> = Vec::new();
+/// The balance as per the imported statements at `as_of`, or `Unsupported` when no statement
+/// exactly determines it (module docs: the coverage rule and the overlap rule).
+fn statement_side(statements: &[BankStatement], as_of: Date) -> Result<Outcome<Paise>, MoneyError> {
+    let mut covering = Vec::new();
     for statement in statements {
-        let Some((from, to)) = statement.period() else {
-            return Ok(Outcome::unsupported(
-                "BRS with a statement that has no lines",
-                format!(
-                    "statement {} has no lines, so its position in time is unknown",
-                    statement.file_hash()
-                ),
-            ));
+        let Some((first, last)) = statement.period() else {
+            continue;
         };
-        dated.push((statement, from, to));
+        if first <= as_of && as_of < last {
+            covering.push(balance_at(statement, as_of)?);
+        }
     }
-    dated.sort_by_key(|(_, from, to)| (*from, *to));
-
-    let Some((first, first_from, first_to)) = dated.first() else {
-        return Ok(Outcome::unsupported(
-            "BRS without a bank statement",
-            "no statement to take the bank balance from",
-        ));
+    let Some(first) = covering.first().copied() else {
+        let reason = if statements.is_empty() {
+            "import the bank statement for the period; the balance per statement comes only from an imported statement"
+        } else {
+            "no imported statement covers the as-of date: a statement covers a date from its first line up to, but not including, its last line, because the file's own end date is not stored; import a statement that runs past this date"
+        };
+        return Ok(Outcome::unsupported("BRS balance per imported statement", reason));
     };
-    if as_of < *first_from {
+    if covering.iter().any(|balance| *balance != first) {
         return Ok(Outcome::unsupported(
-            "BRS before the first statement line",
-            "the statements start after the as-of date and their opening balance is not dated; import an earlier statement",
+            "BRS over overlapping statements",
+            "two imported statements cover the as-of date and give different balances there; one of them is wrong or incomplete, so neither figure is used",
         ));
     }
-    let mut balance = first.opening();
-    let mut previous_closing = first.closing();
-    // The end of the first statement: a later statement that starts before it overlaps.
-    let mut previous_to = first_to;
-    add_lines(&mut balance, first, as_of)?;
-    for (statement, from, to) in dated.iter().skip(1).filter(|(_, from, _)| *from <= as_of) {
-        if from < previous_to {
-            return Ok(Outcome::unsupported(
-                "BRS over overlapping statements",
-                format!(
-                    "statement {} starts before the previous statement ends",
-                    statement.file_hash()
-                ),
-            ));
-        }
-        if statement.opening() != previous_closing {
-            return Ok(Outcome::unsupported(
-                "BRS over statements with a gap",
-                format!(
-                    "statement {} opens at {} but the previous one closed at {}; import the statement in between",
-                    statement.file_hash(),
-                    statement.opening().to_rupees(),
-                    previous_closing.to_rupees()
-                ),
-            ));
-        }
-        add_lines(&mut balance, statement, as_of)?;
-        previous_closing = statement.closing();
-        previous_to = to;
-    }
-    Ok(Outcome::Value(balance))
+    Ok(Outcome::Value(first))
 }
 
-fn add_lines(
-    balance: &mut Paise,
-    statement: &BankStatement,
-    as_of: Date,
-) -> Result<(), MoneyError> {
+/// The statement's balance at `as_of`: its opening balance plus its lines dated on or before it.
+fn balance_at(statement: &BankStatement, as_of: Date) -> Result<Paise, MoneyError> {
+    let mut balance = statement.opening();
     for line in statement.lines().iter().filter(|l| l.date <= as_of) {
-        *balance = balance.checked_add(line.credit)?.checked_sub(line.debit)?;
+        balance = balance.checked_add(line.credit)?.checked_sub(line.debit)?;
     }
-    Ok(())
+    Ok(balance)
 }
