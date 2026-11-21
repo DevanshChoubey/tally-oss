@@ -49,15 +49,15 @@ pub(super) fn with_view(base: &ReportParams, p: ViewParams, as_of: Date) -> Repo
 /// The report a drill on `key` opens. `base` supplies the period, the detail and the scenario.
 ///
 /// # Errors
-/// The notice to show instead when `key` does not open a report: a voucher is a screen (not
-/// wired in worker mode yet), and a stock item or a bill has no report yet.
+/// The notice to show instead when `key` does not open a report: a voucher is a screen (the
+/// caller opens it, see `ReportViewScreen::drill`), and a stock item or a bill has no report yet.
 pub(super) fn drill_params(base: &ReportParams, key: &ViewKey) -> Result<ReportParams, Notice> {
     let kind = match key {
         ViewKey::Group(group) => ReportKind::GroupSummary(*group),
         ViewKey::Ledger(ledger) => ReportKind::LedgerVouchers(*ledger),
         ViewKey::Voucher(_) => {
             return Err(Notice::Info(
-                "Opening a voucher from a report is not wired yet.".to_owned(),
+                "A voucher opens as its own screen, not as a report.".to_owned(),
             ));
         }
         ViewKey::Item(_) | ViewKey::Bill { .. } => {

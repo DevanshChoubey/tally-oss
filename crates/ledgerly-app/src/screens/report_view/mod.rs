@@ -38,6 +38,7 @@
 mod model;
 mod remote;
 mod text;
+mod voucher_view;
 
 use egui::{Align, Context, Key, Layout, Modifiers, RichText, Ui};
 use egui_extras::{Column, TableBuilder, TableRow};
@@ -54,6 +55,9 @@ pub use model::{
 };
 use remote::{drill_params, run_report, view_detail, with_view};
 use text::numeric_date_text;
+pub use voucher_view::{
+    VoucherView, VoucherViewError, VoucherViewLine, VoucherViewScreen, voucher_view,
+};
 pub use text::{
     PeriodTextError, amount_text, cell_text, date_text, parse_period_date, parse_period_text,
     period_text,
@@ -344,8 +348,12 @@ impl ReportViewScreen {
     }
 
     /// Drill in worker mode: a group or ledger opens a new worker-mode report with the same
-    /// period and detail. The new screen asks the worker itself on its first frame.
+    /// period and detail; a voucher opens the read-only voucher screen. The new screen asks the worker itself on its first frame.
     fn drill_worker(&mut self, key: &ViewKey) -> ScreenAction {
+        // A voucher is a screen, not a report: open it read-only (see `voucher_view.rs`).
+        if let ViewKey::Voucher(id) = key {
+            return ScreenAction::Push(Box::new(VoucherViewScreen::new(*id)));
+        }
         let base = self
             .worker
             .as_ref()
