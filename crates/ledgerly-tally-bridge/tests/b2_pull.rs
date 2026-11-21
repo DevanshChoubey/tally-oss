@@ -249,11 +249,11 @@ fn default_plan_requests_31_day_windows() {
             (d(2026, Month::June, 2), d(2026, Month::June, 30)),
         ]
     );
-    assert!(result.vouchers.is_empty());
+    assert_eq!(result.vouchers.len(), 0);
 }
 
 #[test]
-fn oversized_window_is_split_until_each_request_is_within_the_limit() {
+fn oversized_window_is_split_until_each_accepted_window_is_within_the_limit() {
     // 8 days, 20 vouchers a day, limit 50, first window 4 days.
     // provenance: derived — 1..4 Apr holds 4 * 20 = 80 > 50, so it is split to 2 days:
     // 1..2 Apr = 40 <= 50 accepted; 3..4 Apr = 40; 5..6 Apr = 40; 7..8 Apr = 40 (the window size
@@ -359,7 +359,8 @@ fn company_name_is_escaped_in_the_request() {
         &CancelToken::new(),
     )
     .unwrap();
-    for request in fake.requests.borrow().iter() {
+    let sent: Vec<String> = fake.requests.borrow().clone();
+    for request in &sent {
         assert!(
             request.contains("<SVCURRENTCOMPANY>A&amp;B &lt;Traders&gt;</SVCURRENTCOMPANY>"),
             "{request}"
@@ -375,7 +376,7 @@ fn bad_company_names_are_refused_before_any_request() {
         let err = pull(&fake, name, one_day(), dir.path(), &CancelToken::new()).unwrap_err();
         assert!(matches!(err, PullError::InvalidCompany { .. }), "{name:?}");
     }
-    assert!(fake.requests.borrow().is_empty());
+    assert_eq!(fake.requests.borrow().len(), 0);
 }
 
 #[test]
@@ -589,7 +590,7 @@ fn cancel_before_the_first_request_sends_nothing() {
             batches_done: 0
         }
     );
-    assert!(fake.requests.borrow().is_empty());
+    assert_eq!(fake.requests.borrow().len(), 0);
     assert_eq!(
         fs::read_to_string(dir.path().join(MANIFEST_FILE)).unwrap(),
         "ledgerly-capture-manifest-v1\n"
