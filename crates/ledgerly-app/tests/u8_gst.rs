@@ -16,7 +16,7 @@
 use egui::{Event, Key, Modifiers, RawInput};
 use ledgerly_app::screens::gst::{
     ActionError, Bucket, ConfirmedAction, ExceptionItem, Feed, GstCmd, GstScreen, GstTab,
-    ImsAction, MatchState, ReconRow, amount_cell, date_cell,
+    ImsAction, MatchState, ReconRow, amount_cell, date_cell, difference_cell,
 };
 use ledgerly_app::{AppCtx, Screen, ScreenAction};
 use ledgerly_core::{Gstin, Paise, Unsupported, VoucherId, gstin_check_character};
@@ -487,6 +487,49 @@ fn a_row_that_is_no_longer_in_2b_loses_its_action() {
     assert_eq!(s.confirmed_actions(), Vec::<ConfirmedAction>::new());
 }
 
+#[test]
+fn a_failed_refresh_keeps_the_confirmed_actions_for_the_next_loaded_feed() {
+    // provenance: derived - a feed that is Unsupported drops no row, so the two actions the user
+    // confirmed survive it and come back when the same rows are loaded again. The notice must not
+    // blame 2B, because no row left 2B. The old code cleared the decisions on any non-loaded feed.
+    let mut s = screen();
+    s.decide(0, ImsAction::Accept).unwrap();
+    s.decide(1, ImsAction::Reject).unwrap();
+    let revision = s.revision();
+    s.set_recon(unsupported());
+    assert_eq!(
+        s.revision(),
+        revision,
+        "no confirmed action changed when the feed was not loaded"
+    );
+    assert!(s.notice().is_none(), "no row left 2B, so no notice");
+    s.set_recon(Feed::Loaded(rows()));
+    assert_eq!(s.decision(0), Some(ImsAction::Accept));
+    assert_eq!(s.decision(1), Some(ImsAction::Reject));
+    assert_eq!(s.confirmed_actions().len(), 2);
+    assert!(s.notice().is_none(), "the same rows came back, nothing dropped");
+}
+
+#[test]
+fn a_not_loaded_feed_then_a_loaded_feed_without_a_row_drops_only_that_row() {
+    // provenance: derived - Accept on row 0 is held through a NotLoaded feed; the next loaded feed
+    // lacks row 0, so the action is dropped with the notice saying a row left 2B.
+    let mut s = screen();
+    s.decide(0, ImsAction::Accept).unwrap();
+    s.decide(1, ImsAction::Reject).unwrap();
+    s.set_recon(Feed::NotLoaded);
+    let mut rest = rows();
+    rest.remove(0);
+    s.set_recon(Feed::Loaded(rest));
+    assert_eq!(s.decision(0), Some(ImsAction::Reject), "VL-3381 is now row 0");
+    assert_eq!(s.confirmed_actions().len(), 1);
+    assert!(
+        s.notice()
+            .unwrap()
+            .starts_with("1 confirmed IMS action(s) were dropped")
+    );
+}
+
 // ---- drill, bulk, export ---------------------------------------------------------------------
 
 #[test]
@@ -565,6 +608,16 @@ fn a_missing_amount_is_none_never_zero_and_amounts_group_the_indian_way() {
     assert_eq!(amount_cell(Some(Paise::new(12_400_000))), "1,24,000.00");
     assert_eq!(amount_cell(Some(Paise::new(-1_200_000))), "-12,000.00");
     assert_eq!(amount_cell(Some(Paise::new(5))), "0.05");
+}
+
+#[test]
+fn a_missing_difference_reads_none_like_the_other_amount_columns_not_n_a() {
+    // provenance: derived - the module contract (gst.rs module doc, rule C4) says a missing amount
+    // reads "none". The difference column must use the same convention as the three amount
+    // columns beside it, so a row with no difference shows "none" there too.
+    assert_eq!(difference_cell(None), amount_cell(None));
+    assert_eq!(difference_cell(None), "none");
+    assert_eq!(difference_cell(Some(Paise::new(-500))), "-5.00");
 }
 
 #[test]

@@ -28,21 +28,35 @@ fn field(label: &str, value: Option<&str>, permille: u16) -> ProposedField {
     }
 }
 
+/// A draft with every field and line filled and no ledger to create. An `Ok` check on it may be
+/// accepted.
 fn draft(check: EngineCheck) -> DraftView {
     DraftView {
         kind: "Payment".to_owned(),
         fields: vec![
             field("Party", Some("Sharma Properties"), 950),
-            field("Invoice number", None, 400),
+            field("Invoice number", Some("PMT-0318"), 950),
         ],
         lines: vec![ProposedLine {
             ledger: field("Ledger", Some("Rent"), 900),
             side: DrCr::Dr,
             amount: field("Amount", Some("25,000.00"), 980),
         }],
-        create_ledgers: vec!["Sharma Properties".to_owned()],
+        create_ledgers: Vec::new(),
         check,
     }
+}
+
+/// The same draft with a blank invoice number (below the confidence threshold) and a party
+/// ledger still to be created.
+fn draft_with_gaps(check: EngineCheck) -> DraftView {
+    let mut d = draft(check);
+    if let Some(invoice) = d.fields.get_mut(1) {
+        invoice.value = None;
+        invoice.confidence_permille = 400;
+    }
+    d.create_ledgers = vec!["Sharma Properties".to_owned()];
+    d
 }
 
 fn ok_check() -> EngineCheck {
@@ -69,9 +83,24 @@ fn unsupported_check() -> EngineCheck {
 }
 
 fn screen_with(check: EngineCheck) -> AssistScreen {
+    screen_with_draft(draft(check))
+}
+
+fn screen_with_draft(d: DraftView) -> AssistScreen {
     let mut s = AssistScreen::new(Tier::Local);
-    s.set_proposal(ProposalView::Voucher(draft(check)));
+    s.set_proposal(ProposalView::Voucher(d));
     s
+}
+
+/// A bank match or a mapping, with the given engine verdict.
+fn suggestion_with(check: EngineCheck) -> SuggestionView {
+    SuggestionView {
+        heading: "Row 4 matches".to_owned(),
+        rows: vec![("Statement row".to_owned(), "4".to_owned())],
+        reason: Some("amount and reference agree".to_owned()),
+        confidence_permille: 870,
+        check,
+    }
 }
 
 // ---- egui helpers ---------------------------------------------------------------------------
@@ -199,9 +228,45 @@ fn a_low_confidence_field_is_blank_not_guessed() {
 
 #[test]
 fn a_blank_field_is_drawn_as_blank() {
-    let mut s = screen_with(ok_check());
+    let mut s = screen_with_draft(draft_with_gaps(ok_check()));
     let (_, texts) = frames(&mut s, &RawInput::default());
     assert!(has(&texts, BLANK_TEXT));
+}
+
+#[test]
+fn a_blank_field_blocks_accept_even_when_the_engine_check_is_ok() {
+    // provenance: derived - spec 6.8 "below threshold -> blank": a blank value is not confirmed, so
+    // a posting that would carry it must not be accepted. The old code enabled Accept on an Ok
+    // check whatever the fields held, so this draft was accepted.
+    let mut s = screen_with_draft(draft_with_gaps(ok_check()));
+    assert!(!s.can_accept());
+    assert!(!s.accept());
+    assert_eq!(s.take_action(), None);
+    let reason = s.accept_blocked_reason().unwrap();
+    assert!(reason.contains("Invoice number is blank"), "{reason}");
+}
+
+#[test]
+fn a_ledger_still_to_be_created_blocks_accept_even_when_the_engine_check_is_ok() {
+    // provenance: derived - a ledger the user has not created cannot be posted to. The panel gives
+    // the reason in words.
+    let mut d = draft(ok_check());
+    d.create_ledgers = vec!["Sharma Properties".to_owned()];
+    let s = screen_with_draft(d);
+    assert!(!s.can_accept());
+    let reason = s.accept_blocked_reason().unwrap();
+    assert!(reason.contains("Sharma Properties"), "{reason}");
+}
+
+#[test]
+fn a_blank_line_blocks_accept_even_when_the_engine_check_is_ok() {
+    // provenance: derived - the same rule as a blank field, for the amount or ledger of a line.
+    let mut d = draft(ok_check());
+    if let Some(line) = d.lines.get_mut(0) {
+        line.amount.value = None;
+    }
+    let s = screen_with_draft(d);
+    assert!(!s.can_accept());
 }
 
 #[test]
@@ -283,18 +348,37 @@ fn a_report_answer_has_nothing_to_accept() {
 }
 
 #[test]
-fn a_bank_match_and_a_mapping_can_be_accepted() {
-    let view = SuggestionView {
-        heading: "Row 4 matches".to_owned(),
-        rows: vec![("Statement row".to_owned(), "4".to_owned())],
-        reason: Some("amount and reference agree".to_owned()),
-        confidence_permille: 870,
-    };
+fn a_bank_match_and_a_mapping_are_accepted_only_when_the_engine_check_is_ok() {
+    // provenance: derived - spec 6.8: a mismatch blocks Accept, for a bank match and a mapping as for
+    // a voucher. The old code enabled Accept on both whatever the engine said (no verdict in the view).
     let mut s = AssistScreen::new(Tier::Cloud);
-    s.set_proposal(ProposalView::BankMatch(view.clone()));
+    s.set_proposal(ProposalView::BankMatch(suggestion_with(ok_check())));
     assert!(s.can_accept());
-    s.set_proposal(ProposalView::Mapping(view));
+    s.set_proposal(ProposalView::Mapping(suggestion_with(ok_check())));
     assert!(s.can_accept());
+
+    s.set_proposal(ProposalView::BankMatch(suggestion_with(blocked_check())));
+    assert!(!s.can_accept());
+    let reason = s.accept_blocked_reason().unwrap();
+    assert!(reason.contains("the engine computed a different total"), "{reason}");
+
+    s.set_proposal(ProposalView::Mapping(suggestion_with(EngineCheck::NotChecked)));
+    assert!(!s.can_accept());
+    assert!(!s.accept());
+    assert_eq!(s.take_action(), None);
+}
+
+#[test]
+fn set_check_re_enables_accept_on_a_bank_match() {
+    // provenance: derived - the engine's verdict arrives after the match is shown; set_check
+    // updates it on the bank match on show, as it does on a voucher draft.
+    let mut s = AssistScreen::new(Tier::Cloud);
+    s.set_proposal(ProposalView::BankMatch(suggestion_with(EngineCheck::NotChecked)));
+    assert!(!s.can_accept());
+    s.set_check(ok_check());
+    assert!(s.can_accept());
+    assert!(s.accept());
+    assert_eq!(s.take_action(), Some(PanelAction::Accept));
 }
 
 // ---- tiers, requests, reject ----------------------------------------------------------------

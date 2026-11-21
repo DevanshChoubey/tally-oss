@@ -453,11 +453,23 @@ impl ImportWizard {
 
     /// The host's reconciliation report.
     ///
+    /// The report must cover the period the wizard asked for. A report for any other period is
+    /// refused and the comparison stays out, so a late reply for another year cannot show as a
+    /// full match.
+    ///
     /// # Errors
-    /// [`ImportError::WrongStep`] when no comparison is out.
+    /// [`ImportError::WrongStep`] when no comparison is out, and
+    /// [`ImportError::WrongPeriod`] when the report covers another period.
     pub fn recon_ready(&mut self, report: ReconReport) -> Result<(), ImportError> {
         if self.step != Step::Reconcile || self.recon != ReconState::Reconciling {
             return Err(self.wrong_step("accept the reconciliation"));
+        }
+        let asked = self.period()?;
+        if report.period != asked {
+            return Err(ImportError::WrongPeriod {
+                asked,
+                got: report.period,
+            });
         }
         self.recon = ReconState::Ready(report);
         Ok(())

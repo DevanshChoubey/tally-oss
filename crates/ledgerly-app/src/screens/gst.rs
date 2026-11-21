@@ -316,6 +316,13 @@ pub fn amount_cell(amount: Option<Paise>) -> String {
     }
 }
 
+/// The difference column: the same convention as every amount cell, so a missing difference
+/// reads `none` beside the three amounts it is computed from.
+#[must_use]
+pub fn difference_cell(difference: Option<Paise>) -> String {
+    amount_cell(difference)
+}
+
 /// An action the user confirmed, for the IMS action file.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConfirmedAction {
@@ -374,6 +381,22 @@ pub enum GstCmd {
 // The screen
 // ---------------------------------------------------------------------------------------------
 
+/// A confirmed action keyed by supplier GSTIN and invoice number, so it can follow the row
+/// across a refresh.
+type RememberedAction = (Gstin, String, ImsAction);
+
+/// The action remembered for a supplier GSTIN and invoice number, if any.
+fn remembered_for(
+    actions: &[RememberedAction],
+    gstin: &Gstin,
+    invoice_no: &str,
+) -> Option<ImsAction> {
+    actions
+        .iter()
+        .find(|(g, n, _)| g == gstin && n.as_str() == invoice_no)
+        .map(|(_, _, action)| *action)
+}
+
 /// The GST workspace screen.
 #[derive(Debug)]
 pub struct GstScreen {
@@ -385,6 +408,9 @@ pub struct GstScreen {
     recon: Feed<Vec<ReconRow>>,
     /// The user's confirmed action per reconciliation row, parallel to `recon`.
     decisions: Vec<Option<ImsAction>>,
+    /// Confirmed actions kept while the reconciliation feed is not loaded, so that a refresh
+    /// which fails does not erase them. Restored by the next loaded feed.
+    held: Vec<RememberedAction>,
     bucket_filter: Option<Bucket>,
     open_only: bool,
     /// Position, in the visible list, of the selected row.
@@ -422,6 +448,7 @@ impl GstScreen {
             gstr3b: Feed::NotLoaded,
             recon: Feed::NotLoaded,
             decisions: Vec::new(),
+            held: Vec::new(),
             bucket_filter: None,
             open_only: false,
             focus: 0,
@@ -478,24 +505,34 @@ impl GstScreen {
     /// Supplies the reconciliation rows. Actions the user already confirmed are kept for rows
     /// with the same supplier GSTIN and invoice number that are still in 2B. A confirmed action
     /// with no such row any more is dropped and the notice says so.
+    ///
+    /// A feed that is not loaded ([`Feed::NotLoaded`] or [`Feed::Unsupported`]) drops nothing: the
+    /// confirmed actions are held and the next loaded feed restores the ones whose rows are
+    /// still in 2B. The notice names only the real cause (a row that left 2B), never a feed that
+    /// merely failed to load.
     pub fn set_recon(&mut self, feed: Feed<Vec<ReconRow>>) {
-        let before = self.confirmed_actions();
-        let kept: Vec<Option<ImsAction>> = match &feed {
-            Feed::Loaded(rows) => rows
-                .iter()
-                .map(|row| {
-                    if row.in_2b() {
-                        self.decision_for(&row.gstin, &row.invoice_no)
-                    } else {
-                        None
-                    }
-                })
-                .collect(),
-            Feed::NotLoaded | Feed::Unsupported(_) => Vec::new(),
-        };
-        self.decisions = kept;
+        let before = self.remembered_actions();
+        match &feed {
+            Feed::Loaded(rows) => {
+                self.decisions = rows
+                    .iter()
+                    .map(|row| {
+                        if row.in_2b() {
+                            remembered_for(&before, &row.gstin, &row.invoice_no)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+                self.held.clear();
+            }
+            Feed::NotLoaded | Feed::Unsupported(_) => {
+                self.decisions.clear();
+                self.held = before.clone();
+            }
+        }
         self.recon = feed;
-        let after = self.confirmed_actions();
+        let after = self.remembered_actions();
         if before.len() > after.len() {
             self.notice = Some(format!(
                 "{} confirmed IMS action(s) were dropped because the invoice is no longer in 2B.",
@@ -508,14 +545,19 @@ impl GstScreen {
         self.clamp_focus();
     }
 
-    fn decision_for(&self, gstin: &Gstin, invoice_no: &str) -> Option<ImsAction> {
-        let Feed::Loaded(rows) = &self.recon else {
-            return None;
-        };
-        rows.iter()
-            .zip(self.decisions.iter())
-            .find(|(row, _)| row.gstin == *gstin && row.invoice_no == invoice_no)
-            .and_then(|(_, decision)| *decision)
+    /// Every action the user has confirmed, by supplier GSTIN and invoice number. While the
+    /// reconciliation is loaded these come from its rows; otherwise they are the held actions.
+    fn remembered_actions(&self) -> Vec<RememberedAction> {
+        match &self.recon {
+            Feed::Loaded(rows) => rows
+                .iter()
+                .zip(self.decisions.iter())
+                .filter_map(|(row, decision)| {
+                    decision.map(|action| (row.gstin.clone(), row.invoice_no.clone(), action))
+                })
+                .collect(),
+            Feed::NotLoaded | Feed::Unsupported(_) => self.held.clone(),
+        }
     }
 
     // ---- counts ------------------------------------------------------------------------------
@@ -998,7 +1040,7 @@ impl GstScreen {
                         ui.label(amount_cell(row.taxable_2b));
                         ui.label(amount_cell(row.tax_books));
                         ui.label(amount_cell(row.tax_2b));
-                        ui.label(row.difference.map_or_else(|| "n/a".to_owned(), format_inr));
+                        ui.label(difference_cell(row.difference));
                         self.draw_ims_cell(ui, index, row, events);
                         ui.end_row();
                     }

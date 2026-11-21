@@ -427,9 +427,15 @@ impl AuditScreen {
         Ok(Period::new(from, to)?)
     }
 
-    /// Picks a report and asks for it. The old table is dropped, so a table is never shown under
-    /// the wrong heading.
+    /// Picks a report and asks for it. When the report changes, the old table, any error and any
+    /// queued request for the old report are dropped, even when the new period is bad: a table is
+    /// never shown under the wrong heading, and the selector, the description and the table always
+    /// name the same report.
     pub fn select_kind(&mut self, kind: AuditViewKind) {
+        if self.kind != kind {
+            self.state = AuditState::NotRun;
+            self.request = None;
+        }
         self.kind = kind;
         self.run();
     }

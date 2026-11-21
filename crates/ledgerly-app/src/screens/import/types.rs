@@ -91,6 +91,17 @@ pub enum ImportError {
         /// How many items are unmapped.
         count: usize,
     },
+    /// The reconciliation report covers another period than the one the wizard asked for (a late
+    /// or wrong reply). It is refused: the figures of another year must never show as a match.
+    #[error(
+        "the reconciliation report is for another period than the one asked for, so it is refused"
+    )]
+    WrongPeriod {
+        /// The period the wizard asked the host to compare.
+        asked: Period,
+        /// The period the report covers.
+        got: Period,
+    },
 }
 
 // ---------------------------------------------------------------------------------------------
