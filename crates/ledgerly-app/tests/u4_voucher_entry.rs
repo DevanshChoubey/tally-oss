@@ -526,8 +526,12 @@ fn draft(kind: EntryKind, date_text: &str, rows: Vec<DraftRow>) -> VoucherDraft 
 fn the_balancing_line_is_prefilled_on_the_opposite_side() {
     // provenance: derived; spec 5 invariant 1 (sum Dr = sum Cr). A single credit of 5000 needs a
     // debit of 5000: 5000 rupees prints as "5000.00".
+    // Changed in wave 2 (S-H): a payment is single entry now, where the account line's amount is
+    // the total of the particulars and is never typed, so a lone typed account line is not a
+    // double-entry draft. The balancing-line prefill is double-entry behaviour, so the same
+    // expectations are exercised on a journal, which keeps double entry.
     let mut d = draft(
-        EntryKind::Payment,
+        EntryKind::Journal,
         "15-4",
         vec![row(CASH, DrCr::Cr, "5000")],
     );
