@@ -12,13 +12,14 @@ const SAVE_KEYS: [(Modifiers, Key); 2] =
 
 /// Consumes the press of exactly `key` with exactly `modifiers` held, and reports whether there was
 /// one. egui's `consume_key` also accepts extra Alt or Shift, so the discard question would take
-/// Shift+Y as a yes.
+/// Shift+Y as a yes. A held key that repeats is not a new press, so a held Enter cannot post a
+/// save on its own.
 fn consume_exact(input: &mut InputState, key: Key, modifiers: Modifiers) -> bool {
     let before = input.events.len();
     input.events.retain(|event| {
         !matches!(
             event,
-            Event::Key { key: pressed_key, modifiers: held, pressed: true, .. }
+            Event::Key { key: pressed_key, modifiers: held, pressed: true, repeat: false, .. }
                 if *pressed_key == key && held.matches_exact(modifiers)
         )
     });
@@ -30,6 +31,7 @@ pub(super) fn read_keys(
     picker_open: bool,
     escape_wanted: bool,
     confirming: bool,
+    saving: bool,
 ) -> Vec<KeyCmd> {
     let mut out = Vec::new();
     ui.ctx().input_mut(|i| {
@@ -41,6 +43,9 @@ pub(super) fn read_keys(
             if consume_exact(i, Key::N, Modifiers::NONE) {
                 out.push(KeyCmd::DiscardNo);
             }
+        }
+        if saving && consume_exact(i, Key::Enter, Modifiers::NONE) {
+            out.push(KeyCmd::ConfirmSave);
         }
         let mut save = false;
         for (modifiers, key) in SAVE_KEYS {
@@ -71,6 +76,7 @@ impl ItemInvoiceScreen {
     ) -> ScreenAction {
         match cmd {
             KeyCmd::Save => self.save(masters),
+            KeyCmd::ConfirmSave => self.save(masters),
             KeyCmd::PickUp => self.pick_index = self.pick_index.saturating_sub(1),
             KeyCmd::PickDown => {
                 let last = list_len.saturating_sub(1);
@@ -87,6 +93,8 @@ impl ItemInvoiceScreen {
             KeyCmd::Escape => {
                 if self.confirm_discard {
                     self.confirm_discard = false;
+                } else if self.confirming_save {
+                    self.confirming_save = false;
                 } else if self.searching() {
                     self.clear_search();
                 } else if self.request_leave() {
@@ -105,9 +113,13 @@ impl ItemInvoiceScreen {
                     if self.focus != field {
                         self.focus = field;
                         self.pick_index = 0;
+                        self.confirming_save = false;
                     }
                 }
-                UiEvent::Typed(field) => self.typed(field),
+                UiEvent::Typed(field) => {
+                    self.confirming_save = false;
+                    self.typed(field);
+                }
                 UiEvent::Submit { field, back } => {
                     self.focus = field;
                     if back {

@@ -1,6 +1,5 @@
-//! Type-ahead for stock items and ledgers, and the labels and row summaries the lists show.
+//! Type-ahead for stock items and ledgers, and the labels the lists show.
 
-use super::draft::line_amount;
 use super::{Field, ItemInvoiceScreen, PICKER_LIMIT, Pick};
 use crate::screens::voucher_entry::{LedgerHit, PickerItem, search_ledgers};
 use ledgerly_core::format::format_inr;
@@ -184,21 +183,4 @@ impl ItemInvoiceScreen {
         }
     }
 
-    pub(super) fn row_summary(&self, masters: &Masters, i: usize) -> String {
-        let Some(row) = self.draft.rows.get(i) else {
-            return String::new();
-        };
-        if row.is_blank() {
-            return String::new();
-        }
-        let unit = row
-            .item
-            .and_then(|id| masters.stock_items.get(&id))
-            .and_then(|item| masters.units.get(&item.unit))
-            .map_or(String::new(), |u| format!("{}  ", u.symbol));
-        match line_amount(masters, row, i.saturating_add(1)) {
-            Ok(amount) => format!("{unit}Amount {}", format_inr(amount)),
-            Err(e) => format!("{unit}{e}"),
-        }
-    }
 }

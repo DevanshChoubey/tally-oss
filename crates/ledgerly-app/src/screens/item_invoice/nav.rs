@@ -93,7 +93,7 @@ impl ItemInvoiceScreen {
             }
             Field::Number | Field::Reference => Step::Next,
             Field::Narration => {
-                self.save(masters);
+                self.ask_save(masters);
                 Step::Stay
             }
         };
