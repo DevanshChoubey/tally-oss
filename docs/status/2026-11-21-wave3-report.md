@@ -4,7 +4,7 @@ Eight code-only cards (C1 to C8) worked in their own worktrees, all starting fro
 The coordinator merged them into `integration` and fixed what failed.
 
 **Gates at `c6e2cd9`:** fmt, clippy (`-D warnings`), doc (`-D warnings`), doctest and deny are
-clean. nextest: 2473 of 2473 passed.
+clean. nextest: 2473 of 2473 passed. After the shell wiring, 2483 of 2483.
 
 ## What is in
 
@@ -72,9 +72,40 @@ clean. nextest: 2473 of 2473 passed.
 - **Silent default:** `Api::bank_statements` turns a store read error into an empty list. It
   should return the error.
 
-## Not yet wired (shell)
+## Shell wiring (coordinator, after the cards)
 
-- The C5 palette is not connected to `Shell`. The steps are in the C5 section of
-  `docs/interface-requests.md`.
-- The shell does not yet build the worker-mode Home, GST, Import and Bank screens. They exist
-  and are tested, but the running app does not open them.
+Now in the running app:
+
+- **Palette:** Ctrl+K, or Alt+G as in TallyPrime's Go To, opens the palette over any screen.
+  Ctrl+G opens it to switch.
+  - The palette lists the commands, the report menu, Home, GST Returns, Import from Tally, and
+    one "Bank Reconciliation" row per bank ledger. Ledgers and vouchers come from the API search.
+  - The palette is drawn before the screen. While it is open, the screen under it gets no keys,
+    so Esc closes the palette and does not go back.
+  - A pick that opens nothing leaves a notice in the bottom bar.
+- **Home** (`shell::GatewayScreen`) turns each link into a screen:
+  - F8 opens the item invoice when the company keeps inventory, otherwise voucher entry.
+  - F6 and F5 open voucher entry; B and D open the worker-mode reports.
+  - G opens the GST screen. It needs exactly one registration; otherwise a notice says why.
+  - M opens the masters.
+  - The unmatched bank lines open the bank reconciliation when there is one bank ledger. With
+    more than one, a notice says to choose one from the palette.
+  - Purchase from a bill, describing a transaction and pending IMS say they are not there yet.
+  - The KPI tiles are asked for again whenever the loaded books change.
+- **Welcome:** once a file opens or is created, the Welcome screen hands over to Home. Ctrl+T
+  opens Home while a company is open.
+- The import and bank-confirm screens now mark the books changed, so the shell fetches them
+  again.
+- Tests: `crates/ledgerly-app/tests/c9_shell.rs` has 10 tests that drive `Shell::show` against
+  real company files. Each was checked to fail with its wiring disconnected.
+
+Still open:
+
+- **First screen after open:** Home, as the design mock shows it. No Tally page read on
+  2026-11-21 says which screen comes first, so this is `pending`.
+- **Default GST and bank period:** the financial year up to the last voucher dated in it. No
+  Tally source, so `pending`.
+- **Commands from the palette:** a palette command other than new tab, close tab, back or the
+  palette itself only shows a notice. Assistant intents say the assistant is not connected.
+- **Several GSTINs or bank ledgers:** there is no picker on the GST screen or on the Home bank
+  link yet.

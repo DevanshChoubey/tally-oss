@@ -39,6 +39,8 @@ pub struct WelcomeScreen {
     notice: Option<String>,
     /// The background job in progress, if any.
     job: Option<Receiver<JobResult>>,
+    /// A company was opened or created: the next frame hands over to its home screen.
+    opened: bool,
 }
 
 impl Default for WelcomeScreen {
@@ -60,6 +62,7 @@ impl WelcomeScreen {
             fy_year: String::new(),
             notice: None,
             job: None,
+            opened: false,
         }
     }
 
@@ -67,6 +70,11 @@ impl WelcomeScreen {
     #[must_use]
     pub fn is_busy(&self) -> bool {
         self.job.is_some()
+    }
+
+    /// Puts `path` in the "open" row, as typing it does.
+    pub fn set_open_path(&mut self, path: impl Into<String>) {
+        self.open_path = path.into();
     }
 
     /// Starts opening the company file at the path in the "open" row. Returns at once.
@@ -151,6 +159,7 @@ impl WelcomeScreen {
                     let _stopping = std::thread::spawn(move || drop(previous));
                 }
                 self.notice = Some("The company file is open.".to_owned());
+                self.opened = true;
             }
             Err(e) => self.notice = Some(format!("Could not start the worker: {e}")),
         }
@@ -202,6 +211,10 @@ impl Screen for WelcomeScreen {
 
     fn ui(&mut self, ui: &mut egui::Ui, ctx: &mut AppCtx) -> ScreenAction {
         self.collect(ctx);
+        if std::mem::take(&mut self.opened) {
+            // The open company's home screen takes this screen's place (see `gateway`).
+            return ScreenAction::Replace(Box::new(super::GatewayScreen::new()));
+        }
         ui.heading("Ledgerly");
         if ctx.api.is_some() {
             ui.label("A company is open.");

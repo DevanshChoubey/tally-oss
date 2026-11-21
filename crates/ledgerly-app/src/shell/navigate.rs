@@ -7,6 +7,10 @@
 //! | `Report("trial-balance")` and the other menu keys | a worker-mode [`ReportViewScreen`] |
 //! | `Master("ledger:N")` | the ledger's vouchers report (`ReportKind::LedgerVouchers`) |
 //! | `Voucher("voucher:N")` | the read-only [`VoucherViewScreen`] |
+//! | `Report("home")` | the home screen of the open company ([`super::gateway::GatewayScreen`]) |
+//! | `Report("gst-returns")` | the GST screen for the company's one GST registration |
+//! | `Report("import-tally")` | the import screen |
+//! | `Report("bank:N")` | the bank reconciliation of bank ledger N |
 //! | `Setting(name)` | nothing: there is no settings screen yet, so it says so |
 //! | `Command`, `AiIntent` | nothing: the host handles them ([`NavError::NotNavigation`]) |
 //!
@@ -24,14 +28,22 @@
 //! opens detailed, as `ledgerly-reports` drills do). That page covers the Trial Balance only; the
 //! same default is applied to every report here and is `pending` for the others. The user changes
 //! the period with F2 and the detail with Alt+F1.
+//!
+//! The GST screen and the bank reconciliation open on the same period. No Tally page read on
+//! 2026-11-21 says which period GSTR-1 or GSTR-3B opens with (the GSTR-1 and GSTR-3B pages of
+//! help.tallysolutions.com list "Period" in the header and say it can be changed), so that default
+//! is `pending`.
 
 use ledgerly_api::{AuditReportKind, ColumnSpec, Detail, ReportFilter, ReportKind, ReportParams};
-use ledgerly_core::{FinancialYear, GroupId, LedgerId, Period, PeriodError, VoucherId};
+use ledgerly_core::{Date, FinancialYear, GroupId, LedgerId, Period, PeriodError, VoucherId};
 use ledgerly_model::{Books, Scenario};
 use thiserror::Error;
 
 use crate::keymap::Keymap;
 use crate::palette::{PaletteEntry, PaletteTarget, command_entries};
+use crate::screens::bank::BankScreen;
+use crate::screens::gst::GstScreen;
+use crate::screens::import::ImportScreen;
 use crate::screens::report_view::{ReportSource, ReportViewScreen, VoucherViewScreen};
 use crate::{AppCtx, Screen};
 
@@ -192,6 +204,127 @@ pub fn host_entries(keymap: &Keymap) -> Vec<PaletteEntry> {
     entries
 }
 
+// ---- the other screens -----------------------------------------------------------------------
+
+/// The palette key of the home screen.
+pub const HOME_KEY: &str = "home";
+/// The palette key of the GST screen.
+pub const GST_KEY: &str = "gst-returns";
+/// The palette key of the import screen.
+pub const IMPORT_KEY: &str = "import-tally";
+
+/// The palette key of the bank reconciliation of `ledger`.
+#[must_use]
+pub fn bank_key(ledger: LedgerId) -> String {
+    format!("bank:{}", ledger.0)
+}
+
+/// The palette rows for the screens that are not reports: Home, GST returns, Import, and one
+/// bank reconciliation per bank ledger of `books` (none while no books are loaded).
+#[must_use]
+pub fn screen_entries(books: Option<&Books>) -> Vec<PaletteEntry> {
+    let screen = |key: &str, title: &str| {
+        PaletteEntry::new(PaletteTarget::Report(key.to_owned()), title).with_detail("Screen")
+    };
+    let mut entries = vec![
+        screen(HOME_KEY, "Home"),
+        screen(GST_KEY, "GST Returns"),
+        screen(IMPORT_KEY, "Import from Tally"),
+    ];
+    if let Some(books) = books {
+        for ledger in books.masters.ledgers.values() {
+            if ledger.bank.is_some() {
+                entries.push(
+                    PaletteEntry::new(
+                        PaletteTarget::Report(bank_key(ledger.id)),
+                        format!("Bank Reconciliation: {}", ledger.name),
+                    )
+                    .with_detail("Banking"),
+                );
+            }
+        }
+    }
+    entries
+}
+
+/// Today's date in India (UTC+05:30), which the import screen and new vouchers start from.
+#[must_use]
+pub fn today() -> Date {
+    let now = time::OffsetDateTime::now_utc();
+    match time::UtcOffset::from_hms(5, 30, 0) {
+        Ok(india) => now.to_offset(india).date(),
+        // The offset is a constant in range; a failure would leave the UTC date.
+        Err(_) => now.date(),
+    }
+}
+
+/// The GST screen for the company's GST registration, loading GSTR-1 and GSTR-3B for
+/// [`default_period`].
+///
+/// # Errors
+/// [`NavError::Unsupported`] when the company has no GST registration, or more than one (the
+/// screen cannot choose between them yet); [`NavError::Period`] for an invalid financial year.
+pub fn gst_screen(books: &Books) -> Result<GstScreen, NavError> {
+    let gstin = match books.company.registrations.as_slice() {
+        [only] => only.gstin.clone(),
+        [] => {
+            return Err(NavError::Unsupported {
+                what: "GST returns".to_owned(),
+                reason: "the company has no GST registration".to_owned(),
+            });
+        }
+        many => {
+            return Err(NavError::Unsupported {
+                what: "GST returns".to_owned(),
+                reason: format!(
+                    "the company has {} GST registrations and the screen cannot choose one yet",
+                    many.len()
+                ),
+            });
+        }
+    };
+    let period = default_period(books)?;
+    let label = format!("{} to {}", period.from(), period.to());
+    let mut screen = GstScreen::new(label, Some(gstin.clone()));
+    screen.request_load(gstin, period);
+    Ok(screen)
+}
+
+/// The bank reconciliation of `ledger`, as of the end of [`default_period`].
+///
+/// # Errors
+/// [`NavError::BadKey`] when `ledger` is not a bank ledger of `books`; [`NavError::Period`] for
+/// an invalid financial year.
+pub fn bank_screen(books: &Books, ledger: LedgerId) -> Result<BankScreen, NavError> {
+    let Some(found) = books
+        .masters
+        .ledgers
+        .get(&ledger)
+        .filter(|l| l.bank.is_some())
+    else {
+        return Err(NavError::BadKey(bank_key(ledger)));
+    };
+    let as_of = default_period(books)?.to();
+    Ok(BankScreen::worker(&found.name, ledger, as_of))
+}
+
+/// The screen a non-report key names, or `None` when `key` is not one of them.
+fn screen_for_key(key: &str, ctx: &AppCtx) -> Option<Result<Box<dyn Screen>, NavError>> {
+    let built: Result<Box<dyn Screen>, NavError> = match key {
+        HOME_KEY => Ok(Box::new(super::gateway::GatewayScreen::new())),
+        GST_KEY => books_of(ctx).and_then(|b| Ok(Box::new(gst_screen(b)?) as Box<dyn Screen>)),
+        IMPORT_KEY => ImportScreen::new(today())
+            .map(|s| Box::new(s) as Box<dyn Screen>)
+            .map_err(NavError::from),
+        other => {
+            let id = parse_id(other, "bank:")?;
+            books_of(ctx)
+                .and_then(|b| Ok(Box::new(bank_screen(b, LedgerId(id))?) as Box<dyn Screen>))
+        }
+    };
+    Some(built)
+}
+
 // ---- parameters and screens ------------------------------------------------------------------
 
 /// Whether a report opens at the detailed level: a group summary or a ledger's vouchers, as the
@@ -287,6 +420,9 @@ pub fn open_target(target: &PaletteTarget, ctx: &AppCtx) -> Result<Box<dyn Scree
     match target {
         PaletteTarget::Command(_) | PaletteTarget::AiIntent(_) => Err(NavError::NotNavigation),
         PaletteTarget::Report(key) => {
+            if let Some(screen) = screen_for_key(key, ctx) {
+                return screen;
+            }
             let kind = report_from_key(key).ok_or_else(|| report_key_error(key))?;
             open_report(kind, ctx)
         }

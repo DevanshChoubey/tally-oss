@@ -281,6 +281,8 @@ impl BankScreen {
         self.release_in_flight();
         match answer {
             Ok(Outcome::Value(())) => {
+                // The confirmed match set a bank date, so the shell reads the books again.
+                crate::shell::submit::note_changed();
                 self.notice = None;
                 if let Some(run) = self.run.as_mut() {
                     run.matched.extend(matched.statement_lines.iter().copied());

@@ -101,6 +101,8 @@ impl DirectImport {
     pub(super) fn tick(&mut self) {
         match self.latest.poll() {
             Some(Done::Ready(Ok(Outcome::Value(summary)))) => {
+                // The import wrote to the books, so the shell reads them again.
+                crate::shell::submit::note_changed();
                 self.state = DirectState::Imported(summary);
             }
             Some(Done::Ready(Ok(Outcome::Unsupported(u)))) => {

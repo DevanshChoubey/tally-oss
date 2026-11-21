@@ -17,26 +17,49 @@
 //! * Ctrl+T opens a tab, Ctrl+W closes the active one. The key map of card U2 is not wired in
 //!   here: the shell reads these three keys directly until Wave 2 wiring.
 //! * The shell sums nothing and shows no figures (rule C4).
+//! * The command palette (Wave 3): the keymap's open-palette chords (Ctrl+K, Alt+G) open it on
+//!   top of the current screen, and switch-palette (Ctrl+G) opens it so the choice replaces the
+//!   screen. While it is open it takes every key, so the screen under it reacts to none. A pick
+//!   opens its screen through [`navigate::open_target`]; a pick that opens nothing leaves a
+//!   notice in the key bar ([`Shell::notice`]), never silence.
+//! * Opening a company replaces the welcome screen with the company's home screen
+//!   ([`GatewayScreen`]), and Ctrl+T then opens a new tab on that home screen.
 //!
 //! Not built here: split view (report beside voucher), remembering the theme between runs, and
 //! scalable fonts. They need storage or screens that other cards own.
 
 mod chrome;
+pub mod gateway;
 pub mod navigate;
 mod stack;
 pub mod submit;
 mod welcome;
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use egui::{Key, Modifiers};
 
+use crate::keymap::{self, Action, Keymap};
+use crate::palette::{Palette, PaletteChoice, PaletteSearch, PaletteTarget};
 use crate::theme::{self, ThemeKind};
 use crate::worker::Ticket;
 use crate::{AppCtx, Screen};
 use chrome::ChromeCmd;
+use navigate::NavError;
 use submit::BooksReply;
 
+pub use gateway::GatewayScreen;
 pub use stack::{ScreenStack, StackChange, Tabs};
 pub use welcome::{WelcomeScreen, company_from_form};
+
+/// Set by a screen that wants the palette opened (the home screen's Ctrl+K link); the shell
+/// takes it on its next frame.
+static PALETTE_WANTED: AtomicBool = AtomicBool::new(false);
+
+/// Asks the shell to open the palette on top of the current screen on its next frame.
+pub(crate) fn ask_for_palette() {
+    PALETTE_WANTED.store(true, Ordering::SeqCst);
+}
 
 /// The application: tabs of screen stacks, the active theme and the shared screen context.
 pub struct Shell {
@@ -50,12 +73,29 @@ pub struct Shell {
     books_ticket: Option<Ticket<BooksReply>>,
     /// Why the books could not be read, when the last fetch failed.
     books_problem: Option<String>,
+    /// The key map the palette chords come from.
+    keymap: Keymap,
+    /// The command palette.
+    palette: Palette,
+    /// The palette's search through the API worker.
+    search: PaletteSearch,
+    /// Why the last palette pick opened nothing, or why the key map could not be read.
+    notice: Option<String>,
 }
 
 impl Shell {
     /// A shell with one tab showing `root`, in the light theme.
     #[must_use]
     pub fn new(root: Box<dyn Screen>) -> Self {
+        let (keymap, notice) = match keymap::try_classic() {
+            Ok(keymap) => (keymap, None),
+            Err(e) => (
+                Keymap::unbound("none"),
+                Some(format!(
+                    "The key map could not be read, so the palette keys do not work: {e}"
+                )),
+            ),
+        };
         Self {
             tabs: Tabs::new(root),
             app_ctx: AppCtx::default(),
@@ -64,6 +104,131 @@ impl Shell {
             books_seen: submit::change_count(),
             books_ticket: None,
             books_problem: None,
+            keymap,
+            palette: Palette::new(),
+            search: PaletteSearch::new(),
+            notice,
+        }
+    }
+
+    /// The command palette.
+    #[must_use]
+    pub fn palette(&self) -> &Palette {
+        &self.palette
+    }
+
+    /// The command palette, mutably (to type into it from outside a frame).
+    pub fn palette_mut(&mut self) -> &mut Palette {
+        &mut self.palette
+    }
+
+    /// Why the last palette pick opened nothing, when it did not.
+    #[must_use]
+    pub fn notice(&self) -> Option<&str> {
+        self.notice.as_deref()
+    }
+
+    /// Opens the palette for `action` (open-palette or switch-palette) with today's rows.
+    fn open_palette(&mut self, action: Action) {
+        let mut entries = navigate::host_entries(&self.keymap);
+        entries.extend(navigate::screen_entries(self.app_ctx.books.as_ref()));
+        self.palette.set_entries(entries);
+        if self.palette.open_for(action) {
+            self.notice = None;
+        }
+    }
+
+    /// Reads the palette chords; with the palette open, draws it, takes its keys and opens the
+    /// pick. Runs before the screen so the screen never sees a key meant for the palette.
+    fn palette_frame(&mut self, ui: &mut egui::Ui) {
+        if !self.palette.is_open() {
+            let wanted = ui.input_mut(|i| {
+                if self.keymap.consume_action(i, Action::SwitchPalette) {
+                    Some(Action::SwitchPalette)
+                } else if self.keymap.consume_action(i, Action::OpenPalette) {
+                    Some(Action::OpenPalette)
+                } else {
+                    None
+                }
+            });
+            let asked = PALETTE_WANTED.swap(false, Ordering::SeqCst);
+            match (wanted, asked) {
+                (Some(action), _) => self.open_palette(action),
+                (None, true) => self.open_palette(Action::OpenPalette),
+                (None, false) => return,
+            }
+        }
+        self.search
+            .tick(&mut self.palette, self.app_ctx.api.as_ref());
+        if self.search.is_pending() {
+            ui.ctx().request_repaint();
+        }
+        let choice = egui::Area::new(egui::Id::unique("ledgerly-palette"))
+            .order(egui::Order::Foreground)
+            .anchor(egui::Align2::CENTER_TOP, [0.0, 48.0])
+            .show(ui.ctx(), |ui| {
+                egui::Frame::popup(ui.style())
+                    .show(ui, |ui| {
+                        ui.set_min_width(520.0);
+                        self.palette.ui(ui)
+                    })
+                    .inner
+            })
+            .inner;
+        // Whatever key the palette did not use this frame is not passed to the screen under it.
+        ui.input_mut(|i| {
+            i.events.retain(|e| !matches!(e, egui::Event::Key { .. }));
+        });
+        if let Some(choice) = choice {
+            self.pick(&choice);
+        }
+    }
+
+    /// Opens what the palette pick names, or says why it opens nothing.
+    fn pick(&mut self, choice: &PaletteChoice) {
+        match self.tabs.open_choice(choice, &self.app_ctx) {
+            Ok(_) => self.notice = None,
+            Err(NavError::NotNavigation) => self.run_pick(&choice.target),
+            Err(e) => self.notice = Some(e.to_string()),
+        }
+    }
+
+    /// A command or assistant pick: the shell's own commands run; any other says it cannot run
+    /// from the palette yet.
+    fn run_pick(&mut self, target: &PaletteTarget) {
+        let cmd = match target {
+            PaletteTarget::Command(Action::NewTab) => Some(ChromeCmd::NewTab),
+            PaletteTarget::Command(Action::CloseTab) => Some(ChromeCmd::CloseActiveTab),
+            PaletteTarget::Command(Action::Back) => Some(ChromeCmd::Back),
+            PaletteTarget::Command(action @ (Action::OpenPalette | Action::SwitchPalette)) => {
+                self.open_palette(*action);
+                return;
+            }
+            PaletteTarget::Command(action) => {
+                self.notice = Some(format!(
+                    "\"{}\" runs on the screen it belongs to; the palette cannot run it yet.",
+                    action.label()
+                ));
+                None
+            }
+            PaletteTarget::AiIntent(name) => {
+                self.notice = Some(format!(
+                    "Not supported yet: the assistant request \"{name}\" (the assistant is not \
+                     connected to the app yet)."
+                ));
+                None
+            }
+            PaletteTarget::Report(_)
+            | PaletteTarget::Master(_)
+            | PaletteTarget::Voucher(_)
+            | PaletteTarget::Setting(_) => {
+                self.notice = Some("This choice opened nothing.".to_owned());
+                None
+            }
+        };
+        if let Some(cmd) = cmd {
+            self.notice = None;
+            self.run_cmd(cmd);
         }
     }
 
@@ -173,7 +338,13 @@ impl Shell {
             cmds.extend(chrome::tab_strip(ui, &self.tabs, self.theme, &t));
             cmds.extend(chrome::breadcrumbs(ui, &trail, &t));
         });
-        egui::Panel::bottom("keys").show(ui, |ui| chrome::key_bar(ui, can_go_back, &t));
+        egui::Panel::bottom("keys").show(ui, |ui| {
+            if let Some(notice) = &self.notice {
+                ui.colored_label(ui.visuals().error_fg_color, notice.as_str());
+            }
+            chrome::key_bar(ui, can_go_back, &t);
+        });
+        self.palette_frame(ui);
 
         let mut screen_action = crate::ScreenAction::Stay;
         egui::CentralPanel::default_margins().show(ui, |ui| {
@@ -220,7 +391,13 @@ impl Shell {
             ChromeCmd::CloseActiveTab => {
                 self.tabs.close(self.tabs.active_index());
             }
-            ChromeCmd::NewTab => self.tabs.open(Box::new(WelcomeScreen::default())),
+            ChromeCmd::NewTab => {
+                if self.app_ctx.api.is_some() {
+                    self.tabs.open(Box::new(GatewayScreen::new()));
+                } else {
+                    self.tabs.open(Box::new(WelcomeScreen::default()));
+                }
+            }
             ChromeCmd::PopTo(depth) => {
                 if let Some(stack) = self.tabs.active_stack_mut() {
                     stack.truncate_to(depth);
