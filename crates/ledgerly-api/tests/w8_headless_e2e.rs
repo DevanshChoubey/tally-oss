@@ -40,10 +40,11 @@ use ledgerly_core::{
 use ledgerly_gst::gstr1::{Bucket, BucketedVoucher, build_gstr1};
 use ledgerly_gst::pack::{RulePack, load_pack};
 use ledgerly_gst_formats::gstr1::{B2bInvoice, B2bInvoiceType, Gstr1, ItemTax};
+use ledgerly_model::seed_godowns::MAIN_LOCATION;
 use ledgerly_model::seed_groups::reserved_groups;
 use ledgerly_model::seed_voucher_types::default_voucher_types;
 use ledgerly_model::{
-    Address, BaseVoucherKind, Company, EntityKind, Features, Godown, GodownAllocation, GstHistory,
+    Address, BaseVoucherKind, Company, EntityKind, Features, GodownAllocation, GstHistory,
     GstRegistration, InventoryLine, Ledger, LedgerLine, NegativeStockPolicy, PartyDetails,
     RegistrationType, ReservedGroup, Scenario, StockItem, TaxDetails, TaxLedgerKind, Taxability,
     Unit, UnitKind, ValuationMethod, Voucher, VoucherMode, VoucherStatus,
@@ -302,13 +303,10 @@ fn create_masters(api: &mut Api) {
     };
     value(api.execute(Command::CreateUnit(pieces)));
     value(api.execute(Command::CreateStockItem(widget())));
-    let main = Godown {
-        id: MAIN,
-        name: "Main Location".to_owned(),
-        parent: None,
-        tally: None,
-    };
-    value(api.execute(Command::CreateGodown(main)));
+    // Main Location is Tally's default godown and every company file holds it from creation as
+    // godown 1 (seed_godowns; TallyPrime godowns FAQ, accessed 2026-11-21), so this test no
+    // longer creates it by hand (updated 2026-11-21 on the owner's "follow Tally" instruction).
+    assert_eq!(MAIN, MAIN_LOCATION);
 }
 
 // ---------------------------------------------------------------------------------------------

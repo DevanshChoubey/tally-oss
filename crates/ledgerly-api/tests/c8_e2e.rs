@@ -61,10 +61,11 @@ use ledgerly_core::{
 };
 use ledgerly_gst::pack::{RulePack, load_pack};
 use ledgerly_gst_formats::gstr1::{B2bInvoice, B2bInvoiceType, Gstr1, ItemTax};
+use ledgerly_model::seed_godowns::MAIN_LOCATION;
 use ledgerly_model::seed_groups::reserved_groups;
 use ledgerly_model::seed_voucher_types::default_voucher_types;
 use ledgerly_model::{
-    Address, BankDetails, BaseVoucherKind, Company, EntityKind, Features, Godown, GodownAllocation,
+    Address, BankDetails, BaseVoucherKind, Company, EntityKind, Features, GodownAllocation,
     GstHistory, GstRegistration, InventoryLine, Ledger, LedgerLine, NegativeStockPolicy,
     PartyDetails, RegistrationType, ReservedGroup, Scenario, StockItem, TaxDetails, TaxLedgerKind,
     Taxability, Unit, UnitKind, ValuationMethod, Voucher, VoucherMode, VoucherStatus,
@@ -409,16 +410,10 @@ fn create_stock_masters(api: &mut Api) -> (UnitId, StockItemId, GodownId) {
         Some(CreatedId::StockItem(id)) => id,
         other => panic!("expected an assigned stock item id, got {other:?}"),
     };
-    let godown = Godown {
-        id: GodownId(0),
-        name: "Main Location".to_owned(),
-        parent: None,
-        tally: None,
-    };
-    let main = match value(api.execute(Command::CreateGodown(godown))).created {
-        Some(CreatedId::Godown(id)) => id,
-        other => panic!("expected an assigned godown id, got {other:?}"),
-    };
+    // Main Location is Tally's default godown and every company file holds it from creation as
+    // godown 1 (seed_godowns; TallyPrime godowns FAQ, accessed 2026-11-21), so this test no
+    // longer creates it by hand (updated 2026-11-21 on the owner's "follow Tally" instruction).
+    let main = MAIN_LOCATION;
     (unit, item, main)
 }
 

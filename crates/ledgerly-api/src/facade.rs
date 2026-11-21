@@ -38,6 +38,7 @@
 use std::path::Path;
 
 use ledgerly_core::{Clock, Date, Outcome, Unsupported, UserId, VoucherId};
+use ledgerly_model::seed_godowns::default_godowns;
 use ledgerly_model::seed_groups::reserved_groups;
 use ledgerly_model::seed_voucher_types::default_voucher_types;
 use ledgerly_model::{Books, Company, MasterSnapshot};
@@ -84,9 +85,9 @@ enum Cache {
 }
 
 impl Api {
-    /// Creates a company file at `path` holding `company`, and seeds it with the reserved groups
-    /// and the default voucher types, with projection maintenance switched on. The file must not
-    /// exist.
+    /// Creates a company file at `path` holding `company`, and seeds it with the reserved groups,
+    /// the default voucher types and the default godown, Main Location. Projection maintenance is
+    /// switched on. The file must not exist.
     ///
     /// # Errors
     /// [`ApiError::Store`] when the file cannot be created or seeded. A file left half-created by
@@ -364,6 +365,11 @@ fn seed_events() -> Vec<Event> {
             default_voucher_types()
                 .into_iter()
                 .map(|kind| Event::MasterCreated(MasterSnapshot::VoucherType(kind))),
+        )
+        .chain(
+            default_godowns()
+                .into_iter()
+                .map(|godown| Event::MasterCreated(MasterSnapshot::Godown(godown))),
         )
         .collect()
 }

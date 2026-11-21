@@ -24,6 +24,7 @@ use ledgerly_core::{
     Clock, CompanyId, Decimal, DrCr, FinancialYear, GroupId, Gstin, Hsn, LedgerId, Outcome, Paise,
     Rate, SignedAmount, StateCode, StockItemId, UnitId, gstin_check_character,
 };
+use ledgerly_model::seed_godowns::default_godowns;
 use ledgerly_model::seed_groups::reserved_groups;
 use ledgerly_model::seed_voucher_types::default_voucher_types;
 use ledgerly_model::{
@@ -194,6 +195,11 @@ fn setup(name: &str) -> (ApiWorker, Books) {
     masters.stock_items.insert(StockItemId(1), widget());
     for t in default_voucher_types() {
         masters.voucher_types.insert(t.id, t);
+    }
+    // The company file holds Main Location from creation (seed_godowns), so the screen's copy
+    // of the masters does too.
+    for g in default_godowns() {
+        masters.godowns.insert(g.id, g);
     }
     let books = Books {
         company: company(),

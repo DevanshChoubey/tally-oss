@@ -3,10 +3,12 @@
 use super::{InvoiceError, InvoiceKind, parse_decimal, parse_place};
 use crate::screens::voucher_entry::{UNASSIGNED_VOUCHER_ID, eval_amount, parse_entry_date};
 use ledgerly_core::{
-    Decimal, FinancialYear, LedgerId, MoneyError, Paise, Qty, Rate, RoundingRule, StockItemId,
-    Unsupported, VoucherTypeId, round_rupees_to_paise,
+    Decimal, FinancialYear, GodownId, LedgerId, MoneyError, Paise, Qty, Rate, RoundingRule,
+    StockItemId, Unsupported, VoucherTypeId, round_rupees_to_paise,
 };
-use ledgerly_model::{InventoryLine, Masters, Voucher, VoucherMode, VoucherStatus};
+use ledgerly_model::{
+    GodownAllocation, InventoryLine, Masters, Voucher, VoucherMode, VoucherStatus,
+};
 use std::collections::BTreeMap;
 
 /// One stock line as typed.
@@ -235,12 +237,7 @@ impl InvoiceDraft {
         masters: &Masters,
         account: LedgerId,
     ) -> Result<Vec<InventoryLine>, InvoiceError> {
-        if !masters.godowns.is_empty() {
-            return Err(InvoiceError::Unsupported(Unsupported {
-                what: "godown allocation on an item invoice".to_owned(),
-                reason: "this company has godowns and the screen cannot pick one yet".to_owned(),
-            }));
-        }
+        let godown = only_godown(masters)?;
         let mut lines = Vec::new();
         for (index, row) in self.rows.iter().enumerate() {
             if !row.is_blank() {
@@ -249,6 +246,7 @@ impl InvoiceDraft {
                     row,
                     index.saturating_add(1),
                     account,
+                    godown,
                 )?);
             }
         }
@@ -265,6 +263,7 @@ fn inventory_line(
     row: &InvoiceRow,
     line: usize,
     account: LedgerId,
+    godown: Option<GodownId>,
 ) -> Result<InventoryLine, InvoiceError> {
     let amount = line_amount(masters, row, line)?;
     let Some(item) = row.item.and_then(|id| masters.stock_items.get(&id)) else {
@@ -300,8 +299,38 @@ fn inventory_line(
         discount_percent,
         amount,
         ledger: Some(account),
-        godowns: Vec::new(),
+        godowns: godown
+            .map(|godown| GodownAllocation {
+                godown,
+                batch: None,
+                qty: Qty(qty),
+                amount,
+            })
+            .into_iter()
+            .collect(),
     })
+}
+
+/// The godown every line goes to: the company's only godown, or `None` when it has none.
+///
+/// The TallyPrime godowns FAQ
+/// (<https://help.tallysolutions.com/tally-prime/godowns-locations/godowns-locations-faq-tally/>,
+/// accessed 2026-11-21) says that without multiple godowns all stock sits in Main Location, and
+/// voucher entry shows no godown list. Every company file starts with Main Location, so while it
+/// is the only godown the whole line goes there. With more godowns the user must choose, and the
+/// screen has no picker yet, so it refuses. Masters with no godown at all (not a company file,
+/// which always holds Main Location) leave the line unallocated, and the store refuses it on save.
+fn only_godown(masters: &Masters) -> Result<Option<GodownId>, InvoiceError> {
+    let mut ids = masters.godowns.keys();
+    match (ids.next(), ids.next()) {
+        (Some(id), None) => Ok(Some(*id)),
+        (Some(_), Some(_)) => Err(InvoiceError::Unsupported(Unsupported {
+            what: "godown allocation on an item invoice".to_owned(),
+            reason: "this company has more than one godown and the screen cannot pick one yet"
+                .to_owned(),
+        })),
+        (None, _) => Ok(None),
+    }
 }
 
 fn nonblank(text: &str) -> Option<String> {

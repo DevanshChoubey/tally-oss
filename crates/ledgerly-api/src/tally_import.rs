@@ -9,8 +9,8 @@
 //! # Target company
 //!
 //! The import only goes into a company that holds exactly what [`Api::create`] seeds: the reserved
-//! groups and the default voucher types, and nothing else, with no period locked. Any other company
-//! is refused with `Outcome::Unsupported` before Tally is contacted. Merging into existing books
+//! groups, the default voucher types and Main Location, and nothing else, with no period locked.
+//! Any other company is refused with `Outcome::Unsupported` before Tally is contacted. Merging into existing books
 //! is not offered: an import into a company with data would need an id base and a merge rule that
 //! the spec does not give.
 
@@ -20,9 +20,10 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 
 use ledgerly_core::{CancelToken, Date, Outcome, Period, Unsupported};
+use ledgerly_model::seed_godowns::default_godowns;
 use ledgerly_model::seed_groups::reserved_groups;
 use ledgerly_model::seed_voucher_types::default_voucher_types;
-use ledgerly_model::{Books, Group, VoucherType};
+use ledgerly_model::{Books, Godown, Group, VoucherType};
 use ledgerly_store::Actor;
 use ledgerly_tally_bridge::TallyTransport;
 use ledgerly_tally_bridge::import::{ImportCounts, ImportedTally, import_company, import_range};
@@ -168,18 +169,19 @@ impl Api {
 }
 
 /// True when `books` holds only what [`Api::create`] seeds: the reserved groups, the default
-/// voucher types, and no other master, posting or voucher.
+/// voucher types, Main Location, and no other master, posting or voucher.
 fn is_seed_only(books: &Books) -> bool {
     let masters = &books.masters;
     let groups: Vec<Group> = masters.groups.values().cloned().collect();
     let voucher_types: Vec<VoucherType> = masters.voucher_types.values().cloned().collect();
+    let godowns: Vec<Godown> = masters.godowns.values().cloned().collect();
     groups == reserved_groups()
         && voucher_types == default_voucher_types()
+        && godowns == default_godowns()
         && masters.ledgers.is_empty()
         && masters.units.is_empty()
         && masters.stock_groups.is_empty()
         && masters.stock_items.is_empty()
-        && masters.godowns.is_empty()
         && masters.batches.is_empty()
         && masters.cost_categories.is_empty()
         && masters.cost_centres.is_empty()

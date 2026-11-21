@@ -37,9 +37,10 @@ use ledgerly_core::{
 };
 use ledgerly_model::{
     Address, BaseVoucherKind, BillWiseConfig, Books, Company, EntityKind, Features, Godown,
-    GstLine, Ledger, LedgerLine, Masters, NegativeStockPolicy, NumberingConfig, NumberingMethod,
-    PartyDetails, RegistrationType, RestartPeriod, StockItem, StoredGst, TaxLedgerKind, Unit,
-    UnitKind, ValuationMethod, Voucher, VoucherMode, VoucherStatus, VoucherType,
+    GodownAllocation, GstLine, Ledger, LedgerLine, Masters, NegativeStockPolicy, NumberingConfig,
+    NumberingMethod, PartyDetails, RegistrationType, RestartPeriod, StockItem, StoredGst,
+    TaxLedgerKind, Unit, UnitKind, ValuationMethod, Voucher, VoucherMode, VoucherStatus,
+    VoucherType,
 };
 use time::macros::date;
 
@@ -669,13 +670,44 @@ fn bill_wise_party_godowns_and_batches_are_unsupported_not_guessed() {
         s.draft().build_voucher(m, fy()),
         Err(InvoiceError::Unsupported(_))
     ));
-    // pending: godown allocation.
+    // Updated on the owner's instruction (2026-11-21) that everything follows Tally. This used
+    // to assert Unsupported for a company with one godown (then "pending: godown allocation").
+    // The TallyPrime godowns FAQ
+    // <https://help.tallysolutions.com/tally-prime/godowns-locations/godowns-locations-faq-tally/>
+    // (accessed 2026-11-21) says stock goes to the default godown, Main Location, and voucher
+    // entry offers no godown list. So with Main Location the only godown, the whole line goes
+    // there without asking.
     let mut with_godown = books();
     with_godown.masters.godowns.insert(
         GodownId(1),
         Godown {
             id: GodownId(1),
             name: "Main".to_owned(),
+            parent: None,
+            tally: None,
+        },
+    );
+    let mut s = open(&with_godown, T_SALES);
+    fill(&mut s, &with_godown.masters);
+    let voucher = s.draft().build_voucher(&with_godown.masters, fy()).unwrap();
+    for line in &voucher.inventory_lines {
+        assert_eq!(
+            line.godowns,
+            vec![GodownAllocation {
+                godown: GodownId(1),
+                batch: None,
+                qty: line.qty,
+                amount: line.amount,
+            }]
+        );
+    }
+    // pending: with more than one godown the user must pick one, and the screen has no picker
+    // yet, so it refuses rather than guess.
+    with_godown.masters.godowns.insert(
+        GodownId(2),
+        Godown {
+            id: GodownId(2),
+            name: "Store Room".to_owned(),
             parent: None,
             tally: None,
         },

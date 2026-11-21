@@ -33,10 +33,11 @@ use ledgerly_core::{
 };
 use ledgerly_engine::EngineError;
 use ledgerly_gst::pack::load_pack;
+use ledgerly_model::seed_godowns::MAIN_LOCATION;
 use ledgerly_model::seed_groups::reserved_groups;
 use ledgerly_model::seed_voucher_types::default_voucher_types;
 use ledgerly_model::{
-    Address, BaseVoucherKind, Company, EntityKind, Features, Godown, GodownAllocation, GstHistory,
+    Address, BaseVoucherKind, Company, EntityKind, Features, GodownAllocation, GstHistory,
     GstRegistration, InventoryLine, Ledger, LedgerLine, NegativeStockPolicy, PartyDetails,
     RegistrationType, ReservedGroup, StockItem, TaxDetails, TaxLedgerKind, Taxability, Unit,
     UnitKind, ValuationMethod, Voucher, VoucherMode, VoucherStatus,
@@ -202,12 +203,10 @@ fn company_file() -> (tempfile::TempDir, Api) {
         tally: None,
     })));
     ok(api.execute(Command::CreateStockItem(widget())));
-    ok(api.execute(Command::CreateGodown(Godown {
-        id: MAIN,
-        name: "Main Location".to_owned(),
-        parent: None,
-        tally: None,
-    })));
+    // Main Location is Tally's default godown and every company file holds it from creation as
+    // godown 1 (seed_godowns; TallyPrime godowns FAQ, accessed 2026-11-21), so this test no
+    // longer creates it by hand (updated 2026-11-21 on the owner's "follow Tally" instruction).
+    assert_eq!(MAIN, MAIN_LOCATION);
     (dir, api)
 }
 
