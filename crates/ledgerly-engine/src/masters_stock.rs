@@ -112,6 +112,11 @@ fn altered(
     }
 }
 
+/// [`EngineError::InUseByMaster`] naming the blocked master and its first user.
+fn in_use_by_master(what: String, by: String) -> EngineError {
+    EngineError::InUseByMaster { what, by }
+}
+
 /// [`EngineError::InUse`] when any voucher (cancelled ones included) matches `uses`.
 fn not_in_vouchers(books: &Books, uses: impl Fn(&Voucher) -> bool) -> Result<(), EngineError> {
     let vouchers = books.vouchers.values().filter(|&v| uses(v)).count();
@@ -323,7 +328,7 @@ pub fn alter_unit(u: Unit, books: &Books) -> Result<Outcome<Vec<Event>>, EngineE
 ///
 /// # Errors
 /// [`EngineError::NotFound`] when it does not exist; [`EngineError::InUse`] when voucher lines use
-/// it; [`EngineError::Invalid`] naming the stock item or compound unit that uses it.
+/// it; [`EngineError::InUseByMaster`] naming the stock item or compound unit that uses it.
 pub fn delete_unit(id: UnitId, books: &Books) -> Result<Outcome<Vec<Event>>, EngineError> {
     let unit = books
         .masters
@@ -332,10 +337,7 @@ pub fn delete_unit(id: UnitId, books: &Books) -> Result<Outcome<Vec<Event>>, Eng
         .ok_or_else(|| missing(format!("unit id {}", id.0)))?;
     not_in_vouchers(books, |v| v.inventory_lines.iter().any(|l| l.unit == id))?;
     if let Some(user) = unit_master_user(books, id) {
-        return Err(invalid(
-            "unit",
-            format!("'{}' is used by {user}; change that first", unit.symbol),
-        ));
+        return Err(in_use_by_master(format!("unit '{}'", unit.symbol), user));
     }
     deleted(MasterSnapshot::Unit(unit.clone()))
 }
@@ -409,7 +411,7 @@ pub fn alter_stock_group(g: StockGroup, books: &Books) -> Result<Outcome<Vec<Eve
 /// Delete a stock group.
 ///
 /// # Errors
-/// [`EngineError::NotFound`] when it does not exist; [`EngineError::Invalid`] while it has
+/// [`EngineError::NotFound`] when it does not exist; [`EngineError::InUseByMaster`] while it has
 /// sub-groups or stock items.
 pub fn delete_stock_group(
     id: StockGroupId,
@@ -426,12 +428,9 @@ pub fn delete_stock_group(
         .values()
         .find(|c| c.parent == Some(id))
     {
-        return Err(invalid(
-            "stock group",
-            format!(
-                "'{}' still has the sub-group '{}'; move or delete it first",
-                group.name, child.name
-            ),
+        return Err(in_use_by_master(
+            format!("stock group '{}'", group.name),
+            format!("sub-group '{}'", child.name),
         ));
     }
     if let Some(item) = books
@@ -440,12 +439,9 @@ pub fn delete_stock_group(
         .values()
         .find(|i| i.group == Some(id))
     {
-        return Err(invalid(
-            "stock group",
-            format!(
-                "'{}' still holds the stock item '{}'; move or delete it first",
-                group.name, item.name
-            ),
+        return Err(in_use_by_master(
+            format!("stock group '{}'", group.name),
+            format!("stock item '{}'", item.name),
         ));
     }
     deleted(MasterSnapshot::StockGroup(group.clone()))
@@ -715,7 +711,8 @@ pub fn alter_stock_item(it: StockItem, books: &Books) -> Result<Outcome<Vec<Even
 ///
 /// # Errors
 /// [`EngineError::NotFound`] when it does not exist; [`EngineError::InUse`] when vouchers use it;
-/// [`EngineError::Invalid`] when stock movements or batches of it exist.
+/// [`EngineError::InUseByMaster`] when batches of it exist; [`EngineError::Invalid`] when stock
+/// movements of it exist.
 pub fn delete_stock_item(
     id: StockItemId,
     books: &Books,
@@ -733,12 +730,9 @@ pub fn delete_stock_item(
         ));
     }
     if let Some(batch) = books.masters.batches.values().find(|b| b.item == id) {
-        return Err(invalid(
-            "stock item",
-            format!(
-                "'{}' still has the batch '{}'; delete it first",
-                item.name, batch.name
-            ),
+        return Err(in_use_by_master(
+            format!("stock item '{}'", item.name),
+            format!("batch '{}'", batch.name),
         ));
     }
     deleted(MasterSnapshot::StockItem(item.clone()))
@@ -811,8 +805,8 @@ pub fn alter_godown(g: Godown, books: &Books) -> Result<Outcome<Vec<Event>>, Eng
 ///
 /// # Errors
 /// [`EngineError::NotFound`] when it does not exist; [`EngineError::InUse`] when vouchers allocate
-/// stock to it; [`EngineError::Invalid`] while it has sub-godowns, opening stock or stock
-/// movements.
+/// stock to it; [`EngineError::InUseByMaster`] while it has sub-godowns or opening stock;
+/// [`EngineError::Invalid`] while it has stock movements.
 pub fn delete_godown(id: GodownId, books: &Books) -> Result<Outcome<Vec<Event>>, EngineError> {
     let godown = books
         .masters
@@ -830,12 +824,9 @@ pub fn delete_godown(id: GodownId, books: &Books) -> Result<Outcome<Vec<Event>>,
         .values()
         .find(|c| c.parent == Some(id))
     {
-        return Err(invalid(
-            "godown",
-            format!(
-                "'{}' still has the sub-godown '{}'; move or delete it first",
-                godown.name, child.name
-            ),
+        return Err(in_use_by_master(
+            format!("godown '{}'", godown.name),
+            format!("sub-godown '{}'", child.name),
         ));
     }
     let opening = books
@@ -844,12 +835,9 @@ pub fn delete_godown(id: GodownId, books: &Books) -> Result<Outcome<Vec<Event>>,
         .values()
         .find(|i| i.opening.iter().any(|o| o.godown == id));
     if let Some(item) = opening {
-        return Err(invalid(
-            "godown",
-            format!(
-                "'{}' holds opening stock of '{}'; remove that stock first",
-                godown.name, item.name
-            ),
+        return Err(in_use_by_master(
+            format!("godown '{}'", godown.name),
+            format!("stock item '{}' (opening stock)", item.name),
         ));
     }
     if books.stock_moves.iter().any(|m| m.godown == id) {
@@ -951,7 +939,8 @@ pub fn alter_batch(b: Batch, books: &Books) -> Result<Outcome<Vec<Event>>, Engin
 ///
 /// # Errors
 /// [`EngineError::NotFound`] when it does not exist; [`EngineError::InUse`] when voucher lines
-/// allocate stock to it; [`EngineError::Invalid`] when opening stock or stock movements use it.
+/// allocate stock to it; [`EngineError::InUseByMaster`] when opening stock uses it;
+/// [`EngineError::Invalid`] when stock movements use it.
 pub fn delete_batch(id: BatchId, books: &Books) -> Result<Outcome<Vec<Event>>, EngineError> {
     let batch = books
         .masters
@@ -963,12 +952,18 @@ pub fn delete_batch(id: BatchId, books: &Books) -> Result<Outcome<Vec<Event>>, E
             .iter()
             .any(|l| l.godowns.iter().any(|a| a.batch == Some(id)))
     })?;
-    let opening = books
+    if let Some(item) = books
         .masters
         .stock_items
         .values()
-        .any(|i| i.opening.iter().any(|o| o.batch == Some(id)));
-    if opening || books.stock_moves.iter().any(|m| m.batch == Some(id)) {
+        .find(|i| i.opening.iter().any(|o| o.batch == Some(id)))
+    {
+        return Err(in_use_by_master(
+            format!("batch '{}'", batch.name),
+            format!("stock item '{}' (opening stock)", item.name),
+        ));
+    }
+    if books.stock_moves.iter().any(|m| m.batch == Some(id)) {
         return Err(invalid(
             "batch",
             format!("'{}' holds stock; remove that stock first", batch.name),
@@ -1035,7 +1030,7 @@ pub fn alter_cost_category(
 ///
 /// # Errors
 /// [`EngineError::NotFound`] when it does not exist; [`EngineError::InUse`] when voucher lines
-/// allocate to it; [`EngineError::Invalid`] while it has cost centres.
+/// allocate to it; [`EngineError::InUseByMaster`] while it has cost centres.
 pub fn delete_cost_category(
     id: CostCategoryId,
     books: &Books,
@@ -1056,12 +1051,9 @@ pub fn delete_cost_category(
         .values()
         .find(|c| c.category == id)
     {
-        return Err(invalid(
-            "cost category",
-            format!(
-                "'{}' still has the cost centre '{}'; move or delete it first",
-                category.name, centre.name
-            ),
+        return Err(in_use_by_master(
+            format!("cost category '{}'", category.name),
+            format!("cost centre '{}'", centre.name),
         ));
     }
     deleted(MasterSnapshot::CostCategory(category.clone()))
@@ -1187,7 +1179,7 @@ pub fn alter_cost_centre(c: CostCentre, books: &Books) -> Result<Outcome<Vec<Eve
 ///
 /// # Errors
 /// [`EngineError::NotFound`] when it does not exist; [`EngineError::InUse`] when voucher lines
-/// allocate to it; [`EngineError::Invalid`] while it has sub-centres.
+/// allocate to it; [`EngineError::InUseByMaster`] while it has sub-centres.
 pub fn delete_cost_centre(
     id: CostCentreId,
     books: &Books,
@@ -1207,12 +1199,9 @@ pub fn delete_cost_centre(
         .values()
         .find(|o| o.parent == Some(id))
     {
-        return Err(invalid(
-            "cost centre",
-            format!(
-                "'{}' still has the sub-centre '{}'; move or delete it first",
-                centre.name, child.name
-            ),
+        return Err(in_use_by_master(
+            format!("cost centre '{}'", centre.name),
+            format!("sub-centre '{}'", child.name),
         ));
     }
     deleted(MasterSnapshot::CostCentre(centre.clone()))

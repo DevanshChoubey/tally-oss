@@ -178,7 +178,7 @@ pub fn alter_group(g: Group, books: &Books) -> Result<Outcome<Vec<Event>>, Engin
 ///
 /// # Errors
 /// [`EngineError::NotFound`] for an unknown group; [`EngineError::ReservedGroup`] for a reserved
-/// one; [`EngineError::Invalid`] when it still has sub-groups or ledgers.
+/// one; [`EngineError::InUseByMaster`] when it still has sub-groups or ledgers.
 pub fn delete_group(id: GroupId, books: &Books) -> Result<Outcome<Vec<Event>>, EngineError> {
     let Some(group) = books.masters.groups.get(&id) else {
         return Err(EngineError::NotFound {
@@ -188,23 +188,22 @@ pub fn delete_group(id: GroupId, books: &Books) -> Result<Outcome<Vec<Event>>, E
     if let Some(reserved) = group.reserved {
         return Err(EngineError::ReservedGroup(reserved));
     }
-    if books.masters.groups.values().any(|g| g.parent == Some(id)) {
-        return Err(invalid(
-            "group",
-            format!(
-                "'{}' still has sub-groups; move or delete them first",
-                group.name
-            ),
-        ));
+    if let Some(child) = books
+        .masters
+        .groups
+        .values()
+        .find(|g| g.parent == Some(id))
+    {
+        return Err(EngineError::InUseByMaster {
+            what: format!("group '{}'", group.name),
+            by: format!("sub-group '{}'", child.name),
+        });
     }
-    if books.masters.ledgers.values().any(|l| l.group == id) {
-        return Err(invalid(
-            "group",
-            format!(
-                "'{}' still has ledgers; move or delete them first",
-                group.name
-            ),
-        ));
+    if let Some(ledger) = books.masters.ledgers.values().find(|l| l.group == id) {
+        return Err(EngineError::InUseByMaster {
+            what: format!("group '{}'", group.name),
+            by: format!("ledger '{}'", ledger.name),
+        });
     }
     Ok(Outcome::Value(vec![Event::MasterDeleted(
         MasterSnapshot::Group(group.clone()),

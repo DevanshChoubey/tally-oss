@@ -260,6 +260,17 @@ fn is_invalid<T: std::fmt::Debug>(r: &Result<T, EngineError>) -> bool {
     matches!(r, Err(EngineError::Invalid { .. }))
 }
 
+fn is_in_use_by_master<T: std::fmt::Debug>(r: &Result<T, EngineError>) -> bool {
+    matches!(r, Err(EngineError::InUseByMaster { .. }))
+}
+
+fn in_use_by_master(what: &str, by: &str) -> EngineError {
+    EngineError::InUseByMaster {
+        what: what.to_owned(),
+        by: by.to_owned(),
+    }
+}
+
 fn only(events: Outcome<Vec<Event>>) -> Event {
     let mut v = events.value().unwrap();
     assert_eq!(v.len(), 1, "exactly one event");
@@ -408,11 +419,11 @@ fn delete_unit_in_use_errors_and_unused_deletes() {
     put_unit(&mut b, unit(6, "tray"));
     put_item(&mut b, item(1, "Pen", 2));
     assert!(
-        is_invalid(&delete_unit(UnitId(2), &b)),
+        is_in_use_by_master(&delete_unit(UnitId(2), &b)),
         "base unit of an item"
     );
     assert!(
-        is_invalid(&delete_unit(UnitId(1), &b)),
+        is_in_use_by_master(&delete_unit(UnitId(1), &b)),
         "part of a compound unit"
     );
     let mut with_alt = item(2, "Ink", 5);
@@ -422,7 +433,7 @@ fn delete_unit_in_use_errors_and_unused_deletes() {
     });
     put_item(&mut b, with_alt);
     assert!(
-        is_invalid(&delete_unit(UnitId(6), &b)),
+        is_in_use_by_master(&delete_unit(UnitId(6), &b)),
         "alternate unit of an item"
     );
     put_voucher(
@@ -502,8 +513,8 @@ fn stock_group_with_children_or_items_cannot_be_deleted() {
     let mut it = item(1, "Pen", 1);
     it.group = Some(StockGroupId(2));
     put_item(&mut b, it);
-    assert!(is_invalid(&delete_stock_group(StockGroupId(1), &b)));
-    assert!(is_invalid(&delete_stock_group(StockGroupId(2), &b)));
+    assert!(is_in_use_by_master(&delete_stock_group(StockGroupId(1), &b)));
+    assert!(is_in_use_by_master(&delete_stock_group(StockGroupId(2), &b)));
     b.masters.stock_items.clear();
     assert!(delete_stock_group(StockGroupId(2), &b).is_ok());
 }
@@ -735,7 +746,7 @@ fn delete_item_blocked_by_vouchers_moves_and_batches() {
     put_item(&mut b, item(3, "Ink", 1));
     put_item(&mut b, item(4, "Free", 1));
     put_batch(&mut b, batch(1, 1, "B1"));
-    assert!(is_invalid(&delete_stock_item(StockItemId(1), &b)), "batch");
+    assert!(is_in_use_by_master(&delete_stock_item(StockItemId(1), &b)), "batch");
     put_voucher(
         &mut b,
         voucher(vec![inv_line(2, 1, None, None)], Vec::new()),
@@ -776,7 +787,7 @@ fn deleting_a_godown_with_stock_errors() {
     let mut pen = item(1, "Pen", 1);
     pen.opening = vec![opening(2, None, qty(5, 0))];
     put_item(&mut b, pen);
-    assert!(is_invalid(&delete_godown(GodownId(2), &b)), "opening stock");
+    assert!(is_in_use_by_master(&delete_godown(GodownId(2), &b)), "opening stock");
 
     put_voucher(
         &mut b,
@@ -806,7 +817,7 @@ fn empty_godown_deletes_with_one_event_and_children_block() {
     let mut b = books_with_units();
     put_godown(&mut b, godown(2, "Shop", Some(1)));
     put_godown(&mut b, godown(3, "Spare", None));
-    assert!(is_invalid(&delete_godown(GodownId(1), &b)));
+    assert!(is_in_use_by_master(&delete_godown(GodownId(1), &b)));
     assert_eq!(
         only(delete_godown(GodownId(3), &b).unwrap()),
         Event::MasterDeleted(MasterSnapshot::Godown(godown(3, "Spare", None)))
@@ -912,7 +923,7 @@ fn batch_with_stock_cannot_be_deleted() {
     tablet.batches_enabled = true;
     tablet.opening = vec![opening(1, Some(1), qty(5, 0))];
     put_item(&mut b, tablet);
-    assert!(is_invalid(&delete_batch(BatchId(1), &b)), "opening");
+    assert!(is_in_use_by_master(&delete_batch(BatchId(1), &b)), "opening");
     put_voucher(
         &mut b,
         voucher(vec![inv_line(1, 1, Some(1), Some(2))], Vec::new()),
@@ -975,7 +986,7 @@ fn cost_category_names_unique_and_delete_blocked_by_centres_and_vouchers() {
         Err(EngineError::Duplicate { .. })
     ));
     assert!(is_invalid(&create_cost_category(category(9, ""), &b)));
-    assert!(is_invalid(&delete_cost_category(CostCategoryId(1), &b)));
+    assert!(is_in_use_by_master(&delete_cost_category(CostCategoryId(1), &b)));
     put_voucher(&mut b, voucher(Vec::new(), vec![cost_line(2, 7)]));
     assert_eq!(
         delete_cost_category(CostCategoryId(2), &b),
@@ -1051,7 +1062,7 @@ fn cost_centre_delete_and_category_change_blocked_by_use() {
     put_centre(&mut b, centre(3, "Ops", 1, None));
     put_centre(&mut b, centre(4, "Spare", 1, None));
     assert!(
-        is_invalid(&delete_cost_centre(CostCentreId(1), &b)),
+        is_in_use_by_master(&delete_cost_centre(CostCentreId(1), &b)),
         "has sub-centre"
     );
     assert!(
@@ -1071,5 +1082,156 @@ fn cost_centre_delete_and_category_change_blocked_by_use() {
     assert_eq!(
         only(delete_cost_centre(CostCentreId(4), &b).unwrap()),
         Event::MasterDeleted(MasterSnapshot::CostCentre(centre(4, "Spare", 1, None)))
+    );
+}
+
+// ---------------------------------------------------------------------------------------------
+// Master-on-master refusals are typed (InUseByMaster), one test per master kind.
+// Documented rule (Tally help, accessed 2026-11-21): a master that another master uses is not
+// deleted while that user exists. Sources: stock-items FAQ
+// https://help.tallysolutions.com/tally-prime/inventory/stock-items-faq/ (units and stock
+// groups: a unit is blocked by a stock item that defines it, or by an item under a group that has
+// that unit; a stock group is blocked when it is a sub-group or parent of other groups); the
+// godown page https://help.tallysolutions.com/tally-prime/inventory/inventory-storage-using-godowns-locations-tally/
+// (godown: only the rule "not used in any transaction" is stated); the cost-centre FAQ
+// https://help.tallysolutions.com/cost-centres-in-tallyprime-faq/ (allocations block deletion).
+// Where no read page settles the refusal, the test is `pending`; the refusal stays as the safe
+// default. The refusal class is changed from `Invalid` to `InUseByMaster` (the typed form the
+// owner asked for); the refusal itself is unchanged.
+// ---------------------------------------------------------------------------------------------
+
+#[test]
+fn unit_used_by_a_stock_item_is_in_use_by_master() {
+    // provenance: derived from the stock-items FAQ (accessed 2026-11-21): a stock item that
+    // defines a unit blocks its deletion. Hand derivation: unit 2 is the base unit of item 1,
+    // so the refusal names unit 'doz' and stock item 'Pen'.
+    // provenance: pending for the compound-unit part: no page read states that a unit inside a
+    // compound unit blocks deletion; the refusal is kept as the safe default.
+    let mut b = base();
+    put_unit(&mut b, unit(1, "pcs"));
+    put_unit(&mut b, unit(2, "doz"));
+    put_item(&mut b, item(1, "Pen", 2));
+    assert_eq!(
+        delete_unit(UnitId(2), &b),
+        Err(in_use_by_master("unit 'doz'", "stock item 'Pen'"))
+    );
+    put_unit(&mut b, unit(3, "box"));
+    put_unit(&mut b, compound(4, "case", 3, 12, 1));
+    assert_eq!(
+        delete_unit(UnitId(3), &b),
+        Err(in_use_by_master("unit 'box'", "compound unit 'case'"))
+    );
+}
+
+#[test]
+fn stock_group_with_a_sub_group_is_in_use_by_master() {
+    // provenance: derived from the stock-items FAQ (accessed 2026-11-21): a group that is the
+    // parent of other groups cannot be deleted. Hand derivation: group 2 'Raw' sits under group 1
+    // 'Goods', so deleting group 1 names sub-group 'Raw'.
+    // provenance: pending for the stock-item part: the page states the item rule only for items
+    // already used in a transaction, so a plain stock item in the group is not settled.
+    let mut b = base();
+    put_group(&mut b, group(1, "Goods", None));
+    put_group(&mut b, group(2, "Raw", Some(1)));
+    put_group(&mut b, group(3, "Spare", None));
+    let mut it = item(1, "Pen", 1);
+    it.group = Some(StockGroupId(3));
+    put_item(&mut b, it);
+    assert_eq!(
+        delete_stock_group(StockGroupId(1), &b),
+        Err(in_use_by_master("stock group 'Goods'", "sub-group 'Raw'"))
+    );
+    assert_eq!(
+        delete_stock_group(StockGroupId(3), &b),
+        Err(in_use_by_master("stock group 'Spare'", "stock item 'Pen'"))
+    );
+}
+
+#[test]
+fn stock_item_with_a_batch_is_in_use_by_master() {
+    // provenance: pending: no page read settles whether a batch blocks deletion of its stock item.
+    // The refusal is kept as the safe default. Expected value: the item 'Tablet' is named as
+    // blocked by batch 'B1'.
+    let mut b = base();
+    let mut tablet = item(1, "Tablet", 1);
+    tablet.batches_enabled = true;
+    put_item(&mut b, tablet);
+    put_batch(&mut b, batch(1, 1, "B1"));
+    assert_eq!(
+        delete_stock_item(StockItemId(1), &b),
+        Err(in_use_by_master("stock item 'Tablet'", "batch 'B1'"))
+    );
+}
+
+#[test]
+fn godown_with_a_sub_godown_or_opening_stock_is_in_use_by_master() {
+    // provenance: pending: the godown page states only the rule "not used in any transaction";
+    // sub-godowns and opening stock are not settled by a page read. Refusals kept as the safe
+    // default. Hand derivation: godown 1 'Main' has sub-godown 'Shop'; godown 3 'Van' holds the
+    // opening stock of item 'Pen'.
+    let mut b = base();
+    put_godown(&mut b, godown(1, "Main", None));
+    put_godown(&mut b, godown(2, "Shop", Some(1)));
+    put_godown(&mut b, godown(3, "Van", None));
+    let mut pen = item(1, "Pen", 1);
+    pen.opening = vec![opening(3, None, qty(5, 0))];
+    put_item(&mut b, pen);
+    assert_eq!(
+        delete_godown(GodownId(1), &b),
+        Err(in_use_by_master("godown 'Main'", "sub-godown 'Shop'"))
+    );
+    assert_eq!(
+        delete_godown(GodownId(3), &b),
+        Err(in_use_by_master(
+            "godown 'Van'",
+            "stock item 'Pen' (opening stock)"
+        ))
+    );
+}
+
+#[test]
+fn batch_held_as_opening_stock_is_in_use_by_master() {
+    // provenance: pending: no page read settles batch deletion with opening stock. Refusal kept as
+    // the safe default. Hand derivation: batch 1 'B1' of item 'Tablet' is in its opening stock.
+    let mut b = base();
+    let mut tablet = item(1, "Tablet", 1);
+    tablet.batches_enabled = true;
+    tablet.opening = vec![opening(1, Some(1), qty(5, 0))];
+    put_item(&mut b, tablet);
+    put_batch(&mut b, batch(1, 1, "B1"));
+    assert_eq!(
+        delete_batch(BatchId(1), &b),
+        Err(in_use_by_master(
+            "batch 'B1'",
+            "stock item 'Tablet' (opening stock)"
+        ))
+    );
+}
+
+#[test]
+fn cost_category_with_a_centre_is_in_use_by_master() {
+    // provenance: pending: no page read settles deletion of a cost category that has cost centres.
+    // Refusal kept as the safe default. Hand derivation: centre 'Sales' is in category 'Department'.
+    let mut b = base();
+    put_category(&mut b, category(1, "Department"));
+    put_centre(&mut b, centre(1, "Sales", 1, None));
+    assert_eq!(
+        delete_cost_category(CostCategoryId(1), &b),
+        Err(in_use_by_master("cost category 'Department'", "cost centre 'Sales'"))
+    );
+}
+
+#[test]
+fn cost_centre_with_a_sub_centre_is_in_use_by_master() {
+    // provenance: pending for the sub-centre rule: the cost-centre FAQ documents the allocation
+    // block only; sub-centres are not settled. Refusal kept as the safe default. Hand derivation:
+    // centre 2 'North' sits under centre 1 'Sales'.
+    let mut b = base();
+    put_category(&mut b, category(1, "Department"));
+    put_centre(&mut b, centre(1, "Sales", 1, None));
+    put_centre(&mut b, centre(2, "North", 1, Some(1)));
+    assert_eq!(
+        delete_cost_centre(CostCentreId(1), &b),
+        Err(in_use_by_master("cost centre 'Sales'", "sub-centre 'North'"))
     );
 }

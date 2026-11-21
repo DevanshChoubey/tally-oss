@@ -23,6 +23,15 @@ pub enum EngineError {
         /// Number of vouchers using it.
         vouchers: usize,
     },
+    /// The master cannot be deleted because another master still uses it. Named for the user
+    /// so the screen can say what blocks the delete; the user must change or remove that first.
+    #[error("{what} is used by {by}; change or remove that first")]
+    InUseByMaster {
+        /// The master that cannot be deleted, named for the user (for example "unit 'doz'").
+        what: String,
+        /// The master or dependent that uses it, named for the user (for example "stock item 'Pen'").
+        by: String,
+    },
     /// The change would make a group its own ancestor.
     #[error("a group cannot be placed under itself or its own sub-group")]
     GroupCycle,
