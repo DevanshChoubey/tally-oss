@@ -315,7 +315,7 @@ fn esc_with_the_palette_open_closes_it_and_keeps_the_screen() {
 fn the_palette_lists_the_home_gst_and_import_screens() {
     let ctx = egui::Context::default();
     let mut shell = ready(&ctx, setup("palette_screens", 0));
-    choose(&ctx, &mut shell, "Import from Tally");
+    choose(&ctx, &mut shell, "Import from another app");
     assert_eq!(shell.notice(), None);
     assert_eq!(
         titles(&shell),

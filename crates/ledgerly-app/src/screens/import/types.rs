@@ -86,7 +86,7 @@ pub enum ImportError {
     #[error("the chosen years do not make a period: {0}")]
     Period(#[from] PeriodError),
     /// Some Tally items have no mapping; the import cannot continue.
-    #[error("{count} Tally items have no mapping; resolve them before importing")]
+    #[error("{count} items from the other app have no mapping; resolve them before importing")]
     UnmappedItems {
         /// How many items are unmapped.
         count: usize,
@@ -525,7 +525,7 @@ impl RowStatus {
             RowStatus::Match => "Matches",
             RowStatus::Differs => "DIFFERS",
             RowStatus::OnlyInTally => "DIFFERS: missing here",
-            RowStatus::OnlyInOurs => "DIFFERS: missing in Tally",
+            RowStatus::OnlyInOurs => "DIFFERS: missing in the other app",
             RowStatus::NotReported => "NOT COMPARED: no figure on either side",
         }
     }
