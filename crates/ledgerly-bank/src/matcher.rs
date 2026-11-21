@@ -39,7 +39,12 @@
 //! considered for a group, and at most [`MAX_ALTERNATIVES`] alternatives are returned). Omitting a
 //! suggestion is safe; stating a wrong one is not, so no case is guessed.
 
-use std::collections::BTreeSet;
+A candidate is ambiguous when another candidate uses one of its vouchers or lines, when its line
+or voucher has more than one candidate, or when its search was cut short by [`POOL_CAP`]. Every
+candidate of a pass, ambiguous or not, reserves its lines and vouchers, so a later pass never
+offers them again: an ambiguous candidate is shown, and nothing else is claimed on its items.
+
+use std::collections::{BTreeMap, BTreeSet};
 
 use ledgerly_bankfmt::RawLine;
 use ledgerly_core::{Date, LedgerId, Paise, VoucherId};
@@ -114,7 +119,8 @@ pub struct Candidate {
     /// The bank date that would be recorded if the user confirms: the date of the statement line
     /// (the latest one when several lines are matched). Not applied to anything.
     pub proposed_bank_date: Date,
-    /// True when other candidates compete for the same line(s) or voucher(s); the user must pick.
+    /// True when other candidates compete for the same line(s) or voucher(s), or the search that
+    /// found this one was cut short; the user must pick.
     pub ambiguous: bool,
 }
 
@@ -296,8 +302,37 @@ fn near(a: Date, b: Date) -> bool {
     day_gap(a, b) <= DATE_TOLERANCE_DAYS
 }
 
+/// A candidate found by one search, before the contest check decides whether it is ambiguous.
+struct Found<S, I> {
+    /// What the search was for: a statement line in pass 1, a voucher in pass 2.
+    source: S,
+    /// What the candidate uses: vouchers in pass 1, statement lines in pass 2.
+    items: Vec<I>,
+    /// True when the search was cut short by [`POOL_CAP`], so other candidates may exist unseen.
+    truncated: bool,
+}
+
+/// How many candidates each key appears in.
+fn appearances<T: Ord>(keys: impl Iterator<Item = T>) -> BTreeMap<T, usize> {
+    let mut counts = BTreeMap::new();
+    for key in keys {
+        let n = counts.entry(key).or_insert(0_usize);
+        *n = n.saturating_add(1);
+    }
+    counts
+}
+
+/// Whether `key` appears in more than one candidate.
+fn is_shared<T: Ord>(counts: &BTreeMap<T, usize>, key: &T) -> bool {
+    counts.get(key).is_some_and(|n| *n > 1)
+}
+
 /// Pass 1: each statement line against one voucher, or a group of vouchers.
+///
+/// Every line is searched against the same pool, so each candidate is checked against the
+/// candidates of all the other lines before anything is reserved.
 fn match_lines_to_vouchers(lines: &[LineView<'_>], entries: &[Entry], state: &mut State) {
+    let mut found: Vec<Found<usize, VoucherId>> = Vec::new();
     for (i, line) in lines.iter().enumerate() {
         let pool: Vec<&Entry> = entries
             .iter()
@@ -307,28 +342,37 @@ fn match_lines_to_vouchers(lines: &[LineView<'_>], entries: &[Entry], state: &mu
                     && near(e.date, line.date)
             })
             .collect();
-        let mut groups = single_voucher_groups(&pool, line);
-        if groups.is_empty() {
-            groups = voucher_group_sums(&pool, line);
-        }
-        if groups.is_empty() {
+        let singles = single_voucher_groups(&pool, line);
+        let (groups, truncated) = if singles.is_empty() {
+            voucher_group_sums(&pool, line)
+        } else {
+            (singles, false)
+        };
+        found.extend(groups.into_iter().map(|items| Found {
+            source: i,
+            items,
+            truncated,
+        }));
+    }
+    let source_counts = appearances(found.iter().map(|f| f.source));
+    let item_counts = appearances(found.iter().flat_map(|f| f.items.iter().copied()));
+    for f in found {
+        let ambiguous = f.truncated
+            || is_shared(&source_counts, &f.source)
+            || f.items.iter().any(|id| is_shared(&item_counts, id));
+        let Some(line) = lines.get(f.source) else {
             continue;
-        }
-        let ambiguous = groups.len() > 1;
-        state.matched_lines.insert(i);
-        for vouchers in groups {
-            if !ambiguous {
-                state.used_vouchers.extend(vouchers.iter().copied());
-            }
-            state.out.push(Candidate {
-                statement_lines: vec![line.row],
-                vouchers,
-                kind: MatchKind::Exact,
-                suggested_ledger: None,
-                proposed_bank_date: line.date,
-                ambiguous,
-            });
-        }
+        };
+        state.matched_lines.insert(f.source);
+        state.used_vouchers.extend(f.items.iter().copied());
+        state.out.push(Candidate {
+            statement_lines: vec![line.row],
+            vouchers: f.items,
+            kind: MatchKind::Exact,
+            suggested_ledger: None,
+            proposed_bank_date: line.date,
+            ambiguous,
+        });
     }
 }
 
@@ -352,10 +396,12 @@ fn single_voucher_groups(pool: &[&Entry], line: &LineView<'_>) -> Vec<Vec<Vouche
     same.iter().map(|e| vec![e.id]).collect()
 }
 
-/// Combinations of two or more vouchers whose amounts add up to the line.
-fn voucher_group_sums(pool: &[&Entry], line: &LineView<'_>) -> Vec<Vec<VoucherId>> {
+/// Combinations of two or more vouchers whose amounts add up to the line. The flag is true when
+/// the pool held more than [`POOL_CAP`] vouchers, so the vouchers beyond the cap were not searched.
+fn voucher_group_sums(pool: &[&Entry], line: &LineView<'_>) -> (Vec<Vec<VoucherId>>, bool) {
     let mut nearest: Vec<&Entry> = pool.to_vec();
     nearest.sort_by_key(|e| (day_gap(e.date, line.date), e.id));
+    let truncated = nearest.len() > POOL_CAP;
     nearest.truncate(POOL_CAP);
     let items: Vec<Item<VoucherId>> = nearest
         .iter()
@@ -364,11 +410,15 @@ fn voucher_group_sums(pool: &[&Entry], line: &LineView<'_>) -> Vec<Vec<VoucherId
             amount: e.amount,
         })
         .collect();
-    group_sums(&items, line.amount)
+    (group_sums(&items, line.amount), truncated)
 }
 
 /// Pass 2: each still-free voucher against a group of still-unmatched lines.
+///
+/// As in pass 1, every voucher is searched before anything is reserved, so a line or voucher that
+/// two candidates both use makes both of them ambiguous.
 fn match_vouchers_to_lines(lines: &[LineView<'_>], entries: &[Entry], state: &mut State) {
+    let mut found: Vec<Found<VoucherId, usize>> = Vec::new();
     for entry in entries {
         if state.used_vouchers.contains(&entry.id) {
             continue;
@@ -383,34 +433,45 @@ fn match_vouchers_to_lines(lines: &[LineView<'_>], entries: &[Entry], state: &mu
             })
             .collect();
         nearest.sort_by_key(|(i, l)| (day_gap(entry.date, l.date), *i));
+        let truncated = nearest.len() > POOL_CAP;
         nearest.truncate(POOL_CAP);
-        let items: Vec<Item<usize>> = nearest
+        let pool: Vec<Item<usize>> = nearest
             .iter()
             .map(|(i, l)| Item {
                 key: *i,
                 amount: l.amount,
             })
             .collect();
-        let groups = group_sums(&items, entry.amount);
-        let ambiguous = groups.len() > 1;
-        for group in groups {
-            let chosen: Vec<&LineView<'_>> = group.iter().filter_map(|i| lines.get(*i)).collect();
-            let Some(bank_date) = chosen.iter().map(|l| l.date).max() else {
-                continue;
-            };
-            if !ambiguous {
-                state.used_vouchers.insert(entry.id);
-                state.matched_lines.extend(group.iter().copied());
-            }
-            state.out.push(Candidate {
-                statement_lines: chosen.iter().map(|l| l.row).collect(),
-                vouchers: vec![entry.id],
-                kind: MatchKind::Exact,
-                suggested_ledger: None,
-                proposed_bank_date: bank_date,
-                ambiguous,
-            });
-        }
+        found.extend(
+            group_sums(&pool, entry.amount)
+                .into_iter()
+                .map(|items| Found {
+                    source: entry.id,
+                    items,
+                    truncated,
+                }),
+        );
+    }
+    let source_counts = appearances(found.iter().map(|f| f.source));
+    let line_counts = appearances(found.iter().flat_map(|f| f.items.iter().copied()));
+    for f in found {
+        let ambiguous = f.truncated
+            || is_shared(&source_counts, &f.source)
+            || f.items.iter().any(|i| is_shared(&line_counts, i));
+        let chosen: Vec<&LineView<'_>> = f.items.iter().filter_map(|i| lines.get(*i)).collect();
+        let Some(bank_date) = chosen.iter().map(|l| l.date).max() else {
+            continue;
+        };
+        state.used_vouchers.insert(f.source);
+        state.matched_lines.extend(f.items.iter().copied());
+        state.out.push(Candidate {
+            statement_lines: chosen.iter().map(|l| l.row).collect(),
+            vouchers: vec![f.source],
+            kind: MatchKind::Exact,
+            suggested_ledger: None,
+            proposed_bank_date: bank_date,
+            ambiguous,
+        });
     }
 }
 
@@ -436,24 +497,23 @@ fn suggest_by_rules(lines: &[LineView<'_>], rules: &[MatchRule], state: &mut Sta
     }
 }
 
-/// Smallest-size combinations (two to [`MAX_GROUP`] items) whose amounts sum to `target`.
+/// Combinations of two to [`MAX_GROUP`] items whose amounts sum to `target`. Every size is
+/// searched, so a pair and a triple with the same sum are both returned (at most
+/// [`MAX_ALTERNATIVES`] in all).
 ///
 /// Amounts must be positive. Each combination is sorted by key, and the list is sorted, so the
 /// result does not depend on the order of `items`.
 fn group_sums<K: Copy + Ord>(items: &[Item<K>], target: i64) -> Vec<Vec<K>> {
+    let mut found = Vec::new();
     for size in 2..=MAX_GROUP {
-        let mut found = Vec::new();
         collect_sums(items, size, target, &mut Vec::new(), &mut found);
-        if !found.is_empty() {
-            for combo in &mut found {
-                combo.sort();
-            }
-            found.sort();
-            found.dedup();
-            return found;
-        }
     }
-    Vec::new()
+    for combo in &mut found {
+        combo.sort();
+    }
+    found.sort();
+    found.dedup();
+    found
 }
 
 fn collect_sums<K: Copy>(

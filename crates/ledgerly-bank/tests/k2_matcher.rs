@@ -492,3 +492,123 @@ fn pattern_semantics() {
         );
     }
 }
+
+#[test]
+fn two_lines_competing_for_one_voucher_are_both_ambiguous() {
+    // provenance: derived - row 1 is a credit of 100_000 paise on 5 April and row 2 a credit of
+    // the same amount on 6 April; the only voucher is one receipt of 100_000 on 6 April. Both rows
+    // fit it (1 day and 0 days apart), so both candidates name it and both are ambiguous. Neither
+    // row may take the receipt just because it was looked at first.
+    let out = run(
+        vec![
+            line(1, 5, 0, 100_000, "IN A"),
+            line(2, 6, 0, 100_000, "IN B"),
+        ],
+        vec![receipt(1, 6, 100_000)],
+        &[],
+    );
+    assert_eq!(out.len(), 2);
+    assert!(
+        out.iter()
+            .all(|c| c.ambiguous && c.vouchers == vec![VoucherId(1)])
+    );
+    assert_eq!(out[0].statement_lines, vec![1]);
+    assert_eq!(out[1].statement_lines, vec![2]);
+}
+
+#[test]
+fn a_pass_two_claim_cannot_take_a_voucher_that_an_ambiguous_line_offers() {
+    // provenance: derived - row 1 is 100_000 on 5 April and fits receipts 1 (5 April) and 2
+    // (4 April), both 100_000, so row 1 is ambiguous and both receipts are offered. Rows 2 and 3
+    // are 50_000 each on 5 April and add up to receipt 1's amount, which pass 2 would claim for
+    // receipt 1 if it were free. No candidate may claim receipt 1 or 2 unambiguously.
+    let out = run(
+        vec![
+            line(1, 5, 0, 100_000, "IN"),
+            line(2, 5, 0, 50_000, "IN"),
+            line(3, 5, 0, 50_000, "IN"),
+        ],
+        vec![receipt(1, 5, 100_000), receipt(2, 4, 100_000)],
+        &[],
+    );
+    assert!(out.iter().any(|c| c.statement_lines == vec![1]));
+    for c in out.iter().filter(|c| {
+        c.vouchers.contains(&VoucherId(1)) || c.vouchers.contains(&VoucherId(2))
+    }) {
+        assert!(c.ambiguous, "unambiguous claim on a contested voucher: {c:?}");
+    }
+}
+
+#[test]
+fn a_pair_found_while_the_search_pool_was_cut_short_is_ambiguous() {
+    // provenance: derived - the deposit is 100_000 paise on 5 April. Twenty-four receipts are dated
+    // 5 April, which fill the search pool (POOL_CAP = 24): 40_000 and 60_000 among them, and 22
+    // others from 70_000 up, so no other pair or triple reaches 100_000. Six more receipts are
+    // dated 8 April, 3 days away (inside the window, outside the pool): 30_000 and 70_000 form a
+    // second pair that sums to 100_000 and is never searched. The pair in the pool is offered, but
+    // as ambiguous, because the search was cut short.
+    let mut vouchers = vec![receipt(1, 5, 40_000), receipt(2, 5, 60_000)];
+    let mut id = 3_u64;
+    for k in 0..22 {
+        vouchers.push(receipt(id, 5, 70_000 + k));
+        id += 1;
+    }
+    vouchers.push(receipt(id, 8, 30_000));
+    vouchers.push(receipt(id + 1, 8, 70_000));
+    let mut later = id + 2;
+    for k in 0..4_i64 {
+        vouchers.push(receipt(later, 8, 80_000 + k));
+        later += 1;
+    }
+    let out = run(vec![line(1, 5, 0, 100_000, "IN")], vouchers, &[]);
+    assert_eq!(out.len(), 1, "{out:?}");
+    assert_eq!(out[0].vouchers, vec![VoucherId(1), VoucherId(2)]);
+    assert!(out[0].ambiguous);
+}
+
+#[test]
+fn a_pair_and_a_triple_with_the_same_sum_are_both_offered() {
+    // provenance: derived - the deposit is 30_000 on 5 April. Receipts X 10_000 and Y 20_000 make
+    // a pair of 30_000; receipts P 12_000, Q 9_000 and R 9_000 make a triple of 30_000. Checked by
+    // hand: the other pairs sum to 22_000 (X+P), 19_000 (X+Q, X+R), 32_000 (Y+P), 29_000 (Y+Q,
+    // Y+R), 21_000 (P+Q, P+R) and 18_000 (Q+R); the other triples to 31_000 (X+P+Q, X+P+R),
+    // 28_000 (X+Q+R), 38_000 (Y+Q+R) and 39_000 (X+Y+Q). Both solutions are offered, and both are
+    // ambiguous because they compete for the same line.
+    let out = run(
+        vec![line(1, 5, 0, 30_000, "IN")],
+        vec![
+            receipt(1, 5, 10_000),
+            receipt(2, 5, 20_000),
+            receipt(3, 5, 12_000),
+            receipt(4, 5, 9_000),
+            receipt(5, 5, 9_000),
+        ],
+        &[],
+    );
+    assert_eq!(out.len(), 2, "{out:?}");
+    assert!(out.iter().all(|c| c.ambiguous));
+    assert_eq!(out[0].vouchers, vec![VoucherId(1), VoucherId(2)]);
+    assert_eq!(
+        out[1].vouchers,
+        vec![VoucherId(3), VoucherId(4), VoucherId(5)]
+    );
+}
+
+#[test]
+fn two_vouchers_that_both_sum_the_same_two_lines_are_both_ambiguous() {
+    // provenance: derived - rows 1 and 2 are 50_000 each on 5 April; receipts 1 and 2 are each
+    // 100_000 on 5 April. No single line matches a voucher, and each voucher is the sum of the
+    // same two lines, so both are offered and both are flagged.
+    let out = run(
+        vec![line(1, 5, 0, 50_000, "IN"), line(2, 5, 0, 50_000, "IN")],
+        vec![receipt(1, 5, 100_000), receipt(2, 5, 100_000)],
+        &[],
+    );
+    assert_eq!(out.len(), 2, "{out:?}");
+    assert!(
+        out.iter()
+            .all(|c| c.ambiguous && c.statement_lines == vec![1, 2])
+    );
+    assert_eq!(out[0].vouchers, vec![VoucherId(1)]);
+    assert_eq!(out[1].vouchers, vec![VoucherId(2)]);
+}

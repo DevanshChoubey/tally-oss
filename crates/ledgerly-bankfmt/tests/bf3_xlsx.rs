@@ -1168,3 +1168,69 @@ fn csv_and_xlsx_read_amounts_by_the_same_rules() {
         }
     }
 }
+
+#[test]
+fn registry_format_reads_its_balance_labels_from_the_toml() {
+    // derived: the TOML names the labels, so parse_xlsx (which takes no labels argument) reads the
+    // opening balance 500 rupees = 50_000 paise, the closing balance 494.75 rupees = 49_475 paise
+    // and the account number. The one line -5.25 rupees = -525 paise gives 50_000 - 525 = 49_475,
+    // which agrees with the closing balance.
+    let spec = spec_from(
+        r#"
+id = "test-labels-toml"
+name = "Test bank, XLSX with labels"
+kind = "xlsx"
+header_cells = ["Date", "Narration"]
+date_format = "dd/mm/yyyy"
+amounts = "signed"
+opening_label = "Opening Balance"
+closing_label = "Closing Balance"
+account_label = "Account Number"
+
+[columns]
+date = 0
+description = 1
+amount = 2
+"#,
+    );
+    let rows = vec![
+        vec![C::S("Account Number:"), C::S("000012345678")],
+        vec![C::S("Opening Balance"), C::N("500")],
+        vec![C::S("Closing Balance"), C::N("494.75")],
+        vec![C::S("Date"), C::S("Narration"), C::S("Amount")],
+        vec![C::S("05/04/2024"), C::S("A"), C::S("-5.25")],
+    ];
+    let st = parse_xlsx(&one_sheet(rows), &spec).unwrap();
+    assert_eq!(st.opening, Some(Paise::new(50_000)));
+    assert_eq!(st.closing, Some(Paise::new(49_475)));
+    assert_eq!(st.account_hint.as_deref(), Some("000012345678"));
+}
+
+#[test]
+fn registry_format_without_labels_reports_no_balances() {
+    // derived: with no label keys in the TOML, the balances are None (not guessed), so the balance
+    // check in K1 reports the missing balance. The same sheet as above, without the labels.
+    let spec = spec_from(
+        r#"
+id = "test-no-labels"
+name = "Test bank, XLSX without labels"
+kind = "xlsx"
+header_cells = ["Date", "Narration"]
+date_format = "dd/mm/yyyy"
+amounts = "signed"
+
+[columns]
+date = 0
+description = 1
+amount = 2
+"#,
+    );
+    let rows = vec![
+        vec![C::S("Opening Balance"), C::N("500")],
+        vec![C::S("Date"), C::S("Narration"), C::S("Amount")],
+        vec![C::S("05/04/2024"), C::S("A"), C::S("-5.25")],
+    ];
+    let st = parse_xlsx(&one_sheet(rows), &spec).unwrap();
+    assert_eq!(st.opening, None);
+    assert_eq!(st.closing, None);
+}

@@ -39,7 +39,8 @@ APRIL\r\n\
 #[test]
 fn sample_header_and_balances_parsed() {
     let st = parse_mt940(SAMPLE).unwrap();
-    assert_eq!(st.format_id, "mt940");
+    // derived: the id of formats/generic-mt940.toml, the registry entry this parser serves.
+    assert_eq!(st.format_id, "generic-mt940");
     assert_eq!(st.account_hint.as_deref(), Some("0123456789"));
     // derived: C240401INR100000,00 = credit 100000 rupees = 10_000_000 paise.
     assert_eq!(st.opening, Some(Paise::new(10_000_000)));
@@ -218,4 +219,32 @@ fn rejects_two_statements_in_one_file() {
 #[test]
 fn parse_is_deterministic() {
     assert_eq!(parse_mt940(SAMPLE).unwrap(), parse_mt940(SAMPLE).unwrap());
+}
+
+#[test]
+fn two_digit_year_outside_the_window_is_an_error_not_2099() {
+    // derived: "99" would read as 2099. The window is 2000 to 2050, so a value date of 990102 (a
+    // 1999 statement) is refused with a Row error on its :61: line (line 2 here), never read as
+    // 2099-01-02.
+    let text = ":60F:C240401INR0,00\n:61:990102C1,00NTRF\n:62F:C240401INR1,00\n";
+    let err = parse_mt940(text).unwrap_err();
+    assert!(
+        matches!(err, BankFmtError::Row { row: 2, .. }),
+        "expected a Row error on line 2, got {err:?}"
+    );
+    assert!(err.to_string().contains("2099"), "{err}");
+}
+
+#[test]
+fn two_digit_year_window_bounds_are_2000_and_2050() {
+    // derived: 2050 is the last year accepted and 2051 the first refused. 500101 is 2050-01-01 and
+    // 510101 would be 2051-01-01. Both are checked on the :61: value date.
+    let accepted = ":60F:C500101INR0,00\n:61:500101C1,00NTRF\n:62F:C500101INR1,00\n";
+    let parsed = parse_mt940(accepted).unwrap();
+    assert_eq!(parsed.lines[0].value_date, Some(d(2050, Month::January, 1)));
+    let refused = ":60F:C500101INR0,00\n:61:510101C1,00NTRF\n:62F:C500101INR1,00\n";
+    assert!(matches!(
+        parse_mt940(refused),
+        Err(BankFmtError::Row { row: 2, .. })
+    ));
 }

@@ -287,7 +287,7 @@ fn bank_balance(statements: &[BankStatement], as_of: Date) -> Result<Outcome<Pai
     }
     dated.sort_by_key(|(_, from, to)| (*from, *to));
 
-    let Some((first, first_from, _)) = dated.first() else {
+    let Some((first, first_from, first_to)) = dated.first() else {
         return Ok(Outcome::unsupported(
             "BRS without a bank statement",
             "no statement to take the bank balance from",
@@ -301,7 +301,8 @@ fn bank_balance(statements: &[BankStatement], as_of: Date) -> Result<Outcome<Pai
     }
     let mut balance = first.opening();
     let mut previous_closing = first.closing();
-    let mut previous_to = first_from;
+    // The end of the first statement: a later statement that starts before it overlaps.
+    let mut previous_to = first_to;
     add_lines(&mut balance, first, as_of)?;
     for (statement, from, to) in dated.iter().skip(1).filter(|(_, from, _)| *from <= as_of) {
         if from < previous_to {

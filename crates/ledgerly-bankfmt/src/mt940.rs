@@ -13,7 +13,8 @@
 //!   credit positive (`C` is `+`, `D` is `-`). Only currency `INR` is accepted.
 //! - Each `:61:` is one [`RawLine`]. `date` is the entry date (`MMDD`, its year taken as the one
 //!   nearest the value date) when the field has one, else the value date. `value_date` is always
-//!   the value date. Years are `2000 + YY`. `D` and `RC` (reversal of a credit, a debit entry)
+//!   the value date. Years are `2000 + YY` and must fall in 2000 to 2050; any other year is an
+//!   error. `D` and `RC` (reversal of a credit, a debit entry)
 //!   are money out; `C` and `RD` (reversal of a debit, a credit entry) are money in. The
 //!   reference is the customer reference, or the bank reference after `//` when the customer
 //!   reference is empty or `NONREF`.
@@ -31,8 +32,13 @@
 use crate::{BankFmtError, RawLine, RawStatement};
 use ledgerly_core::{Date, Month, Paise};
 
-/// Registry id stored in `RawStatement::format_id`.
-const FORMAT_ID: &str = "mt940";
+/// Registry id stored in `RawStatement::format_id`: the id of `formats/generic-mt940.toml`.
+const FORMAT_ID: &str = "generic-mt940";
+
+/// The years a two-digit `YY` may stand for. `YY` is read as `2000 + YY`, so a year outside this
+/// window (for example `99`, which would otherwise read as 2099 for a 1999 statement) is an error.
+/// The window is a design choice awaiting owner confirmation.
+const YEAR_WINDOW: std::ops::RangeInclusive<i32> = 2000..=2050;
 
 /// One tagged field of the message.
 struct Field {
@@ -322,6 +328,13 @@ fn parse_yymmdd(text: &str) -> Result<Date, String> {
     let (yy, rest) = text.split_at_checked(2).ok_or_else(bad)?;
     let (mm, dd) = rest.split_at_checked(2).ok_or_else(bad)?;
     let year = 2000_i32.saturating_add(i32::from(two_digits(yy).ok_or_else(bad)?));
+    if !YEAR_WINDOW.contains(&year) {
+        return Err(format!(
+            "'{text}' has year {year}, outside {} to {}; two-digit years are read as 2000 to 2050 only",
+            YEAR_WINDOW.start(),
+            YEAR_WINDOW.end()
+        ));
+    }
     let month = Month::try_from(two_digits(mm).ok_or_else(bad)?).map_err(|_| bad())?;
     Date::from_calendar_date(year, month, two_digits(dd).ok_or_else(bad)?).map_err(|_| bad())
 }

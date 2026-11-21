@@ -574,7 +574,9 @@ fn statements_with_a_gap_are_unsupported() {
 
 #[test]
 fn overlapping_statements_are_unsupported() {
-    // S1 covers 5 Apr to 20 Apr, S2 covers 7 Apr only: S2 starts before S1 ends.
+    // provenance: derived - S1 covers 5 Apr to 20 Apr with opening 10_000_000 and closing
+    // 10_000_000 + 100 + 200 = 10_000_300. S2 opens at 10_000_300, so it chains with S1 and only
+    // the overlap can fail: it covers 7 Apr, which is inside S1's 5 to 20 Apr range.
     let s1 = stmt(
         "k3-o1",
         10_000_000,
@@ -583,6 +585,33 @@ fn overlapping_statements_are_unsupported() {
     );
     let s2 = stmt(
         "k3-o2",
+        10_000_300,
+        10_000_400,
+        vec![raw_line(1, apr(7), 0, 100)],
+    );
+    assert!(is_unsupported(brs(
+        &books(Vec::new()),
+        BANK,
+        apr(30),
+        &[s1, s2]
+    )));
+}
+
+#[test]
+fn chained_but_overlapping_statements_are_unsupported() {
+    // provenance: derived - S1 opens 10_000_000, 5 Apr credit 100, 20 Apr debit 100, closes
+    // 10_000_000 (chains: 10_000_000 + 100 - 100). S2 opens 10_000_000 (= S1's closing), 7 Apr
+    // credit 100, closes 10_000_100. S2 starts on 7 Apr, before S1 ends on 20 Apr, so the
+    // statements overlap and the balance is Unsupported. Before the fix the overlap check compared
+    // against S1's start (5 Apr) and accepted this pair as a value.
+    let s1 = stmt(
+        "k3-co1",
+        10_000_000,
+        10_000_000,
+        vec![raw_line(1, apr(5), 0, 100), raw_line(2, apr(20), 100, 0)],
+    );
+    let s2 = stmt(
+        "k3-co2",
         10_000_000,
         10_000_100,
         vec![raw_line(1, apr(7), 0, 100)],

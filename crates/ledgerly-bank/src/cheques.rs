@@ -93,13 +93,15 @@ fn invalid(field: &str, reason: impl Into<String>) -> BankError {
     }
 }
 
-/// Parses a cheque number: ASCII digits only, at least one.
-fn parse_leaf(number: &str) -> Option<u64> {
+/// Reads a cheque number as a leaf: ASCII digits only, at least one, and within `u64`. The error
+/// says why the text cannot be read.
+fn parse_leaf(number: &str) -> Result<u64, &'static str> {
     let t = number.trim();
     if t.is_empty() || !t.chars().all(|c| c.is_ascii_digit()) {
-        return None;
+        return Err("a cheque number is digits only and not empty");
     }
-    t.parse::<u64>().ok()
+    t.parse::<u64>()
+        .map_err(|_| "a cheque number has too many digits to be a leaf number")
 }
 
 /// `true` when `ledger` sits under the reserved Bank Accounts or Bank OD group (at any depth).
@@ -134,13 +136,14 @@ fn is_bank_ledger(books: &Books, ledger: LedgerId) -> Result<bool, BankError> {
 /// - [`BankError::Invalid`] when the book's bank ledger does not exist.
 /// - [`BankError::NotABankLedger`] when it is not under a bank group.
 /// - [`BankError::ChequeLeaf`] when the number is not all digits, lies outside the book, or is
-///   already used by a voucher (any status) on the book's bank ledger.
+///   already used by a voucher (any status) on the book's bank ledger; also when a cheque number
+///   already stored on this bank ledger cannot be read as a leaf, because the leaf cannot then be
+///   confirmed free.
 pub fn check_leaf(book: &ChequeBook, number: &str, books: &Books) -> Result<(), BankError> {
     if !is_bank_ledger(books, book.bank)? {
         return Err(BankError::NotABankLedger(book.bank));
     }
-    let leaf = parse_leaf(number)
-        .ok_or_else(|| leaf_error(number, "a cheque number is digits only and not empty"))?;
+    let leaf = parse_leaf(number).map_err(|reason| leaf_error(number, reason))?;
     if !book.contains(leaf) {
         return Err(leaf_error(
             number,
@@ -164,22 +167,36 @@ pub fn check_leaf(book: &ChequeBook, number: &str, books: &Books) -> Result<(), 
             let Some(used) = bank.instrument_number.as_deref() else {
                 continue;
             };
-            if parse_leaf(used) == Some(leaf) {
-                let which = voucher
-                    .number
-                    .clone()
-                    .unwrap_or_else(|| format!("id {}", voucher.id.0));
-                return Err(leaf_error(
-                    number,
-                    format!("already used on voucher {which}"),
-                ));
+            let which = voucher
+                .number
+                .clone()
+                .unwrap_or_else(|| format!("id {}", voucher.id.0));
+            match parse_leaf(used) {
+                Ok(found) if found == leaf => {
+                    return Err(leaf_error(
+                        number,
+                        format!("already used on voucher {which}"),
+                    ));
+                }
+                Ok(_) => {}
+                // A stored number that cannot be read might be this leaf, so the check fails
+                // rather than reporting the leaf free.
+                Err(reason) => {
+                    return Err(leaf_error(
+                        number,
+                        format!(
+                            "voucher {which} has a cheque number '{used}' that cannot be read ({reason}), so this leaf cannot be confirmed free"
+                        ),
+                    ));
+                }
             }
         }
     }
     Ok(())
 }
 
-/// The reversing reference for a bill allocation (see the module docs).
+/// The reversing reference for a bill allocation (see the module docs). This netting rule is a
+/// design choice, not taken from a statute or format spec; its tests are labelled pending.
 fn reverse_bill(bill: &BillAllocation) -> BillAllocation {
     let kind = match bill.kind {
         BillRefKind::New | BillRefKind::Against | BillRefKind::Advance => BillRefKind::Against,
@@ -279,7 +296,10 @@ fn single_cheque_line(voucher: &Voucher) -> Result<&LedgerLine, BankError> {
 
 /// Proposes the entries for a dishonoured cheque: the original voucher reversed, plus the bank's
 /// charges. The result is a draft (status `Optional`, id `VoucherId(0)`, no number); the caller
-/// shows it and posts it only when the user accepts.
+/// shows it and posts it only when the user accepts. The draft keeps the original voucher's
+/// `type_id`: before it is accepted the caller must give it a journal type and assign its id,
+/// because this function takes no books (interface request in `docs/interface-requests.md`).
+/// The bill-reversal rule is a design choice awaiting owner confirmation.
 ///
 /// `voucher` must be a regular voucher with exactly one cheque line, balanced, without GST or
 /// inventory lines. `charges` may be zero (no charges lines are added). `date` is the date of

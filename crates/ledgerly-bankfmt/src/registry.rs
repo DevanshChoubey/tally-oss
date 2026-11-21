@@ -38,6 +38,15 @@
 //! balance = 6                   # optional
 //! ```
 //!
+//! Balance labels (xlsx only, all optional) name the cells that hold the statement-level values
+//! outside the transaction table; see `BalanceLabels` in the xlsx module:
+//!
+//! ```toml
+//! # opening_label = "Opening Balance"  # text of the label cell; the value is the first non-blank
+//! # closing_label = "Closing Balance"  # cell to its right
+//! # account_label = "Account Number"
+//! ```
+//!
 //! `kind = "mt940"` takes only `id`, `name` and `kind`: the parser reads the message tags.
 //!
 //! Only layouts without a claim about a particular bank ship today (`generic-*`). A bank's own
@@ -49,6 +58,7 @@ use serde::Deserialize;
 
 use crate::BankFmtError;
 use crate::csv::{AmountColumns, CsvLayout, DateFormat};
+use crate::xlsx::BalanceLabels;
 
 /// What kind of file a format describes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -104,6 +114,9 @@ pub struct TableSpec {
     pub columns: Columns,
     /// Dr/Cr convention and the amount columns.
     pub amounts: AmountColumns,
+    /// Label texts of the opening balance, closing balance and account, read from the cells beside
+    /// them. All `None` when the format names none; the balance check then reports the gap.
+    pub balance_labels: BalanceLabels,
 }
 
 /// One bank statement format, as described by a `formats/*.toml` file.
@@ -285,6 +298,9 @@ struct RawSpec {
     century_base: Option<i32>,
     amounts: Option<Convention>,
     columns: Option<RawColumns>,
+    opening_label: Option<String>,
+    closing_label: Option<String>,
+    account_label: Option<String>,
 }
 
 fn load_one(file: &str, text: &str) -> Result<FormatSpec, BankFmtError> {
@@ -342,6 +358,9 @@ fn reject_table_keys(raw: &RawSpec) -> Result<(), String> {
         ("century_base", raw.century_base.is_some()),
         ("amounts", raw.amounts.is_some()),
         ("columns", raw.columns.is_some()),
+        ("opening_label", raw.opening_label.is_some()),
+        ("closing_label", raw.closing_label.is_some()),
+        ("account_label", raw.account_label.is_some()),
     ]
     .iter()
     .filter(|(_, set)| *set)
@@ -382,6 +401,11 @@ fn build_table(raw: &RawSpec) -> Result<TableSpec, String> {
         .ok_or_else(|| "missing 'amounts' (split, signed or indicator)".to_owned())?;
     let amounts = build_amounts(convention, columns)?;
     check_distinct_columns(columns)?;
+    let balance_labels = BalanceLabels {
+        opening: label_text("opening_label", raw.opening_label.as_deref(), is_csv)?,
+        closing: label_text("closing_label", raw.closing_label.as_deref(), is_csv)?,
+        account: label_text("account_label", raw.account_label.as_deref(), is_csv)?,
+    };
     Ok(TableSpec {
         delimiter,
         header,
@@ -396,7 +420,18 @@ fn build_table(raw: &RawSpec) -> Result<TableSpec, String> {
             balance: columns.balance,
         },
         amounts,
+        balance_labels,
     })
+}
+
+/// One balance label key: optional, xlsx only, and never blank.
+fn label_text(key: &str, value: Option<&str>, is_csv: bool) -> Result<Option<String>, String> {
+    match value {
+        None => Ok(None),
+        Some(_) if is_csv => Err(format!("'{key}' applies to xlsx only")),
+        Some(text) if text.trim().is_empty() => Err(format!("'{key}' must not be empty")),
+        Some(text) => Ok(Some(text.to_owned())),
+    }
 }
 
 fn build_delimiter(raw: &RawSpec, is_csv: bool) -> Result<Option<u8>, String> {
