@@ -232,6 +232,8 @@ fn invoice_without_items_is_an_error_naming_the_path() {
 
 #[test]
 fn b2cl_cdnr_cdnur_exp_nil_layout() {
+    // provenance: pending. The exact text uses key names recalled from the offline-tool layout
+    // (see the module doc above); it must be re-checked against an official sample.
     let mut r = empty();
     // provenance: derived. B2CL: 3,00,000.00 at 18% inter-state to Delhi: IGST = 54,000.00;
     //   value = 3,54,000.00.
@@ -310,6 +312,8 @@ fn b2cl_cdnr_cdnur_exp_nil_layout() {
 
 #[test]
 fn cess_is_written_only_when_not_zero() {
+    // provenance: pending. The exact text uses key names recalled from the offline-tool layout
+    // (see the module doc above); it must be re-checked against an official sample.
     let mut r = empty();
     // provenance: derived. 1,000.00 at 28% inter-state: IGST 280.00; cess 12% of 1,000.00 = 120.00.
     r.b2cs = vec![B2csRow {
@@ -335,6 +339,8 @@ fn cess_is_written_only_when_not_zero() {
 
 #[test]
 fn doc_issue_net_is_total_minus_cancelled() {
+    // provenance: pending. The exact text uses key names recalled from the offline-tool layout
+    // (see the module doc above); it must be re-checked against an official sample.
     let mut r = empty();
     // provenance: derived. Invoices 1 to 10 issued, 2 cancelled: net = 10 - 2 = 8.
     r.doc_issue = vec![DocIssue {
@@ -394,6 +400,8 @@ fn hsn_without_unit_code_is_an_error() {
 
 #[test]
 fn gstr1a_b2ba_carries_original_and_amended_invoice() {
+    // provenance: pending. The exact text uses key names recalled from the offline-tool layout
+    // (see the module doc above); it must be re-checked against an official sample.
     // provenance: derived. Original INV/001 of 05-10-2025 amended to 1,000.00 at 18%: IGST 180.00,
     // value 1,180.00.
     let r = Gstr1a {

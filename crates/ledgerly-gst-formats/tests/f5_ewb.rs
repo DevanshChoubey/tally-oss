@@ -99,6 +99,7 @@ fn fields(r: Result<(), Vec<FormatError>>) -> Vec<String> {
             FormatError::Field { field, .. } => field,
             FormatError::Json { path, .. } => path,
             FormatError::Spreadsheet(s) => s,
+            FormatError::Unsupported { reason } => reason,
         })
         .collect()
 }
@@ -171,14 +172,56 @@ fn negative_other_value_and_leading_zero_hsn() {
     let mut e = sample();
     e.other_value = Paise::new(-5_000);
     e.tot_inv_value = Paise::new(1_175_000);
-    e.items[0].hsn = Hsn::parse("0101").unwrap();
     let json = ewb_to_json(&e).unwrap();
     // provenance: derived. Round-off of -50.00: 10,000.00 + 1,800.00 - 50.00 = 11,750.00.
-    // The portal's hsnCode is numeric, so 0101 is written as 101 (a JSON number cannot start
-    // with 0).
     assert!(json.contains(r#""otherValue":-50.00"#), "{json}");
     assert!(json.contains(r#""totInvValue":11750.00"#), "{json}");
-    assert!(json.contains(r#""hsnCode":101,"#), "{json}");
+    // A leading zero is refused (Unsupported), not written as 101: 0101 is a different code.
+    e.items[0].hsn = Hsn::parse("0101").unwrap();
+    assert!(matches!(
+        ewb_to_json(&e),
+        Err(FormatError::Unsupported { .. })
+    ));
+}
+
+#[test]
+fn leading_zero_hsn_is_refused_not_written_as_a_different_code() {
+    // provenance: derived. HSN 0101 is the code given; writing it as the number 101 would name a
+    // different code. Until the numeric field is confirmed, the bill is Unsupported, not written.
+    let mut e = sample();
+    e.items[0].hsn = Hsn::parse("0101").unwrap();
+    match ewb_to_json(&e) {
+        Err(FormatError::Unsupported { reason }) => assert!(reason.contains("0101"), "{reason}"),
+        other => panic!("expected Unsupported, got {other:?}"),
+    }
+}
+
+#[test]
+fn header_igst_that_is_not_the_items_tax_is_refused() {
+    // provenance: derived. 18% x 10,000.00 taxable = 1,800.00 IGST (180,000 paise). A header of
+    // 1,900.00 (190,000 paise) is outside rounding of that, and the total is kept consistent so
+    // that only the tax head is wrong.
+    let mut e = sample();
+    e.igst_value = Paise::new(190_000);
+    e.tot_inv_value = Paise::new(1_190_000);
+    assert_eq!(fields(validate_ewb(&e)), ["igstValue"]);
+}
+
+#[test]
+fn header_tax_within_one_paise_of_the_items_tax_is_accepted_and_two_paise_refused() {
+    // provenance: derived. 1,001 paise x 18 / 100 = 180.18 paise, so a whole-paise tax is 180 or
+    // 181 under any rounding. 182 is not, and 180 and 181 are both accepted.
+    let mut e = sample();
+    e.items[0].taxable_amount = Paise::new(1_001);
+    e.total_value = Paise::new(1_001);
+    for (igst, tot) in [(180, 1_181), (181, 1_182)] {
+        e.igst_value = Paise::new(igst);
+        e.tot_inv_value = Paise::new(tot);
+        assert!(validate_ewb(&e).is_ok(), "igst {igst} paise should pass");
+    }
+    e.igst_value = Paise::new(182);
+    e.tot_inv_value = Paise::new(1_183);
+    assert_eq!(fields(validate_ewb(&e)), ["igstValue"]);
 }
 
 #[test]
@@ -312,11 +355,17 @@ fn igst_with_cgst_is_rejected() {
     // adds up, but IGST and CGST are never charged on the same supply, so it is still rejected.
     e.cgst_value = Paise::new(90_000);
     e.tot_inv_value = Paise::new(1_270_000);
-    assert_eq!(fields(validate_ewb(&e)), ["igstValue"]);
+    // The header CGST of 900.00 is also not the items' tax (their CGST rate is 0), so the
+    // header CGST is reported too.
+    assert_eq!(fields(validate_ewb(&e)), ["igstValue", "cgstValue"]);
 
     let mut e = sample();
     e.items[0].cgst_rate = Decimal::from(9);
-    assert_eq!(fields(validate_ewb(&e)), ["itemList[0].igstRate"]);
+    // Item CGST is 9% of 10,000.00 = 900.00, but the header CGST is 0.00.
+    assert_eq!(
+        fields(validate_ewb(&e)),
+        ["itemList[0].igstRate", "cgstValue"]
+    );
 }
 
 #[test]

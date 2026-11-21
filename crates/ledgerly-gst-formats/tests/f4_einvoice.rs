@@ -169,6 +169,7 @@ fn field_names(errs: &[FormatError]) -> Vec<String> {
             FormatError::Field { field, .. } => field.clone(),
             FormatError::Json { path, .. } => path.clone(),
             FormatError::Spreadsheet(s) => s.clone(),
+            FormatError::Unsupported { reason } => reason.clone(),
         })
         .collect()
 }
@@ -257,7 +258,8 @@ fn inter_state_round_off_is_written() {
 
 #[test]
 fn doc_no_sixteen_chars_ok_seventeen_rejected() {
-    // provenance: derived — INV-01 DocDtls.No: 1 to 16 characters.
+    // provenance: pending — INV-01 DocDtls.No: 1 to 16 characters (recalled from the schema, not
+    // yet quoted from it; rule A5).
     let mut e = intra_sample();
     e.doc_no = "A234567890123456".to_owned(); // 16 characters
     assert_eq!(e.doc_no.chars().count(), 16);
@@ -276,8 +278,9 @@ fn doc_no_sixteen_chars_ok_seventeen_rejected() {
 
 #[test]
 fn doc_no_shape() {
-    // provenance: derived — INV-01 DocDtls.No pattern: first character a-zA-Z1-9, then
-    // a-zA-Z0-9/- (no leading zero, slash or hyphen; no spaces; not empty).
+    // provenance: pending — INV-01 DocDtls.No pattern: first character a-zA-Z1-9, then
+    // a-zA-Z0-9/- (no leading zero, slash or hyphen; no spaces; not empty). Recalled from the
+    // schema, not yet quoted from it (rule A5).
     for bad in ["", "0001", "/A1", "-A1", "A 1", "A_1"] {
         let mut e = intra_sample();
         e.doc_no = bad.to_owned();
@@ -387,7 +390,7 @@ fn schema_invalid_error_message_is_user_readable() {
     let mut e = intra_sample();
     e.seller.legal_name = "AB".to_owned();
     let err = einvoice_to_json(&e).unwrap_err();
-    // provenance: derived — LglNm is 3 to 100 characters.
+    // provenance: pending — LglNm is 3 to 100 characters (recalled from the schema; rule A5).
     assert_eq!(
         err.to_string(),
         "SellerDtls.LglNm: must be 3 to 100 characters, found 2"
@@ -396,8 +399,8 @@ fn schema_invalid_error_message_is_user_readable() {
 
 #[test]
 fn item_field_rules() {
-    // provenance: derived — IsServc is Y only for a SAC (99...); quantities and prices allow 3
-    // decimal places and are not negative.
+    // provenance: pending — IsServc is Y only for a SAC (99...); quantities and prices allow 3
+    // decimal places and are not negative. Recalled from the schema (rule A5).
     let mut e = intra_sample();
     if let Some(it) = e.items.get_mut(0) {
         it.is_service = true; // HSN 8471 is goods
@@ -501,4 +504,71 @@ fn output_is_deterministic() {
     // provenance: derived — rule A7: same input, same output.
     let e = intra_sample();
     assert_eq!(einvoice_to_json(&e).unwrap(), einvoice_to_json(&e).unwrap());
+}
+
+/// Intra-state sample with item 1's CGST one paise above `rate x AssAmt / 2`, the item total and
+/// the CGST total moved with it so that only the item head is wrong.
+///
+/// provenance: pending — CGST = AssAmt x GstRt / 2 rounded to whole paise is recalled from the
+/// schema, not yet quoted from it (rule A5). Hand arithmetic: 1000.00 x 18% / 2 = 90.00 exactly,
+/// so 9_000 paise is the only acceptable CGST and 9_001 must be refused.
+#[test]
+fn item_cgst_is_checked_against_rate_times_assessable() {
+    let mut e = intra_sample();
+    if let Some(it) = e.items.get_mut(0) {
+        it.cgst = p(9_001);
+        it.total = p(118_001);
+    }
+    e.totals.cgst = p(12_001);
+    e.totals.total = p(174_001);
+    assert_eq!(invalid_fields(&e), vec!["ItemList[0].CgstAmt".to_owned()]);
+}
+
+/// Inter-state invoice with one item of `taxable` paise at 12% and `igst` paise of IGST.
+fn inter_item_of(taxable: i64, igst: i64) -> EInvoice {
+    let mut e = inter_sample();
+    if let Some(it) = e.items.get_mut(0) {
+        it.unit_price = Decimal::new(taxable, 2);
+        it.gross_amount = p(taxable);
+        it.assessable = p(taxable);
+        it.igst = p(igst);
+        it.total = p(taxable + igst);
+    }
+    e.totals.assessable = p(taxable);
+    e.totals.igst = p(igst);
+    e.totals.round_off = p(0);
+    e.totals.total = p(taxable + igst);
+    e
+}
+
+/// provenance: pending — IGST = AssAmt x GstRt / 100 rounded to whole paise is recalled from the
+/// schema, not yet quoted from it (rule A5). Hand arithmetic: 10_001 paise x 12% = 1_200.12
+/// paise, so 1_200 and 1_201 are the two whole-paise roundings and 1_202 is not.
+#[test]
+fn item_igst_accepts_the_paise_either_side_of_the_exact_tax() {
+    for ok in [1_200, 1_201] {
+        assert!(validate_einvoice(&inter_item_of(10_001, ok)).is_ok(), "{ok}");
+    }
+    assert_eq!(
+        invalid_fields(&inter_item_of(10_001, 1_202)),
+        vec!["ItemList[0].IgstAmt".to_owned()]
+    );
+}
+
+/// provenance: pending — TotAmt = Qty x UnitPrice is recalled from the schema, not yet quoted from
+/// it (rule A5). Hand arithmetic: 2 x 250.50 = 501.00 = 50_100 paise; 50_101 is not a whole-paise
+/// rounding of that exact product.
+#[test]
+fn item_gross_amount_is_qty_times_unit_price() {
+    let mut e = intra_sample();
+    if let Some(it) = e.items.get_mut(1) {
+        it.gross_amount = p(50_101);
+        it.discount = p(101);
+        it.assessable = p(50_000);
+    }
+    let fields = invalid_fields(&e);
+    assert!(
+        fields.contains(&"ItemList[1].TotAmt".to_owned()),
+        "{fields:?}"
+    );
 }

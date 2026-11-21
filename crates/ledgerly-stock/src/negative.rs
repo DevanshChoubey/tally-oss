@@ -45,7 +45,7 @@
 
 use std::collections::BTreeMap;
 
-use ledgerly_core::{Date, Decimal, MoneyError, StockItemId, UnitId, VoucherId};
+use ledgerly_core::{Date, Decimal, MoneyError, Qty, StockItemId, VoucherId};
 use ledgerly_model::{
     BaseVoucherKind, Books, NegativeStockPolicy, StockItem, StockMove, Voucher, VoucherStatus,
 };
@@ -187,17 +187,6 @@ fn stock_effect(kind: BaseVoucherKind) -> StockEffect {
     }
 }
 
-/// Base units per unit of the line, or `None` when the item cannot convert.
-fn unit_factor(item: &StockItem, unit: UnitId) -> Option<Decimal> {
-    if unit == item.unit {
-        Some(Decimal::ONE)
-    } else {
-        item.alt_unit
-            .filter(|alt| alt.unit == unit)
-            .map(|alt| alt.base_per_alt)
-    }
-}
-
 /// The voucher's issues, per item, in base units.
 fn voucher_issues(
     v: &Voucher,
@@ -214,16 +203,18 @@ fn voucher_issues(
                 ),
             )
         })?;
-        let factor = unit_factor(item, line.unit).ok_or_else(|| StockError::Unit {
-            reason: format!(
-                "voucher {:?}: unit {:?} is neither the base nor the alternate unit of item {:?}",
-                v.id, line.unit, item.id
-            ),
-        })?;
         if line.qty.0 < Decimal::ZERO {
             return Err(invalid("inventory_lines", "negative line quantity"));
         }
-        let base = line.qty.0.checked_mul(factor).ok_or_else(overflow)?;
+        // Compound units (1 box = 12 pcs) convert through the unit chain, as in every other
+        // quantity conversion; an unrelated unit or an overflow is an error, never a guess.
+        let base = crate::units::to_base_units(
+            Qty(line.qty.0),
+            line.unit,
+            item,
+            &books.masters,
+        )?
+        .0;
         issues.entry(item.id).or_default().push(Step {
             date: v.date,
             voucher: v.id,

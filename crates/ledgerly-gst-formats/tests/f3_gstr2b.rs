@@ -5,7 +5,8 @@
 //! `07AAACL0000A1ZP` suppliers). Its **shape** is recalled from the portal download and is
 //! pending observed (no portal file has been captured yet; see the module doc of
 //! `gstr2b.rs`), so these tests prove the reader against the documented shape, not against the
-//! portal. Every expected value below is read off the fixture text with the conversion written
+//! portal. Every test in this file depends on those recalled key names, so every test is
+//! `pending` until a capture exists, whatever its arithmetic provenance says. Every expected value below is read off the fixture text with the conversion written
 //! beside it: rupees times 100 is paise; no value comes from running the reader.
 
 #![allow(
@@ -101,7 +102,7 @@ fn date(y: i32, m: Month, d: u8) -> Date {
 fn json_path(err: FormatError) -> String {
     match err {
         FormatError::Json { path, .. } => path,
-        other @ (FormatError::Field { .. } | FormatError::Spreadsheet(_)) => {
+        other @ (FormatError::Field { .. } | FormatError::Spreadsheet(_) | FormatError::Unsupported { .. }) => {
             panic!("expected FormatError::Json, got {other:?}")
         }
     }
@@ -116,7 +117,7 @@ fn mutate(from: &str, to: &str) -> String {
 #[test]
 fn parses_header_and_supplier_rows() {
     let r = parse_gstr2b(SAMPLE).unwrap();
-    // provenance: derived - read off the fixture header: gstin, rtnprd "042024" = April 2024,
+    // provenance: pending (key names recalled, not observed) - read off the fixture header: gstin, rtnprd "042024" = April 2024,
     // gendt "14-05-2024" = 14 May 2024.
     assert_eq!(r.gstin, "29ABCDE1234F1ZW");
     assert_eq!(r.return_period.year, 2024);
@@ -138,7 +139,7 @@ fn parses_header_and_supplier_rows() {
 fn parses_invoice_fields_and_amounts_as_paise() {
     let r = parse_gstr2b(SAMPLE).unwrap();
     let inv = &r.b2b[0].docs[0];
-    // provenance: derived - fixture INV-001: val 1180.00 rupees = 118000 paise; item txval
+    // provenance: pending (key names recalled, not observed) - fixture INV-001: val 1180.00 rupees = 118000 paise; item txval
     // 1000.00 = 100000, igst 180.00 = 18000, zero heads = 0.
     assert_eq!(inv.kind, InwardDocKind::Invoice);
     assert_eq!(inv.number, "INV-001");
@@ -181,7 +182,7 @@ fn second_invoice_flags_rcm_itc_not_available_and_sums_two_items() {
         inv.diff_percent.map(|d| d.to_string()).as_deref(),
         Some("0.65")
     );
-    // provenance: derived - two items, each txval 1000.00 (100000 paise), cgst 90.00 (9000),
+    // provenance: pending (key names recalled, not observed) - two items, each txval 1000.00 (100000 paise), cgst 90.00 (9000),
     // sgst 90.00 (9000): taxable 200000, cgst 18000, sgst 18000, igst 0, cess 0;
     // total tax 18000 + 18000 = 36000; the document value 2360.00 = 200000 + 36000 = 236000.
     let Outcome::Value(total) = inv.tax_totals().unwrap() else {
@@ -199,7 +200,7 @@ fn second_invoice_flags_rcm_itc_not_available_and_sums_two_items() {
 fn paise_amounts_are_exact_and_null_means_absent() {
     let r = parse_gstr2b(SAMPLE).unwrap();
     let inv = &r.b2b[0].docs[2];
-    // provenance: derived - fixture INV-003: val 118.50 = 11850 paise; txval 100.42 = 10042;
+    // provenance: pending (key names recalled, not observed) - fixture INV-003: val 118.50 = 11850 paise; txval 100.42 = 10042;
     // igst 18.08 = 1808; 10042 + 1808 = 11850. "pos": null reads as absent.
     assert_eq!(inv.value, paise(11_850));
     assert_eq!(inv.items[0].amounts.taxable, paise(10_042));
@@ -212,7 +213,7 @@ fn paise_amounts_are_exact_and_null_means_absent() {
 fn credit_and_debit_notes_are_told_apart() {
     let r = parse_gstr2b(SAMPLE).unwrap();
     let notes = &r.cdnr[0].docs;
-    // provenance: derived - fixture: CN-1 typ C val 590.00 = 59000 paise (500.00 + 90.00 igst);
+    // provenance: pending (key names recalled, not observed) - fixture: CN-1 typ C val 590.00 = 59000 paise (500.00 + 90.00 igst);
     // DN-1 typ D val 118.00 = 11800 paise.
     assert_eq!(notes[0].kind, InwardDocKind::CreditNote);
     assert_eq!(notes[0].number, "CN-1");
@@ -226,7 +227,7 @@ fn credit_and_debit_notes_are_told_apart() {
 #[test]
 fn unknown_fields_are_preserved_in_extra_at_every_level() {
     let r = parse_gstr2b(SAMPLE).unwrap();
-    // provenance: derived - the fixture's keys the reader has no field for, as written there.
+    // provenance: pending (key names recalled, not observed) - the fixture's keys the reader has no field for, as written there.
     assert_eq!(
         serde_json::Value::Object(r.root_extra.clone()),
         json!({ "status": 1 })
@@ -278,7 +279,7 @@ fn document_without_items_has_no_tax_split_and_is_unsupported() {
     );
     // A zero here would be a guess: the file carries no tax heads.
     assert!(doc.tax_totals().unwrap().is_unsupported());
-    // provenance: derived - "val": 10.00 rupees = 1000 paise.
+    // provenance: pending (key names recalled, not observed) - "val": 10.00 rupees = 1000 paise.
     assert_eq!(doc.value, paise(1_000));
 }
 
@@ -321,7 +322,7 @@ fn text_that_is_not_json_is_an_error_at_the_root_with_line_and_column() {
             assert!(reason.contains("line"), "reason was: {reason}");
             assert!(reason.contains("column"), "reason was: {reason}");
         }
-        other @ (FormatError::Field { .. } | FormatError::Spreadsheet(_)) => {
+        other @ (FormatError::Field { .. } | FormatError::Spreadsheet(_) | FormatError::Unsupported { .. }) => {
             panic!("expected FormatError::Json, got {other:?}")
         }
     }

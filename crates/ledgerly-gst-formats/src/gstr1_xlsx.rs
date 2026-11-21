@@ -71,14 +71,14 @@ pub struct SheetData {
 /// Writes a GSTR-1 workbook in the official offline tool layout.
 ///
 /// # Errors
-/// Always an error until the official template is supplied: the sheet layout is defined by that
-/// file and is not guessed (rule A1: a value, `Unsupported`, or an error).
+/// [`FormatError::Unsupported`] until the official template is supplied: the sheet layout is
+/// defined by that file and is not guessed (rule A1: a value, `Unsupported`, or an error). Nothing
+/// is written to `path` in that case.
 pub fn gstr1_to_xlsx(r: &Gstr1, path: &Path) -> Result<(), FormatError> {
     let _ = (r, path);
-    Err(FormatError::Field {
-        field: "template".to_owned(),
-        reason: "Unsupported: the official GSTR-1 offline tool template is not in \
-                 gst-formats/templates/ yet, so sheet names and columns are unknown (card F2)"
+    Err(FormatError::Unsupported {
+        reason: "the official GSTR-1 offline tool template is not in gst-formats/templates/ yet, \
+                 so sheet names and columns are unknown (card F2)"
             .to_owned(),
     })
 }

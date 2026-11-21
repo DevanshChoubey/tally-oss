@@ -14,8 +14,9 @@ use std::path::PathBuf;
 use calamine::{Data, DataType, Reader, Xlsx, open_workbook};
 use ledgerly_core::Paise;
 use ledgerly_gst_formats::FormatError;
+use ledgerly_gst_formats::gstr1::Gstr1;
 use ledgerly_gst_formats::gstr1_xlsx::{
-    Cell, SheetData, SheetSpec, check_against_template, read_layout, write_sheets,
+    Cell, SheetData, SheetSpec, check_against_template, gstr1_to_xlsx, read_layout, write_sheets,
 };
 
 fn out(name: &str) -> PathBuf {
@@ -78,6 +79,40 @@ fn sheets_headers_and_cells_round_trip() {
     assert!(rows[2][1].is_empty());
     assert_eq!(rows[2][2].as_f64(), Some(-0.05));
 }
+
+#[test]
+fn gstr1_to_xlsx_is_unsupported_until_the_official_template_is_supplied() {
+    // provenance: derived - the template is not in templates/ (see templates/README.md), so the
+    // public writer must answer Unsupported with a reason, never a Field error on a template
+    // field that a caller could mistake for a mismatch.
+    let day = |d: u8| time::Date::from_calendar_date(2025, time::Month::October, d).unwrap();
+    let gstr1 = Gstr1 {
+        gstin: ledgerly_core::Gstin::parse("29ABCDE1234F1ZW").unwrap(),
+        period: ledgerly_core::Period::new(day(1), day(31)).unwrap(),
+        aggregate_turnover: None,
+        current_turnover: None,
+        b2b: vec![],
+        b2cl: vec![],
+        b2cs: vec![],
+        cdnr: vec![],
+        cdnur: vec![],
+        exp: vec![],
+        nil: vec![],
+        hsn: vec![],
+        doc_issue: vec![],
+    };
+    let err = gstr1_to_xlsx(&gstr1, &out("gstr1_public")).unwrap_err();
+    match err {
+        FormatError::Unsupported { reason } => assert!(reason.contains("template"), "{reason}"),
+        FormatError::Json { .. } | FormatError::Field { .. } | FormatError::Spreadsheet(_) => {
+            panic!("expected Unsupported, got a different error")
+        }
+    }
+}
+
+// Pending (rule A5): the official GSTR-1 offline tool layout test. The owner supplies the official
+// template; until it is in templates/, no sheet name or header in this file is verified against
+// it, and check_against_template is tested only against workbooks this file writes.
 
 #[test]
 fn money_beyond_exact_double_range_is_an_error() {
@@ -175,7 +210,7 @@ fn template_check_accepts_matching_and_names_the_first_difference() {
     write_sheets(&bad_header, &p).unwrap();
     match check_against_template(&p, &template, 0).unwrap_err() {
         FormatError::Field { field, .. } => assert_eq!(field, "alpha"),
-        other @ (FormatError::Json { .. } | FormatError::Spreadsheet(_)) => {
+        other @ (FormatError::Json { .. } | FormatError::Spreadsheet(_) | FormatError::Unsupported { .. }) => {
             panic!("unexpected error {other:?}")
         }
     }
@@ -187,7 +222,7 @@ fn template_check_accepts_matching_and_names_the_first_difference() {
     write_sheets(&bad_name, &p).unwrap();
     match check_against_template(&p, &template, 0).unwrap_err() {
         FormatError::Field { field, .. } => assert_eq!(field, "sheet name"),
-        other @ (FormatError::Json { .. } | FormatError::Spreadsheet(_)) => {
+        other @ (FormatError::Json { .. } | FormatError::Spreadsheet(_) | FormatError::Unsupported { .. }) => {
             panic!("unexpected error {other:?}")
         }
     }

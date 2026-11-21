@@ -31,10 +31,11 @@
 //!
 //! Amounts are rupees in the file and become [`Paise`]. A number with more than two decimal
 //! places is an error, never rounded. Numbers are read through the decimal text `serde_json`
-//! gives for them, so no floating point arithmetic is done. With the `arbitrary_precision`
-//! feature of `serde_json` that text is the file's own digits; without it, it is the shortest
-//! text that round-trips the `f64` the JSON parser produced (exact for amounts of up to 15
-//! significant digits).
+//! gives for them, so no floating point arithmetic is done. This crate does not enable the
+//! `arbitrary_precision` feature of `serde_json`, so that text is the shortest text that
+//! round-trips the `f64` the parser produced. That is exact only for numbers of up to 15
+//! significant digits, so `parse_root` refuses any number with more digits before it is
+//! parsed (see the `json_digits` module), with a typed error rather than a rounded value.
 
 use std::str::FromStr;
 
@@ -44,6 +45,7 @@ use serde_json::{Map, Value};
 use time::{Date, Month};
 
 use crate::FormatError;
+use crate::json_digits::reject_long_numbers;
 
 /// A GST return period, `MMYYYY` in the portal files.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -301,13 +303,18 @@ fn json_err(path: impl Into<String>, reason: impl Into<String>) -> FormatError {
 }
 
 /// Parses text into a JSON value; a syntax error is reported at `$` with line and column.
+///
+/// Also refuses any number with more than 15 significant digits: `serde_json` would hold it as an
+/// `f64` and lose digits without an error (rule A3).
 pub(crate) fn parse_root(json: &str) -> Result<Value, FormatError> {
-    serde_json::from_str::<Value>(json).map_err(|e| {
+    let value = serde_json::from_str::<Value>(json).map_err(|e| {
         json_err(
             "$",
             format!("{e} (line {}, column {})", e.line(), e.column()),
         )
-    })
+    })?;
+    reject_long_numbers(json)?;
+    Ok(value)
 }
 
 /// A JSON object being read: remembers its path and which keys were consumed, so that

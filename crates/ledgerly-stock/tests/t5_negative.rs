@@ -5,6 +5,10 @@
 //! the arithmetic is written in each test. Spec 6.4: "Negative-stock policy per company/voucher
 //! type: Block | Warn | Allow"; Block rejects the voucher, Warn saves with a warning, Allow saves
 //! silently.
+//!
+//! Provenance: every expectation is `derived` from the spec and hand arithmetic written in the
+//! test. None is `observed` from TallyPrime, so any case that asserts how TallyPrime itself
+//! reports negative stock is `pending` until a capture exists.
 #![allow(
     clippy::unwrap_used,
     clippy::panic,
@@ -20,7 +24,8 @@ use ledgerly_core::{
 use ledgerly_model::{
     Address, AltUnit, BaseVoucherKind, Books, Company, EntityKind, Features, InventoryLine,
     Masters, NegativeStockPolicy, NumberingConfig, NumberingMethod, OpeningStock, RestartPeriod,
-    StockItem, StockMove, ValuationMethod, Voucher, VoucherMode, VoucherStatus, VoucherType,
+    StockItem, StockMove, Unit, UnitKind, ValuationMethod, Voucher, VoucherMode, VoucherStatus,
+    VoucherType,
 };
 use ledgerly_stock::StockError;
 use ledgerly_stock::negative::{
@@ -105,6 +110,21 @@ fn books(moves: Vec<StockMove>) -> Books {
         (STOCK_JOURNAL, BaseVoucherKind::StockJournal),
     ] {
         masters.voucher_types.insert(id, vtype(id, base));
+    }
+    // Every unit a line or an item names must exist in the unit master, as in real books.
+    for (id, symbol) in [(UnitId(1), "pcs"), (UnitId(2), "alt")] {
+        masters.units.insert(
+            id,
+            Unit {
+                id,
+                symbol: symbol.to_owned(),
+                formal_name: symbol.to_owned(),
+                decimals: 0,
+                kind: UnitKind::Simple,
+                uqc: None,
+                tally: None,
+            },
+        );
     }
     masters.stock_items.insert(ITEM, stock_item(ITEM, 10));
     masters
@@ -514,4 +534,73 @@ fn undecidable_stock_effect_and_unknown_masters_are_errors() {
         check_policy(&no_item, &b, NegativeStockPolicy::Block).unwrap_err(),
         StockError::Invalid { .. }
     ));
+}
+
+/// Unit id of the compound unit `box` in these tests: 1 box = 12 pieces (`UnitId(1)`).
+const BOX: UnitId = UnitId(3);
+
+/// Books whose item 1 is held in pieces and sold in boxes of 12 pieces, with the given opening
+/// quantity in pieces.
+fn books_with_box(opening: i64) -> Books {
+    let mut b = books(vec![]);
+    b.masters.units.insert(
+        BOX,
+        Unit {
+            id: BOX,
+            symbol: "box".to_owned(),
+            formal_name: "Box of 12 pieces".to_owned(),
+            decimals: 0,
+            kind: UnitKind::Compound {
+                first: BOX,
+                factor: d(12),
+                second: UnitId(1),
+            },
+            uqc: None,
+            tally: None,
+        },
+    );
+    b.masters
+        .stock_items
+        .insert(ITEM, stock_item(ITEM, opening));
+    b
+}
+
+#[test]
+fn compound_unit_sale_is_converted_before_the_block_check() {
+    // derived: 1 box = 12 pieces. Opening 10 pieces; a sale of 1 box issues 12 pieces on
+    // 10-Apr: running 10 - 12 = -2, below zero, so Block refuses it. The unit must not be
+    // reported as unrelated to the item.
+    let b = books_with_box(10);
+    let v = voucher(
+        20,
+        SALES,
+        date!(2026 - 04 - 10),
+        vec![line(ITEM, 1, BOX)],
+        VoucherStatus::Regular,
+    );
+    assert_eq!(
+        check_policy(&v, &b, NegativeStockPolicy::Block).unwrap_err(),
+        StockError::NegativeStockBlocked {
+            item: ITEM,
+            date: date!(2026 - 04 - 10)
+        }
+    );
+}
+
+#[test]
+fn compound_unit_sale_that_exactly_empties_stock_passes_under_block() {
+    // derived: opening 12 pieces; a sale of 1 box issues 12 pieces: running 0, which is not
+    // below zero, so Block allows it.
+    let b = books_with_box(12);
+    let v = voucher(
+        21,
+        SALES,
+        date!(2026 - 04 - 10),
+        vec![line(ITEM, 1, BOX)],
+        VoucherStatus::Regular,
+    );
+    assert_eq!(
+        check_policy(&v, &b, NegativeStockPolicy::Block).unwrap(),
+        vec![]
+    );
 }
