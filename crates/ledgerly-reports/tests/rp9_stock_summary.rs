@@ -288,8 +288,10 @@ fn r3_fifo_item_row() {
 
 #[test]
 fn r3_with_the_real_valuation_method_as_input() {
-    // The closing valuation is produced by ledgerly-stock itself; the expected cells are the
-    // hand-derived R3 figures (see r3_average_cost_item_row), not read from that output.
+    // provenance: derived, the R3 figures of r3_average_cost_item_row: closing 40 x 2,250 / 190 =
+    // 473.68 = 47,368 paise; consumption 1,000 + 1,250 - 473.68 = 1,776.32 = 177,632 paise. The
+    // closing valuation is produced by ledgerly-stock itself and only used as input; the expected
+    // cells are the hand-derived numbers, not read from that output.
     let b = r3_books(ValuationMethod::AverageCost);
     let p = r3_period();
     let item = b.masters.stock_items.get(&StockItemId(1)).unwrap();
@@ -515,6 +517,9 @@ fn without_an_opening_valuation_after_earlier_movement_opening_is_unsupported() 
 
 #[test]
 fn missing_closing_valuation_leaves_quantities_and_unsupported_values() {
+    // provenance: derived, R3 quantities (100 + 90 - 150 = 40 closing) and opening value
+    // 100 x 10 = 1,000.00; no closing valuation is supplied, so closing value and consumption
+    // (which needs it) are Unsupported.
     let b = r3_books(ValuationMethod::AverageCost);
     let r = run(&b, &r3_period(), vec![]);
     let cells = &r.rows[0].cells;
@@ -815,4 +820,45 @@ fn movements_after_the_period_end_are_ignored() {
     assert_eq!(r.rows[0].cells.get(2), Some(&qty(50)));
     assert_eq!(r.rows[0].cells.get(4), Some(&qty(120)));
     assert_eq!(r.rows[0].cells.get(6), Some(&qty(30)));
+}
+
+#[test]
+fn a_godown_transfer_makes_item_consumption_unsupported() {
+    // provenance: derived. Opening 100 @ 10 in Main. On 10-Apr one voucher issues 30 from Main and
+    // receives 30 into Annexe (a transfer, each side valued at 300.00). Item level: 30 in, 30 out,
+    // closing 100 + 30 - 30 = 100. Main: 100 open, 30 out, 70 closing. Annexe: 0 open, 30 in, 30
+    // closing. The transfer is not consumption, so the item's outwards value is Unsupported
+    // (opening + inwards - closing would give 300.00, which is wrong).
+    let b = books(
+        vec![item(
+            1,
+            "Widget",
+            ValuationMethod::AverageCost,
+            &[(1, 100, 10)],
+        )],
+        vec![
+            mv(1, date!(2026 - 04 - 10), 1, 1, 0, 30, rs(300)),
+            mv(1, date!(2026 - 04 - 10), 1, 2, 30, 0, rs(300)),
+        ],
+    );
+    let mut p = params(date!(2026 - 04 - 01), date!(2026 - 04 - 30));
+    p.detail = Detail::Detailed;
+    let r = run(
+        &b,
+        &p,
+        vec![valuation(1, date!(2026 - 04 - 30), 100, rs(1300))],
+    );
+    let cells = &r.rows[0].cells;
+    assert_eq!(cells.get(2), Some(&qty(30)));
+    assert_eq!(cells.get(4), Some(&qty(30)));
+    assert_eq!(cells.get(6), Some(&qty(100)));
+    assert!(is_unsupported(&cells[5]));
+    let main = row_of(&r, "Main godown");
+    assert_eq!(main.cells.first(), Some(&qty(100)));
+    assert_eq!(main.cells.get(4), Some(&qty(30)));
+    assert_eq!(main.cells.get(6), Some(&qty(70)));
+    let annexe = row_of(&r, "Annexe");
+    assert_eq!(annexe.cells.first(), Some(&qty(0)));
+    assert_eq!(annexe.cells.get(2), Some(&qty(30)));
+    assert_eq!(annexe.cells.get(6), Some(&qty(30)));
 }

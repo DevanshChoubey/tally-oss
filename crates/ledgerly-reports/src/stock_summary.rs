@@ -28,6 +28,8 @@
 //!   definition of consumption under periodic average cost and annual FIFO (R3 dataset: 1,776.32
 //!   and 1,650.00). Last purchase and standard cost have no verified consumption rule, so it is
 //!   `Unsupported`. The value on an issuing voucher is a selling price and is never used.
+//! * Item-level inwards and outwards include godown transfers (a voucher that receives and
+//!   issues the item); the outwards value of such an item is `Unsupported`.
 //! * A valuation whose quantity differs from the quantity computed here gives an `Unsupported`
 //!   value, not a number.
 //!
@@ -53,7 +55,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use ledgerly_core::{
     Date, Decimal, GodownId, Outcome, Paise, PeriodError, Qty, RoundingRule, SignedAmount,
-    StockItemId, Unsupported, round_rupees_to_paise,
+    StockItemId, Unsupported, VoucherId, round_rupees_to_paise,
 };
 use ledgerly_model::{Books, Scenario, StockItem, StockMove, ValuationMethod, VoucherStatus};
 use ledgerly_stock::{ProvisionalReason, StockValuation, ValuationStatus};
@@ -306,9 +308,18 @@ struct ItemFlow {
     by_godown: BTreeMap<GodownId, Flow>,
     /// Some included movement is dated before the period starts.
     moves_before: bool,
+    /// Per voucher dated inside the period: whether it receives and whether it issues the item.
+    directions: BTreeMap<VoucherId, (bool, bool)>,
 }
 
 impl ItemFlow {
+    /// A voucher in the period both receives and issues the item (a godown transfer).
+    fn has_transfer(&self) -> bool {
+        self.directions
+            .values()
+            .any(|&(received, issued)| received && issued)
+    }
+
     fn total(&self) -> Result<Flow, ReportError> {
         let mut sum = Flow::ZERO;
         for flow in self.by_godown.values() {
@@ -392,6 +403,12 @@ fn collect_flows(
         } else {
             flow.inwards = dec_add(flow.inwards, m.qty_in.0, "inward quantity")?;
             flow.outwards = dec_add(flow.outwards, m.qty_out.0, "outward quantity")?;
+            let seen = item_flow
+                .directions
+                .entry(m.voucher)
+                .or_insert((false, false));
+            seen.0 |= !m.qty_in.0.is_zero();
+            seen.1 |= !m.qty_out.0.is_zero();
             if !m.qty_in.0.is_zero() {
                 flow.in_value = flow.in_value.checked_add(m.value)?;
             }
@@ -617,6 +634,7 @@ fn outwards_value(
     in_value: Paise,
     closing: &Val,
     qty_close: Decimal,
+    transfer: bool,
 ) -> Result<Val, ReportError> {
     let what = format!("stock summary: outwards value of {}", item.name);
     match item.valuation {
@@ -632,6 +650,12 @@ fn outwards_value(
         return Ok(Val::unsupported(
             what,
             "closing quantity is negative; consumption cannot be valued",
+        ));
+    }
+    if transfer {
+        return Ok(Val::unsupported(
+            what,
+            "a voucher in the period moves this item between godowns, so its inwards and outwards include the transfer and consumption cannot be told apart",
         ));
     }
     let (open, open_reason) = match addend(opening) {
@@ -687,7 +711,14 @@ fn build_item(
     let qty_close = sum.closing()?;
     let opening = opening_value(item, flow, sum.open, table)?;
     let closing = closing_value(item, qty_close, table);
-    let outwards = outwards_value(item, &opening, sum.in_value, &closing, qty_close)?;
+    let outwards = outwards_value(
+        item,
+        &opening,
+        sum.in_value,
+        &closing,
+        qty_close,
+        flow.has_transfer(),
+    )?;
     let vals = Vals {
         opening,
         inwards: Val::Final(sum.in_value),
