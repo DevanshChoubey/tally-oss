@@ -117,8 +117,7 @@ pub fn palette_key_bar(palette: &[KeyHint]) -> (String, Vec<(String, String)>) {
     let context = palette
         .iter()
         .find(|hint| hint.keys.is_empty())
-        .map(|hint| hint.label.clone())
-        .unwrap_or_default();
+        .map_or_default(|hint| hint.label.clone());
     let hints = palette
         .iter()
         .filter(|hint| !hint.keys.is_empty())
