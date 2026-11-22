@@ -19,9 +19,9 @@
 //!
 //! * The high-contrast focus ring is 3 px. The mock uses 2 px in every theme. High contrast keeps
 //!   the thicker ring that the v1 tests asserted, because spec 7 asks for visible focus.
-//! * The UI face is Noto Sans, not Inter as DESIGN.md names it. Noto Sans is what is available
-//!   under an open licence in `assets/fonts` (see `LICENSING.md`). Noto Sans Devanagari is the
-//!   fallback for Hindi names, as DESIGN.md asks.
+//! * The mock turns on Inter's tabular figures (`font-feature-settings:"tnum" 1`). egui cannot
+//!   select OpenType features, so figures use Inter's default proportional digits; amounts are
+//!   still right-aligned in their columns.
 //! * egui's `Shadow::spread` is an unsigned byte, so the mock's `-12px` spread of shadow-2 cannot
 //!   be drawn. [`shadow_2`] keeps the offset and blur and drops the negative spread.
 //! * The v1 tokens `ruling`, `margin` and `focus_band` have no v2 counterpart and are removed.
@@ -79,7 +79,8 @@ pub const BORDER_WIDTH: f32 = 1.0;
 /// Border width in high contrast, `--bw`.
 pub const BORDER_WIDTH_HIGH_CONTRAST: f32 = 2.0;
 
-/// Name of the bold face family (Noto Sans Bold, then Noto Sans Devanagari Bold).
+/// Name of the bold face family (Inter semibold, the mock's weight 600, then Noto Sans Bold and
+/// Noto Sans Devanagari Bold).
 pub const BOLD_FAMILY: &str = "bold";
 
 /// Name of the caption text style (11 px).
@@ -91,7 +92,11 @@ pub const STYLE_SUBHEADING: &str = "Subheading";
 /// Name of the figure text style (26 px, bold).
 pub const STYLE_FIGURE: &str = "Figure";
 
-/// Font data names, as keys of [`FontDefinitions::font_data`].
+/// Font data names, as keys of [`FontDefinitions::font_data`]: Inter, the mock's face.
+const INTER_REGULAR: &str = "Inter-Regular";
+/// Inter semibold, the mock's bold weight (600).
+const INTER_SEMIBOLD: &str = "Inter-SemiBold";
+/// Noto Sans, for glyphs Inter lacks.
 const NOTO_REGULAR: &str = "NotoSans-Regular";
 /// Bold Noto Sans.
 const NOTO_BOLD: &str = "NotoSans-Bold";
@@ -495,12 +500,22 @@ fn install_fonts_once(ctx: &Context) {
     ctx.data_mut(|d| d.insert_temp(fonts_id(), true));
 }
 
-/// Font definitions: Noto Sans first, Noto Sans Devanagari as the fallback for Hindi names,
-/// then egui's own fallbacks. The bold face is the [`BOLD_FAMILY`] family, with the Devanagari
-/// bold face as its fallback. Monospace is egui's own.
+/// Font definitions: Inter first (the mock's face), Noto Sans for glyphs Inter lacks, Noto Sans
+/// Devanagari for Hindi names, then egui's own fallbacks. The bold face is the [`BOLD_FAMILY`]
+/// family: Inter semibold, then the Noto bold faces. Monospace is egui's own.
 #[must_use]
 pub fn font_definitions() -> FontDefinitions {
     let mut defs = FontDefinitions::default();
+    insert_face(
+        &mut defs,
+        INTER_REGULAR,
+        include_bytes!("../assets/fonts/Inter-Regular.ttf"),
+    );
+    insert_face(
+        &mut defs,
+        INTER_SEMIBOLD,
+        include_bytes!("../assets/fonts/Inter-SemiBold.ttf"),
+    );
     insert_face(
         &mut defs,
         NOTO_REGULAR,
@@ -525,12 +540,20 @@ pub fn font_definitions() -> FontDefinitions {
         .families
         .remove(&FontFamily::Proportional)
         .unwrap_or_default();
-    let mut chain = vec![NOTO_REGULAR.to_owned(), NOTO_DEVANAGARI.to_owned()];
+    let mut chain = vec![
+        INTER_REGULAR.to_owned(),
+        NOTO_REGULAR.to_owned(),
+        NOTO_DEVANAGARI.to_owned(),
+    ];
     chain.extend(fallback);
     defs.families.insert(FontFamily::Proportional, chain);
     defs.families.insert(
         bold_family(),
-        vec![NOTO_BOLD.to_owned(), NOTO_DEVANAGARI_BOLD.to_owned()],
+        vec![
+            INTER_SEMIBOLD.to_owned(),
+            NOTO_BOLD.to_owned(),
+            NOTO_DEVANAGARI_BOLD.to_owned(),
+        ],
     );
     defs
 }

@@ -316,9 +316,11 @@ fn apply_twice_switches_theme_in_place() {
 
 #[test]
 fn fonts_and_text_styles_are_installed_once_on_apply() {
-    // derived: the mock's UI face is Inter (design/mock-v2/index.html `font-family`). Noto Sans
-    // stands in for it (installed with the system, OFL; decided 2026-11-22 when wave 1 started),
-    // Noto Sans Devanagari is the fallback for Hindi names, and the bold face is its own family.
+    // derived: the mock's UI face is Inter (design/mock-v2/index.html `font-family`), regular and
+    // 600 for bold. Inter 4.1 (OFL, github.com/rsms/inter) is bundled, downloaded with the user's
+    // permission 2026-11-22; it replaces the Noto Sans stand-in of wave 1. Noto Sans follows it
+    // for any glyph Inter lacks, Noto Sans Devanagari is the fallback for Hindi names, and the
+    // bold face is its own family led by Inter SemiBold.
     let ctx = egui::Context::default();
     theme::apply(&ctx, ThemeKind::Light);
     theme::apply(&ctx, ThemeKind::Dark);
@@ -338,7 +340,14 @@ fn fonts_and_text_styles_are_installed_once_on_apply() {
         .get(&FontFamily::Proportional)
         .cloned()
         .unwrap_or_default();
-    assert_eq!(chain.first().map(String::as_str), Some("NotoSans-Regular"));
+    assert_eq!(
+        chain.iter().take(3).map(String::as_str).collect::<Vec<_>>(),
+        vec![
+            "Inter-Regular",
+            "NotoSans-Regular",
+            "NotoSansDevanagari-Regular"
+        ]
+    );
     assert!(
         chain
             .iter()
@@ -348,7 +357,14 @@ fn fonts_and_text_styles_are_installed_once_on_apply() {
         .get(&theme::bold_family())
         .cloned()
         .unwrap_or_default();
-    assert_eq!(bold.first().map(String::as_str), Some("NotoSans-Bold"));
+    assert_eq!(
+        bold,
+        vec![
+            "Inter-SemiBold".to_owned(),
+            "NotoSans-Bold".to_owned(),
+            "NotoSansDevanagari-Bold".to_owned()
+        ]
+    );
 }
 
 #[test]
