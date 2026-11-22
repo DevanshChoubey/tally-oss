@@ -95,7 +95,7 @@ pub(super) fn breadcrumbs(ui: &mut Ui, trail: &[String], t: &Tokens) -> Vec<Chro
 }
 
 /// The key bar's entries, as `(keys, what it does)` pairs: the screen's own hints, then Esc when
-/// the stack can go back. Ctrl+K and `?` sit at the right of the bar ([`KEY_BAR_RIGHT`]), as the
+/// the stack can go back and the screen has not named Esc itself. Ctrl+K and `?` sit at the right of the bar ([`KEY_BAR_RIGHT`]), as the
 /// mock's `renderKeys` draws them; the tab and sidebar keys are in the keyboard map.
 #[must_use]
 pub fn key_hints(screen: &[KeyHint], can_go_back: bool) -> Vec<(String, String)> {
@@ -103,7 +103,8 @@ pub fn key_hints(screen: &[KeyHint], can_go_back: bool) -> Vec<(String, String)>
         .iter()
         .map(|hint| (hint.keys.clone(), hint.label.clone()))
         .collect();
-    if can_go_back {
+    // A screen that names Esc itself (such as "Esc Back up") gets no second Esc.
+    if can_go_back && !screen.iter().any(|hint| hint.keys == "Esc") {
         out.push(("Esc".to_owned(), "Back".to_owned()));
     }
     out

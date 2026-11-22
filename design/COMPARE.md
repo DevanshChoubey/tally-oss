@@ -16,20 +16,20 @@
 | light | palette.entry | 0.6283 |
 | light | palette.ask | 0.6312 |
 | light | palette.no-results | 0.6344 |
+| light | balance-sheet.detailed | 0.6379 |
 | light | keys.standard | 0.6380 |
-| light | balance-sheet.detailed | 0.6383 |
 | light | receipt.default | 0.6433 |
 | light | keys.classic | 0.6493 |
-| light | balance-sheet.default | 0.6522 |
 | light | palette.search | 0.6576 |
 | light | palette.default | 0.6588 |
 | light | payment.default | 0.6601 |
 | light | bank.brs | 0.6619 |
+| light | balance-sheet.default | 0.6789 |
 | light | masters.ledger-detail | 0.6840 |
-| light | day-book.default | 0.6890 |
 | light | palette.commands | 0.6899 |
 | light | masters.create-ledger | 0.7247 |
 | light | gst.recon-empty | 0.7339 |
+| light | day-book.default | 0.7453 |
 
 ## hc / home.default
 
@@ -175,6 +175,18 @@ SSIM 0.6344
 </tr>
 </table>
 
+## light / balance-sheet.detailed
+
+SSIM 0.6379
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/balance-sheet.detailed.webp" width="480" alt="mock light balance-sheet.detailed"></td>
+<td><img src="app-captures/light/balance-sheet.detailed.webp" width="480" alt="app light balance-sheet.detailed"></td>
+</tr>
+</table>
+
 ## light / keys.standard
 
 SSIM 0.6380
@@ -184,18 +196,6 @@ SSIM 0.6380
 <tr>
 <td><img src="mock-v2/captures/states/light/keys.standard.webp" width="480" alt="mock light keys.standard"></td>
 <td><img src="app-captures/light/keys.standard.webp" width="480" alt="app light keys.standard"></td>
-</tr>
-</table>
-
-## light / balance-sheet.detailed
-
-SSIM 0.6383
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/light/balance-sheet.detailed.webp" width="480" alt="mock light balance-sheet.detailed"></td>
-<td><img src="app-captures/light/balance-sheet.detailed.webp" width="480" alt="app light balance-sheet.detailed"></td>
 </tr>
 </table>
 
@@ -220,18 +220,6 @@ SSIM 0.6493
 <tr>
 <td><img src="mock-v2/captures/states/light/keys.classic.webp" width="480" alt="mock light keys.classic"></td>
 <td><img src="app-captures/light/keys.classic.webp" width="480" alt="app light keys.classic"></td>
-</tr>
-</table>
-
-## light / balance-sheet.default
-
-SSIM 0.6522
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/light/balance-sheet.default.webp" width="480" alt="mock light balance-sheet.default"></td>
-<td><img src="app-captures/light/balance-sheet.default.webp" width="480" alt="app light balance-sheet.default"></td>
 </tr>
 </table>
 
@@ -283,6 +271,18 @@ SSIM 0.6619
 </tr>
 </table>
 
+## light / balance-sheet.default
+
+SSIM 0.6789
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/balance-sheet.default.webp" width="480" alt="mock light balance-sheet.default"></td>
+<td><img src="app-captures/light/balance-sheet.default.webp" width="480" alt="app light balance-sheet.default"></td>
+</tr>
+</table>
+
 ## light / masters.ledger-detail
 
 SSIM 0.6840
@@ -292,18 +292,6 @@ SSIM 0.6840
 <tr>
 <td><img src="mock-v2/captures/states/light/masters.ledger-detail.webp" width="480" alt="mock light masters.ledger-detail"></td>
 <td><img src="app-captures/light/masters.ledger-detail.webp" width="480" alt="app light masters.ledger-detail"></td>
-</tr>
-</table>
-
-## light / day-book.default
-
-SSIM 0.6890
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/light/day-book.default.webp" width="480" alt="mock light day-book.default"></td>
-<td><img src="app-captures/light/day-book.default.webp" width="480" alt="app light day-book.default"></td>
 </tr>
 </table>
 
@@ -340,6 +328,18 @@ SSIM 0.7339
 <tr>
 <td><img src="mock-v2/captures/states/light/gst.recon-empty.webp" width="480" alt="mock light gst.recon-empty"></td>
 <td><img src="app-captures/light/gst.recon-empty.webp" width="480" alt="app light gst.recon-empty"></td>
+</tr>
+</table>
+
+## light / day-book.default
+
+SSIM 0.7453
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/day-book.default.webp" width="480" alt="mock light day-book.default"></td>
+<td><img src="app-captures/light/day-book.default.webp" width="480" alt="app light day-book.default"></td>
 </tr>
 </table>
 

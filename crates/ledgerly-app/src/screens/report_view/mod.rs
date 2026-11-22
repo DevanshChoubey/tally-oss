@@ -49,14 +49,12 @@ use ledgerly_core::{Outcome, Period};
 
 use crate::screen::KeyHint;
 use crate::screens::wire::{Done, Latest, unsupported_text};
-use crate::ui::badge::{BadgeKind, badge};
 use crate::ui::button::{ButtonKind, button};
 use crate::ui::note::{NoteKind, note};
 use crate::ui::page_head::page_head;
 use crate::ui::tabs::tabs;
 use crate::worker::ApiWorker;
 use crate::{AppCtx, Screen, ScreenAction};
-use balance::VerticalBalance;
 
 pub use model::{
     DrillTarget, ReportSource, ReportToken, ViewCell, ViewDetail, ViewError, ViewKey, ViewParams,
@@ -543,6 +541,14 @@ impl ReportViewScreen {
         ScreenAction::Stay
     }
 
+    /// What Alt+F1 and the button switch to: the other detail level.
+    fn detail_switch(&self) -> &'static str {
+        match self.report.params.detail {
+            ViewDetail::Condensed => "Detailed",
+            ViewDetail::Detailed => "Condensed",
+        }
+    }
+
     /// The layout this screen draws in.
     fn look(&self) -> Look {
         match self.worker.as_ref() {
@@ -555,10 +561,7 @@ impl ReportViewScreen {
     fn draw_head(&mut self, ui: &mut Ui, look: Look) {
         let title = self.page_title();
         let subtitle = self.subtitle();
-        let detail_switch = match self.report.params.detail {
-            ViewDetail::Condensed => "Detailed",
-            ViewDetail::Detailed => "Condensed",
-        };
+        let detail_switch = self.detail_switch();
         let mut toggle = false;
         page_head(ui, &title, subtitle.as_deref(), |ui| {
             if look == Look::BalanceSheet {
@@ -615,31 +618,42 @@ impl ReportViewScreen {
         } else {
             None
         };
-        // The footnote is a bottom panel added before the table, so the table takes the space
-        // left above it and the footnote stays inside the screen, above the key bar (B7).
-        let footer = egui::Panel::bottom("u7-footer")
-            .show(ui, |ui| self.draw_footer(ui, look, balance.as_ref()))
-            .response
-            .rect;
-        self.footer = Some(footer);
-
         let (selected, scroll) = (self.selected, self.scroll_pending);
-        let empty_day = look == Look::DayBook && self.report.rows.is_empty();
-        let events = egui::CentralPanel::default()
-            .show(ui, |ui| {
-                if empty_day {
-                    let title = day_book::empty_title(self.report.params.period);
-                    crate::ui::empty::empty_state(ui, &title, day_book::EMPTY_SENTENCE, None);
-                    TableEvents::default()
-                } else if let Some(b) = &balance {
+        let events = if let Some(b) = &balance {
+            // The balance sheet draws its own card with the check and the notes pinned under the
+            // statement (B7 holds inside the card).
+            let (events, foot) = egui::CentralPanel::default()
+                .frame(egui::Frame::NONE)
+                .show(ui, |ui| {
                     balance::draw(ui, &self.report, b, selected, scroll)
-                } else if let Some(cols) = day_cols {
-                    day_book::draw(ui, &self.report, cols, selected, scroll)
-                } else {
-                    self.draw_table(ui)
-                }
-            })
-            .inner;
+                })
+                .inner;
+            self.footer = Some(foot);
+            events
+        } else {
+            // The footnote is a bottom panel added before the table, so the table takes the
+            // space left above it and the footnote stays inside the screen, above the key bar
+            // (B7).
+            let footer = egui::Panel::bottom("u7-footer")
+                .show(ui, |ui| self.draw_footer(ui, look))
+                .response
+                .rect;
+            self.footer = Some(footer);
+            let empty_day = look == Look::DayBook && self.report.rows.is_empty();
+            egui::CentralPanel::default()
+                .show(ui, |ui| {
+                    if empty_day {
+                        let title = day_book::empty_title(self.report.params.period);
+                        crate::ui::empty::empty_state(ui, &title, day_book::EMPTY_SENTENCE, None);
+                        TableEvents::default()
+                    } else if let Some(cols) = day_cols {
+                        day_book::draw(ui, &self.report, cols, selected, scroll)
+                    } else {
+                        self.draw_table(ui)
+                    }
+                })
+                .inner
+        };
         self.scroll_pending = false;
         if let Some(i) = events.clicked {
             self.selected = i.min(self.last_row());
@@ -656,20 +670,9 @@ impl ReportViewScreen {
         action
     }
 
-    /// The footnote: a balance check for the balance sheet, the report's notes, and what the day
-    /// book does not show yet.
-    fn draw_footer(&self, ui: &mut Ui, look: Look, balance: Option<&VerticalBalance>) {
-        if let Some(b) = balance {
-            match balance::sides_agree(b) {
-                Some(true) => {
-                    badge(ui, BadgeKind::Ok, "Both sides agree");
-                }
-                Some(false) => {
-                    badge(ui, BadgeKind::Bad, "Sides differ");
-                }
-                None => {}
-            }
-        }
+    /// The footnote under a table: the report's notes, and what the day book does not show yet.
+    /// The balance sheet draws its own (see [`balance::draw`]).
+    fn draw_footer(&self, ui: &mut Ui, look: Look) {
         for line in &self.report.notes {
             ui.label(line.as_str());
         }
@@ -829,6 +832,9 @@ fn read_keys(ctx: &Context, editing: bool) -> Vec<KeyCmd> {
             (Modifiers::NONE, Key::Enter, KeyCmd::Open),
             (Modifiers::NONE, Key::ArrowUp, KeyCmd::Up),
             (Modifiers::NONE, Key::ArrowDown, KeyCmd::Down),
+            // index.html:1634 and 1656: "J / K" Move.
+            (Modifiers::NONE, Key::J, KeyCmd::Down),
+            (Modifiers::NONE, Key::K, KeyCmd::Up),
             (Modifiers::NONE, Key::PageUp, KeyCmd::PageUp),
             (Modifiers::NONE, Key::PageDown, KeyCmd::PageDown),
             (Modifiers::NONE, Key::Home, KeyCmd::First),
@@ -845,7 +851,12 @@ fn read_keys(ctx: &Context, editing: bool) -> Vec<KeyCmd> {
 
 impl Screen for ReportViewScreen {
     fn title(&self) -> String {
-        self.report.title.clone()
+        // The crumb uses the page title's wording for the screens drawn to the mock
+        // (index.html:1572: "Balance sheet").
+        match self.look() {
+            Look::BalanceSheet | Look::DayBook => self.page_title(),
+            Look::Generic => self.report.title.clone(),
+        }
     }
 
     fn page_title(&self) -> String {
@@ -864,10 +875,7 @@ impl Screen for ReportViewScreen {
                     .worker
                     .as_ref()
                     .map_or(period.to(), |run| run.engine.as_of);
-                Some(format!(
-                    "As at {} · Enter opens a row, Esc goes back up",
-                    crate::ui::format::date(as_of)
-                ))
+                Some(balance::subtitle(as_of))
             }
             Look::DayBook => Some(day_book::subtitle(period)),
             Look::Generic => Some(format!(
@@ -881,14 +889,14 @@ impl Screen for ReportViewScreen {
     fn keys(&self) -> Vec<KeyHint> {
         match self.look() {
             Look::BalanceSheet => vec![
-                KeyHint::new("Up / Down", "Move"),
+                KeyHint::new("J / K", "Move"),
                 KeyHint::new("Enter", "Drill in"),
                 KeyHint::new("Esc", "Back up"),
-                KeyHint::new("Alt+F1", "Detailed or condensed"),
+                KeyHint::new("Alt+F1", self.detail_switch()),
                 KeyHint::new("F2", "Period"),
             ],
             Look::DayBook => vec![
-                KeyHint::new("Up / Down", "Move"),
+                KeyHint::new("J / K", "Move"),
                 KeyHint::new("Enter", "Open voucher"),
                 KeyHint::new("F2", "Period"),
                 KeyHint::new("Esc", "Back"),
