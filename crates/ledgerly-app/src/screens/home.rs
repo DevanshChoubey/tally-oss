@@ -12,8 +12,10 @@
 //! What the screen shows, from the mock's home (`design/mock-v2/index.html`, `SCREENS.home`, lines
 //! 1041 to 1078; the light capture is `design/mock-v2/captures/states/light/home.default.webp`):
 //!
-//! * a page head with "Day book" (D) and "New sale" (F8) on the right. The title is "Home": the
-//!   mock's greeting needs a user name, which the app does not have yet.
+//! * a page head with "Day book" and "New sale" (F8) on the right. Once drawn, the title is the
+//!   mock's greeting without the user's name ([`greeting`], the user's decision of 2026-11-23)
+//!   and the line under it names today, the financial year and the lock ([`date_line`]). Before
+//!   the first frame it is "Home"; the key bar always says "Home".
 //! * the KPI row: "Cash in hand", "Bank accounts", "Receivables", "Payables" and "GST cash
 //!   payable". Each figure is an [`Outcome<Paise>`] from a report output. The screen never sums anything (rule C4), and a
 //!   figure the engine cannot give shows "Not supported yet" with its reason (rule A1).
@@ -251,6 +253,32 @@ pub fn figure_parts(value_text: &str) -> (Option<&str>, &str) {
         Some(rest) => (Some("\u{20B9}"), rest),
         None => (None, value_text),
     }
+}
+
+/// The greeting for `hour` (0 to 23): "Good morning" from 05:00, "Good afternoon" from 12:00,
+/// "Good evening" from 17:00 until 05:00.
+#[must_use]
+pub fn greeting(hour: u8) -> &'static str {
+    match hour {
+        5..=11 => "Good morning",
+        12..=16 => "Good afternoon",
+        _ => "Good evening",
+    }
+}
+
+/// The line under the greeting: today with its weekday, then the financial year and the lock
+/// when known, joined by middle dots (`Saturday 21 Nov 2026 · FY 2026-27 · books locked to 31 Oct
+/// 2026`).
+#[must_use]
+pub fn date_line(today: Date, fy: Option<&str>, lock: Option<Date>) -> String {
+    let mut parts = vec![crate::ui::format::long_date(today)];
+    if let Some(fy) = fy {
+        parts.push(fy.to_owned());
+    }
+    if let Some(lock) = lock {
+        parts.push(format!("books locked to {}", crate::ui::format::date(lock)));
+    }
+    parts.join(" \u{b7} ")
 }
 
 /// Which body of the home screen is drawn.
@@ -559,6 +587,8 @@ pub struct HomeScreen {
     notice: Option<String>,
     /// Where each KPI tile was drawn in the last frame, in order. Empty when no tile was drawn.
     tile_rects: Vec<Rect>,
+    /// The greeting and the date line, set from the clock and the books on each frame.
+    head: Option<(&'static str, String)>,
 }
 
 impl HomeScreen {
@@ -572,6 +602,7 @@ impl HomeScreen {
             latest: Latest::default(),
             notice: None,
             tile_rects: Vec::new(),
+            head: None,
         }
     }
 
@@ -686,11 +717,21 @@ impl Screen for HomeScreen {
     }
 
     fn page_title(&self) -> String {
+        self.head
+            .as_ref()
+            .map_or(PAGE_TITLE, |(greet, _)| greet)
+            .to_owned()
+    }
+
+    fn key_bar_name(&self) -> String {
         PAGE_TITLE.to_owned()
     }
 
     fn subtitle(&self) -> Option<String> {
-        let line = sub_line(&self.data.company_name, &self.data.subtitle);
+        let line = match &self.head {
+            Some((_, line)) => line.clone(),
+            None => sub_line(&self.data.company_name, &self.data.subtitle),
+        };
         (!line.is_empty()).then_some(line)
     }
 
@@ -713,6 +754,25 @@ impl Screen for HomeScreen {
             .filter(|books| books.vouchers.is_empty())
             .map(|books| books.company.books_begin);
         let shown = body(new_company, self.is_loading(), !self.data.kpis.is_empty());
+        let fy = ctx.books.as_ref().map(|books| {
+            format!(
+                "FY {}",
+                ledgerly_core::FinancialYear {
+                    start: books.company.fy_start
+                }
+                .label()
+            )
+        });
+        self.head = Some((
+            greeting(crate::shell::navigate::hour_now()),
+            date_line(
+                crate::shell::navigate::today(),
+                fy.as_deref(),
+                ctx.lock_date,
+            ),
+        ));
+        let title = self.page_title();
+        let line = self.subtitle().unwrap_or_default();
         let ai = ai_panel(ctx.ai_tier);
         let tiles = self.tile_items();
         let mut chosen = None;
@@ -722,7 +782,8 @@ impl Screen for HomeScreen {
                 ui,
                 shown,
                 &self.data.company_name,
-                &self.data.subtitle,
+                &title,
+                &line,
                 &mut chosen,
             );
             draw::notice(ui, self.notice.as_deref());

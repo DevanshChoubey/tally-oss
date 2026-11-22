@@ -4,17 +4,17 @@
 
 | Theme | State | SSIM |
 | --- | --- | --- |
-| hc | home.default | 0.4614 |
+| hc | home.default | 0.3856 |
 | light | palette.entry | 0.4866 |
 | light | palette.ask | 0.4882 |
 | light | palette.voucher | 0.4918 |
 | light | palette.no-results | 0.4959 |
 | light | palette.search | 0.5113 |
+| dark | home.default | 0.5420 |
 | light | palette.commands | 0.5426 |
 | light | sales-invoice.default | 0.5438 |
 | light | palette.default | 0.5505 |
-| dark | home.default | 0.5724 |
-| light | home.default | 0.5831 |
+| light | home.default | 0.5837 |
 | light | gst.gstr3b | 0.5879 |
 | light | masters.ledgers | 0.6005 |
 | light | gst.gstr1 | 0.6027 |
@@ -33,7 +33,7 @@
 
 ## hc / home.default
 
-SSIM 0.4614
+SSIM 0.3856
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -103,6 +103,18 @@ SSIM 0.5113
 </tr>
 </table>
 
+## dark / home.default
+
+SSIM 0.5420
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/dark/home.default.webp" width="480" alt="mock dark home.default"></td>
+<td><img src="app-captures/dark/home.default.webp" width="480" alt="app dark home.default"></td>
+</tr>
+</table>
+
 ## light / palette.commands
 
 SSIM 0.5426
@@ -139,21 +151,9 @@ SSIM 0.5505
 </tr>
 </table>
 
-## dark / home.default
-
-SSIM 0.5724
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/dark/home.default.webp" width="480" alt="mock dark home.default"></td>
-<td><img src="app-captures/dark/home.default.webp" width="480" alt="app dark home.default"></td>
-</tr>
-</table>
-
 ## light / home.default
 
-SSIM 0.5831
+SSIM 0.5837
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>

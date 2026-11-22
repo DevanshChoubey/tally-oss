@@ -11,7 +11,7 @@
 use egui::{Pos2, RawInput, Rect, Vec2};
 use ledgerly_app::screens::home::{
     AiPanel, AttentionItem, AttentionKind, HomeBody, HomeData, HomeScreen, HomeTarget, Kpi,
-    ai_panel, body, panel_row_is_wide, sub_line, tile_columns,
+    ai_panel, body, date_line, greeting, panel_row_is_wide, sub_line, tile_columns,
 };
 use ledgerly_app::shell::AiTier;
 use ledgerly_app::{AppCtx, Screen};
@@ -289,9 +289,10 @@ fn an_ai_off_company_still_draws_its_figures() {
 
 #[test]
 fn the_page_title_is_home_and_the_company_line_joins_name_and_subtitle() {
-    // provenance: derived. The page title is "Home" because the mock's greeting needs a user name
-    // the app does not have. The company line joins the name and the subtitle with a middle dot,
-    // as the mock's sub-line does ("Saturday 21 Nov 2026 · FY 2026-27", index.html line 1054).
+    // provenance: derived. Before its first frame (no clock or books read yet) the page title is
+    // "Home" and the company line joins the name and the subtitle with a middle dot, as the mock's
+    // sub-line does ("Saturday 21 Nov 2026 · FY 2026-27", index.html line 1054). After a frame
+    // the title is the greeting (see `after_a_frame_home_greets_and_the_key_bar_still_says_home`).
     let screen = HomeScreen::new(four_tiles());
     assert_eq!(screen.page_title(), "Home");
     assert_eq!(
@@ -345,5 +346,75 @@ fn attention_items_keep_their_words_and_targets() {
         Some(HomeTarget::GstReturns {
             tab: "gstr1".to_owned()
         })
+    );
+}
+
+// ---- greeting and date line (user decision 2026-11-23: the mock's greeting, no name) ---------
+
+#[test]
+fn the_greeting_follows_the_hour() {
+    // provenance: derived. The mock greets "Good afternoon" (index.html line 1059) and names the
+    // user; the user chose the greeting without a name on 2026-11-23. The hour bands are ours:
+    // morning from 05:00, afternoon from 12:00, evening from 17:00 until 05:00. Catches a
+    // greeting that ignores the clock or has a gap between bands.
+    assert_eq!(greeting(5), "Good morning");
+    assert_eq!(greeting(11), "Good morning");
+    assert_eq!(greeting(12), "Good afternoon");
+    assert_eq!(greeting(16), "Good afternoon");
+    assert_eq!(greeting(17), "Good evening");
+    assert_eq!(greeting(23), "Good evening");
+    assert_eq!(greeting(0), "Good evening");
+    assert_eq!(greeting(4), "Good evening");
+}
+
+#[test]
+fn the_date_line_reads_like_the_mocks() {
+    // provenance: derived from the mock's line, "Saturday 21 Nov 2026 · FY 2026-27 · books
+    // locked to 31 Oct 2026" (index.html line 1059); 21 Nov 2026 is a Saturday by the calendar.
+    // A part that is not known is left out, never invented.
+    assert_eq!(
+        date_line(
+            date!(2026 - 11 - 21),
+            Some("FY 2026-27"),
+            Some(date!(2026 - 10 - 31))
+        ),
+        "Saturday 21 Nov 2026 \u{b7} FY 2026-27 \u{b7} books locked to 31 Oct 2026"
+    );
+    assert_eq!(
+        date_line(date!(2026 - 11 - 23), Some("FY 2026-27"), None),
+        "Monday 23 Nov 2026 \u{b7} FY 2026-27"
+    );
+    assert_eq!(
+        date_line(date!(2026 - 04 - 10), None, None),
+        "Friday 10 Apr 2026"
+    );
+}
+
+#[test]
+fn after_a_frame_home_greets_and_the_key_bar_still_says_home() {
+    // provenance: derived. Once drawn with the clock and books, the page title is a greeting and
+    // the line under it names today, the financial year and the lock; the key bar's name stays
+    // "Home", as the mock's key bar does (`keys` of `SCREENS.home`, index.html line 1081).
+    let ctx = egui::Context::default();
+    let mut screen = HomeScreen::new(four_tiles());
+    let mut app = AppCtx {
+        books: Some(books_without_vouchers()),
+        lock_date: Some(date!(2026 - 03 - 31)),
+        ..AppCtx::default()
+    };
+    let out = ctx.run_ui(RawInput::default(), |ui| {
+        screen.ui(ui, &mut app);
+    });
+    out.drop_without_applying_deltas();
+    assert!(
+        screen.page_title().starts_with("Good "),
+        "title {}",
+        screen.page_title()
+    );
+    assert_eq!(screen.key_bar_name(), "Home");
+    let line = screen.subtitle().unwrap_or_default();
+    assert!(
+        line.ends_with("\u{b7} FY 2026-27 \u{b7} books locked to 31 Mar 2026"),
+        "line {line}"
     );
 }

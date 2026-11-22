@@ -416,6 +416,16 @@ pub fn today() -> Date {
     }
 }
 
+/// The hour of the day now, 0 to 23, on India Standard Time (UTC+05:30), as [`today`] dates it.
+#[must_use]
+pub fn hour_now() -> u8 {
+    let now = time::OffsetDateTime::now_utc();
+    match time::UtcOffset::from_hms(5, 30, 0) {
+        Ok(india) => now.to_offset(india).hour(),
+        Err(_) => now.hour(),
+    }
+}
+
 /// The calendar month of `date`, as a period from its first day to its last.
 ///
 /// # Errors

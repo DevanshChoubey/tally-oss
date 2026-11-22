@@ -42,6 +42,8 @@ const CHART_UNSUPPORTED: &str =
     "Not supported yet. The engine gives no monthly sales figures, so no bars are drawn.";
 /// Placeholder for the nudges until their rules exist.
 const NUDGES_PLACEHOLDER: &str = "Nudges are not built yet. Due dates and possible duplicate entries will be listed here, each with the rule that raised it.";
+/// The page title of a company with no vouchers (`home.empty`).
+const NEW_COMPANY_TITLE: &str = "Welcome to your new company";
 /// Shown when no company is open.
 const NO_FIGURES_TEXT: &str = "No figures yet. Open a company to see them.";
 /// Under the welcome card, as the mock's empty state says (`home.empty`, `index.html` line 1054).
@@ -58,17 +60,25 @@ pub(super) fn header(
     ui: &mut Ui,
     shown: HomeBody,
     company: &str,
-    subtitle: &str,
+    title: &str,
+    date_line: &str,
     chosen: &mut Option<HomeTarget>,
 ) {
     let line = match shown {
         HomeBody::Loading => LOADING_LINE.to_owned(),
         HomeBody::NewCompany { .. } => company.to_owned(),
-        HomeBody::Figures | HomeBody::NoFigures => super::sub_line(company, subtitle),
+        HomeBody::Figures | HomeBody::NoFigures => date_line.to_owned(),
+    };
+    // The mock's loading and empty states have their own titles (`home.loading`: "Opening
+    // <company>", `home.empty`: "Welcome to your new company", index.html lines 1043, 1046).
+    let title = match shown {
+        HomeBody::Loading if !company.is_empty() => format!("Opening {company}"),
+        HomeBody::NewCompany { .. } => NEW_COMPANY_TITLE.to_owned(),
+        HomeBody::Loading | HomeBody::Figures | HomeBody::NoFigures => title.to_owned(),
     };
     let sub = (!line.is_empty()).then_some(line.as_str());
     let with_actions = shown == HomeBody::Figures;
-    page_head(ui, super::PAGE_TITLE, sub, |ui| {
+    page_head(ui, &title, sub, |ui| {
         if !with_actions {
             return;
         }

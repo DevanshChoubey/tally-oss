@@ -277,6 +277,10 @@ impl Screen for GatewayScreen {
         self.home.page_title()
     }
 
+    fn key_bar_name(&self) -> String {
+        self.home.key_bar_name()
+    }
+
     fn subtitle(&self) -> Option<String> {
         self.home.subtitle()
     }

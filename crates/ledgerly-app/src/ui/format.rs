@@ -9,6 +9,7 @@
 //! convert or add.
 
 use ledgerly_core::{Date, Month, Paise};
+use time::Weekday;
 
 /// An amount in paise as rupees and paise with Indian grouping: `1,00,000.00`, `12,34,567.89`,
 /// `-50.25`, `0.00`. The sign is a leading `-` for negative amounts.
@@ -37,6 +38,21 @@ fn group_indian(rupees: u64) -> String {
 #[must_use]
 pub fn date(d: Date) -> String {
     format!("{} {} {}", d.day(), month_abbrev(d.month()), d.year())
+}
+
+/// `d` with its weekday in full, as the mock's Home line writes it: `Saturday 21 Nov 2026`.
+#[must_use]
+pub fn long_date(d: Date) -> String {
+    let day = match d.weekday() {
+        Weekday::Monday => "Monday",
+        Weekday::Tuesday => "Tuesday",
+        Weekday::Wednesday => "Wednesday",
+        Weekday::Thursday => "Thursday",
+        Weekday::Friday => "Friday",
+        Weekday::Saturday => "Saturday",
+        Weekday::Sunday => "Sunday",
+    };
+    format!("{day} {}", date(d))
 }
 
 /// The three-letter English abbreviation of `m`.

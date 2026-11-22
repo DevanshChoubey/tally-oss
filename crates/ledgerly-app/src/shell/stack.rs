@@ -156,6 +156,12 @@ impl ScreenStack {
         self.screens.last().map_or_default(|s| s.page_title())
     }
 
+    /// The key bar name of the top screen ([`Screen::key_bar_name`]), or empty with no screen.
+    #[must_use]
+    pub fn top_key_bar_name(&self) -> String {
+        self.screens.last().map_or_default(|s| s.key_bar_name())
+    }
+
     /// The top screen, which is the one drawn.
     pub fn top_mut(&mut self) -> Option<&mut Box<dyn Screen>> {
         self.screens.last_mut()

@@ -462,7 +462,7 @@ impl Shell {
         let context = self
             .tabs
             .active_stack()
-            .map_or_default(ScreenStack::top_page_title);
+            .map_or_default(ScreenStack::top_key_bar_name);
         let rail = self.rail;
         let selected = self.selected_sidebar();
 

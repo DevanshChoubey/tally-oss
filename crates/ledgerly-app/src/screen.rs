@@ -44,6 +44,12 @@ pub trait Screen {
         self.title()
     }
 
+    /// The screen's name at the left of the key bar (`.keys .ctx` in the mock). Defaults to
+    /// [`Screen::page_title`]; Home, whose page title is a greeting, says "Home".
+    fn key_bar_name(&self) -> String {
+        self.page_title()
+    }
+
     /// The one-line purpose under the page title, when the screen has one. Defaults to none.
     fn subtitle(&self) -> Option<String> {
         None
