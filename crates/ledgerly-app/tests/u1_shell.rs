@@ -6,7 +6,7 @@
 #![allow(clippy::unwrap_used, reason = "test code: rule B2 lets tests unwrap")]
 
 use egui::{Event, Key, Modifiers, RawInput};
-use ledgerly_app::shell::chrome::key_hints;
+use ledgerly_app::shell::chrome::{KEY_BAR_RIGHT, key_hints};
 use ledgerly_app::shell::topbar::{ai_chip, company_chip, date_chip, lock_chip};
 use ledgerly_app::shell::{AiTier, KeyHint, ScreenStack, Shell, StackChange, Tabs};
 use ledgerly_app::theme::{self, ThemeKind};
@@ -389,7 +389,11 @@ fn the_chips_say_not_known_when_the_data_is_missing() {
     assert_eq!(ai_chip(None), "AI: not set up");
     assert_eq!(lock_chip(None), None, "no lock date means no lock chip");
     assert_eq!(ai_chip(Some(AiTier::Local)), "AI on this computer");
-    assert_eq!(date_chip(date!(2026 - 11 - 21)), "21 Nov 2026");
+    // provenance: derived from the mock, `design/mock-v2/index.html:898`, which reads
+    // "Sat, 21 Nov 2026" (spec change 2026-11-22: the user asked for the app to match the mock;
+    // 21 Nov 2026 is a Saturday by the calendar).
+    assert_eq!(date_chip(date!(2026 - 11 - 21)), "Sat, 21 Nov 2026");
+    assert_eq!(date_chip(date!(2026 - 04 - 10)), "Fri, 10 Apr 2026");
     assert_eq!(
         lock_chip(Some(date!(2026 - 03 - 31)))
             .unwrap_or_default()
@@ -400,25 +404,27 @@ fn the_chips_say_not_known_when_the_data_is_missing() {
 
 #[test]
 fn the_key_bar_shows_the_screen_keys_before_the_shells_own() {
-    // provenance: derived. The key bar lists the screen's keys first, then Esc (only when the stack
-    // can go back) and the shell's four keys. Catches a key bar that ignores the screen's keys,
-    // or lists Esc on a root screen.
+    // provenance: derived from the mock, `design/mock-v2/index.html:910-914` (`renderKeys`): the
+    // bar lists the screen's keys, then Esc when the stack can go back; Ctrl+K and `?` sit at the
+    // right end. Spec change 2026-11-22 (the user asked for the app to match the mock): the
+    // tab and sidebar keys moved to the keyboard map. Catches a key bar that ignores the screen's
+    // keys, lists Esc on a root screen, or repeats the right-end keys in the list.
     let screen = [KeyHint::new("Ctrl+A", "Save")];
     assert_eq!(
         key_hints(&screen, true),
         vec![
             ("Ctrl+A".to_owned(), "Save".to_owned()),
             ("Esc".to_owned(), "Back".to_owned()),
-            ("Ctrl+K".to_owned(), "Search".to_owned()),
-            ("Ctrl+T".to_owned(), "New tab".to_owned()),
-            ("Ctrl+W".to_owned(), "Close tab".to_owned()),
-            ("Ctrl+\\".to_owned(), "Sidebar".to_owned()),
         ]
     );
     assert_eq!(
-        key_hints(&[], false).first(),
-        Some(&("Ctrl+K".to_owned(), "Search".to_owned())),
-        "a root screen with no keys starts with the shell's keys"
+        key_hints(&[], false),
+        Vec::<(String, String)>::new(),
+        "a root screen with no keys lists nothing; the right end still offers Ctrl+K and ?"
+    );
+    assert_eq!(
+        KEY_BAR_RIGHT,
+        [("Ctrl+K", "anything \u{00B7}"), ("?", "all keys")]
     );
 }
 

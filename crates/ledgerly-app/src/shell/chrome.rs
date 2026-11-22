@@ -8,8 +8,9 @@ use egui::{RichText, Ui};
 
 use super::stack::Tabs;
 use crate::screen::KeyHint;
-use crate::theme::{SPACE_3, TEXT_META, Tokens};
-use crate::ui::{keycap, tabs};
+use crate::theme::{TEXT_META, Tokens};
+use crate::ui::icon::{self, Icon};
+use crate::ui::{bold_font, keycap, tabs};
 
 /// What the user asked for in the chrome this frame.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -68,27 +69,34 @@ pub(super) fn tab_strip(ui: &mut Ui, tabs_set: &Tabs) -> Vec<ChromeCmd> {
     cmds
 }
 
-/// Breadcrumb trail for the active tab. Earlier crumbs go back to that screen when clicked.
+/// Breadcrumb trail for the active tab (`.crumbs`: meta size, `text-3`, earlier crumbs in
+/// `text-2` with a chevron after each, 6 points below). Earlier crumbs go back to that screen
+/// when clicked.
 pub(super) fn breadcrumbs(ui: &mut Ui, trail: &[String], t: &Tokens) -> Vec<ChromeCmd> {
     let mut cmds = Vec::new();
     ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 6.0;
         let last = trail.len().saturating_sub(1);
         for (i, title) in trail.iter().enumerate() {
             if i == last {
-                ui.label(RichText::new(title).strong().color(t.text));
+                ui.label(RichText::new(title).size(TEXT_META).color(t.text_3));
             } else {
-                if ui.link(title).clicked() {
+                let crumb = egui::Label::new(RichText::new(title).size(TEXT_META).color(t.text_2))
+                    .sense(egui::Sense::click());
+                if ui.add(crumb).clicked() {
                     cmds.push(ChromeCmd::PopTo(i.saturating_add(1)));
                 }
-                ui.label(RichText::new("\u{203A}").color(t.text_3));
+                icon::icon(ui, Icon::Chev, t.text_3);
             }
         }
     });
+    ui.add_space(6.0);
     cmds
 }
 
-/// The key bar's entries, as `(keys, what it does)` pairs: the screen's own hints first, then
-/// Esc (only when the stack can go back), Ctrl+K, Ctrl+T, Ctrl+W and Ctrl+\.
+/// The key bar's entries, as `(keys, what it does)` pairs: the screen's own hints, then Esc when
+/// the stack can go back. Ctrl+K and `?` sit at the right of the bar ([`KEY_BAR_RIGHT`]), as the
+/// mock's `renderKeys` draws them; the tab and sidebar keys are in the keyboard map.
 #[must_use]
 pub fn key_hints(screen: &[KeyHint], can_go_back: bool) -> Vec<(String, String)> {
     let mut out: Vec<(String, String)> = screen
@@ -98,16 +106,31 @@ pub fn key_hints(screen: &[KeyHint], can_go_back: bool) -> Vec<(String, String)>
     if can_go_back {
         out.push(("Esc".to_owned(), "Back".to_owned()));
     }
-    out.push(("Ctrl+K".to_owned(), "Search".to_owned()));
-    out.push(("Ctrl+T".to_owned(), "New tab".to_owned()));
-    out.push(("Ctrl+W".to_owned(), "Close tab".to_owned()));
-    out.push(("Ctrl+\\".to_owned(), "Sidebar".to_owned()));
     out
 }
 
-/// Draws the key bar's entries from [`key_hints`]: a keycap, then its words.
-pub(super) fn key_bar(ui: &mut Ui, hints: &[(String, String)], t: &Tokens) {
-    ui.horizontal(|ui| {
+/// The right end of the key bar: each keycap and the words after it (`.keys .right`).
+pub const KEY_BAR_RIGHT: [(&str, &str); 2] = [("Ctrl+K", "anything \u{00B7}"), ("?", "all keys")];
+
+/// Gap between key bar entries, in points (`.keys{gap:14px}`).
+const ENTRY_GAP: f32 = 14.0;
+/// Gap between a keycap and its words (`.keys span{gap:5px}`).
+const KEY_GAP: f32 = 5.0;
+
+/// Draws the key bar: the screen's name in bold (`.keys .ctx`), its entries from [`key_hints`]
+/// (a keycap, then its words), and [`KEY_BAR_RIGHT`] at the right in `text-3`.
+pub(super) fn key_bar(ui: &mut Ui, context: &str, hints: &[(String, String)], t: &Tokens) {
+    ui.spacing_mut().item_spacing.x = KEY_GAP;
+    ui.horizontal_centered(|ui| {
+        ui.spacing_mut().item_spacing.x = KEY_GAP;
+        if !context.is_empty() {
+            ui.label(
+                RichText::new(context)
+                    .font(bold_font(ui, TEXT_META))
+                    .color(t.text),
+            );
+            ui.add_space(ENTRY_GAP - KEY_GAP);
+        }
         for (keys, label) in hints {
             keycap::keycap(ui, keys);
             ui.label(
@@ -115,7 +138,14 @@ pub(super) fn key_bar(ui: &mut Ui, hints: &[(String, String)], t: &Tokens) {
                     .size(TEXT_META)
                     .color(t.text_2),
             );
-            ui.add_space(SPACE_3);
+            ui.add_space(ENTRY_GAP - KEY_GAP);
         }
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            ui.spacing_mut().item_spacing.x = KEY_GAP;
+            for (keys, label) in KEY_BAR_RIGHT.iter().rev() {
+                ui.label(RichText::new(*label).size(TEXT_META).color(t.text_3));
+                keycap::keycap(ui, keys);
+            }
+        });
     });
 }

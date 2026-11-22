@@ -11,18 +11,18 @@
 | light | palette.no-results | 0.4959 |
 | dark | home.default | 0.5014 |
 | light | palette.search | 0.5113 |
-| light | home.default | 0.5199 |
 | light | palette.commands | 0.5426 |
 | light | sales-invoice.default | 0.5438 |
 | light | palette.default | 0.5505 |
+| light | home.default | 0.5702 |
 | light | gst.gstr3b | 0.5879 |
 | light | keys.standard | 0.5899 |
-| light | keys.classic | 0.5915 |
 | light | masters.ledgers | 0.6005 |
 | light | gst.gstr1 | 0.6027 |
 | light | bank.default | 0.6271 |
 | light | balance-sheet.detailed | 0.6383 |
 | light | receipt.default | 0.6433 |
+| light | keys.classic | 0.6482 |
 | light | balance-sheet.default | 0.6522 |
 | light | payment.default | 0.6601 |
 | light | bank.brs | 0.6619 |
@@ -115,18 +115,6 @@ SSIM 0.5113
 </tr>
 </table>
 
-## light / home.default
-
-SSIM 0.5199
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/light/home.default.webp" width="480" alt="mock light home.default"></td>
-<td><img src="app-captures/light/home.default.webp" width="480" alt="app light home.default"></td>
-</tr>
-</table>
-
 ## light / palette.commands
 
 SSIM 0.5426
@@ -163,6 +151,18 @@ SSIM 0.5505
 </tr>
 </table>
 
+## light / home.default
+
+SSIM 0.5702
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/home.default.webp" width="480" alt="mock light home.default"></td>
+<td><img src="app-captures/light/home.default.webp" width="480" alt="app light home.default"></td>
+</tr>
+</table>
+
 ## light / gst.gstr3b
 
 SSIM 0.5879
@@ -184,18 +184,6 @@ SSIM 0.5899
 <tr>
 <td><img src="mock-v2/captures/states/light/keys.standard.webp" width="480" alt="mock light keys.standard"></td>
 <td><img src="app-captures/light/keys.standard.webp" width="480" alt="app light keys.standard"></td>
-</tr>
-</table>
-
-## light / keys.classic
-
-SSIM 0.5915
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/light/keys.classic.webp" width="480" alt="mock light keys.classic"></td>
-<td><img src="app-captures/light/keys.classic.webp" width="480" alt="app light keys.classic"></td>
 </tr>
 </table>
 
@@ -256,6 +244,18 @@ SSIM 0.6433
 <tr>
 <td><img src="mock-v2/captures/states/light/receipt.default.webp" width="480" alt="mock light receipt.default"></td>
 <td><img src="app-captures/light/receipt.default.webp" width="480" alt="app light receipt.default"></td>
+</tr>
+</table>
+
+## light / keys.classic
+
+SSIM 0.6482
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/keys.classic.webp" width="480" alt="mock light keys.classic"></td>
+<td><img src="app-captures/light/keys.classic.webp" width="480" alt="app light keys.classic"></td>
 </tr>
 </table>
 

@@ -404,6 +404,38 @@ impl Shell {
         &mut self.app_ctx
     }
 
+    /// Draws the stage (`#stage{padding:18px 24px 40px}` on the `--bg` paper): the tab strip
+    /// once a second tab is open, breadcrumbs below the root, then the top screen, whose action
+    /// is applied to its stack.
+    fn stage(&mut self, ui: &mut egui::Ui, trail: &[String], t: &Tokens) -> Vec<ChromeCmd> {
+        let mut cmds = Vec::new();
+        let mut screen_action = ScreenAction::Stay;
+        let stage = egui::Frame::NONE.fill(t.bg).inner_margin(egui::Margin {
+            left: 24,
+            right: 24,
+            top: 18,
+            bottom: 0,
+        });
+        egui::CentralPanel::default().frame(stage).show(ui, |ui| {
+            // The mock has one page and no tab strip.
+            if self.tabs.len() > 1 {
+                cmds.extend(chrome::tab_strip(ui, &self.tabs));
+            }
+            // The root screen has no breadcrumbs (`phead(null, ..)` on Home in the mock).
+            if trail.len() > 1 {
+                cmds.extend(chrome::breadcrumbs(ui, trail, t));
+            }
+            let top = self.tabs.active_stack_mut().and_then(ScreenStack::top_mut);
+            if let Some(screen) = top {
+                screen_action = screen.ui(ui, &mut self.app_ctx);
+            }
+        });
+        if let Some(stack) = self.tabs.active_stack_mut() {
+            stack.apply(screen_action);
+        }
+        cmds
+    }
+
     /// Draws one frame into `ui`: the top bar, the key bar, the sidebar, the tab strip and
     /// breadcrumbs, the palette, the top screen of the active tab, then key handling.
     pub fn show(&mut self, ui: &mut egui::Ui) {
@@ -427,6 +459,10 @@ impl Shell {
             .and_then(ScreenStack::top_mut)
             .map_or_default(|screen| screen.keys());
         let hints = chrome::key_hints(&keys, can_go_back);
+        let context = self
+            .tabs
+            .active_stack()
+            .map_or_default(ScreenStack::top_page_title);
         let rail = self.rail;
         let selected = self.selected_sidebar();
 
@@ -451,7 +487,7 @@ impl Shell {
                     if let Some(notice) = &self.notice {
                         ui.colored_label(ui.visuals().error_fg_color, notice.as_str());
                     }
-                    chrome::key_bar(ui, &hints, &t);
+                    chrome::key_bar(ui, &context, &hints, &t);
                 });
             });
         let width = if rail {
@@ -461,27 +497,13 @@ impl Shell {
         };
         egui::Panel::left("sidebar")
             .exact_size(width)
-            .frame(panel_frame(&t, egui::Margin::symmetric(8, 4)))
+            .frame(panel_frame(&t, egui::Margin::same(8)))
             .show(ui, |ui| {
                 cmds.extend(sidebar::sidebar(ui, rail, selected, &t));
             });
-        egui::Panel::top("tabs").show(ui, |ui| {
-            cmds.extend(chrome::tab_strip(ui, &self.tabs));
-            cmds.extend(chrome::breadcrumbs(ui, &trail, &t));
-        });
         self.palette_frame(ui);
 
-        let mut screen_action = ScreenAction::Stay;
-        egui::CentralPanel::default_margins().show(ui, |ui| {
-            let top = self.tabs.active_stack_mut().and_then(ScreenStack::top_mut);
-            if let Some(screen) = top {
-                screen_action = screen.ui(ui, &mut self.app_ctx);
-            }
-        });
-
-        if let Some(stack) = self.tabs.active_stack_mut() {
-            stack.apply(screen_action);
-        }
+        cmds.extend(self.stage(ui, &trail, &t));
         cmds.extend(Self::key_cmds(ui, can_go_back));
         for cmd in cmds {
             self.run_cmd(cmd);
@@ -490,6 +512,7 @@ impl Shell {
 
     /// Reads Esc, Ctrl+T, Ctrl+W and Ctrl+\. Esc counts only if no screen consumed it this frame.
     fn key_cmds(ui: &egui::Ui, can_go_back: bool) -> Vec<ChromeCmd> {
+        let text_focused = ui.ctx().text_edit_focused();
         let mut cmds = Vec::new();
         ui.input_mut(|i| {
             if i.consume_key(Modifiers::COMMAND, Key::T) {
@@ -505,6 +528,13 @@ impl Shell {
                 cmds.push(ChromeCmd::Back);
             }
         });
+        // `?` opens the keyboard map (the mock's key bar: "? all keys"), but not while a text
+        // field has focus, where it is a typed character.
+        if !text_focused && ui.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Questionmark)) {
+            cmds.push(ChromeCmd::OpenOnTop(crate::palette::PaletteTarget::Report(
+                navigate::KEYS_KEY.to_owned(),
+            )));
+        }
         cmds
     }
 

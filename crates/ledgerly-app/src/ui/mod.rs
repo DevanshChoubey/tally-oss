@@ -18,6 +18,7 @@ pub mod chip;
 pub mod conf;
 pub mod empty;
 pub mod format;
+pub mod icon;
 pub mod keycap;
 pub mod note;
 pub mod page_head;

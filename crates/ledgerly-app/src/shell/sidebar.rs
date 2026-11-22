@@ -21,8 +21,9 @@ use crate::keymap::Action;
 use crate::palette::PaletteTarget;
 use crate::screens::item_invoice::ItemInvoiceScreen;
 use crate::screens::voucher_entry::VoucherEntryScreen;
-use crate::theme::{TEXT_CAP, Tokens};
-use crate::ui::keycap;
+use crate::theme::{RADIUS_S, TEXT_BODY, TEXT_CAP, Tokens};
+use crate::ui::icon::{self, ICON_SIZE, Icon};
+use crate::ui::{bold_font, keycap};
 use crate::{AppCtx, Screen};
 
 /// Width of the sidebar, in points (`--navw` in the mock, 208 px).
@@ -31,6 +32,10 @@ pub const WIDTH: f32 = 208.0;
 pub const RAIL_WIDTH: f32 = 60.0;
 /// Height of one sidebar row, in points.
 const ROW_HEIGHT: f32 = 32.0;
+/// Side padding inside a row (`padding:0 10px`).
+const ROW_PAD_X: f32 = 10.0;
+/// Gap between a row's icon, label and keys (`gap:10px`).
+const ROW_GAP: f32 = 10.0;
 
 /// What a keymap command does in the shell.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -251,7 +256,33 @@ pub fn selected_label(top_title: &str) -> Option<&'static str> {
         .map(|entry| entry.label)
 }
 
+/// The icon of a sidebar entry, by its label (`NAV` in the mock). `None` for a label the mock has
+/// no icon for.
+#[must_use]
+pub fn entry_icon(label: &str) -> Option<Icon> {
+    let icon = match label {
+        "Home" => Icon::Home,
+        "Review queue" => Icon::Inbox,
+        "Sales" => Icon::Sale,
+        "Purchase" => Icon::Purchase,
+        "Payment" => Icon::Pay,
+        "Receipt" => Icon::Recv,
+        "Plain-words entry" => Icon::Chat,
+        "Day book" => Icon::Book,
+        "Balance sheet" => Icon::Scale,
+        "Masters" => Icon::Users,
+        "GST returns" => Icon::Gst,
+        "Bank reconciliation" => Icon::Bank,
+        "AI and privacy" => Icon::Shield,
+        "Keyboard map" => Icon::Kbd,
+        "Company setup" => Icon::Building,
+        _ => return None,
+    };
+    Some(icon)
+}
+
 /// Draws the sidebar and returns the click, if any: the clicked entry replaces the top screen.
+/// The footer (`nav.side .foot`) sits at the bottom.
 pub(super) fn sidebar(
     ui: &mut Ui,
     rail: bool,
@@ -259,14 +290,10 @@ pub(super) fn sidebar(
     t: &Tokens,
 ) -> Vec<ChromeCmd> {
     let mut cmds = Vec::new();
+    ui.spacing_mut().item_spacing.y = 1.0;
     for group in visible_groups() {
         if !rail {
-            ui.add_space(8.0);
-            ui.label(
-                egui::RichText::new(group.title)
-                    .size(TEXT_CAP)
-                    .color(t.text_3),
-            );
+            group_heading(ui, group.title, t);
         }
         for entry in &group.entries {
             let is_selected = selected == Some(entry.label);
@@ -275,11 +302,51 @@ pub(super) fn sidebar(
             }
         }
     }
+    if !rail {
+        footer(ui, t);
+    }
     cmds
 }
 
-/// One sidebar row. Selected rows use the accent-soft fill with accent ink; the key hint is a
-/// keycap at the right edge, and the count (when there is one) a pill beside it.
+/// A group heading (`nav.side .grp`): caption size, weight 600, `text-3`, padded 12 10 4.
+#[allow(clippy::float_arithmetic, reason = "padding")]
+fn group_heading(ui: &mut Ui, title: &str, t: &Tokens) {
+    let font = bold_font(ui, TEXT_CAP);
+    let galley = ui
+        .painter()
+        .layout_no_wrap(title.to_owned(), font, t.text_3);
+    let height = 12.0 + galley.size().y + 4.0;
+    let (rect, _) = ui.allocate_exact_size(
+        Vec2::new(ui.available_width(), height),
+        egui::Sense::hover(),
+    );
+    ui.painter().galley(
+        Pos2::new(rect.min.x + ROW_PAD_X, rect.min.y + 12.0),
+        galley,
+        t.text_3,
+    );
+}
+
+/// The footer at the bottom of the sidebar (`nav.side .foot`): the app's version, and where the
+/// company file is kept.
+fn footer(ui: &mut Ui, t: &Tokens) {
+    let text = format!(
+        "Ledgerly {}\nSaved on this computer",
+        env!("CARGO_PKG_VERSION")
+    );
+    ui.with_layout(egui::Layout::bottom_up(egui::Align::Min), |ui| {
+        ui.add_space(8.0);
+        ui.horizontal(|ui| {
+            ui.add_space(ROW_PAD_X);
+            ui.label(egui::RichText::new(text).size(TEXT_CAP).color(t.text_3));
+        });
+    });
+}
+
+/// One sidebar row (`nav.side button`): 32 points high, the icon, the label, then the count and
+/// the keycap at the right. The selected row has the accent-soft fill, accent ink and weight
+/// 600; a hovered row the hover fill and text ink.
+#[allow(clippy::float_arithmetic, reason = "laying out the row")]
 fn entry_row(
     ui: &mut Ui,
     entry: &SidebarEntry,
@@ -287,40 +354,62 @@ fn entry_row(
     selected: bool,
     t: &Tokens,
 ) -> Option<ChromeCmd> {
+    let (rect, response) = ui.allocate_exact_size(
+        Vec2::new(ui.available_width(), ROW_HEIGHT),
+        egui::Sense::click(),
+    );
+    let hovered = response.hovered();
     let (ink, fill) = if selected {
         (t.accent_ink, t.accent_soft)
+    } else if hovered {
+        (t.text, t.hover)
     } else {
         (t.text_2, Color32::TRANSPARENT)
     };
-    let text = if rail {
-        entry.label.chars().take(1).collect::<String>()
+    let painter = ui.painter();
+    painter.rect_filled(rect, RADIUS_S, fill);
+    let mid = rect.center().y;
+    let icon_x = if rail {
+        rect.center().x - ICON_SIZE / 2.0
     } else {
-        entry.label.to_owned()
+        rect.min.x + ROW_PAD_X
     };
-    let width = ui.available_width();
-    let response = ui
-        .scope(|ui| {
-            ui.visuals_mut().override_text_color = Some(ink);
-            ui.add(
-                egui::Button::new(text.as_str())
-                    .fill(fill)
-                    .min_size(Vec2::new(width, ROW_HEIGHT)),
-            )
-        })
-        .inner;
+    if let Some(which) = entry_icon(entry.label) {
+        let r = Rect::from_min_size(
+            Pos2::new(icon_x, mid - ICON_SIZE / 2.0),
+            Vec2::splat(ICON_SIZE),
+        );
+        icon::paint(painter, r, which, ink);
+    }
     if !rail {
+        let font = if selected {
+            bold_font(ui, TEXT_BODY)
+        } else {
+            egui::FontId::proportional(TEXT_BODY)
+        };
+        painter.text(
+            Pos2::new(icon_x + ICON_SIZE + ROW_GAP, mid),
+            egui::Align2::LEFT_CENTER,
+            entry.label,
+            font,
+            ink,
+        );
+        let mut right = rect.max.x - ROW_PAD_X;
         if let Some(hint) = entry.hint {
-            paint_at_right(ui, &response, hint, t.surface_2, t.border, t.text_2);
+            // `nav.side button kbd{background:transparent}`.
+            right = paint_at_right(
+                ui,
+                right,
+                mid,
+                hint,
+                Color32::TRANSPARENT,
+                t.border,
+                t.text_2,
+            );
+            right -= ROW_GAP;
         }
         if let Some(count) = entry.count {
-            paint_at_right(
-                ui,
-                &response,
-                &count.to_string(),
-                t.ai_soft,
-                t.ai_soft,
-                t.ai_ink,
-            );
+            paint_count(ui, right, mid, count, t);
         }
     }
     let response = if rail {
@@ -335,22 +424,41 @@ fn entry_row(
     }
 }
 
-/// Paints a keycap-sized box with `label` at the right edge of a sidebar row.
+/// Paints a keycap with `label` ending at `right`, centred on `mid`. Returns its left edge.
+#[allow(clippy::float_arithmetic, reason = "placing the keycap")]
 fn paint_at_right(
     ui: &Ui,
-    row: &egui::Response,
+    right: f32,
+    mid: f32,
     label: &str,
     fill: Color32,
     edge: Color32,
     ink: Color32,
-) {
+) -> f32 {
     let width = keycap::width(ui, label);
-    let mid = row.rect.center().y;
     let half = keycap::KEYCAP_HEIGHT / 2.0;
-    let right = row.rect.max.x - 8.0;
     let rect = Rect::from_min_max(
         Pos2::new(right - width, mid - half),
         Pos2::new(right, mid + half),
     );
     keycap::paint(ui.painter(), rect, label, fill, edge, ink);
+    rect.min.x
+}
+
+/// Paints the count pill (`nav.side .count`: caption size, weight 700, `ai-soft` fill, `ai-ink`
+/// text, 18 points high, 6 points of side padding) ending at `right`.
+#[allow(clippy::float_arithmetic, reason = "placing the pill")]
+fn paint_count(ui: &Ui, right: f32, mid: f32, count: u64, t: &Tokens) {
+    let galley = ui
+        .painter()
+        .layout_no_wrap(count.to_string(), bold_font(ui, TEXT_CAP), t.ai_ink);
+    let width = galley.size().x + 12.0;
+    let rect = Rect::from_min_max(
+        Pos2::new(right - width, mid - 9.0),
+        Pos2::new(right, mid + 9.0),
+    );
+    ui.painter().rect_filled(rect, 9.0, t.ai_soft);
+    let size = galley.size();
+    ui.painter()
+        .galley(rect.center() - size / 2.0, galley, t.ai_ink);
 }
