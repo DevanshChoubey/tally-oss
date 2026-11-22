@@ -833,6 +833,10 @@ fn every_sidebar_target_resolves_to_a_screen_or_a_keymap_command() {
                     panic!("sidebar row \"{}\" did not open: {err}", entry.label);
                 }
             }
+            // A fill only types into the palette; a sidebar row must open something.
+            PaletteTarget::Fill(text) => {
+                panic!("sidebar row \"{}\" only fills \"{text}\"", entry.label)
+            }
         }
     }
 }

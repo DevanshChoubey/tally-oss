@@ -95,8 +95,9 @@ pub enum NavError {
     /// The company's financial year does not make a valid period.
     #[error("the company's financial year is not a valid period: {0}")]
     Period(#[from] PeriodError),
-    /// A command or assistant request: the host handles it, it is not a screen.
-    #[error("this choice is a command or an assistant request, not a screen")]
+    /// A command, an assistant request or a fill of the query box: the host or the palette
+    /// handles it, it is not a screen.
+    #[error("this choice is a command, an assistant request or a fill, not a screen")]
     NotNavigation,
     /// The report screen could not be set up.
     #[error("the report screen could not be set up")]
@@ -207,6 +208,21 @@ pub fn report_menu() -> Vec<(&'static str, ReportKind)> {
     ]
 }
 
+/// The words under every report and screen row of the palette (`design/mock-v2/index.html:1126`).
+pub const REPORT_OR_SCREEN: &str = "Report or screen";
+
+/// The palette key that opens the ledger form with `name` filled in. The name is kept as typed.
+#[must_use]
+pub fn new_ledger_key(name: &str) -> String {
+    format!("new-ledger:{name}")
+}
+
+/// The name a [`new_ledger_key`] carries, or `None` for any other key.
+#[must_use]
+pub fn new_ledger_name(key: &str) -> Option<&str> {
+    key.strip_prefix("new-ledger:")
+}
+
 /// One palette row per report menu entry. A report that has no key is left out (none of the menu
 /// reports is such a one).
 #[must_use]
@@ -215,7 +231,7 @@ pub fn menu_entries() -> Vec<PaletteEntry> {
         .into_iter()
         .filter_map(|(title, kind)| {
             let key = report_key(&kind)?;
-            Some(PaletteEntry::new(PaletteTarget::Report(key), title).with_detail("Report"))
+            Some(PaletteEntry::new(PaletteTarget::Report(key), title).with_detail(REPORT_OR_SCREEN))
         })
         .collect()
 }
@@ -265,11 +281,32 @@ pub const SETUP_KEY: &str = "setup";
 pub fn row_icon(target: &PaletteTarget) -> Icon {
     match target {
         PaletteTarget::Command(_) => Icon::Sliders,
-        PaletteTarget::Master(_) => Icon::Users,
+        PaletteTarget::Master(key) => {
+            if new_ledger_name(key).is_some() {
+                Icon::Plus
+            } else {
+                Icon::Users
+            }
+        }
         PaletteTarget::Voucher(_) => Icon::File,
         PaletteTarget::Setting(_) => Icon::Shield,
         PaletteTarget::AiIntent(_) => Icon::Spark,
+        PaletteTarget::Fill(text) => fill_icon(text),
         PaletteTarget::Report(key) => report_icon(key),
+    }
+}
+
+/// The icon of a row that fills the query box: a bare prefix takes the icon the mock gives it
+/// (`index.html:1116`); a prefix with text after it is a search (`search`, `index.html:1129`).
+fn fill_icon(text: &str) -> Icon {
+    match text {
+        "#" => Icon::File,
+        "@" => Icon::Users,
+        ">" => Icon::Sliders,
+        "?" => Icon::Spark,
+        "+" => Icon::Chat,
+        // The text is free, not one of our enums: anything longer than a prefix is a search.
+        _ => Icon::Search,
     }
 }
 
@@ -308,7 +345,8 @@ pub fn bank_key(ledger: LedgerId) -> String {
 #[must_use]
 pub fn screen_entries(books: Option<&Books>) -> Vec<PaletteEntry> {
     let screen = |key: &str, title: &str| {
-        PaletteEntry::new(PaletteTarget::Report(key.to_owned()), title).with_detail("Screen")
+        PaletteEntry::new(PaletteTarget::Report(key.to_owned()), title)
+            .with_detail(REPORT_OR_SCREEN)
     };
     let mut entries = vec![
         screen(HOME_KEY, "Home"),
@@ -332,7 +370,7 @@ pub fn screen_entries(books: Option<&Books>) -> Vec<PaletteEntry> {
                         PaletteTarget::Report(bank_key(ledger.id)),
                         format!("Bank Reconciliation: {}", ledger.name),
                     )
-                    .with_detail("Banking"),
+                    .with_detail(REPORT_OR_SCREEN),
                 );
             }
         }
@@ -735,7 +773,9 @@ pub fn open_report(kind: ReportKind, ctx: &AppCtx) -> Result<Box<dyn Screen>, Na
 /// [`NavError::VoucherNotFound`] for a voucher the books do not hold.
 pub fn open_target(target: &PaletteTarget, ctx: &AppCtx) -> Result<Box<dyn Screen>, NavError> {
     match target {
-        PaletteTarget::Command(_) | PaletteTarget::AiIntent(_) => Err(NavError::NotNavigation),
+        PaletteTarget::Command(_) | PaletteTarget::AiIntent(_) | PaletteTarget::Fill(_) => {
+            Err(NavError::NotNavigation)
+        }
         PaletteTarget::Report(key) => {
             if let Some(screen) = screen_for_key(key, ctx) {
                 return screen;
@@ -744,6 +784,9 @@ pub fn open_target(target: &PaletteTarget, ctx: &AppCtx) -> Result<Box<dyn Scree
             open_report(kind, ctx)
         }
         PaletteTarget::Master(key) => {
+            if let Some(name) = new_ledger_name(key) {
+                return Ok(Box::new(MastersScreen::creating_ledger(name)));
+            }
             let id = parse_id(key, "ledger:").ok_or_else(|| NavError::BadKey(key.clone()))?;
             open_report(ReportKind::LedgerVouchers(LedgerId(id)), ctx)
         }

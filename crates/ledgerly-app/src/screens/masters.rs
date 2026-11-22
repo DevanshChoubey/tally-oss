@@ -375,6 +375,9 @@ pub struct MastersScreen {
     commands: std::collections::VecDeque<Command>,
     /// The command the worker is running, if any. While it runs the screen takes no keys.
     posting: Option<Ticket<CommandReply>>,
+    /// A ledger name to open the create form with, on the first frame that has books (the
+    /// palette's `Create ledger "<name>"`).
+    pending_create: Option<String>,
 }
 
 impl Default for MastersScreen {
@@ -402,6 +405,29 @@ impl MastersScreen {
             requests: Vec::new(),
             commands: std::collections::VecDeque::new(),
             posting: None,
+            pending_create: None,
+        }
+    }
+
+    /// A ledger list that opens the create form with `name` filled in, as soon as the books are
+    /// there (the palette's `Create ledger "<name>"`, `design/mock-v2/index.html:1129`). A form
+    /// that cannot open says why, as Alt+C does.
+    #[must_use]
+    pub fn creating_ledger(name: impl Into<String>) -> Self {
+        let mut screen = MastersScreen::with_kind(MasterKind::Ledger);
+        screen.pending_create = Some(name.into());
+        screen
+    }
+
+    /// Opens the create form the screen was made for, if any, now that `books` are there.
+    fn start_pending_create(&mut self, books: &Books) {
+        let Some(name) = self.pending_create.take() else {
+            return;
+        };
+        if self.begin_create(books).is_ok()
+            && let Some(MasterDraft::Ledger(draft)) = self.draft_mut()
+        {
+            draft.name = name;
         }
     }
 
@@ -1111,6 +1137,7 @@ impl MastersScreen {
     }
 
     fn draw(&mut self, ui: &mut Ui, books: &Books) -> ScreenAction {
+        self.start_pending_create(books);
         let mut action = ScreenAction::Stay;
         let keys = read_keys(ui, self.mode_tag());
         for cmd in &keys {

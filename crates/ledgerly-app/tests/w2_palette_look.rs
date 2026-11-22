@@ -54,6 +54,18 @@ fn each_row_shows_the_icon_the_mock_gives_its_kind() {
         (PaletteTarget::Voucher("voucher:9".to_owned()), Icon::File),
         (PaletteTarget::Command(Action::OpenPalette), Icon::Sliders),
         (PaletteTarget::AiIntent("ask".to_owned()), Icon::Spark),
+        // index.html:1116, the "Type a prefix" rows, and :1129, the no-match rows ('plus' for
+        // the ledger create, 'search' for the voucher search).
+        (PaletteTarget::Fill("#".to_owned()), Icon::File),
+        (PaletteTarget::Fill("@".to_owned()), Icon::Users),
+        (PaletteTarget::Fill(">".to_owned()), Icon::Sliders),
+        (PaletteTarget::Fill("?".to_owned()), Icon::Spark),
+        (PaletteTarget::Fill("+".to_owned()), Icon::Chat),
+        (PaletteTarget::Fill("#zzqx".to_owned()), Icon::Search),
+        (
+            PaletteTarget::Master(ledgerly_app::shell::navigate::new_ledger_key("zzqx")),
+            Icon::Plus,
+        ),
     ];
     for (target, want) in cases {
         assert_eq!(row_icon(&target), want, "{target:?}");

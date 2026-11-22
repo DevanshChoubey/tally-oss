@@ -4,7 +4,7 @@ use ledgerly_api::SearchHit;
 
 use super::{Palette, PaletteEntry, PaletteTarget};
 use crate::screens::wire::{Done, Latest};
-use crate::shell::navigate::{ledger_key, report_key, voucher_key};
+use crate::shell::navigate::{REPORT_OR_SCREEN, ledger_key, report_key, voucher_key};
 use crate::ui::format;
 use crate::worker::ApiWorker;
 
@@ -50,7 +50,10 @@ pub fn entries_from_hits(query: &str, hits: &[SearchHit]) -> Vec<PaletteEntry> {
             }
             SearchHit::Report { title, kind } => {
                 let key = report_key(kind).unwrap_or_else(|| format!("unsupported-report:{title}"));
-                Some(PaletteEntry::new(PaletteTarget::Report(key), *title).with_detail("Report"))
+                Some(
+                    PaletteEntry::new(PaletteTarget::Report(key), *title)
+                        .with_detail(REPORT_OR_SCREEN),
+                )
             }
             SearchHit::Setting { name } => Some(
                 PaletteEntry::new(PaletteTarget::Setting((*name).to_owned()), *name)
@@ -153,15 +156,16 @@ impl PaletteSearch {
         let Some(text) = wanted else {
             return;
         };
-        match worker {
-            Some(worker) => {
-                let wanted = text;
-                self.latest
-                    .start(worker, move |api| (wanted.clone(), api.search(&wanted)));
-            }
-            None => palette.set_note(Some(
+        if let Some(worker) = worker {
+            let wanted = text;
+            self.latest
+                .start(worker, move |api| (wanted.clone(), api.search(&wanted)));
+        } else {
+            palette.set_note(Some(
                 "No company is open, so ledgers and vouchers are not searched.".to_owned(),
-            )),
+            ));
+            // Not settled: with no company there is no ledger to create and no voucher to
+            // search, so the no-match rows are not offered; the note says why.
         }
     }
 
@@ -173,6 +177,7 @@ impl PaletteSearch {
                     return;
                 }
                 palette.set_remote_entries(entries_from_hits(&asked, &hits));
+                palette.search_done(&asked);
                 palette.set_note(
                     unavailable_reason(&hits)
                         .map(|reason| format!("Some of the books were not searched: {reason}")),

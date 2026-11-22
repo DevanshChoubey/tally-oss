@@ -2,7 +2,7 @@
 //! scrim and the panel around it (`shell/mod.rs`), at [`palette_rect`], so the palette adds no
 //! second frame. Sizes follow the mock's `.palette` rules (`design/mock-v2/index.html:273-286`).
 
-use egui::text::{CCursor, CCursorRange};
+use egui::text::{CCursor, CCursorRange, LayoutJob, TextFormat};
 use egui::text_edit::TextEditState;
 use egui::{
     Align, Align2, Color32, Context, CornerRadius, FontId, Frame, Id, Key, Margin, Modifiers, Rect,
@@ -12,6 +12,7 @@ use egui::{
 use super::scope::{Section, empty_scope_hint};
 use super::{
     LEGEND, PLACEHOLDER, Palette, PaletteChoice, PaletteMode, PaletteScope, PaletteTarget,
+    match_span,
 };
 use crate::shell::navigate::row_icon;
 use crate::theme::{RADIUS_L, RADIUS_S, TEXT_BODY, TEXT_CAP, TEXT_META, border_width};
@@ -72,15 +73,6 @@ enum KeyPress {
     ShiftEnter,
     /// Closes the palette without choosing.
     Escape,
-}
-
-/// What the user clicked in the palette this frame.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Click {
-    /// A row, by its index in the results.
-    Row(usize),
-    /// The "Search vouchers for ..." suggestion under a query with no match.
-    SearchVouchers,
 }
 
 /// The other mode: a replace becomes an open on top, and the reverse.
@@ -161,17 +153,15 @@ impl Palette {
         rule(ui);
         self.footer(ui);
 
-        match click {
-            Some(Click::Row(index)) => return self.accept_at(index),
-            Some(Click::SearchVouchers) => {
-                self.search_vouchers();
-                move_cursor_to_end(ui.ctx(), self.query().chars().count());
-                return None;
-            }
-            None => {}
-        }
         let index = self.selected;
-        choose_with.and_then(|replace| self.choose(index, replace))
+        let choice = match click {
+            Some(row) => self.accept_at(row),
+            None => choose_with.and_then(|replace| self.choose(index, replace)),
+        };
+        if self.take_cursor_to_end() {
+            move_cursor_to_end(ui.ctx(), self.query().chars().count());
+        }
+        choice
     }
 
     /// The search icon, the query box and the "Go to" label at its right (`.pin`). Returns whether
@@ -222,9 +212,9 @@ impl Palette {
             .inner
     }
 
-    /// The rows, grouped under their headings, in a scroll area. Returns a click on a row or on a
-    /// suggestion.
-    fn results_area(&self, ui: &mut Ui) -> Option<Click> {
+    /// The rows, grouped under their headings, in a scroll area. Returns the index of a clicked
+    /// row.
+    fn results_area(&self, ui: &mut Ui) -> Option<usize> {
         let mut click = None;
         let pad = f32::from(RESULTS_PAD);
         ScrollArea::vertical()
@@ -232,13 +222,26 @@ impl Palette {
             .show(ui, |ui| {
                 ui.add_space(pad);
                 if self.shown.is_empty() {
-                    click = self.empty_state(ui);
+                    self.empty_state(ui);
                     return;
                 }
+                let typed = PaletteScope::of_query(&self.query).1.trim();
                 let mut heading: Option<Section> = None;
                 for (index, row) in self.shown.iter().enumerate() {
                     if heading != Some(row.section) {
-                        padded(ui, |ui| section_heading(ui, row.section.label()));
+                        let label = match row.section {
+                            Section::NoMatch => format!("No match for \"{}\"", self.query.trim()),
+                            Section::Recent
+                            | Section::Prefixes
+                            | Section::Reports
+                            | Section::Ledgers
+                            | Section::Vouchers
+                            | Section::Commands
+                            | Section::Settings
+                            | Section::Ask
+                            | Section::Entry => row.section.label().to_owned(),
+                        };
+                        padded(ui, |ui| section_heading(ui, &label));
                         heading = Some(row.section);
                     }
                     let selected = index == self.selected;
@@ -246,6 +249,7 @@ impl Palette {
                     let line = Line {
                         icon: row_icon(&row.entry.target),
                         title: &row.entry.title,
+                        mark: match_span(&row.entry.title, typed),
                         detail: &row.entry.detail,
                         keycap,
                     };
@@ -254,7 +258,7 @@ impl Palette {
                         response.scroll_to_me(Some(Align::Center));
                     }
                     if response.clicked() {
-                        click = Some(Click::Row(index));
+                        click = Some(index);
                     }
                 }
                 ui.add_space(pad);
@@ -262,12 +266,12 @@ impl Palette {
         click
     }
 
-    /// What is drawn when no row is shown: the scope's hint when nothing is typed after the prefix,
-    /// otherwise "No match" and, for an unprefixed query, a suggestion to search vouchers.
-    fn empty_state(&self, ui: &mut Ui) -> Option<Click> {
+    /// What is drawn when no row is shown: the scope's hint when nothing is typed after the prefix;
+    /// "No match" for a prefixed query; nothing for a plain query whose search is still out (its
+    /// no-match rows come once the search is over).
+    fn empty_state(&self, ui: &mut Ui) {
         let (scope, body) = PaletteScope::of_query(&self.query);
-        let body = body.trim();
-        if body.is_empty() {
+        if body.trim().is_empty() {
             if let Some(hint) = empty_scope_hint(scope) {
                 let ink = tokens(ui).text_3;
                 padded(ui, |ui| {
@@ -284,23 +288,13 @@ impl Palette {
                     ui.add_space(ROW_PAD_Y);
                 });
             }
-            return None;
+            return;
         }
-        padded(ui, |ui| {
-            section_heading(ui, &format!("No match for \"{}\"", self.query.trim()));
-        });
         if scope != PaletteScope::All {
-            return None;
+            padded(ui, |ui| {
+                section_heading(ui, &format!("No match for \"{}\"", self.query.trim()));
+            });
         }
-        let title = format!("Search vouchers for \"{body}\"");
-        let line = Line {
-            icon: Icon::Search,
-            title: &title,
-            detail: "Number, party, amount or date",
-            keycap: false,
-        };
-        let response = padded(ui, |ui| paint_line(ui, &line, false));
-        response.clicked().then_some(Click::SearchVouchers)
     }
 
     /// The line under the rows, when the palette has one (for example, that no company is open).
@@ -361,13 +355,6 @@ impl Palette {
                     }
                 });
             });
-    }
-
-    /// Fills the query with `#` and the typed text, so the vouchers are searched.
-    fn search_vouchers(&mut self) {
-        let body = PaletteScope::of_query(&self.query).1.trim().to_owned();
-        self.set_query(format!("#{body}"));
-        self.focus_pending = true;
     }
 }
 
@@ -439,6 +426,8 @@ struct Line<'a> {
     icon: Icon,
     /// The first line.
     title: &'a str,
+    /// The part of `title` the query matched, as byte offsets, drawn marked.
+    mark: Option<(usize, usize)>,
     /// The second line, or the key at the right when `keycap` is set.
     detail: &'a str,
     /// Whether `detail` is a key, drawn in a keycap at the right (a command's key).
@@ -481,14 +470,11 @@ fn paint_line(ui: &mut Ui, line: &Line<'_>, selected: bool) -> Response {
     icon::paint(painter, glyph, line.icon, title_ink);
     let x = glyph.right() + ROW_GAP;
     let top = mid - words_h / 2.0;
-    paint_centred(
-        painter,
-        pos2(x, top),
-        title_h,
-        line.title,
-        TEXT_BODY,
-        title_ink,
-    );
+    let mark_ink = Mark {
+        fill: t.accent_soft,
+        ink: t.accent_ink,
+    };
+    paint_title(painter, pos2(x, top), title_h, line, title_ink, mark_ink);
     if two_lines {
         paint_centred(
             painter,
@@ -517,6 +503,56 @@ fn paint_line(ui: &mut Ui, line: &Line<'_>, selected: bool) -> Response {
         );
     }
     response
+}
+
+/// The colours of the marked part of a title (`mark` in the mock: the soft accent behind the
+/// accent ink).
+#[derive(Clone, Copy)]
+struct Mark {
+    /// The fill behind the marked letters.
+    fill: Color32,
+    /// The ink of the marked letters.
+    ink: Color32,
+}
+
+/// Paints a row's title from `left_top`, centred in a line `line_h` points high, with the part
+/// the query matched marked.
+#[allow(clippy::float_arithmetic, reason = "centring one line")]
+fn paint_title(
+    painter: &egui::Painter,
+    left_top: egui::Pos2,
+    line_h: f32,
+    line: &Line<'_>,
+    ink: Color32,
+    mark: Mark,
+) {
+    let font = FontId::proportional(TEXT_BODY);
+    let plain = TextFormat::simple(font.clone(), ink);
+    let marked = TextFormat {
+        background: mark.fill,
+        color: mark.ink,
+        ..TextFormat::simple(font, mark.ink)
+    };
+    let mut job = LayoutJob::default();
+    let title = line.title;
+    let parts = line.mark.and_then(|(start, end)| {
+        Some((
+            title.get(..start)?,
+            title.get(start..end)?,
+            title.get(end..)?,
+        ))
+    });
+    match parts {
+        Some((before, hit, after)) => {
+            job.append(before, 0.0, plain.clone());
+            job.append(hit, 0.0, marked);
+            job.append(after, 0.0, plain);
+        }
+        None => job.append(title, 0.0, plain),
+    }
+    let galley = painter.layout_job(job);
+    let top = left_top.y + (line_h - galley.size().y) / 2.0;
+    painter.galley(pos2(left_top.x, top), galley, ink);
 }
 
 /// Paints `text` at `size` from `left_top`, centred in a line `line_h` points high.

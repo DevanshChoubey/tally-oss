@@ -48,6 +48,13 @@ fn open_with(entries: Vec<PaletteEntry>, mode: PaletteMode) -> Palette {
     p
 }
 
+/// A palette over one "Balance Sheet" report with "bal" typed, so that row is the selected one.
+fn open_balance_sheet(mode: PaletteMode) -> Palette {
+    let mut p = open_with(vec![report("bs", "Balance Sheet")], mode);
+    p.set_query("bal");
+    p
+}
+
 /// Draws the palette for one frame with `input` and returns the choice it made.
 fn frame(palette: &mut Palette, input: RawInput) -> Option<PaletteChoice> {
     let ctx = egui::Context::default();
@@ -222,11 +229,13 @@ fn enter_on_an_assistant_row_keeps_the_palette_open_in_the_drawn_frame() {
 fn enter_chooses_in_the_opened_mode_and_shift_enter_in_the_other() {
     // provenance: index.html:1139 footer "Enter open on top", "Shift+Enter replace screen"; the
     // mock opens Ctrl+K on top, so Enter keeps the mode and Shift+Enter flips it.
-    let mut p = open_with(vec![report("bs", "Balance Sheet")], PaletteMode::OnTop);
+    // spec change 2026-11-23: `open_balance_sheet` types "bal", since the empty query now lists
+    // the prefix rows, which fill rather than choose (index.html:1115-1116).
+    let mut p = open_balance_sheet(PaletteMode::OnTop);
     let choice = frame(&mut p, key_press(Key::Enter, Modifiers::SHIFT)).unwrap();
     assert_eq!(choice.mode, PaletteMode::Replace);
 
-    let mut p = open_with(vec![report("bs", "Balance Sheet")], PaletteMode::OnTop);
+    let mut p = open_balance_sheet(PaletteMode::OnTop);
     let choice = frame(&mut p, key_press(Key::Enter, Modifiers::NONE)).unwrap();
     assert_eq!(choice.mode, PaletteMode::OnTop);
 }
@@ -235,11 +244,12 @@ fn enter_chooses_in_the_opened_mode_and_shift_enter_in_the_other() {
 fn a_palette_opened_to_replace_flips_the_same_way() {
     // provenance: derived — Ctrl+G opens in Replace mode; Enter keeps it and Shift+Enter gives
     // OnTop, as the footer says (see `key_hints_follow_the_mode_they_were_opened_in`).
-    let mut p = open_with(vec![report("bs", "Balance Sheet")], PaletteMode::Replace);
+    // spec change 2026-11-23: typed "bal" as in the test above.
+    let mut p = open_balance_sheet(PaletteMode::Replace);
     let choice = frame(&mut p, key_press(Key::Enter, Modifiers::NONE)).unwrap();
     assert_eq!(choice.mode, PaletteMode::Replace);
 
-    let mut p = open_with(vec![report("bs", "Balance Sheet")], PaletteMode::Replace);
+    let mut p = open_balance_sheet(PaletteMode::Replace);
     let choice = frame(&mut p, key_press(Key::Enter, Modifiers::SHIFT)).unwrap();
     assert_eq!(choice.mode, PaletteMode::OnTop);
 }
@@ -283,8 +293,10 @@ fn the_footer_keys_follow_the_mode_they_were_opened_in() {
 #[test]
 fn rows_are_grouped_by_heading_in_the_mock_s_order() {
     // provenance: index.html:1127-1129 push the headings Reports and screens, Ledgers, Commands in
-    // that order. The empty query keeps the given order inside a heading (rank docs).
-    let p = open_with(
+    // that order. Equal scores keep the given order inside a heading (rank docs).
+    // spec change 2026-11-23: the empty query now lists the prefix rows (index.html:1115-1116),
+    // so the test types "a": each title contains it, not at a word start (400 each).
+    let mut p = open_with(
         vec![
             command(Action::Save, "Save"),
             report("db", "Day Book"),
@@ -292,6 +304,7 @@ fn rows_are_grouped_by_heading_in_the_mock_s_order() {
         ],
         PaletteMode::OnTop,
     );
+    p.set_query("a");
     assert_eq!(titles(&p), ["Day Book", "Balance Sheet", "Save"]);
 }
 
@@ -334,7 +347,20 @@ fn recent_choices_come_first_and_survive_the_search_that_found_them() {
     );
 
     p.open(PaletteMode::OnTop);
-    assert_eq!(titles(&p), ["0412"]);
+    // spec change 2026-11-23: the empty query lists Recent and then the five "Type a prefix"
+    // rows (index.html:1115-1116); the recent row is still first.
+    let mut want = vec!["0412".to_owned()];
+    want.extend(
+        [
+            "# voucher number",
+            "@ party or ledger",
+            "> command",
+            "? ask your books",
+            "+ entry in plain words",
+        ]
+        .map(str::to_owned),
+    );
+    assert_eq!(titles(&p), want);
 }
 
 #[test]

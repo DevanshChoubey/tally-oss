@@ -46,6 +46,50 @@ pub use search::{PaletteSearch, entries_from_hits, unavailable_reason};
 
 use scope::{Section, assistant_row};
 
+use crate::shell::navigate::new_ledger_key;
+
+/// The rows the empty query lists under "Type a prefix": the text each fills, its title and the
+/// words under it (`design/mock-v2/index.html:1116`).
+const PREFIX_ROWS: [(&str, &str, &str); 5] = [
+    ("#", "# voucher number", "e.g. #0412"),
+    ("@", "@ party or ledger", "name, alias or GSTIN"),
+    (">", "> command", "e.g. > export"),
+    (
+        "?",
+        "? ask your books",
+        "answer is a report the engine runs",
+    ),
+    (
+        "+",
+        "+ entry in plain words",
+        "drafts a voucher for you to review",
+    ),
+];
+
+/// Where `query` first appears in `title`, ignoring case, as byte offsets into `title`; `None`
+/// when it does not appear as one run of letters, or when `query` is empty. This is the part of
+/// a row's title the palette marks, as the mock's `hl` does (`design/mock-v2/index.html:1112`).
+/// Letters are compared one by one, so a letter whose lower case is longer does not shift the
+/// offsets.
+#[must_use]
+pub fn match_span(title: &str, query: &str) -> Option<(usize, usize)> {
+    let wanted: Vec<char> = query.chars().collect();
+    if wanted.is_empty() {
+        return None;
+    }
+    let same = |a: char, b: char| a == b || a.to_lowercase().eq(b.to_lowercase());
+    let letters: Vec<(usize, char)> = title.char_indices().collect();
+    for start in 0..letters.len() {
+        let run = letters.get(start..start.saturating_add(wanted.len()))?;
+        if run.iter().zip(&wanted).all(|((_, a), b)| same(*a, *b)) {
+            let (first, _) = run.first()?;
+            let (last, c) = run.last()?;
+            return Some((*first, last.saturating_add(c.len_utf8())));
+        }
+    }
+    None
+}
+
 /// How many recent choices are remembered, for this session only (see the module docs).
 const MAX_RECENTS: usize = 8;
 
@@ -78,6 +122,9 @@ pub enum PaletteTarget {
     Setting(String),
     /// Start an AI intent (a proposal; never a posting).
     AiIntent(String),
+    /// Put this text in the query box: a prefix (`#`), or a prefix and the typed text (`#0412`).
+    /// The palette does this itself and stays open; it is never returned in a [`PaletteChoice`].
+    Fill(String),
 }
 
 /// One row the palette can show.
@@ -250,25 +297,36 @@ fn subsequence_gaps(term: &str, text: &str) -> Option<u32> {
     Some(u32::try_from(gaps).unwrap_or(u32::MAX))
 }
 
-/// A row as drawn: its heading, the entry, and whether it is inert (an `?` or `+` row, which
-/// chooses nothing).
+/// What choosing a row does, besides what its target says.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RowKind {
+    /// It is chosen and remembered as recent.
+    Pick,
+    /// It is chosen but not remembered: offering it again later would be wrong (a ledger create,
+    /// once the ledger exists).
+    Once,
+    /// Choosing it does nothing (an `?` or `+` row: the assistant is not available yet).
+    Inert,
+}
+
+/// A row as drawn: its heading, the entry, and what choosing it does.
 #[derive(Debug, Clone)]
 struct Row {
     /// The heading the row sits under.
     section: Section,
     /// The entry the row shows and chooses.
     entry: PaletteEntry,
-    /// Whether choosing the row does nothing (the assistant is not available yet).
-    inert: bool,
+    /// What choosing it does.
+    kind: RowKind,
 }
 
 impl Row {
     /// A row under `section` for `entry`.
-    fn new(section: Section, entry: PaletteEntry, inert: bool) -> Row {
+    fn new(section: Section, entry: PaletteEntry, kind: RowKind) -> Row {
         Row {
             section,
             entry,
-            inert,
+            kind,
         }
     }
 }
@@ -299,6 +357,12 @@ pub struct Palette {
     selected: usize,
     /// Whether the query box takes the focus on the next frame.
     focus_pending: bool,
+    /// Whether the query box's cursor moves to the end of the text on the next frame (after a
+    /// fill).
+    cursor_to_end: bool,
+    /// The text whose API search has answered (or that no search will be made for), so a query
+    /// with no match is only offered the no-match rows once nothing more can be found.
+    settled: Option<String>,
 }
 
 impl Palette {
@@ -364,7 +428,21 @@ impl Palette {
         self.focus_pending = true;
         self.remote.clear();
         self.note = None;
+        self.settled = None;
         self.rebuild();
+    }
+
+    /// Says that the search for `text` is over: its answer is in (or none will come, with no
+    /// company open). Until then a query with no match lists nothing, because the search may
+    /// still find what was typed. [`PaletteSearch`] calls this.
+    pub fn search_done(&mut self, text: &str) {
+        self.settled = Some(text.to_owned());
+        self.refresh();
+    }
+
+    /// Whether the query box's cursor should move to the end of the text, once.
+    fn take_cursor_to_end(&mut self) -> bool {
+        std::mem::take(&mut self.cursor_to_end)
     }
 
     /// Opens it if `action` is one of the two palette actions; returns whether it was.
@@ -445,11 +523,20 @@ impl Palette {
     }
 
     /// Chooses the row at `index`. `other_mode` takes the other mode from the one the palette was
-    /// opened with (Shift+Enter). An inert row is not chosen, and the palette stays open.
+    /// opened with (Shift+Enter). An inert row is not chosen, and the palette stays open. A fill
+    /// row puts its text in the query box and the palette stays open.
     fn choose(&mut self, index: usize, other_mode: bool) -> Option<PaletteChoice> {
         let open = self.open?;
         let row = self.shown.get(index)?;
-        if row.inert {
+        let kind = row.kind;
+        if kind == RowKind::Inert {
+            return None;
+        }
+        if let PaletteTarget::Fill(text) = &row.entry.target {
+            let text = text.clone();
+            self.set_query(text);
+            self.focus_pending = true;
+            self.cursor_to_end = true;
             return None;
         }
         let entry = row.entry.clone();
@@ -458,7 +545,9 @@ impl Palette {
         } else {
             open
         };
-        self.remember(entry.clone());
+        if kind == RowKind::Pick {
+            self.remember(entry.clone());
+        }
         self.close();
         Some(PaletteChoice {
             target: entry.target,
@@ -492,29 +581,45 @@ impl Palette {
     fn refresh(&mut self) {
         let (scope, body) = PaletteScope::of_query(&self.query);
         let body = body.trim().to_owned();
-        let browsing = scope == PaletteScope::All && body.is_empty();
         let mut rows: Vec<Row> = Vec::new();
-        if browsing {
+        if scope == PaletteScope::All && body.is_empty() {
+            // The empty query lists the recent choices and the prefixes, nothing else
+            // (`design/mock-v2/index.html:1115-1116`).
             rows.extend(
                 self.recent_rows
                     .iter()
-                    .map(|entry| Row::new(Section::Recent, entry.clone(), false)),
+                    .map(|entry| Row::new(Section::Recent, entry.clone(), RowKind::Pick)),
             );
+            rows.extend(PREFIX_ROWS.iter().map(|(fill, title, detail)| {
+                let entry = PaletteEntry::new(PaletteTarget::Fill((*fill).to_owned()), *title)
+                    .with_detail(*detail);
+                Row::new(Section::Prefixes, entry, RowKind::Pick)
+            }));
+            self.shown = rows;
+            self.clamp_selection();
+            return;
         }
         let pool: Vec<PaletteEntry> = self
             .merged
             .iter()
             .filter(|entry| scope.admits(&entry.target))
-            .filter(|entry| !(browsing && self.recents.contains(&entry.target)))
             .cloned()
             .collect();
         for index in rank(&body, &pool, &self.recents) {
             if let Some(entry) = pool.get(index) {
-                rows.push(Row::new(Section::of(&entry.target), entry.clone(), false));
+                rows.push(Row::new(
+                    Section::of(&entry.target),
+                    entry.clone(),
+                    RowKind::Pick,
+                ));
             }
         }
         if let Some((section, entry)) = assistant_row(scope, &body) {
-            rows.push(Row::new(section, entry, true));
+            rows.push(Row::new(section, entry, RowKind::Inert));
+        }
+        let searched = self.settled.as_deref() == Some(body.as_str());
+        if rows.is_empty() && scope == PaletteScope::All && searched {
+            rows.extend(no_match_rows(&body));
         }
         rows.sort_by_key(|row| row.section);
         self.shown = rows;
@@ -560,4 +665,25 @@ impl Palette {
             (vec!["Esc"], "close, back to where you were"),
         ]
     }
+}
+
+/// The rows a query with no match lists, once its search is over (`design/mock-v2/index.html:
+/// 1129`): create a ledger of that name, or search the vouchers for it. The mock's third row,
+/// "Ask", is listed only when AI is on; the assistant is not available, so it is not listed.
+/// The voucher row's words say what the API search matches (`MatchedOn`).
+fn no_match_rows(body: &str) -> [Row; 2] {
+    let create = PaletteEntry::new(
+        PaletteTarget::Master(new_ledger_key(body)),
+        format!("Create ledger \"{body}\""),
+    )
+    .with_detail("Opens the ledger form with this name");
+    let search = PaletteEntry::new(
+        PaletteTarget::Fill(format!("#{body}")),
+        format!("Search vouchers for \"{body}\""),
+    )
+    .with_detail("Number, party, amount or date");
+    [
+        Row::new(Section::NoMatch, create, RowKind::Once),
+        Row::new(Section::NoMatch, search, RowKind::Pick),
+    ]
 }

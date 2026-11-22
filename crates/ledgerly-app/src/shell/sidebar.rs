@@ -101,7 +101,8 @@ pub fn target_is_shown(target: &PaletteTarget) -> bool {
         | PaletteTarget::Master(_)
         | PaletteTarget::Voucher(_)
         | PaletteTarget::Setting(_)
-        | PaletteTarget::AiIntent(_) => true,
+        | PaletteTarget::AiIntent(_)
+        | PaletteTarget::Fill(_) => true,
     }
 }
 
@@ -133,7 +134,8 @@ pub fn screen_for(target: &PaletteTarget, ctx: &AppCtx) -> Result<Box<dyn Screen
         | PaletteTarget::Master(_)
         | PaletteTarget::Voucher(_)
         | PaletteTarget::Setting(_)
-        | PaletteTarget::AiIntent(_) => navigate::open_target(target, ctx),
+        | PaletteTarget::AiIntent(_)
+        | PaletteTarget::Fill(_) => navigate::open_target(target, ctx),
     }
 }
 

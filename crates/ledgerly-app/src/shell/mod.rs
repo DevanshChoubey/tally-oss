@@ -284,7 +284,9 @@ impl Shell {
             PaletteTarget::Report(_)
             | PaletteTarget::Master(_)
             | PaletteTarget::Voucher(_)
-            | PaletteTarget::Setting(_) => self.open_in_tab(&choice.target, choice.mode),
+            | PaletteTarget::Setting(_)
+            // A fill never leaves the palette; were one to, opening it says why it cannot.
+            | PaletteTarget::Fill(_) => self.open_in_tab(&choice.target, choice.mode),
         }
     }
 

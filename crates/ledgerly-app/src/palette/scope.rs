@@ -85,6 +85,8 @@ impl PaletteScope {
 pub(crate) enum Section {
     /// The choices made this session, shown first while the query is empty.
     Recent,
+    /// The prefixes, listed under the recent choices while the query is empty.
+    Prefixes,
     /// Reports and screens.
     Reports,
     /// Ledgers and parties.
@@ -99,6 +101,8 @@ pub(crate) enum Section {
     Ask,
     /// A plain-words entry.
     Entry,
+    /// What a query with no match can still do; drawn as `No match for "<query>"`.
+    NoMatch,
 }
 
 impl Section {
@@ -112,6 +116,7 @@ impl Section {
             PaletteTarget::Voucher(_) => Section::Vouchers,
             PaletteTarget::Setting(_) => Section::Settings,
             PaletteTarget::AiIntent(_) => Section::Ask,
+            PaletteTarget::Fill(_) => Section::Prefixes,
         }
     }
 
@@ -120,6 +125,8 @@ impl Section {
     pub(crate) fn label(self) -> &'static str {
         match self {
             Section::Recent => "Recent",
+            Section::Prefixes => "Type a prefix",
+            Section::NoMatch => "No match",
             Section::Reports => "Reports and screens",
             Section::Ledgers => "Ledgers",
             Section::Vouchers => "Vouchers",

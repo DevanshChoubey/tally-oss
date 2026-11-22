@@ -527,3 +527,36 @@ fn the_stock_tab_shows_a_missing_hsn_and_draws() {
     assert!(rows.iter().any(|r| r.hsn.is_empty()));
     assert_eq!(s.kind(), MasterKind::StockItem);
 }
+
+#[test]
+fn a_screen_opened_to_create_a_ledger_starts_the_form_with_the_name() {
+    // provenance: index.html:1129, the palette's 'Create ledger "<q>"' row: "Opens the ledger
+    // form with this name". The name is the typed text unchanged. Catches the form opened blank,
+    // or not opened.
+    let ctx = egui::Context::default();
+    let mut app = app_with(fixture());
+    let mut s = MastersScreen::creating_ledger("Ramesh Kirana");
+    frame(&ctx, &mut s, &mut app, RawInput::default());
+    assert!(s.is_form_open());
+    let Some(MasterDraft::Ledger(d)) = s.draft() else {
+        panic!("no ledger form");
+    };
+    assert_eq!(d.name, "Ramesh Kirana");
+}
+
+#[test]
+fn a_create_from_the_palette_without_books_says_why() {
+    // provenance: derived. With no company open there is nothing to create a ledger in; the
+    // screen shows its no-books line and opens no form. Catches a pending create that panics
+    // or opens a form with no books under it.
+    let ctx = egui::Context::default();
+    let mut app = AppCtx {
+        books: None,
+        api: None,
+        lock_date: None,
+        ai_tier: None,
+    };
+    let mut s = MastersScreen::creating_ledger("Ramesh Kirana");
+    frame(&ctx, &mut s, &mut app, RawInput::default());
+    assert!(!s.is_form_open());
+}

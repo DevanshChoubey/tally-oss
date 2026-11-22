@@ -258,7 +258,11 @@ fn accepting_with_no_match_or_when_closed_returns_nothing() {
 #[test]
 fn the_selection_moves_and_stops_at_the_ends() {
     // provenance: derived — three rows (indices 0..=2); move_selection docs.
+    // spec change 2026-11-23: the empty query now lists the prefix rows, not the entries
+    // (index.html:1115-1116), so the test types "a": every title contains it (400 each, `rank`
+    // docs), so the given order is kept.
     let mut p = open_palette(PaletteMode::OnTop);
+    p.set_query("a");
     assert_eq!(p.selected(), 0);
     p.move_selection(1);
     assert_eq!(p.selected(), 1);
@@ -357,9 +361,12 @@ fn a_closed_palette_draws_nothing_and_chooses_nothing() {
 
 #[test]
 fn enter_chooses_the_selected_row() {
-    // provenance: derived — ui() docs: "Enter chooses"; the first row of the empty query is the
-    // first entry.
+    // provenance: derived — ui() docs: "Enter chooses"; the first row of the query "a" is the
+    // first entry (every title contains "a", 400 each, given order kept).
+    // spec change 2026-11-23: the empty query now lists the prefix rows (index.html:1115-1116),
+    // so the test types "a" instead of relying on the empty query.
     let mut p = open_palette(PaletteMode::OnTop);
+    p.set_query("a");
     assert!(frame(&mut p, RawInput::default()).is_none());
     let choice = frame(&mut p, key_frame(&[Key::Enter])).unwrap();
     assert_eq!(choice.title, "Trial Balance");
@@ -369,7 +376,10 @@ fn enter_chooses_the_selected_row() {
 #[test]
 fn down_then_enter_chooses_the_second_row() {
     // provenance: derived — ui() docs: "Up and Down move".
+    // spec change 2026-11-23: typed "a" (all three rows, given order) since the empty query now
+    // lists the prefix rows (index.html:1115-1116).
     let mut p = open_palette(PaletteMode::Replace);
+    p.set_query("a");
     let choice = frame(&mut p, key_frame(&[Key::ArrowDown, Key::Enter])).unwrap();
     assert_eq!(choice.title, "Balance Sheet");
     assert_eq!(choice.mode, PaletteMode::Replace);
