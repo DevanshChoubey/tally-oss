@@ -16,8 +16,8 @@
 | light | sales-invoice.default | 0.5438 |
 | light | palette.default | 0.5505 |
 | light | gst.gstr3b | 0.5879 |
-| light | keys.standard | 0.5902 |
-| light | keys.classic | 0.5976 |
+| light | keys.standard | 0.5899 |
+| light | keys.classic | 0.5915 |
 | light | masters.ledgers | 0.6005 |
 | light | gst.gstr1 | 0.6027 |
 | light | bank.default | 0.6271 |
@@ -177,7 +177,7 @@ SSIM 0.5879
 
 ## light / keys.standard
 
-SSIM 0.5902
+SSIM 0.5899
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -189,7 +189,7 @@ SSIM 0.5902
 
 ## light / keys.classic
 
-SSIM 0.5976
+SSIM 0.5915
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>

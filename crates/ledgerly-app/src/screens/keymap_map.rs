@@ -157,25 +157,49 @@ fn chord_keys(ui: &mut Ui, keymap: &Keymap, action: Action) {
     }
 }
 
-/// Draws one card: its heading, then a row per action with its keys and words.
+/// Width of the keys column inside a card, in points: room for two keycaps such as
+/// `Ctrl+Shift+S` and `F8` side by side. Wider chords wrap onto a second line.
+const KEYS_WIDTH: f32 = 120.0;
+
+/// Draws one card: its heading, then a row per action with its keys and words. The card fills its
+/// column and the words wrap, so a long label never widens the card past the column.
 fn group_ui(ui: &mut Ui, group: &KeyGroup, keymap: &Keymap, t: &Tokens) {
+    ui.set_width(ui.available_width());
     let heading = bold_font(ui, TEXT_BODY);
     ui.label(RichText::new(group.title).font(heading).color(t.text));
     ui.add_space(SPACE_2);
-    egui::Grid::new(group.title)
-        .spacing([SPACE_3, SPACE_2])
-        .show(ui, |ui| {
-            for row in &group.rows {
-                ui.horizontal(|ui| chord_keys(ui, keymap, row.action));
-                ui.label(RichText::new(row.label).size(TEXT_BODY).color(t.text));
-                ui.end_row();
-            }
+    for row in &group.rows {
+        ui.horizontal_top(|ui| {
+            ui.allocate_ui_with_layout(
+                egui::vec2(KEYS_WIDTH, 0.0),
+                egui::Layout::left_to_right(egui::Align::Min).with_main_wrap(true),
+                |ui| {
+                    ui.set_width(KEYS_WIDTH);
+                    chord_keys(ui, keymap, row.action);
+                },
+            );
+            ui.add_space(SPACE_3);
+            ui.add(egui::Label::new(RichText::new(row.label).size(TEXT_BODY).color(t.text)).wrap());
         });
+        ui.add_space(SPACE_2);
+    }
 }
 
 /// The Keyboard map screen (mock `keys`). It shows the keys in use, and a preset for reference.
 #[derive(Debug, Default)]
-pub struct KeymapScreen;
+pub struct KeymapScreen {
+    /// The card rectangles of the last frame, in drawing order.
+    cards: Vec<egui::Rect>,
+}
+
+impl KeymapScreen {
+    /// The card rectangles of the last frame, in the order of [`layout`]. Empty before the first
+    /// frame.
+    #[must_use]
+    pub fn card_rects(&self) -> &[egui::Rect] {
+        &self.cards
+    }
+}
 
 impl Screen for KeymapScreen {
     fn title(&self) -> String {
@@ -256,14 +280,19 @@ impl Screen for KeymapScreen {
         egui::ScrollArea::vertical()
             .auto_shrink([false, false])
             .show(ui, |ui| {
+                let mut rects = vec![egui::Rect::NOTHING; groups.len()];
                 ui.columns(3, |cols| {
                     for (i, group) in groups.iter().enumerate() {
                         if let Some(col) = cols.get_mut(i % 3) {
-                            card(col, |ui| group_ui(ui, group, &shown, &t));
+                            let drawn = card(col, |ui| group_ui(ui, group, &shown, &t));
+                            if let Some(slot) = rects.get_mut(i) {
+                                *slot = drawn.response.rect;
+                            }
                             col.add_space(SPACE_3);
                         }
                     }
                 });
+                self.cards = rects;
             });
         ScreenAction::Stay
     }

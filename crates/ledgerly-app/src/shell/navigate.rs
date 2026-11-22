@@ -579,7 +579,7 @@ fn screen_for_key(key: &str, ctx: &AppCtx) -> Option<Result<Box<dyn Screen>, Nav
         ASK_KEY => Ok(Box::new(AskScreen)),
         QUICK_ENTRY_KEY => Ok(Box::new(QuickEntryScreen)),
         PURCHASE_BILL_KEY => Ok(Box::new(PurchaseBillScreen)),
-        KEYS_KEY => Ok(Box::new(KeymapScreen)),
+        KEYS_KEY => Ok(Box::new(KeymapScreen::default())),
         AI_SETTINGS_KEY => Ok(Box::new(AiSettingsScreen)),
         SETUP_KEY => Ok(Box::new(SetupScreen)),
         other => {
