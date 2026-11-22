@@ -69,6 +69,7 @@ use crate::screens::quick_entry::QuickEntryScreen;
 use crate::screens::report_view::{ReportSource, ReportViewScreen, VoucherViewScreen};
 use crate::screens::review::ReviewScreen;
 use crate::screens::setup::SetupScreen;
+use crate::ui::icon::Icon;
 use crate::{AppCtx, Screen};
 
 /// Why a pick or a menu entry did not open a screen.
@@ -254,6 +255,46 @@ pub const KEYS_KEY: &str = "keys";
 pub const AI_SETTINGS_KEY: &str = "ai-settings";
 /// The palette key of the Company setup stub.
 pub const SETUP_KEY: &str = "setup";
+
+/// The icon a palette row for `target` shows. Screens take the icon the mock's `PAL_SCREENS`
+/// gives them (`design/mock-v2/index.html:1109`); the kinds take the icons of `palResults`
+/// (lines 1113-1128): commands `sliders`, vouchers `file`, ledgers `users`, questions `spark`.
+/// A report the mock does not list takes `scale`, its report icon; the import screen, which the
+/// mock does not have, takes `recv` (a file coming in).
+#[must_use]
+pub fn row_icon(target: &PaletteTarget) -> Icon {
+    match target {
+        PaletteTarget::Command(_) => Icon::Sliders,
+        PaletteTarget::Master(_) => Icon::Users,
+        PaletteTarget::Voucher(_) => Icon::File,
+        PaletteTarget::Setting(_) => Icon::Shield,
+        PaletteTarget::AiIntent(_) => Icon::Spark,
+        PaletteTarget::Report(key) => report_icon(key),
+    }
+}
+
+/// The icon of the screen or report a palette key opens (see [`row_icon`]).
+fn report_icon(key: &str) -> Icon {
+    match key {
+        HOME_KEY => Icon::Home,
+        "day-book" => Icon::Book,
+        GST_KEY => Icon::Gst,
+        BANK_RECON_KEY => Icon::Bank,
+        MASTERS_KEY => Icon::Users,
+        REVIEW_KEY => Icon::Inbox,
+        KEYS_KEY => Icon::Kbd,
+        AI_SETTINGS_KEY => Icon::Shield,
+        SETUP_KEY => Icon::Building,
+        ASK_KEY => Icon::Spark,
+        QUICK_ENTRY_KEY => Icon::Chat,
+        PURCHASE_BILL_KEY => Icon::Purchase,
+        IMPORT_KEY => Icon::Recv,
+        other if other.starts_with("bank:") => Icon::Bank,
+        other if other.starts_with("ledger:") => Icon::Users,
+        // A key is free text, not one of our enums: every other report draws the report icon.
+        _ => Icon::Scale,
+    }
+}
 
 /// The palette key of the bank reconciliation of `ledger`.
 #[must_use]

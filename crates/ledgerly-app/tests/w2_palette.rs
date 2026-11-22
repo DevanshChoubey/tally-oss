@@ -246,7 +246,11 @@ fn a_palette_opened_to_replace_flips_the_same_way() {
 
 #[test]
 fn the_footer_keys_follow_the_mode_they_were_opened_in() {
-    // provenance: index.html:1139 (footer) and :1159 (key bar: a first hint with no key, "Go to").
+    // provenance: index.html:1159, the palette's key bar: a first hint with no key, "Go to", then
+    // "↑ ↓" Move, Enter "Open on top", Shift+Enter "Replace", Esc "Close". Spec change
+    // 2026-11-23: this test pinned "Up / Down" and "Replace screen" (the footer's words, index.html
+    // :1139); the key bar now reads as the mock's does, and the footer's own words are pinned in
+    // `w2_palette_look.rs`.
     let on_top = open_with(Vec::new(), PaletteMode::OnTop);
     let hints: Vec<(String, String)> = on_top
         .key_hints()
@@ -257,9 +261,9 @@ fn the_footer_keys_follow_the_mode_they_were_opened_in() {
         hints,
         [
             (String::new(), "Go to".to_owned()),
-            ("Up / Down".to_owned(), "Move".to_owned()),
+            ("\u{2191} \u{2193}".to_owned(), "Move".to_owned()),
             ("Enter".to_owned(), "Open on top".to_owned()),
-            ("Shift+Enter".to_owned(), "Replace screen".to_owned()),
+            ("Shift+Enter".to_owned(), "Replace".to_owned()),
             ("Esc".to_owned(), "Close".to_owned()),
         ]
     );
@@ -271,7 +275,7 @@ fn the_footer_keys_follow_the_mode_they_were_opened_in() {
         .filter(|h| h.keys == "Enter" || h.keys == "Shift+Enter")
         .map(|h| h.label)
         .collect();
-    assert_eq!(enter, ["Replace screen", "Open on top"]);
+    assert_eq!(enter, ["Replace", "Open on top"]);
 }
 
 // ---- grouping, recents -----------------------------------------------------------------------

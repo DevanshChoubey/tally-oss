@@ -40,6 +40,7 @@ mod draw;
 mod scope;
 mod search;
 
+pub use draw::palette_rect;
 pub use scope::PaletteScope;
 pub use search::{PaletteSearch, entries_from_hits, unavailable_reason};
 
@@ -528,16 +529,35 @@ impl Palette {
     pub fn key_hints(&self) -> Vec<KeyHint> {
         let replace_on_enter = self.open == Some(PaletteMode::Replace);
         let (enter, shift_enter) = if replace_on_enter {
-            ("Replace screen", "Open on top")
+            ("Replace", "Open on top")
         } else {
-            ("Open on top", "Replace screen")
+            ("Open on top", "Replace")
         };
         vec![
             KeyHint::new("", "Go to"),
-            KeyHint::new("Up / Down", "Move"),
+            KeyHint::new("\u{2191} \u{2193}", "Move"),
             KeyHint::new("Enter", enter),
             KeyHint::new("Shift+Enter", shift_enter),
             KeyHint::new("Esc", "Close"),
+        ]
+    }
+
+    /// The palette's own footer, in the mock's words (`design/mock-v2/index.html:1139`): the keys
+    /// of each hint, each drawn in its own keycap, and the words after them. Enter and Shift+Enter
+    /// say which mode each one chooses in, as [`Palette::key_hints`] does.
+    #[must_use]
+    pub fn footer_hints(&self) -> Vec<(Vec<&'static str>, &'static str)> {
+        let replace_on_enter = self.open == Some(PaletteMode::Replace);
+        let (enter, shift_enter) = if replace_on_enter {
+            ("replace screen", "open on top")
+        } else {
+            ("open on top", "replace screen")
+        };
+        vec![
+            (vec!["\u{2191}", "\u{2193}"], "move"),
+            (vec!["Enter"], enter),
+            (vec!["Shift+Enter"], shift_enter),
+            (vec!["Esc"], "close, back to where you were"),
         ]
     }
 }

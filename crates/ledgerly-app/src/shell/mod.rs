@@ -215,18 +215,7 @@ impl Shell {
         if self.search.is_pending() {
             ui.ctx().request_repaint();
         }
-        let choice = egui::Area::new(egui::Id::unique("ledgerly-palette"))
-            .order(egui::Order::Foreground)
-            .anchor(egui::Align2::CENTER_TOP, [0.0, TOP_BAR_HEIGHT])
-            .show(ui.ctx(), |ui| {
-                egui::Frame::popup(ui.style())
-                    .show(ui, |ui| {
-                        ui.set_min_width(520.0);
-                        self.palette.ui(ui)
-                    })
-                    .inner
-            })
-            .inner;
+        let choice = self.palette_panel(ui);
         // Whatever key the palette did not use this frame is not passed to the screen under it.
         ui.input_mut(|i| {
             i.events.retain(|e| !matches!(e, egui::Event::Key { .. }));
@@ -234,6 +223,51 @@ impl Shell {
         if let Some(choice) = choice {
             self.pick(&choice);
         }
+    }
+
+    /// Draws the open palette as the mock does (`design/mock-v2/index.html:273-274`): a scrim over
+    /// the window, which closes the palette when clicked, and the panel at
+    /// [`crate::palette::palette_rect`] with the strong border, the large radius and the overlay
+    /// shadow. Returns the palette's choice this frame.
+    fn palette_panel(&mut self, ui: &egui::Ui) -> Option<crate::palette::PaletteChoice> {
+        let ctx = ui.ctx().clone();
+        let screen = ctx.content_rect();
+        let kind = crate::ui::kind(ui);
+        let t = crate::ui::tokens(ui);
+        let scrim_clicked = egui::Area::new(egui::Id::unique("ledgerly-palette-scrim"))
+            .order(egui::Order::Middle)
+            .fixed_pos(screen.min)
+            .show(&ctx, |ui| {
+                let (rect, response) = ui.allocate_exact_size(screen.size(), egui::Sense::click());
+                ui.painter().rect_filled(rect, 0.0, theme::scrim(kind));
+                response.clicked()
+            })
+            .inner;
+        let rect = crate::palette::palette_rect(screen);
+        let choice = egui::Area::new(egui::Id::unique("ledgerly-palette"))
+            .order(egui::Order::Foreground)
+            .fixed_pos(rect.min)
+            .show(&ctx, |ui| {
+                ui.set_max_height(rect.height());
+                egui::Frame::new()
+                    .fill(t.surface)
+                    .stroke(egui::Stroke::new(
+                        theme::border_width(kind),
+                        t.border_strong,
+                    ))
+                    .corner_radius(theme::RADIUS_L)
+                    .shadow(theme::shadow_2(kind))
+                    .show(ui, |ui| {
+                        ui.set_width(rect.width());
+                        self.palette.ui(ui)
+                    })
+                    .inner
+            })
+            .inner;
+        if scrim_clicked && choice.is_none() {
+            self.palette.close();
+        }
+        choice
     }
 
     /// Runs a palette pick: a screen opens in the active tab, a shell command runs, and an
@@ -458,11 +492,15 @@ impl Shell {
             .active_stack_mut()
             .and_then(ScreenStack::top_mut)
             .map_or_default(|screen| screen.keys());
-        let hints = chrome::key_hints(&keys, can_go_back);
-        let context = self
-            .tabs
-            .active_stack()
-            .map_or_default(ScreenStack::top_key_bar_name);
+        let (context, hints) = if self.palette.is_open() {
+            chrome::palette_key_bar(&self.palette.key_hints())
+        } else {
+            let name = self
+                .tabs
+                .active_stack()
+                .map_or_default(ScreenStack::top_key_bar_name);
+            (name, chrome::key_hints(&keys, can_go_back))
+        };
         let rail = self.rail;
         let selected = self.selected_sidebar();
 

@@ -71,6 +71,12 @@ pub enum Icon {
     Chev,
     /// `spark` (AI).
     Spark,
+    /// `file` (a voucher).
+    File,
+    /// `sliders` (a command).
+    Sliders,
+    /// `plus` (create).
+    Plus,
 }
 
 impl Icon {
@@ -120,6 +126,11 @@ impl Icon {
             Icon::Spark => {
                 "M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z M19 15.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z"
             }
+            Icon::File => "M6 3h9l4 4v14H6z M14 3v5h5",
+            Icon::Sliders => {
+                "M4 6h9 M17 6h3 M15 4v4 M4 12h3 M11 12h9 M9 10v4 M4 18h11 M19 18h1 M17 16v4"
+            }
+            Icon::Plus => "M12 5v14 M5 12h14",
         }
     }
 }

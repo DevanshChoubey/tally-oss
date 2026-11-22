@@ -1,39 +1,63 @@
 //! Drawing the palette and reading its keys. This is the inner layout only: the shell draws the
-//! popup frame around it (`shell/mod.rs`), so the palette adds no second frame.
+//! scrim and the panel around it (`shell/mod.rs`), at [`palette_rect`], so the palette adds no
+//! second frame. Sizes follow the mock's `.palette` rules (`design/mock-v2/index.html:273-286`).
 
 use egui::text::{CCursor, CCursorRange};
 use egui::text_edit::TextEditState;
 use egui::{
-    Align, Align2, Context, FontId, Frame, Id, Key, Margin, Modifiers, Rect, Response, RichText,
-    ScrollArea, Sense, Ui, pos2, vec2,
+    Align, Align2, Color32, Context, CornerRadius, FontId, Frame, Id, Key, Margin, Modifiers, Rect,
+    Response, RichText, ScrollArea, Sense, Ui, Vec2, pos2, vec2,
 };
 
 use super::scope::{Section, empty_scope_hint};
 use super::{
     LEGEND, PLACEHOLDER, Palette, PaletteChoice, PaletteMode, PaletteScope, PaletteTarget,
 };
-use crate::theme::{RADIUS_S, SPACE_2, SPACE_3, TEXT_BODY, TEXT_CAP, TEXT_INPUT, TEXT_META};
+use crate::shell::navigate::row_icon;
+use crate::theme::{RADIUS_L, RADIUS_S, TEXT_BODY, TEXT_CAP, TEXT_META, border_width};
+use crate::ui::icon::{self, ICON_SIZE, Icon};
 use crate::ui::keycap::{self, KEYCAP_HEIGHT};
-use crate::ui::{bold_font, tokens};
+use crate::ui::{bold_font, kind, line_height, tokens};
 
-/// Width of the palette, in points (`.palette` in the mock, 640 px).
+/// Width of the palette, in points (`.palette{width:640px}`).
 pub(super) const PALETTE_WIDTH: f32 = 640.0;
-/// Most height the rows take before they scroll (`.res` in the mock, 420 px).
+/// Distance from the window's top to the panel (`.scrim{padding-top:72px}`).
+const TOP_GAP: f32 = 72.0;
+/// Room the panel leaves across the window, both sides together
+/// (`max-width:calc(100vw - 32px)`).
+const SIDE_ROOM: f32 = 32.0;
+/// Most height the rows take before they scroll (`.res{max-height:420px}`).
 const RESULTS_HEIGHT: f32 = 420.0;
-/// Height of a row with one line (a command with its key, or a row with no detail).
-const ROW_ONE_LINE: f32 = 34.0;
-/// Height of a row with a second line of detail.
-const ROW_TWO_LINES: f32 = 46.0;
-/// Inner left and right padding of a row, and of the key that sits at its right.
+/// Padding around the rows (`.res{padding:6px}`).
+const RESULTS_PAD: i8 = 6;
+/// Left and right padding of a row (`.it{padding:8px 10px}`).
 const ROW_PAD_X: f32 = 10.0;
-/// Top padding of a row's first line.
-const ROW_PAD_TOP: f32 = 7.0;
-/// Distance from a row's top to its second line.
-const SECOND_LINE_TOP: f32 = 24.0;
+/// Top and bottom padding of a row.
+const ROW_PAD_Y: f32 = 8.0;
+/// Gap between a row's icon, its words and its key (`.it{gap:10px}`).
+const ROW_GAP: f32 = 10.0;
+/// Size of the query's text (`.pin input{font-size:16px}`).
+const QUERY_SIZE: f32 = 16.0;
+/// Height of the query box (`.pin input{height:28px}`).
+const QUERY_HEIGHT: f32 = 28.0;
+/// Size of the search icon by the query (`.ico.l`).
+const QUERY_ICON: f32 = 20.0;
 /// Horizontal padding of the query row, the legend row, the note and the footer, in points.
 const EDGE_PAD: i8 = 14;
 /// The id of the query box, so its cursor can be moved when a suggestion fills it.
 const QUERY_ID: &str = "ledgerly-palette-query";
+
+/// Where the panel sits in a window whose area is `screen`: 640 points wide, or 32 fewer than the
+/// window when that is narrower, centred, 72 points from the top, down to 16 above the bottom.
+#[must_use]
+#[allow(clippy::float_arithmetic, reason = "placing one rectangle")]
+pub fn palette_rect(screen: Rect) -> Rect {
+    let width = PALETTE_WIDTH.min(screen.width() - SIDE_ROOM).max(0.0);
+    let top = screen.min.y + TOP_GAP;
+    let bottom = (screen.max.y - SIDE_ROOM / 2.0).max(top);
+    let left = screen.center().x - width / 2.0;
+    Rect::from_min_max(pos2(left, top), pos2(left + width, bottom))
+}
 
 /// A key the palette reads this frame. Escape closes; the rest move or choose.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -124,16 +148,17 @@ impl Palette {
             }
         }
 
-        ui.set_width(PALETTE_WIDTH.min(ui.available_width()));
+        ui.spacing_mut().item_spacing = Vec2::ZERO;
         if self.input_row(ui) {
             self.selected = 0;
             self.refresh();
         }
+        rule(ui);
         legend_row(ui);
-        ui.separator();
+        rule(ui);
         let click = self.results_area(ui);
         self.note_line(ui);
-        ui.separator();
+        rule(ui);
         self.footer(ui);
 
         match click {
@@ -149,7 +174,9 @@ impl Palette {
         choose_with.and_then(|replace| self.choose(index, replace))
     }
 
-    /// The query box with the "Go to" label at its right. Returns whether the text changed.
+    /// The search icon, the query box and the "Go to" label at its right (`.pin`). Returns whether
+    /// the text changed.
+    #[allow(clippy::float_arithmetic, reason = "sharing the row's width")]
     fn input_row(&mut self, ui: &mut Ui) -> bool {
         let t = tokens(ui);
         let go_width = ui
@@ -163,16 +190,25 @@ impl Palette {
             .x;
         let focus = std::mem::take(&mut self.focus_pending);
         Frame::new()
-            .inner_margin(Margin::symmetric(EDGE_PAD, 10))
+            .inner_margin(Margin::symmetric(EDGE_PAD, 12))
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
-                    let width = ui.available_width() - go_width - SPACE_3;
+                    ui.spacing_mut().item_spacing.x = ROW_GAP;
+                    let (spot, _) =
+                        ui.allocate_exact_size(vec2(QUERY_ICON, QUERY_HEIGHT), Sense::hover());
+                    let glyph = Rect::from_center_size(spot.center(), Vec2::splat(QUERY_ICON));
+                    icon::paint(ui.painter(), glyph, Icon::Search, t.text);
+                    let width = ui.available_width() - go_width - ROW_GAP;
                     let edit = ui.add(
                         egui::TextEdit::singleline(&mut self.query)
                             .id(Id::unique(QUERY_ID))
-                            .hint_text(PLACEHOLDER)
+                            .hint_text(RichText::new(PLACEHOLDER).size(QUERY_SIZE).color(t.text_3))
                             .frame(Frame::NONE)
-                            .font(FontId::proportional(TEXT_INPUT))
+                            .margin(Margin::ZERO)
+                            .font(FontId::proportional(QUERY_SIZE))
+                            .text_color(t.text)
+                            .align(Align2::LEFT_CENTER)
+                            .min_size(vec2(0.0, QUERY_HEIGHT))
                             .desired_width(width),
                     );
                     ui.label(RichText::new("Go to").size(TEXT_META).color(t.text_3));
@@ -190,9 +226,11 @@ impl Palette {
     /// suggestion.
     fn results_area(&self, ui: &mut Ui) -> Option<Click> {
         let mut click = None;
+        let pad = f32::from(RESULTS_PAD);
         ScrollArea::vertical()
             .max_height(RESULTS_HEIGHT)
             .show(ui, |ui| {
+                ui.add_space(pad);
                 if self.shown.is_empty() {
                     click = self.empty_state(ui);
                     return;
@@ -200,13 +238,18 @@ impl Palette {
                 let mut heading: Option<Section> = None;
                 for (index, row) in self.shown.iter().enumerate() {
                     if heading != Some(row.section) {
-                        section_heading(ui, row.section.label());
+                        padded(ui, |ui| section_heading(ui, row.section.label()));
                         heading = Some(row.section);
                     }
                     let selected = index == self.selected;
                     let keycap = matches!(row.entry.target, PaletteTarget::Command(_));
-                    let response =
-                        paint_line(ui, &row.entry.title, &row.entry.detail, keycap, selected);
+                    let line = Line {
+                        icon: row_icon(&row.entry.target),
+                        title: &row.entry.title,
+                        detail: &row.entry.detail,
+                        keycap,
+                    };
+                    let response = padded(ui, |ui| paint_line(ui, &line, selected));
                     if selected {
                         response.scroll_to_me(Some(Align::Center));
                     }
@@ -214,6 +257,7 @@ impl Palette {
                         click = Some(Click::Row(index));
                     }
                 }
+                ui.add_space(pad);
             });
         click
     }
@@ -225,17 +269,37 @@ impl Palette {
         let body = body.trim();
         if body.is_empty() {
             if let Some(hint) = empty_scope_hint(scope) {
-                ui.add_space(SPACE_2);
-                ui.label(RichText::new(hint).size(TEXT_META).color(tokens(ui).text_3));
+                let ink = tokens(ui).text_3;
+                padded(ui, |ui| {
+                    ui.add_space(ROW_PAD_Y);
+                    ui.horizontal(|ui| {
+                        ui.add_space(ROW_PAD_X);
+                        ui.label(
+                            RichText::new(hint)
+                                .size(TEXT_META)
+                                .line_height(Some(line_height(TEXT_META)))
+                                .color(ink),
+                        );
+                    });
+                    ui.add_space(ROW_PAD_Y);
+                });
             }
             return None;
         }
-        section_heading(ui, &format!("No match for \"{}\"", self.query.trim()));
+        padded(ui, |ui| {
+            section_heading(ui, &format!("No match for \"{}\"", self.query.trim()));
+        });
         if scope != PaletteScope::All {
             return None;
         }
         let title = format!("Search vouchers for \"{body}\"");
-        let response = paint_line(ui, &title, "Number, party, amount or date", false, false);
+        let line = Line {
+            icon: Icon::Search,
+            title: &title,
+            detail: "Number, party, amount or date",
+            keycap: false,
+        };
+        let response = padded(ui, |ui| paint_line(ui, &line, false));
         response.clicked().then_some(Click::SearchVouchers)
     }
 
@@ -251,22 +315,49 @@ impl Palette {
         }
     }
 
-    /// The footer: the keys of [`Palette::key_hints`] that have a key, each in a keycap.
+    /// The footer (`.pfoot`): each of [`Palette::footer_hints`], its keys in keycaps 5 points
+    /// apart and then its words, 14 points between hints, on the raised fill. Its lower corners
+    /// follow the panel's.
+    #[allow(
+        clippy::float_arithmetic,
+        reason = "the corner inside the panel's border"
+    )]
     fn footer(&self, ui: &mut Ui) {
         let t = tokens(ui);
+        let inner = f32::from(RADIUS_L) - border_width(kind(ui));
+        #[allow(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            reason = "a radius of a few points"
+        )]
+        let corner = inner.round().max(0.0) as u8;
         Frame::new()
             .fill(t.surface_2)
+            .corner_radius(CornerRadius {
+                nw: 0,
+                ne: 0,
+                sw: corner,
+                se: corner,
+            })
             .inner_margin(Margin::symmetric(EDGE_PAD, 8))
             .show(ui, |ui| {
+                ui.set_width(ui.available_width());
                 ui.horizontal_wrapped(|ui| {
-                    for hint in self.key_hints().iter().filter(|hint| !hint.keys.is_empty()) {
-                        keycap::keycap(ui, &hint.keys);
+                    ui.spacing_mut().item_spacing = Vec2::ZERO;
+                    for (n, (keys, label)) in self.footer_hints().into_iter().enumerate() {
+                        if n > 0 {
+                            ui.add_space(14.0);
+                        }
+                        for key in keys {
+                            keycap::keycap(ui, key);
+                            ui.add_space(5.0);
+                        }
                         ui.label(
-                            RichText::new(hint.label.as_str())
+                            RichText::new(label)
                                 .size(TEXT_META)
+                                .line_height(Some(line_height(TEXT_META)))
                                 .color(t.text_3),
                         );
-                        ui.add_space(SPACE_3);
                     }
                 });
             });
@@ -280,48 +371,99 @@ impl Palette {
     }
 }
 
-/// The legend under the query box: each prefix and what it finds (`index.html:1138`).
+/// A hairline across the panel in the border colour, between its parts.
+fn rule(ui: &mut Ui) {
+    let t = tokens(ui);
+    let (rect, _) = ui.allocate_exact_size(
+        vec2(ui.available_width(), border_width(kind(ui))),
+        Sense::hover(),
+    );
+    ui.painter().rect_filled(rect, 0.0, t.border);
+}
+
+/// Draws `add` inset by the rows' padding at the left and right (`.res{padding:6px}`).
+fn padded<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
+    Frame::new()
+        .inner_margin(Margin::symmetric(RESULTS_PAD, 0))
+        .show(ui, add)
+        .inner
+}
+
+/// The legend under the query box (`.modes`): each prefix in a keycap and what it finds, 6 points
+/// between entries (`index.html:1137`).
 fn legend_row(ui: &mut Ui) {
     let t = tokens(ui);
     Frame::new()
         .inner_margin(Margin::symmetric(EDGE_PAD, 8))
         .show(ui, |ui| {
+            ui.set_width(ui.available_width());
             ui.horizontal_wrapped(|ui| {
-                for (key, label) in LEGEND {
+                ui.spacing_mut().item_spacing = Vec2::ZERO;
+                for (n, (key, label)) in LEGEND.into_iter().enumerate() {
+                    if n > 0 {
+                        ui.add_space(6.0);
+                    }
                     keycap::keycap(ui, key);
-                    ui.label(RichText::new(label).size(TEXT_META).color(t.text_3));
-                    ui.add_space(SPACE_2);
+                    ui.add_space(4.0);
+                    ui.label(
+                        RichText::new(label)
+                            .size(TEXT_META)
+                            .line_height(Some(line_height(TEXT_META)))
+                            .color(t.text_3),
+                    );
                 }
             });
         });
 }
 
-/// A heading above a group of rows, in the caption size and the muted ink.
+/// A heading above a group of rows (`.sec`): caption size, semibold, muted, padded 8 10 4.
 fn section_heading(ui: &mut Ui, label: &str) {
     let t = tokens(ui);
     let font = bold_font(ui, TEXT_CAP);
-    ui.add_space(SPACE_2);
+    ui.add_space(ROW_PAD_Y);
     ui.horizontal(|ui| {
         ui.add_space(ROW_PAD_X);
-        ui.label(RichText::new(label).font(font).color(t.text_3));
+        ui.label(
+            RichText::new(label)
+                .font(font)
+                .line_height(Some(line_height(TEXT_CAP)))
+                .color(t.text_3),
+        );
     });
+    ui.add_space(4.0);
 }
 
-/// One clickable row: `title` on the first line; `detail` on a second line, or at the right as a
-/// keycap when `keycap` is set (a command shows its key there). The selected row is filled with
-/// the accent.
-fn paint_line(ui: &mut Ui, title: &str, detail: &str, keycap: bool, selected: bool) -> Response {
-    let key_at_right = keycap && !detail.is_empty();
-    let two_lines = !key_at_right && !detail.is_empty();
-    let height = if two_lines {
-        ROW_TWO_LINES
+/// What one row shows.
+struct Line<'a> {
+    /// The icon first.
+    icon: Icon,
+    /// The first line.
+    title: &'a str,
+    /// The second line, or the key at the right when `keycap` is set.
+    detail: &'a str,
+    /// Whether `detail` is a key, drawn in a keycap at the right (a command's key).
+    keycap: bool,
+}
+
+/// One clickable row (`.it`): the icon, then `title` with `detail` on a second line in the muted
+/// meta size, or `detail` at the right in a keycap for a command. Padded 8 10, 10 points between
+/// parts; the selected row is filled with the soft accent and inked with the accent.
+#[allow(clippy::float_arithmetic, reason = "laying out one row")]
+fn paint_line(ui: &mut Ui, line: &Line<'_>, selected: bool) -> Response {
+    let key_at_right = line.keycap && !line.detail.is_empty();
+    let two_lines = !key_at_right && !line.detail.is_empty();
+    let title_h = line_height(TEXT_BODY);
+    let detail_h = line_height(TEXT_META);
+    let words_h = if two_lines {
+        title_h + detail_h
     } else {
-        ROW_ONE_LINE
+        title_h
     };
+    let height = 2.0 * ROW_PAD_Y + words_h.max(KEYCAP_HEIGHT);
     let (rect, response) =
         ui.allocate_exact_size(vec2(ui.available_width(), height), Sense::click());
     let t = tokens(ui);
-    let key_width = keycap::width(ui, detail);
+    let key_width = keycap::width(ui, line.detail);
     let painter = ui.painter();
     let (title_ink, detail_ink) = if selected {
         (t.accent_ink, t.accent_ink)
@@ -331,20 +473,29 @@ fn paint_line(ui: &mut Ui, title: &str, detail: &str, keycap: bool, selected: bo
     if selected {
         painter.rect_filled(rect, RADIUS_S, t.accent_soft);
     }
-    let top = rect.left_top() + vec2(ROW_PAD_X, ROW_PAD_TOP);
-    painter.text(
-        top,
-        Align2::LEFT_TOP,
-        title,
-        FontId::proportional(TEXT_BODY),
+    let mid = rect.center().y;
+    let glyph = Rect::from_min_size(
+        pos2(rect.left() + ROW_PAD_X, mid - ICON_SIZE / 2.0),
+        Vec2::splat(ICON_SIZE),
+    );
+    icon::paint(painter, glyph, line.icon, title_ink);
+    let x = glyph.right() + ROW_GAP;
+    let top = mid - words_h / 2.0;
+    paint_centred(
+        painter,
+        pos2(x, top),
+        title_h,
+        line.title,
+        TEXT_BODY,
         title_ink,
     );
     if two_lines {
-        painter.text(
-            top + vec2(0.0, SECOND_LINE_TOP),
-            Align2::LEFT_TOP,
-            detail,
-            FontId::proportional(TEXT_META),
+        paint_centred(
+            painter,
+            pos2(x, top + title_h),
+            detail_h,
+            line.detail,
+            TEXT_META,
             detail_ink,
         );
     }
@@ -352,11 +503,37 @@ fn paint_line(ui: &mut Ui, title: &str, detail: &str, keycap: bool, selected: bo
         let key_rect = Rect::from_min_size(
             pos2(
                 rect.right() - ROW_PAD_X - key_width,
-                rect.center().y - KEYCAP_HEIGHT / 2.0,
+                mid - KEYCAP_HEIGHT / 2.0,
             ),
             vec2(key_width, KEYCAP_HEIGHT),
         );
-        keycap::paint(painter, key_rect, detail, t.surface_2, t.border, t.text_2);
+        keycap::paint(
+            painter,
+            key_rect,
+            line.detail,
+            t.surface_2,
+            t.border,
+            t.text_2,
+        );
     }
     response
+}
+
+/// Paints `text` at `size` from `left_top`, centred in a line `line_h` points high.
+#[allow(clippy::float_arithmetic, reason = "centring one line")]
+fn paint_centred(
+    painter: &egui::Painter,
+    left_top: egui::Pos2,
+    line_h: f32,
+    text: &str,
+    size: f32,
+    ink: Color32,
+) {
+    painter.text(
+        pos2(left_top.x, left_top.y + line_h / 2.0),
+        Align2::LEFT_CENTER,
+        text,
+        FontId::proportional(size),
+        ink,
+    );
 }

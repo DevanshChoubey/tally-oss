@@ -109,6 +109,24 @@ pub fn key_hints(screen: &[KeyHint], can_go_back: bool) -> Vec<(String, String)>
     out
 }
 
+/// The key bar while the palette is open (`design/mock-v2/index.html:1159`): the palette's hint
+/// with no key names the bar (its bold context, "Go to"), and its other hints follow. The screen
+/// under the palette adds nothing, not even Esc Back: Esc closes the palette.
+#[must_use]
+pub fn palette_key_bar(palette: &[KeyHint]) -> (String, Vec<(String, String)>) {
+    let context = palette
+        .iter()
+        .find(|hint| hint.keys.is_empty())
+        .map(|hint| hint.label.clone())
+        .unwrap_or_default();
+    let hints = palette
+        .iter()
+        .filter(|hint| !hint.keys.is_empty())
+        .map(|hint| (hint.keys.clone(), hint.label.clone()))
+        .collect();
+    (context, hints)
+}
+
 /// The right end of the key bar: each keycap and the words after it (`.keys .right`).
 pub const KEY_BAR_RIGHT: [(&str, &str); 2] = [("Ctrl+K", "anything \u{00B7}"), ("?", "all keys")];
 

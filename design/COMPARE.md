@@ -5,29 +5,29 @@
 | Theme | State | SSIM |
 | --- | --- | --- |
 | hc | home.default | 0.3856 |
-| light | palette.entry | 0.4866 |
-| light | palette.ask | 0.4882 |
-| light | palette.voucher | 0.4918 |
-| light | palette.no-results | 0.4959 |
-| light | palette.search | 0.5113 |
 | dark | home.default | 0.5420 |
-| light | palette.commands | 0.5426 |
 | light | sales-invoice.default | 0.5438 |
-| light | palette.default | 0.5505 |
 | light | home.default | 0.5837 |
 | light | gst.gstr3b | 0.5879 |
 | light | masters.ledgers | 0.6005 |
 | light | gst.gstr1 | 0.6027 |
 | light | bank.default | 0.6271 |
+| light | palette.voucher | 0.6275 |
+| light | palette.entry | 0.6281 |
+| light | palette.ask | 0.6309 |
+| light | palette.no-results | 0.6332 |
 | light | keys.standard | 0.6380 |
 | light | balance-sheet.detailed | 0.6383 |
 | light | receipt.default | 0.6433 |
 | light | keys.classic | 0.6493 |
 | light | balance-sheet.default | 0.6522 |
+| light | palette.search | 0.6592 |
 | light | payment.default | 0.6601 |
 | light | bank.brs | 0.6619 |
 | light | masters.ledger-detail | 0.6840 |
 | light | day-book.default | 0.6890 |
+| light | palette.commands | 0.6899 |
+| light | palette.default | 0.6918 |
 | light | masters.create-ledger | 0.7247 |
 | light | gst.recon-empty | 0.7339 |
 
@@ -43,66 +43,6 @@ SSIM 0.3856
 </tr>
 </table>
 
-## light / palette.entry
-
-SSIM 0.4866
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/light/palette.entry.webp" width="480" alt="mock light palette.entry"></td>
-<td><img src="app-captures/light/palette.entry.webp" width="480" alt="app light palette.entry"></td>
-</tr>
-</table>
-
-## light / palette.ask
-
-SSIM 0.4882
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/light/palette.ask.webp" width="480" alt="mock light palette.ask"></td>
-<td><img src="app-captures/light/palette.ask.webp" width="480" alt="app light palette.ask"></td>
-</tr>
-</table>
-
-## light / palette.voucher
-
-SSIM 0.4918
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/light/palette.voucher.webp" width="480" alt="mock light palette.voucher"></td>
-<td><img src="app-captures/light/palette.voucher.webp" width="480" alt="app light palette.voucher"></td>
-</tr>
-</table>
-
-## light / palette.no-results
-
-SSIM 0.4959
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/light/palette.no-results.webp" width="480" alt="mock light palette.no-results"></td>
-<td><img src="app-captures/light/palette.no-results.webp" width="480" alt="app light palette.no-results"></td>
-</tr>
-</table>
-
-## light / palette.search
-
-SSIM 0.5113
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/light/palette.search.webp" width="480" alt="mock light palette.search"></td>
-<td><img src="app-captures/light/palette.search.webp" width="480" alt="app light palette.search"></td>
-</tr>
-</table>
-
 ## dark / home.default
 
 SSIM 0.5420
@@ -115,18 +55,6 @@ SSIM 0.5420
 </tr>
 </table>
 
-## light / palette.commands
-
-SSIM 0.5426
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/light/palette.commands.webp" width="480" alt="mock light palette.commands"></td>
-<td><img src="app-captures/light/palette.commands.webp" width="480" alt="app light palette.commands"></td>
-</tr>
-</table>
-
 ## light / sales-invoice.default
 
 SSIM 0.5438
@@ -136,18 +64,6 @@ SSIM 0.5438
 <tr>
 <td><img src="mock-v2/captures/states/light/sales-invoice.default.webp" width="480" alt="mock light sales-invoice.default"></td>
 <td><img src="app-captures/light/sales-invoice.default.webp" width="480" alt="app light sales-invoice.default"></td>
-</tr>
-</table>
-
-## light / palette.default
-
-SSIM 0.5505
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/light/palette.default.webp" width="480" alt="mock light palette.default"></td>
-<td><img src="app-captures/light/palette.default.webp" width="480" alt="app light palette.default"></td>
 </tr>
 </table>
 
@@ -211,6 +127,54 @@ SSIM 0.6271
 </tr>
 </table>
 
+## light / palette.voucher
+
+SSIM 0.6275
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/palette.voucher.webp" width="480" alt="mock light palette.voucher"></td>
+<td><img src="app-captures/light/palette.voucher.webp" width="480" alt="app light palette.voucher"></td>
+</tr>
+</table>
+
+## light / palette.entry
+
+SSIM 0.6281
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/palette.entry.webp" width="480" alt="mock light palette.entry"></td>
+<td><img src="app-captures/light/palette.entry.webp" width="480" alt="app light palette.entry"></td>
+</tr>
+</table>
+
+## light / palette.ask
+
+SSIM 0.6309
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/palette.ask.webp" width="480" alt="mock light palette.ask"></td>
+<td><img src="app-captures/light/palette.ask.webp" width="480" alt="app light palette.ask"></td>
+</tr>
+</table>
+
+## light / palette.no-results
+
+SSIM 0.6332
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/palette.no-results.webp" width="480" alt="mock light palette.no-results"></td>
+<td><img src="app-captures/light/palette.no-results.webp" width="480" alt="app light palette.no-results"></td>
+</tr>
+</table>
+
 ## light / keys.standard
 
 SSIM 0.6380
@@ -271,6 +235,18 @@ SSIM 0.6522
 </tr>
 </table>
 
+## light / palette.search
+
+SSIM 0.6592
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/palette.search.webp" width="480" alt="mock light palette.search"></td>
+<td><img src="app-captures/light/palette.search.webp" width="480" alt="app light palette.search"></td>
+</tr>
+</table>
+
 ## light / payment.default
 
 SSIM 0.6601
@@ -316,6 +292,30 @@ SSIM 0.6890
 <tr>
 <td><img src="mock-v2/captures/states/light/day-book.default.webp" width="480" alt="mock light day-book.default"></td>
 <td><img src="app-captures/light/day-book.default.webp" width="480" alt="app light day-book.default"></td>
+</tr>
+</table>
+
+## light / palette.commands
+
+SSIM 0.6899
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/palette.commands.webp" width="480" alt="mock light palette.commands"></td>
+<td><img src="app-captures/light/palette.commands.webp" width="480" alt="app light palette.commands"></td>
+</tr>
+</table>
+
+## light / palette.default
+
+SSIM 0.6918
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/palette.default.webp" width="480" alt="mock light palette.default"></td>
+<td><img src="app-captures/light/palette.default.webp" width="480" alt="app light palette.default"></td>
 </tr>
 </table>
 
