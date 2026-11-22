@@ -5,20 +5,28 @@
 //! No width is fixed. Tiles and panels split the width they are given, through `Ui::columns`, so
 //! nothing clips when the window is narrow (B2).
 
-use egui::{Color32, Rect, RichText, Sense, Ui};
+use egui::FontId;
+use egui::text::{LayoutJob, TextFormat};
+use egui::{
+    Align, Color32, Frame, Layout, Margin, Rect, RichText, Sense, Stroke, Ui, UiBuilder, vec2,
+};
 use ledgerly_core::Date;
 
 use super::{
-    AiPanel, AttentionItem, AttentionKind, HomeBody, HomeTarget, KpiView, panel_row_is_wide,
-    tile_columns,
+    AiPanel, AttentionItem, AttentionKind, HomeBody, HomeTarget, KpiView, figure_parts,
+    main_columns, tile_columns,
 };
-use crate::theme::{SPACE_2, SPACE_3, SPACE_4, SPACE_6, TEXT_BODY, TEXT_FIG, TEXT_H2, TEXT_META};
-use crate::ui::button::{ButtonKind, button};
+use crate::theme::{
+    RADIUS_M, SPACE_2, SPACE_3, SPACE_4, SPACE_6, TEXT_BODY, TEXT_FIG, TEXT_H2, TEXT_META,
+    border_width,
+};
+use crate::ui::button::{ButtonKind, button, button_icon};
 use crate::ui::card::card;
+use crate::ui::icon::{self, Icon};
 use crate::ui::note::{NoteKind, note};
 use crate::ui::page_head::page_head;
 use crate::ui::skeleton::skeleton_bar;
-use crate::ui::{bold_font, format, tokens};
+use crate::ui::{bold_font, format, kind, para, tokens};
 
 /// Line under the title while the figures load (the mock's `home.loading`).
 const LOADING_LINE: &str =
@@ -64,13 +72,33 @@ pub(super) fn header(
         if !with_actions {
             return;
         }
-        if button(ui, "New sale", Some("F8"), ButtonKind::Primary).clicked() {
+        // The mock's head: "Day book" with the book icon and no key, then "New sale" with the
+        // sale icon and F8 (`SCREENS.home`, index.html line 1059). D still opens the day book.
+        if button_icon(
+            ui,
+            Some(Icon::Sale),
+            "New sale",
+            Some("F8"),
+            ButtonKind::Primary,
+        )
+        .clicked()
+        {
             *chosen = Some(HomeTarget::SalesInvoice);
         }
-        if button(ui, "Day book", Some("D"), ButtonKind::Secondary).clicked() {
+        if button_icon(
+            ui,
+            Some(Icon::Book),
+            "Day book",
+            None,
+            ButtonKind::Secondary,
+        )
+        .clicked()
+        {
             *chosen = Some(HomeTarget::DayBook);
         }
     });
+    // `.phead{margin-bottom:16px}`.
+    ui.add_space(SPACE_4);
 }
 
 /// Draws the last refresh's error, when there is one.
@@ -91,7 +119,11 @@ pub(super) fn figures(
     chosen: &mut Option<HomeTarget>,
 ) -> Vec<Rect> {
     entry_bar(ui, ai);
-    ui.add_space(SPACE_3);
+    // `.qe{margin-bottom:14px}`; the AI-off note has 12.
+    ui.add_space(match ai {
+        AiPanel::Off => SPACE_3,
+        AiPanel::Placeholder => ENTRY_GAP,
+    });
     let per_row = tile_columns(ui.available_width());
     let mut rects = Vec::new();
     grid(
@@ -178,14 +210,48 @@ pub(super) fn skeleton(ui: &mut Ui) {
     );
 }
 
-/// The one line above the tiles: the AI-off note, or the placeholder for the plain-words entry.
+/// The one line above the tiles: the AI-off note, or the plain-words entry line. The entry is
+/// drawn in the mock's `.qe` box (strong border, radius 10, the spark icon) but says in words
+/// that it is not built; it takes no typing and runs nothing.
 fn entry_bar(ui: &mut Ui, ai: AiPanel) {
-    let text = match ai {
-        AiPanel::Off => AI_OFF_TEXT,
-        AiPanel::Placeholder => ENTRY_PLACEHOLDER,
-    };
-    note(ui, NoteKind::Info, text);
+    match ai {
+        AiPanel::Off => {
+            note(ui, NoteKind::Info, AI_OFF_TEXT);
+        }
+        AiPanel::Placeholder => {
+            let t = tokens(ui);
+            Frame::new()
+                .fill(t.surface)
+                .stroke(Stroke::new(border_width(kind(ui)), t.border_strong))
+                .corner_radius(RADIUS_M)
+                // `.qe{padding:8px 8px 8px 12px}` around a 30 px line.
+                .inner_margin(Margin {
+                    left: 12,
+                    right: 8,
+                    top: 8,
+                    bottom: 8,
+                })
+                .show(ui, |ui| {
+                    ui.set_min_width(ui.available_width());
+                    ui.horizontal(|ui| {
+                        ui.set_min_height(ENTRY_LINE_HEIGHT);
+                        ui.spacing_mut().item_spacing.x = SPACE_2;
+                        icon::icon(ui, Icon::Spark, t.text);
+                        ui.label(
+                            RichText::new(ENTRY_PLACEHOLDER)
+                                .size(TEXT_BODY)
+                                .color(t.text_3),
+                        );
+                    });
+                });
+        }
+    }
 }
+
+/// Height of the entry line inside its box (`.qe input{height:30px}`).
+const ENTRY_LINE_HEIGHT: f32 = 30.0;
+/// Space under the entry box (`.qe` with `margin-bottom:14px`).
+const ENTRY_GAP: f32 = 14.0;
 
 /// Draws the two lower panels: the review list and the chart on the left, the nudges on the
 /// right. Side by side when the width allows, one after the other otherwise.
@@ -267,33 +333,55 @@ fn skeleton_panel(ui: &mut Ui, rows: usize) {
     });
 }
 
-/// Draws one KPI tile and returns its click response, whose rectangle is the tile's.
+/// Draws one KPI tile and returns its click response, whose rectangle is the tile's. As the
+/// mock's `.kpi`: the label in `text-2` with a chevron at the right, the figure at 26 points
+/// with a small `text-3` rupee sign (`.fig small`, 16 px), then the footnote in meta `text-3`.
 fn tile(ui: &mut Ui, index: usize, view: &KpiView) -> egui::Response {
     let t = tokens(ui);
-    let label_font = bold_font(ui, TEXT_META);
-    let figure_font = if view.supported {
-        bold_font(ui, TEXT_FIG)
-    } else {
-        bold_font(ui, TEXT_H2)
-    };
-    let figure_color = if view.supported { t.text } else { t.text_2 };
     let inner = card(ui, |ui| {
         ui.set_min_width(ui.available_width());
-        ui.label(
-            RichText::new(view.label.as_str())
-                .font(label_font)
-                .color(t.text_2),
-        );
-        ui.label(
-            RichText::new(view.value_text.as_str())
-                .font(figure_font)
-                .color(figure_color),
-        );
-        ui.label(
-            RichText::new(view.footnote_text.as_str())
-                .size(TEXT_META)
-                .color(t.text_3),
-        );
+        ui.spacing_mut().item_spacing.y = 0.0;
+        ui.horizontal(|ui| {
+            ui.label(
+                RichText::new(view.label.as_str())
+                    .size(TEXT_BODY)
+                    .color(t.text_2),
+            );
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                icon::icon(ui, Icon::Chev, t.text_2);
+            });
+        });
+        // `.fig{margin:6px 0 2px}`.
+        ui.add_space(6.0);
+        if view.supported {
+            // One text job, so the small sign and the digits share a baseline (each section's
+            // `valign` is bottom by default).
+            let (sign, digits) = figure_parts(&view.value_text);
+            let mut job = LayoutJob::default();
+            if let Some(sign) = sign {
+                job.append(
+                    sign,
+                    0.0,
+                    TextFormat::simple(FontId::proportional(RUPEE_SIZE), t.text_3),
+                );
+            }
+            // `.fig small{margin-right:2px}`.
+            let gap = if sign.is_some() { 2.0 } else { 0.0 };
+            job.append(
+                digits,
+                gap,
+                TextFormat::simple(bold_font(ui, TEXT_FIG), t.text),
+            );
+            ui.label(job);
+        } else {
+            ui.label(
+                RichText::new(view.value_text.as_str())
+                    .font(bold_font(ui, TEXT_H2))
+                    .color(t.text_2),
+            );
+        }
+        ui.add_space(2.0);
+        para(ui, view.footnote_text.as_str(), TEXT_META, t.text_3);
     });
     let id = ui.scope_id().with(("home-kpi", index));
     let response = ui.interact(inner.response.rect, id, Sense::click());
@@ -304,6 +392,9 @@ fn tile(ui: &mut Ui, index: usize, view: &KpiView) -> egui::Response {
     response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, spoken.as_str()));
     response
 }
+
+/// Size of the rupee sign before a tile figure (`.kpi .fig small{font-size:16px}`).
+const RUPEE_SIZE: f32 = 16.0;
 
 /// Lays `items` out in rows of `per_row` columns. `draw` gets the index of each item in the whole
 /// list, so the tiles get distinct ids.
@@ -319,16 +410,38 @@ fn grid<T>(ui: &mut Ui, items: &[T], per_row: usize, draw: &mut impl FnMut(&mut 
     }
 }
 
-/// Lays two panels side by side when the width allows, or one below the other otherwise.
+/// Lays two panels side by side as the mock's `.g-main` grid does ([`main_columns`]), or one
+/// below the other when the width is too small.
+#[allow(
+    clippy::float_arithmetic,
+    reason = "placing the right column after the left"
+)]
 fn split(ui: &mut Ui, left: impl FnOnce(&mut Ui), right: impl FnOnce(&mut Ui)) {
-    if panel_row_is_wide(ui.available_width()) {
-        ui.columns(2, |cols| {
-            let mut columns = cols.iter_mut();
-            if let (Some(first), Some(second)) = (columns.next(), columns.next()) {
-                left(first);
-                right(second);
-            }
-        });
+    let width = ui.available_width();
+    if let Some((left_w, right_w)) = main_columns(width) {
+        let top = ui.cursor().min;
+        let height = ui.available_height().max(0.0);
+        let column = |x: f32, w: f32| {
+            UiBuilder::new()
+                .max_rect(Rect::from_min_size(egui::pos2(x, top.y), vec2(w, height)))
+                .layout(Layout::top_down(Align::Min))
+        };
+        let l = ui
+            .scope_builder(column(top.x, left_w), |ui| {
+                ui.set_width(left_w);
+                left(ui);
+            })
+            .response
+            .rect;
+        let r = ui
+            .scope_builder(column(top.x + width - right_w, right_w), |ui| {
+                ui.set_width(right_w);
+                right(ui);
+            })
+            .response
+            .rect;
+        let bottom = l.max.y.max(r.max.y);
+        ui.advance_cursor_after_rect(Rect::from_min_max(top, egui::pos2(top.x + width, bottom)));
     } else {
         left(&mut *ui);
         ui.add_space(SPACE_3);
@@ -336,11 +449,15 @@ fn split(ui: &mut Ui, left: impl FnOnce(&mut Ui), right: impl FnOnce(&mut Ui)) {
     }
 }
 
-/// A card heading in the card title size.
+/// A card heading in the card title size. Called first in each panel card, it also makes the
+/// card fill its column, as the mock's grid cells do.
 fn title(ui: &mut Ui, text: &str) {
+    ui.set_min_width(ui.available_width());
     let t = tokens(ui);
     let font = bold_font(ui, TEXT_H2);
     ui.label(RichText::new(text).font(font).color(t.text));
+    // `.card h2{margin-bottom:10px}`.
+    ui.add_space(10.0);
 }
 
 /// Colour of the word before a nudge. Taken from the active visuals, so the three themes stay

@@ -2,9 +2,9 @@
 //! Used for lock bars, offline cues and errors. The words in the text say what happened; the
 //! colour only repeats it.
 
-use egui::{Color32, Frame, Margin, Response, RichText, Stroke, Ui};
+use egui::{Color32, Frame, Margin, Response, Stroke, Ui};
 
-use super::{kind, tokens};
+use super::{kind, para, tokens};
 use crate::theme::{RADIUS_S, TEXT_META, ThemeKind, Tokens, border_width};
 
 /// The kind of a note, which picks its colours.
@@ -56,7 +56,7 @@ pub fn note(ui: &mut Ui, kind_of: NoteKind, text: &str) -> Response {
         .corner_radius(RADIUS_S)
         .inner_margin(Margin::symmetric(PAD_X, PAD_Y))
         .show(ui, |ui| {
-            ui.label(RichText::new(text).size(TEXT_META).color(fg));
+            para(ui, text, TEXT_META, fg);
         })
         .response
 }

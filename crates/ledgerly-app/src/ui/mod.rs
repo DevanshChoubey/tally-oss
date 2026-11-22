@@ -28,7 +28,7 @@ pub mod skeleton;
 pub mod table;
 pub mod tabs;
 
-use egui::{FontFamily, FontId, Ui};
+use egui::{Align, Color32, FontFamily, FontId, Layout, Response, RichText, Ui};
 
 use crate::theme::{self, ThemeKind, Tokens};
 
@@ -58,4 +58,32 @@ pub fn bold_font(ui: &Ui, size: f32) -> FontId {
         FontFamily::Proportional
     };
     FontId::new(size, family)
+}
+
+/// Line height as a multiple of the text size (`body{line-height:1.45}` in the mock).
+pub const LINE_HEIGHT: f32 = 1.45;
+
+/// The mock's line height for text of `size` points, rounded to a whole point.
+#[must_use]
+#[allow(clippy::float_arithmetic, reason = "one product")]
+pub fn line_height(size: f32) -> f32 {
+    (size * LINE_HEIGHT).round()
+}
+
+/// `text` at `size` in `color`, at the mock's line height.
+#[must_use]
+pub fn para_text(text: &str, size: f32, color: Color32) -> RichText {
+    RichText::new(text)
+        .size(size)
+        .color(color)
+        .line_height(Some(line_height(size)))
+}
+
+/// Draws `text` as a wrapping paragraph at the mock's line height, ragged right even inside a
+/// justified layout (where egui would otherwise spread the words of each full row).
+pub fn para(ui: &mut Ui, text: &str, size: f32, color: Color32) -> Response {
+    ui.with_layout(Layout::top_down(Align::Min), |ui| {
+        ui.add(egui::Label::new(para_text(text, size, color)).wrap())
+    })
+    .inner
 }

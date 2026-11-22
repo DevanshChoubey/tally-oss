@@ -3,7 +3,7 @@
 
 use egui::{Align, Layout, RichText, Ui};
 
-use super::{bold_font, tokens};
+use super::{bold_font, para_text, tokens};
 use crate::theme::{TEXT_BODY, TEXT_H1};
 
 /// Draws the page head: `title` in the page-title size, `sub` below it when given, and
@@ -18,7 +18,8 @@ pub fn page_head(ui: &mut Ui, title: &str, sub: Option<&str>, actions: impl FnOn
         ui.vertical(|ui| {
             ui.label(RichText::new(title).font(h1).color(t.text));
             if let Some(sub) = sub {
-                ui.label(RichText::new(sub).size(TEXT_BODY).color(t.text_2));
+                ui.add_space(3.0);
+                ui.label(para_text(sub, TEXT_BODY, t.text_2));
             }
         });
         ui.with_layout(Layout::right_to_left(Align::Center), actions);

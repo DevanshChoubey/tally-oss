@@ -179,7 +179,7 @@ fn group_ui(ui: &mut Ui, group: &KeyGroup, keymap: &Keymap, t: &Tokens) {
                 },
             );
             ui.add_space(SPACE_3);
-            ui.add(egui::Label::new(RichText::new(row.label).size(TEXT_BODY).color(t.text)).wrap());
+            crate::ui::para(ui, row.label, TEXT_BODY, t.text);
         });
         ui.add_space(SPACE_2);
     }
@@ -264,7 +264,7 @@ impl Screen for KeymapScreen {
             STANDARD_NOTE
         };
         ui.add_space(SPACE_2);
-        ui.label(RichText::new(note).size(TEXT_BODY).color(t.text_2));
+        crate::ui::para(ui, note, TEXT_BODY, t.text_2);
         ui.label(
             RichText::new(format!(
                 "Keys in use now: {}. Changing the preset is not available yet; this map shows {} for reference.",

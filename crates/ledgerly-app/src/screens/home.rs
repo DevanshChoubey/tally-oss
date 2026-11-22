@@ -220,6 +220,39 @@ pub fn panel_row_is_wide(width: f32) -> bool {
     width >= WIDE_MIN_WIDTH
 }
 
+/// Gap between the lower row's two columns, in points (`.grid{gap:12px}`).
+const MAIN_GAP: f32 = SPACE_3;
+/// Narrowest the lower row's right column gets (`minmax(320px,1fr)`).
+const MAIN_RIGHT_MIN: f32 = 320.0;
+/// The left column's share against the right's 1 (`minmax(0,1.55fr)`).
+const MAIN_LEFT_FR: f32 = 1.55;
+
+/// The widths of the lower row's left and right columns in `width` points, as the mock's
+/// `.g-main` grid gives them, or `None` when the panels stack ([`panel_row_is_wide`]).
+#[must_use]
+#[allow(
+    clippy::float_arithmetic,
+    reason = "sharing a width between two columns"
+)]
+pub fn main_columns(width: f32) -> Option<(f32, f32)> {
+    if !panel_row_is_wide(width) {
+        return None;
+    }
+    let shared = width - MAIN_GAP;
+    let right = (shared / (MAIN_LEFT_FR + 1.0)).max(MAIN_RIGHT_MIN);
+    Some((shared - right, right))
+}
+
+/// A tile figure split for drawing: the rupee sign, drawn small (`.kpi .fig small`), and the
+/// rest. Words, which carry no sign, come back whole.
+#[must_use]
+pub fn figure_parts(value_text: &str) -> (Option<&str>, &str) {
+    match value_text.strip_prefix('\u{20B9}') {
+        Some(rest) => (Some("\u{20B9}"), rest),
+        None => (None, value_text),
+    }
+}
+
 /// Which body of the home screen is drawn.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HomeBody {

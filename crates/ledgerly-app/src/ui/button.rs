@@ -3,6 +3,7 @@
 
 use egui::{Align2, Color32, FontId, Rect, Response, Sense, Stroke, StrokeKind, Ui, Vec2, pos2};
 
+use super::icon::{self, ICON_SIZE, Icon};
 use super::{keycap, kind, tokens};
 use crate::theme::{RADIUS_S, TEXT_BODY, Tokens, border_width};
 
@@ -48,6 +49,18 @@ pub fn colors(
 /// Draws a button reading `label`, with `key` (such as `Ctrl+A`) as a keycap at its right end.
 /// Pass `None` for a button without a key. Disabled when the surrounding `Ui` is disabled.
 pub fn button(ui: &mut Ui, label: &str, key: Option<&str>, kind_of: ButtonKind) -> Response {
+    button_icon(ui, None, label, key, kind_of)
+}
+
+/// Draws a button like [`button`], with `which` first when given (`.btn` with an icon: the icon,
+/// 8 points, the label).
+pub fn button_icon(
+    ui: &mut Ui,
+    which: Option<Icon>,
+    label: &str,
+    key: Option<&str>,
+    kind_of: ButtonKind,
+) -> Response {
     let t = tokens(ui);
     let bw = border_width(kind(ui));
     let enabled = ui.is_enabled();
@@ -58,14 +71,22 @@ pub fn button(ui: &mut Ui, label: &str, key: Option<&str>, kind_of: ButtonKind) 
         .size()
         .x;
     let key_w = key.map_or(0.0, |k| GAP + keycap::width(ui, k));
-    let width = 2.0 * PAD_X + text_w + key_w;
+    let icon_w = which.map_or(0.0, |_| ICON_SIZE + GAP);
+    let width = 2.0 * PAD_X + icon_w + text_w + key_w;
     let (rect, response) = ui.allocate_exact_size(Vec2::new(width, HEIGHT), Sense::click());
     let (fill, edge, ink) = colors(kind_of, enabled, response.hovered(), &t);
     let painter = ui.painter();
     painter.rect_filled(rect, RADIUS_S, fill);
     painter.rect_stroke(rect, RADIUS_S, Stroke::new(bw, edge), StrokeKind::Inside);
+    if let Some(i) = which {
+        let r = Rect::from_min_size(
+            pos2(rect.min.x + PAD_X, rect.center().y - ICON_SIZE / 2.0),
+            Vec2::splat(ICON_SIZE),
+        );
+        icon::paint(painter, r, i, ink);
+    }
     painter.text(
-        pos2(rect.min.x + PAD_X, rect.center().y),
+        pos2(rect.min.x + PAD_X + icon_w, rect.center().y),
         Align2::LEFT_CENTER,
         label,
         font,

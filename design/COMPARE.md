@@ -4,7 +4,7 @@
 
 | Theme | State | SSIM |
 | --- | --- | --- |
-| hc | home.default | 0.4409 |
+| hc | home.default | 0.4614 |
 | light | palette.entry | 0.4866 |
 | light | palette.ask | 0.4882 |
 | light | palette.voucher | 0.4918 |
@@ -13,16 +13,16 @@
 | light | palette.commands | 0.5426 |
 | light | sales-invoice.default | 0.5438 |
 | light | palette.default | 0.5505 |
-| dark | home.default | 0.5566 |
-| light | home.default | 0.5729 |
+| dark | home.default | 0.5724 |
+| light | home.default | 0.5831 |
 | light | gst.gstr3b | 0.5879 |
 | light | masters.ledgers | 0.6005 |
 | light | gst.gstr1 | 0.6027 |
 | light | bank.default | 0.6271 |
+| light | keys.standard | 0.6380 |
 | light | balance-sheet.detailed | 0.6383 |
 | light | receipt.default | 0.6433 |
-| light | keys.standard | 0.6502 |
-| light | keys.classic | 0.6509 |
+| light | keys.classic | 0.6493 |
 | light | balance-sheet.default | 0.6522 |
 | light | payment.default | 0.6601 |
 | light | bank.brs | 0.6619 |
@@ -33,7 +33,7 @@
 
 ## hc / home.default
 
-SSIM 0.4409
+SSIM 0.4614
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -141,7 +141,7 @@ SSIM 0.5505
 
 ## dark / home.default
 
-SSIM 0.5566
+SSIM 0.5724
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -153,7 +153,7 @@ SSIM 0.5566
 
 ## light / home.default
 
-SSIM 0.5729
+SSIM 0.5831
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -211,6 +211,18 @@ SSIM 0.6271
 </tr>
 </table>
 
+## light / keys.standard
+
+SSIM 0.6380
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/keys.standard.webp" width="480" alt="mock light keys.standard"></td>
+<td><img src="app-captures/light/keys.standard.webp" width="480" alt="app light keys.standard"></td>
+</tr>
+</table>
+
 ## light / balance-sheet.detailed
 
 SSIM 0.6383
@@ -235,21 +247,9 @@ SSIM 0.6433
 </tr>
 </table>
 
-## light / keys.standard
-
-SSIM 0.6502
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/light/keys.standard.webp" width="480" alt="mock light keys.standard"></td>
-<td><img src="app-captures/light/keys.standard.webp" width="480" alt="app light keys.standard"></td>
-</tr>
-</table>
-
 ## light / keys.classic
 
-SSIM 0.6509
+SSIM 0.6493
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
