@@ -299,3 +299,23 @@ fn an_empty_state_without_an_action_draws_without_a_button() {
         assert!(!clicked);
     });
 }
+
+#[test]
+fn the_page_head_leaves_16_points_before_what_follows() {
+    // provenance: design/mock-v2/index.html:121: `.phead` has `margin-bottom:16px`, so the
+    // first thing under the head starts 16 px below it, on every screen. Derived: the label drawn
+    // after the head starts 16 points below the bottom of everything the head drew.
+    let ctx = themed(ThemeKind::Light);
+    let gap = Cell::new(0.0_f32);
+    run(&ctx, Vec::new(), |ui| {
+        ui.vertical(|ui| {
+            let head = page_head::page_head(ui, "Vouchers", Some("3 this month"), |ui| {
+                button::button(ui, "New sale", Some("F8"), ButtonKind::Primary);
+            });
+            let head_bottom = head.bottom();
+            let next = ui.label("first line").rect;
+            gap.set(next.top() - head_bottom);
+        });
+    });
+    assert!((gap.get() - 16.0).abs() < 0.5, "gap {}", gap.get());
+}

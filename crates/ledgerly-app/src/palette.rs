@@ -201,8 +201,8 @@ const LEAD_COMMANDS: [Action; 4] = [
     Action::NewReceipt,
 ];
 
-/// One entry per keymap action, with the first chord as the detail text: [`LEAD_COMMANDS`]
-/// first, then the rest in [`Action::ALL`] order.
+/// One entry per keymap action, with the first chord as the detail text: new sales, purchase,
+/// payment and receipt first (the mock's order), then the rest in [`Action::ALL`] order.
 #[must_use]
 pub fn command_entries(keymap: &Keymap) -> Vec<PaletteEntry> {
     let mut actions: Vec<Action> = Action::ALL.to_vec();

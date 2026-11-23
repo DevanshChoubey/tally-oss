@@ -69,10 +69,6 @@ feature that is not built), **data** (the capture company lacks what the mock's 
 - **needs a decision: F2 offers the shown day.** TallyHelp says F2 in the Day Book first offers
   the day after the current date; ours fills in the day shown. Check the TallyPrime page (only
   the Tally.ERP 9 page was read) before changing it.
-- **bug: the 16-point gap under the page head is only on the report screens.** The mock's
-  `.phead` has `margin-bottom:16px` (index.html:121); the balance sheet, day book and GST
-  returns add it (`HEAD_GAP`), the other screens still follow the head with egui's item spacing. Move it into
-  `ui::page_head` in a round that recaptures every screen.
 - **data: voucher numbers and the sample day.** The capture company numbers vouchers 1, 2, ...
   per type and its last voucher is 20 Nov; the mock shows "SI/0417" and five vouchers on 20 Nov.
 - **by design: Status column.** Kept from the engine (it shows a cancelled voucher as such) until

@@ -38,8 +38,6 @@ use crate::ui::table::{self, CellPlace, RowState, T_HEAD_HEIGHT, T_ROW_HEIGHT};
 use crate::ui::{bold_font, kind, para, tokens};
 use ledgerly_core::Paise;
 
-/// Space under the page head (`.phead{margin-bottom:16px}`, index.html:121).
-const HEAD_GAP: f32 = 16.0;
 /// Width of the Voucher column of the GSTR-1 table.
 const VOUCHER_W: f32 = 120.0;
 /// Width of the Status column of the GSTR-1 table.
@@ -118,7 +116,6 @@ impl GstScreen {
                 events.push(UiEvent::ExportJson);
             }
         });
-        ui.add_space(HEAD_GAP);
         let items: Vec<(&str, &str)> = GstTab::ALL
             .iter()
             .map(|t| (t.label(), t.key_hint()))

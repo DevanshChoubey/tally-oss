@@ -118,9 +118,6 @@ pub enum EditorKind {
     Period,
 }
 
-/// Space between the page head and what follows (index.html:121, `.phead` `margin-bottom`).
-const HEAD_GAP: f32 = 16.0;
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum KeyCmd {
     Up,
@@ -632,9 +629,6 @@ impl ReportViewScreen {
                 }
             });
         }
-        // index.html:121: `.phead` has a 16 px bottom margin before the card.
-        let gap = (HEAD_GAP - ui.spacing().item_spacing.y).max(0.0);
-        ui.add_space(gap);
         if toggle {
             self.toggle_detail();
         }

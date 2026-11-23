@@ -107,8 +107,6 @@ pub(super) fn header(
             *chosen = Some(HomeTarget::DayBook);
         }
     });
-    // `.phead{margin-bottom:16px}`.
-    ui.add_space(SPACE_4);
 }
 
 /// Draws the last refresh's error, when there is one.

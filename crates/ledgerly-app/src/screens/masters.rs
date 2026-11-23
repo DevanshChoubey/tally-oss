@@ -975,8 +975,6 @@ fn read_keys(ui: &Ui, tag: ModeTag, kind: MasterKind) -> Vec<KeyCmd> {
 
 /// The subtitle under the page title (mock v2).
 const SUBTITLE: &str = "Ledgers and stock items. Type to filter. Alt+C creates anywhere.";
-/// The gap between the page head and the tabs (`.phead{margin-bottom:16px}`).
-const HEAD_GAP: f32 = 16.0;
 /// The gap under the tabs' rule (`.tabs{margin-bottom:14px}`, index.html:139).
 const TABS_GAP: f32 = 14.0;
 /// The widest the create form grows (`style="max-width:880px"`, index.html:1808).
@@ -1445,7 +1443,6 @@ impl MastersScreen {
         if create {
             drop(self.begin_create(books));
         }
-        ui.add_space(HEAD_GAP);
         self.draw_tabs(ui);
         ui.add_space(TABS_GAP);
         self.draw_notice(ui);
