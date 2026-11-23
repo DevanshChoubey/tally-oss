@@ -139,10 +139,11 @@ it cannot enter a bad GSTIN; needs typed text in the capture) and `suggested-led
 matching to propose a ledger, which is not built).
 
 - **deferred: the Balance column** (index.html:1796, `prov('eng','engine')`). The engine has the
-  figures (`ReportKind::TrialBalance`), but the masters screen has no report feed and no way to
-  know when a posting has made them stale. Each cell shows a dash and the heading says why on
-  hover. Wire it through the report worker the way report views refresh, joined by ledger id,
-  with an absent row left blank, never 0.00.
+  figures (`ReportKind::TrialBalance`), but the masters screen has no report feed yet. Each
+  cell shows a dash and the heading says why on hover. Wire it through the API worker, asking
+  again when the books change the way the home screen does (`shell/gateway.rs`, `follow`: the
+  change count, voucher count and newest voucher id), joined by ledger id, with an absent row
+  left blank, never 0.00.
 - **deferred: Stock and Value on the items tab** (index.html:1798, `prov('eng','stock engine')`)
   and the "Closing stock" total row. Same reason; the engine has `ReportKind::StockSummary`.
 - **deferred: Open bills on the party detail** (index.html:1806). The engine has
