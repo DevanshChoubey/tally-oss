@@ -13,7 +13,7 @@ use egui::{
 use ledgerly_core::Date;
 
 use super::{
-    AiPanel, AttentionItem, AttentionKind, HomeBody, HomeTarget, KpiView, figure_parts,
+    AiPanel, AttentionItem, AttentionKind, HomeBody, HomeTarget, KpiView, ReviewCard, figure_parts,
     main_columns, tile_columns,
 };
 use crate::theme::{
@@ -22,6 +22,7 @@ use crate::theme::{
 };
 use crate::ui::button::{ButtonKind, button, button_icon};
 use crate::ui::card::card;
+use crate::ui::conf::conf;
 use crate::ui::icon::{self, Icon};
 use crate::ui::note::{NoteKind, note};
 use crate::ui::page_head::page_head;
@@ -35,8 +36,6 @@ const LOADING_LINE: &str =
 const AI_OFF_TEXT: &str = "AI is off for this company. Plain-words entry, bill reading and suggestions are hidden. Rule checks, matching rules and every report work as usual.";
 /// Placeholder for the plain-words line, which needs the assistant and runs nothing.
 const ENTRY_PLACEHOLDER: &str = "Plain-words entry is not built yet. This line runs nothing.";
-/// Placeholder for the review list, which needs the assistant and runs nothing.
-const REVIEW_PLACEHOLDER: &str = "Not built yet. Proposals from the assistant will be listed here, and nothing posts until you accept one.";
 /// The chart's state until the engine has a monthly sales series.
 const CHART_UNSUPPORTED: &str =
     "Not supported yet. The engine gives no monthly sales figures, so no bars are drawn.";
@@ -124,6 +123,7 @@ pub(super) fn figures(
     tiles: &[(KpiView, HomeTarget)],
     ai: AiPanel,
     attention: &[AttentionItem],
+    review: ReviewCard<'_>,
     chosen: &mut Option<HomeTarget>,
 ) -> Vec<Rect> {
     entry_bar(ui, ai);
@@ -148,7 +148,7 @@ pub(super) fn figures(
         },
     );
     ui.add_space(SPACE_3);
-    panels(ui, ai, attention, chosen);
+    panels(ui, ai, attention, review, chosen);
     rects
 }
 
@@ -263,20 +263,35 @@ const ENTRY_GAP: f32 = 14.0;
 
 /// Draws the two lower panels: the review list and the chart on the left, the nudges on the
 /// right. Side by side when the width allows, one after the other otherwise.
-fn panels(ui: &mut Ui, ai: AiPanel, attention: &[AttentionItem], chosen: &mut Option<HomeTarget>) {
+fn panels(
+    ui: &mut Ui,
+    ai: AiPanel,
+    attention: &[AttentionItem],
+    review: ReviewCard<'_>,
+    chosen: &mut Option<HomeTarget>,
+) {
+    // The review list and the nudges may each ask for a screen; both write to `chosen` after the
+    // split, so the two closures never borrow it at the same time.
+    let mut from_review = None;
     split(
         ui,
-        |left| left_column(left, ai),
+        |left| left_column(left, ai, review, &mut from_review),
         |right| right_column(right, attention, chosen),
     );
+    if from_review.is_some() {
+        *chosen = from_review;
+    }
 }
 
-/// The left panel: the review list placeholder (not with AI off), and the sales chart state.
-fn left_column(ui: &mut Ui, ai: AiPanel) {
+/// The rows the Home card lists before "All N" (the mock shows four).
+const REVIEW_ROWS: usize = 4;
+
+/// The left panel: the review list (not with AI off), and the sales chart state.
+fn left_column(ui: &mut Ui, ai: AiPanel, review: ReviewCard<'_>, chosen: &mut Option<HomeTarget>) {
     if ai == AiPanel::Placeholder {
         card(ui, |ui| {
             title(ui, "Waiting for your review");
-            note(ui, NoteKind::Info, REVIEW_PLACEHOLDER);
+            review_list(ui, review, chosen);
         });
         ui.add_space(SPACE_3);
     }
@@ -284,6 +299,70 @@ fn left_column(ui: &mut Ui, ai: AiPanel) {
         title(ui, "Sales by month, before GST");
         note(ui, NoteKind::Info, CHART_UNSUPPORTED);
     });
+}
+
+/// The Home card's list: the same rows as the Review queue, the first few, with a button to the
+/// queue. The button says "All N" only when the queue's count is known (every source listed).
+fn review_list(ui: &mut Ui, review: ReviewCard<'_>, chosen: &mut Option<HomeTarget>) {
+    let Some(panel) = review.panel else {
+        match review.error {
+            Some(error) => note(ui, NoteKind::Bad, error),
+            None => note(ui, NoteKind::Info, "Loading the proposals from the engine."),
+        };
+        return;
+    };
+    let label = match panel.count {
+        Some(count) => format!("All {count}"),
+        None => "Review queue".to_owned(),
+    };
+    if button(ui, &label, None, ButtonKind::Secondary).clicked() {
+        *chosen = Some(HomeTarget::ReviewQueue);
+    }
+    if panel.rows.is_empty() {
+        note(
+            ui,
+            NoteKind::Info,
+            "No proposal is waiting from the connected sources.",
+        );
+    }
+    for row in panel.rows.iter().take(REVIEW_ROWS) {
+        review_row(ui, row);
+    }
+    let t = tokens(ui);
+    if !panel.not_connected.is_empty() {
+        note(
+            ui,
+            NoteKind::Info,
+            &format!(
+                "{} sources are not connected yet, so their proposals are not listed. The Review queue says which.",
+                panel.not_connected.len()
+            ),
+        );
+    }
+    ui.label(
+        RichText::new("Every row is a proposal. Nothing posts until you accept it.")
+            .size(TEXT_META)
+            .color(t.text_3),
+    );
+}
+
+/// One proposal line on the Home card: its kind, what it is about, its confidence and amount.
+fn review_row(ui: &mut Ui, row: &crate::screens::review::QueueRow) {
+    let t = tokens(ui);
+    ui.separator();
+    ui.horizontal(|ui| {
+        ui.label(RichText::new(row.kind).strong());
+        ui.label(row.what.as_str());
+        conf(ui, row.confidence);
+        if let Some(amount) = row.amount {
+            ui.label(format::amount(amount));
+        }
+    });
+    ui.label(
+        RichText::new(row.source.as_str())
+            .size(TEXT_META)
+            .color(t.text_3),
+    );
 }
 
 /// The right panel: the nudges. Each host item is a line with its word; with none, the card says

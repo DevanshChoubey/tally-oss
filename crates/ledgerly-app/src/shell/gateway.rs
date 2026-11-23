@@ -32,6 +32,7 @@ use crate::screen::KeyHint;
 use crate::screens::gst::{GstScreen, GstTab};
 use crate::screens::home::{HomeData, HomeScreen, HomeTarget};
 use crate::screens::masters::MastersScreen;
+use crate::screens::review::ReviewScreen;
 use crate::screens::voucher_entry::VoucherEntryScreen;
 use crate::{AppCtx, Screen, ScreenAction};
 
@@ -119,6 +120,7 @@ impl GatewayScreen {
             HomeTarget::PurchaseFromBill => Err(not_yet("a purchase from a photo of a bill")),
             HomeTarget::DescribeTransaction => Err(not_yet("describing a transaction")),
             HomeTarget::PendingIms => Err(not_yet("the invoice management system list")),
+            HomeTarget::ReviewQueue => Ok(Box::new(ReviewScreen::default()) as Box<dyn Screen>),
         };
         match opened {
             Ok(screen) => {

@@ -342,7 +342,7 @@ impl Api {
     }
 
     /// The statements in the company file, read from the audit log on first use.
-    fn held(&self) -> Result<&BTreeMap<BankStatementId, BankStatement>, ApiError> {
+    pub(crate) fn held(&self) -> Result<&BTreeMap<BankStatementId, BankStatement>, ApiError> {
         self.bank
             .all(|| read_all(self.store()).map_err(ApiError::from))
     }

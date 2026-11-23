@@ -39,7 +39,8 @@ pub(crate) mod draw;
 
 use egui::{Event, InputState, Key, Modifiers, Rect, Ui};
 use ledgerly_api::{
-    Api, Cell, ColumnSpec, Detail, Report, ReportFilter, ReportKind, ReportParams, RowKind,
+    Api, Cell, ColumnSpec, Detail, Report, ReportFilter, ReportKind, ReportParams, ReviewQueue,
+    RowKind,
 };
 use ledgerly_core::format::format_inr;
 use ledgerly_core::{Date, DrCr, Outcome, Paise, Period, SignedAmount, Unsupported};
@@ -47,6 +48,7 @@ use ledgerly_model::seed_groups::reserved_groups;
 use ledgerly_model::{ReservedGroup, Scenario};
 
 use crate::screen::{AiTier, KeyHint};
+use crate::screens::review::{self, QueuePanel};
 use crate::screens::wire::{Done, Latest};
 use crate::theme::SPACE_3;
 use crate::ui::format;
@@ -99,6 +101,18 @@ pub enum HomeTarget {
     PendingIms,
     /// Bank statement lines that are not matched yet.
     UnmatchedBankLines,
+    /// The Review queue (the card's button).
+    ReviewQueue,
+}
+
+/// The Home card's review list: the panel the Review queue draws, or why it has none yet. Both
+/// come from the same `Api::review_queue` answer.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ReviewCard<'a> {
+    /// The queue's panel, once it has been read.
+    pub panel: Option<&'a QueuePanel>,
+    /// Why the queue could not be read, when it could not.
+    pub error: Option<&'a str>,
 }
 
 /// One KPI tile. Every field comes from a report output; the screen computes none of them.
@@ -583,6 +597,12 @@ pub struct HomeScreen {
     want: Option<Date>,
     /// The KPI refresh running on the API worker.
     latest: Latest<Vec<Kpi>>,
+    /// The review queue read running on the API worker, with the KPI refresh.
+    review_latest: Latest<Result<ReviewQueue, String>>,
+    /// The review queue's panel from the last read, shared with the Review screen's rows.
+    review: Option<QueuePanel>,
+    /// Why the review queue could not be read, when it could not.
+    review_error: Option<String>,
     /// Why the KPIs could not be refreshed, when they could not.
     notice: Option<String>,
     /// Where each KPI tile was drawn in the last frame, in order. Empty when no tile was drawn.
@@ -600,6 +620,9 @@ impl HomeScreen {
             request: None,
             want: None,
             latest: Latest::default(),
+            review_latest: Latest::default(),
+            review: None,
+            review_error: None,
             notice: None,
             tile_rects: Vec::new(),
             head: None,
@@ -618,6 +641,12 @@ impl HomeScreen {
         self.want.is_some() || self.latest.is_pending()
     }
 
+    /// The Home card's review list from the last read: the same panel the Review queue draws.
+    #[must_use]
+    pub fn review_panel(&self) -> Option<&QueuePanel> {
+        self.review.as_ref()
+    }
+
     /// Why the last refresh failed, when it did.
     #[must_use]
     pub fn notice(&self) -> Option<&str> {
@@ -628,6 +657,19 @@ impl HomeScreen {
     /// to `worker`. With no worker (no company open) the request is dropped and the notice says
     /// so; the tiles are left as they were.
     pub fn tick(&mut self, worker: Option<&ApiWorker>) {
+        match self.review_latest.poll() {
+            Some(Done::Ready(Ok(queue))) => {
+                self.review = Some(review::panel(&queue));
+                self.review_error = None;
+            }
+            Some(Done::Ready(Err(e))) => self.review_error = Some(e),
+            Some(Done::Lost) => {
+                self.review_error = Some(
+                    "The background worker stopped, so the proposals could not be read.".to_owned(),
+                );
+            }
+            None => {}
+        }
         match self.latest.poll() {
             Some(Done::Ready(kpis)) => {
                 self.data.kpis = kpis;
@@ -649,6 +691,8 @@ impl HomeScreen {
             return;
         };
         self.latest.start(handle, move |api| home_kpis(api, as_of));
+        self.review_latest
+            .start(handle, |api| api.review_queue().map_err(|e| e.to_string()));
     }
 
     /// What the screen shows now.
@@ -791,7 +835,12 @@ impl Screen for HomeScreen {
                 HomeBody::NewCompany { begins } => draw::welcome(ui, begins, &mut chosen),
                 HomeBody::Loading => draw::skeleton(ui),
                 HomeBody::Figures => {
-                    rects = draw::figures(ui, &tiles, ai, &self.data.attention, &mut chosen);
+                    let review = ReviewCard {
+                        panel: self.review.as_ref(),
+                        error: self.review_error.as_deref(),
+                    };
+                    rects =
+                        draw::figures(ui, &tiles, ai, &self.data.attention, review, &mut chosen);
                 }
                 HomeBody::NoFigures => draw::no_figures(ui),
             }

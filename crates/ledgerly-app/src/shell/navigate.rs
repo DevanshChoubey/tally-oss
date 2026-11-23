@@ -670,7 +670,7 @@ fn screen_for_key(key: &str, ctx: &AppCtx) -> Option<Result<Box<dyn Screen>, Nav
         BANK_RECON_KEY => {
             books_of(ctx).and_then(|b| Ok(Box::new(sole_bank_screen(b)?) as Box<dyn Screen>))
         }
-        REVIEW_KEY => Ok(Box::new(ReviewScreen)),
+        REVIEW_KEY => Ok(Box::new(ReviewScreen::default())),
         ASK_KEY => Ok(Box::new(AskScreen)),
         QUICK_ENTRY_KEY => Ok(Box::new(QuickEntryScreen)),
         PURCHASE_BILL_KEY => Ok(Box::new(PurchaseBillScreen)),

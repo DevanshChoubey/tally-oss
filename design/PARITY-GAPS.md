@@ -300,3 +300,32 @@ matching to propose a ledger, which is not built).
   supplier ledger" (help.tallysolutions.com/tally-prime/purchase-process/purchase-goods-and-services-tally/),
   both read 2026-11-23. Neither says which ledgers the list shows or leaves out. Limiting it to
   cash, bank and party groups needs a page that documents the list before it is changed.
+
+## Review queue (card W4, round of 2026-11-23)
+
+- **deferred: the queue lists bank matches only.** The mock lists six kinds (index.html:1023 and
+  1203). The engine lists bank matches for the newest stored statement of each bank ledger
+  (`Api::review_queue`, `ledgerly-api/src/review.rs`). Five sources have no engine list yet and
+  are named on the screen and on Home with the engine's reason: bill photo drafts (no bill
+  reader), plain-words drafts (no assistant), new ledger suggestions, possible duplicates (rule
+  D-02, index.html:1036), and 2B explanations (no 2B reader, engine item E-3). Closing each needs
+  its own engine list; nothing is shown for them until then.
+- **deferred: the sidebar count (6 in the mock) is off.** `ReviewQueue::count` is `None` while any
+  source is unlisted, so no partial count is shown. It comes back when every source is listed.
+- **deferred: Y accept, N reject and Ctrl+A on the queue.** The mock's decisions
+  (index.html:1224) need a reject command and a queue-side accept. Enter opens the row's bank
+  ledger (bank reconciliation), but does not yet select the suggested line or its tab. Accepting
+  there goes through `Api::confirm_bank_match`.
+- **deferred: Home rows do not open their proposal.** The Home card lists the same rows as the
+  queue (index.html:1066). Its button says "Review queue" until the count exists. Rows are not
+  clickable yet.
+- **deferred: the empty state's action.** The mock's review.empty has "Read a bill" (Alt+O,
+  index.html:1206). It needs the bill reader. The app's empty state says which sources are not
+  connected instead of the mock's "Nothing to review", because that wording claims every source
+  is empty.
+- **by design: no optional-voucher list.** Tally's nearest page is "Display Optional Vouchers"
+  under Exception Reports (help.tallysolutions.com/docs/te9rel66/Reports/MIS_Reports/Display_Optional_Vouchers.htm,
+  read 2026-11-23). It lists vouchers marked Optional, which are not posted. It is not a queue of
+  proposals awaiting a decision, so the queue is not built from it.
+- **data: review.default and review.empty captures.** Not captured in this round. The capture
+  company has no bank statement, so review.default would show the not-connected list only.
