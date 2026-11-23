@@ -260,8 +260,5 @@ matching to propose a ledger, which is not built).
   and As Voucher (help.tallysolutions.com/sales-of-goods-services/). Ctrl+H here switches
   between the first two only, as the mock's toast says; As Voucher is not built (the GST engine
   refuses it).
-- **bug: the sidebar does not highlight Sales or Purchase while its invoice is open.** The
-  screen's title is "Sales invoice" or "Purchase invoice" and `selected_label` only matches a
-  title equal to the row's label or the label and a colon.
 - **deferred: More details (Ctrl+I), the e-Invoice status, the voucher number in the title, the
   party balance line and the place-of-supply note** (index.html, `sales-invoice`). Not built.

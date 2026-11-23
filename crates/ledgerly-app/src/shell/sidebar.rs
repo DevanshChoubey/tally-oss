@@ -230,7 +230,8 @@ fn entry_screen(ctx: &AppCtx, kind: BaseVoucherKind) -> Result<Box<dyn Screen>, 
 }
 
 /// The sidebar entry that names the screen on top of a stack, by its title: the title equals the
-/// entry's label, or starts with it and a colon (`Masters: Ledgers`, `Bank reconciliation: HDFC`),
+/// entry's label, starts with it and a colon (`Masters: Ledgers`, `Bank reconciliation: HDFC`),
+/// or is the label and " invoice" (`Sales invoice`: the invoice screen of the Sales row),
 /// ignoring case. `None` when no entry names it (the screen is not in the sidebar).
 #[must_use]
 pub fn selected_label(top_title: &str) -> Option<&'static str> {
@@ -241,7 +242,9 @@ pub fn selected_label(top_title: &str) -> Option<&'static str> {
         .flat_map(|group| group.entries.iter())
         .find(|entry| {
             let label = entry.label.to_lowercase();
-            top == label || top.starts_with(&format!("{label}:"))
+            top == label
+                || top.starts_with(&format!("{label}:"))
+                || top == format!("{label} invoice")
         })
         .map(|entry| entry.label)
 }

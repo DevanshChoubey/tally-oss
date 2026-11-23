@@ -244,6 +244,15 @@ fn the_selected_entry_follows_the_top_of_the_stack() {
     );
     assert_eq!(sidebar::selected_label("Day Book"), Some("Day book"));
     assert_eq!(sidebar::selected_label("Some other screen"), None);
+    // An invoice titles itself "<voucher type> invoice"; the mock's sidebar row Sales is the
+    // `sales-invoice` screen (index.html:888, `NAV`), so it is selected while the invoice is open.
+    // Purchase opens the same screen here. A credit note has no sidebar row.
+    assert_eq!(sidebar::selected_label("Sales invoice"), Some("Sales"));
+    assert_eq!(
+        sidebar::selected_label("Purchase invoice"),
+        Some("Purchase")
+    );
+    assert_eq!(sidebar::selected_label("Credit Note invoice"), None);
 
     let mut shell = Shell::new(leaf("Home"));
     assert_eq!(shell.selected_sidebar(), Some("Home"));
