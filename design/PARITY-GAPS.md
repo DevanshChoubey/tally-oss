@@ -183,12 +183,16 @@ matching to propose a ledger, which is not built).
 - **by design: "Create {kind}" follows the tab.** The mock's button always says "Create ledger";
   ours names the kind on screen ("Create stock item"), since Alt+C creates that kind.
 - **by design: the filter is on every tab.** The mock's items tab has no filter box.
-- **bug: "Alt+C creates anywhere" is not true yet.** The subtitle is the mock's word for word,
-  but Alt+C creates a master only on this screen; the shell has no global Alt+C. Needs the shell
-  to open the create form from any screen, or the subtitle to drop "anywhere".
-- **bug: Enter does not move to the next field in the form.** The mock's form keys are "Enter
-  Next field" (index.html:1831); ours offer Tab, which is what egui moves focus with. Needs an
-  Enter-advances-focus rule for single-line fields that does not break multi-line ones.
+- **bug: "Alt+C creates anywhere" is not true yet.** The subtitle is the mock's word for word.
+  The mock means Alt+C on any master field creates that master there (index.html:916 "Create
+  master here", 1325 on the sales invoice: "The form opens on top and returns with it
+  selected"). Ours does that on this screen and on a voucher's ledger field only; the sales
+  invoice's item field and the purchase bill have no Alt+C yet. Needs Alt+C on those fields,
+  or the subtitle to drop "anywhere".
+- **by design: Enter walks every field, as Tab does.** Enter in a one-line field moves to the next
+  field and Shift+Enter to the previous one (index.html:1831, 1344), including the lists and
+  switches between them; in a multi-line field (the address) Enter is a new line. Enter on a
+  list or switch opens or flips it, as egui's own keys do.
 - **by design: the forms have more fields than the mock.** Opening balance, cost centres, party,
   bank, tax and GST details follow the TallyPrime ledger master; the mock's form shows the party
   fields only. They come after the mock's fields, in the same four-column sheet.

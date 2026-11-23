@@ -627,9 +627,9 @@ fn enter_is_offered_only_where_it_opens_something() {
 #[test]
 fn the_form_key_bar_reads_like_the_mocks_and_names_the_kind() {
     // provenance: index.html:1831: in the ledger form the key bar is named "Ledger" and reads
-    // Enter Next field, Ctrl+A Save, Esc Back. Derived: in this form Tab moves to the next field
-    // and Enter does not yet, so the bar says Tab (design/PARITY-GAPS.md). Catches "Esc Cancel"
-    // and the bar named "Masters".
+    // Enter Next field, Ctrl+A Save, Esc Back. Enter moves to the next one-line field
+    // (tests/w2_masters_enter.rs). Catches "Esc Cancel", the bar named "Masters", and the bar
+    // still offering Tab.
     let ctx = egui::Context::default();
     let mut app = app_with(fixture());
     let mut s = MastersScreen::new();
@@ -639,7 +639,7 @@ fn the_form_key_bar_reads_like_the_mocks_and_names_the_kind() {
     assert_eq!(s.key_bar_name(), "Ledger");
     assert_eq!(
         pairs(&s),
-        owned(&[("Tab", "Next field"), ("Ctrl+A", "Save"), ("Esc", "Back")])
+        owned(&[("Enter", "Next field"), ("Ctrl+A", "Save"), ("Esc", "Back")])
     );
 }
 

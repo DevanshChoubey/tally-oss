@@ -4,8 +4,12 @@
 //!
 //! Drawing only: every edit goes straight into the draft, and nothing is checked here. The
 //! checks live in [`super::draft`], so the same rules apply to a click and to a test.
+//!
+//! Enter in a one-line field moves to the next field and Shift+Enter to the previous one
+//! (index.html:1831 "Enter Next field"; 1344 "Shift+Enter Previous"), as Tab and Shift+Tab do. A
+//! multi-line field keeps Enter for a new line.
 
-use egui::{Align, Align2, FontId, Layout, RichText, Ui, vec2};
+use egui::{Align, Align2, FocusDirection, FontId, Id, Key, Layout, Modifiers, RichText, Ui, vec2};
 use ledgerly_core::{DrCr, StateCode};
 use ledgerly_model::{
     Masters, Nature, RegistrationType, TaxLedgerKind, Taxability, ValuationMethod,
@@ -32,6 +36,64 @@ const FIELD_HEIGHT: f32 = 32.0;
 const LABEL_GAP: f32 = 4.0;
 /// The least width of one column, so a narrow window still shows something.
 const COLUMN_MIN: f32 = 60.0;
+
+/// Where the form keeps the ids of the one-line fields it drew, in order.
+fn lines_key() -> Id {
+    Id::unique("masters-form-lines")
+}
+
+/// The ids of the form's one-line fields, in the order the last frame drew them. A test gives
+/// one the keyboard with these.
+#[must_use]
+pub fn line_ids(ctx: &egui::Context) -> Vec<Id> {
+    ctx.data(|d| d.get_temp::<Vec<Id>>(lines_key()))
+        .unwrap_or_default()
+}
+
+/// The id of the party's address, the form's multi-line field.
+#[must_use]
+pub fn address_id() -> Id {
+    Id::unique("masters-form-address")
+}
+
+/// Turns Enter in a one-line field into a move to the next field, and Shift+Enter into a move to
+/// the previous one. Runs before the fields draw: egui moves the keyboard when the focused field
+/// says it wants focus, and forgets the direction at the start of each frame. The fields are the
+/// ones the last frame drew; the list is drawn afresh after this.
+fn enter_moves_focus(ui: &Ui) {
+    let ctx = ui.ctx();
+    let last = ctx
+        .data_mut(|d| d.remove_temp::<Vec<Id>>(lines_key()))
+        .unwrap_or_default();
+    let Some(focused) = ctx.memory(egui::Memory::focused) else {
+        return;
+    };
+    if !last.contains(&focused) {
+        return;
+    }
+    let direction = ctx.input_mut(|i| {
+        if i.consume_key(Modifiers::SHIFT, Key::Enter) {
+            FocusDirection::Previous
+        } else if i.consume_key(Modifiers::NONE, Key::Enter) {
+            FocusDirection::Next
+        } else {
+            FocusDirection::None
+        }
+    });
+    if direction != FocusDirection::None {
+        ctx.memory_mut(|m| m.move_focus(direction));
+    }
+}
+
+/// Adds a one-line field and notes its id for [`enter_moves_focus`].
+fn one_line(ui: &mut Ui, edit: egui::TextEdit<'_>) -> egui::Response {
+    let response = ui.add(edit);
+    ui.data_mut(|d| {
+        d.get_temp_mut_or_default::<Vec<Id>>(lines_key())
+            .push(response.id);
+    });
+    response
+}
 
 /// Draws the result of the GSTIN check under the GSTIN field (index.html:1810): nothing when the
 /// field is empty; "Check character OK" with the PAN and state the GSTIN holds when every test
@@ -177,7 +239,8 @@ fn fld(ui: &mut Ui, span: u8, label: &str, body: impl FnOnce(&mut Ui)) {
 
 /// A one-line input as wide as its field, 32 points tall.
 fn input(ui: &mut Ui, value: &mut String) -> egui::Response {
-    ui.add(
+    one_line(
+        ui,
         egui::TextEdit::singleline(value)
             .font(FontId::proportional(TEXT_INPUT))
             .align(Align2::LEFT_CENTER)
@@ -196,7 +259,8 @@ fn text_row(ui: &mut Ui, span: u8, label: &str, value: &mut String) {
 /// A one-line field for a number, right-aligned (`input.num`).
 fn number_row(ui: &mut Ui, span: u8, label: &str, value: &mut String) {
     fld(ui, span, label, |ui| {
-        ui.add(
+        one_line(
+            ui,
             egui::TextEdit::singleline(value)
                 .font(FontId::proportional(TEXT_INPUT))
                 .align(Align2::RIGHT_CENTER)
@@ -207,10 +271,11 @@ fn number_row(ui: &mut Ui, span: u8, label: &str, value: &mut String) {
 }
 
 /// A multi-line text field.
-fn area_row(ui: &mut Ui, span: u8, label: &str, value: &mut String) {
+fn area_row(ui: &mut Ui, span: u8, id: Id, label: &str, value: &mut String) {
     fld(ui, span, label, |ui| {
         ui.add(
             egui::TextEdit::multiline(value)
+                .id(id)
                 .font(FontId::proportional(TEXT_INPUT))
                 .desired_rows(3)
                 .desired_width(ui.available_width()),
@@ -341,6 +406,7 @@ pub(crate) fn draw_form(
     editing: Option<u64>,
     balance: Option<&str>,
 ) {
+    enter_moves_focus(ui);
     let width = ui.available_width();
     ui.allocate_ui_with_layout(
         vec2(width, 0.0),
@@ -515,7 +581,8 @@ fn draw_ledger(ui: &mut Ui, masters: &Masters, d: &mut LedgerDraft, balance: Opt
         ui.horizontal(|ui| {
             let side_w = 72.0;
             let text_w = (ui.available_width() - side_w - 8.0).max(40.0);
-            ui.add(
+            one_line(
+                ui,
                 egui::TextEdit::singleline(&mut d.opening)
                     .font(FontId::proportional(TEXT_INPUT))
                     .align(Align2::RIGHT_CENTER)
@@ -610,7 +677,7 @@ fn draw_party_rest(ui: &mut Ui, p: &mut PartyDraft) {
     text_row(ui, 1, "PIN code", &mut p.pincode);
     text_row(ui, 1, "Country", &mut p.country);
     ui.end_row();
-    area_row(ui, 2, "Address", &mut p.address_lines);
+    area_row(ui, 2, address_id(), "Address", &mut p.address_lines);
     ui.end_row();
 }
 

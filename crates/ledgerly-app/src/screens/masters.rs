@@ -86,6 +86,7 @@ pub use draft::{
     BankDraft, CostCentreDraft, GroupDraft, GstDraft, LedgerDraft, MasterDraft, PartyDraft,
     StockItemDraft, TaxDraft, TreeDraft, UNASSIGNED_ID, UnitDraft, creation_allowed, parse_rupees,
 };
+pub use form_ui::{address_id, line_ids};
 pub use list::{MasterRow, list_rows, snapshot_of};
 pub use look::filter_id;
 
@@ -1313,7 +1314,7 @@ impl MastersScreen {
                 keys
             }
             ModeTag::Form => vec![
-                KeyHint::new("Tab", "Next field"),
+                KeyHint::new("Enter", "Next field"),
                 KeyHint::new("Ctrl+A", "Save"),
                 KeyHint::new("Esc", "Back"),
             ],
