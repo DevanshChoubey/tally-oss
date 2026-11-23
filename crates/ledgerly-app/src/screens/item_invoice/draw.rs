@@ -22,7 +22,7 @@ use crate::ui::page_head::page_head;
 use crate::ui::prov::{ProvKind, prov};
 use crate::ui::{bold_font, format, table, tokens};
 use crate::{AppCtx, Screen, ScreenAction};
-use egui::{Align, Id, Layout, RichText, Ui};
+use egui::{Align, Id, Layout, Rect, RichText, Ui};
 use egui_extras::{Column, TableRow};
 use ledgerly_api::Command;
 use ledgerly_core::LedgerId;
@@ -310,14 +310,23 @@ fn caption(ui: &mut Ui, label: &str) {
 /// empty query) never pushes the rest of the invoice off the screen.
 const PICKER_MAX_HEIGHT: f32 = 220.0;
 
-/// The type-ahead list under a field: one selectable row per entry; a click picks it.
-fn draw_picker(ui: &mut Ui, labels: &[String], pick: usize, events: &mut Vec<UiEvent>) {
+/// The type-ahead list under a field: one selectable row per entry; a click picks it. Returns
+/// where the list was drawn, or `None` when there is nothing to list.
+fn draw_picker(
+    ui: &mut Ui,
+    labels: &[String],
+    pick: usize,
+    events: &mut Vec<UiEvent>,
+) -> Option<Rect> {
     if labels.is_empty() {
-        return;
+        return None;
     }
-    ui.group(|ui| {
+    let shown = ui.group(|ui| {
+        // A grid cell offers little height, and a scroll area then shrinks to its default
+        // minimum (about three rows); a long list keeps its full height instead.
         egui::ScrollArea::vertical()
             .max_height(PICKER_MAX_HEIGHT)
+            .min_scrolled_height(PICKER_MAX_HEIGHT)
             .show(ui, |ui| {
                 for (j, label) in labels.iter().enumerate() {
                     let row = ui.selectable_label(j == pick, label.as_str());
@@ -330,6 +339,7 @@ fn draw_picker(ui: &mut Ui, labels: &[String], pick: usize, events: &mut Vec<UiE
                 }
             });
     });
+    Some(shown.response.rect)
 }
 
 /// The party's GSTIN with its check badge, or the B2C words for an unregistered party.
@@ -509,7 +519,7 @@ impl ItemInvoiceScreen {
                     let s = spec("party", Field::Party, PARTY_WIDTH, "type to search");
                     text_field(ui, &s, &mut self.draft.party_text, want, ev);
                     if focus == Field::Party {
-                        draw_picker(ui, labels, pick, ev);
+                        self.shown.picker = draw_picker(ui, labels, pick, ev);
                     }
                 });
                 ui.vertical(|ui| {
@@ -531,7 +541,7 @@ impl ItemInvoiceScreen {
                             let s = spec("account", Field::Account, PARTY_WIDTH, "type to search");
                             text_field(ui, &s, &mut self.draft.account_text, want, ev);
                             if focus == Field::Account {
-                                draw_picker(ui, labels, pick, ev);
+                                self.shown.picker = draw_picker(ui, labels, pick, ev);
                             }
                         });
                     }
@@ -638,7 +648,7 @@ impl ItemInvoiceScreen {
                 });
             });
         if matches!(focus, Field::Ledger(_)) {
-            draw_picker(ui, labels, pick, ev);
+            self.shown.picker = draw_picker(ui, labels, pick, ev);
         }
     }
 
@@ -686,7 +696,7 @@ impl ItemInvoiceScreen {
                 });
             });
         if matches!(focus, Field::Item(_)) {
-            draw_picker(ui, labels, pick, ev);
+            self.shown.picker = draw_picker(ui, labels, pick, ev);
         }
         for line in shown.iter().filter(|line| !line.focused) {
             if let Some(problem) = &line.problem {
@@ -744,7 +754,8 @@ impl ItemInvoiceScreen {
                         width: ui.available_width(),
                         hint: "Optional",
                     };
-                    text_field(ui, &s, &mut self.draft.narration, want, ev);
+                    let field = ui.scope(|ui| text_field(ui, &s, &mut self.draft.narration, want, ev));
+                    self.shown.narration = Some(field.response.rect);
                     match &self.notice {
                         Some(Notice::Error(s)) => {
                             note(ui, NoteKind::Bad, s);
@@ -831,6 +842,7 @@ impl ItemInvoiceScreen {
     }
 
     fn draw(&mut self, ui: &mut Ui, masters: &Masters) -> ScreenAction {
+        self.shown = Shown::default();
         let base = ui.scope_id().with("item-invoice");
         let mut labels = self.pick_labels(masters);
         let (any_key, pop) = self.run_keys(ui, masters, &labels);
@@ -887,6 +899,29 @@ impl ItemInvoiceScreen {
             ui.ctx().request_repaint();
         }
         action
+    }
+}
+
+/// Where parts of the screen were drawn in the last frame, for layout tests.
+#[derive(Debug, Clone, Copy, Default)]
+pub(super) struct Shown {
+    /// The narration field.
+    pub(super) narration: Option<Rect>,
+    /// The open type-ahead list.
+    pub(super) picker: Option<Rect>,
+}
+
+impl ItemInvoiceScreen {
+    /// Where the narration field was drawn in the last frame; `None` before the first frame.
+    #[must_use]
+    pub fn narration_rect(&self) -> Option<Rect> {
+        self.shown.narration
+    }
+
+    /// Where the open type-ahead list was drawn in the last frame; `None` when none was open.
+    #[must_use]
+    pub fn picker_rect(&self) -> Option<Rect> {
+        self.shown.picker
     }
 }
 

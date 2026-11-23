@@ -324,3 +324,195 @@ fn f8_on_a_company_without_inventory_opens_the_accounting_invoice() {
     let subtitle = screen.subtitle().unwrap();
     assert!(subtitle.starts_with("Accounting invoice"), "{subtitle}");
 }
+
+/// The invoice up to the first particular: Sharma Traders, place 27, no reference.
+fn to_particulars(s: &mut ItemInvoiceScreen, books: &Books) {
+    let m = &books.masters;
+    s.set_party_text("sharma");
+    s.submit(m);
+    "27".clone_into(&mut s.draft_mut().place_text);
+    s.submit(m);
+    s.submit(m);
+    assert_eq!(s.focus(), Field::Ledger(0));
+}
+
+#[test]
+fn enter_on_a_blank_second_particular_ends_them_and_a_zero_amount_is_refused() {
+    // provenance: derived, as on the item lines: a blank row after the first ends the list and
+    // goes to the narration (the blank row is dropped); a particular of 0.00 is refused (a line
+    // with no amount carries no sale); typing over a picked ledger un-picks it.
+    let (_api, books) = setup("w2_acc_inv_rows.ledgerly");
+    let m = &books.masters;
+    let mut s = open(&books);
+    to_particulars(&mut s, &books);
+    s.set_particular_text(0, "service");
+    s.submit(m);
+    "0".clone_into(&mut s.draft_mut().particulars.get_mut(0).unwrap().amount_text);
+    s.submit(m);
+    assert_eq!(s.focus(), Field::LedgerAmount(0));
+    assert!(s.error_text().is_some());
+    "10000".clone_into(&mut s.draft_mut().particulars.get_mut(0).unwrap().amount_text);
+    s.submit(m);
+    assert_eq!(s.focus(), Field::Ledger(1));
+    s.submit(m);
+    assert_eq!(s.focus(), Field::Narration);
+    assert_eq!(s.draft().particulars.len(), 1);
+    s.set_particular_text(0, "serv");
+    assert_eq!(s.draft().particulars.first().unwrap().ledger, None);
+}
+
+#[test]
+fn alt_c_on_a_particular_creates_its_ledger_without_a_worker() {
+    // provenance: help.tallysolutions.com/ledgers-in-tallyprime/: "In the Voucher Creation
+    // screen, when your cursor is on the ledger selection field, press Alt+C". Derived: Enter on
+    // a name that matches nothing says how to create it; Alt+C opens the form with the typed
+    // name; confirming moves on to the amount with no ledger behind the name yet; Enter on the
+    // name says it is still being created; the host's answer (id 77) fills the particular.
+    let (_api, books) = setup("w2_acc_inv_create.ledgerly");
+    let m = &books.masters;
+    let mut s = open(&books);
+    to_particulars(&mut s, &books);
+    s.set_particular_text(0, "Consulting Fees");
+    s.submit(m);
+    assert_eq!(s.focus(), Field::Ledger(0));
+    assert!(s.error_text().unwrap().contains("Alt+C"));
+    s.begin_create();
+    assert_eq!(s.creating_name(), Some("Consulting Fees"));
+    s.confirm_create(
+        m,
+        "Consulting Fees",
+        Some(group(ReservedGroup::SalesAccounts)),
+    );
+    assert!(!s.is_creating());
+    assert_eq!(s.focus(), Field::LedgerAmount(0));
+    let requests = s.take_master_requests();
+    assert_eq!(requests.len(), 1);
+    s.step_back();
+    assert_eq!(s.focus(), Field::Ledger(0));
+    s.submit(m);
+    assert_eq!(s.focus(), Field::Ledger(0));
+    assert!(
+        s.error_text().unwrap().contains("still being created"),
+        "{:?}",
+        s.error_text()
+    );
+    s.resolve_created_ledger("Consulting Fees", LedgerId(77));
+    assert_eq!(
+        s.draft().particulars.first().unwrap().ledger,
+        Some(LedgerId(77))
+    );
+}
+
+#[test]
+fn alt_c_on_a_particular_with_the_worker_creates_the_ledger_in_the_store() {
+    // provenance: help.tallysolutions.com/keyboard-shortcuts-tally-prime/ (Alt+C creates
+    // "another master on the fly while creating ... vouchers"). Derived: the engine creates
+    // "Consulting Fees" under Sales Accounts and the particular holds the id the store gave it
+    // (found by name after reopening the file).
+    let (api, books) = setup("w2_acc_inv_create_worker.ledgerly");
+    let masters = books.masters.clone();
+    let mut s = open(&books);
+    to_particulars(&mut s, &books);
+    s.set_particular_text(0, "Consulting Fees");
+    s.begin_create();
+    s.confirm_create(
+        &masters,
+        "Consulting Fees",
+        Some(group(ReservedGroup::SalesAccounts)),
+    );
+    let mut app = AppCtx {
+        books: Some(books),
+        api: Some(ApiWorker::spawn(api).unwrap()),
+        lock_date: None,
+        ai_tier: None,
+    };
+    let ctx = egui::Context::default();
+    for _ in 0..2000 {
+        let out = ctx.run_ui(RawInput::default(), |ui| {
+            let _stay = s.ui(ui, &mut app);
+        });
+        out.drop_without_applying_deltas();
+        if s.draft().particulars.first().unwrap().ledger.is_some() || s.error_text().is_some() {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    assert_eq!(s.error_text(), None);
+    let picked = s.draft().particulars.first().unwrap().ledger;
+    drop(app);
+    let reopened = Api::open(&path("w2_acc_inv_create_worker.ledgerly")).unwrap();
+    let Ok(Outcome::Value(books)) = reopened.books() else {
+        panic!("the books did not load");
+    };
+    let made = books
+        .masters
+        .ledgers
+        .values()
+        .find(|l| l.name == "Consulting Fees")
+        .expect("the ledger was created");
+    assert_eq!(picked, Some(made.id));
+    assert_eq!(made.group, group(ReservedGroup::SalesAccounts));
+}
+
+#[test]
+fn the_open_ledger_list_keeps_its_height_and_the_invoice_stays_in_the_window() {
+    // provenance: derived from the layout. Window 1280 by 800 points; the keyboard is on the
+    // empty party field, so the list shows every ledger (16 or more: the 4 of the fixture and 12
+    // more). Each row is at least 18 points, so the rows are taller than the list's 220-point cap
+    // and the list is drawn at the cap (at least 220 points with its frame). The header, the
+    // list, the lines and the narration then fit in 800 points, so the narration's bottom edge is
+    // inside the window. Before the fix the header grid laid its columns out at their minimum
+    // width, every ledger name wrapped a letter or two per line, and the narration was pushed far
+    // below the window; the list was also cut to about three rows.
+    let (mut api, _) = setup("w2_acc_inv_layout.ledgerly");
+    for n in 1..=12 {
+        let made = api.execute(Command::CreateLedger(ledger(
+            &format!("Customer {n:02}"),
+            ReservedGroup::SundryDebtors,
+        )));
+        assert!(matches!(made, Ok(Outcome::Value(_))), "{made:?}");
+    }
+    let Ok(Outcome::Value(books)) = api.books() else {
+        panic!("the books did not load");
+    };
+    let window = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::Vec2::new(1280.0, 800.0));
+    let sales = books
+        .masters
+        .voucher_types
+        .values()
+        .find(|t| t.base == BaseVoucherKind::Sales)
+        .unwrap()
+        .id;
+    for mode in [InvoiceMode::Accounting, InvoiceMode::Item] {
+        let fy = FinancialYear::april(2026).unwrap();
+        let Ok(Outcome::Value(mut s)) =
+            ItemInvoiceScreen::open_in(&books, sales, fy, date!(2026 - 11 - 21), mode)
+        else {
+            panic!("the screen did not open");
+        };
+        let mut app = AppCtx {
+            books: Some(books.clone()),
+            api: None,
+            lock_date: None,
+            ai_tier: None,
+        };
+        let ctx = egui::Context::default();
+        for _ in 0..3 {
+            let input = RawInput {
+                screen_rect: Some(window),
+                ..RawInput::default()
+            };
+            let out = ctx.run_ui(input, |ui| {
+                let _stay = s.ui(ui, &mut app);
+            });
+            out.drop_without_applying_deltas();
+        }
+        let list = s.picker_rect().expect("the party list is open");
+        assert!(list.height() >= 220.0, "{mode:?}: list {list:?}");
+        let narration = s.narration_rect().expect("the narration is drawn");
+        assert!(
+            narration.max.y <= window.max.y,
+            "{mode:?}: narration {narration:?} must lie inside the window {window:?}"
+        );
+    }
+}

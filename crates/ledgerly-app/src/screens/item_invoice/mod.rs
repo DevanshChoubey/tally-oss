@@ -41,7 +41,8 @@
 //!
 //! Godown and batch allocation, bill references on a bill-wise party, and units other than the
 //! item's own are `Unsupported` ([`InvoiceError::Unsupported`]). Alt+C creates a ledger from the
-//! party or sales/purchase ledger field (the `create` submodule); it creates no stock item, since
+//! party, sales/purchase ledger or Particulars ledger field (the `create` submodule); it creates
+//! no stock item, since
 //! the pages read document Alt+C on ledger fields only.
 //! The place of supply is never defaulted: the user sets it.
 //!
@@ -287,7 +288,8 @@ pub fn place_label(state: StateCode) -> String {
 // The engine's answer
 // ---------------------------------------------------------------------------------------------
 
-/// Tax on one inventory line, as the engine computed it.
+/// Tax on one line the engine taxed (an inventory line of an item invoice, a particular of an
+/// accounting invoice), as the engine computed it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GstBlockLine {
     /// Taxable value of the line.
@@ -502,6 +504,8 @@ pub struct ItemInvoiceScreen {
     creating: Option<(String, Ticket<CommandReply>)>,
     /// Fields waiting for a ledger the engine has not named yet, with the name asked for.
     waiting: Vec<(create::CreateFor, String)>,
+    /// Where parts of the screen were drawn in the last frame.
+    shown: draw::Shown,
 }
 
 impl ItemInvoiceScreen {
@@ -573,6 +577,7 @@ impl ItemInvoiceScreen {
             create_queue: VecDeque::new(),
             creating: None,
             waiting: Vec::new(),
+            shown: draw::Shown::default(),
         }))
     }
 
