@@ -5,7 +5,10 @@
 //! one ([`feature_rows`]); a GSTIN must agree with the state ([`check_gstin`]); books may begin
 //! on any day of the financial year ([`parse_books_begin`]).
 
-use ledgerly_core::{CompanyId, Date, Gstin, GstinError, Pan, StateCode};
+use std::path::Path;
+
+use ledgerly_api::{AiTier, Api};
+use ledgerly_core::{Clock, CompanyId, Date, Gstin, GstinError, Outcome, Pan, StateCode};
 use ledgerly_model::{
     Address, Company, EntityKind, Features, GstRegistration, NegativeStockPolicy,
 };
@@ -120,21 +123,58 @@ pub enum KeyOutcome {
 }
 
 /// What a step says when its choice cannot be stored yet, or `None` when the step saves what it
-/// asks. The keyboard preset, AI tier and backup folder have no store (design/PARITY-GAPS.md).
+/// asks. The keyboard preset and backup folder have no store (design/PARITY-GAPS.md); the AI tier
+/// is stored, and [`ai_notice`] covers the one AI choice the engine refuses.
 #[must_use]
 pub fn unsaved_notice(step: Step) -> Option<&'static str> {
     match step {
         Step::Keyboard => Some(
             "This choice is not saved yet: every company uses the classic keys until keyboard presets are stored (PARITY-GAPS).",
         ),
-        Step::Ai => Some(
-            "This choice is not saved yet. Until an AI setting is stored, the top bar says AI is not set up (PARITY-GAPS).",
-        ),
         Step::Backup => {
             Some("This folder is not saved and no backup runs on a schedule yet (PARITY-GAPS).")
         }
-        Step::Welcome | Step::Company | Step::Features | Step::Done => None,
+        Step::Welcome | Step::Company | Step::Ai | Step::Features | Step::Done => None,
     }
+}
+
+/// What the AI step says under the cards for `choice`, or `None` when the choice is stored with
+/// the company. Off and On this computer are stored ([`create_company`]); the cloud tier is
+/// refused by the engine until a keychain store exists (design/PARITY-GAPS.md).
+#[must_use]
+pub fn ai_notice(choice: AiTier) -> Option<&'static str> {
+    match choice {
+        AiTier::Off | AiTier::Local => None,
+        AiTier::Cloud => Some(
+            "Cloud is not saved yet: this build has no keychain store for the provider key. The company starts with AI not set up (PARITY-GAPS).",
+        ),
+    }
+}
+
+/// Creates the company file at `path` and stores the AI tier chosen in the wizard. Returns the
+/// open company and, when the tier could not be stored, what the engine said, for the Done step.
+/// The company is kept either way: a refused tier leaves AI not set up.
+///
+/// # Errors
+/// The reason the company file could not be created.
+pub fn create_company(
+    path: &Path,
+    company: &Company,
+    clock: Clock,
+    ai: AiTier,
+) -> Result<(Api, Option<String>), String> {
+    let mut api = Api::create(path, company, clock).map_err(|e| e.to_string())?;
+    let note = match api.set_ai_tier(ai) {
+        Ok(Outcome::Value(())) => None,
+        Ok(Outcome::Unsupported(refused)) => Some(format!(
+            "The AI choice was not saved: {}. AI is not set up for this company.",
+            refused.reason
+        )),
+        Err(e) => Some(format!(
+            "The AI choice was not saved: {e}. AI is not set up for this company."
+        )),
+    };
+    Ok((api, note))
 }
 
 /// What a key does on `step`. Enter and Escape do nothing while a field has focus (index.html:1887

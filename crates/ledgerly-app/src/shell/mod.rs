@@ -85,7 +85,7 @@ pub(crate) fn books_print(books: &ledgerly_api::Books) -> BooksPrint {
 pub use gateway::GatewayScreen;
 pub use stack::{ScreenStack, StackChange, Tabs};
 pub use welcome::{WelcomeScreen, company_from_form};
-pub(crate) use welcome::{hand_over, spawn_create};
+pub(crate) use welcome::{hand_over, spawn_file_job};
 
 /// Height of the top bar, in points (`design/mock-v2/index.html:80`, `grid-template-rows: 48px`).
 pub const TOP_BAR_HEIGHT: f32 = 48.0;

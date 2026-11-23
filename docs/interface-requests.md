@@ -257,16 +257,17 @@ Filed from the r2/* fix branches. Each line names the card and the request; the 
   company file never holds a key.
 - Tests: `ledgerly-api/tests/w4_ai_settings.rs`, `ledgerly-app/tests/w4_ai_settings.rs`.
 
-## S4 (company setup): stores for the keyboard preset, AI tier and backup folder (2026-11-23)
+## S4 (company setup): stores for the keyboard preset and backup folder (2026-11-23)
 
-The setup wizard collects three choices that no store holds. Until these exist, the steps say the
+The setup wizard collects two choices that no store holds. Until these exist, the steps say the
 choice is not saved (`screens::setup::form::unsaved_notice`), and the gaps stay in
 `design/PARITY-GAPS.md`.
 
 - Keyboard preset per company: a stored value that `keymap::preset` reads when the company opens.
-- AI tier per company: a stored value that sets `AppCtx::ai_tier` when the company opens.
+- AI tier per company: done. The wizard stores it with `Api::set_ai_tier` when it creates the
+  company (`screens::setup::form::create_company`), through the W4 AI tier request above.
 - Backup folder and schedule per company: a stored folder, and a daily backup on close that calls
   `Api::backup_to`. The schedule needs a timer or a close hook from the shell.
 
 Each needs a store field (and a schema migration if the company file changes) and a facade method
-to read and set it. Request: a settings event on the company file that carries these three values.
+to read and set it. Request: a settings event on the company file that carries these two values.

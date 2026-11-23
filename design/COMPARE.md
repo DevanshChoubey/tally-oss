@@ -32,8 +32,8 @@
 | light | bank.brs | 0.7218 |
 | light | payment.default | 0.7360 |
 | light | balance-sheet.ledger | 0.7380 |
-| light | setup.ai | 0.7431 |
 | light | balance-sheet.group | 0.7446 |
+| light | setup.ai | 0.7493 |
 | light | setup.welcome | 0.7520 |
 | light | masters.items | 0.7552 |
 | light | day-book.default | 0.7618 |
@@ -41,7 +41,7 @@
 | light | masters.ledger-detail | 0.7672 |
 | light | setup.keyboard | 0.7677 |
 | light | masters.create-ledger | 0.7916 |
-| light | setup.done | 0.8147 |
+| light | setup.done | 0.8148 |
 | light | review.empty | 0.8269 |
 | light | gst.recon-empty | 0.8323 |
 
@@ -381,18 +381,6 @@ SSIM 0.7380
 </tr>
 </table>
 
-## light / setup.ai
-
-SSIM 0.7431
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/light/setup.ai.webp" width="480" alt="mock light setup.ai"></td>
-<td><img src="app-captures/light/setup.ai.webp" width="480" alt="app light setup.ai"></td>
-</tr>
-</table>
-
 ## light / balance-sheet.group
 
 SSIM 0.7446
@@ -402,6 +390,18 @@ SSIM 0.7446
 <tr>
 <td><img src="mock-v2/captures/states/light/balance-sheet.group.webp" width="480" alt="mock light balance-sheet.group"></td>
 <td><img src="app-captures/light/balance-sheet.group.webp" width="480" alt="app light balance-sheet.group"></td>
+</tr>
+</table>
+
+## light / setup.ai
+
+SSIM 0.7493
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/setup.ai.webp" width="480" alt="mock light setup.ai"></td>
+<td><img src="app-captures/light/setup.ai.webp" width="480" alt="app light setup.ai"></td>
 </tr>
 </table>
 
@@ -491,7 +491,7 @@ SSIM 0.7916
 
 ## light / setup.done
 
-SSIM 0.8147
+SSIM 0.8148
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>

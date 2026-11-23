@@ -14,11 +14,12 @@
     reason = "test code: rule B2 lets tests unwrap and panic"
 )]
 
+use ledgerly_api::AiTier;
 use ledgerly_api::Api;
 use ledgerly_app::screens::setup::form::{
-    CompanyForm, GstinCheck, KeyInput, KeyOutcome, Step, build_company, check_gstin,
-    default_features, feature_rows, financial_year_start, gstin_allows_continue, parse_books_begin,
-    state_from_gstin, step_outcome, unsaved_notice,
+    CompanyForm, GstinCheck, KeyInput, KeyOutcome, Step, ai_notice, build_company, check_gstin,
+    create_company, default_features, feature_rows, financial_year_start, gstin_allows_continue,
+    parse_books_begin, state_from_gstin, step_outcome, unsaved_notice,
 };
 use ledgerly_core::{Clock, OffsetDateTime, Outcome, StateCode};
 use ledgerly_model::EntityKind;
@@ -234,16 +235,79 @@ fn a_company_with_a_mismatched_gstin_is_not_built() {
 
 #[test]
 fn the_steps_that_cannot_save_their_choice_say_so_on_that_step() {
-    // Keyboard preset, AI tier and backup folder have no store yet (design/PARITY-GAPS.md). Each
-    // such step must say the choice is not saved; the other steps must not claim a gap.
-    for step in [Step::Keyboard, Step::Ai, Step::Backup] {
+    // Keyboard preset and backup folder have no store yet (design/PARITY-GAPS.md). Each such step
+    // must say the choice is not saved; the other steps must not claim a gap. The AI step saves
+    // its tier through `Api::set_ai_tier` (the AI and privacy screen's store); only the cloud
+    // choice is refused, and `ai_notice` says so for that choice alone.
+    for step in [Step::Keyboard, Step::Backup] {
         let notice = unsaved_notice(step);
         assert!(
             notice.is_some_and(|n| n.contains("not saved")),
             "{step:?} must say its choice is not saved, got {notice:?}"
         );
     }
-    for step in [Step::Welcome, Step::Company, Step::Features, Step::Done] {
+    for step in [
+        Step::Welcome,
+        Step::Company,
+        Step::Ai,
+        Step::Features,
+        Step::Done,
+    ] {
         assert_eq!(unsaved_notice(step), None, "{step:?} saves what it asks");
     }
+}
+
+/// A fresh company file path under the test's temporary folder.
+fn fresh_path(name: &str) -> std::path::PathBuf {
+    let dir = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join("w4_setup");
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join(name);
+    if path.exists() {
+        std::fs::remove_file(&path).unwrap();
+    }
+    path
+}
+
+#[test]
+fn the_ai_choice_made_in_the_wizard_is_the_companys_stored_tier() {
+    // provenance: derived from the mock's AI step (index.html:1879-1884: "Pick per company") and
+    // the AI and privacy screen, which reads the tier stored in the company file
+    // (`Api::ai_tier`). Choosing Off or On this computer in the wizard must leave that tier stored
+    // in the new file, and nothing to say about it.
+    let clock = Clock::Fixed(OffsetDateTime::UNIX_EPOCH);
+    for (file, tier) in [
+        ("ai-off.ledgerly", AiTier::Off),
+        ("ai-local.ledgerly", AiTier::Local),
+    ] {
+        let path = fresh_path(file);
+        let company = build_company(&godavari_form(), default_features()).unwrap();
+        let (api, note) = create_company(&path, &company, clock, tier).unwrap();
+        assert_eq!(note, None, "{tier:?} is stored, so nothing is said");
+        assert_eq!(api.ai_tier().unwrap(), Some(tier));
+        drop(api);
+        assert_eq!(Api::open(&path).unwrap().ai_tier().unwrap(), Some(tier));
+    }
+}
+
+#[test]
+fn a_cloud_choice_creates_the_company_with_no_tier_and_says_the_engines_reason() {
+    // provenance: `Api::set_ai_tier(Cloud)` is Unsupported until a keychain store exists
+    // (design/PARITY-GAPS.md, "AI and privacy": the cloud tier). The company is still created;
+    // no tier is stored, so the top bar says AI is not set up, and the wizard passes on the
+    // engine's reason, which names the keychain.
+    let clock = Clock::Fixed(OffsetDateTime::UNIX_EPOCH);
+    let path = fresh_path("ai-cloud.ledgerly");
+    let company = build_company(&godavari_form(), default_features()).unwrap();
+    let (api, note) = create_company(&path, &company, clock, AiTier::Cloud).unwrap();
+    assert_eq!(api.ai_tier().unwrap(), None);
+    let note = note.unwrap();
+    assert!(note.contains("keychain"), "{note}");
+}
+
+#[test]
+fn only_the_cloud_choice_says_on_the_ai_step_that_it_is_not_saved() {
+    // provenance: as above: Off and Local are stored, Cloud is refused by the engine.
+    assert!(ai_notice(AiTier::Cloud).is_some_and(|n| n.contains("not saved")));
+    assert_eq!(ai_notice(AiTier::Off), None);
+    assert_eq!(ai_notice(AiTier::Local), None);
 }

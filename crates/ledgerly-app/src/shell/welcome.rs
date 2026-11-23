@@ -25,11 +25,12 @@ pub(crate) type JobResult = Result<Api, String>;
 ///
 /// # Errors
 /// A message when the operating system refuses the thread.
-pub(crate) fn spawn_file_job<F>(job: F) -> Result<Receiver<JobResult>, String>
+pub(crate) fn spawn_file_job<F, T>(job: F) -> Result<Receiver<Result<T, String>>, String>
 where
-    F: FnOnce() -> JobResult + Send + 'static,
+    F: FnOnce() -> Result<T, String> + Send + 'static,
+    T: Send + 'static,
 {
-    let (tx, rx) = mpsc::channel::<JobResult>();
+    let (tx, rx) = mpsc::channel::<Result<T, String>>();
     std::thread::Builder::new()
         .name("ledgerly-file".to_owned())
         .spawn(move || {
@@ -38,18 +39,6 @@ where
         })
         .map(|_handle| rx)
         .map_err(|e| format!("Could not start the file work: {e}"))
-}
-
-/// Starts creating the company file at `path` on a background thread.
-///
-/// # Errors
-/// A message when the thread could not start.
-pub(crate) fn spawn_create(
-    path: PathBuf,
-    company: Company,
-    clock: Clock,
-) -> Result<Receiver<JobResult>, String> {
-    spawn_file_job(move || Api::create(&path, &company, clock).map_err(|e| e.to_string()))
 }
 
 /// Puts `api` on a new worker in `ctx`, as the open company. The previous worker stops on a

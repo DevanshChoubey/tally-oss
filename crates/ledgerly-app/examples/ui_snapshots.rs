@@ -395,7 +395,8 @@ struct Shot {
     after: Vec<Inject>,
 }
 
-/// Frames a setup shot waits after its keys, so the background company file job can finish.
+/// Frames the `setup.done` shot waits after its keys, so the background company file job can
+/// finish.
 const SETUP_SETTLE_FRAMES: u32 = 900;
 
 /// One thing the harness sends after a shot's setup: a key press or typed text (the company setup
@@ -775,8 +776,9 @@ impl eframe::App for Snapshots {
             }
             Stage::Settle => {
                 // The wizard's Finish creates a company file on a background thread, and the screen
-                // moves to Done only when that finishes, so the setup shots wait longer.
-                let settle = if self.shots[self.index].state.starts_with("setup.") {
+                // moves to Done only when that finishes, so the Done shot waits longer. The other
+                // setup steps draw at once and settle like any shot.
+                let settle = if self.shots[self.index].state == "setup.done" {
                     SETUP_SETTLE_FRAMES
                 } else {
                     60

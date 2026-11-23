@@ -13,17 +13,17 @@ use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, TryRecvError};
 
 use egui::Key;
-use ledgerly_api::Api;
+use ledgerly_api::{AiTier, Api};
 use ledgerly_core::{Clock, Date, StateCode};
 use ledgerly_model::{EntityKind, Features};
 
 use self::form::{
-    CompanyForm, GstinCheck, KeyInput, KeyOutcome, Step, build_company, check_gstin,
+    CompanyForm, GstinCheck, KeyInput, KeyOutcome, Step, ai_notice, build_company, check_gstin,
     default_features, feature_rows, financial_year_end, financial_year_start, parse_books_begin,
     state_from_gstin, step_outcome, unsaved_notice,
 };
 use crate::shell::navigate::{self, MASTERS_KEY};
-use crate::shell::{GatewayScreen, hand_over, spawn_create};
+use crate::shell::{GatewayScreen, hand_over, spawn_file_job};
 use crate::{AppCtx, Screen, ScreenAction};
 
 /// `true` when the frame's input has a press of `key`.
@@ -43,16 +43,9 @@ fn is_key_event(event: &egui::Event, key: Key) -> bool {
 /// The width of the step rail, as the mock's card gives it (index.html:311, 240 px).
 const RAIL_WIDTH: f32 = 220.0;
 
-/// The AI choice on the AI step (index.html:1880-1882). It is not stored yet.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AiChoice {
-    /// No AI anywhere.
-    Off,
-    /// The local model on this computer.
-    Local,
-    /// A cloud provider with the user's key.
-    Cloud,
-}
+/// The answer of the background create: the open company and what the engine said about the
+/// AI choice when it was not stored, or why the file could not be created.
+type Created = Result<(Api, Option<String>), String>;
 
 /// The company setup wizard. Opened from the palette or the sidebar.
 pub struct SetupScreen {
@@ -82,8 +75,8 @@ pub struct SetupScreen {
     features: Features,
     /// The keyboard preset the user picked. Not stored yet.
     keyboard_classic: bool,
-    /// The AI choice the user picked. Not stored yet.
-    ai: AiChoice,
+    /// The AI tier the user picked, stored with the new company ([`form::create_company`]).
+    ai: AiTier,
     /// The backup folder typed. Not stored yet.
     backup_folder: String,
     /// What the last action said, shown on the step.
@@ -91,7 +84,7 @@ pub struct SetupScreen {
     /// The name field takes focus when the company step opens, so typing goes there.
     focus_name: bool,
     /// The company file being created, if any.
-    job: Option<Receiver<Result<Api, String>>>,
+    job: Option<Receiver<Created>>,
     /// The name of the company that was created, for the Done step.
     created_name: Option<String>,
 }
@@ -131,7 +124,7 @@ impl SetupScreen {
             books_begin: fy_start.to_string(),
             features: default_features(),
             keyboard_classic: true,
-            ai: AiChoice::Local,
+            ai: AiTier::Local,
             backup_folder: String::new(),
             notice: None,
             job: None,
@@ -232,7 +225,8 @@ impl SetupScreen {
                 return;
             }
         };
-        match spawn_create(path, company, self.clock) {
+        let (clock, ai) = (self.clock, self.ai);
+        match spawn_file_job(move || form::create_company(&path, &company, clock, ai)) {
             Ok(rx) => {
                 self.job = Some(rx);
                 self.notice = Some("Working on the company file...".to_owned());
@@ -283,18 +277,19 @@ impl SetupScreen {
         };
         self.job = None;
         match answer {
-            Ok(api) => self.open_created(ctx, api),
+            Ok((api, note)) => self.open_created(ctx, api, note),
             Err(reason) => self.notice = Some(reason),
         }
     }
 
     /// Puts the new company on the worker and moves to Done. The wizard stays on Done until the
     /// user goes Home.
-    fn open_created(&mut self, ctx: &mut AppCtx, api: Api) {
+    /// `note` is what the engine said when the AI choice could not be stored; Done shows it.
+    fn open_created(&mut self, ctx: &mut AppCtx, api: Api, note: Option<String>) {
         match hand_over(ctx, api) {
             Ok(()) => {
                 self.created_name = Some(self.name.trim().to_owned());
-                self.notice = None;
+                self.notice = note;
                 self.step = Step::Done;
             }
             Err(reason) => self.notice = Some(reason),
@@ -596,28 +591,29 @@ impl SetupScreen {
         }
     }
 
-    /// The AI step (index.html:1879-1884). The choice is not stored yet.
+    /// The AI step (index.html:1879-1884). The tier is stored when the company is created; the
+    /// cloud tier is refused by the engine, and [`ai_notice`] says so.
     fn draw_ai(&mut self, ui: &mut egui::Ui) {
         ui.heading("AI and privacy");
         ui.label("AI only drafts. You accept every draft, and the engine computes every amount. Pick per company; change any time.");
         ui.add_space(8.0);
         ui.columns(3, |cols| {
             let [c0, c1, c2] = cols else { return };
-            let off = option_card(c0, self.ai == AiChoice::Off, true, "Off", "No AI anywhere. Exact and rule matching still work.");
+            let off = option_card(c0, self.ai == AiTier::Off, true, "Off", "No AI anywhere. Exact and rule matching still work.");
             if off.clicked() {
-                self.ai = AiChoice::Off;
+                self.ai = AiTier::Off;
             }
-            let local = option_card(c1, self.ai == AiChoice::Local, true, "On this computer", "A small local model. Nothing leaves this computer. Slower on old machines.");
+            let local = option_card(c1, self.ai == AiTier::Local, true, "On this computer", "A small local model. Nothing leaves this computer. Slower on old machines.");
             if local.clicked() {
-                self.ai = AiChoice::Local;
+                self.ai = AiTier::Local;
             }
-            let cloud = option_card(c2, self.ai == AiChoice::Cloud, true, "Cloud, with your own key", "Better reading of poor photos. You confirm each document before it is sent; bank numbers, PAN and phone numbers are removed first.");
+            let cloud = option_card(c2, self.ai == AiTier::Cloud, true, "Cloud, with your own key", "Better reading of poor photos. You confirm each document before it is sent; bank numbers, PAN and phone numbers are removed first.");
             if cloud.clicked() {
-                self.ai = AiChoice::Cloud;
+                self.ai = AiTier::Cloud;
             }
         });
         ui.add_space(8.0);
-        if let Some(notice) = unsaved_notice(Step::Ai) {
+        if let Some(notice) = ai_notice(self.ai) {
             ui.weak(notice);
         }
     }

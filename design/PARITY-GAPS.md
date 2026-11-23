@@ -375,8 +375,10 @@ financial year starts. The model supports that (`Company::books_begin`), so it i
 - **bug: keyboard preset is not saved.** The Keyboard step's choice is shown and explained on the
   step, but no store holds it; every company uses the classic keys (`keymap::preset`, "no
   persistence yet"). Closing it needs a stored preset per company.
-- **bug: AI tier is not saved.** The AI step's choice is not stored; the top bar says "AI: not set
-  up" until a tier store exists (`AppCtx::ai_tier` is in memory only). The step says so.
+- **deferred: the cloud AI choice is not saved.** Off and On this computer are stored with the new
+  company (`form::create_company` calls `Api::set_ai_tier`). The engine refuses the cloud tier
+  until a keychain store exists (see "AI and privacy" above), so the AI step says so when Cloud is
+  picked, and Done shows the engine's reason; the company starts with AI not set up.
 - **bug: backup folder is not saved and no backup runs on a schedule.** `backup_to` writes one
   file when called; nothing stores a folder or runs daily. The Backup step says so.
 - **gap: GST filing frequency (Monthly) is not saved.** The model has no filing-frequency field.
