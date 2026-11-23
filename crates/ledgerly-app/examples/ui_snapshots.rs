@@ -42,10 +42,11 @@ use ledgerly_core::{
 use ledgerly_model::seed_groups::reserved_groups;
 use ledgerly_model::seed_voucher_types::default_voucher_types;
 use ledgerly_model::{
-    Address, BankDetails, BaseVoucherKind, Company, EntityKind, Features, GstClassification,
-    GstRegistration, Ledger, LedgerLine, NegativeStockPolicy, PartyDetails, RegistrationType,
-    ReservedGroup, StockItem, TaxDetails, TaxLedgerKind, Taxability, Unit, UnitKind,
-    ValuationMethod, Voucher, VoucherMode, VoucherStatus,
+    Address, BankDetails, BaseVoucherKind, BillAllocation, BillRefKind, BillWiseConfig, Company,
+    EntityKind, Features, GstClassification, GstRegistration, Ledger, LedgerLine,
+    NegativeStockPolicy, PartyDetails, RegistrationType, ReservedGroup, StockItem, TaxDetails,
+    TaxLedgerKind, Taxability, Unit, UnitKind, ValuationMethod, Voucher, VoucherMode,
+    VoucherStatus,
 };
 use time::OffsetDateTime;
 use time::macros::date;
@@ -133,6 +134,18 @@ fn line(ledger: LedgerId, amount: SignedAmount) -> LedgerLine {
 
 fn dr(ledger: LedgerId, rupees: i64) -> LedgerLine {
     line(ledger, SignedAmount::dr(Paise::new(rupees * 100)))
+}
+
+/// `line` opening a new bill `name` for its whole amount, due `days` after the voucher date.
+fn billed(mut line: LedgerLine, name: &str, days: u32) -> LedgerLine {
+    line.bills = vec![BillAllocation {
+        kind: BillRefKind::New,
+        name: name.to_owned(),
+        due_date: None,
+        credit_days: Some(days),
+        amount: line.amount,
+    }];
+    line
 }
 
 fn cr(ledger: LedgerId, rupees: i64) -> LedgerLine {
@@ -269,11 +282,16 @@ fn company_file(dir: &Path) -> Api {
         taxability: Taxability::Taxable,
         rate_percent: Some(Rate(Decimal::from(18))),
     });
+    // Sample Buyer is bill-wise with 30 credit days, so its detail has an Open bills card.
+    let mut sample_buyer = buyer(BUYER, "Sample Buyer Pvt Ltd", "27FGHIJ5678K1Z", 27);
+    sample_buyer.bill_wise = Some(BillWiseConfig {
+        default_credit_days: Some(30),
+    });
     for l in [
         ledger(CASH, "Cash", ReservedGroup::CashInHand),
         ledger(CAPITAL, "Capital", ReservedGroup::CapitalAccount),
         bank,
-        buyer(BUYER, "Sample Buyer Pvt Ltd", "27FGHIJ5678K1Z", 27),
+        sample_buyer,
         buyer(OTHER_BUYER, "Other State Buyer", "29RSTUV3456W1Z", 29),
         sales,
         tax(CGST, "Output CGST", TaxLedgerKind::Cgst),
@@ -313,7 +331,7 @@ fn company_file(dir: &Path) -> Api {
             BUYER,
             27,
             vec![
-                dr(BUYER, 118_000),
+                billed(dr(BUYER, 118_000), "SI-3", 30),
                 cr(SALES, 100_000),
                 cr(CGST, 9_000),
                 cr(SGST, 9_000),

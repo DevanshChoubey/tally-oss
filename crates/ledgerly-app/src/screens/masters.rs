@@ -47,6 +47,7 @@
 //! cached (not asked for yet, nothing to key a cache on).
 
 pub mod balances;
+pub mod bills;
 mod check;
 mod command;
 mod draft;
@@ -397,6 +398,10 @@ pub struct MastersScreen {
     stock: stock::ItemStockFigures,
     /// The copy of the books and the period the stock figures were last asked for.
     stock_for: Option<(crate::shell::BooksPrint, Result<Period, String>)>,
+    /// The Open bills card of the altered bill-wise party, from the engine.
+    bills: bills::PartyBills,
+    /// The copy of the books, the party and the period its bills were last asked for.
+    bills_for: Option<(crate::shell::BooksPrint, LedgerId, Result<Period, String>)>,
 }
 
 impl Default for MastersScreen {
@@ -430,6 +435,8 @@ impl MastersScreen {
             balances_for: None,
             stock: stock::ItemStockFigures::new(),
             stock_for: None,
+            bills: bills::PartyBills::new(),
+            bills_for: None,
         }
     }
 
@@ -899,8 +906,11 @@ const NOT_AVAILABLE_HINT: &str = "Not available yet: the engine does not give th
 /// What the form's foot says when it has a GSTIN field (index.html:1812).
 const GSTIN_FOOT: &str =
     "The check character is verified on this computer. Ledgerly does not look the GSTIN up online.";
-/// What the open bills card says until this screen asks the engine for them.
-const OPEN_BILLS_NOT_YET: &str = "Not shown yet: the engine works out open bills (the outstanding report), but this screen does not ask for them yet. Nothing is estimated here.";
+/// What the open bills card says before the engine's answer.
+const OPEN_BILLS_LOADING: &str =
+    "The open bills have not come from the engine yet. Nothing is estimated here.";
+/// What the open bills card says when the party has nothing open.
+const OPEN_BILLS_NONE: &str = "Nothing is open for this party.";
 
 /// The ledger list's columns (index.html:1796), with the Balance heading's hover text and its
 /// "engine" chip set from what the balances are now.
@@ -1199,6 +1209,10 @@ impl MastersScreen {
                 | MasterDraft::CostCentre(_)
                 | MasterDraft::StockItem(_) => None,
             };
+            // An altered ledger shows its closing balance as the engine gave it (index.html:1805).
+            let balance = form_balance(form, &self.balances);
+            let balance = balance.as_deref();
+            let party_bills = &self.bills;
             let draft = &mut form.draft;
             // A form with every section on is taller than the window, so it scrolls and Save
             // stays in reach.
@@ -1209,8 +1223,10 @@ impl MastersScreen {
                     if bills {
                         crate::screens::home::draw::split(
                             ui,
-                            |ui| clicks = sheet(ui, &books.masters, draft, editing, foot),
-                            open_bills_card,
+                            |ui| {
+                                clicks = sheet(ui, &books.masters, draft, editing, foot, balance);
+                            },
+                            |ui| open_bills_card(ui, party_bills),
                         );
                     } else {
                         let width = ui.available_width().min(FORM_MAX_WIDTH);
@@ -1219,7 +1235,7 @@ impl MastersScreen {
                             Layout::top_down(Align::Min),
                             |ui| {
                                 ui.set_width(width);
-                                clicks = sheet(ui, &books.masters, draft, editing, foot);
+                                clicks = sheet(ui, &books.masters, draft, editing, foot, balance);
                             },
                         );
                     }
@@ -1382,6 +1398,7 @@ fn sheet(
     draft: &mut MasterDraft,
     editing: Option<u64>,
     foot: Option<&str>,
+    balance: Option<&str>,
 ) -> FormClicks {
     let t = tokens(ui);
     let k = crate::ui::kind(ui);
@@ -1398,7 +1415,7 @@ fn sheet(
                 .inner_margin(egui::Margin::same(16))
                 .show(ui, |ui| {
                     ui.set_min_width(ui.available_width());
-                    form_ui::draw_form(ui, masters, draft, editing);
+                    form_ui::draw_form(ui, masters, draft, editing, balance);
                 });
             let rule = ui.available_rect_before_wrap();
             ui.painter().hline(
@@ -1443,20 +1460,133 @@ fn sheet(
     clicks
 }
 
-/// The open bills card beside an altered bill-wise ledger (index.html:1806). The engine's
-/// outstanding report has them; this screen does not ask for it yet, so the card says so.
-fn open_bills_card(ui: &mut Ui) {
+/// The Balance field of an alter form of a ledger: its closing balance as the engine gave it
+/// ([`balances::LedgerBalances::text`]). A create form has none.
+fn form_balance(form: &FormState, balances: &balances::LedgerBalances) -> Option<String> {
+    form.editing
+        .filter(|_| matches!(&form.draft, MasterDraft::Ledger(_)))
+        .map(|id| balances.text(LedgerId(id)))
+}
+
+/// The open bills card beside an altered bill-wise ledger (index.html:1806): each open line's
+/// name, date, open amount and age, as the engine's outstanding report gives them
+/// ([`bills::PartyBills`]).
+fn open_bills_card(ui: &mut Ui, party: &bills::PartyBills) {
     card(ui, |ui| {
         let t = tokens(ui);
         let h2 = bold_font(ui, TEXT_H2);
         ui.label(RichText::new("Open bills").font(h2).color(t.text));
         ui.add_space(SPACE_2);
-        ui.label(
-            RichText::new(OPEN_BILLS_NOT_YET)
-                .size(TEXT_META)
-                .color(t.text_2),
-        );
+        let quiet = |ui: &mut Ui, text: &str| {
+            ui.label(RichText::new(text).size(TEXT_META).color(t.text_2));
+        };
+        match party.state() {
+            bills::BillsState::NotAsked => quiet(ui, OPEN_BILLS_LOADING),
+            bills::BillsState::Unsupported(why) => quiet(
+                ui,
+                &format!("Open bills are not shown: {why}. Nothing is estimated here."),
+            ),
+            bills::BillsState::Loaded(lines) if lines.is_empty() => quiet(ui, OPEN_BILLS_NONE),
+            bills::BillsState::Loaded(lines) => bills_table(ui, lines),
+        }
     });
+}
+
+/// The open lines in the `table.t` rules: name, date (secondary ink), amount, age badge.
+fn bills_table(ui: &mut Ui, lines: &[bills::BillLine]) {
+    use crate::ui::table::{self, CellPlace, RowState, T_ROW_HEIGHT};
+    let t = tokens(ui);
+    let font = egui::FontId::proportional(crate::theme::TEXT_BODY);
+    ui.spacing_mut().item_spacing.y = 0.0;
+    let width = ui.available_width();
+    let texts: Vec<(String, String)> = lines
+        .iter()
+        .map(|line| {
+            let date = line.date.map_or_else(String::new, crate::ui::format::date);
+            let amount = line.pending.as_ref().map_or_else(
+                |_| NOT_AVAILABLE.to_owned(),
+                |a| crate::screens::report_view::amount_text(*a),
+            );
+            (date, amount)
+        })
+        .collect();
+    // Each text column is as wide as its widest text, so nothing overlaps in a narrow card; the
+    // badges take what is left.
+    let widest = |each: &mut dyn Iterator<Item = &str>| {
+        each.map(|text| {
+            ui.painter()
+                .layout_no_wrap(text.to_owned(), font.clone(), t.text)
+                .size()
+                .x
+        })
+        .fold(0.0_f32, f32::max)
+            + 2.0 * table::CELL_PAD_X
+    };
+    let name_w = widest(&mut lines.iter().map(|l| l.name.as_str()));
+    let date_w = widest(&mut texts.iter().map(|(d, _)| d.as_str()));
+    let amount_w = widest(&mut texts.iter().map(|(_, a)| a.as_str()));
+    for (line, (date, amount)) in lines.iter().zip(&texts) {
+        let (rect, _) =
+            ui.allocate_exact_size(egui::vec2(width, T_ROW_HEIGHT), egui::Sense::hover());
+        table::paint_row(
+            ui,
+            rect,
+            RowState {
+                selected: false,
+                hovered: false,
+                sub: false,
+            },
+        );
+        let col = |from: f32, to: f32| {
+            egui::Rect::from_min_max(
+                egui::pos2(rect.left() + from, rect.top()),
+                egui::pos2(rect.left() + to, rect.bottom()),
+            )
+        };
+        let left = CellPlace::Left(table::CELL_PAD_X);
+        let date_at = name_w;
+        let amount_at = date_at + date_w;
+        let badge_at = amount_at + amount_w;
+        let cells = [
+            (0.0, date_at, line.name.as_str(), t.text, left),
+            (date_at, amount_at, date.as_str(), t.text_2, left),
+            (
+                amount_at,
+                badge_at,
+                amount.as_str(),
+                t.text,
+                CellPlace::Right,
+            ),
+        ];
+        for (from, to, text, color, place) in cells {
+            table::paint_cell_text(ui, col(from, to), 1.0, text, font.clone(), color, place);
+        }
+        if let Some(badge) = bills::age_badge(&line.age) {
+            age_badge(ui, col(badge_at, rect.width().max(badge_at)), &badge);
+        }
+    }
+}
+
+/// Draws an open bill's age badge in `cell`.
+fn age_badge(ui: &mut Ui, cell: egui::Rect, (text, warn): &(String, bool)) {
+    let inner = egui::Rect::from_min_max(
+        egui::pos2(cell.left() + crate::ui::table::CELL_PAD_X, cell.top()),
+        egui::pos2(
+            cell.right() - crate::ui::table::CELL_PAD_X,
+            cell.bottom() - 1.0,
+        ),
+    );
+    let mut child = ui.new_child(
+        egui::UiBuilder::new()
+            .max_rect(inner)
+            .layout(Layout::left_to_right(Align::Center)),
+    );
+    let kind = if *warn {
+        BadgeKind::Warn
+    } else {
+        BadgeKind::Neutral
+    };
+    crate::ui::badge::badge(&mut child, kind, text);
 }
 
 /// The ledger list's cells: the name with its alias, the group and GSTIN in the secondary ink
@@ -1559,7 +1689,11 @@ impl Screen for MastersScreen {
             self.balances.tick(ctx.api.as_ref());
             self.follow_stock(books);
             self.stock.tick(ctx.api.as_ref());
-            if (self.balances.is_loading() || self.stock.is_loading()) && ctx.api.is_some() {
+            self.follow_bills(books);
+            self.bills.tick(ctx.api.as_ref());
+            let loading =
+                self.balances.is_loading() || self.stock.is_loading() || self.bills.is_loading();
+            if loading && ctx.api.is_some() {
                 ui.ctx().request_repaint();
             }
             self.draw(ui, books)
@@ -1614,6 +1748,58 @@ impl MastersScreen {
             Err(why) => self.stock.set(stock::StockState::Unsupported(why.clone())),
         }
         self.stock_for = Some(key);
+    }
+
+    /// The Balance field of the open alter form of a ledger (index.html:1805), or `None` when no
+    /// ledger is being altered.
+    #[must_use]
+    pub fn form_balance_text(&self) -> Option<String> {
+        match &self.mode {
+            Mode::Form(form) => form_balance(form, &self.balances),
+            Mode::List | Mode::ConfirmDelete(_) => None,
+        }
+    }
+
+    /// The bill-wise party the open form alters, if any: the one whose Open bills card shows.
+    fn bills_party(&self) -> Option<LedgerId> {
+        match &self.mode {
+            Mode::Form(form) => form
+                .editing
+                .filter(|_| matches!(&form.draft, MasterDraft::Ledger(d) if d.bill_wise))
+                .map(LedgerId),
+            Mode::List | Mode::ConfirmDelete(_) => None,
+        }
+    }
+
+    /// Asks for the open bills when a bill-wise party's alter form is open and its bills were not
+    /// asked for with this copy of the books and this period. They are as of the last voucher
+    /// date, as the balances are.
+    fn follow_bills(&mut self, books: &Books) {
+        let Some(party) = self.bills_party() else {
+            return;
+        };
+        let print = crate::shell::books_print(books);
+        let period = crate::shell::navigate::default_period(books).map_err(|e| e.to_string());
+        let key = (print, party, period);
+        if self.bills_for.as_ref() == Some(&key) {
+            return;
+        }
+        match &key.2 {
+            Ok(period) => self.bills.request(party, *period),
+            Err(why) => self.bills.set(bills::BillsState::Unsupported(why.clone())),
+        }
+        self.bills_for = Some(key);
+    }
+
+    /// The Open bills card's bills, as the screen holds them.
+    #[must_use]
+    pub fn bills(&self) -> &bills::PartyBills {
+        &self.bills
+    }
+
+    /// The Open bills card's bills, to set them as an answer from the worker would.
+    pub fn bills_mut(&mut self) -> &mut bills::PartyBills {
+        &mut self.bills
     }
 
     /// The item list's stock figures, as the screen holds them.

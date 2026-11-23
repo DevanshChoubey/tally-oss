@@ -161,11 +161,21 @@ matching to propose a ledger, which is not built).
   "(provisional)". The cell's reason is kept but not shown, as with the balances (bug above).
 - **by design: stock is over the stock summary's opening period**, the financial year to its
   last voucher, as the stock summary report opens.
-- **deferred: Open bills on the party detail** (index.html:1806). The engine has
-  `ReportKind::Outstanding`. The alter form of a bill-wise ledger shows the card with a sentence
-  saying the bills are not shown here yet.
-- **deferred: the Balance field on the party detail** (index.html:1805). The list has the
-  figure (`LedgerBalances`); the alter form does not show it yet.
+- **by design: an open bill's badge names the outstanding report's bucket, not a day count**
+  (index.html:1806: `x.overdue+' days overdue'`). The card is the party's rows of the engine's
+  detailed outstanding report (`screens/masters/bills.rs`), which ages a bill into "0-30 days",
+  "31-60 days", "61-90 days" or "Over 90 days"; the screen counts no days itself (rule C4), so
+  the badge says "61-90 days overdue". A day count needs the engine to give one.
+- **by design: open amounts carry their side** ("1,18,000.00 Dr"). The mock's amounts are bare;
+  a party's bills can be on either side, so ours keep "Dr" or "Cr".
+- **by design: the card has lines the mock does not show.** A bill with no due date shows a
+  "No due date" badge, and the party's unallocated amount shows as an "On account" line with no
+  badge, as the outstanding report has them. Nothing open says "Nothing is open for this
+  party."; a report the engine cannot give says why and estimates nothing.
+- **by design: the Balance field sits after Bill-wise and Credit days.** The mock places it
+  after City and Bill-wise (index.html:1805); ours keeps the ledger master's field order and
+  shows the balance read-only at the end of the party fields, as the list gives it
+  (`LedgerBalances`, as of the last voucher date).
 - **by design: Alt+D Delete and Alt+Left / Right Change kind stay in the key bar.** The mock's
   masters have only ledgers and stock items; ours keep every master kind TallyPrime has (groups,
   voucher types, units, godowns, batches, cost categories and centres), so changing kind and
@@ -209,10 +219,7 @@ matching to propose a ledger, which is not built).
 - **by design: the engine chips sit at the column's right edge** (index.html:1796, 1798). The
   Balance heading's "engine" and the value heading's "stock engine" chips show once the figures
   are in; the mock's sit just after the word.
-- **unverified: the Open bills split was never captured.** The capture company has no bill-wise
-  party, so the alter form beside its Open bills card is drawn only in tests. Needs a bill-wise
-  party in the capture company, checked against the other captures' figures.
 - **data: the capture company.** Fictional Traders has ten ledgers and two stock items with no
   opening stock and no movement (so no other screen's figures move), so the items capture shows
-  0 quantities and 0.00 values. Sample Buyer Pvt Ltd is not bill-wise, so the party detail has
-  no Open bills card. The mock shows Godavari Drip's ledgers and seven items with stock.
+  0 quantities and 0.00 values. Sample Buyer Pvt Ltd is bill-wise with 30 credit days and one
+  open bill (SI-3, not due), so the party detail's card has one line where the mock has two. The mock shows Godavari Drip's ledgers and seven items with stock.

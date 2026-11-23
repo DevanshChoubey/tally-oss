@@ -231,6 +231,20 @@ fn switch_row(ui: &mut Ui, span: u8, label: &str, value: &mut bool) {
     });
 }
 
+/// A value shown, not edited (`.ro`): the text in the input size, 32 points tall.
+fn read_only_row(ui: &mut Ui, span: u8, label: &str, text: &str) {
+    fld(ui, span, label, |ui| {
+        ui.allocate_ui_with_layout(
+            vec2(ui.available_width(), FIELD_HEIGHT),
+            Layout::left_to_right(Align::Center),
+            |ui| {
+                let t = tokens(ui);
+                ui.label(RichText::new(text).size(TEXT_INPUT).color(t.text));
+            },
+        );
+    });
+}
+
 /// A note across the sheet, in the hint style.
 fn sheet_note(ui: &mut Ui, text: &str) {
     fld(ui, COLUMNS, "", |ui| {
@@ -325,6 +339,7 @@ pub(crate) fn draw_form(
     masters: &Masters,
     draft: &mut MasterDraft,
     editing: Option<u64>,
+    balance: Option<&str>,
 ) {
     let width = ui.available_width();
     ui.allocate_ui_with_layout(
@@ -333,16 +348,22 @@ pub(crate) fn draw_form(
         |ui| {
             ui.set_width(width);
             ui.spacing_mut().item_spacing = vec2(GAP_X, GAP_Y);
-            draw_fields(ui, masters, draft, editing);
+            draw_fields(ui, masters, draft, editing, balance);
         },
     );
 }
 
 /// The fields of each kind, in sheet order.
-fn draw_fields(ui: &mut Ui, masters: &Masters, draft: &mut MasterDraft, editing: Option<u64>) {
+fn draw_fields(
+    ui: &mut Ui,
+    masters: &Masters,
+    draft: &mut MasterDraft,
+    editing: Option<u64>,
+    balance: Option<&str>,
+) {
     match draft {
         MasterDraft::Group(d) => draw_group(ui, masters, d, editing),
-        MasterDraft::Ledger(d) => draw_ledger(ui, masters, d),
+        MasterDraft::Ledger(d) => draw_ledger(ui, masters, d, balance),
         MasterDraft::Unit(d) => draw_unit(ui, d),
         MasterDraft::StockGroup(d) => {
             text_row(ui, 2, "Name", &mut d.name);
@@ -466,8 +487,9 @@ fn draw_group(ui: &mut Ui, masters: &Masters, d: &mut GroupDraft, editing: Optio
 }
 
 /// The ledger: the mock's fields first, in its order (index.html:1803-1805: Name, Alias, Under;
-/// GSTIN, State, Credit days; Bill-wise), then the fields the mock does not show.
-fn draw_ledger(ui: &mut Ui, masters: &Masters, d: &mut LedgerDraft) {
+/// GSTIN, State, Credit days; Bill-wise, Balance), then the fields the mock does not show.
+/// `balance` is the altered ledger's closing balance as the engine gave it, shown read-only.
+fn draw_ledger(ui: &mut Ui, masters: &Masters, d: &mut LedgerDraft, balance: Option<&str>) {
     text_row(ui, 2, "Name", &mut d.name);
     text_row(ui, 1, "Alias", &mut d.aliases);
     let groups = sorted_options(
@@ -485,6 +507,9 @@ fn draw_ledger(ui: &mut Ui, masters: &Masters, d: &mut LedgerDraft) {
     switch_row(ui, 1, "Bill-wise", &mut d.bill_wise);
     if d.bill_wise {
         number_row(ui, 1, "Credit days", &mut d.credit_days);
+    }
+    if let Some(text) = balance {
+        read_only_row(ui, 1, "Balance", text);
     }
     fld(ui, 2, "Opening balance", |ui| {
         ui.horizontal(|ui| {

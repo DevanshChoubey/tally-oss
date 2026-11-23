@@ -427,3 +427,31 @@ fn moving_the_last_voucher_later_asks_again() {
         "a later last date asks again"
     );
 }
+
+#[test]
+fn the_alter_form_shows_the_ledgers_balance() {
+    // provenance: index.html:1805: the party detail has a read-only "Balance" field,
+    // `${inr(balances().sgt)} Dr`. Derived: it is the same engine figure as the list's Balance
+    // cell, 1,05,000.00 Dr for Cash as derived in
+    // `each_ledger_shows_its_closing_balance_from_the_engine`. A create form has no balance.
+    let api = setup("w2_masters_balances_form.ledgerly");
+    let Ok(Outcome::Value(books)) = api.books() else {
+        panic!("the books did not load");
+    };
+    let worker = ApiWorker::spawn(api).unwrap();
+    let mut screen = MastersScreen::new();
+    *screen.balances_mut() = loaded(&worker, date!(2026 - 04 - 30));
+    assert_eq!(screen.form_balance_text(), None);
+    screen.select(ledgerly_app::screens::masters::MasterRef {
+        kind: ledgerly_app::screens::masters::MasterKind::Ledger,
+        id: CASH.0,
+    });
+    screen.begin_alter(&books).unwrap();
+    assert_eq!(
+        screen.form_balance_text().as_deref(),
+        Some("1,05,000.00 Dr")
+    );
+    drop(screen.escape());
+    screen.begin_create(&books).unwrap();
+    assert_eq!(screen.form_balance_text(), None);
+}
