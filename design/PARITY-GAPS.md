@@ -10,9 +10,10 @@ feature that is not built), **data** (the capture company lacks what the mock's 
 
 ## Palette (round of 2026-11-23, commit d4f0bcb)
 
-- **bug: command rows are in keymap order.** The mock's `> ` list starts New sales invoice, New
-  purchase, New payment, New receipt, Read a bill photo, Import bank statement, ... (index.html,
-  `palResults`, Commands). Ours lists New contra voucher first. Needs an order for command rows.
+- **deferred: the mock's other commands.** After the four voucher commands the mock's `>` list
+  has Read a bill photo, Import bank statement, Import 2B / IMS JSON, Export GSTR-1 JSON, Switch
+  theme, Collapse side bar and Back up now (index.html:1110). Ours follows with the keymap's
+  other commands; the mock's are not built as commands.
 - **bug: Recent rows have a plain detail.** The mock's Recent rows say "As at 21 Nov 2026",
   "3 sections ready, 1 needs correction", "Ledger · Sundry debtors · 1,93,500.00 Dr"
   (index.html:1115). Ours keep the detail the row had when chosen. Live details need the engine's

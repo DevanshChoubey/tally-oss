@@ -209,11 +209,11 @@ impl Action {
     pub fn label(self) -> &'static str {
         match self {
             Action::NewContra => "New contra voucher",
-            Action::NewPayment => "New payment voucher",
-            Action::NewReceipt => "New receipt voucher",
+            Action::NewPayment => "New payment",
+            Action::NewReceipt => "New receipt",
             Action::NewJournal => "New journal voucher",
-            Action::NewSales => "New sales voucher",
-            Action::NewPurchase => "New purchase voucher",
+            Action::NewSales => "New sales invoice",
+            Action::NewPurchase => "New purchase",
             Action::NewCreditNote => "New credit note",
             Action::NewDebitNote => "New debit note",
             Action::ChangePeriod => "Change date or period",

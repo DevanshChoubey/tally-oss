@@ -192,10 +192,27 @@ pub struct PaletteChoice {
     pub mode: PaletteMode,
 }
 
-/// One entry per keymap action, with the first chord as the detail text.
+/// The commands the palette lists first, in this order: the mock's `>` list starts New sales
+/// invoice, New purchase, New payment, New receipt (design/mock-v2/index.html:1110, `PAL_CMDS`).
+const LEAD_COMMANDS: [Action; 4] = [
+    Action::NewSales,
+    Action::NewPurchase,
+    Action::NewPayment,
+    Action::NewReceipt,
+];
+
+/// One entry per keymap action, with the first chord as the detail text: [`LEAD_COMMANDS`]
+/// first, then the rest in [`Action::ALL`] order.
 #[must_use]
 pub fn command_entries(keymap: &Keymap) -> Vec<PaletteEntry> {
-    Action::ALL
+    let mut actions: Vec<Action> = Action::ALL.to_vec();
+    actions.sort_by_key(|a| {
+        LEAD_COMMANDS
+            .iter()
+            .position(|lead| lead == a)
+            .unwrap_or(LEAD_COMMANDS.len())
+    });
+    actions
         .iter()
         .map(|action| {
             PaletteEntry::new(PaletteTarget::Command(*action), action.label())

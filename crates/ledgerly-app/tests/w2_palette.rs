@@ -462,6 +462,42 @@ fn the_shell_s_palette_rows_never_list_a_command_with_no_route() {
 }
 
 #[test]
+fn the_command_list_starts_with_sales_purchase_payment_and_receipt() {
+    // provenance: design/mock-v2/index.html:1110 (`PAL_CMDS`): the `>` list starts New sales
+    // invoice, New purchase, New payment, New receipt. Derived: the shell's `>` rows start with
+    // those four commands, in that order; the rest follow.
+    let mut p = Palette::new();
+    p.set_entries(palette_rows(&classic()));
+    p.open(PaletteMode::OnTop);
+    p.set_query(">");
+    let first: Vec<PaletteTarget> = p
+        .results()
+        .iter()
+        .take(4)
+        .map(|e| e.target.clone())
+        .collect();
+    assert_eq!(
+        first,
+        [
+            PaletteTarget::Command(Action::NewSales),
+            PaletteTarget::Command(Action::NewPurchase),
+            PaletteTarget::Command(Action::NewPayment),
+            PaletteTarget::Command(Action::NewReceipt),
+        ]
+    );
+}
+
+#[test]
+fn the_four_voucher_commands_carry_the_mock_s_titles() {
+    // provenance: design/mock-v2/index.html:1110 (`PAL_CMDS`): "New sales invoice", "New
+    // purchase", "New payment", "New receipt".
+    assert_eq!(Action::NewSales.label(), "New sales invoice");
+    assert_eq!(Action::NewPurchase.label(), "New purchase");
+    assert_eq!(Action::NewPayment.label(), "New payment");
+    assert_eq!(Action::NewReceipt.label(), "New receipt");
+}
+
+#[test]
 fn the_host_s_command_list_has_one_row_per_keymap_action() {
     // provenance: derived — `command_entries` documents one entry per keymap action, so the count
     // is `Action::ALL.len()` (keymap.rs:104). No key-chord text is asserted here.

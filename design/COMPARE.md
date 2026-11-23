@@ -9,19 +9,19 @@
 | light | home.default | 0.5838 |
 | light | masters.ledgers | 0.6070 |
 | light | sales-invoice.default | 0.6271 |
-| light | palette.voucher | 0.6276 |
-| light | palette.entry | 0.6282 |
-| light | palette.ask | 0.6312 |
-| light | palette.no-results | 0.6344 |
+| light | palette.voucher | 0.6313 |
+| light | palette.entry | 0.6319 |
+| light | palette.ask | 0.6347 |
+| light | palette.no-results | 0.6381 |
 | light | keys.standard | 0.6390 |
 | light | balance-sheet.detailed | 0.6429 |
 | light | keys.classic | 0.6503 |
-| light | palette.search | 0.6576 |
-| light | palette.default | 0.6588 |
 | light | gst.gstr1 | 0.6610 |
+| light | palette.search | 0.6614 |
+| light | palette.default | 0.6626 |
 | light | balance-sheet.default | 0.6705 |
 | light | bank.default | 0.6787 |
-| light | palette.commands | 0.6897 |
+| light | palette.commands | 0.6960 |
 | light | gst.gstr3b | 0.7000 |
 | light | receipt.default | 0.7151 |
 | light | bank.brs | 0.7249 |
@@ -94,7 +94,7 @@ SSIM 0.6271
 
 ## light / palette.voucher
 
-SSIM 0.6276
+SSIM 0.6313
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -106,7 +106,7 @@ SSIM 0.6276
 
 ## light / palette.entry
 
-SSIM 0.6282
+SSIM 0.6319
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -118,7 +118,7 @@ SSIM 0.6282
 
 ## light / palette.ask
 
-SSIM 0.6312
+SSIM 0.6347
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -130,7 +130,7 @@ SSIM 0.6312
 
 ## light / palette.no-results
 
-SSIM 0.6344
+SSIM 0.6381
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -176,9 +176,21 @@ SSIM 0.6503
 </tr>
 </table>
 
+## light / gst.gstr1
+
+SSIM 0.6610
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/gst.gstr1.webp" width="480" alt="mock light gst.gstr1"></td>
+<td><img src="app-captures/light/gst.gstr1.webp" width="480" alt="app light gst.gstr1"></td>
+</tr>
+</table>
+
 ## light / palette.search
 
-SSIM 0.6576
+SSIM 0.6614
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -190,25 +202,13 @@ SSIM 0.6576
 
 ## light / palette.default
 
-SSIM 0.6588
+SSIM 0.6626
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
 <tr>
 <td><img src="mock-v2/captures/states/light/palette.default.webp" width="480" alt="mock light palette.default"></td>
 <td><img src="app-captures/light/palette.default.webp" width="480" alt="app light palette.default"></td>
-</tr>
-</table>
-
-## light / gst.gstr1
-
-SSIM 0.6610
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/light/gst.gstr1.webp" width="480" alt="mock light gst.gstr1"></td>
-<td><img src="app-captures/light/gst.gstr1.webp" width="480" alt="app light gst.gstr1"></td>
 </tr>
 </table>
 
@@ -238,7 +238,7 @@ SSIM 0.6787
 
 ## light / palette.commands
 
-SSIM 0.6897
+SSIM 0.6960
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
