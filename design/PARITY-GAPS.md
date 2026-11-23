@@ -171,6 +171,32 @@ matching to propose a ledger, which is not built).
   report (`hashFor('balance-sheet','ledger')`) or, for one party, the detail. Ours opens the
   ledger's vouchers for every ledger, and Ctrl+Enter opens the detail (the alter form). Enter is
   not offered on other kinds, which have no report.
+- **needs a decision: State is a list, not a read-only value from the GSTIN** (index.html:1804,
+  1812: `<div class="ro">27 Maharashtra</div>` with a "from GSTIN" chip). Ours lets the user pick
+  the state, since a party without a GSTIN still has one. Taking it from a valid GSTIN and
+  locking the field needs a rule for a GSTIN and a picked state that disagree.
+- **by design: GSTIN shows only with Party details on.** The mock's create form has GSTIN, State
+  and the footer note from the start, because its sample is a party. Ours keeps party fields
+  under Party details (the ledger master's own section), so a blank form has no GSTIN field and
+  no footer note until the switch is on.
+- **by design: Credit days shows only when Bill-wise is on.** Credit days belong to bill-wise
+  details; the mock shows both because its party is bill-wise.
+- **needs a decision: Bill-wise is a checkbox.** The mock shows a read-only "On" badge
+  (index.html:1805, 1811). Ours is editable; a badge would need Bill-wise set somewhere else.
+- **deferred: no City field** (index.html:1805). The ledger model has an address and PIN code,
+  not a city. Needs a city in `PartyDetails`.
+- **by design: the tabs and More master kinds are dimmed while a form is open.** Switching kind
+  would drop the draft; the mock never shows them with a form open in another kind.
+- **by design: ledgers are in name order.** The mock lists its sample in its own order. Ours
+  sorts by name so the cursor and the filter behave the same on any company.
+- **deferred: no "engine" chip on Balance and Value headings** (index.html:1796, 1798). The chip
+  says the figures come from the engine; there are none yet, so the heading has a hover note
+  saying why instead.
+- **unverified: the items list and the Open bills split were never captured.** The capture
+  company has no stock items and no bill-wise party, so the items columns, the "Missing: add
+  HSN" badge and the alter form beside its Open bills card are drawn only in tests. Needs two
+  items (one without an HSN) and a bill-wise party in the capture company, checked against the
+  other captures' figures.
 - **data: the capture company.** Fictional Traders has ten ledgers and no stock items, so the
   items capture is the empty state, and Sample Buyer Pvt Ltd is not bill-wise, so the party
   detail has no Open bills card. The mock shows Godavari Drip's ledgers and seven items.

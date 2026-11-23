@@ -870,6 +870,8 @@ fn read_keys(ui: &Ui, tag: ModeTag, kind: MasterKind) -> Vec<KeyCmd> {
 const SUBTITLE: &str = "Ledgers and stock items. Type to filter. Alt+C creates anywhere.";
 /// The gap between the page head and the tabs (`.phead{margin-bottom:16px}`).
 const HEAD_GAP: f32 = 16.0;
+/// The gap under the tabs' rule (`.tabs{margin-bottom:14px}`, index.html:139).
+const TABS_GAP: f32 = 14.0;
 /// The widest the create form grows (`style="max-width:880px"`, index.html:1808).
 const FORM_MAX_WIDTH: f32 = 880.0;
 /// What a cell shows where a figure is not available yet.
@@ -1120,23 +1122,30 @@ impl MastersScreen {
                 | MasterDraft::StockItem(_) => None,
             };
             let draft = &mut form.draft;
-            if bills {
-                crate::screens::home::draw::split(
-                    ui,
-                    |ui| clicks = sheet(ui, &books.masters, draft, editing, foot),
-                    open_bills_card,
-                );
-            } else {
-                let width = ui.available_width().min(FORM_MAX_WIDTH);
-                ui.allocate_ui_with_layout(
-                    egui::vec2(width, 0.0),
-                    Layout::top_down(Align::Min),
-                    |ui| {
-                        ui.set_width(width);
-                        clicks = sheet(ui, &books.masters, draft, editing, foot);
-                    },
-                );
-            }
+            // A form with every section on is taller than the window, so it scrolls and Save
+            // stays in reach.
+            egui::ScrollArea::vertical()
+                .id_salt("masters-form")
+                .auto_shrink([false, true])
+                .show(ui, |ui| {
+                    if bills {
+                        crate::screens::home::draw::split(
+                            ui,
+                            |ui| clicks = sheet(ui, &books.masters, draft, editing, foot),
+                            open_bills_card,
+                        );
+                    } else {
+                        let width = ui.available_width().min(FORM_MAX_WIDTH);
+                        ui.allocate_ui_with_layout(
+                            egui::vec2(width, 0.0),
+                            Layout::top_down(Align::Min),
+                            |ui| {
+                                ui.set_width(width);
+                                clicks = sheet(ui, &books.masters, draft, editing, foot);
+                            },
+                        );
+                    }
+                });
         }
         if clicks.save {
             drop(self.save(books));
@@ -1261,6 +1270,7 @@ impl MastersScreen {
         }
         ui.add_space(HEAD_GAP);
         self.draw_tabs(ui);
+        ui.add_space(TABS_GAP);
         self.draw_notice(ui);
         match self.mode_tag() {
             ModeTag::List => keys.extend(self.draw_list(ui, books)),

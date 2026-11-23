@@ -18,7 +18,7 @@ use std::collections::BTreeMap;
 use egui::{Event, Key, Modifiers, RawInput};
 use ledgerly_app::screens::masters::view::{self, GstinCheck};
 use ledgerly_app::screens::masters::{
-    MasterDraft, MasterKind, MasterRef, MastersScreen, PartyDraft, Step,
+    BankDraft, MasterDraft, MasterKind, MasterRef, MastersScreen, PartyDraft, Step,
 };
 use ledgerly_app::{AppCtx, Screen, ScreenAction};
 use ledgerly_core::{
@@ -725,4 +725,39 @@ fn a_valid_gstin_says_its_pan_and_state() {
         Some("PAN ABCDE1234F \u{00B7} state 29 Karnataka")
     );
     assert_eq!(view::gstin_hint("29ABCDE1234F1ZX"), None);
+}
+
+#[test]
+fn a_long_form_scrolls_inside_the_window() {
+    // provenance: derived. The mock's form fits its window (index.html:1810-1815), but ours grows
+    // with Party and Bank details (design/PARITY-GAPS.md). Bug found 2026-11-23 in the
+    // masters.ledger-detail capture: the footer note and Save ran under the key bar, out of reach.
+    // The form now scrolls, so the screen never draws past the window's bottom edge.
+    let ctx = egui::Context::default();
+    let mut app = app_with(fixture());
+    let mut s = MastersScreen::new();
+    s.begin_create(app.books.as_ref().unwrap()).unwrap();
+    let Some(MasterDraft::Ledger(d)) = s.draft_mut() else {
+        panic!("Alt+C on ledgers opens a ledger form");
+    };
+    d.bill_wise = true;
+    d.party = Some(PartyDraft::default());
+    d.bank = Some(BankDraft::default());
+    let window = egui::Rect::from_min_size(egui::Pos2::ZERO, egui::vec2(1280.0, 600.0));
+    let mut bottom = 0.0_f32;
+    for _ in 0..2 {
+        let input = RawInput {
+            screen_rect: Some(window),
+            ..RawInput::default()
+        };
+        let out = ctx.run_ui(input, |ui| {
+            s.ui(ui, &mut app);
+            bottom = ui.min_rect().bottom();
+        });
+        out.drop_without_applying_deltas();
+    }
+    assert!(
+        bottom <= window.bottom(),
+        "the screen drew down to {bottom}"
+    );
 }
