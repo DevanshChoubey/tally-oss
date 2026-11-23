@@ -327,5 +327,7 @@ matching to propose a ledger, which is not built).
   under Exception Reports (help.tallysolutions.com/docs/te9rel66/Reports/MIS_Reports/Display_Optional_Vouchers.htm,
   read 2026-11-23). It lists vouchers marked Optional, which are not posted. It is not a queue of
   proposals awaiting a decision, so the queue is not built from it.
-- **data: review.default and review.empty captures.** Not captured in this round. The capture
-  company has no bank statement, so review.default would show the not-connected list only.
+- **data: review.default has no capture.** The capture company has no bank statement, so the
+  queue has no rows and review.default would look the same as review.empty. review.empty is
+  captured (`design/app-captures/light/review.empty.webp`) and shows the connected-sources
+  wording above, not the mock's "Nothing to review" heading.

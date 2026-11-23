@@ -1,6 +1,6 @@
 # App against mock
 
-29 app captures are paired with a mock capture of the same theme and state id. SSIM is 1 for identical images; lower is a bigger difference, and the list runs worst first.
+30 app captures are paired with a mock capture of the same theme and state id. SSIM is 1 for identical images; lower is a bigger difference, and the list runs worst first.
 
 | Theme | State | SSIM |
 | --- | --- | --- |
@@ -32,6 +32,7 @@
 | light | day-book.default | 0.7618 |
 | light | masters.ledger-detail | 0.7672 |
 | light | masters.create-ledger | 0.7916 |
+| light | review.empty | 0.8263 |
 | light | gst.recon-empty | 0.8323 |
 
 ## hc / home.default
@@ -370,6 +371,18 @@ SSIM 0.7916
 </tr>
 </table>
 
+## light / review.empty
+
+SSIM 0.8263
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/review.empty.webp" width="480" alt="mock light review.empty"></td>
+<td><img src="app-captures/light/review.empty.webp" width="480" alt="app light review.empty"></td>
+</tr>
+</table>
+
 ## light / gst.recon-empty
 
 SSIM 0.8323
@@ -384,7 +397,7 @@ SSIM 0.8323
 
 ## Mock states with no app capture yet
 
-### light (62)
+### light (61)
 
 - `home.loading`
 - `home.empty`
@@ -436,7 +449,6 @@ SSIM 0.8323
 - `masters.gstin-error`
 - `masters.suggested-ledger`
 - `review.default`
-- `review.empty`
 - `setup.welcome`
 - `setup.company`
 - `setup.gstin-error`

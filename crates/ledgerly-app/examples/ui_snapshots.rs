@@ -468,6 +468,10 @@ fn shots() -> Vec<Shot> {
         shot("palette.ask", &[palette]).query("?who owes us"),
         shot("palette.entry", &[palette]).query("+paid rent"),
         shot("palette.commands", &[palette]).query(">"),
+        // The Review queue opens from the palette ("Review queue" is a screen row there).
+        shot("review.empty", &[palette])
+            .query("Review queue")
+            .then(&[(Key::Enter, NONE)]),
         shot("palette.no-results", &[palette]).query("zzqx"),
         shot("balance-sheet.default", &[(Key::B, NONE)]),
         shot(

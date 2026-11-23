@@ -330,7 +330,8 @@ impl ReviewScreen {
                 ui.label(&row.source);
             }
         });
-        if !panel.not_connected.is_empty() {
+        // With no rows the empty state above already names the sources, so the card is not repeated.
+        if !panel.rows.is_empty() && !panel.not_connected.is_empty() {
             ui.add_space(crate::theme::SPACE_3);
             card(ui, |ui| {
                 draw_empty_heading(ui, "Not connected yet");
