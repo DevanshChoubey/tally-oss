@@ -150,9 +150,17 @@ matching to propose a ledger, which is not built).
 - **by design: balances are as of the last voucher date**, the date the balance sheet opens on
   (`navigate::default_period`). The mock does not say which date its balances are as of, and
   the list does not say it either; a date in the subtitle would make it plain.
-- **deferred: Stock and Value on the items tab** (index.html:1798, `prov('eng','stock engine')`)
-  and the "Closing stock" total row. The engine has `ReportKind::StockSummary`; wire it the way
-  the Balance column is (`screens/masters/balances.rs`).
+- **by design: the value heading is "Closing value", not "Value at average cost"**
+  (index.html:1798). Stock and value are the engine's stock summary, joined by item id
+  (`screens/masters/stock.rs`), and the engine values each item by its own method (average cost,
+  FIFO, last purchase or standard cost), so the heading is the stock summary's own. The
+  "Closing stock" line is the summary's own total.
+- **by design: a credit or provisional stock value is marked.** The mock's value is
+  `inr(max(qty,0)*cost)`, so stock below zero shows 0.00. Ours shows the engine's figure: a
+  credit value keeps "Cr", and a value the engine marks provisional (negative stock) says
+  "(provisional)". The cell's reason is kept but not shown, as with the balances (bug above).
+- **by design: stock is over the stock summary's opening period**, the financial year to its
+  last voucher, as the stock summary report opens.
 - **deferred: Open bills on the party detail** (index.html:1806). The engine has
   `ReportKind::Outstanding`. The alter form of a bill-wise ledger shows the card with a sentence
   saying the bills are not shown here yet.
@@ -198,14 +206,13 @@ matching to propose a ledger, which is not built).
   would drop the draft; the mock never shows them with a form open in another kind.
 - **by design: ledgers are in name order.** The mock lists its sample in its own order. Ours
   sorts by name so the cursor and the filter behave the same on any company.
-- **deferred: no "stock engine" chip on the items tab's Value heading** (index.html:1798). It
-  comes with the stock figures. The Balance heading has its "engine" chip once the balances
-  are in; ours sits at the column's right edge, the mock's just after the word.
-- **unverified: the items list and the Open bills split were never captured.** The capture
-  company has no stock items and no bill-wise party, so the items columns, the "Missing: add
-  HSN" badge and the alter form beside its Open bills card are drawn only in tests. Needs two
-  items (one without an HSN) and a bill-wise party in the capture company, checked against the
-  other captures' figures.
-- **data: the capture company.** Fictional Traders has ten ledgers and no stock items, so the
-  items capture is the empty state, and Sample Buyer Pvt Ltd is not bill-wise, so the party
-  detail has no Open bills card. The mock shows Godavari Drip's ledgers and seven items.
+- **by design: the engine chips sit at the column's right edge** (index.html:1796, 1798). The
+  Balance heading's "engine" and the value heading's "stock engine" chips show once the figures
+  are in; the mock's sit just after the word.
+- **unverified: the Open bills split was never captured.** The capture company has no bill-wise
+  party, so the alter form beside its Open bills card is drawn only in tests. Needs a bill-wise
+  party in the capture company, checked against the other captures' figures.
+- **data: the capture company.** Fictional Traders has ten ledgers and two stock items with no
+  opening stock and no movement (so no other screen's figures move), so the items capture shows
+  0 quantities and 0.00 values. Sample Buyer Pvt Ltd is not bill-wise, so the party detail has
+  no Open bills card. The mock shows Godavari Drip's ledgers and seven items with stock.

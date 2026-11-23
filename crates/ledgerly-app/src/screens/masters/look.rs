@@ -14,7 +14,7 @@ use crate::theme::{RADIUS_M, RADIUS_XS, TEXT_BODY, TEXT_CAP, TEXT_META, border_w
 use crate::ui::badge::{BadgeKind, badge};
 use crate::ui::icon::{self, ICON_SIZE, Icon};
 use crate::ui::prov::{self, ProvKind};
-use crate::ui::table::{self, CellPlace, RowState, T_HEAD_HEIGHT, T_ROW_HEIGHT};
+use crate::ui::table::{self, CellPlace, RowState, T_HEAD_HEIGHT, T_ROW_HEIGHT, T_TOTAL_HEIGHT};
 use crate::ui::{bold_font, kind, tokens};
 
 /// Height of the filter's text line (`.qe input{height:30px}`).
@@ -97,9 +97,9 @@ pub(super) struct Col {
     pub numeric: bool,
     /// Shown when the pointer is over the heading, for a column whose figures are not here yet.
     pub hint: Option<&'static str>,
-    /// The figures came from the engine: the heading carries the "engine" provenance tag
-    /// (`prov('eng','engine')`, index.html:1796).
-    pub engine: bool,
+    /// The figures came from the engine: the heading carries the engine provenance tag with this
+    /// text (`prov('eng','engine')`, index.html:1796; `prov('eng','stock engine')`, line 1798).
+    pub tag: Option<&'static str>,
 }
 
 /// One cell of a list.
@@ -118,6 +118,16 @@ pub(super) enum Cell {
     },
     /// A badge (`badge(..)` in a cell).
     Badge(BadgeKind, &'static str),
+}
+
+/// The total line under a list (`tr.total`, index.html:1800): the label across every column but
+/// the last, and the figure in the last.
+#[derive(Debug, Clone)]
+pub(super) struct TotalLine {
+    /// The label ("Closing stock").
+    pub label: &'static str,
+    /// The figure, as the engine gave it.
+    pub value: String,
 }
 
 /// What the pointer did to the list this frame.
@@ -160,6 +170,7 @@ pub(super) fn list_card(
     rows: &[Vec<Cell>],
     selected: Option<usize>,
     scroll_to_selected: bool,
+    total: Option<&TotalLine>,
 ) -> ListEvents {
     let t = tokens(ui);
     let k = kind(ui);
@@ -204,6 +215,11 @@ pub(super) fn list_card(
                             events.opened = Some(index);
                         }
                     }
+                    if let Some(line) = total {
+                        let (rect, _) =
+                            ui.allocate_exact_size(vec2(width, T_TOTAL_HEIGHT), Sense::hover());
+                        paint_total(ui, cols, rect, line);
+                    }
                 });
         });
     events
@@ -220,8 +236,8 @@ fn paint_heading(ui: &Ui, cols: &[Col], rect: Rect, response: &egui::Response) {
         } else {
             CellPlace::Left(table::CELL_PAD_X)
         };
-        let label_rect = if col.engine {
-            let tag = paint_engine_tag(ui, r);
+        let label_rect = if let Some(text) = col.tag {
+            let tag = paint_engine_tag(ui, r, text);
             // `CellPlace::Right` keeps the cell's right padding, so give it back here: the label
             // then ends `TAG_GAP` before the tag.
             Rect::from_min_max(
@@ -248,16 +264,14 @@ fn paint_heading(ui: &Ui, cols: &[Col], rect: Rect, response: &egui::Response) {
     }
 }
 
-/// Paints the "engine" provenance tag at the right of a heading cell `r` (`.prov`: the engine
-/// colours, caption size, bold) and returns its rectangle.
-fn paint_engine_tag(ui: &Ui, r: Rect) -> Rect {
+/// Paints an engine provenance tag reading `text` at the right of a heading cell `r` (`.prov`:
+/// the engine colours, caption size, bold) and returns its rectangle.
+fn paint_engine_tag(ui: &Ui, r: Rect, text: &str) -> Rect {
     let t = tokens(ui);
     let (bg, fg) = prov::colors(ProvKind::Engine, &t);
-    let galley = ui.painter().layout_no_wrap(
-        prov::label(ProvKind::Engine).to_owned(),
-        bold_font(ui, TEXT_CAP),
-        fg,
-    );
+    let galley = ui
+        .painter()
+        .layout_no_wrap(text.to_owned(), bold_font(ui, TEXT_CAP), fg);
     let text = galley.size();
     let size = vec2(text.x + 2.0 * TAG_PAD_X, TAG_HEIGHT);
     let right = r.right() - table::CELL_PAD_X;
@@ -270,6 +284,29 @@ fn paint_engine_tag(ui: &Ui, r: Rect) -> Rect {
         fg,
     );
     tag
+}
+
+/// The total line: its rules, the label in the first column and the figure in the last, in the
+/// total weight (`font-weight:650`).
+fn paint_total(ui: &Ui, cols: &[Col], rect: Rect, line: &TotalLine) {
+    let t = tokens(ui);
+    table::paint_total_rules(ui, rect);
+    let font = bold_font(ui, TEXT_BODY);
+    let rects = column_rects(cols, rect);
+    let (Some(first), Some(last)) = (rects.first(), rects.last()) else {
+        return;
+    };
+    let label_rect = Rect::from_min_max(first.min, pos2(last.left(), rect.bottom()));
+    table::paint_cell_text(
+        ui,
+        label_rect,
+        3.0,
+        line.label,
+        font.clone(),
+        t.text,
+        CellPlace::Left(table::CELL_PAD_X),
+    );
+    table::paint_cell_text(ui, *last, 3.0, &line.value, font, t.text, CellPlace::Right);
 }
 
 /// The cells of one row.

@@ -94,8 +94,8 @@ pub fn ledger_rows(masters: &Masters, filter: &str) -> Vec<LedgerRow> {
         .collect()
 }
 
-/// One stock item line in the stock item table. Stock quantities and values are not here: the
-/// engine does not supply them yet.
+/// One stock item line in the stock item table. Stock quantities and values are not here: they
+/// are the engine's, joined to the line by its id (`masters::stock`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ItemRow {
     /// Which stock item.
@@ -107,6 +107,9 @@ pub struct ItemRow {
     /// The GST rate of its latest entry in the GST history, as `18%`; empty when there is none.
     /// The history is not shown date by date yet.
     pub gst_rate: String,
+    /// The symbol of its base unit, the unit the engine's quantities are in; empty when the unit
+    /// is not in the masters.
+    pub unit: String,
 }
 
 /// The stock items the filter keeps, in name order.
@@ -127,11 +130,16 @@ pub fn item_rows(masters: &Masters, filter: &str) -> Vec<ItemRow> {
                 .max_by_key(|h| h.effective_from)
                 .and_then(|h| h.rate_percent)
                 .map_or_else(String::new, |r| format!("{}%", r.0));
+            let unit = masters
+                .units
+                .get(&item.unit)
+                .map_or_else(String::new, |u| u.symbol.clone());
             Some(ItemRow {
                 master: row.master,
                 name: row.name,
                 hsn,
                 gst_rate,
+                unit,
             })
         })
         .collect()

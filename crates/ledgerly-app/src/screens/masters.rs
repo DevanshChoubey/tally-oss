@@ -29,7 +29,8 @@
 //!
 //! Rule C4 (the UI never sums anything): this screen shows an opening balance as stored and adds
 //! nothing. The ledger list's closing balances are the engine's trial balance, asked for on the
-//! API worker ([`balances`]). Stock quantities and values are not shown here yet.
+//! API worker ([`balances`]). The item list's closing quantities and values, and its closing
+//! stock total, are the engine's stock summary, asked for the same way ([`stock`]).
 //!
 //! Not built here, and said so rather than faked ([`MasterError::Unsupported`]):
 //!
@@ -52,10 +53,11 @@ mod draft;
 mod form_ui;
 mod list;
 mod look;
+pub mod stock;
 pub mod view;
 
 use egui::{Align, Key, Layout, Modifiers, RichText, Ui};
-use ledgerly_core::{Date, LedgerId, Outcome, Unsupported};
+use ledgerly_core::{Date, LedgerId, Outcome, Period, StockItemId, Unsupported};
 use ledgerly_model::{Books, MasterSnapshot, Masters};
 
 use command::command_for;
@@ -72,6 +74,7 @@ use crate::ui::empty::empty_state;
 use crate::ui::icon::Icon;
 use crate::ui::note::{NoteKind, note};
 use crate::ui::page_head::page_head;
+use crate::ui::prov::{self, ProvKind};
 use crate::ui::tabs::tabs;
 use crate::ui::{bold_font, tokens};
 use crate::worker::{ApiWorker, Ticket};
@@ -390,6 +393,10 @@ pub struct MastersScreen {
     /// The copy of the books and the date the balances were last asked for, so a change to
     /// either asks again.
     balances_for: Option<(crate::shell::BooksPrint, Result<Date, String>)>,
+    /// The item list's Stock and value columns and its total line, from the engine.
+    stock: stock::ItemStockFigures,
+    /// The copy of the books and the period the stock figures were last asked for.
+    stock_for: Option<(crate::shell::BooksPrint, Result<Period, String>)>,
 }
 
 impl Default for MastersScreen {
@@ -421,6 +428,8 @@ impl MastersScreen {
             scroll_to_selected: false,
             balances: balances::LedgerBalances::new(),
             balances_for: None,
+            stock: stock::ItemStockFigures::new(),
+            stock_for: None,
         }
     }
 
@@ -899,7 +908,10 @@ fn ledger_cols(balances: &balances::LedgerBalances) -> [look::Col; 4] {
     let mut cols = LEDGER_COLS;
     if let Some(balance) = cols.last_mut() {
         balance.hint = balances.heading_hint();
-        balance.engine = balance.hint.is_none();
+        balance.tag = balance
+            .hint
+            .is_none()
+            .then_some(prov::label(ProvKind::Engine));
     }
     cols
 }
@@ -912,67 +924,85 @@ const LEDGER_COLS: [look::Col; 4] = [
         width: None,
         numeric: false,
         hint: None,
-        engine: false,
+        tag: None,
     },
     look::Col {
         label: "Group",
         width: Some(276.0),
         numeric: false,
         hint: None,
-        engine: false,
+        tag: None,
     },
     look::Col {
         label: "GSTIN",
         width: Some(200.0),
         numeric: false,
         hint: None,
-        engine: false,
+        tag: None,
     },
     look::Col {
         label: "Balance",
         width: Some(197.0),
         numeric: true,
         hint: Some(NOT_AVAILABLE_HINT),
-        engine: false,
+        tag: None,
     },
 ];
 
-/// The stock item list's columns (index.html:1798), widths read off the mock's capture.
+/// The stock item list's columns (index.html:1798), with the Stock and value headings' hover
+/// text and the value's "stock engine" chip set from what the figures are now.
+fn item_cols(figures: &stock::ItemStockFigures) -> [look::Col; 5] {
+    let mut cols = ITEM_COLS;
+    let hint = figures.heading_hint();
+    let [.., qty, value] = &mut cols;
+    qty.hint = hint;
+    value.hint = hint;
+    value.tag = hint.is_none().then_some(STOCK_ENGINE_TAG);
+    cols
+}
+
+/// The value heading's provenance chip (`prov('eng','stock engine')`, index.html:1798).
+const STOCK_ENGINE_TAG: &str = "stock engine";
+
+/// The stock item list's columns before the figures are known, widths read off the mock's
+/// capture. The mock's value heading is "Value at average cost"; the engine values each item by
+/// its own method (average cost, FIFO, last purchase or standard cost), so the heading is the
+/// engine's own "Closing value" (design/PARITY-GAPS.md).
 const ITEM_COLS: [look::Col; 5] = [
     look::Col {
         label: "Item",
         width: Some(296.0),
         numeric: false,
         hint: None,
-        engine: false,
+        tag: None,
     },
     look::Col {
         label: "HSN",
         width: Some(213.0),
         numeric: false,
         hint: None,
-        engine: false,
+        tag: None,
     },
     look::Col {
         label: "GST",
         width: Some(72.0),
         numeric: true,
         hint: None,
-        engine: false,
+        tag: None,
     },
     look::Col {
         label: "Stock",
         width: Some(116.0),
         numeric: true,
-        hint: Some(NOT_AVAILABLE_HINT),
-        engine: false,
+        hint: None,
+        tag: None,
     },
     look::Col {
-        label: "Value at average cost",
+        label: stock::VALUE_HEADING,
         width: None,
         numeric: true,
-        hint: Some(NOT_AVAILABLE_HINT),
-        engine: false,
+        hint: None,
+        tag: None,
     },
 ];
 
@@ -983,14 +1013,14 @@ const PLAIN_COLS: [look::Col; 2] = [
         width: None,
         numeric: false,
         hint: None,
-        engine: false,
+        tag: None,
     },
     look::Col {
         label: "Details",
         width: None,
         numeric: false,
         hint: None,
-        engine: false,
+        tag: None,
     },
 ];
 
@@ -1083,11 +1113,20 @@ impl MastersScreen {
                     &self.balances,
                 );
                 let cols = ledger_cols(&self.balances);
-                look::list_card(ui, "ledgers", &cols, &rows, selected, scroll)
+                look::list_card(ui, "ledgers", &cols, &rows, selected, scroll, None)
             }
             MasterKind::StockItem => {
-                let rows = item_cells(&view::item_rows(&books.masters, &self.filter));
-                look::list_card(ui, "items", &ITEM_COLS, &rows, selected, scroll)
+                if let Some(text) = self.stock_note() {
+                    note(ui, NoteKind::Warn, &text);
+                    ui.add_space(look::FILTER_GAP);
+                }
+                let rows = item_cells(&view::item_rows(&books.masters, &self.filter), &self.stock);
+                let cols = item_cols(&self.stock);
+                let total = self.stock.total_text().map(|value| look::TotalLine {
+                    label: CLOSING_STOCK,
+                    value,
+                });
+                look::list_card(ui, "items", &cols, &rows, selected, scroll, total.as_ref())
             }
             MasterKind::Group
             | MasterKind::VoucherType
@@ -1098,7 +1137,7 @@ impl MastersScreen {
             | MasterKind::CostCategory
             | MasterKind::CostCentre => {
                 let rows = plain_cells(&list_rows(&books.masters, kind, &self.filter));
-                look::list_card(ui, "plain", &PLAIN_COLS, &rows, selected, scroll)
+                look::list_card(ui, "plain", &PLAIN_COLS, &rows, selected, scroll, None)
             }
         };
         if let Some(i) = events.clicked.or(events.opened) {
@@ -1441,9 +1480,12 @@ fn ledger_cells(
         .collect()
 }
 
+/// The label of the item list's total line (index.html:1800).
+const CLOSING_STOCK: &str = "Closing stock";
+
 /// The stock item list's cells: the name, the HSN (or the missing-HSN badge), the GST rate, and
-/// the stock and value as not available.
-fn item_cells(rows: &[view::ItemRow]) -> Vec<Vec<look::Cell>> {
+/// the closing quantity and value as the engine gave them ([`stock::ItemStockFigures`]).
+fn item_cells(rows: &[view::ItemRow], figures: &stock::ItemStockFigures) -> Vec<Vec<look::Cell>> {
     rows.iter()
         .map(|r| {
             let hsn = if r.hsn.is_empty() {
@@ -1460,8 +1502,8 @@ fn item_cells(rows: &[view::ItemRow]) -> Vec<Vec<look::Cell>> {
                 look::Cell::Text(r.name.clone()),
                 hsn,
                 look::Cell::Text(rate),
-                look::Cell::Text(NOT_AVAILABLE.to_owned()),
-                look::Cell::Text(NOT_AVAILABLE.to_owned()),
+                look::Cell::Text(figures.qty_text(StockItemId(r.master.id), &r.unit)),
+                look::Cell::Text(figures.value_text(StockItemId(r.master.id))),
             ]
         })
         .collect()
@@ -1515,7 +1557,9 @@ impl Screen for MastersScreen {
         let action = if let Some(books) = ctx.books.as_ref() {
             self.follow_balances(books);
             self.balances.tick(ctx.api.as_ref());
-            if self.balances.is_loading() && ctx.api.is_some() {
+            self.follow_stock(books);
+            self.stock.tick(ctx.api.as_ref());
+            if (self.balances.is_loading() || self.stock.is_loading()) && ctx.api.is_some() {
                 ui.ctx().request_repaint();
             }
             self.draw(ui, books)
@@ -1553,6 +1597,43 @@ impl MastersScreen {
                 .set(balances::BalanceState::Unsupported(why.clone())),
         }
         self.balances_for = Some(key);
+    }
+
+    /// Asks for the stock figures again when `books` is a copy, or the period is one, they were
+    /// not asked for, as [`MastersScreen::follow_balances`] does. The period is the one the stock
+    /// summary opens with (`navigate::default_period`): the financial year to its last voucher.
+    fn follow_stock(&mut self, books: &Books) {
+        let print = crate::shell::books_print(books);
+        let period = crate::shell::navigate::default_period(books).map_err(|e| e.to_string());
+        let key = (print, period);
+        if self.stock_for.as_ref() == Some(&key) {
+            return;
+        }
+        match &key.1 {
+            Ok(period) => self.stock.request(*period),
+            Err(why) => self.stock.set(stock::StockState::Unsupported(why.clone())),
+        }
+        self.stock_for = Some(key);
+    }
+
+    /// The item list's stock figures, as the screen holds them.
+    #[must_use]
+    pub fn stock(&self) -> &stock::ItemStockFigures {
+        &self.stock
+    }
+
+    /// The item list's stock figures, to set them as an answer from the worker would.
+    pub fn stock_mut(&mut self) -> &mut stock::ItemStockFigures {
+        &mut self.stock
+    }
+
+    /// The note drawn above the item list when the engine could not give the stock figures,
+    /// with the engine's own reason (rule A1).
+    #[must_use]
+    pub fn stock_note(&self) -> Option<String> {
+        self.stock
+            .notice()
+            .map(|why| format!("Stock figures are not shown: {why}. Nothing is estimated here."))
     }
 
     /// The ledger list's balances, as the screen holds them.

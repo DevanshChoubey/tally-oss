@@ -4,37 +4,37 @@
 
 | Theme | State | SSIM |
 | --- | --- | --- |
-| hc | home.default | 0.3856 |
-| dark | home.default | 0.5420 |
-| light | sales-invoice.default | 0.5438 |
-| light | home.default | 0.5837 |
+| hc | home.default | 0.4664 |
+| dark | home.default | 0.5732 |
+| light | sales-invoice.default | 0.5756 |
+| light | home.default | 0.5838 |
 | light | masters.ledgers | 0.6070 |
-| light | bank.default | 0.6271 |
-| light | palette.voucher | 0.6275 |
-| light | palette.entry | 0.6283 |
+| light | palette.voucher | 0.6276 |
+| light | palette.entry | 0.6282 |
 | light | palette.ask | 0.6312 |
 | light | palette.no-results | 0.6344 |
-| light | keys.standard | 0.6380 |
-| light | balance-sheet.detailed | 0.6409 |
-| light | receipt.default | 0.6433 |
-| light | keys.classic | 0.6493 |
+| light | keys.standard | 0.6390 |
+| light | balance-sheet.detailed | 0.6429 |
+| light | keys.classic | 0.6503 |
 | light | palette.search | 0.6576 |
 | light | palette.default | 0.6588 |
-| light | payment.default | 0.6601 |
 | light | gst.gstr1 | 0.6610 |
-| light | bank.brs | 0.6619 |
-| light | balance-sheet.default | 0.6703 |
-| light | palette.commands | 0.6899 |
+| light | balance-sheet.default | 0.6705 |
+| light | bank.default | 0.6787 |
+| light | palette.commands | 0.6897 |
 | light | gst.gstr3b | 0.7000 |
-| light | masters.ledger-detail | 0.7307 |
-| light | masters.items | 0.7496 |
+| light | receipt.default | 0.7151 |
+| light | bank.brs | 0.7249 |
+| light | masters.ledger-detail | 0.7333 |
+| light | payment.default | 0.7334 |
+| light | masters.items | 0.7409 |
 | light | day-book.default | 0.7570 |
 | light | masters.create-ledger | 0.7782 |
 | light | gst.recon-empty | 0.8231 |
 
 ## hc / home.default
 
-SSIM 0.3856
+SSIM 0.4664
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -46,7 +46,7 @@ SSIM 0.3856
 
 ## dark / home.default
 
-SSIM 0.5420
+SSIM 0.5732
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -58,7 +58,7 @@ SSIM 0.5420
 
 ## light / sales-invoice.default
 
-SSIM 0.5438
+SSIM 0.5756
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -70,7 +70,7 @@ SSIM 0.5438
 
 ## light / home.default
 
-SSIM 0.5837
+SSIM 0.5838
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -92,21 +92,9 @@ SSIM 0.6070
 </tr>
 </table>
 
-## light / bank.default
-
-SSIM 0.6271
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/light/bank.default.webp" width="480" alt="mock light bank.default"></td>
-<td><img src="app-captures/light/bank.default.webp" width="480" alt="app light bank.default"></td>
-</tr>
-</table>
-
 ## light / palette.voucher
 
-SSIM 0.6275
+SSIM 0.6276
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -118,7 +106,7 @@ SSIM 0.6275
 
 ## light / palette.entry
 
-SSIM 0.6283
+SSIM 0.6282
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -154,7 +142,7 @@ SSIM 0.6344
 
 ## light / keys.standard
 
-SSIM 0.6380
+SSIM 0.6390
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -166,7 +154,7 @@ SSIM 0.6380
 
 ## light / balance-sheet.detailed
 
-SSIM 0.6409
+SSIM 0.6429
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -176,21 +164,9 @@ SSIM 0.6409
 </tr>
 </table>
 
-## light / receipt.default
-
-SSIM 0.6433
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/light/receipt.default.webp" width="480" alt="mock light receipt.default"></td>
-<td><img src="app-captures/light/receipt.default.webp" width="480" alt="app light receipt.default"></td>
-</tr>
-</table>
-
 ## light / keys.classic
 
-SSIM 0.6493
+SSIM 0.6503
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -224,18 +200,6 @@ SSIM 0.6588
 </tr>
 </table>
 
-## light / payment.default
-
-SSIM 0.6601
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/light/payment.default.webp" width="480" alt="mock light payment.default"></td>
-<td><img src="app-captures/light/payment.default.webp" width="480" alt="app light payment.default"></td>
-</tr>
-</table>
-
 ## light / gst.gstr1
 
 SSIM 0.6610
@@ -248,21 +212,9 @@ SSIM 0.6610
 </tr>
 </table>
 
-## light / bank.brs
-
-SSIM 0.6619
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/light/bank.brs.webp" width="480" alt="mock light bank.brs"></td>
-<td><img src="app-captures/light/bank.brs.webp" width="480" alt="app light bank.brs"></td>
-</tr>
-</table>
-
 ## light / balance-sheet.default
 
-SSIM 0.6703
+SSIM 0.6705
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -272,9 +224,21 @@ SSIM 0.6703
 </tr>
 </table>
 
+## light / bank.default
+
+SSIM 0.6787
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/bank.default.webp" width="480" alt="mock light bank.default"></td>
+<td><img src="app-captures/light/bank.default.webp" width="480" alt="app light bank.default"></td>
+</tr>
+</table>
+
 ## light / palette.commands
 
-SSIM 0.6899
+SSIM 0.6897
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -296,9 +260,33 @@ SSIM 0.7000
 </tr>
 </table>
 
+## light / receipt.default
+
+SSIM 0.7151
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/receipt.default.webp" width="480" alt="mock light receipt.default"></td>
+<td><img src="app-captures/light/receipt.default.webp" width="480" alt="app light receipt.default"></td>
+</tr>
+</table>
+
+## light / bank.brs
+
+SSIM 0.7249
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/bank.brs.webp" width="480" alt="mock light bank.brs"></td>
+<td><img src="app-captures/light/bank.brs.webp" width="480" alt="app light bank.brs"></td>
+</tr>
+</table>
+
 ## light / masters.ledger-detail
 
-SSIM 0.7307
+SSIM 0.7333
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -308,9 +296,21 @@ SSIM 0.7307
 </tr>
 </table>
 
+## light / payment.default
+
+SSIM 0.7334
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/payment.default.webp" width="480" alt="mock light payment.default"></td>
+<td><img src="app-captures/light/payment.default.webp" width="480" alt="app light payment.default"></td>
+</tr>
+</table>
+
 ## light / masters.items
 
-SSIM 0.7496
+SSIM 0.7409
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>

@@ -37,14 +37,15 @@ use ledgerly_app::theme::ThemeKind;
 use ledgerly_app::worker::ApiWorker;
 use ledgerly_core::{
     Clock, CompanyId, Date, Decimal, GroupId, Gstin, Hsn, LedgerId, Paise, Rate, SignedAmount,
-    StateCode, VoucherId, gstin_check_character,
+    StateCode, StockItemId, UnitId, VoucherId, gstin_check_character,
 };
 use ledgerly_model::seed_groups::reserved_groups;
 use ledgerly_model::seed_voucher_types::default_voucher_types;
 use ledgerly_model::{
     Address, BankDetails, BaseVoucherKind, Company, EntityKind, Features, GstClassification,
     GstRegistration, Ledger, LedgerLine, NegativeStockPolicy, PartyDetails, RegistrationType,
-    ReservedGroup, TaxDetails, TaxLedgerKind, Taxability, Voucher, VoucherMode, VoucherStatus,
+    ReservedGroup, StockItem, TaxDetails, TaxLedgerKind, Taxability, Unit, UnitKind,
+    ValuationMethod, Voucher, VoucherMode, VoucherStatus,
 };
 use time::OffsetDateTime;
 use time::macros::date;
@@ -59,6 +60,8 @@ const CGST: LedgerId = LedgerId(7);
 const SGST: LedgerId = LedgerId(8);
 const IGST: LedgerId = LedgerId(9);
 const RENT: LedgerId = LedgerId(10);
+const COIL: UnitId = UnitId(1);
+const NOS: UnitId = UnitId(2);
 
 fn gstin(first14: &str) -> Gstin {
     let check = gstin_check_character(first14).unwrap();
@@ -184,6 +187,43 @@ fn run(api: &mut Api, command: Command) {
     }
 }
 
+/// A simple unit.
+fn unit(id: UnitId, symbol: &str, formal: &str) -> Unit {
+    Unit {
+        id,
+        symbol: symbol.to_owned(),
+        formal_name: formal.to_owned(),
+        decimals: 0,
+        kind: UnitKind::Simple,
+        uqc: None,
+        tally: None,
+    }
+}
+
+/// A taxable stock item at `rate` percent from the start of the year, with no opening stock.
+fn stock_item(id: u64, name: &str, unit: UnitId, rate: i64) -> StockItem {
+    StockItem {
+        ineligible_itc: None,
+        id: StockItemId(id),
+        name: name.to_owned(),
+        aliases: Vec::new(),
+        group: None,
+        unit,
+        alt_unit: None,
+        hsn: None,
+        gst_history: vec![ledgerly_model::GstHistory {
+            effective_from: date!(2026 - 04 - 01),
+            taxability: Taxability::Taxable,
+            rate_percent: Some(Rate(Decimal::from(rate))),
+        }],
+        valuation: ValuationMethod::AverageCost,
+        batches_enabled: false,
+        opening: Vec::new(),
+        standard_costs: Vec::new(),
+        tally: None,
+    }
+}
+
 /// A fictional Maharashtra trader with a bank, two GST buyers and a few November vouchers.
 fn company_file(dir: &Path) -> Api {
     let path = dir.join("snapshot-company.ledgerly");
@@ -242,6 +282,16 @@ fn company_file(dir: &Path) -> Api {
         ledger(RENT, "Rent", ReservedGroup::IndirectExpenses),
     ] {
         run(&mut api, Command::CreateLedger(l));
+    }
+    // Two stock items with no opening stock and no movement, so no other screen's figures move:
+    // the items list shows the engine's 0 quantities and 0.00 values, one item without an HSN.
+    for u in [unit(COIL, "coil", "Coils"), unit(NOS, "nos", "Numbers")] {
+        run(&mut api, Command::CreateUnit(u));
+    }
+    let mut pipe = stock_item(1, "HDPE pipe coil 32 mm", COIL, 18);
+    pipe.hsn = Some(Hsn::parse("3917").unwrap());
+    for it in [pipe, stock_item(2, "Steel pickaxe 2.5 kg", NOS, 5)] {
+        run(&mut api, Command::CreateStockItem(it));
     }
     let journal = BaseVoucherKind::Journal;
     for v in [
