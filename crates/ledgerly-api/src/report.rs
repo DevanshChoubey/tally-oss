@@ -24,6 +24,8 @@ use ledgerly_stock::{StockError, StockValuation};
 use ledgerly_store::SqliteStore;
 use ledgerly_store::verify::verify_chain;
 
+use std::path::Path;
+
 use crate::ApiError;
 use crate::events::read_all;
 
@@ -152,4 +154,58 @@ fn value_item(
         ValuationMethod::LastPurchaseCost => last_purchase_cost(item, moves, period),
         ValuationMethod::StandardCost => standard_cost(item, moves, period),
     }
+}
+
+/// The file formats the app exports a report to (the mock's Export, index.html:1624, offers
+/// PDF, XLSX or CSV; PDF comes with printing).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExportFormat {
+    /// Comma-separated text (`ledgerly_reports::export::to_csv`).
+    Csv,
+    /// An Excel workbook with one sheet (`ledgerly_reports::export::to_xlsx`).
+    Xlsx,
+}
+
+impl ExportFormat {
+    /// The format a file name asks for, from its extension in any case; `None` for any other.
+    #[must_use]
+    pub fn from_path(path: &Path) -> Option<Self> {
+        let ext = path.extension()?.to_str()?.to_ascii_lowercase();
+        match ext.as_str() {
+            "csv" => Some(Self::Csv),
+            "xlsx" => Some(Self::Xlsx),
+            _ => None,
+        }
+    }
+
+    /// The file extension, without the dot.
+    #[must_use]
+    pub fn extension(self) -> &'static str {
+        match self {
+            Self::Csv => "csv",
+            Self::Xlsx => "xlsx",
+        }
+    }
+}
+
+/// Runs `p` over `books` and writes the report to `path` in `format`, atomically.
+///
+/// # Errors
+/// The errors of [`run`], and [`ApiError::Report`] when the file cannot be written.
+pub(crate) fn export(
+    store: &SqliteStore,
+    books: &Books,
+    p: &ReportParams,
+    format: ExportFormat,
+    path: &Path,
+) -> Result<Outcome<()>, ApiError> {
+    let report = match run(store, books, p)? {
+        Outcome::Value(report) => report,
+        Outcome::Unsupported(u) => return Ok(Outcome::Unsupported(u)),
+    };
+    match format {
+        ExportFormat::Csv => ledgerly_reports::export::to_csv_file(&report, path)?,
+        ExportFormat::Xlsx => ledgerly_reports::export::to_xlsx(&report, path)?,
+    }
+    Ok(Outcome::Value(()))
 }

@@ -8,6 +8,9 @@
 //! pub fn to_json(report: &Report) -> Result<String, ReportError>;
 //! ```
 //!
+//! Added for the app's Export (see `docs/interface-requests.md`, "Export of the report on
+//! screen"): `to_csv_file`, the CSV text written atomically like `to_xlsx`.
+//!
 //! # Layout (CSV and XLSX)
 //!
 //! One header line (`Particulars` followed by the column labels), one line per report row (the
@@ -93,6 +96,17 @@ pub fn to_csv(report: &Report) -> Result<String, ReportError> {
         .into_inner()
         .map_err(|e| memory_error("csv", &e.to_string()))?;
     String::from_utf8(bytes).map_err(|e| memory_error("csv", &e.to_string()))
+}
+
+/// Writes [`to_csv`]'s text to `path` atomically, as [`to_xlsx`] does (rule D3): on failure
+/// `path` is untouched.
+///
+/// # Errors
+/// The errors of [`to_csv`], and [`ReportError::Export`] when the file cannot be written.
+pub fn to_csv_file(report: &Report, path: &Path) -> Result<(), ReportError> {
+    let text = to_csv(report)?;
+    tracing::info!(path = %path.display(), "exporting report to csv");
+    write_atomic(path, text.as_bytes())
 }
 
 /// Exports a report as an XLSX workbook with one sheet, written atomically: the bytes go to a

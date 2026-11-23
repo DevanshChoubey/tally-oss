@@ -185,7 +185,7 @@ fn the_key_bar_reads_like_the_mocks() {
     // provenance: index.html:1634: "J / K" Move, Enter Drill in, Esc Back up, Alt+F1 Detailed.
     // Alt+F1 names what it switches to, as the button does (index.html:1576: "Condensed" in the
     // detailed view). F2 keeps "Period": ours opens a from-to period editor, not a single date
-    // (design/PARITY-GAPS.md). Ctrl+E Export is not built, so it is not offered. Catches "Up /
+    // (design/PARITY-GAPS.md). Ctrl+E Export comes before F2, as in the mock. Catches "Up /
     // Down" and "Detailed or condensed".
     let condensed = balance_screen(Detail::Condensed);
     assert_eq!(
@@ -195,6 +195,7 @@ fn the_key_bar_reads_like_the_mocks() {
             ("Enter", "Drill in"),
             ("Esc", "Back up"),
             ("Alt+F1", "Detailed"),
+            ("Ctrl+E", "Export"),
             ("F2", "Period"),
         ])
     );

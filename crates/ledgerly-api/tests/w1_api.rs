@@ -15,7 +15,7 @@
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
-use ledgerly_api::{Api, ApiError, Command, CommandResult, MatchedOn, SearchHit};
+use ledgerly_api::{Api, ApiError, Command, CommandResult, ExportFormat, MatchedOn, SearchHit};
 use ledgerly_core::{
     Clock, CompanyId, Date, EventSeq, GroupId, LedgerId, Outcome, Paise, Period, SignedAmount,
     StateCode, VoucherId, VoucherTypeId,
@@ -435,4 +435,50 @@ fn search_finds_ledger_by_alias_and_voucher_by_number_and_amount() {
     )));
     assert_eq!(api.search("godown rent"), by_alias);
     assert_eq!(api.search("   "), Vec::<SearchHit>::new());
+}
+
+// ---- export of a report ---------------------------------------------------------------------
+
+#[test]
+fn an_exported_report_is_the_report_the_same_parameters_show() {
+    // provenance: derived. The mock's Export (index.html:1576, 1624) writes "exactly what is on
+    // screen" as CSV or XLSX, and engineering rule 4 has one query path for figures: the file is
+    // the CSV text of the report `Api::report` returns for the same parameters.
+    let (dir, _path, api) = setup();
+    let p = params(ReportKind::TrialBalance, date!(2026 - 12 - 31));
+    let out = dir.path().join("trial balance.csv");
+    let done = api.export_report(&p, ExportFormat::Csv, &out).unwrap();
+    assert!(matches!(done, Outcome::Value(())), "{done:?}");
+    let report = run_report(&api, ReportKind::TrialBalance, date!(2026 - 12 - 31));
+    assert_eq!(
+        std::fs::read_to_string(&out).unwrap(),
+        ledgerly_reports::export::to_csv(&report).unwrap()
+    );
+}
+
+#[test]
+fn an_xlsx_export_is_a_workbook() {
+    // provenance: derived: an XLSX file is a zip archive, whose first bytes are "PK".
+    let (dir, _path, api) = setup();
+    let p = params(ReportKind::TrialBalance, date!(2026 - 12 - 31));
+    let out = dir.path().join("tb.xlsx");
+    let done = api.export_report(&p, ExportFormat::Xlsx, &out).unwrap();
+    assert!(matches!(done, Outcome::Value(())), "{done:?}");
+    assert_eq!(&std::fs::read(&out).unwrap()[..2], b"PK");
+}
+
+#[test]
+fn the_export_format_is_read_from_the_file_name() {
+    // provenance: derived: the save dialog offers CSV and XLSX (index.html:1624); the format
+    // follows the extension the user typed, in any case, and any other name has no format.
+    assert_eq!(
+        ExportFormat::from_path(Path::new("a/tb.csv")),
+        Some(ExportFormat::Csv)
+    );
+    assert_eq!(
+        ExportFormat::from_path(Path::new("tb.XLSX")),
+        Some(ExportFormat::Xlsx)
+    );
+    assert_eq!(ExportFormat::from_path(Path::new("tb.pdf")), None);
+    assert_eq!(ExportFormat::from_path(Path::new("tb")), None);
 }

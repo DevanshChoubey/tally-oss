@@ -31,8 +31,9 @@ feature that is not built), **data** (the capture company lacks what the mock's 
 
 ## Balance sheet (round of 2026-11-23)
 
-- **bug: no Export.** The mock has an Export button and Ctrl+E (index.html:1576, 1624, 1634).
-  Export of the report on screen is not built, so neither the button nor the key is offered.
+- **gap: Export has no PDF.** The mock's Export offers "PDF, XLSX or CSV" (index.html:1624).
+  Ours writes CSV and XLSX; PDF comes with printing (M5). The palette's Export command still
+  says it is not available there: Ctrl+E and the button on the report screen export.
 - **bug: other tables keep the older row height.** The balance sheet, the day book, the masters
   list and the generic report table (every drill: group summary, ledger vouchers) draw the
   mock's `table.t` lines by hand (34-point rows, rules, the selected bar: `ui::table::paint_row`).

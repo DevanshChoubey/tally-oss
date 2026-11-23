@@ -13,21 +13,21 @@
 | light | palette.entry | 0.6287 |
 | light | palette.ask | 0.6317 |
 | light | palette.no-results | 0.6352 |
-| light | balance-sheet.detailed | 0.6474 |
+| light | balance-sheet.detailed | 0.6431 |
 | light | gst.gstr1 | 0.6523 |
 | light | keys.standard | 0.6536 |
 | light | keys.classic | 0.6548 |
 | light | palette.search | 0.6589 |
 | light | palette.default | 0.6591 |
-| light | balance-sheet.default | 0.6751 |
+| light | balance-sheet.default | 0.6731 |
 | light | bank.default | 0.6839 |
 | light | palette.commands | 0.6934 |
 | light | gst.gstr3b | 0.7035 |
 | light | receipt.default | 0.7190 |
 | light | bank.brs | 0.7218 |
 | light | payment.default | 0.7360 |
-| light | balance-sheet.ledger | 0.7376 |
-| light | balance-sheet.group | 0.7439 |
+| light | balance-sheet.ledger | 0.7361 |
+| light | balance-sheet.group | 0.7438 |
 | light | masters.items | 0.7552 |
 | light | day-book.default | 0.7618 |
 | light | masters.ledger-detail | 0.7672 |
@@ -144,7 +144,7 @@ SSIM 0.6352
 
 ## light / balance-sheet.detailed
 
-SSIM 0.6474
+SSIM 0.6431
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -216,7 +216,7 @@ SSIM 0.6591
 
 ## light / balance-sheet.default
 
-SSIM 0.6751
+SSIM 0.6731
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -300,7 +300,7 @@ SSIM 0.7360
 
 ## light / balance-sheet.ledger
 
-SSIM 0.7376
+SSIM 0.7361
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -312,7 +312,7 @@ SSIM 0.7376
 
 ## light / balance-sheet.group
 
-SSIM 0.7439
+SSIM 0.7438
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>

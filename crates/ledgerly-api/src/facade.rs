@@ -49,7 +49,7 @@ use crate::bank::Statements;
 use crate::command::{self, Command, CommandResult};
 use crate::error::ApiError;
 use crate::events::{lock_date, read_all};
-use crate::report;
+use crate::report::{self, ExportFormat};
 use crate::search::{SearchHit, search_books, search_catalogue};
 
 /// The app version written to every audit record.
@@ -189,6 +189,25 @@ impl Api {
     pub fn report(&self, p: &ReportParams) -> Result<Outcome<Report>, ApiError> {
         match &self.cache {
             Cache::Ready(books) => report::run(&self.store, books, p),
+            Cache::Blocked(unsupported) => Ok(Outcome::Unsupported(unsupported.clone())),
+            Cache::Stale => Err(ApiError::Stale),
+        }
+    }
+
+    /// Runs a report over the cached books and writes it to `path` as CSV or XLSX, atomically
+    /// (the file is written whole or not at all). The file holds the same report [`Api::report`]
+    /// returns for `p`.
+    ///
+    /// # Errors
+    /// The errors of [`Api::report`], and [`ApiError::Report`] when the file cannot be written.
+    pub fn export_report(
+        &self,
+        p: &ReportParams,
+        format: ExportFormat,
+        path: &Path,
+    ) -> Result<Outcome<()>, ApiError> {
+        match &self.cache {
+            Cache::Ready(books) => report::export(&self.store, books, p, format, path),
             Cache::Blocked(unsupported) => Ok(Outcome::Unsupported(unsupported.clone())),
             Cache::Stale => Err(ApiError::Stale),
         }

@@ -236,3 +236,12 @@ Filed from the r2/* fix branches. Each line names the card and the request; the 
 - **Model gap: no invoice-rounding ledger type.** TallyPrime posts an invoice round-off to a ledger of type Invoice Rounding. The model has none, so an invoice whose engine round-off is non-zero is `Unsupported` at `invoice_gst` and at posting (nothing is guessed). Requested: a `TaxLedgerKind`-like marker for the rounding ledger (model owner).
 - **Ambiguous tax ledgers.** When a company has more than one ledger of one tax kind and the rate does not pick one, the API answers `Unsupported` rather than choosing.
 - **Posting.** `PostVoucher`/`AlterVoucher` recompute GST. A typed tax line that disagrees with the engine is refused (invariant 9). When the engine answers `Unsupported` (for example an unregistered supplier), the voucher passes through with `gst: None`, as before this card.
+
+## Export of the report on screen (integration)
+- Crate/file: `crates/ledgerly-reports/src/export.rs`, `crates/ledgerly-api/src/facade.rs`.
+- Current interface: `to_csv` returns text; only `to_xlsx` writes a file.
+- Change made: `to_csv_file(report, path)` writes the CSV text atomically (rule D3), and
+  `Api::export_report(&ReportParams, ExportFormat, &Path) -> Result<Outcome<()>, ApiError>` runs
+  the report and writes CSV or XLSX. Both are additions; nothing frozen changed.
+- Why: the mock's Export button and Ctrl+E (index.html:1576, 1624). Tests:
+  `rp8_exports::csv_file_holds_exactly_the_csv_text`, `w1_api::an_exported_report_is_*`.

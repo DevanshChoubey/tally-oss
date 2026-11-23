@@ -35,6 +35,7 @@ pub use ledgerly_reports::{
 pub use ledgerly_store::backup::{RebuildOutcome, RebuildReport};
 pub use ledgerly_store::verify::{ChainProblem, VerifyReport};
 pub use maintenance::{VoucherCheck, verify_file};
+pub use report::ExportFormat;
 pub use search::{MatchedOn, SearchHit};
 pub use tally_import::ImportSummary;
 pub use voucher_gst::InvoiceGst;

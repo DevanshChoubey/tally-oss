@@ -23,7 +23,7 @@ use std::path::PathBuf;
 use calamine::{Data, Reader, Xlsx, open_workbook};
 use ledgerly_core::{Decimal, Paise, Period, Qty, SignedAmount, Unsupported};
 use ledgerly_model::Scenario;
-use ledgerly_reports::export::{to_csv, to_json, to_xlsx};
+use ledgerly_reports::export::{to_csv, to_csv_file, to_json, to_xlsx};
 use ledgerly_reports::{
     Cell, ColumnHeader, ColumnSpec, Detail, Report, ReportError, ReportFilter, ReportKind,
     ReportParams, ReportRow, RowKind,
@@ -129,6 +129,22 @@ fn scratch(name: &str) -> PathBuf {
 }
 
 // ---------------------------------------------------------------- CSV
+
+#[test]
+fn csv_file_holds_exactly_the_csv_text() {
+    // derived: the file is `to_csv`'s text, byte for byte, written atomically as `to_xlsx` is
+    // (rule D3): no temp file is left beside it.
+    let path = scratch("csv-file.csv");
+    to_csv_file(&trial_balance_fixture(), &path).unwrap();
+    let written = std::fs::read_to_string(&path).unwrap();
+    assert_eq!(written, to_csv(&trial_balance_fixture()).unwrap());
+    let leftovers = std::fs::read_dir(path.parent().unwrap())
+        .unwrap()
+        .filter_map(Result::ok)
+        .filter(|e| e.file_name().to_string_lossy().contains("csv-file.csv."))
+        .count();
+    assert_eq!(leftovers, 0);
+}
 
 #[test]
 fn csv_of_trial_balance_fixture() {

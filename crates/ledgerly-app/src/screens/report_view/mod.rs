@@ -45,13 +45,16 @@ mod remote;
 mod text;
 mod voucher_view;
 
+use std::path::PathBuf;
+
 use egui::{Align, Context, Key, Layout, Modifiers, Rect, Ui};
-use ledgerly_api::{ReportKind, ReportParams};
+use ledgerly_api::{ExportFormat, ReportKind, ReportParams};
 use ledgerly_core::{Outcome, Period};
 
 use crate::screen::KeyHint;
 use crate::screens::wire::{Done, Latest, unsupported_text};
-use crate::ui::button::{ButtonKind, button};
+use crate::ui::button::{ButtonKind, button, button_icon};
+use crate::ui::icon::Icon;
 use crate::ui::keycap::keycap;
 use crate::ui::note::{NoteKind, note};
 use crate::ui::page_head::{page_head, page_head_with};
@@ -128,6 +131,7 @@ enum KeyCmd {
     EditPeriod,
     ApplyPeriod,
     CancelPeriod,
+    Export,
 }
 
 #[derive(Default)]
@@ -135,6 +139,23 @@ struct TableEvents {
     clicked: Option<usize>,
     opened: Option<usize>,
 }
+
+/// The save dialog Export opens: given the suggested file name, the path chosen, or `None` when
+/// the user cancelled. [`ReportViewScreen::set_export_picker`] replaces it (tests do).
+pub type ExportPicker = Box<dyn FnMut(&str) -> Option<PathBuf>>;
+
+/// The system save dialog, offering CSV and XLSX (index.html:1624).
+fn save_dialog(suggested: &str) -> Option<PathBuf> {
+    rfd::FileDialog::new()
+        .set_title("Export report")
+        .set_file_name(suggested)
+        .add_filter("CSV", &["csv"])
+        .add_filter("Excel workbook", &["xlsx"])
+        .save_file()
+}
+
+/// What an export brings back: the file, and whether it was written.
+type Exported = (PathBuf, Result<Outcome<()>, String>);
 
 /// The answer a worker-mode request brings back: the parameters it ran with, and the report.
 type Answer = (ReportParams, Result<Outcome<ViewReport>, ViewError>);
@@ -193,6 +214,12 @@ pub struct ReportViewScreen {
     footer: Option<Rect>,
     /// The selected line's rectangle in the last frame, when the generic table laid it out.
     selected_line: Option<Rect>,
+    /// Ctrl+E or the Export button was pressed; the save dialog opens after the frame is drawn.
+    export_wanted: bool,
+    /// The save dialog.
+    export_picker: ExportPicker,
+    /// The export in flight.
+    export: Latest<Exported>,
 }
 
 impl ReportViewScreen {
@@ -212,6 +239,9 @@ impl ReportViewScreen {
             worker: None,
             footer: None,
             selected_line: None,
+            export_wanted: false,
+            export_picker: Box::new(save_dialog),
+            export: Latest::default(),
         })
     }
 
@@ -256,6 +286,9 @@ impl ReportViewScreen {
             }),
             footer: None,
             selected_line: None,
+            export_wanted: false,
+            export_picker: Box::new(save_dialog),
+            export: Latest::default(),
         })
     }
 
@@ -308,6 +341,80 @@ impl ReportViewScreen {
                 }
                 Err(e) => self.fail(e.to_string()),
             },
+        }
+    }
+
+    /// Replaces the save dialog Export opens.
+    pub fn set_export_picker(&mut self, picker: ExportPicker) {
+        self.export_picker = picker;
+    }
+
+    /// `true` while an export is being written.
+    #[must_use]
+    pub fn is_exporting(&self) -> bool {
+        self.export.is_pending()
+    }
+
+    /// Writes the report on screen to `path` on `worker`, as CSV or XLSX by the file's extension
+    /// (index.html:1624). The engine runs the same parameters again, so the file holds exactly the
+    /// report shown. The screen says where the file went, or why it was not written: a name that
+    /// is neither `.csv` nor `.xlsx`, a report still loading, a host-mode screen or no company.
+    pub fn export_to(&mut self, path: PathBuf, worker: Option<&ApiWorker>) {
+        let Some(format) = ExportFormat::from_path(&path) else {
+            self.fail(format!(
+                "\"{}\" was not written: choose a file name ending in .csv or .xlsx.",
+                path.display()
+            ));
+            return;
+        };
+        if self.is_loading() {
+            self.notice = Some(Notice::Info(
+                "The report is still computing; export it once it is shown.".to_owned(),
+            ));
+            return;
+        }
+        let Some(run) = self.worker.as_ref() else {
+            self.fail("This report was not run by the engine, so it cannot be exported.");
+            return;
+        };
+        let Some(handle) = worker else {
+            self.fail("No company is open, so the report cannot be exported.");
+            return;
+        };
+        let params = run.engine.clone();
+        self.export.start(handle, move |api| {
+            let done = api
+                .export_report(&params, format, &path)
+                .map_err(|e| e.to_string());
+            (path, done)
+        });
+    }
+
+    /// Shows how a finished export went.
+    fn poll_export(&mut self) {
+        match self.export.poll() {
+            Some(Done::Ready((path, Ok(Outcome::Value(()))))) => {
+                self.notice = Some(Notice::Info(format!("Exported to {}.", path.display())));
+            }
+            Some(Done::Ready((_, Ok(Outcome::Unsupported(u))))) => self.fail(unsupported_text(&u)),
+            Some(Done::Ready((path, Err(e)))) => {
+                self.fail(format!("\"{}\" was not written: {e}", path.display()));
+            }
+            Some(Done::Lost) => {
+                self.fail("the engine stopped before the export finished; nothing was written");
+            }
+            None => {}
+        }
+    }
+
+    /// Opens the save dialog for a pending Export and starts the export on the file chosen.
+    fn run_export_request(&mut self, worker: Option<&ApiWorker>) {
+        if !std::mem::take(&mut self.export_wanted) {
+            return;
+        }
+        let suggested = format!("{}.{}", self.report.title, ExportFormat::Csv.extension());
+        if let Some(path) = (self.export_picker)(&suggested) {
+            self.export_to(path, worker);
         }
     }
 
@@ -583,6 +690,7 @@ impl ReportViewScreen {
             KeyCmd::EditPeriod => self.open_period_editor(),
             KeyCmd::ApplyPeriod => self.apply_period_edit(),
             KeyCmd::CancelPeriod => self.cancel_period_edit(),
+            KeyCmd::Export => self.export_wanted = true,
         }
         ScreenAction::Stay
     }
@@ -593,6 +701,24 @@ impl ReportViewScreen {
             ViewDetail::Condensed => "Detailed",
             ViewDetail::Detailed => "Condensed",
         }
+    }
+
+    /// `true` for a report that a drill opens (a group summary, a ledger's vouchers). Every kind
+    /// is listed, so a new kind fails to compile until it is placed.
+    fn is_drill_level(&self) -> bool {
+        self.worker
+            .as_ref()
+            .is_some_and(|run| match run.engine.kind {
+                ReportKind::GroupSummary(_) | ReportKind::LedgerVouchers(_) => true,
+                ReportKind::BalanceSheet
+                | ReportKind::DayBook
+                | ReportKind::TrialBalance
+                | ReportKind::ProfitAndLoss
+                | ReportKind::Register(_)
+                | ReportKind::Outstanding { .. }
+                | ReportKind::StockSummary
+                | ReportKind::Audit(_) => false,
+            })
     }
 
     /// The layout this screen draws in.
@@ -630,12 +756,31 @@ impl ReportViewScreen {
                 },
             );
         } else {
+            let mut export = false;
+            // index.html:1577: a drill level (a group, a ledger) has no action buttons; its keys
+            // still offer Ctrl+E (index.html:1634).
+            let drill_level = self.is_drill_level();
             page_head(ui, &title, subtitle.as_deref(), |ui| {
+                // index.html:1576: the detail switch, then Export at the right. The actions are
+                // laid out right to left, so Export goes first.
+                if !drill_level {
+                    export = button_icon(
+                        ui,
+                        Some(Icon::Upload),
+                        "Export",
+                        Some("Ctrl+E"),
+                        ButtonKind::Secondary,
+                    )
+                    .clicked();
+                }
                 if look == Look::BalanceSheet {
                     toggle =
                         button(ui, detail_switch, Some("Alt+F1"), ButtonKind::Secondary).clicked();
                 }
             });
+            if export {
+                self.export_wanted = true;
+            }
         }
         if toggle {
             self.toggle_detail();
@@ -865,6 +1010,8 @@ fn read_keys(ctx: &Context, editing: bool, look: Look) -> Vec<KeyCmd> {
             (Modifiers::NONE, Key::PageDown, KeyCmd::PageDown),
             (Modifiers::NONE, Key::Home, KeyCmd::First),
             (Modifiers::NONE, Key::End, KeyCmd::Last),
+            // index.html:1624 and 1634: Ctrl+E exports.
+            (Modifiers::COMMAND, Key::E, KeyCmd::Export),
         ];
         for (modifiers, key, cmd) in table {
             if i.consume_key(modifiers, key) {
@@ -919,6 +1066,7 @@ impl Screen for ReportViewScreen {
                 KeyHint::new("Enter", "Drill in"),
                 KeyHint::new("Esc", "Back up"),
                 KeyHint::new("Alt+F1", self.detail_switch()),
+                KeyHint::new("Ctrl+E", "Export"),
                 KeyHint::new("F2", "Period"),
             ],
             Look::DayBook => vec![
@@ -932,6 +1080,7 @@ impl Screen for ReportViewScreen {
                 KeyHint::new("Enter", "Open"),
                 KeyHint::new("Esc", "Back up"),
                 KeyHint::new("Alt+F1", "Condensed or detailed"),
+                KeyHint::new("Ctrl+E", "Export"),
                 KeyHint::new("F2", "Period"),
             ],
         }
@@ -939,7 +1088,13 @@ impl Screen for ReportViewScreen {
 
     fn ui(&mut self, ui: &mut Ui, ctx: &mut AppCtx) -> ScreenAction {
         self.tick(ctx.api.as_ref());
-        self.draw(ui)
+        self.poll_export();
+        let action = self.draw(ui);
+        self.run_export_request(ctx.api.as_ref());
+        if self.is_exporting() {
+            ui.ctx().request_repaint();
+        }
+        action
     }
 }
 

@@ -24,11 +24,13 @@ use std::path::PathBuf;
 use std::sync::mpsc;
 use std::time::Duration;
 
+use egui::{Event, Key, Modifiers, RawInput};
 use ledgerly_api::{
     Api, ApiError, ColumnSpec, Command, Detail, ReportFilter, ReportKind, ReportParams,
 };
 use ledgerly_app::screens::report_view::{ReportSource, ReportViewScreen, ViewCell, ViewReport};
 use ledgerly_app::worker::ApiWorker;
+use ledgerly_app::{AppCtx, Screen};
 use ledgerly_core::{
     Clock, CompanyId, Date, GroupId, LedgerId, Outcome, Paise, Period, SignedAmount, StateCode,
     VoucherId,
@@ -324,4 +326,123 @@ fn a_report_request_without_a_company_says_so_and_runs_nothing() {
     assert!(!screen.is_loading());
     assert_eq!(screen.report().rows.len(), 0);
     assert!(screen.notice().is_some());
+}
+
+// ---- Export (Ctrl+E) ----------------------------------------------------------------------------
+
+/// Runs frames of `screen` with `app` until `done` holds. Bounded, with a short sleep between
+/// frames so the worker can answer.
+fn frames_until(
+    screen: &mut ReportViewScreen,
+    app: &mut AppCtx,
+    first: Option<(Key, Modifiers)>,
+    done: impl Fn(&ReportViewScreen) -> bool,
+) {
+    let ctx = egui::Context::default();
+    let mut key = first;
+    for _ in 0..2000 {
+        let events = key
+            .take()
+            .map(|(key, modifiers)| Event::Key {
+                key,
+                physical_key: None,
+                pressed: true,
+                repeat: false,
+                modifiers,
+            })
+            .into_iter()
+            .collect();
+        let input = RawInput {
+            events,
+            ..RawInput::default()
+        };
+        let out = ctx.run_ui(input, |ui| {
+            let _stay = screen.ui(ui, app);
+        });
+        out.drop_without_applying_deltas();
+        if done(screen) {
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    panic!("the screen did not settle within the bound");
+}
+
+fn export_dir(name: &str) -> PathBuf {
+    let dir = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join(name);
+    let _removed = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    dir
+}
+
+#[test]
+fn ctrl_e_writes_the_report_on_screen_to_the_file_chosen() {
+    // provenance: index.html:1624 and 1634: Ctrl+E exports "exactly what is on screen" as CSV or
+    // XLSX. Derived: the file is the CSV layout of rp8 (a `Particulars` heading line, then the
+    // rows) and the screen says where it went. The save dialog is suggested the report's title.
+    let dir = export_dir("w7_export_ctrl_e");
+    let out = dir.join("tb.csv");
+    let mut app = AppCtx {
+        api: Some(ApiWorker::spawn(setup("w7_export_ctrl_e.ledgerly")).unwrap()),
+        ..AppCtx::default()
+    };
+    let mut screen =
+        ReportViewScreen::worker(ReportSource::worker(trial_balance(april()))).unwrap();
+    frames_until(&mut screen, &mut app, None, |s| !s.is_loading());
+    let suggested = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
+    let seen = std::sync::Arc::clone(&suggested);
+    let chosen = out.clone();
+    screen.set_export_picker(Box::new(move |name: &str| {
+        *seen.lock().unwrap() = name.to_owned();
+        Some(chosen.clone())
+    }));
+    frames_until(
+        &mut screen,
+        &mut app,
+        Some((Key::E, Modifiers::COMMAND)),
+        |s| s.notice().is_some() && !s.is_exporting(),
+    );
+    let notice = screen.notice().unwrap().text().to_owned();
+    assert!(notice.contains("tb.csv"), "{notice}");
+    let text = std::fs::read_to_string(&out).unwrap();
+    assert!(text.starts_with("Particulars,"), "{text}");
+    assert!(text.contains("Cash"), "{text}");
+    let title = screen.report().title.clone();
+    assert_eq!(*suggested.lock().unwrap(), format!("{title}.csv"));
+}
+
+#[test]
+fn an_export_to_a_name_that_is_not_csv_or_xlsx_writes_nothing_and_says_why() {
+    // provenance: derived: the format follows the extension (`ExportFormat::from_path`); a name
+    // with neither has no format, so nothing is written and the screen names the two that work.
+    let dir = export_dir("w7_export_bad_name");
+    let out = dir.join("tb.pdf");
+    let worker = ApiWorker::spawn(setup("w7_export_bad_name.ledgerly")).unwrap();
+    let mut screen =
+        ReportViewScreen::worker(ReportSource::worker(trial_balance(april()))).unwrap();
+    settle(&mut screen, &worker);
+    screen.export_to(out.clone(), Some(&worker));
+    assert!(!screen.is_exporting());
+    let notice = screen.notice().unwrap().text().to_owned();
+    assert!(
+        notice.contains(".csv") && notice.contains(".xlsx"),
+        "{notice}"
+    );
+    assert!(!out.exists());
+}
+
+#[test]
+fn an_export_waits_for_the_report_to_arrive() {
+    // provenance: derived from index.html:1580: while the report is computing, "the previous
+    // result is not shown as current", so there is nothing on screen to export yet.
+    let dir = export_dir("w7_export_loading");
+    let out = dir.join("tb.csv");
+    let worker = ApiWorker::spawn(setup("w7_export_loading.ledgerly")).unwrap();
+    let mut screen =
+        ReportViewScreen::worker(ReportSource::worker(trial_balance(april()))).unwrap();
+    assert!(screen.is_loading());
+    screen.export_to(out.clone(), Some(&worker));
+    assert!(!screen.is_exporting());
+    assert!(screen.notice().is_some());
+    assert!(!out.exists());
 }
