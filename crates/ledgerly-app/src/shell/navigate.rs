@@ -32,6 +32,11 @@
 //! same default is applied to every report here and is `pending` for the others. The user changes
 //! the period with F2 and the detail with Alt+F1.
 //!
+//! The day book opens on one day: the date of the last voucher in the year (or the year's last
+//! day when it has none). The Tally help page "Viewing Day Book" (read 2026-11-23,
+//! <https://help.tallysolutions.com/article/Tally.ERP9/Reports/Display_Registers_Ledgers/Display_Day_Book.htm>):
+//! the Day Book is displayed for the current date, "as on the last date of voucher entry".
+//!
 //! The bank reconciliation opens on the financial-year period above. The GST screen does not: it
 //! opens on one calendar month, which is the return period (decision 7 of the UI parity report,
 //! monthly). The rule is [`gst_return_period`]:
@@ -722,7 +727,12 @@ pub fn default_period(books: &Books) -> Result<Period, NavError> {
 /// # Errors
 /// [`NavError::Period`] when the company's financial year is not a valid period.
 pub fn default_params(kind: ReportKind, books: &Books) -> Result<ReportParams, NavError> {
-    let period = default_period(books)?;
+    let year_to_date = default_period(books)?;
+    let period = if kind == ReportKind::DayBook {
+        Period::new(year_to_date.to(), year_to_date.to())?
+    } else {
+        year_to_date
+    };
     let detail = if opens_detailed(&kind) {
         Detail::Detailed
     } else {

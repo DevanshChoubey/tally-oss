@@ -530,6 +530,21 @@ fn report_keys_round_trip_and_unopenable_reports_have_no_key() {
 // ---- the report menu runs in worker mode ------------------------------------------------------
 
 #[test]
+fn the_day_book_opens_on_the_last_voucher_date_alone() {
+    // provenance: TallyHelp "Viewing Day Book" (read 2026-11-23,
+    // <https://help.tallysolutions.com/article/Tally.ERP9/Reports/Display_Registers_Ledgers/Display_Day_Book.htm>):
+    // the Day Book is displayed for the current date, "as on the last date of voucher entry".
+    // The mock's default day book is one day too (index.html:1642). Both vouchers here are dated
+    // 10 April 2026, so the day book opens on 10 April 2026 alone. Catches the day book opening
+    // on the whole year to date.
+    let books = books();
+    let params = default_params(ReportKind::DayBook, &books).unwrap();
+    let day = date!(2026 - 04 - 10);
+    assert_eq!(params.period, Period::new(day, day).unwrap());
+    assert_eq!(params.as_of, day);
+}
+
+#[test]
 fn trial_balance_from_the_menu_runs_on_the_worker_with_tallys_defaults() {
     // provenance: derived. Tally Trial Balance page (read 2026-11-21): group-wise by default, "as
     // on the date of the last voucher entry". Both vouchers are dated 10 April 2026 and the year

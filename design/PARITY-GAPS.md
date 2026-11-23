@@ -35,10 +35,10 @@ feature that is not built), **data** (the capture company lacks what the mock's 
 
 - **bug: no Export.** The mock has an Export button and Ctrl+E (index.html:1576, 1624, 1634).
   Export of the report on screen is not built, so neither the button nor the key is offered.
-- **bug: other tables keep the older row height.** The balance sheet draws the mock's `table.t`
-  lines by hand (34-point rows, rules, the selected bar: `ui::table::paint_row`). The day book,
-  masters, bank and invoice tables still use `TableBuilder` at 30 points with egui's selection
-  tint; each moves over in its own round.
+- **bug: other tables keep the older row height.** The balance sheet and the day book draw the
+  mock's `table.t` lines by hand (34-point rows, rules, the selected bar: `ui::table::paint_row`).
+  The masters, bank, invoice and generic report tables still use `TableBuilder` at 30 points
+  with egui's selection tint; each moves over in its own round.
 - **needs a decision: sub-groups in the condensed view.** The mock's condensed statement shows
   each top group's sub-groups (Loans > Secured loans; index.html:1588, `depth===0` children).
   Ours shows the primary groups only, which is what the engine's condensed report gives. Before
@@ -56,3 +56,25 @@ feature that is not built), **data** (the capture company lacks what the mock's 
   figures the screen would have to work out, which it never does.
 - **data: the capture company is small.** Fictional Traders has four primary groups, so the
   capture is shorter than the mock's Godavari Drip statement.
+
+## Day book (round of 2026-11-23)
+
+- **deferred: Entered by and Origin columns, and Ctrl+I Origin** (index.html:1650-1653, 1659).
+  The engine records neither who entered a voucher nor whether it came from an AI draft or a
+  bank rule (engine item E-4). The table keeps the engine's Status column in their place and the
+  footnote says so; Ctrl+I is not offered.
+- **deferred: narration under the party** (index.html:1652, the `meta` line). The engine's day
+  book has no narration field, so Particulars shows the party alone and every row is one line.
+- **deferred: the empty state's card and voucher buttons** (index.html:1647). Ours shows the
+  shared empty state with the keys in its sentence; not captured yet (`day-book.empty`).
+- **needs a decision: F2 offers the shown day.** TallyHelp says F2 in the Day Book first offers
+  the day after the current date; ours fills in the day shown. Check the TallyPrime page (only
+  the Tally.ERP 9 page was read) before changing it.
+- **bug: the 16-point gap under the page head is only on the report screens.** The mock's
+  `.phead` has `margin-bottom:16px` (index.html:121); the balance sheet and day book add it
+  (`HEAD_GAP`), the other screens still follow the head with egui's item spacing. Move it into
+  `ui::page_head` in a round that recaptures every screen.
+- **data: voucher numbers and the sample day.** The capture company numbers vouchers 1, 2, ...
+  per type and its last voucher is 20 Nov; the mock shows "SI/0417" and five vouchers on 20 Nov.
+- **by design: Status column.** Kept from the engine (it shows a cancelled voucher as such) until
+  Entered by and Origin exist.

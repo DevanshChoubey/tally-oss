@@ -26,26 +26,58 @@ pub struct TabsResponse {
 pub fn tabs(ui: &mut Ui, labels: &[&str], selected: usize) -> TabsResponse {
     let t = tokens(ui);
     let bw = border_width(kind(ui));
+    let (out, bottom) = strip(ui, labels, Some(selected), &t);
+    let clip = ui.max_rect();
+    ui.painter().line_segment(
+        [pos2(clip.min.x, bottom), pos2(clip.max.x, bottom)],
+        Stroke::new(bw, t.border),
+    );
+    out
+}
+
+/// Draws the tabs without the rule under them, as the mock's tabs in a page head (index.html:
+/// 1645, `.tabs` with `border:0`). `None` underlines no tab, for a view that is none of them.
+pub fn tab_strip(ui: &mut Ui, labels: &[&str], selected: Option<usize>) -> TabsResponse {
+    let t = tokens(ui);
+    strip(ui, labels, selected, &t).0
+}
+
+/// The width [`tab_strip`] takes for `labels`, measured with the selected (semibold) face so the
+/// strip never comes out wider than this.
+#[must_use]
+pub fn tab_strip_width(ui: &Ui, labels: &[&str]) -> f32 {
+    let font = bold_font(ui, TEXT_BODY);
+    let gap = ui.spacing().item_spacing.x;
+    let text: f32 = labels
+        .iter()
+        .map(|label| {
+            ui.painter()
+                .layout_no_wrap((*label).to_owned(), font.clone(), egui::Color32::BLACK)
+                .size()
+                .x
+                + 2.0 * TAB_PAD
+        })
+        .sum();
+    let gaps = gap * f32::from(u16::try_from(labels.len().saturating_sub(1)).unwrap_or(u16::MAX));
+    text + gaps
+}
+
+/// Draws the tabs in a row and returns what was clicked and the row's bottom edge.
+fn strip(ui: &mut Ui, labels: &[&str], selected: Option<usize>, t: &Tokens) -> (TabsResponse, f32) {
     let mut out = TabsResponse {
         clicked: None,
         rects: Vec::with_capacity(labels.len()),
     };
     let row = ui.horizontal(|ui| {
         for (i, label) in labels.iter().enumerate() {
-            let (rect, response) = tab(ui, label, i == selected, &t);
+            let (rect, response) = tab(ui, label, selected == Some(i), t);
             if response.clicked() {
                 out.clicked = Some(i);
             }
             out.rects.push(rect);
         }
     });
-    let y = row.response.rect.bottom();
-    let clip = ui.max_rect();
-    ui.painter().line_segment(
-        [pos2(clip.min.x, y), pos2(clip.max.x, y)],
-        Stroke::new(bw, t.border),
-    );
-    out
+    (out, row.response.rect.bottom())
 }
 
 /// Draws one tab and returns its rectangle and response.

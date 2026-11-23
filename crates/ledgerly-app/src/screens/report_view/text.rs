@@ -59,6 +59,33 @@ pub fn period_text(period: Period) -> String {
     format!("{} to {}", date_text(period.from()), date_text(period.to()))
 }
 
+/// The text of `cell` where `usual` is the side every figure is expected on: an amount on that
+/// side, or zero, drops its Dr or Cr; an amount on the other side keeps it, so it is never read
+/// as the usual side. The figure is the engine's; only the side word is left out. Every other
+/// cell reads as [`cell_text`] writes it.
+#[must_use]
+pub(super) fn amount_on_side(cell: &ViewCell, usual: DrCr) -> String {
+    let bare = |amount: SignedAmount| {
+        if amount.amount.is_zero() || amount.side == usual {
+            format_inr(amount.amount)
+        } else {
+            amount_text(amount)
+        }
+    };
+    match cell {
+        ViewCell::Amount(a) => bare(*a),
+        ViewCell::Provisional { amount, reason } => {
+            format!("{} (provisional: {reason})", bare(*amount))
+        }
+        ViewCell::Signed(_)
+        | ViewCell::Qty(_)
+        | ViewCell::Text(_)
+        | ViewCell::Date(_)
+        | ViewCell::Empty
+        | ViewCell::Unsupported(_) => cell_text(cell),
+    }
+}
+
 /// What a cell shows. Amounts carry Dr or Cr, a provisional value says so next to the figure, and
 /// an unsupported cell says what is not supported and why, instead of a number.
 #[must_use]

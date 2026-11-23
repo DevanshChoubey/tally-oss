@@ -15,7 +15,9 @@
 //!   which pops the stack.
 //! * Alt+F1 toggles condensed and detailed ([`ReportViewScreen::toggle_detail`]). The report
 //!   reshapes in place and the selection stays on the same row when that row still exists.
-//! * F2 edits the period ([`ReportViewScreen::open_period_editor`], [`parse_period_text`]).
+//! * F2 edits the period ([`ReportViewScreen::open_period_editor`], [`parse_period_text`]). In
+//!   the day book F2 asks for one date and Alt+F2 for a period, as TallyPrime's Day Book does
+//!   ([`ReportViewScreen::open_date_editor`]).
 //!
 //! # Where the figures come from (rule C4)
 //!
@@ -50,9 +52,11 @@ use ledgerly_core::{Outcome, Period};
 use crate::screen::KeyHint;
 use crate::screens::wire::{Done, Latest, unsupported_text};
 use crate::ui::button::{ButtonKind, button};
+use crate::ui::keycap::keycap;
 use crate::ui::note::{NoteKind, note};
-use crate::ui::page_head::page_head;
-use crate::ui::tabs::tabs;
+use crate::ui::page_head::{page_head, page_head_with};
+use crate::ui::para_text;
+use crate::ui::tabs::{tab_strip, tab_strip_width};
 use crate::worker::ApiWorker;
 use crate::{AppCtx, Screen, ScreenAction};
 
@@ -99,10 +103,23 @@ impl Notice {
 }
 
 struct PeriodEdit {
+    kind: EditorKind,
     from: String,
     to: String,
     focus_pending: bool,
 }
+
+/// What the open editor asks for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EditorKind {
+    /// One date: the day book's F2 (TallyPrime's Day Book, F2 Date).
+    Date,
+    /// A From and a To date: F2 elsewhere, Alt+F2 in the day book.
+    Period,
+}
+
+/// Space between the page head and what follows (index.html:121, `.phead` `margin-bottom`).
+const HEAD_GAP: f32 = 16.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum KeyCmd {
@@ -114,6 +131,7 @@ enum KeyCmd {
     Last,
     Open,
     ToggleDetail,
+    EditDate,
     EditPeriod,
     ApplyPeriod,
     CancelPeriod,
@@ -448,10 +466,29 @@ impl ReportViewScreen {
     pub fn open_period_editor(&mut self) {
         let p = self.report.params.period;
         self.period_edit = Some(PeriodEdit {
+            kind: EditorKind::Period,
             from: numeric_date_text(p.from()),
             to: numeric_date_text(p.to()),
             focus_pending: true,
         });
+    }
+
+    /// Opens the date editor (the day book's F2), filled with the day the period ends on.
+    /// Applying it shows that one day.
+    pub fn open_date_editor(&mut self) {
+        let day = numeric_date_text(self.report.params.period.to());
+        self.period_edit = Some(PeriodEdit {
+            kind: EditorKind::Date,
+            from: day.clone(),
+            to: day,
+            focus_pending: true,
+        });
+    }
+
+    /// What the open editor asks for, or `None` when no editor is open.
+    #[must_use]
+    pub fn editor_kind(&self) -> Option<EditorKind> {
+        self.period_edit.as_ref().map(|edit| edit.kind)
     }
 
     /// Sets the text of the two period fields. Does nothing unless the editor is open.
@@ -466,7 +503,10 @@ impl ReportViewScreen {
     /// stays open and the notice says what is wrong.
     pub fn apply_period_edit(&mut self) {
         let parsed = match self.period_edit.as_ref() {
-            Some(edit) => parse_period_text(&edit.from, &edit.to),
+            Some(edit) => match edit.kind {
+                EditorKind::Date => parse_period_text(&edit.from, &edit.from),
+                EditorKind::Period => parse_period_text(&edit.from, &edit.to),
+            },
             None => return,
         };
         match parsed {
@@ -534,6 +574,7 @@ impl ReportViewScreen {
             KeyCmd::Last => self.select(self.last_row()),
             KeyCmd::Open => return self.drill(),
             KeyCmd::ToggleDetail => self.toggle_detail(),
+            KeyCmd::EditDate => self.open_date_editor(),
             KeyCmd::EditPeriod => self.open_period_editor(),
             KeyCmd::ApplyPeriod => self.apply_period_edit(),
             KeyCmd::CancelPeriod => self.cancel_period_edit(),
@@ -563,16 +604,37 @@ impl ReportViewScreen {
         let subtitle = self.subtitle();
         let detail_switch = self.detail_switch();
         let mut toggle = false;
-        page_head(ui, &title, subtitle.as_deref(), |ui| {
-            if look == Look::BalanceSheet {
-                toggle = button(ui, detail_switch, Some("Alt+F1"), ButtonKind::Secondary).clicked();
-            }
-        });
         let mut tab_clicked = None;
         if look == Look::DayBook {
-            let selected = day_book::tab_of(self.report.params.period);
-            tab_clicked = tabs(ui, &["Day", "Month to date"], selected).clicked;
+            // index.html:1643-1645: the subtitle carries keycaps and the tabs sit at the right of
+            // the head.
+            let period = self.report.params.period;
+            let labels = day_book::tab_labels(period);
+            let labels = [labels[0].as_str(), labels[1].as_str()];
+            page_head_with(
+                ui,
+                &title,
+                |ui| draw_sub_parts(ui, &day_book::subtitle_parts(period)),
+                |ui| {
+                    let size = egui::vec2(tab_strip_width(ui, &labels), ui.available_height());
+                    tab_clicked = ui
+                        .allocate_ui_with_layout(size, Layout::left_to_right(Align::Center), |ui| {
+                            tab_strip(ui, &labels, day_book::tab_of(period)).clicked
+                        })
+                        .inner;
+                },
+            );
+        } else {
+            page_head(ui, &title, subtitle.as_deref(), |ui| {
+                if look == Look::BalanceSheet {
+                    toggle =
+                        button(ui, detail_switch, Some("Alt+F1"), ButtonKind::Secondary).clicked();
+                }
+            });
         }
+        // index.html:121: `.phead` has a 16 px bottom margin before the card.
+        let gap = (HEAD_GAP - ui.spacing().item_spacing.y).max(0.0);
+        ui.add_space(gap);
         if toggle {
             self.toggle_detail();
         }
@@ -598,7 +660,7 @@ impl ReportViewScreen {
     }
 
     fn draw(&mut self, ui: &mut Ui) -> ScreenAction {
-        let keys = read_keys(ui.ctx(), self.period_edit.is_some());
+        let keys = read_keys(ui.ctx(), self.period_edit.is_some(), self.look());
         let mut action = ScreenAction::Stay;
         for cmd in &keys {
             if let ScreenAction::Push(screen) = self.run(*cmd) {
@@ -619,7 +681,18 @@ impl ReportViewScreen {
             None
         };
         let (selected, scroll) = (self.selected, self.scroll_pending);
-        let events = if let Some(b) = &balance {
+        let day_card = day_cols.filter(|_| !self.report.rows.is_empty());
+        let events = if let Some(cols) = day_card {
+            // The day book draws its own card with the footnote under it (B7 holds).
+            let (events, foot) = egui::CentralPanel::default()
+                .frame(egui::Frame::NONE)
+                .show(ui, |ui| {
+                    day_book::draw(ui, &self.report, cols, selected, scroll)
+                })
+                .inner;
+            self.footer = Some(foot);
+            events
+        } else if let Some(b) = &balance {
             // The balance sheet draws its own card with the check and the notes pinned under the
             // statement (B7 holds inside the card).
             let (events, foot) = egui::CentralPanel::default()
@@ -646,8 +719,6 @@ impl ReportViewScreen {
                         let title = day_book::empty_title(self.report.params.period);
                         crate::ui::empty::empty_state(ui, &title, day_book::EMPTY_SENTENCE, None);
                         TableEvents::default()
-                    } else if let Some(cols) = day_cols {
-                        day_book::draw(ui, &self.report, cols, selected, scroll)
                     } else {
                         self.draw_table(ui)
                     }
@@ -687,10 +758,17 @@ impl ReportViewScreen {
             return;
         };
         let (mut apply, mut cancel) = (false, false);
+        let kind = edit.kind;
         ui.group(|ui| {
-            ui.label("Period (DD-MM-YYYY)");
+            ui.label(match kind {
+                EditorKind::Date => "Date (DD-MM-YYYY)",
+                EditorKind::Period => "Period (DD-MM-YYYY)",
+            });
             ui.horizontal(|ui| {
-                ui.label("From");
+                ui.label(match kind {
+                    EditorKind::Date => "Date",
+                    EditorKind::Period => "From",
+                });
                 let from = ui.add(
                     egui::TextEdit::singleline(&mut edit.from)
                         .id(base.with("from"))
@@ -700,12 +778,17 @@ impl ReportViewScreen {
                     from.request_focus();
                     edit.focus_pending = false;
                 }
-                ui.label("To");
-                ui.add(
-                    egui::TextEdit::singleline(&mut edit.to)
-                        .id(base.with("to"))
-                        .desired_width(110.0),
-                );
+                match kind {
+                    EditorKind::Date => {}
+                    EditorKind::Period => {
+                        ui.label("To");
+                        ui.add(
+                            egui::TextEdit::singleline(&mut edit.to)
+                                .id(base.with("to"))
+                                .desired_width(110.0),
+                        );
+                    }
+                }
             });
             ui.horizontal(|ui| {
                 apply = ui.button("Apply (Enter)").clicked();
@@ -811,10 +894,28 @@ fn draw_totals_row(row: &mut TableRow<'_, '_>, totals: &[ViewCell]) {
     }
 }
 
+/// Draws a subtitle made of text and keycaps on one line, in the subtitle's ink.
+fn draw_sub_parts(ui: &mut Ui, parts: &[day_book::SubPart]) {
+    let t = crate::ui::tokens(ui);
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 0.0;
+        for part in parts {
+            match part {
+                day_book::SubPart::Text(text) => {
+                    ui.label(para_text(text, crate::theme::TEXT_BODY, t.text_2));
+                }
+                day_book::SubPart::Key(key) => {
+                    keycap(ui, key);
+                }
+            }
+        }
+    });
+}
+
 /// Reads this frame's keys. While the period editor is open only Enter and Esc count, so the
 /// arrows belong to the text fields. Alt+F1 comes first in the table because egui ignores extra
 /// Alt and Shift when it matches a plain key.
-fn read_keys(ctx: &Context, editing: bool) -> Vec<KeyCmd> {
+fn read_keys(ctx: &Context, editing: bool, look: Look) -> Vec<KeyCmd> {
     let mut out = Vec::new();
     ctx.input_mut(|i| {
         if editing {
@@ -826,9 +927,16 @@ fn read_keys(ctx: &Context, editing: bool) -> Vec<KeyCmd> {
             }
             return;
         }
+        // TallyHelp "Viewing Day Book": in the day book F2 changes the date and Alt+F2 the
+        // period; elsewhere F2 edits the period. Alt+F2 comes before F2 for the reason above.
+        let f2 = match look {
+            Look::DayBook => KeyCmd::EditDate,
+            Look::BalanceSheet | Look::Generic => KeyCmd::EditPeriod,
+        };
         let table = [
             (Modifiers::ALT, Key::F1, KeyCmd::ToggleDetail),
-            (Modifiers::NONE, Key::F2, KeyCmd::EditPeriod),
+            (Modifiers::ALT, Key::F2, KeyCmd::EditPeriod),
+            (Modifiers::NONE, Key::F2, f2),
             (Modifiers::NONE, Key::Enter, KeyCmd::Open),
             (Modifiers::NONE, Key::ArrowUp, KeyCmd::Up),
             (Modifiers::NONE, Key::ArrowDown, KeyCmd::Down),
@@ -898,7 +1006,7 @@ impl Screen for ReportViewScreen {
             Look::DayBook => vec![
                 KeyHint::new("J / K", "Move"),
                 KeyHint::new("Enter", "Open voucher"),
-                KeyHint::new("F2", "Period"),
+                KeyHint::new("F2", "Date"),
                 KeyHint::new("Esc", "Back"),
             ],
             Look::Generic => vec![

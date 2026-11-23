@@ -28,9 +28,9 @@
 //! screen does not copy; the two section names above are the standard ones.
 
 use egui::{Frame, Margin, Rect, ScrollArea, Sense, Stroke, Ui, vec2};
-use ledgerly_core::{Date, DrCr, FinancialYear, SignedAmount, format::format_inr};
+use ledgerly_core::{Date, DrCr, FinancialYear};
 
-use super::text::{amount_text, cell_text};
+use super::text::amount_on_side;
 use super::{TableEvents, ViewCell, ViewReport};
 use crate::theme::{RADIUS_M, TEXT_BODY, TEXT_META, border_width, shadow_1};
 use crate::ui::badge::{BadgeKind, badge};
@@ -104,34 +104,12 @@ pub fn subtitle(as_of: Date) -> String {
     }
 }
 
-/// An amount as this section shows it: without Dr or Cr when it is on the section's usual side
-/// or zero (the mock prints the bare figure, index.html:1585), and with its side written out
-/// otherwise, so a loss under liabilities or an overdraft under assets is never read as the usual
-/// side. The figure is the engine's; only the side word is left out.
-fn amount_for(amount: SignedAmount, section: Section) -> String {
-    if amount.amount.is_zero() || amount.side == section.usual_side() {
-        format_inr(amount.amount)
-    } else {
-        amount_text(amount)
-    }
-}
-
 /// The text of `cell` in `section`: an amount drops its Dr or Cr when it is zero or on the
-/// section's own side; every other cell reads as everywhere else ([`cell_text`]).
+/// section's own side (the mock prints the bare figure, index.html:1585), so a loss under
+/// liabilities or an overdraft under assets keeps its side.
 #[must_use]
 pub fn amount_in(cell: &ViewCell, section: Section) -> String {
-    match cell {
-        ViewCell::Amount(a) => amount_for(*a, section),
-        ViewCell::Provisional { amount, reason } => {
-            format!("{} (provisional: {reason})", amount_for(*amount, section))
-        }
-        ViewCell::Signed(_)
-        | ViewCell::Qty(_)
-        | ViewCell::Text(_)
-        | ViewCell::Date(_)
-        | ViewCell::Empty
-        | ViewCell::Unsupported(_) => cell_text(cell),
-    }
+    amount_on_side(cell, section.usual_side())
 }
 
 /// The balance sheet placed for vertical drawing. Each entry is an index into the report's rows,

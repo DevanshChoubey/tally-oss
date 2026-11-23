@@ -254,9 +254,11 @@ fn the_day_tab_shows_the_last_day_and_the_month_tab_shows_the_month_to_that_day(
     // Period 1 to 21 November 2026 (mock day-book.month, "1 to 21 Nov 2026").
     // The Day tab is the single day that ends the period: 21 November. The Month tab starts on
     // the first of that month and ends on the same day: 1 to 21 November.
-    assert_eq!(tab_of(november()), MONTH_TAB);
+    // Spec change 2026-11-23 (mock index.html:1645): `tab_of` answers `None` for a period that
+    // is neither tab, so it now returns an `Option`; the two periods here keep their tabs.
+    assert_eq!(tab_of(november()), Some(MONTH_TAB));
     let day = Period::new(date!(2026 - 11 - 21), date!(2026 - 11 - 21)).unwrap();
-    assert_eq!(tab_of(day), DAY_TAB);
+    assert_eq!(tab_of(day), Some(DAY_TAB));
     assert_eq!(period_of_tab(november(), DAY_TAB), Some(day));
     assert_eq!(period_of_tab(november(), MONTH_TAB), Some(november()));
 }
@@ -266,11 +268,19 @@ fn the_day_book_subtitle_reads_like_the_mock() {
     // Mock day-book render, index.html line 1644: "20 Nov 2026 · F2 another date" for a day,
     // "1 to 21 Nov 2026" for a month. The day here is 21 November, so the text follows the same
     // pattern with the other date.
+    //
+    // Spec change 2026-11-23: the day text now carries the mock's whole line, "· Alt+F2 a
+    // period" included (index.html:1644, and TallyHelp "Viewing Day Book": Alt+F2 asks for a
+    // period). The month text is the mock's "1 to 21 Nov 2026 · every voucher, in order"
+    // (index.html:1644), not our earlier "F2 another period".
     let day = Period::new(date!(2026 - 11 - 21), date!(2026 - 11 - 21)).unwrap();
-    assert_eq!(subtitle(day), "21 Nov 2026 · F2 another date");
+    assert_eq!(
+        subtitle(day),
+        "21 Nov 2026 · F2 another date · Alt+F2 a period"
+    );
     assert_eq!(
         subtitle(november()),
-        "1 Nov 2026 to 21 Nov 2026 · F2 another period"
+        "1 to 21 Nov 2026 · every voucher, in order"
     );
 }
 
