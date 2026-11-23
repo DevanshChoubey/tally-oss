@@ -18,7 +18,56 @@ use crate::worker::ApiWorker;
 use crate::{AppCtx, Screen, ScreenAction};
 
 /// The answer of a background open or create: the opened company, or the reason it failed.
-type JobResult = Result<Api, String>;
+pub(crate) type JobResult = Result<Api, String>;
+
+/// Starts `job` on a new thread. Returns where its answer will arrive, or the reason the thread
+/// could not start. The company setup wizard (`screens::setup`) creates its company this way too.
+///
+/// # Errors
+/// A message when the operating system refuses the thread.
+pub(crate) fn spawn_file_job<F>(job: F) -> Result<Receiver<JobResult>, String>
+where
+    F: FnOnce() -> JobResult + Send + 'static,
+{
+    let (tx, rx) = mpsc::channel::<JobResult>();
+    std::thread::Builder::new()
+        .name("ledgerly-file".to_owned())
+        .spawn(move || {
+            // The screen may have gone; then the answer is not wanted.
+            let _unwanted = tx.send(job());
+        })
+        .map(|_handle| rx)
+        .map_err(|e| format!("Could not start the file work: {e}"))
+}
+
+/// Starts creating the company file at `path` on a background thread.
+///
+/// # Errors
+/// A message when the thread could not start.
+pub(crate) fn spawn_create(
+    path: PathBuf,
+    company: Company,
+    clock: Clock,
+) -> Result<Receiver<JobResult>, String> {
+    spawn_file_job(move || Api::create(&path, &company, clock).map_err(|e| e.to_string()))
+}
+
+/// Puts `api` on a new worker in `ctx`, as the open company. The previous worker stops on a
+/// separate thread, because dropping a worker waits for its queued jobs.
+///
+/// # Errors
+/// A message when the worker thread could not start; `ctx` is then unchanged.
+pub(crate) fn hand_over(ctx: &mut AppCtx, api: Api) -> Result<(), String> {
+    let worker = ApiWorker::spawn(api).map_err(|e| format!("Could not start the worker: {e}"))?;
+    // The books on screen belong to the previous company; the shell fetches the new ones from
+    // the new worker.
+    ctx.books = None;
+    super::submit::note_changed();
+    if let Some(previous) = ctx.api.replace(worker) {
+        let _stopping = std::thread::spawn(move || drop(previous));
+    }
+    Ok(())
+}
 
 /// Root screen of a new tab: opens or creates a company file.
 #[derive(Debug)]
@@ -112,19 +161,12 @@ impl WelcomeScreen {
     where
         F: FnOnce() -> JobResult + Send + 'static,
     {
-        let (tx, rx) = mpsc::channel::<JobResult>();
-        let spawned = std::thread::Builder::new()
-            .name("ledgerly-file".to_owned())
-            .spawn(move || {
-                // The screen may have gone; then the answer is not wanted.
-                let _unwanted = tx.send(job());
-            });
-        match spawned {
-            Ok(_handle) => {
+        match spawn_file_job(job) {
+            Ok(rx) => {
                 self.job = Some(rx);
                 self.notice = Some("Working on the company file...".to_owned());
             }
-            Err(e) => self.notice = Some(format!("Could not start the file work: {e}")),
+            Err(reason) => self.notice = Some(reason),
         }
     }
 
@@ -149,19 +191,12 @@ impl WelcomeScreen {
 
     /// Puts `api` on a new worker in `ctx`. The previous worker stops on a separate thread.
     fn install(&mut self, ctx: &mut AppCtx, api: Api) {
-        match ApiWorker::spawn(api) {
-            Ok(worker) => {
-                // The books on screen belong to the previous company; the shell fetches the new
-                // ones from the new worker.
-                ctx.books = None;
-                super::submit::note_changed();
-                if let Some(previous) = ctx.api.replace(worker) {
-                    let _stopping = std::thread::spawn(move || drop(previous));
-                }
+        match hand_over(ctx, api) {
+            Ok(()) => {
                 self.notice = Some("The company file is open.".to_owned());
                 self.opened = true;
             }
-            Err(e) => self.notice = Some(format!("Could not start the worker: {e}")),
+            Err(reason) => self.notice = Some(reason),
         }
     }
 }

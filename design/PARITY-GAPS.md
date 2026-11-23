@@ -300,3 +300,31 @@ matching to propose a ledger, which is not built).
   supplier ledger" (help.tallysolutions.com/tally-prime/purchase-process/purchase-goods-and-services-tally/),
   both read 2026-11-23. Neither says which ledgers the list shows or leaves out. Limiting it to
   cash, bank and party groups needs a page that documents the list before it is changed.
+
+## Company setup (round of 2026-11-23)
+
+Read on help.tallysolutions.com/set-up-company-tally/ (2026-11-23): the financial year beginning
+and books beginning dates are both prefilled and may be changed, and books may begin after the
+financial year starts. The model supports that (`Company::books_begin`), so it is offered.
+
+- **bug: keyboard preset is not saved.** The Keyboard step's choice is shown and explained on the
+  step, but no store holds it; every company uses the classic keys (`keymap::preset`, "no
+  persistence yet"). Closing it needs a stored preset per company.
+- **bug: AI tier is not saved.** The AI step's choice is not stored; the top bar says "AI: not set
+  up" until a tier store exists (`AppCtx::ai_tier` is in memory only). The step says so.
+- **bug: backup folder is not saved and no backup runs on a schedule.** `backup_to` writes one
+  file when called; nothing stores a folder or runs daily. The Backup step says so.
+- **gap: GST filing frequency (Monthly) is not saved.** The model has no filing-frequency field.
+- **gap: the "Company file" field is ours.** The mock has no file location; the wizard asks for
+  it, defaulting to `Documents/Ledgerly/<company>.ledgerly` when blank.
+- **gap: City is kept as the first address line.** The model's `Address` has no city field.
+- **gap: no state-mismatch capture.** The mock's `setup.gstin-error` state needs the State combo
+  changed to a state other than the GSTIN's; the capture harness types text and presses keys but
+  cannot operate the combo, so that state has no app capture. The rule is tested in
+  `tests/w4_setup.rs`.
+- **gap: import, open-file and sample cards on Start are shown, not working.** Import needs the
+  import wizard (not routed from here); open-file is on the welcome screen; no sample data ships.
+- **gap: Done's "Make your first invoice" is disabled.** No route to a sales invoice from the
+  wizard yet; the other two launches open their screens.
+- **data: the mock's sample is prefilled; the wizard starts blank.** The capture types the mock's
+  company (name, GSTIN, file). The mock's City "Pune" is not typed.
