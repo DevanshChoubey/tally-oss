@@ -203,23 +203,26 @@ matching to propose a ledger, which is not built).
   report (`hashFor('balance-sheet','ledger')`) or, for one party, the detail. Ours opens the
   ledger's vouchers for every ledger, and Ctrl+Enter opens the detail (the alter form). Enter is
   not offered on other kinds, which have no report.
-- **needs a decision: State is a list, not a read-only value from the GSTIN** (index.html:1804,
-  1812: `<div class="ro">27 Maharashtra</div>` with a "from GSTIN" chip). Ours lets the user pick
-  the state, since a party without a GSTIN still has one. Taking it from a valid GSTIN and
-  locking the field needs a rule for a GSTIN and a picked state that disagree.
+- **by design: State is a list, as in TallyPrime, not read-only from the GSTIN** (index.html:1804,
+  1812: a read-only state with a "from GSTIN" chip). TallyPrime's State is chosen under Mailing
+  Details ("Select the required State", help.tallysolutions.com/tally-prime/vat-masters/india-
+  vat-party-ledger-tally/) and altered there ("Update State under Mailing Details",
+  help.tallysolutions.com/state-field-required/). The pages read say nothing of a state taken
+  from the GSTIN, so ours keeps the list and, left blank, uses the GSTIN's state and says so.
 - **by design: GSTIN shows only with Party details on.** The mock's create form has GSTIN, State
   and the footer note from the start, because its sample is a party. Ours keeps party fields
   under Party details (the ledger master's own section), so a blank form has no GSTIN field and
   no footer note until the switch is on.
 - **by design: Credit days shows only when Bill-wise is on.** Credit days belong to bill-wise
   details; the mock shows both because its party is bill-wise.
-- **needs a decision: Bill-wise is a checkbox.** The mock shows a read-only "On" badge
-  (index.html:1805, 1811). Ours is editable; a badge would need Bill-wise set somewhere else.
-- **deferred: no City field** (index.html:1805). The ledger model has an address and PIN code,
-  not a city, and the city goes in the address lines. Before a city is added to `PartyDetails`,
-  check that the ledger master has one: the Tally help pages read so far ("Entering Mailing
-  Details for Ledger Accounts", "Set Up Party Ledgers for GST") say "mailing details" without
-  naming the fields, so whether a separate city exists is not confirmed.
+- **by design: Bill-wise is a checkbox, as in TallyPrime** (index.html:1805, 1811: a read-only
+  "On" badge). TallyPrime's "Maintain balances bill-by-bill" is a Yes/No set in the ledger
+  creation or alteration screen (help.tallysolutions.com/set-up-party-ledger/), and credit
+  periods show only with bill-wise on (help.tallysolutions.com/set-up-receivables-and-payables-
+  tracking-in-tallyprime/), as ours do.
+- **by design: no City field, as in TallyPrime** (index.html:1805). TallyPrime's ledger mailing
+  details are "Name, Address, State, Country, and Pincode" (help.tallysolutions.com/ledgers-in-
+  tallyprime/, Alter Ledger), with no city; the city goes in the address lines, as ours does.
 - **by design: the tabs and More master kinds are dimmed while a form is open.** Switching kind
   would drop the draft; the mock never shows them with a form open in another kind.
 - **by design: ledgers are in name order.** The mock lists its sample in its own order. Ours
