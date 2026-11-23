@@ -659,7 +659,7 @@ pub fn sole_bank_screen(books: &Books) -> Result<BankScreen, NavError> {
 }
 
 /// The screen a non-report key names, or `None` when `key` is not one of them.
-fn screen_for_key(key: &str, ctx: &AppCtx) -> Option<Result<Box<dyn Screen>, NavError>> {
+pub fn screen_for_key(key: &str, ctx: &AppCtx) -> Option<Result<Box<dyn Screen>, NavError>> {
     let built: Result<Box<dyn Screen>, NavError> = match key {
         HOME_KEY => Ok(Box::new(super::gateway::GatewayScreen::new())),
         GST_KEY => books_of(ctx).and_then(|b| Ok(Box::new(gst_screen(b)?) as Box<dyn Screen>)),
@@ -676,7 +676,7 @@ fn screen_for_key(key: &str, ctx: &AppCtx) -> Option<Result<Box<dyn Screen>, Nav
         PURCHASE_BILL_KEY => Ok(Box::new(PurchaseBillScreen)),
         KEYS_KEY => Ok(Box::new(KeymapScreen::default())),
         AI_SETTINGS_KEY => Ok(Box::new(AiSettingsScreen::default())),
-        SETUP_KEY => Ok(Box::new(SetupScreen)),
+        SETUP_KEY => Ok(Box::new(SetupScreen::default())),
         other => {
             let id = parse_id(other, "bank:")?;
             books_of(ctx)

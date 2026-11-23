@@ -392,7 +392,20 @@ struct Shot {
     theme: Theme,
     keys: Vec<(Key, Modifiers)>,
     query: Option<&'static str>,
-    after: Vec<(Key, Modifiers)>,
+    after: Vec<Inject>,
+}
+
+/// Frames a setup shot waits after its keys, so the background company file job can finish.
+const SETUP_SETTLE_FRAMES: u32 = 900;
+
+/// One thing the harness sends after a shot's setup: a key press or typed text (the company setup
+/// wizard's name and GSTIN fields need text).
+#[derive(Clone, Copy)]
+enum Inject {
+    /// A key press (down and up).
+    Key(Key, Modifiers),
+    /// Text typed into the focused field.
+    Text(&'static str),
 }
 
 impl Shot {
@@ -415,7 +428,20 @@ impl Shot {
 
     /// The same shot with keys pressed after the query.
     fn then(mut self, keys: &[(Key, Modifiers)]) -> Self {
-        self.after = keys.to_vec();
+        self.after = keys.iter().map(|(k, m)| Inject::Key(*k, *m)).collect();
+        self
+    }
+
+    /// The same shot with `text` typed after the keys of [`Shot::then`].
+    fn type_text(mut self, text: &'static str) -> Self {
+        self.after.push(Inject::Text(text));
+        self
+    }
+
+    /// The same shot with `keys` pressed after what came before them.
+    fn press(mut self, keys: &[(Key, Modifiers)]) -> Self {
+        self.after
+            .extend(keys.iter().map(|(k, m)| Inject::Key(*k, *m)));
         self
     }
 }
@@ -449,6 +475,35 @@ fn to_debtors() -> Vec<(Key, Modifiers)> {
         (Key::J, NONE),
         (Key::Enter, NONE),
     ]
+}
+
+/// The company name the setup captures type (the mock's sample company, index.html:489).
+const SETUP_NAME: &str = "Godavari Drip & Pump Works";
+/// The GSTIN the setup captures type; its first two digits fill the state (index.html:1868).
+const SETUP_GSTIN: &str = "27AAGFG4417K1ZA";
+/// Where the setup captures create their company file, relative to the repository root. The
+/// harness removes it before a run, because the wizard does not overwrite a file.
+const SETUP_FILE: &str = "target/setup-capture/godavari.ledgerly";
+
+/// A company setup capture: the palette opens the wizard, the company form is filled by typing
+/// (Tab moves focus between its fields), then `after_company` Enters move on from the company step.
+fn setup_shot(state: &'static str, after_company: usize) -> Shot {
+    let palette = (Key::K, Modifiers::COMMAND);
+    let mut shot = shot(state, &[palette])
+        .query("Company setup")
+        // The palette's Enter opens the wizard; the next Enter goes from Start to Company, where the
+        // name field takes focus by itself.
+        .then(&[(Key::Enter, NONE), (Key::Enter, NONE)])
+        .type_text(SETUP_NAME)
+        .press(&[(Key::Tab, NONE), (Key::Tab, NONE), (Key::Tab, NONE)])
+        .type_text(SETUP_GSTIN)
+        .press(&[(Key::Tab, NONE), (Key::Tab, NONE), (Key::Tab, NONE)])
+        .type_text(SETUP_FILE)
+        .press(&[(Key::Tab, NONE), (Key::Tab, NONE)]);
+    for _ in 0..after_company {
+        shot = shot.press(&[(Key::Enter, NONE)]);
+    }
+    shot
 }
 
 /// The registry: one entry per image, named by the mock state id it should match.
@@ -550,6 +605,16 @@ fn shots() -> Vec<Shot> {
         shot("bank.brs", &[palette])
             .query("Bank Reconciliation")
             .then(&[(Key::Enter, NONE), (Key::B, NONE)]),
+        // Company setup (mock SCREENS.setup). The palette opens the wizard at Start; Enter goes on.
+        shot("setup.welcome", &[palette])
+            .query("Company setup")
+            .then(&[(Key::Enter, NONE)]),
+        setup_shot("setup.company", 0),
+        setup_shot("setup.features", 1),
+        setup_shot("setup.keyboard", 2),
+        setup_shot("setup.ai", 3),
+        setup_shot("setup.backup", 4),
+        setup_shot("setup.done", 5),
     ]
 }
 
@@ -582,7 +647,7 @@ struct Snapshots {
     stage: Stage,
     frames: u32,
     /// Keys still to press, one per frame with a gap, so the screen reacts to each before the next.
-    inject: VecDeque<(Key, Modifiers)>,
+    inject: VecDeque<Inject>,
     /// Frames to wait before the next queued key.
     gap: u32,
     /// Escape presses so far in the current return to Home.
@@ -629,15 +694,20 @@ impl eframe::App for Snapshots {
             self.gap -= 1;
             return;
         }
-        if let Some((key, modifiers)) = self.inject.pop_front() {
-            for pressed in [true, false] {
-                raw_input.events.push(Event::Key {
-                    key,
-                    physical_key: None,
-                    pressed,
-                    repeat: false,
-                    modifiers,
-                });
+        if let Some(item) = self.inject.pop_front() {
+            match item {
+                Inject::Key(key, modifiers) => {
+                    for pressed in [true, false] {
+                        raw_input.events.push(Event::Key {
+                            key,
+                            physical_key: None,
+                            pressed,
+                            repeat: false,
+                            modifiers,
+                        });
+                    }
+                }
+                Inject::Text(text) => raw_input.events.push(Event::Text(text.to_owned())),
             }
             self.gap = 6;
         }
@@ -661,7 +731,7 @@ impl eframe::App for Snapshots {
                         self.next_stage(Stage::Keys);
                     } else if self.presses < HOME_PRESSES_MAX {
                         self.presses += 1;
-                        self.inject.push_back(ESC);
+                        self.inject.push_back(Inject::Key(ESC.0, ESC.1));
                     } else {
                         // Escape did not close what is open (a form that keeps its draft, say).
                         // Close the stack and the palette directly, and say so in the output.
@@ -682,7 +752,11 @@ impl eframe::App for Snapshots {
             Stage::Keys => {
                 let current = &self.shots[self.index];
                 self.shell.set_theme(current.theme.kind());
-                self.inject = current.keys.iter().copied().collect();
+                self.inject = current
+                    .keys
+                    .iter()
+                    .map(|(k, m)| Inject::Key(*k, *m))
+                    .collect();
                 self.next_stage(Stage::Query);
             }
             Stage::Query => {
@@ -700,7 +774,14 @@ impl eframe::App for Snapshots {
                 }
             }
             Stage::Settle => {
-                if self.inject.is_empty() && self.frames > 60 {
+                // The wizard's Finish creates a company file on a background thread, and the screen
+                // moves to Done only when that finishes, so the setup shots wait longer.
+                let settle = if self.shots[self.index].state.starts_with("setup.") {
+                    SETUP_SETTLE_FRAMES
+                } else {
+                    60
+                };
+                if self.inject.is_empty() && self.frames > settle {
                     let slot = Arc::clone(&self.image);
                     ui.ctx().request_screenshot(move |image| {
                         if let Ok(mut held) = slot.lock() {
@@ -749,6 +830,9 @@ fn parse_args() -> (PathBuf, Option<String>) {
 }
 
 fn main() -> eframe::Result<()> {
+    // The setup captures create a company file; the wizard never overwrites one, so clear the last.
+    let _ = std::fs::create_dir_all("target/setup-capture");
+    let _ = std::fs::remove_file(SETUP_FILE);
     let (out, only) = parse_args();
     let entries: Vec<Shot> = shots()
         .into_iter()
