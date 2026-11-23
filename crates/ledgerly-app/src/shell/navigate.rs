@@ -13,7 +13,8 @@
 //! | `Report("bank-reconciliation")` | the bank reconciliation of the company's one bank ledger (a stated reason when there are none or several) |
 //! | `Report("bank:N")` | the bank reconciliation of bank ledger N |
 //! | `Report("masters")` | the masters screen, showing ledgers |
-//! | `Report("review")`, `"ask"`, `"quick-entry"`, `"purchase-bill"`, `"keys"`, `"ai-settings"`, `"setup"` | a stub screen: its title and a "not supported yet" line ([`crate::screens::draw_stub`]) |
+//! | `Report("review")`, `"keys"`, `"ai-settings"`, `"setup"` | the Review queue, Keyboard map, AI and privacy and Company setup screens |
+//! | `Report("ask")`, `"quick-entry"`, `"purchase-bill"` | Ask your books, Plain-words entry and the bill photo: each says, for the company's AI tier, why it cannot run in this build and offers the reports or voucher forms instead ([`crate::screens::ai_gate`]) |
 //! | `Setting(name)` | nothing: there is no settings screen yet, so it says so |
 //! | `Command`, `AiIntent` | nothing: the host handles them ([`NavError::NotNavigation`]) |
 //!
@@ -263,19 +264,19 @@ pub const IMPORT_KEY: &str = "import-tally";
 pub const MASTERS_KEY: &str = "masters";
 /// The palette key of the bank reconciliation of the company's one bank ledger.
 pub const BANK_RECON_KEY: &str = "bank-reconciliation";
-/// The palette key of the Review queue stub.
+/// The palette key of the Review queue screen.
 pub const REVIEW_KEY: &str = "review";
-/// The palette key of the Ask your books stub.
+/// The palette key of the Ask your books screen.
 pub const ASK_KEY: &str = "ask";
-/// The palette key of the Plain-words entry stub.
+/// The palette key of the Plain-words entry screen.
 pub const QUICK_ENTRY_KEY: &str = "quick-entry";
-/// The palette key of the Purchase from bill photo stub.
+/// The palette key of the Purchase from bill photo screen.
 pub const PURCHASE_BILL_KEY: &str = "purchase-bill";
-/// The palette key of the Keyboard map stub.
+/// The palette key of the Keyboard map screen.
 pub const KEYS_KEY: &str = "keys";
-/// The palette key of the AI and privacy stub.
+/// The palette key of the AI and privacy screen.
 pub const AI_SETTINGS_KEY: &str = "ai-settings";
-/// The palette key of the Company setup stub.
+/// The palette key of the Company setup screen.
 pub const SETUP_KEY: &str = "setup";
 
 /// The icon a palette row for `target` shows. Screens take the icon the mock's `PAL_SCREENS`
@@ -346,7 +347,7 @@ pub fn bank_key(ledger: LedgerId) -> String {
 }
 
 /// The palette rows for the screens that are not reports: Home, the Review queue, GST returns,
-/// the import, the masters, the bank reconciliation, the stubs of the mock's screens, and one bank
+/// the import, the masters, the bank reconciliation, the mock's other screens, and one bank
 /// reconciliation per bank ledger of `books` (none while no books are loaded).
 #[must_use]
 pub fn screen_entries(books: Option<&Books>) -> Vec<PaletteEntry> {
@@ -671,9 +672,9 @@ pub fn screen_for_key(key: &str, ctx: &AppCtx) -> Option<Result<Box<dyn Screen>,
             books_of(ctx).and_then(|b| Ok(Box::new(sole_bank_screen(b)?) as Box<dyn Screen>))
         }
         REVIEW_KEY => Ok(Box::new(ReviewScreen::default())),
-        ASK_KEY => Ok(Box::new(AskScreen)),
-        QUICK_ENTRY_KEY => Ok(Box::new(QuickEntryScreen)),
-        PURCHASE_BILL_KEY => Ok(Box::new(PurchaseBillScreen)),
+        ASK_KEY => Ok(Box::new(AskScreen::default())),
+        QUICK_ENTRY_KEY => Ok(Box::new(QuickEntryScreen::default())),
+        PURCHASE_BILL_KEY => Ok(Box::new(PurchaseBillScreen::default())),
         KEYS_KEY => Ok(Box::new(KeymapScreen::default())),
         AI_SETTINGS_KEY => Ok(Box::new(AiSettingsScreen::default())),
         SETUP_KEY => Ok(Box::new(SetupScreen::default())),

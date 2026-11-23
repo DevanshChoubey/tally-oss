@@ -205,7 +205,8 @@ matching to propose a ledger, which is not built).
 - **deferred: Alt+C on the item invoice's item field.** The mock creates an item there
   (index.html:390, 1253). None of the TallyPrime pages read documents Alt+C on a stock item
   field, so it stays out until a cited page does; Enter on an unknown item still says to create
-  it on the masters screen. The purchase bill screen is a stub with no fields yet.
+  it on the masters screen. The bill photo screen has no fields: it reads no bill (see "Assistant
+  screens" below).
 - **by design: Enter walks every field, as Tab does.** Enter in a one-line field moves to the next
   field and Shift+Enter to the previous one (index.html:1831, 1344), including the lists and
   switches between them; in a multi-line field (the address) Enter is a new line. Enter on a
@@ -358,13 +359,64 @@ matching to propose a ledger, which is not built).
 - **deferred: the empty-log wording.** The mock's off state says "No AI events since AI was turned
   off" (index.html:1915). It is not used: the log is empty for every tier until a feature records
   an event.
-- **deferred: AI off and the screens it hides.** The off note (index.html:1911) is shown, but the
-  screens it names (bill reading, plain-words entry, bank suggestions, Ask) hide themselves only
-  through the existing home panel; the other screens are not yet wired to the tier.
+- **deferred: AI off and the screens it hides.** The off note (index.html:1911) is shown. Ask your
+  books, Plain-words entry and the bill photo read the tier and say AI is off (see "Assistant
+  screens" below); they stay in the sidebar and palette, as the mock's own AI-off states keep
+  them reachable (index.html:1169, 1430). Bank suggestions are not yet wired to the tier.
 - **by design: the "Current" badge.** The mock marks the chosen card with a border only
   (index.html:1905-1907). The app puts a "Current" badge on the tier stored in the company file, so
   a refused cloud choice still shows the stored tier as current. The app also draws the selected
   card with an accent fill and border, so the stored tier stands out in both ways.
+
+## Assistant screens: Ask your books, Plain-words entry, bill photo (round of 2026-11-23)
+
+No model or bill reader exists in this build: `ledgerly_assist::nl_entry::ModelClient` has only
+the recorded test double (`RecordedModel`), no OCR engine produces `ledgerly_assist::ocr::OcrOutput`
+from an image, and `Api::set_ai_tier(Cloud)` is refused (no keychain store). So no question
+becomes a query, no sentence a draft and no photo a reading. Each screen reads the company's tier
+through the worker and says why for that tier (`screens/ai_gate.rs`); none shows a sample. The
+accounting product has no AI features, so these follow the mock and spec 6.8 only.
+
+- **deferred: ask.result, ask.loading, ask.low-confidence, ask.unsupported.** Each needs a
+  question compiled to a `ReportQuery` (index.html:382-385, 1171-1190). Nothing compiles one, so
+  the box is disabled and only ask.offline-ai's report list is built, for every tier. Closing
+  needs a model client and the query runner.
+- **by design: the report list shows for every tier.** The mock shows it when AI is off
+  (index.html:1169-1170). With no model, it is the only answer the screen has, so Local, Cloud and
+  no tier show it too, with their own reason.
+- **by design: the reason for tiers the mock has no state for.** Local says no local model (or no
+  bill reader) is installed; no tier says none is chosen; Cloud says the cloud tier is not
+  available without a keychain store. The wording is in `ai_gate::reason`.
+- **gap: the note is plain.** The mock bolds the note's first clause and draws its AI and privacy
+  button as a ghost (index.html:1169, 1430). Ours is one weight with a secondary button.
+- **gap: Ask's question box is empty and has no Enter keycap.** The mock fills it with a sample
+  question and lists Enter "Ask" in the key bar (index.html:1168, 1199). Nothing would answer it,
+  so it holds a hint, is disabled, and the key bar lists only the name.
+- **gap: the receivables button's icon.** The mock's `clock` is not in the app's icon set; the
+  calendar stands in.
+- **deferred: every quick-entry state.** quick-entry.proposal, .hinglish, .unknown-ledger,
+  .loading and .rejected (index.html:404-408) all need a draft from a model. The mock has no AI-off
+  state for this screen; the app's capture is `quick-entry.offline-ai` (no mock capture). It keeps
+  the head, the disabled box and the rules card (index.html:1542-1545), and offers F5 Payment and
+  F6 Receipt in place of the draft card. The "Try" sentences are left out.
+- **deferred: purchase-bill.reading, .proposal, .low-confidence, .mismatch, .duplicate,
+  .cloud-consent, .accepted.** Each needs a reading of the bill (index.html:395-403). The draft
+  would go through the normal purchase submit path after the user's accept; nothing reaches it.
+- **deferred: purchase-bill.error.** The unreadable-file state (index.html:402) needs a file to
+  have been chosen and read. No file dialog is offered, since no reader exists to read the file.
+- **gap: purchase-bill.offline-ai has no form or image beside it.** The mock embeds a purchase form
+  under the note and keeps the image attached to the voucher (index.html:1430, 1504-1506). Ours
+  offers F9, which opens the purchase form on its own screen, and the image column says no image
+  is read or kept (no attachment store exists). The note's second sentence says so instead of
+  "Type the bill below; the image stays attached to the voucher".
+- **gap: the bill photo's head.** The mock's crumbs are Home, Purchase, From bill photo and its
+  head has "Read another" (Alt+O) and the subtitle "... Alt+O read another bill · the image is
+  kept with the voucher" (index.html:1422). Ours: Home, Purchase from bill photo; no Alt+O; the
+  subtitle is "F9 purchase". The key bar is named "Bill photo", not "Draft purchase". The
+  sidebar keeps Purchase selected, as the mock does.
+- **by design: the review queue's unlisted sources stay.** Bill drafts and plain-words drafts stay
+  in `Api::review_queue`'s unlisted list (`ledgerly-api/src/review.rs`), since no draft store
+  exists.
 
 ## Company setup (round of 2026-11-23)
 
