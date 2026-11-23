@@ -379,3 +379,51 @@ fn the_screen_asks_on_open_and_again_after_a_save() {
     frame(&ctx, &mut screen, &mut app);
     assert!(screen.balances().is_loading(), "a save asks again");
 }
+
+#[test]
+fn when_the_engine_cannot_give_the_balances_the_list_says_why() {
+    // provenance: derived (rule A1: an unsupported figure is shown with its reason, never as a
+    // number). The engine's own words appear in a note above the list; the cells keep dashes.
+    let mut screen = MastersScreen::new();
+    assert_eq!(screen.balance_note(), None);
+    screen
+        .balances_mut()
+        .set(BalanceState::Unsupported("the books are locked".to_owned()));
+    let note = screen.balance_note().unwrap();
+    assert!(note.contains("the books are locked"), "{note}");
+    assert_eq!(screen.balances().text(CASH), "\u{2014}");
+}
+
+#[test]
+fn moving_the_last_voucher_later_asks_again() {
+    // provenance: derived. The balances are as of the last voucher date. When the books arrive
+    // with a later last date but the same change count, voucher count and newest voucher id (a
+    // voucher's date was altered), the date has moved, so the screen asks again.
+    let api = setup("w2_masters_balances_moved.ledgerly");
+    let Ok(Outcome::Value(books)) = api.books() else {
+        panic!("the books did not load");
+    };
+    let mut app = AppCtx {
+        books: Some(books),
+        api: Some(ApiWorker::spawn(api).unwrap()),
+        lock_date: None,
+        ai_tier: None,
+    };
+    let ctx = egui::Context::default();
+    let mut screen = MastersScreen::new();
+    for _ in 0..2000 {
+        frame(&ctx, &mut screen, &mut app);
+        if !screen.balances().is_loading() {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    assert!(!screen.balances().is_loading());
+    let books = app.books.as_mut().unwrap();
+    books.vouchers.get_mut(&VoucherId(1)).unwrap().date = date!(2026 - 04 - 20);
+    frame(&ctx, &mut screen, &mut app);
+    assert!(
+        screen.balances().is_loading(),
+        "a later last date asks again"
+    );
+}

@@ -27,8 +27,9 @@ use crate::worker::ApiWorker;
 
 /// What a cell shows where there is no figure.
 const DASH: &str = "\u{2014}";
-/// The heading's hover text while the figures are on their way.
-const LOADING_HINT: &str = "The engine is working out the balances.";
+/// The heading's hover text before the figures are here.
+const LOADING_HINT: &str =
+    "The balances have not come from the engine yet. Nothing is estimated here.";
 /// The heading's hover text when the engine could not give the balances.
 const FAILED_HINT: &str =
     "The engine could not give the balances, so none are shown. Nothing is estimated here.";

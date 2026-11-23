@@ -28,7 +28,8 @@
 //!   deleting a master the books still use, and the company's feature switches.
 //!
 //! Rule C4 (the UI never sums anything): this screen shows an opening balance as stored and adds
-//! nothing. Balances and stock quantities are not shown here.
+//! nothing. The ledger list's closing balances are the engine's trial balance, asked for on the
+//! API worker ([`balances`]). Stock quantities and values are not shown here yet.
 //!
 //! Not built here, and said so rather than faked ([`MasterError::Unsupported`]):
 //!
@@ -54,7 +55,7 @@ mod look;
 pub mod view;
 
 use egui::{Align, Key, Layout, Modifiers, RichText, Ui};
-use ledgerly_core::{LedgerId, Outcome, Unsupported};
+use ledgerly_core::{Date, LedgerId, Outcome, Unsupported};
 use ledgerly_model::{Books, MasterSnapshot, Masters};
 
 use command::command_for;
@@ -386,8 +387,9 @@ pub struct MastersScreen {
     scroll_to_selected: bool,
     /// The ledger list's Balance column, from the engine.
     balances: balances::LedgerBalances,
-    /// The copy of the books the balances were last asked for, so a change asks again.
-    balances_for: Option<crate::shell::BooksPrint>,
+    /// The copy of the books and the date the balances were last asked for, so a change to
+    /// either asks again.
+    balances_for: Option<(crate::shell::BooksPrint, Result<Date, String>)>,
 }
 
 impl Default for MastersScreen {
@@ -1072,6 +1074,10 @@ impl MastersScreen {
         let kind = self.kind;
         let events = match kind {
             MasterKind::Ledger => {
+                if let Some(text) = self.balance_note() {
+                    note(ui, NoteKind::Warn, &text);
+                    ui.add_space(look::FILTER_GAP);
+                }
                 let rows = ledger_cells(
                     &view::ledger_rows(&books.masters, &self.filter),
                     &self.balances,
@@ -1527,27 +1533,46 @@ impl Screen for MastersScreen {
 }
 
 impl MastersScreen {
-    /// Asks for the balances again when `books` is a copy they were not asked for: on the first
-    /// frame, and after anything is saved. They are as of the last voucher date, the date the
-    /// balance sheet opens on (`navigate::default_period`).
+    /// Asks for the balances again when `books` is a copy, or the date is one, they were not
+    /// asked for: on the first frame, after anything is saved, and when the books arrive with a
+    /// later last voucher date. They are as of the last voucher date, the date the balance sheet
+    /// opens on (`navigate::default_period`).
     fn follow_balances(&mut self, books: &Books) {
         let print = crate::shell::books_print(books);
-        if self.balances_for == Some(print) {
+        let as_of = crate::shell::navigate::default_period(books)
+            .map(ledgerly_core::Period::to)
+            .map_err(|e| e.to_string());
+        let key = (print, as_of);
+        if self.balances_for.as_ref() == Some(&key) {
             return;
         }
-        self.balances_for = Some(print);
-        match crate::shell::navigate::default_period(books) {
-            Ok(period) => self.balances.request(period.to()),
-            Err(e) => self
+        match &key.1 {
+            Ok(date) => self.balances.request(*date),
+            Err(why) => self
                 .balances
-                .set(balances::BalanceState::Unsupported(e.to_string())),
+                .set(balances::BalanceState::Unsupported(why.clone())),
         }
+        self.balances_for = Some(key);
     }
 
     /// The ledger list's balances, as the screen holds them.
     #[must_use]
     pub fn balances(&self) -> &balances::LedgerBalances {
         &self.balances
+    }
+
+    /// The ledger list's balances, to set them as an answer from the worker would.
+    pub fn balances_mut(&mut self) -> &mut balances::LedgerBalances {
+        &mut self.balances
+    }
+
+    /// The note drawn above the ledger list when the engine could not give the balances, with
+    /// the engine's own reason (rule A1).
+    #[must_use]
+    pub fn balance_note(&self) -> Option<String> {
+        self.balances
+            .notice()
+            .map(|why| format!("Balances are not shown: {why}. Nothing is estimated here."))
     }
 }
 

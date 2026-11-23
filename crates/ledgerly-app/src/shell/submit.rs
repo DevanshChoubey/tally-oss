@@ -23,8 +23,9 @@ pub enum CommandReply {
 }
 
 /// Counts the changes after which the shell must fetch the books again: a company opened or
-/// created, and every command that saved something. Screens never read it; the shell compares it
-/// with the value it last saw.
+/// created, and every command that saved something. The shell compares it with the value it last
+/// saw; screens that show engine figures read it only through [`super::books_print`], to ask for
+/// their figures again after a change.
 static CHANGES: AtomicU64 = AtomicU64::new(0);
 
 /// Tells the shell that the books changed (a company was opened, or a command saved something),

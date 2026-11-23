@@ -26,7 +26,7 @@
 | light | balance-sheet.default | 0.6703 |
 | light | palette.commands | 0.6899 |
 | light | gst.gstr3b | 0.7000 |
-| light | masters.ledger-detail | 0.7333 |
+| light | masters.ledger-detail | 0.7307 |
 | light | masters.items | 0.7496 |
 | light | day-book.default | 0.7570 |
 | light | masters.create-ledger | 0.7782 |
@@ -298,7 +298,7 @@ SSIM 0.7000
 
 ## light / masters.ledger-detail
 
-SSIM 0.7333
+SSIM 0.7307
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>

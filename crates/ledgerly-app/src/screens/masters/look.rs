@@ -222,7 +222,12 @@ fn paint_heading(ui: &Ui, cols: &[Col], rect: Rect, response: &egui::Response) {
         };
         let label_rect = if col.engine {
             let tag = paint_engine_tag(ui, r);
-            Rect::from_min_max(r.min, pos2(tag.left() - TAG_GAP, r.max.y))
+            // `CellPlace::Right` keeps the cell's right padding, so give it back here: the label
+            // then ends `TAG_GAP` before the tag.
+            Rect::from_min_max(
+                r.min,
+                pos2(tag.left() - TAG_GAP + table::CELL_PAD_X, r.max.y),
+            )
         } else {
             r
         };
