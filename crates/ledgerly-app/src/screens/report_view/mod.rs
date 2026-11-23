@@ -154,6 +154,28 @@ fn save_dialog(suggested: &str) -> Option<PathBuf> {
         .save_file()
 }
 
+/// The file name the save dialog suggests for a report titled `title`: the title with path
+/// separators and the characters Windows refuses (`/ \\ < > : " | ? *`) turned into `-`, edge
+/// spaces and dots dropped, and `.csv` added. An empty result is "Report".
+#[must_use]
+pub fn export_file_name(title: &str) -> String {
+    let safe: String = title
+        .chars()
+        .map(|c| match c {
+            '/' | '\\' | '<' | '>' | ':' | '"' | '|' | '?' | '*' => '-',
+            c if c.is_control() => '-',
+            c => c,
+        })
+        .collect();
+    let trimmed = safe.trim_matches(|c: char| c == ' ' || c == '.');
+    let stem = if trimmed.is_empty() {
+        "Report"
+    } else {
+        trimmed
+    };
+    format!("{stem}.{}", ExportFormat::Csv.extension())
+}
+
 /// What an export brings back: the file, and whether it was written.
 type Exported = (PathBuf, Result<Outcome<()>, String>);
 
@@ -412,7 +434,7 @@ impl ReportViewScreen {
         if !std::mem::take(&mut self.export_wanted) {
             return;
         }
-        let suggested = format!("{}.{}", self.report.title, ExportFormat::Csv.extension());
+        let suggested = export_file_name(&self.report.title);
         if let Some(path) = (self.export_picker)(&suggested) {
             self.export_to(path, worker);
         }

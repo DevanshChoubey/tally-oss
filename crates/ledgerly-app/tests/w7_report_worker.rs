@@ -446,3 +446,22 @@ fn an_export_waits_for_the_report_to_arrive() {
     assert!(screen.notice().is_some());
     assert!(!out.exists());
 }
+
+#[test]
+fn the_suggested_export_name_has_no_path_or_reserved_characters() {
+    // provenance: derived. A drill's title carries ':' ("Ledger Vouchers: ...") and ledger names
+    // carry '/' ("Profit and Loss A/c"). '/' and '\' are path separators, and Windows refuses
+    // `< > : " | ? *` in a file name; each becomes '-'. Edge spaces and dots are dropped, and an
+    // empty name falls back to "Report".
+    use ledgerly_app::screens::report_view::export_file_name;
+    assert_eq!(
+        export_file_name("Ledger Vouchers: Profit and Loss A/c"),
+        "Ledger Vouchers- Profit and Loss A-c.csv"
+    );
+    assert_eq!(
+        export_file_name(r#"a\b<c>d"e|f?g*h"#),
+        "a-b-c-d-e-f-g-h.csv"
+    );
+    assert_eq!(export_file_name(" . "), "Report.csv");
+    assert_eq!(export_file_name("Trial Balance"), "Trial Balance.csv");
+}

@@ -34,6 +34,13 @@ feature that is not built), **data** (the capture company lacks what the mock's 
 - **gap: Export has no PDF.** The mock's Export offers "PDF, XLSX or CSV" (index.html:1624).
   Ours writes CSV and XLSX; PDF comes with printing (M5). The palette's Export command still
   says it is not available there: Ctrl+E and the button on the report screen export.
+  TallyPrime's "How to Export Data" page (help.tallysolutions.com/export-data-in-tally/, read
+  2026-11-23) has Ctrl+E (Current) export any open report and lists ASCII, Excel, HTML, JPEG,
+  PDF, XML and JSON; it states no default file name or folder. Ours suggests the report's title
+  as the name and leaves the folder to the save dialog.
+- **by design: Ctrl+E works on the day book.** The mock's day book key bar has no Ctrl+E
+  (index.html, `SCREENS['day-book'].keys`), but Tally's page above exports any open report with
+  Ctrl+E, so the key works there; it is not listed in the key bar, as in the mock.
 - **bug: other tables keep the older row height.** The balance sheet, the day book, the masters
   list and the generic report table (every drill: group summary, ledger vouchers) draw the
   mock's `table.t` lines by hand (34-point rows, rules, the selected bar: `ui::table::paint_row`).
@@ -249,6 +256,10 @@ matching to propose a ledger, which is not built).
   open bill (SI-3, not due), so the party detail's card has one line where the mock has two. The mock shows Godavari Drip's ledgers and seven items with stock.
 
 ## Bank reconciliation (round of 2026-11-23)
+
+- **gap: no Export of the reconciliation statement.** The mock's statement state offers Ctrl+E
+  Export (index.html:1784). The bank screen has no export yet; the report screen's Export does
+  not cover it, since the statement is not an engine report.
 
 - **data: the statement lists totals, the mock lists each line.** The mock's statement
   (index.html:1741-1745) heads "In the bank, not yet in the books" and "In the books, not yet in
