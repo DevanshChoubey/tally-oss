@@ -19,7 +19,6 @@ use super::chrome::ChromeCmd;
 use super::navigate::{self, NavError, SidebarEntry, SidebarGroup};
 use crate::keymap::Action;
 use crate::palette::PaletteTarget;
-use crate::screens::item_invoice::ItemInvoiceScreen;
 use crate::screens::voucher_entry::VoucherEntryScreen;
 use crate::theme::{RADIUS_S, TEXT_BODY, TEXT_CAP, Tokens};
 use crate::ui::icon::{self, ICON_SIZE, Icon};
@@ -142,7 +141,7 @@ pub fn screen_for(target: &PaletteTarget, ctx: &AppCtx) -> Result<Box<dyn Screen
 /// The screen a command opens; [`NavError::NotNavigation`] for a command with no screen.
 fn command_screen(action: Action, ctx: &AppCtx) -> Result<Box<dyn Screen>, NavError> {
     match action {
-        Action::NewSales => sales_screen(ctx),
+        Action::NewSales => navigate::sales_screen(loaded(ctx)?, navigate::today()),
         Action::NewContra => entry_screen(ctx, BaseVoucherKind::Contra),
         Action::NewPayment => entry_screen(ctx, BaseVoucherKind::Payment),
         Action::NewReceipt => entry_screen(ctx, BaseVoucherKind::Receipt),
@@ -216,26 +215,6 @@ fn entry_screen(ctx: &AppCtx, kind: BaseVoucherKind) -> Result<Box<dyn Screen>, 
         }),
         Err(e) => Err(NavError::Unsupported {
             what: format!("a new {kind:?} voucher"),
-            reason: e.to_string(),
-        }),
-    }
-}
-
-/// A new sales invoice: the item invoice when the company keeps inventory, otherwise voucher entry.
-fn sales_screen(ctx: &AppCtx) -> Result<Box<dyn Screen>, NavError> {
-    let books = loaded(ctx)?;
-    if !books.company.features.inventory {
-        return entry_screen(ctx, BaseVoucherKind::Sales);
-    }
-    let id = type_of(books, BaseVoucherKind::Sales)?;
-    match ItemInvoiceScreen::open(books, id, year_of(books), navigate::today()) {
-        Ok(Outcome::Value(screen)) => Ok(Box::new(screen)),
-        Ok(Outcome::Unsupported(u)) => Err(NavError::Unsupported {
-            what: u.what,
-            reason: u.reason,
-        }),
-        Err(e) => Err(NavError::Unsupported {
-            what: "a new sales invoice".to_owned(),
             reason: e.to_string(),
         }),
     }

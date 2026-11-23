@@ -131,6 +131,12 @@ impl ItemInvoiceScreen {
                 .get(i)
                 .filter(|r| r.item.is_none())
                 .map(|_| Pick::Item(i)),
+            Field::Ledger(i) => self
+                .draft
+                .particulars
+                .get(i)
+                .filter(|r| r.ledger.is_none())
+                .map(|_| Pick::Particular(i)),
             Field::Date
             | Field::Number
             | Field::Place
@@ -139,6 +145,7 @@ impl ItemInvoiceScreen {
             | Field::Rate(_)
             | Field::Discount(_)
             | Field::Amount(_)
+            | Field::LedgerAmount(_)
             | Field::Narration => None,
         }
     }
@@ -161,6 +168,15 @@ impl ItemInvoiceScreen {
                 let text = self.draft.rows.get(i).map_or("", |r| r.item_text.as_str());
                 search_items(masters, text).iter().map(item_label).collect()
             }
+            Pick::Particular(i) => {
+                let text = self
+                    .draft
+                    .particulars
+                    .get(i)
+                    .map_or("", |r| r.ledger_text.as_str());
+                let hits = self.ledger_choices(masters, text);
+                hits.iter().map(ledger_label).collect()
+            }
         }
     }
 
@@ -170,6 +186,11 @@ impl ItemInvoiceScreen {
             Some(Pick::Party) => self.draft.party_text.as_str(),
             Some(Pick::Account) => self.draft.account_text.as_str(),
             Some(Pick::Item(i)) => self.draft.rows.get(i).map_or("", |r| r.item_text.as_str()),
+            Some(Pick::Particular(i)) => self
+                .draft
+                .particulars
+                .get(i)
+                .map_or("", |r| r.ledger_text.as_str()),
             None => return false,
         };
         !text.trim().is_empty()
@@ -180,6 +201,7 @@ impl ItemInvoiceScreen {
             Some(Pick::Party) => self.set_party_text(""),
             Some(Pick::Account) => self.set_account_text(""),
             Some(Pick::Item(i)) => self.set_item_text(i, ""),
+            Some(Pick::Particular(i)) => self.set_particular_text(i, ""),
             None => {}
         }
     }

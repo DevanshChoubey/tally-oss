@@ -190,7 +190,7 @@ matching to propose a ledger, which is not built).
   (a new group, and the ledger comes back with it under; help.tallysolutions.com/ledgers-in-
   tallyprime/), and on a voucher's ledger selection fields ("In the Voucher Creation screen, when
   your cursor is on the ledger selection field, press Alt+C", same page): voucher entry's ledger
-  lines and the item invoice's party and sales or purchase ledger.
+  lines and the invoice screen's party, sales or purchase ledger and Particulars ledgers.
 - **deferred: Alt+C on the item invoice's item field.** The mock creates an item there
   (index.html:390, 1253). None of the TallyPrime pages read documents Alt+C on a stock item
   field, so it stays out until a cited page does; Enter on an unknown item still says to create
@@ -239,3 +239,29 @@ matching to propose a ledger, which is not built).
   opening stock and no movement (so no other screen's figures move), so the items capture shows
   0 quantities and 0.00 values. Sample Buyer Pvt Ltd is bill-wise with 30 credit days and one
   open bill (SI-3, not due), so the party detail's card has one line where the mock has two. The mock shows Godavari Drip's ledgers and seven items with stock.
+
+## Sales invoice (round of 2026-11-23)
+
+- **by design: a company without inventory gets an accounting invoice.** F8, the sidebar's Sales
+  row and the palette open the invoice screen in accounting invoice mode when Maintain Inventory
+  is off: the party, place of supply and reference, then ledgers under Particulars with their
+  amounts, and no sales ledger field. TallyPrime documents the mode ("select Accounting Invoice
+  mode", "Select the service ledger under Particulars, and enter the Amount",
+  help.tallysolutions.com/sales-of-goods-services/) and the missing field ("The Sales ledger field
+  will not appear", help.tallysolutions.com/tally-prime/sales-process/faq-sales/), both read
+  2026-11-23. Choosing the mode from Maintain Inventory is our choice: the pages read are silent
+  on what that setting does to the mode.
+- **data: the capture is an accounting invoice; the mock's is an item invoice.** Fictional
+  Traders keeps no inventory, so `sales-invoice.default` shows an empty accounting invoice where
+  the mock (index.html, `sales-invoice`) shows Godavari Drip's three-item invoice with its tax.
+  The pair cannot match until the capture company keeps inventory or the mock has an accounting
+  invoice state.
+- **deferred: Ctrl+H (change mode).** The mock's "Item invoice Ctrl+H" button and TallyPrime's
+  Ctrl+H switch between item invoice, accounting invoice and as-voucher modes. The screen opens
+  in one mode and cannot switch yet; "as voucher" mode is not built (the GST engine refuses it).
+- **deferred: Purchase, credit note and debit note as accounting invoices.** Only Sales routes
+  to the invoice screen. The screen enters the other three in accounting mode, but the shell has
+  no entry point that opens them there: New purchase (F9) opens no screen yet, and the notes have
+  no command.
+- **deferred: More details (Ctrl+I), the e-Invoice status, the voucher number in the title, the
+  party balance line and the place-of-supply note** (index.html, `sales-invoice`). Not built.

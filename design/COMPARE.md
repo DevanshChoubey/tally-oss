@@ -6,12 +6,12 @@
 | --- | --- | --- |
 | hc | home.default | 0.4664 |
 | dark | home.default | 0.5732 |
-| light | sales-invoice.default | 0.5756 |
 | light | home.default | 0.5838 |
 | light | masters.ledgers | 0.6070 |
 | light | palette.voucher | 0.6276 |
 | light | palette.entry | 0.6282 |
 | light | palette.ask | 0.6312 |
+| light | sales-invoice.default | 0.6337 |
 | light | palette.no-results | 0.6344 |
 | light | keys.standard | 0.6390 |
 | light | balance-sheet.detailed | 0.6429 |
@@ -53,18 +53,6 @@ SSIM 0.5732
 <tr>
 <td><img src="mock-v2/captures/states/dark/home.default.webp" width="480" alt="mock dark home.default"></td>
 <td><img src="app-captures/dark/home.default.webp" width="480" alt="app dark home.default"></td>
-</tr>
-</table>
-
-## light / sales-invoice.default
-
-SSIM 0.5756
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/light/sales-invoice.default.webp" width="480" alt="mock light sales-invoice.default"></td>
-<td><img src="app-captures/light/sales-invoice.default.webp" width="480" alt="app light sales-invoice.default"></td>
 </tr>
 </table>
 
@@ -125,6 +113,18 @@ SSIM 0.6312
 <tr>
 <td><img src="mock-v2/captures/states/light/palette.ask.webp" width="480" alt="mock light palette.ask"></td>
 <td><img src="app-captures/light/palette.ask.webp" width="480" alt="app light palette.ask"></td>
+</tr>
+</table>
+
+## light / sales-invoice.default
+
+SSIM 0.6337
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/sales-invoice.default.webp" width="480" alt="mock light sales-invoice.default"></td>
+<td><img src="app-captures/light/sales-invoice.default.webp" width="480" alt="app light sales-invoice.default"></td>
 </tr>
 </table>
 

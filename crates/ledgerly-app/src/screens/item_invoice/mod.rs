@@ -11,6 +11,12 @@
 //! vouchers as item invoices (party, place of supply, a sales or purchase ledger and stock lines).
 //! Every other voucher kind answers [`Outcome::Unsupported`] from [`ItemInvoiceScreen::open`].
 //!
+//! It also enters them as accounting invoices ([`InvoiceMode::Accounting`], opened with
+//! [`ItemInvoiceScreen::open_in`]): the party, then ledgers "under Particulars" with their
+//! amounts, and no sales or purchase ledger field (help.tallysolutions.com/sales-of-goods-services/
+//! and help.tallysolutions.com/tally-prime/sales-process/faq-sales/, read 2026-11-23). The engine
+//! adds the party line and the tax lines, as it does for an item invoice.
+//!
 //! # Where the numbers come from (rule C4: the UI never sums anything)
 //!
 //! * A line amount is quantity times rate, less the discount percent. It is arithmetic on what
@@ -75,7 +81,7 @@ use std::collections::{BTreeMap, VecDeque};
 use std::str::FromStr;
 use thiserror::Error;
 
-pub use self::draft::{InvoiceDraft, InvoiceRow};
+pub use self::draft::{InvoiceDraft, InvoiceRow, ParticularRow};
 pub use self::draw::{LineShown, tax_rows};
 pub use self::picker::{ItemHit, search_items};
 
@@ -155,6 +161,16 @@ impl InvoiceKind {
             InvoiceKind::CreditNote | InvoiceKind::DebitNote => "Original invoice no.",
         }
     }
+}
+
+/// How the invoice is entered.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InvoiceMode {
+    /// Stock lines posted to one sales or purchase ledger.
+    Item,
+    /// Ledgers under Particulars with their amounts; no stock lines and no sales or purchase
+    /// ledger field.
+    Accounting,
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -339,13 +355,20 @@ pub enum GstStatus<'a> {
 }
 
 /// Checks that a block describes `voucher` (same lines, party amount equals the invoice total).
+/// The engine's lines are the inventory lines of an item invoice and the particulars of an
+/// accounting invoice.
 fn check_block(voucher: &Voucher, block: &GstBlock) -> Result<(), String> {
-    let same_lines = block.lines.len() == voucher.inventory_lines.len()
-        && block
-            .lines
+    let typed: Vec<Paise> = if voucher.inventory_lines.is_empty() {
+        voucher
+            .ledger_lines
             .iter()
-            .zip(&voucher.inventory_lines)
-            .all(|(b, v)| b.taxable == v.amount);
+            .map(|l| l.amount.amount)
+            .collect()
+    } else {
+        voucher.inventory_lines.iter().map(|l| l.amount).collect()
+    };
+    let same_lines = block.lines.len() == typed.len()
+        && block.lines.iter().zip(&typed).all(|(b, v)| b.taxable == *v);
     if !same_lines {
         return Err(
             "the engine's lines do not match the invoice lines; nothing is shown".to_owned(),
@@ -394,6 +417,10 @@ pub enum Field {
     Discount(usize),
     /// Typed amount of a line.
     Amount(usize),
+    /// Ledger of a particular (accounting invoice).
+    Ledger(usize),
+    /// Amount of a particular (accounting invoice).
+    LedgerAmount(usize),
     /// Narration.
     Narration,
 }
@@ -417,6 +444,7 @@ enum Pick {
     Party,
     Account,
     Item(usize),
+    Particular(usize),
 }
 
 enum UiEvent {
@@ -477,7 +505,7 @@ pub struct ItemInvoiceScreen {
 }
 
 impl ItemInvoiceScreen {
-    /// Opens an entry screen for voucher type `type_id`, dated `today` (in financial year `fy`).
+    /// Opens an item invoice for voucher type `type_id`, dated `today` (in financial year `fy`).
     ///
     /// Returns `Unsupported` for voucher kinds this screen does not enter.
     ///
@@ -488,6 +516,23 @@ impl ItemInvoiceScreen {
         type_id: VoucherTypeId,
         fy: FinancialYear,
         today: Date,
+    ) -> Result<Outcome<Self>, OpenError> {
+        Self::open_in(books, type_id, fy, today, InvoiceMode::Item)
+    }
+
+    /// Opens an invoice for voucher type `type_id` in `mode`, dated `today` (in financial year
+    /// `fy`).
+    ///
+    /// Returns `Unsupported` for voucher kinds this screen does not enter.
+    ///
+    /// # Errors
+    /// [`OpenError`] when the voucher type is missing or inactive.
+    pub fn open_in(
+        books: &Books,
+        type_id: VoucherTypeId,
+        fy: FinancialYear,
+        today: Date,
+        mode: InvoiceMode,
     ) -> Result<Outcome<Self>, OpenError> {
         let vt = books
             .masters
@@ -508,7 +553,7 @@ impl ItemInvoiceScreen {
         Ok(Outcome::Value(ItemInvoiceScreen {
             type_name: vt.name.clone(),
             fy,
-            draft: InvoiceDraft::new(type_id, kind, manual, format_entry_date(today)),
+            draft: InvoiceDraft::new(type_id, kind, manual, format_entry_date(today)).in_mode(mode),
             balances: BTreeMap::new(),
             recents: Vec::new(),
             focus: Field::Party,
@@ -596,6 +641,21 @@ impl ItemInvoiceScreen {
         text.clone_into(&mut self.draft.account_text);
         self.draft.account = None;
         self.pick_index = 0;
+    }
+
+    /// Types into the ledger field of particular `row`.
+    pub fn set_particular_text(&mut self, row: usize, text: &str) {
+        if let Some(r) = self.draft.particulars.get_mut(row) {
+            text.clone_into(&mut r.ledger_text);
+            r.ledger = None;
+        }
+        self.pick_index = 0;
+    }
+
+    /// How the invoice is entered.
+    #[must_use]
+    pub fn mode(&self) -> InvoiceMode {
+        self.draft.mode
     }
 
     /// Types into the item field of line `row`.
@@ -747,7 +807,8 @@ impl ItemInvoiceScreen {
             self.draft.kind,
             self.draft.number_required,
             self.draft.date_text.clone(),
-        );
+        )
+        .in_mode(self.draft.mode);
         self.requested = None;
         self.answer = None;
         self.outbox = None;

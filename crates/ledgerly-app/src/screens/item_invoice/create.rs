@@ -1,5 +1,5 @@
-//! Creating a ledger on the fly (Alt+C) from the party or the sales/purchase ledger field, as
-//! voucher entry does. TallyPrime documents it: "In the Voucher Creation screen, when your cursor
+//! Creating a ledger on the fly (Alt+C) from the party, the sales/purchase ledger field or a
+//! particular's ledger field, as voucher entry does. TallyPrime documents it: "In the Voucher Creation screen, when your cursor
 //! is on the ledger selection field, press Alt+C" (help.tallysolutions.com/ledgers-in-tallyprime/).
 //!
 //! The screen creates nothing itself: it records a [`CreateLedgerRequest`]. With a worker the
@@ -28,6 +28,8 @@ pub(super) enum CreateFor {
     Party,
     /// The sales or purchase ledger.
     Account,
+    /// The ledger of particular `i` (accounting invoice).
+    Particular(usize),
 }
 
 impl CreateFor {
@@ -35,6 +37,7 @@ impl CreateFor {
         match field {
             Field::Party => Some(CreateFor::Party),
             Field::Account => Some(CreateFor::Account),
+            Field::Ledger(i) => Some(CreateFor::Particular(i)),
             Field::Date
             | Field::Number
             | Field::Place
@@ -44,6 +47,7 @@ impl CreateFor {
             | Field::Rate(_)
             | Field::Discount(_)
             | Field::Amount(_)
+            | Field::LedgerAmount(_)
             | Field::Narration => None,
         }
     }
@@ -52,13 +56,14 @@ impl CreateFor {
         match self {
             CreateFor::Party => Field::Party,
             CreateFor::Account => Field::Account,
+            CreateFor::Particular(i) => Field::Ledger(i),
         }
     }
 }
 
 impl ItemInvoiceScreen {
-    /// Alt+C: opens the "create ledger" form when the keyboard is on the party or the
-    /// sales/purchase ledger field, with the typed text as the name. Elsewhere it does nothing:
+    /// Alt+C: opens the "create ledger" form when the keyboard is on the party, the
+    /// sales/purchase ledger or a particular's ledger field, with the typed text as the name. Elsewhere it does nothing:
     /// the pages read do not document Alt+C on an item field.
     pub fn begin_create(&mut self) {
         let Some(target) = CreateFor::of(self.focus) else {
@@ -67,6 +72,11 @@ impl ItemInvoiceScreen {
         let name = match target {
             CreateFor::Party => self.draft.party_text.trim().to_owned(),
             CreateFor::Account => self.draft.account_text.trim().to_owned(),
+            CreateFor::Particular(i) => self
+                .draft
+                .particulars
+                .get(i)
+                .map_or_else(String::new, |r| r.ledger_text.trim().to_owned()),
         };
         self.create = Some((target, CreateForm { name, group: None }));
     }
@@ -113,6 +123,12 @@ impl ItemInvoiceScreen {
                 self.draft.account = None;
                 name.clone_into(&mut self.draft.account_text);
             }
+            CreateFor::Particular(i) => {
+                if let Some(row) = self.draft.particulars.get_mut(i) {
+                    row.ledger = None;
+                    name.clone_into(&mut row.ledger_text);
+                }
+            }
         }
         self.master_requests.push(CreateLedgerRequest {
             name: name.clone(),
@@ -145,6 +161,10 @@ impl ItemInvoiceScreen {
             let (text, ledger) = match target {
                 CreateFor::Party => (&self.draft.party_text, &mut self.draft.party),
                 CreateFor::Account => (&self.draft.account_text, &mut self.draft.account),
+                CreateFor::Particular(i) => match self.draft.particulars.get_mut(i) {
+                    Some(row) => (&row.ledger_text, &mut row.ledger),
+                    None => continue,
+                },
             };
             if ledger.is_none() && text.trim() == name {
                 *ledger = Some(id);

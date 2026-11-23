@@ -5,7 +5,7 @@
 //!
 //! | Target | Opens |
 //! |---|---|
-//! | Sales invoice (F8) | the item invoice when the company keeps inventory, else voucher entry |
+//! | Sales invoice (F8) | [`navigate::sales_screen`]: an item invoice when the company keeps inventory, else an accounting invoice |
 //! | Receipt (F6), Payment (F5) | voucher entry of that type |
 //! | Balance sheet (B), Day book (D) | the worker-mode report |
 //! | GST returns (G) | the GST screen ([`navigate::gst_screen`]) |
@@ -31,7 +31,6 @@ use super::navigate::{self, NavError};
 use crate::screen::KeyHint;
 use crate::screens::gst::{GstScreen, GstTab};
 use crate::screens::home::{HomeData, HomeScreen, HomeTarget};
-use crate::screens::item_invoice::ItemInvoiceScreen;
 use crate::screens::masters::MastersScreen;
 use crate::screens::voucher_entry::VoucherEntryScreen;
 use crate::{AppCtx, Screen, ScreenAction};
@@ -100,7 +99,9 @@ impl GatewayScreen {
     /// The screen `target` opens, or `None` with a notice saying why it opens nothing.
     fn open(&mut self, target: &HomeTarget, ctx: &AppCtx) -> Option<Box<dyn Screen>> {
         let opened = match target {
-            HomeTarget::SalesInvoice => books(ctx).and_then(|b| sales_screen(b, navigate::today())),
+            HomeTarget::SalesInvoice => {
+                books(ctx).and_then(|b| navigate::sales_screen(b, navigate::today()))
+            }
             HomeTarget::Receipt => books(ctx)
                 .and_then(|b| entry_screen(b, BaseVoucherKind::Receipt, navigate::today())),
             HomeTarget::Payment => books(ctx)
@@ -181,26 +182,6 @@ fn entry_screen(
         }),
         Err(e) => Err(NavError::Unsupported {
             what: format!("a new {kind:?} voucher"),
-            reason: e.to_string(),
-        }),
-    }
-}
-
-/// A new sales invoice: the item invoice when the company keeps inventory, otherwise voucher
-/// entry (an accounting invoice).
-fn sales_screen(books: &Books, today: Date) -> Result<Box<dyn Screen>, NavError> {
-    if !books.company.features.inventory {
-        return entry_screen(books, BaseVoucherKind::Sales, today);
-    }
-    let id = type_of(books, BaseVoucherKind::Sales)?;
-    match ItemInvoiceScreen::open(books, id, year_of(books), today) {
-        Ok(Outcome::Value(screen)) => Ok(Box::new(screen)),
-        Ok(Outcome::Unsupported(u)) => Err(NavError::Unsupported {
-            what: u.what,
-            reason: u.reason,
-        }),
-        Err(e) => Err(NavError::Unsupported {
-            what: "a new sales invoice".to_owned(),
             reason: e.to_string(),
         }),
     }

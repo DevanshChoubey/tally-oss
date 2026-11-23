@@ -55,9 +55,9 @@
 
 use ledgerly_api::{AuditReportKind, ColumnSpec, Detail, ReportFilter, ReportKind, ReportParams};
 use ledgerly_core::{
-    Date, FinancialYear, GroupId, LedgerId, Month, Period, PeriodError, VoucherId,
+    Date, FinancialYear, GroupId, LedgerId, Month, Outcome, Period, PeriodError, VoucherId,
 };
-use ledgerly_model::{Books, Scenario};
+use ledgerly_model::{BaseVoucherKind, Books, Scenario};
 use thiserror::Error;
 
 use crate::keymap::{Action, Keymap};
@@ -67,6 +67,7 @@ use crate::screens::ask::AskScreen;
 use crate::screens::bank::BankScreen;
 use crate::screens::gst::{GstScreen, GstTab};
 use crate::screens::import::ImportScreen;
+use crate::screens::item_invoice::{InvoiceMode, ItemInvoiceScreen};
 use crate::screens::keymap_map::KeymapScreen;
 use crate::screens::masters::MastersScreen;
 use crate::screens::purchase_bill::PurchaseBillScreen;
@@ -822,5 +823,50 @@ fn report_key_error(key: &str) -> NavError {
             reason: "the app cannot open it from a search result yet".to_owned(),
         },
         None => NavError::BadKey(key.to_owned()),
+    }
+}
+
+/// A new sales invoice of the company's first active sales voucher type, dated `today`. Every
+/// way in (F8 on Home, the sidebar's Sales row, the palette command) opens it here.
+///
+/// A company that keeps inventory gets an item invoice. One that does not gets an accounting
+/// invoice: ledgers under Particulars, the mode TallyPrime documents for a sale without stock
+/// items (help.tallysolutions.com/sales-of-goods-services/, read 2026-11-23). Choosing the mode
+/// from Maintain Inventory is a product choice: the pages read are silent on what that setting
+/// does to the mode. Switching mode on the screen (Ctrl+H there) is not built yet
+/// (`design/PARITY-GAPS.md`).
+///
+/// # Errors
+/// [`NavError::Unsupported`] when the company has no active sales voucher type or the screen
+/// cannot open it.
+pub fn sales_screen(books: &Books, today: Date) -> Result<Box<dyn Screen>, NavError> {
+    let id = books
+        .masters
+        .voucher_types
+        .values()
+        .find(|t| t.base == BaseVoucherKind::Sales && t.active)
+        .map(|t| t.id)
+        .ok_or_else(|| NavError::Unsupported {
+            what: "a new sales invoice".to_owned(),
+            reason: "the company has no active voucher type of this kind".to_owned(),
+        })?;
+    let mode = if books.company.features.inventory {
+        InvoiceMode::Item
+    } else {
+        InvoiceMode::Accounting
+    };
+    let fy = FinancialYear {
+        start: books.company.fy_start,
+    };
+    match ItemInvoiceScreen::open_in(books, id, fy, today, mode) {
+        Ok(Outcome::Value(screen)) => Ok(Box::new(screen)),
+        Ok(Outcome::Unsupported(u)) => Err(NavError::Unsupported {
+            what: u.what,
+            reason: u.reason,
+        }),
+        Err(e) => Err(NavError::Unsupported {
+            what: "a new sales invoice".to_owned(),
+            reason: e.to_string(),
+        }),
     }
 }

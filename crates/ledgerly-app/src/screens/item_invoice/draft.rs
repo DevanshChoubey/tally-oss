@@ -1,13 +1,13 @@
-//! The invoice as typed: stock rows, the draft, and the voucher built from it.
+//! The invoice as typed: stock rows or particulars, the draft, and the voucher built from it.
 
-use super::{InvoiceError, InvoiceKind, parse_decimal, parse_place};
+use super::{InvoiceError, InvoiceKind, InvoiceMode, parse_decimal, parse_place};
 use crate::screens::voucher_entry::{UNASSIGNED_VOUCHER_ID, eval_amount, parse_entry_date};
 use ledgerly_core::{
-    Decimal, FinancialYear, GodownId, LedgerId, MoneyError, Paise, Qty, Rate, RoundingRule,
-    StockItemId, Unsupported, VoucherTypeId, round_rupees_to_paise,
+    Decimal, DrCr, FinancialYear, GodownId, LedgerId, MoneyError, Paise, Qty, Rate, RoundingRule,
+    SignedAmount, StockItemId, Unsupported, VoucherTypeId, round_rupees_to_paise,
 };
 use ledgerly_model::{
-    GodownAllocation, InventoryLine, Masters, Voucher, VoucherMode, VoucherStatus,
+    GodownAllocation, InventoryLine, LedgerLine, Masters, Voucher, VoucherMode, VoucherStatus,
 };
 use std::collections::BTreeMap;
 
@@ -36,6 +36,35 @@ impl InvoiceRow {
             && self.rate_text.trim().is_empty()
             && self.discount_text.trim().is_empty()
             && self.amount_text.trim().is_empty()
+    }
+}
+
+/// One particular of an accounting invoice as typed: a ledger and its amount.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct ParticularRow {
+    /// The ledger, once picked.
+    pub ledger: Option<LedgerId>,
+    /// The text in the ledger field (the query, or the picked ledger's name).
+    pub ledger_text: String,
+    /// The amount, in rupees.
+    pub amount_text: String,
+}
+
+impl ParticularRow {
+    pub(super) fn is_blank(&self) -> bool {
+        self.ledger.is_none()
+            && self.ledger_text.trim().is_empty()
+            && self.amount_text.trim().is_empty()
+    }
+}
+
+/// The side the particulars of `kind` are posted on: a sale credits its income ledger, a
+/// purchase debits its expense ledger, a credit note (a sales return) debits and a debit note (a
+/// purchase return) credits. The engine posts the tax lines on the same side.
+fn particular_side(kind: InvoiceKind) -> DrCr {
+    match kind {
+        InvoiceKind::Sales | InvoiceKind::DebitNote => DrCr::Cr,
+        InvoiceKind::Purchase | InvoiceKind::CreditNote => DrCr::Dr,
     }
 }
 
@@ -129,14 +158,18 @@ pub struct InvoiceDraft {
     pub account_text: String,
     /// Supplier invoice number, original invoice number or order reference.
     pub reference_text: String,
-    /// The stock lines.
+    /// How the invoice is entered.
+    pub mode: InvoiceMode,
+    /// The stock lines (item invoice).
     pub rows: Vec<InvoiceRow>,
+    /// The particulars (accounting invoice).
+    pub particulars: Vec<ParticularRow>,
     /// Narration.
     pub narration: String,
 }
 
 impl InvoiceDraft {
-    /// An empty invoice of `kind` dated `date_text`, with one blank line.
+    /// An empty item invoice of `kind` dated `date_text`, with one blank line.
     #[must_use]
     pub fn new(
         type_id: VoucherTypeId,
@@ -156,9 +189,17 @@ impl InvoiceDraft {
             account: None,
             account_text: String::new(),
             reference_text: String::new(),
+            mode: InvoiceMode::Item,
             rows: vec![InvoiceRow::default()],
+            particulars: vec![ParticularRow::default()],
             narration: String::new(),
         }
+    }
+
+    /// The same invoice entered in `mode`.
+    #[must_use]
+    pub fn in_mode(self, mode: InvoiceMode) -> Self {
+        InvoiceDraft { mode, ..self }
     }
 
     /// `true` when nothing but the date has been entered.
@@ -173,10 +214,12 @@ impl InvoiceDraft {
             && self.reference_text.trim().is_empty()
             && self.narration.trim().is_empty()
             && self.rows.iter().all(InvoiceRow::is_blank)
+            && self.particulars.iter().all(ParticularRow::is_blank)
     }
 
-    /// The voucher to hand to the tax engine: the header, the inventory lines and nothing else.
-    /// The accounting lines and the stored GST are the engine's to produce.
+    /// The voucher to hand to the tax engine: the header and the inventory lines (item invoice)
+    /// or the particulars (accounting invoice), and nothing else. The party line, the tax lines
+    /// and the stored GST are the engine's to produce.
     ///
     /// # Errors
     /// An [`InvoiceError`] naming the first thing that is missing or wrong.
@@ -204,10 +247,20 @@ impl InvoiceDraft {
             }));
         }
         let place = parse_place(&self.place_text)?;
-        let account = self.account.ok_or(InvoiceError::Missing {
-            field: self.kind.account_label(),
-        })?;
-        let inventory_lines = self.inventory_lines(masters, account)?;
+        let (mode, ledger_lines, inventory_lines) = match self.mode {
+            InvoiceMode::Item => {
+                let account = self.account.ok_or(InvoiceError::Missing {
+                    field: self.kind.account_label(),
+                })?;
+                let lines = self.inventory_lines(masters, account)?;
+                (VoucherMode::ItemInvoice, Vec::new(), lines)
+            }
+            InvoiceMode::Accounting => (
+                VoucherMode::AccountingInvoice,
+                self.particular_lines(masters)?,
+                Vec::new(),
+            ),
+        };
         Ok(Voucher {
             id: UNASSIGNED_VOUCHER_ID,
             type_id: self.type_id,
@@ -217,19 +270,52 @@ impl InvoiceDraft {
             supply_date: None,
             payment_date: None,
             status: VoucherStatus::Regular,
-            mode: VoucherMode::ItemInvoice,
+            mode,
             party: Some(party),
             place_of_supply: Some(place),
             reverse_charge: false,
             reference: nonblank(&self.reference_text),
             reference_date: None,
             narration: self.narration.trim().to_owned(),
-            ledger_lines: Vec::new(),
+            ledger_lines,
             inventory_lines,
             gst: None,
             tally: None,
             extra: BTreeMap::new(),
         })
+    }
+
+    /// The non-blank particulars as ledger lines on the kind's side, in typed order.
+    fn particular_lines(&self, masters: &Masters) -> Result<Vec<LedgerLine>, InvoiceError> {
+        let side = particular_side(self.kind);
+        let mut lines = Vec::new();
+        for (index, row) in self.particulars.iter().enumerate() {
+            if row.is_blank() {
+                continue;
+            }
+            let line = index.saturating_add(1);
+            let bad = |reason: String| InvoiceError::Line { line, reason };
+            let ledger = row
+                .ledger
+                .filter(|id| masters.ledgers.contains_key(id))
+                .ok_or_else(|| bad("choose a ledger".to_owned()))?;
+            let amount = typed_amount(&row.amount_text).map_err(|e| bad(format!("amount: {e}")))?;
+            if amount.is_zero() || amount.is_negative() {
+                return Err(bad("the amount must be more than zero".to_owned()));
+            }
+            lines.push(LedgerLine {
+                ledger,
+                amount: SignedAmount { amount, side },
+                bills: Vec::new(),
+                cost: Vec::new(),
+                bank: None,
+                ineligible_itc: None,
+            });
+        }
+        if lines.is_empty() {
+            return Err(InvoiceError::Missing { field: "a ledger" });
+        }
+        Ok(lines)
     }
 
     fn inventory_lines(

@@ -166,6 +166,11 @@ impl ItemInvoiceScreen {
                     row.item = None;
                 }
             }
+            Field::Ledger(i) => {
+                if let Some(row) = self.draft.particulars.get_mut(i) {
+                    row.ledger = None;
+                }
+            }
             Field::Date
             | Field::Number
             | Field::Place
@@ -174,6 +179,7 @@ impl ItemInvoiceScreen {
             | Field::Rate(_)
             | Field::Discount(_)
             | Field::Amount(_)
+            | Field::LedgerAmount(_)
             | Field::Narration => {}
         }
     }
