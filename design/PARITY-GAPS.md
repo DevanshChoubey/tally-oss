@@ -33,11 +33,24 @@ feature that is not built), **data** (the capture company lacks what the mock's 
 
 - **bug: no Export.** The mock has an Export button and Ctrl+E (index.html:1576, 1624, 1634).
   Export of the report on screen is not built, so neither the button nor the key is offered.
-- **bug: other tables keep the older row height.** The balance sheet and the day book draw the
+- **bug: other tables keep the older row height.** The balance sheet, the day book, the masters
+  list and the generic report table (every drill: group summary, ledger vouchers) draw the
   mock's `table.t` lines by hand (34-point rows, rules, the selected bar: `ui::table::paint_row`).
-  The masters list moved over in its round. The bank, invoice and generic report tables still
-  use `TableBuilder` at 30 points
-  with egui's selection tint; each moves over in its own round.
+  The bank and invoice tables still use `TableBuilder` at 30 points with egui's selection tint;
+  each moves over in its own round.
+- **bug: no sidebar entry is selected during a drill.** The mock's group and ledger states are
+  states of the `balance-sheet` screen, so Balance sheet stays selected (index.html:1594, 1600).
+  Ours selects by the top screen's title, and "Group Summary: Sundry Debtors" names no entry.
+  `w1_shell_nav` expects no selection for a screen outside the sidebar pushed over Masters, so
+  the fix is a drill keeping its origin's entry, not a walk down the stack.
+- **data: the drill reports' columns and wording.** Captured as `balance-sheet.group` and
+  `balance-sheet.ledger`. The mock's group drill lists Ledger or group, GSTIN, Opening, Debit,
+  Credit and Closing, with "Group total, same as the balance sheet row"; ours is the engine's
+  group summary (Particulars, Debit, Credit, a "Net balance" row and Total). The mock titles the
+  screens by the group or ledger name ("Sundry debtors") with the balance sheet's subtitle; ours
+  says "Group Summary: Sundry Debtors" and "Ledger Vouchers: ...". The ledger state's side card
+  (group, GSTIN, credit days, open bills, Alter ledger) is not built. Each needs the engine's
+  report to carry the figures first; the screen computes none.
 - **needs a decision: sub-groups in the condensed view.** The mock's condensed statement shows
   each top group's sub-groups (Loans > Secured loans; index.html:1588, `depth===0` children).
   Ours shows the primary groups only, which is what the engine's condensed report gives. Before

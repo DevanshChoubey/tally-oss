@@ -39,13 +39,13 @@
 
 pub mod balance;
 pub mod day_book;
+pub mod generic;
 mod model;
 mod remote;
 mod text;
 mod voucher_view;
 
-use egui::{Align, Context, Key, Layout, Modifiers, Rect, RichText, Ui};
-use egui_extras::{Column, TableBuilder, TableRow};
+use egui::{Align, Context, Key, Layout, Modifiers, Rect, Ui};
 use ledgerly_api::{ReportKind, ReportParams};
 use ledgerly_core::{Outcome, Period};
 
@@ -74,12 +74,8 @@ pub use voucher_view::{
     VoucherView, VoucherViewError, VoucherViewLine, VoucherViewScreen, voucher_view,
 };
 
-/// Height of one table row, in points.
-const ROW_HEIGHT: f32 = 22.0;
 /// Rows moved by Page Up and Page Down.
 const PAGE_ROWS: usize = 10;
-/// Indent per nesting level of a row label, in points.
-const INDENT: f32 = 16.0;
 
 // ---- screen ----------------------------------------------------------------------------------
 
@@ -195,6 +191,8 @@ pub struct ReportViewScreen {
     worker: Option<WorkerRun>,
     /// The footnote area's rectangle in the last frame drawn (see [`ReportViewScreen::footer_rect`]).
     footer: Option<Rect>,
+    /// The selected line's rectangle in the last frame, when the generic table laid it out.
+    selected_line: Option<Rect>,
 }
 
 impl ReportViewScreen {
@@ -213,6 +211,7 @@ impl ReportViewScreen {
             notice: None,
             worker: None,
             footer: None,
+            selected_line: None,
         })
     }
 
@@ -222,6 +221,14 @@ impl ReportViewScreen {
     #[must_use]
     pub fn footer_rect(&self) -> Option<Rect> {
         self.footer
+    }
+
+    /// The selected line's rectangle in the last frame drawn, when the generic table (a report
+    /// without a look of its own) laid it out; `None` for the other looks and while the line is
+    /// out of view.
+    #[must_use]
+    pub fn selected_line_rect(&self) -> Option<Rect> {
+        self.selected_line
     }
 
     /// A worker-mode screen for the report `source` describes. The report is requested from the
@@ -248,6 +255,7 @@ impl ReportViewScreen {
                 latest: Latest::default(),
             }),
             footer: None,
+            selected_line: None,
         })
     }
 
@@ -707,17 +715,24 @@ impl ReportViewScreen {
                 .rect;
             self.footer = Some(footer);
             let empty_day = look == Look::DayBook && self.report.rows.is_empty();
-            egui::CentralPanel::default()
+            let report = &self.report;
+            let drawn = egui::CentralPanel::default()
+                .frame(egui::Frame::NONE)
                 .show(ui, |ui| {
                     if empty_day {
-                        let title = day_book::empty_title(self.report.params.period);
+                        let title = day_book::empty_title(report.params.period);
                         crate::ui::empty::empty_state(ui, &title, day_book::EMPTY_SENTENCE, None);
-                        TableEvents::default()
+                        generic::Drawn {
+                            events: TableEvents::default(),
+                            selected: None,
+                        }
                     } else {
-                        self.draw_table(ui)
+                        generic::draw(ui, report, selected, scroll)
                     }
                 })
-                .inner
+                .inner;
+            self.selected_line = drawn.selected;
+            drawn.events
         };
         self.scroll_pending = false;
         if let Some(i) = events.clicked {
@@ -794,97 +809,6 @@ impl ReportViewScreen {
         } else if cancel {
             self.cancel_period_edit();
         }
-    }
-
-    /// Draws header, rows and totals as one virtualised table, so a long register costs only the
-    /// rows in view (spec 8).
-    fn draw_table(&self, ui: &mut Ui) -> TableEvents {
-        let mut events = TableEvents::default();
-        let report = &self.report;
-        let total_rows = report
-            .rows
-            .len()
-            .saturating_add(usize::from(!report.totals.is_empty()));
-        let height = ui.available_height().max(120.0);
-        let mut table = TableBuilder::new(ui)
-            .id_salt(("u7-report-table", report.token.0.as_str()))
-            .striped(true)
-            .sense(egui::Sense::click())
-            .max_scroll_height(height)
-            .auto_shrink([false, false])
-            .column(Column::initial(300.0).at_least(160.0).clip(true));
-        for _ in &report.columns {
-            table = table.column(Column::initial(170.0).at_least(110.0).clip(true));
-        }
-        if self.scroll_pending && !report.rows.is_empty() {
-            table = table.scroll_to_row(self.selected, None);
-        }
-        table
-            .header(ROW_HEIGHT, |mut header| {
-                header.col(|ui| {
-                    ui.strong("Particulars");
-                });
-                for column in &report.columns {
-                    header.col(|ui| right_aligned(ui, RichText::new(column.as_str()).strong()));
-                }
-            })
-            .body(|body| {
-                body.rows(ROW_HEIGHT, total_rows, |mut row| {
-                    let index = row.index();
-                    match report.rows.get(index) {
-                        Some(data) => {
-                            row.set_selected(index == self.selected);
-                            draw_data_row(&mut row, data);
-                            let response = row.response();
-                            if response.clicked() {
-                                events.clicked = Some(index);
-                            }
-                            if response.double_clicked() {
-                                events.opened = Some(index);
-                            }
-                        }
-                        None => draw_totals_row(&mut row, &report.totals),
-                    }
-                });
-            });
-        events
-    }
-}
-
-fn right_aligned(ui: &mut Ui, text: RichText) {
-    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-        ui.label(text);
-    });
-}
-
-fn draw_data_row(row: &mut TableRow<'_, '_>, data: &ViewRow) {
-    let emphasised = match data.kind {
-        ViewRowKind::Group | ViewRowKind::Subtotal | ViewRowKind::Difference => true,
-        ViewRowKind::Ledger
-        | ViewRowKind::Voucher
-        | ViewRowKind::Item
-        | ViewRowKind::Bill
-        | ViewRowKind::Text => false,
-    };
-    row.col(|ui| {
-        ui.add_space(f32::from(data.depth) * INDENT);
-        let label = RichText::new(data.label.as_str());
-        ui.label(if emphasised { label.strong() } else { label });
-    });
-    for cell in &data.cells {
-        row.col(|ui| {
-            let text = RichText::new(cell_text(cell));
-            right_aligned(ui, if emphasised { text.strong() } else { text });
-        });
-    }
-}
-
-fn draw_totals_row(row: &mut TableRow<'_, '_>, totals: &[ViewCell]) {
-    row.col(|ui| {
-        ui.strong("Total");
-    });
-    for cell in totals {
-        row.col(|ui| right_aligned(ui, RichText::new(cell_text(cell)).strong()));
     }
 }
 

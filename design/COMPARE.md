@@ -1,6 +1,6 @@
 # App against mock
 
-27 app captures are paired with a mock capture of the same theme and state id. SSIM is 1 for identical images; lower is a bigger difference, and the list runs worst first.
+29 app captures are paired with a mock capture of the same theme and state id. SSIM is 1 for identical images; lower is a bigger difference, and the list runs worst first.
 
 | Theme | State | SSIM |
 | --- | --- | --- |
@@ -26,6 +26,8 @@
 | light | receipt.default | 0.7190 |
 | light | payment.default | 0.7360 |
 | light | bank.brs | 0.7368 |
+| light | balance-sheet.ledger | 0.7376 |
+| light | balance-sheet.group | 0.7439 |
 | light | masters.items | 0.7552 |
 | light | day-book.default | 0.7618 |
 | light | masters.ledger-detail | 0.7672 |
@@ -296,6 +298,30 @@ SSIM 0.7368
 </tr>
 </table>
 
+## light / balance-sheet.ledger
+
+SSIM 0.7376
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/balance-sheet.ledger.webp" width="480" alt="mock light balance-sheet.ledger"></td>
+<td><img src="app-captures/light/balance-sheet.ledger.webp" width="480" alt="app light balance-sheet.ledger"></td>
+</tr>
+</table>
+
+## light / balance-sheet.group
+
+SSIM 0.7439
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/balance-sheet.group.webp" width="480" alt="mock light balance-sheet.group"></td>
+<td><img src="app-captures/light/balance-sheet.group.webp" width="480" alt="app light balance-sheet.group"></td>
+</tr>
+</table>
+
 ## light / masters.items
 
 SSIM 0.7552
@@ -358,7 +384,7 @@ SSIM 0.8323
 
 ## Mock states with no app capture yet
 
-### light (64)
+### light (62)
 
 - `home.loading`
 - `home.empty`
@@ -392,8 +418,6 @@ SSIM 0.8323
 - `quick-entry.rejected`
 - `payment.bill-wise`
 - `payment.overdraft`
-- `balance-sheet.group`
-- `balance-sheet.ledger`
 - `balance-sheet.voucher`
 - `balance-sheet.loading`
 - `balance-sheet.provisional`

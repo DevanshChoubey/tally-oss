@@ -436,6 +436,21 @@ const ESC: (Key, Modifiers) = (Key::Escape, Modifiers::NONE);
 /// The most Escape presses one return to Home may take before the screens are closed directly.
 const HOME_PRESSES_MAX: u32 = 12;
 
+/// From Home to the balance sheet's Sundry Debtors drill: B, three lines down to Current Assets,
+/// Enter, two lines down to Sundry Debtors, Enter.
+fn to_debtors() -> Vec<(Key, Modifiers)> {
+    vec![
+        (Key::B, NONE),
+        (Key::J, NONE),
+        (Key::J, NONE),
+        (Key::J, NONE),
+        (Key::Enter, NONE),
+        (Key::J, NONE),
+        (Key::J, NONE),
+        (Key::Enter, NONE),
+    ]
+}
+
 /// The registry: one entry per image, named by the mock state id it should match.
 fn shots() -> Vec<Shot> {
     let palette = (Key::K, Modifiers::COMMAND);
@@ -455,6 +470,11 @@ fn shots() -> Vec<Shot> {
             "balance-sheet.detailed",
             &[(Key::B, NONE), (Key::F1, Modifiers::ALT)],
         ),
+        // The mock drills from the balance sheet into Sundry debtors (index.html:1594), then into
+        // its first ledger (index.html:1600). Current Assets is the fourth line of the capture
+        // company's condensed statement and Sundry Debtors the third line of its summary.
+        shot("balance-sheet.group", &to_debtors()),
+        shot("balance-sheet.ledger", &to_debtors()).then(&[(Key::Enter, NONE)]),
         shot("day-book.default", &[(Key::D, NONE)]),
         shot("gst.gstr1", &[(Key::G, NONE), (Key::Num1, NONE)]),
         // The tabs are 1 GSTR-1, 2 GSTR-3B, 3 reconciliation (`screens/gst.rs`). The capture
