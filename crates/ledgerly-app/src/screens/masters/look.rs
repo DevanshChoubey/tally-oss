@@ -10,9 +10,10 @@ use egui::{
     Ui, UiBuilder, Vec2, pos2, vec2,
 };
 
-use crate::theme::{RADIUS_M, TEXT_BODY, TEXT_META, border_width, shadow_1};
+use crate::theme::{RADIUS_M, RADIUS_XS, TEXT_BODY, TEXT_CAP, TEXT_META, border_width, shadow_1};
 use crate::ui::badge::{BadgeKind, badge};
 use crate::ui::icon::{self, ICON_SIZE, Icon};
+use crate::ui::prov::{self, ProvKind};
 use crate::ui::table::{self, CellPlace, RowState, T_HEAD_HEIGHT, T_ROW_HEIGHT};
 use crate::ui::{bold_font, kind, tokens};
 
@@ -24,6 +25,12 @@ pub(super) const FILTER_GAP: f32 = 12.0;
 const FILL_MIN: f32 = 160.0;
 /// The gap between a name and its alias in a name cell (the space before `.meta`).
 const ALIAS_GAP: f32 = 4.0;
+/// The gap between a heading and its provenance tag.
+const TAG_GAP: f32 = 6.0;
+/// The padding at each side of a provenance tag (`.prov{padding:0 5px}`).
+const TAG_PAD_X: f32 = 5.0;
+/// The height of a provenance tag (`.prov{line-height:16px}`).
+const TAG_HEIGHT: f32 = 16.0;
 
 /// The id of the list's filter box, so a test can give it the keyboard.
 #[must_use]
@@ -90,6 +97,9 @@ pub(super) struct Col {
     pub numeric: bool,
     /// Shown when the pointer is over the heading, for a column whose figures are not here yet.
     pub hint: Option<&'static str>,
+    /// The figures came from the engine: the heading carries the "engine" provenance tag
+    /// (`prov('eng','engine')`, index.html:1796).
+    pub engine: bool,
 }
 
 /// One cell of a list.
@@ -210,13 +220,51 @@ fn paint_heading(ui: &Ui, cols: &[Col], rect: Rect, response: &egui::Response) {
         } else {
             CellPlace::Left(table::CELL_PAD_X)
         };
-        table::paint_cell_text(ui, r, 1.0, col.label, font.clone(), t.text_3, place);
+        let label_rect = if col.engine {
+            let tag = paint_engine_tag(ui, r);
+            Rect::from_min_max(r.min, pos2(tag.left() - TAG_GAP, r.max.y))
+        } else {
+            r
+        };
+        table::paint_cell_text(
+            ui,
+            label_rect,
+            1.0,
+            col.label,
+            font.clone(),
+            t.text_3,
+            place,
+        );
         if let Some(hint) = col.hint
             && response.hover_pos().is_some_and(|p| r.contains(p))
         {
             response.clone().on_hover_text(hint);
         }
     }
+}
+
+/// Paints the "engine" provenance tag at the right of a heading cell `r` (`.prov`: the engine
+/// colours, caption size, bold) and returns its rectangle.
+fn paint_engine_tag(ui: &Ui, r: Rect) -> Rect {
+    let t = tokens(ui);
+    let (bg, fg) = prov::colors(ProvKind::Engine, &t);
+    let galley = ui.painter().layout_no_wrap(
+        prov::label(ProvKind::Engine).to_owned(),
+        bold_font(ui, TEXT_CAP),
+        fg,
+    );
+    let text = galley.size();
+    let size = vec2(text.x + 2.0 * TAG_PAD_X, TAG_HEIGHT);
+    let right = r.right() - table::CELL_PAD_X;
+    // The heading's rule is the cell's last point, so the middle is half a point higher.
+    let tag = Rect::from_center_size(pos2(right - size.x / 2.0, r.center().y - 0.5), size);
+    ui.painter().rect_filled(tag, RADIUS_XS, bg);
+    ui.painter().galley(
+        pos2(tag.left() + TAG_PAD_X, tag.center().y - text.y / 2.0),
+        galley,
+        fg,
+    );
+    tag
 }
 
 /// The cells of one row.

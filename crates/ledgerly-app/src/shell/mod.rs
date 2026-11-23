@@ -68,6 +68,20 @@ use sidebar::CommandRoute;
 use submit::BooksReply;
 
 pub use crate::screen::{AiTier, KeyHint};
+
+/// What identifies one copy of the books, so a screen that shows engine figures asks again when
+/// the books change: the shell's change count (a company opened, or a command saved), the number
+/// of vouchers and the newest voucher id.
+pub(crate) type BooksPrint = (u64, usize, Option<ledgerly_core::VoucherId>);
+
+/// The [`BooksPrint`] of `books` now.
+pub(crate) fn books_print(books: &ledgerly_api::Books) -> BooksPrint {
+    (
+        submit::change_count(),
+        books.vouchers.len(),
+        books.vouchers.keys().next_back().copied(),
+    )
+}
 pub use gateway::GatewayScreen;
 pub use stack::{ScreenStack, StackChange, Tabs};
 pub use welcome::{WelcomeScreen, company_from_form};

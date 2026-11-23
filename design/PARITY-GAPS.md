@@ -138,18 +138,22 @@ Captured states: `masters.ledgers`, `masters.ledger-detail`, `masters.items`,
 it cannot enter a bad GSTIN; needs typed text in the capture) and `suggested-ledger` (needs bank
 matching to propose a ledger, which is not built).
 
-- **deferred: the Balance column** (index.html:1796, `prov('eng','engine')`). The engine has the
-  figures (`ReportKind::TrialBalance`), but the masters screen has no report feed yet. Each
-  cell shows a dash and the heading says why on hover. Wire it through the API worker, asking
-  again when the books change the way the home screen does (`shell/gateway.rs`, `follow`: the
-  change count, voucher count and newest voucher id), joined by ledger id, with an absent row
-  left blank, never 0.00.
+- **by design: a nil balance is blank, not "0.00 Dr".** The Balance column is the engine's
+  trial balance, joined by ledger id (`screens/masters/balances.rs`). The trial balance leaves
+  out a ledger with a nil balance, and the screen does not fill in a figure the engine did not
+  give, so the mock's "0.00 Dr" rows (Rupa Polymers, CGST input) are blank here. Showing 0.00
+  needs the engine to give a row for every ledger.
+- **by design: balances are as of the last voucher date**, the date the balance sheet opens on
+  (`navigate::default_period`). The mock does not say which date its balances are as of, and
+  the list does not say it either; a date in the subtitle would make it plain.
 - **deferred: Stock and Value on the items tab** (index.html:1798, `prov('eng','stock engine')`)
-  and the "Closing stock" total row. Same reason; the engine has `ReportKind::StockSummary`.
+  and the "Closing stock" total row. The engine has `ReportKind::StockSummary`; wire it the way
+  the Balance column is (`screens/masters/balances.rs`).
 - **deferred: Open bills on the party detail** (index.html:1806). The engine has
   `ReportKind::Outstanding`. The alter form of a bill-wise ledger shows the card with a sentence
   saying the bills are not shown here yet.
-- **deferred: the Balance field on the party detail** (index.html:1805). Same as the column.
+- **deferred: the Balance field on the party detail** (index.html:1805). The list has the
+  figure (`LedgerBalances`); the alter form does not show it yet.
 - **by design: Alt+D Delete and Alt+Left / Right Change kind stay in the key bar.** The mock's
   masters have only ledgers and stock items; ours keep every master kind TallyPrime has (groups,
   voucher types, units, godowns, batches, cost categories and centres), so changing kind and
@@ -190,9 +194,9 @@ matching to propose a ledger, which is not built).
   would drop the draft; the mock never shows them with a form open in another kind.
 - **by design: ledgers are in name order.** The mock lists its sample in its own order. Ours
   sorts by name so the cursor and the filter behave the same on any company.
-- **deferred: no "engine" chip on Balance and Value headings** (index.html:1796, 1798). The chip
-  says the figures come from the engine; there are none yet, so the heading has a hover note
-  saying why instead.
+- **deferred: no "stock engine" chip on the items tab's Value heading** (index.html:1798). It
+  comes with the stock figures. The Balance heading has its "engine" chip once the balances
+  are in; ours sits at the column's right edge, the mock's just after the word.
 - **unverified: the items list and the Open bills split were never captured.** The capture
   company has no stock items and no bill-wise party, so the items columns, the "Missing: add
   HSN" badge and the alter form beside its Open bills card are drawn only in tests. Needs two

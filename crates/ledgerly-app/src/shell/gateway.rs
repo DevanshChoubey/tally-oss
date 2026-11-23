@@ -24,7 +24,7 @@
 //! silent), so it is `pending`.
 
 use ledgerly_api::ReportKind;
-use ledgerly_core::{Date, FinancialYear, Outcome, VoucherId};
+use ledgerly_core::{Date, FinancialYear, Outcome};
 use ledgerly_model::{BaseVoucherKind, Books};
 
 use super::navigate::{self, NavError};
@@ -36,14 +36,10 @@ use crate::screens::masters::MastersScreen;
 use crate::screens::voucher_entry::VoucherEntryScreen;
 use crate::{AppCtx, Screen, ScreenAction};
 
-/// What identifies one loaded copy of the books, so a new copy triggers a KPI refresh: the shell's
-/// change count, the number of vouchers and the newest voucher id.
-type Fingerprint = (u64, usize, Option<VoucherId>);
-
 /// The home screen of an open company.
 pub struct GatewayScreen {
     home: HomeScreen,
-    seen: Option<Fingerprint>,
+    seen: Option<super::BooksPrint>,
     notice: Option<String>,
 }
 
@@ -83,11 +79,7 @@ impl GatewayScreen {
 
     /// Asks for the tiles again when `books` is a copy this screen has not seen.
     fn follow(&mut self, books: &Books) {
-        let print = (
-            super::submit::change_count(),
-            books.vouchers.len(),
-            books.vouchers.keys().next_back().copied(),
-        );
+        let print = super::books_print(books);
         if self.seen == Some(print) {
             return;
         }

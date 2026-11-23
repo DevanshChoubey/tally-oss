@@ -8,7 +8,7 @@
 | dark | home.default | 0.5420 |
 | light | sales-invoice.default | 0.5438 |
 | light | home.default | 0.5837 |
-| light | masters.ledgers | 0.6128 |
+| light | masters.ledgers | 0.6070 |
 | light | bank.default | 0.6271 |
 | light | palette.voucher | 0.6275 |
 | light | palette.entry | 0.6283 |
@@ -26,7 +26,7 @@
 | light | balance-sheet.default | 0.6703 |
 | light | palette.commands | 0.6899 |
 | light | gst.gstr3b | 0.7000 |
-| light | masters.ledger-detail | 0.7307 |
+| light | masters.ledger-detail | 0.7333 |
 | light | masters.items | 0.7496 |
 | light | day-book.default | 0.7570 |
 | light | masters.create-ledger | 0.7782 |
@@ -82,7 +82,7 @@ SSIM 0.5837
 
 ## light / masters.ledgers
 
-SSIM 0.6128
+SSIM 0.6070
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -298,7 +298,7 @@ SSIM 0.7000
 
 ## light / masters.ledger-detail
 
-SSIM 0.7307
+SSIM 0.7333
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>

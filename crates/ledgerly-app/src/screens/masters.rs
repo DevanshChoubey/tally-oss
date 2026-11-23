@@ -44,6 +44,7 @@
 //! masters; a very large company needs the host to hand in a revision number so the list can be
 //! cached (not asked for yet, nothing to key a cache on).
 
+pub mod balances;
 mod check;
 mod command;
 mod draft;
@@ -53,7 +54,7 @@ mod look;
 pub mod view;
 
 use egui::{Align, Key, Layout, Modifiers, RichText, Ui};
-use ledgerly_core::{Outcome, Unsupported};
+use ledgerly_core::{LedgerId, Outcome, Unsupported};
 use ledgerly_model::{Books, MasterSnapshot, Masters};
 
 use command::command_for;
@@ -383,6 +384,10 @@ pub struct MastersScreen {
     pending_create: Option<String>,
     /// Scroll the list to the cursor on the next frame (after J, K, Up or Down).
     scroll_to_selected: bool,
+    /// The ledger list's Balance column, from the engine.
+    balances: balances::LedgerBalances,
+    /// The copy of the books the balances were last asked for, so a change asks again.
+    balances_for: Option<crate::shell::BooksPrint>,
 }
 
 impl Default for MastersScreen {
@@ -412,6 +417,8 @@ impl MastersScreen {
             posting: None,
             pending_create: None,
             scroll_to_selected: false,
+            balances: balances::LedgerBalances::new(),
+            balances_for: None,
         }
     }
 
@@ -884,32 +891,47 @@ const GSTIN_FOOT: &str =
 /// What the open bills card says until this screen asks the engine for them.
 const OPEN_BILLS_NOT_YET: &str = "Not shown yet: the engine works out open bills (the outstanding report), but this screen does not ask for them yet. Nothing is estimated here.";
 
-/// The ledger list's columns (index.html:1796). Widths are read off the mock's capture at 1280
-/// by 800; the ledger name takes what is left.
+/// The ledger list's columns (index.html:1796), with the Balance heading's hover text and its
+/// "engine" chip set from what the balances are now.
+fn ledger_cols(balances: &balances::LedgerBalances) -> [look::Col; 4] {
+    let mut cols = LEDGER_COLS;
+    if let Some(balance) = cols.last_mut() {
+        balance.hint = balances.heading_hint();
+        balance.engine = balance.hint.is_none();
+    }
+    cols
+}
+
+/// The ledger list's columns before the balances are known. Widths are read off the mock's
+/// capture at 1280 by 800; the ledger name takes what is left.
 const LEDGER_COLS: [look::Col; 4] = [
     look::Col {
         label: "Ledger",
         width: None,
         numeric: false,
         hint: None,
+        engine: false,
     },
     look::Col {
         label: "Group",
         width: Some(276.0),
         numeric: false,
         hint: None,
+        engine: false,
     },
     look::Col {
         label: "GSTIN",
         width: Some(200.0),
         numeric: false,
         hint: None,
+        engine: false,
     },
     look::Col {
         label: "Balance",
         width: Some(197.0),
         numeric: true,
         hint: Some(NOT_AVAILABLE_HINT),
+        engine: false,
     },
 ];
 
@@ -920,30 +942,35 @@ const ITEM_COLS: [look::Col; 5] = [
         width: Some(296.0),
         numeric: false,
         hint: None,
+        engine: false,
     },
     look::Col {
         label: "HSN",
         width: Some(213.0),
         numeric: false,
         hint: None,
+        engine: false,
     },
     look::Col {
         label: "GST",
         width: Some(72.0),
         numeric: true,
         hint: None,
+        engine: false,
     },
     look::Col {
         label: "Stock",
         width: Some(116.0),
         numeric: true,
         hint: Some(NOT_AVAILABLE_HINT),
+        engine: false,
     },
     look::Col {
         label: "Value at average cost",
         width: None,
         numeric: true,
         hint: Some(NOT_AVAILABLE_HINT),
+        engine: false,
     },
 ];
 
@@ -954,12 +981,14 @@ const PLAIN_COLS: [look::Col; 2] = [
         width: None,
         numeric: false,
         hint: None,
+        engine: false,
     },
     look::Col {
         label: "Details",
         width: None,
         numeric: false,
         hint: None,
+        engine: false,
     },
 ];
 
@@ -1043,8 +1072,12 @@ impl MastersScreen {
         let kind = self.kind;
         let events = match kind {
             MasterKind::Ledger => {
-                let rows = ledger_cells(&view::ledger_rows(&books.masters, &self.filter));
-                look::list_card(ui, "ledgers", &LEDGER_COLS, &rows, selected, scroll)
+                let rows = ledger_cells(
+                    &view::ledger_rows(&books.masters, &self.filter),
+                    &self.balances,
+                );
+                let cols = ledger_cols(&self.balances);
+                look::list_card(ui, "ledgers", &cols, &rows, selected, scroll)
             }
             MasterKind::StockItem => {
                 let rows = item_cells(&view::item_rows(&books.masters, &self.filter));
@@ -1382,8 +1415,11 @@ fn open_bills_card(ui: &mut Ui) {
 }
 
 /// The ledger list's cells: the name with its alias, the group and GSTIN in the secondary ink
-/// (blank for none), and the balance as not available.
-fn ledger_cells(rows: &[view::LedgerRow]) -> Vec<Vec<look::Cell>> {
+/// (blank for none), and the balance as the engine gave it ([`balances::LedgerBalances::text`]).
+fn ledger_cells(
+    rows: &[view::LedgerRow],
+    balances: &balances::LedgerBalances,
+) -> Vec<Vec<look::Cell>> {
     rows.iter()
         .map(|r| {
             vec![
@@ -1393,7 +1429,7 @@ fn ledger_cells(rows: &[view::LedgerRow]) -> Vec<Vec<look::Cell>> {
                 },
                 look::Cell::Quiet(r.group.clone()),
                 look::Cell::Quiet(r.gstin.clone()),
-                look::Cell::Text(NOT_AVAILABLE.to_owned()),
+                look::Cell::Text(balances.text(LedgerId(r.master.id))),
             ]
         })
         .collect()
@@ -1471,6 +1507,11 @@ impl Screen for MastersScreen {
             return ScreenAction::Stay;
         }
         let action = if let Some(books) = ctx.books.as_ref() {
+            self.follow_balances(books);
+            self.balances.tick(ctx.api.as_ref());
+            if self.balances.is_loading() && ctx.api.is_some() {
+                ui.ctx().request_repaint();
+            }
             self.draw(ui, books)
         } else {
             ui.label(no_books_text(ctx));
@@ -1482,6 +1523,31 @@ impl Screen for MastersScreen {
             self.send_next(worker);
         }
         action
+    }
+}
+
+impl MastersScreen {
+    /// Asks for the balances again when `books` is a copy they were not asked for: on the first
+    /// frame, and after anything is saved. They are as of the last voucher date, the date the
+    /// balance sheet opens on (`navigate::default_period`).
+    fn follow_balances(&mut self, books: &Books) {
+        let print = crate::shell::books_print(books);
+        if self.balances_for == Some(print) {
+            return;
+        }
+        self.balances_for = Some(print);
+        match crate::shell::navigate::default_period(books) {
+            Ok(period) => self.balances.request(period.to()),
+            Err(e) => self
+                .balances
+                .set(balances::BalanceState::Unsupported(e.to_string())),
+        }
+    }
+
+    /// The ledger list's balances, as the screen holds them.
+    #[must_use]
+    pub fn balances(&self) -> &balances::LedgerBalances {
+        &self.balances
     }
 }
 
