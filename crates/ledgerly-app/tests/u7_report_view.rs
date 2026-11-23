@@ -886,3 +886,17 @@ fn comparative_and_monthly_columns_are_the_hosts_to_provide() {
     };
     assert!(two.check_shape().is_ok());
 }
+
+#[test]
+fn the_generic_report_names_its_move_keys_as_the_other_reports_do() {
+    // provenance: the mock's report screens name the row keys "J / K" (the balance sheet and day
+    // book key bars, design/PARITY-GAPS.md "Up / Down" entry); this screen moves on J and K as
+    // well as the arrows (KeyCmd::Down on Key::J). Catches "Up / Down" coming back.
+    let host = host();
+    let s = screen_for(&host, ViewDetail::Condensed);
+    let first = s.keys().into_iter().next().unwrap();
+    assert_eq!(
+        (first.keys.as_str(), first.label.as_str()),
+        ("J / K", "Move")
+    );
+}

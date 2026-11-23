@@ -18,9 +18,6 @@ feature that is not built), **data** (the capture company lacks what the mock's 
   "3 sections ready, 1 needs correction", "Ledger · Sundry debtors · 1,93,500.00 Dr"
   (index.html:1115). Ours keep the detail the row had when chosen. Live details need the engine's
   figures at reopen time.
-- **bug: "Up / Down" on other screens.** The palette shows "↑ ↓" and the balance sheet, day
-  book and masters "J / K" (the mock's words); the generic report and invoice screens still say
-  "Up / Down".
 - **deferred: Alt+C keycap on 'Create ledger "q"'** (index.html:1129). Not drawn because the
   palette takes the keyboard, so Alt+C would not work there. Needs the palette to pass row
   shortcuts through.

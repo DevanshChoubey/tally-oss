@@ -8,7 +8,7 @@
 | dark | home.default | 0.5732 |
 | light | home.default | 0.5838 |
 | light | masters.ledgers | 0.6070 |
-| light | sales-invoice.default | 0.6271 |
+| light | sales-invoice.default | 0.6284 |
 | light | palette.voucher | 0.6313 |
 | light | palette.entry | 0.6319 |
 | light | palette.ask | 0.6347 |
@@ -82,7 +82,7 @@ SSIM 0.6070
 
 ## light / sales-invoice.default
 
-SSIM 0.6271
+SSIM 0.6284
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>

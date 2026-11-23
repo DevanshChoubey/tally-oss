@@ -214,3 +214,27 @@ fn ctrl_h_on_the_screen_changes_the_mode_and_the_key_bar_names_it() {
     }
     assert_eq!(s.mode(), InvoiceMode::Accounting);
 }
+
+#[test]
+fn the_invoice_key_bar_uses_the_mock_s_words() {
+    // provenance: design/mock-v2/index.html:1344 (`sales-invoice` keys): Enter Next field,
+    // Shift+Enter Previous, "↑ ↓" List, Alt+C Create master, Ctrl+A Save, Esc Back. Ctrl+H is
+    // the mock keymap's Change mode (index.html:1838). Ctrl+D Delete line is not built on this
+    // screen, so it is not offered.
+    let books = setup("w2_mode_keybar.ledgerly", true);
+    let s = open(&books, InvoiceMode::Item);
+    let pairs: Vec<(String, String)> = s.keys().into_iter().map(|k| (k.keys, k.label)).collect();
+    let want: Vec<(String, String)> = [
+        ("Enter", "Next field"),
+        ("Shift+Enter", "Previous"),
+        ("\u{2191} \u{2193}", "List"),
+        ("Alt+C", "Create master"),
+        ("Ctrl+H", "Change mode"),
+        ("Ctrl+A", "Save"),
+        ("Esc", "Back"),
+    ]
+    .into_iter()
+    .map(|(k, l)| (k.to_owned(), l.to_owned()))
+    .collect();
+    assert_eq!(pairs, want);
+}

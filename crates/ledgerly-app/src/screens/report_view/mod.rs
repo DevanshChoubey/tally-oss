@@ -1010,7 +1010,7 @@ impl Screen for ReportViewScreen {
                 KeyHint::new("Esc", "Back"),
             ],
             Look::Generic => vec![
-                KeyHint::new("Up / Down", "Move"),
+                KeyHint::new("J / K", "Move"),
                 KeyHint::new("Enter", "Open"),
                 KeyHint::new("Esc", "Back up"),
                 KeyHint::new("Alt+F1", "Condensed or detailed"),

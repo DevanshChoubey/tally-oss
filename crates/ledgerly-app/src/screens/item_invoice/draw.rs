@@ -962,11 +962,12 @@ impl Screen for ItemInvoiceScreen {
         }
         vec![
             KeyHint::new("Enter", "Next field"),
-            KeyHint::new("Shift+Enter", "Previous field"),
-            KeyHint::new("Up / Down", "List"),
+            KeyHint::new("Shift+Enter", "Previous"),
+            KeyHint::new("\u{2191} \u{2193}", "List"),
             KeyHint::new("Alt+C", "Create master"),
             KeyHint::new("Ctrl+H", "Change mode"),
             KeyHint::new("Ctrl+A", "Save"),
+            KeyHint::new("Esc", "Back"),
         ]
     }
 
