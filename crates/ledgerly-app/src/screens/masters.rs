@@ -80,7 +80,7 @@ use crate::ui::tabs::tabs;
 use crate::ui::{bold_font, tokens};
 use crate::worker::{ApiWorker, Ticket};
 use crate::{AppCtx, Screen, ScreenAction};
-use ledgerly_api::Command;
+use ledgerly_api::{Command, CreatedId};
 
 pub use draft::{
     BankDraft, CostCentreDraft, GroupDraft, GstDraft, LedgerDraft, MasterDraft, PartyDraft,
@@ -403,6 +403,11 @@ pub struct MastersScreen {
     bills: bills::PartyBills,
     /// The copy of the books, the party and the period its bills were last asked for.
     bills_for: Option<(crate::shell::BooksPrint, LedgerId, Result<Period, String>)>,
+    /// The ledger form waiting under a group form that Alt+C opened for its Under field.
+    parent: Option<Box<FormState>>,
+    /// A group created from a ledger's Under field is on its way to the engine: when it is
+    /// created, its id goes into the ledger form's Under.
+    awaiting_group: bool,
 }
 
 impl Default for MastersScreen {
@@ -438,6 +443,8 @@ impl MastersScreen {
             stock_for: None,
             bills: bills::PartyBills::new(),
             bills_for: None,
+            parent: None,
+            awaiting_group: false,
         }
     }
 
@@ -694,6 +701,16 @@ impl MastersScreen {
             MasterRequest::Create(snapshot)
         };
         self.requests.push(request);
+        if let Some(parent) = self.parent.take() {
+            // The group made from the ledger's Under field: back to the ledger, whose Under
+            // takes the group's id when the engine has created it.
+            self.mode = Mode::Form(parent);
+            self.awaiting_group = true;
+            self.notice = Some(Notice::Info(format!(
+                "'{name}' sent to be saved; it goes under this ledger once it is created."
+            )));
+            return Ok(());
+        }
         self.mode = Mode::List;
         if editing.is_none() {
             self.selected = None;
@@ -764,7 +781,7 @@ impl MastersScreen {
             EscState::Confirm => self.mode = Mode::List,
             EscState::Form { dirty, armed } => {
                 if !dirty || armed {
-                    self.mode = Mode::List;
+                    self.mode = self.parent.take().map_or(Mode::List, Mode::Form);
                     self.notice = None;
                 } else {
                     if let Mode::Form(f) = &mut self.mode {
@@ -777,6 +794,60 @@ impl MastersScreen {
             }
         }
         ScreenAction::Stay
+    }
+
+    /// Alt+C in a ledger form: opens a group form for the ledger's Under field, keeping the
+    /// ledger form to come back to (TallyPrime: Alt+C on the Under field creates a group,
+    /// help.tallysolutions.com/ledgers-in-tallyprime/). The ledger form's only master field is
+    /// Under, so Alt+C anywhere in it means Under. Other forms have no such field here.
+    fn begin_under_group(&mut self) {
+        if self.parent.is_some() {
+            return;
+        }
+        let Mode::Form(form) = &self.mode else {
+            return;
+        };
+        if !matches!(form.draft, MasterDraft::Ledger(_)) {
+            return;
+        }
+        let group = match MasterDraft::blank(MasterKind::Group) {
+            Outcome::Value(d) => d,
+            Outcome::Unsupported(u) => {
+                self.notice = Some(Notice::Error(MasterError::from(u).to_string()));
+                return;
+            }
+        };
+        let Mode::Form(ledger) = std::mem::replace(&mut self.mode, Mode::List) else {
+            return;
+        };
+        self.parent = Some(ledger);
+        self.open_form(group, None);
+        self.notice = Some(Notice::Info(
+            "A new group for the ledger's Under. Ctrl+A saves it and goes back to the ledger; \
+             Esc goes back without it."
+                .to_owned(),
+        ));
+    }
+
+    /// The engine created a master. A group made from a ledger's Under field goes into the
+    /// ledger form's Under.
+    fn master_created(&mut self, created: Option<CreatedId>) {
+        if !self.awaiting_group {
+            return;
+        }
+        let Some(CreatedId::Group(id)) = created else {
+            return;
+        };
+        self.awaiting_group = false;
+        let form = match &mut self.mode {
+            Mode::Form(form) => Some(form),
+            Mode::List | Mode::ConfirmDelete(_) => None,
+        };
+        if let Some(form) = form
+            && let MasterDraft::Ledger(d) = &mut form.draft
+        {
+            d.group = Some(id);
+        }
     }
 
     fn mode_tag(&self) -> ModeTag {
@@ -792,7 +863,13 @@ impl MastersScreen {
         match cmd {
             KeyCmd::Open => return self.open_selected(books),
             KeyCmd::Save => drop(self.save(books)),
-            KeyCmd::Create => drop(self.begin_create(books)),
+            KeyCmd::Create => {
+                if matches!(self.mode, Mode::Form(_)) {
+                    self.begin_under_group();
+                } else {
+                    drop(self.begin_create(books));
+                }
+            }
             KeyCmd::Alter => drop(self.begin_alter(books)),
             KeyCmd::Delete => drop(self.request_delete(books)),
             KeyCmd::Yes => drop(self.confirm_delete(books)),
@@ -844,6 +921,10 @@ fn read_keys(ui: &Ui, tag: ModeTag, kind: MasterKind) -> Vec<KeyCmd> {
             }
             if i.consume_key(Modifiers::NONE, Key::Escape) {
                 out.push(KeyCmd::Escape);
+            }
+            let (modifiers, key) = bindings::CREATE;
+            if consume_exact(i, key, modifiers) {
+                out.push(KeyCmd::Create);
             }
         }
         ModeTag::Confirm => {
@@ -1905,8 +1986,14 @@ impl MastersScreen {
 
     /// Shows the engine's answer for the command that ran.
     fn finish_post(&mut self, reply: CommandReply) {
+        if !matches!(reply, CommandReply::Booked(_)) {
+            self.awaiting_group = false;
+        }
         self.notice = Some(match reply {
-            CommandReply::Booked(_) => Notice::Info("Saved.".to_owned()),
+            CommandReply::Booked(result) => {
+                self.master_created(result.created);
+                Notice::Info("Saved.".to_owned())
+            }
             CommandReply::Unsupported(u) => {
                 Notice::Warn(format!("Not supported yet: {} ({})", u.what, u.reason))
             }
