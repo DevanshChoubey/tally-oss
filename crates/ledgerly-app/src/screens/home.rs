@@ -35,7 +35,7 @@
 //! or F5. The key map of card U2 is not wired in yet (Wave 2), so the keys are read directly, as the
 //! shell does for Ctrl+T.
 
-mod draw;
+pub(crate) mod draw;
 
 use egui::{Event, InputState, Key, Modifiers, Rect, Ui};
 use ledgerly_api::{

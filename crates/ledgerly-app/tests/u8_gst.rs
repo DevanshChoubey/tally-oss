@@ -172,10 +172,12 @@ fn opens_on_the_reconciliation_tab_as_the_mock_does() {
     let s = screen();
     assert_eq!(s.tab(), GstTab::Reconciliation);
     assert_eq!(s.title(), "GST returns");
+    // Spec change 2026-11-23: the subtitle follows the mock-v2 head (index.html:1670); it was
+    // "Return period November 2026. GSTIN ...".
     assert_eq!(
         s.subtitle(),
         format!(
-            "Return period November 2026. GSTIN {}.",
+            "{} \u{00B7} November 2026 \u{00B7} monthly",
             gstin("27AABCK7314R1Z")
         )
     );
@@ -331,7 +333,8 @@ fn deciding_without_a_reconciliation_is_an_error() {
     );
     assert_eq!(s.item_count(GstTab::Reconciliation), None);
     assert_eq!(s.open_count(), 0);
-    assert_eq!(s.subtitle(), "Return period November 2026.");
+    // Spec change 2026-11-23: mock-v2 head subtitle (index.html:1670).
+    assert_eq!(s.subtitle(), "November 2026 \u{00B7} monthly");
 }
 
 #[test]
@@ -761,11 +764,17 @@ fn escape_leaves_the_screen() {
 
 #[test]
 fn enter_through_egui_opens_the_voucher() {
-    // provenance: derived - mock "Enter open".
+    // provenance: derived - mock "Enter open". Spec change 2026-11-23: the screen now opens the
+    // voucher itself (it pushes the voucher view, as the day book does) instead of leaving a
+    // request nothing took; see w2_gst_look.rs `enter_on_a_gstr1_row_opens_its_voucher`.
     let ctx = egui::Context::default();
     let mut app = AppCtx::default();
     let mut s = screen();
     frame(&ctx, &mut s, &mut app, RawInput::default());
-    frame(&ctx, &mut s, &mut app, key(Key::Enter, Modifiers::NONE));
-    assert_eq!(s.take_drill_request(), Some(VoucherId(101)));
+    let action = frame(&ctx, &mut s, &mut app, key(Key::Enter, Modifiers::NONE));
+    let ScreenAction::Push(pushed) = action else {
+        panic!("Enter did not open the voucher");
+    };
+    assert_eq!(pushed.title(), "Voucher #101");
+    assert_eq!(s.take_drill_request(), None);
 }

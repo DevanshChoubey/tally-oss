@@ -28,7 +28,7 @@ use crate::error::ApiError;
 use crate::facade::Api;
 
 pub use ledgerly_gst::gstr1::{Bucket, BucketedVoucher};
-pub use ledgerly_gst::gstr3b::Gstr3bWorking;
+pub use ledgerly_gst::gstr3b::{Gstr3bTaxAmounts, Gstr3bWorking};
 pub use ledgerly_gst::pack::{RulePack, load_pack};
 pub use ledgerly_gst_formats::gstr1::Gstr1;
 

@@ -231,14 +231,17 @@ impl GstScreen {
             Ok(Outcome::Value(working)) => {
                 self.set_gstr3b(Feed::Loaded(Vec::new()));
                 self.figures3b = gstr3b_figures(&working);
+                self.lines3b = super::look::gstr3b_lines(&working);
             }
             Ok(Outcome::Unsupported(u)) => {
                 self.set_gstr3b(Feed::Unsupported(u));
                 self.figures3b = Figures::default();
+                self.lines3b = Vec::new();
             }
             Err(message) => {
                 self.set_gstr3b(failed("GSTR-3B", &message));
                 self.figures3b = Figures::default();
+                self.lines3b = Vec::new();
                 self.run.error = Some(format!("GSTR-3B: {message}"));
             }
         }

@@ -71,10 +71,56 @@ feature that is not built), **data** (the capture company lacks what the mock's 
   the day after the current date; ours fills in the day shown. Check the TallyPrime page (only
   the Tally.ERP 9 page was read) before changing it.
 - **bug: the 16-point gap under the page head is only on the report screens.** The mock's
-  `.phead` has `margin-bottom:16px` (index.html:121); the balance sheet and day book add it
-  (`HEAD_GAP`), the other screens still follow the head with egui's item spacing. Move it into
+  `.phead` has `margin-bottom:16px` (index.html:121); the balance sheet, day book and GST
+  returns add it (`HEAD_GAP`), the other screens still follow the head with egui's item spacing. Move it into
   `ui::page_head` in a round that recaptures every screen.
 - **data: voucher numbers and the sample day.** The capture company numbers vouchers 1, 2, ...
   per type and its last voucher is 20 Nov; the mock shows "SI/0417" and five vouchers on 20 Nov.
 - **by design: Status column.** Kept from the engine (it shows a cancelled voucher as such) until
   Entered by and Origin exist.
+
+## GST returns (round of 2026-11-23)
+
+Captured states: `gst.gstr1`, `gst.gstr3b`, `gst.recon-empty`. Not captured yet:
+`gstr1-correction`, `recon`, `recon-explain`, `recon-error` and `recon-locked`. The app cannot
+reach them, because no 2B file can be read.
+
+- **deferred: GSTR-1 by section** (index.html:1673-1676). The mock's table has one row per
+  return section (4A B2B, 5 B2C large, 7 B2C others, 9B notes, 12 HSN, 13 documents), with
+  records, taxable value, tax and a status for each. Its tiles count sections too. The engine
+  buckets vouchers, not sections, and `Gstr1` has no per-section totals. The UI may not add them
+  up (rule C4). Ours shows the vouchers with the engine's bucket, the tiles count vouchers
+  ("vouchers", not "sections"), and the return's own figures sit in a second card. Needs an
+  engine section summary with its own tests.
+- **deferred: the agreement line under the GSTR-1 table** ("Taxable value agrees with GSTR-3B
+  table 3.1(a): ..."). No engine check compares the two, so the line is not drawn.
+- **deferred: GSTR-3B rows from IMS and set-off** (index.html:1683-1686). These are "Accepted
+  in IMS", "No action yet: deemed accepted", "6.1 Payment of tax", "Left after using accepted
+  credit" and "Payable in cash". They need the 2B and IMS match (engine item E-3) and set-off
+  (engine item E-1). Ours draws 3.1(a), "In your books" (4(A)(5)) and the blocked or ineligible
+  credit, all from the engine's working.
+- **by design: a Cess column on GSTR-3B.** The mock has no cess column, but the engine works out
+  cess, and a figure is never dropped.
+- **by design: our own words in "What happens next" and "Read this before filing".** The mock's
+  bullets claim things the app does not do: "Mark the month filed here", "Credit counts only what
+  you accepted in IMS" and the set-off order. Ours say what the engine does.
+- **deferred: the period button, "November 2026 Alt+F2"** (index.html:1671). The screen cannot
+  change its return period, so the button and the key are not shown.
+- **deferred: importing a 2B file** (index.html:1692). The mock offers "Import 2B JSON Ctrl+O"
+  and "drop it here". There is no 2B reader (engine item E-3), so the empty state says so and
+  offers no import button and no key.
+- **deferred: Y Take suggestion and X Explain on the 2B tab** (index.html:1721). They need the
+  engine's match and explanation (E-3). The key bar offers A, R and P only when rows are loaded.
+- **deferred: the match table's look.** The loaded 2B table still uses egui's grid inside a card.
+  It cannot be reached or captured until 2B import exists; restyle it then.
+- **gap: Re-apply masters and Export IMS action file.** The view model records both requests
+  (`take_reapply_request`, `take_export_request`), but nothing in the shell takes them, so the
+  buttons did nothing and are no longer drawn. Wire them to the shell before showing them again.
+- **by design: the bucket filter moved onto the tiles.** The mock has no chip row. Clicking a
+  tile shows only that bucket in the table; clicking it again shows every voucher. The selected
+  tile has the accent border.
+- **by design: Export JSON is disabled off the GSTR-1 tab.** The engine exports GSTR-1 only. The
+  button says why on hover, and Ctrl+E says why in a notice.
+- **data: the capture company.** It has five vouchers in November and the GSTIN
+  27ABCDE1234F1Z0; the mock shows Godavari Drip's figures.
+

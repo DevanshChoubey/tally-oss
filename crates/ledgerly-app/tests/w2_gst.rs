@@ -163,27 +163,33 @@ fn the_return_label_names_the_month() {
 #[test]
 fn the_page_title_and_the_subtitle_name_the_return_period() {
     // provenance: derived - the mock's page title is "GST returns" (design/mock-v2/index.html,
-    // SCREENS.gst title).
+    // SCREENS.gst title). Spec change 2026-11-23: the subtitle follows index.html:1670
+    // ("<GSTIN> · <state> · <period> · monthly"); it was "Return period November 2026.". The
+    // full form is in w2_gst_look.rs.
     let s = GstScreen::new("November 2026", None);
     assert_eq!(s.page_title(), "GST returns");
     assert_eq!(
         Screen::subtitle(&s),
-        Some("Return period November 2026.".to_owned())
+        Some("November 2026 \u{00B7} monthly".to_owned())
     );
 }
 
 #[test]
 fn the_keys_show_export_json_and_the_ims_keys_only_on_the_2b_tab() {
     // provenance: derived - the mock's key list for the GST screen (index.html, SCREENS.gst keys)
-    // has Ctrl+E Export JSON and, on the 2B tab, A R P for the IMS actions.
+    // has Ctrl+E Export JSON and, on the 2B tab, the IMS actions. Spec change 2026-11-23: the
+    // IMS actions are A, R and P as separate keys (index.html:1721), offered only when the 2B
+    // tab has rows to act on; they were one "A R P" hint shown on the empty tab too. The full
+    // key bars are in w2_gst_look.rs.
     let mut s = GstScreen::new("November 2026", None);
     s.switch_tab(GstTab::Gstr1);
     let keys: Vec<(String, String)> = s.keys().into_iter().map(|k| (k.keys, k.label)).collect();
     assert!(keys.contains(&("Ctrl+E".to_owned(), "Export JSON".to_owned())));
-    assert!(!keys.iter().any(|(k, _)| k == "A R P"));
+    assert!(!keys.iter().any(|(k, _)| k == "A"));
     s.switch_tab(GstTab::Reconciliation);
-    let keys: Vec<String> = s.keys().into_iter().map(|k| k.keys).collect();
-    assert!(keys.contains(&"A R P".to_owned()));
+    s.set_recon(Feed::Loaded(Vec::new()));
+    let keys: Vec<(String, String)> = s.keys().into_iter().map(|k| (k.keys, k.label)).collect();
+    assert!(keys.contains(&("A".to_owned(), "Accept".to_owned())));
 }
 
 // ---- the export checks -----------------------------------------------------------------------

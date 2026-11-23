@@ -8,14 +8,16 @@
 //! ```
 //!
 //! Here `<Name>` is `Gst`. The screen has three tabs numbered as the mock numbers them: GSTR-1 (key
-//! `1`), GSTR-3B (key `2`) and 2B and IMS reconciliation (key `3`). It opens on GSTR-1 when the
+//! `1`), GSTR-3B (key `2`) and 2B and IMS (key `3`). It opens on GSTR-1 when the
 //! shell opens it ([`crate::shell::navigate::gst_screen`]).
 //!
 //! * **Exception buckets** (spec 6.3): Ready, Not relevant, Mismatch and Needs correction. Every
 //!   item arrives with its bucket already decided by the engine; the screen never classifies a
-//!   document itself. Counts are shown on filter chips. Enter drills to the voucher to fix
-//!   ([`GstScreen::take_drill_request`]) and the "Re-apply masters" button records a bulk request
-//!   for the host ([`GstScreen::take_reapply_request`]).
+//!   document itself. Counts are shown on the status tiles, which also filter the table. Enter
+//!   opens the voucher to fix on top of the screen. [`GstScreen::take_reapply_request`] records a
+//!   bulk re-apply for a host; no button is drawn while the shell does not take it
+//!   (`design/PARITY-GAPS.md`). The drawing is in the `draw` module, laid out as the mock-v2
+//!   GST screen.
 //! * **2B and IMS table**: one row per supplier invoice. J and K (or the arrow keys) move the
 //!   row, A accepts, R rejects, P marks pending, Enter opens the voucher. The engine's suggestion
 //!   is shown beside the buttons but is never applied: an action exists only after the user
@@ -36,14 +38,15 @@
 //! file needs. Credit notes that may stay pending for one period (spec 6.3) are not modelled: a
 //! row's `Pending` action is the user's choice, and the period rule is the engine's.
 
-use egui::{Key, Modifiers, Ui};
+use egui::{Key, Ui};
 use ledgerly_core::format::format_inr;
-use ledgerly_core::{Date, Gstin, Paise, Unsupported, VoucherId};
+use ledgerly_core::{Date, Gstin, Paise, StateCode, Unsupported, VoucherId};
 use thiserror::Error;
 
-use crate::screens::wire::unsupported_text;
 use crate::{AppCtx, Screen, ScreenAction};
 
+mod draw;
+pub mod look;
 mod worker;
 
 pub use worker::{FigureRow, Figures};
@@ -73,7 +76,7 @@ impl GstTab {
         match self {
             GstTab::Gstr1 => "GSTR-1",
             GstTab::Gstr3b => "GSTR-3B",
-            GstTab::Reconciliation => "2B and IMS reconciliation",
+            GstTab::Reconciliation => "2B and IMS",
         }
     }
 
@@ -410,6 +413,8 @@ fn remembered_for(
 pub struct GstScreen {
     period_label: String,
     own_gstin: Option<Gstin>,
+    /// The state of the registration, named in the subtitle.
+    state: Option<StateCode>,
     tab: GstTab,
     gstr1: Feed<Vec<ExceptionItem>>,
     gstr3b: Feed<Vec<ExceptionItem>>,
@@ -437,6 +442,8 @@ pub struct GstScreen {
     figures1: Figures,
     /// Figures of the GSTR-3B tab, from the worker.
     figures3b: Figures,
+    /// The GSTR-3B table, from the worker.
+    lines3b: Vec<look::Line3b>,
 }
 
 /// What a click in the table asks for, applied after the frame is drawn.
@@ -448,8 +455,6 @@ enum UiEvent {
     Focus(usize),
     Drill(usize),
     Decide(usize, ImsAction),
-    Reapply,
-    Export,
     ExportJson,
 }
 
@@ -460,6 +465,7 @@ impl GstScreen {
         GstScreen {
             period_label: period_label.into(),
             own_gstin,
+            state: None,
             tab: GstTab::Reconciliation,
             gstr1: Feed::NotLoaded,
             gstr3b: Feed::NotLoaded,
@@ -479,7 +485,15 @@ impl GstScreen {
             run: worker::GstRun::default(),
             figures1: Figures::default(),
             figures3b: Figures::default(),
+            lines3b: Vec::new(),
         }
+    }
+
+    /// The same screen naming `state`, the state of the registration, in its subtitle.
+    #[must_use]
+    pub fn with_state(mut self, state: StateCode) -> Self {
+        self.state = Some(state);
+        self
     }
 
     /// The tab on show.
@@ -488,13 +502,22 @@ impl GstScreen {
         self.tab
     }
 
-    /// The line under the heading.
     #[must_use]
+    /// The line under the heading: the GSTIN, the state, the period and "monthly", joined by
+    /// middle dots as in the mock (index.html:1670). A part with no source is left out. Returns
+    /// are monthly because the shell opens one calendar month
+    /// ([`crate::shell::navigate::gst_return_period`]).
     pub fn subtitle(&self) -> String {
-        match &self.own_gstin {
-            Some(g) => format!("Return period {}. GSTIN {g}.", self.period_label),
-            None => format!("Return period {}.", self.period_label),
+        let mut parts: Vec<String> = Vec::new();
+        if let Some(g) = &self.own_gstin {
+            parts.push(g.to_string());
         }
+        if let Some(state) = self.state {
+            parts.push(state.name().to_owned());
+        }
+        parts.push(self.period_label.clone());
+        parts.push("monthly".to_owned());
+        parts.join(" \u{00B7} ")
     }
 
     /// The message under the table, when there is one.
@@ -901,337 +924,9 @@ impl GstScreen {
                 self.open_focused();
             }
             UiEvent::Decide(row, action) => self.decide_with_notice(row, action),
-            UiEvent::Reapply => self.request_reapply(),
-            UiEvent::Export => self.request_export(),
             UiEvent::ExportJson => self.request_json_export(),
         }
         self.clamp_focus();
-    }
-
-    // ---- drawing -----------------------------------------------------------------------------
-
-    fn draw(&mut self, ui: &mut Ui) -> ScreenAction {
-        let mut action = ScreenAction::Stay;
-        for cmd in read_keys(ui) {
-            if matches!(self.apply(cmd), ScreenAction::Pop) {
-                action = ScreenAction::Pop;
-            }
-        }
-        if let Some((name, json)) = self.take_json_export() {
-            self.notice = Some(save_json_file(&name, &json));
-        }
-        let mut events = Vec::new();
-        let subtitle = self.subtitle();
-        let json_enabled = self.export_blocked_reason().is_none();
-        crate::ui::page_head::page_head(ui, "GST returns", Some(subtitle.as_str()), |ui| {
-            let clicked = ui
-                .add_enabled_ui(json_enabled, |ui| {
-                    crate::ui::button::button(
-                        ui,
-                        "Export JSON",
-                        Some("Ctrl+E"),
-                        crate::ui::button::ButtonKind::Secondary,
-                    )
-                })
-                .inner
-                .clicked();
-            if clicked {
-                events.push(UiEvent::ExportJson);
-            }
-        });
-        self.draw_tabs(ui, &mut events);
-        self.draw_chips(ui, &mut events);
-        ui.separator();
-        let want_scroll = self.scroll_pending;
-        if let Some(error) = self.load_error() {
-            ui.colored_label(ui.visuals().error_fg_color, format!("Error: {error}"));
-        }
-        match self.tab {
-            GstTab::Gstr1 => {
-                self.draw_tiles(ui);
-                self.draw_next_steps(ui);
-                draw_figures(ui, &self.figures1);
-                self.draw_exceptions(ui, &self.gstr1, want_scroll, &mut events);
-            }
-            GstTab::Gstr3b => {
-                self.draw_tiles(ui);
-                draw_figures(ui, &self.figures3b);
-                Self::draw_3b_notes(ui);
-                self.draw_exceptions(ui, &self.gstr3b, want_scroll, &mut events);
-            }
-            GstTab::Reconciliation => self.draw_recon(ui, want_scroll, &mut events),
-        }
-        self.scroll_pending = false;
-        ui.separator();
-        self.draw_footer(ui, &mut events);
-        for event in events {
-            self.apply_event(event);
-        }
-        action
-    }
-
-    /// The status tiles of the tab on show. Each count is of the vouchers the engine put in a
-    /// bucket (the screen only counts rows, rule C4). A figure that is not in the API says so
-    /// rather than showing a number.
-    fn draw_tiles(&self, ui: &mut Ui) {
-        ui.horizontal(|ui| match self.tab {
-            GstTab::Gstr1 => {
-                for bucket in Bucket::ALL {
-                    let value = match self.bucket_count(GstTab::Gstr1, bucket) {
-                        Some(n) => n.to_string(),
-                        None => "Not loaded".to_owned(),
-                    };
-                    tile(ui, bucket.label(), &value, "vouchers");
-                }
-            }
-            GstTab::Gstr3b => {
-                tile(
-                    ui,
-                    "Payable in cash after set-off",
-                    "Not supported yet",
-                    "the engine has no set-off figure",
-                );
-                tile(
-                    ui,
-                    "ITC accepted in IMS",
-                    "Not loaded",
-                    "2B and IMS import is not built",
-                );
-            }
-            GstTab::Reconciliation => {}
-        });
-        ui.add_space(8.0);
-    }
-
-    /// The guidance card of GSTR-1, with a note when vouchers are held back.
-    fn draw_next_steps(&self, ui: &mut Ui) {
-        let held = self
-            .bucket_count(GstTab::Gstr1, Bucket::NeedsCorrection)
-            .unwrap_or(0);
-        if held > 0 {
-            let text = format!(
-                "{held} voucher(s) need correction. The JSON is held back until they are fixed; \
-                 the reason is in the table below."
-            );
-            crate::ui::note::note(ui, crate::ui::note::NoteKind::Warn, &text);
-            ui.add_space(8.0);
-        }
-        crate::ui::card::card(ui, |ui| {
-            ui.strong("What happens next");
-            for step in NEXT_STEPS {
-                ui.label(format!("- {step}"));
-            }
-        });
-        ui.add_space(8.0);
-    }
-
-    /// The "Read this before filing" card of GSTR-3B, from the engine's own notes on what the
-    /// working does and does not check.
-    fn draw_3b_notes(ui: &mut Ui) {
-        crate::ui::card::card(ui, |ui| {
-            ui.strong("Read this before filing");
-            for line in GSTR3B_NOTES {
-                ui.label(format!("- {line}"));
-            }
-        });
-        ui.add_space(8.0);
-    }
-
-    fn draw_tabs(&self, ui: &mut Ui, events: &mut Vec<UiEvent>) {
-        ui.horizontal(|ui| {
-            for tab in GstTab::ALL {
-                let text = format!("{} ({})", tab.label(), tab.key_hint());
-                if ui.selectable_label(self.tab == tab, text).clicked() {
-                    events.push(UiEvent::Tab(tab));
-                }
-            }
-        });
-    }
-
-    fn draw_chips(&self, ui: &mut Ui, events: &mut Vec<UiEvent>) {
-        let Some(total) = self.item_count(self.tab) else {
-            return;
-        };
-        ui.horizontal(|ui| {
-            let all = format!("All {total}");
-            if ui
-                .selectable_label(self.bucket_filter.is_none(), all)
-                .clicked()
-            {
-                events.push(UiEvent::Filter(None));
-            }
-            for bucket in Bucket::ALL {
-                let n = self.bucket_count(self.tab, bucket).unwrap_or(0);
-                let text = format!("{} {n}", bucket.label());
-                if ui
-                    .selectable_label(self.bucket_filter == Some(bucket), text)
-                    .clicked()
-                {
-                    events.push(UiEvent::Filter(Some(bucket)));
-                }
-            }
-            if self.tab == GstTab::Reconciliation {
-                let text = format!("Open actions {}", self.open_count());
-                if ui.selectable_label(self.open_only, text).clicked() {
-                    events.push(UiEvent::OpenOnly(!self.open_only));
-                }
-            }
-        });
-    }
-
-    fn draw_exceptions(
-        &self,
-        ui: &mut Ui,
-        feed: &Feed<Vec<ExceptionItem>>,
-        want_scroll: bool,
-        events: &mut Vec<UiEvent>,
-    ) {
-        let Feed::Loaded(items) = feed else {
-            draw_not_ready(ui, feed);
-            return;
-        };
-        let visible = self.visible_exceptions(feed);
-        egui::ScrollArea::vertical()
-            .auto_shrink([false, false])
-            .show(ui, |ui| {
-                egui::Grid::new("gst-exceptions")
-                    .striped(true)
-                    .show(ui, |ui| {
-                        for head in ["Bucket", "Item", "Detail"] {
-                            ui.weak(head);
-                        }
-                        ui.end_row();
-                        for (pos, &index) in visible.iter().enumerate() {
-                            let Some(item) = items.get(index) else {
-                                continue;
-                            };
-                            let focused = pos == self.focus;
-                            select_cell(
-                                ui,
-                                focused && want_scroll,
-                                focused,
-                                pos,
-                                item.bucket.label(),
-                                events,
-                            );
-                            ui.label(item.title.as_str());
-                            ui.label(item.detail.as_str());
-                            ui.end_row();
-                        }
-                    });
-            });
-    }
-
-    fn draw_recon(&self, ui: &mut Ui, want_scroll: bool, events: &mut Vec<UiEvent>) {
-        let Feed::Loaded(rows) = &self.recon else {
-            draw_recon_not_ready(ui, &self.recon);
-            return;
-        };
-        let visible = self.visible_recon();
-        egui::ScrollArea::vertical()
-            .auto_shrink([false, false])
-            .show(ui, |ui| {
-                egui::Grid::new("gst-recon").striped(true).show(ui, |ui| {
-                    for head in [
-                        "Match",
-                        "Supplier",
-                        "Invoice",
-                        "Taxable, books",
-                        "Taxable, 2B",
-                        "Tax, books",
-                        "Tax, 2B",
-                        "Difference",
-                        "IMS action",
-                    ] {
-                        ui.weak(head);
-                    }
-                    ui.end_row();
-                    for (pos, &index) in visible.iter().enumerate() {
-                        let Some(row) = rows.get(index) else {
-                            continue;
-                        };
-                        let focused = pos == self.focus;
-                        select_cell(
-                            ui,
-                            focused && want_scroll,
-                            focused,
-                            pos,
-                            row.state.label(),
-                            events,
-                        );
-                        ui.vertical(|ui| {
-                            ui.label(row.supplier.as_str());
-                            ui.weak(row.gstin.as_str());
-                        });
-                        ui.vertical(|ui| {
-                            ui.label(row.invoice_no.as_str());
-                            ui.weak(row.dates_text());
-                        });
-                        ui.label(amount_cell(row.taxable_books));
-                        ui.label(amount_cell(row.taxable_2b));
-                        ui.label(amount_cell(row.tax_books));
-                        ui.label(amount_cell(row.tax_2b));
-                        ui.label(difference_cell(row.difference));
-                        self.draw_ims_cell(ui, index, row, events);
-                        ui.end_row();
-                    }
-                });
-            });
-    }
-
-    fn draw_ims_cell(&self, ui: &mut Ui, index: usize, row: &ReconRow, events: &mut Vec<UiEvent>) {
-        if !row.in_2b() {
-            ui.weak("Ask supplier to file");
-            return;
-        }
-        let decision = self.decision(index);
-        ui.horizontal(|ui| {
-            for action in ImsAction::ALL {
-                if ui
-                    .selectable_label(decision == Some(action), action.label())
-                    .clicked()
-                {
-                    events.push(UiEvent::Decide(index, action));
-                }
-            }
-            if decision.is_none() {
-                ui.weak(format!(
-                    "suggested: {}, not confirmed",
-                    row.suggested.label()
-                ));
-            }
-        });
-    }
-
-    fn draw_footer(&self, ui: &mut Ui, events: &mut Vec<UiEvent>) {
-        if let Some(text) = &self.notice {
-            ui.label(text.as_str());
-        }
-        if let Some(reason) = self.export_blocked_reason() {
-            ui.weak(format!("Export JSON: {reason}"));
-        }
-        if self.tab == GstTab::Reconciliation {
-            ui.weak(
-                "J K move, A accept, R reject, P pending, Enter open. Actions are saved here and \
-                 uploaded to IMS only when you choose to.",
-            );
-        } else {
-            ui.weak("J K move, Enter opens the voucher, 1 2 3 switch tab.");
-        }
-        ui.horizontal(|ui| {
-            if ui.button("Re-apply masters").clicked() {
-                events.push(UiEvent::Reapply);
-            }
-            if self.tab == GstTab::Reconciliation {
-                let any = !self.confirmed_actions().is_empty();
-                if ui
-                    .add_enabled(any, egui::Button::new("Export IMS action file"))
-                    .clicked()
-                {
-                    events.push(UiEvent::Export);
-                }
-            }
-        });
     }
 }
 
@@ -1254,170 +949,6 @@ fn is_open(row: &ReconRow, decision: Option<ImsAction>) -> bool {
     row.in_2b() && matches!(decision, None | Some(ImsAction::Pending))
 }
 
-/// The first cell of a row: click selects, double click opens, and the selected row scrolls into
-/// view when `scroll` is set.
-fn select_cell(
-    ui: &mut Ui,
-    scroll: bool,
-    focused: bool,
-    pos: usize,
-    label: &str,
-    events: &mut Vec<UiEvent>,
-) {
-    let r = ui.selectable_label(focused, label);
-    if r.clicked() {
-        events.push(UiEvent::Focus(pos));
-    }
-    if r.double_clicked() {
-        events.push(UiEvent::Drill(pos));
-    }
-    if scroll {
-        r.scroll_to_me(None);
-    }
-}
-
-/// The figures a return holds, one per line, and the notes about what is not drawn.
-fn draw_figures(ui: &mut Ui, figures: &Figures) {
-    if figures.rows.is_empty() && figures.notes.is_empty() {
-        return;
-    }
-    egui::CollapsingHeader::new("Figures from the return")
-        .default_open(true)
-        .show(ui, |ui| {
-            egui::Grid::new("gst-figures").striped(true).show(ui, |ui| {
-                for figure in &figures.rows {
-                    ui.label(figure.label.as_str());
-                    ui.label(amount_cell(Some(figure.amount)));
-                    ui.end_row();
-                }
-            });
-            for note in &figures.notes {
-                ui.weak(note.as_str());
-            }
-        });
-}
-
-/// Says why a feed shows no table.
-fn draw_not_ready<T>(ui: &mut Ui, feed: &Feed<T>) {
-    match feed {
-        Feed::Loaded(_) => {}
-        Feed::NotLoaded => {
-            ui.weak("Not loaded for this period yet.");
-        }
-        Feed::Unsupported(u) => {
-            ui.colored_label(ui.visuals().error_fg_color, unsupported_text(u));
-        }
-    }
-}
-
-/// Says why the 2B and IMS tab shows no table. Nothing is imported in this version, so a feed
-/// that was never supplied says so and names what is missing.
-fn draw_recon_not_ready(ui: &mut Ui, feed: &Feed<Vec<ReconRow>>) {
-    match feed {
-        Feed::NotLoaded => {
-            ui.weak(
-                "2B and IMS are not imported in this version, so there is nothing to match. \
-                 The match needs the engine's reconciliation (engine item E-3).",
-            );
-        }
-        Feed::Unsupported(_) | Feed::Loaded(_) => draw_not_ready(ui, feed),
-    }
-}
-
-/// One status tile: a label, the value in large type, and a line saying what the value counts.
-fn tile(ui: &mut Ui, label: &str, value: &str, note: &str) {
-    ui.vertical(|ui| {
-        ui.set_min_width(170.0);
-        ui.weak(label);
-        ui.label(egui::RichText::new(value).size(20.0).strong());
-        ui.weak(note);
-    });
-    ui.add_space(16.0);
-}
-
-/// The guidance under the GSTR-1 tiles. Each line says what the screen does and nothing it does
-/// not: there is no mark-as-filed and no portal upload. Sources: the `Api::gstr1_json` refusal
-/// (`ledgerly-api/src/gst.rs`), the GST portal's returns page
-/// (<https://www.gst.gov.in/help/returns>, read 2026-11-22), and the module notes of
-/// `ledgerly-gst/src/gstr3b.rs`, which say that Ledgerly does not file.
-const NEXT_STEPS: [&str; 4] = [
-    "Fix anything in Needs correction or Mismatch. Enter opens the voucher to fix.",
-    "Export JSON (Ctrl+E) writes the GSTR-1 JSON for the GST portal's offline tool. The engine \
-     writes it only when every voucher is Ready or Not relevant.",
-    "Ledgerly does not file. Upload the JSON and file on the GST portal yourself.",
-    "Ledgerly does not yet record a return as filed or lock its period.",
-];
-
-/// The "Read this before filing" lines of GSTR-3B. They follow the engine's module notes in
-/// `ledgerly-gst/src/gstr3b.rs` (what is worked out, which conditions are not checked, and the
-/// reverse-charge rule), not the mock's text, which the engine does not match.
-const GSTR3B_NOTES: [&str; 4] = [
-    "Ledgerly does not file GSTR-3B. It works out tables 3.1(a) and 4(A)(5) from your books.",
-    "Table 4(A)(5) is the credit your books could claim. It is not checked against GSTR-2B, and \
-     the conditions of CGST Act s.16(2) and s.16(4) are not checked.",
-    "Tax on blocked or ineligible purchase lines is shown apart and is never added to 4(A)(5).",
-    "Purchases under reverse charge are in neither 3.1(a) nor 4(A)(5). Set-off against the \
-     liability is not worked out yet, so no cash payable figure is shown.",
-];
-
-/// Asks where to save the GSTR-1 JSON and writes it there. Cancelling writes nothing. The dialog
-/// is the user's own choice of place; nothing is uploaded.
-fn save_json_file(name: &str, json: &str) -> String {
-    let Some(path) = rfd::FileDialog::new()
-        .set_file_name(name)
-        .add_filter("JSON", &["json"])
-        .save_file()
-    else {
-        return "Export cancelled. Nothing was written.".to_owned();
-    };
-    match std::fs::write(&path, json) {
-        Ok(()) => format!("Saved the GSTR-1 JSON to {}.", path.display()),
-        Err(error) => format!("Could not write {}: {error}.", path.display()),
-    }
-}
-
-/// Reads the workspace keys. Nothing is read while a text field has the keyboard.
-fn read_keys(ui: &Ui) -> Vec<GstCmd> {
-    let ctx = ui.ctx();
-    if ctx.egui_wants_keyboard_input() {
-        return Vec::new();
-    }
-    let mut out = Vec::new();
-    ctx.input_mut(|i| {
-        for tab in GstTab::ALL {
-            if i.consume_key(Modifiers::NONE, tab.key()) {
-                out.push(GstCmd::SwitchTab(tab));
-            }
-        }
-        // Both keys are consumed even when the first one fired.
-        let j = i.consume_key(Modifiers::NONE, Key::J);
-        let down = i.consume_key(Modifiers::NONE, Key::ArrowDown);
-        if j || down {
-            out.push(GstCmd::Next);
-        }
-        let k = i.consume_key(Modifiers::NONE, Key::K);
-        let up = i.consume_key(Modifiers::NONE, Key::ArrowUp);
-        if k || up {
-            out.push(GstCmd::Prev);
-        }
-        for action in ImsAction::ALL {
-            if i.consume_key(Modifiers::NONE, action.key()) {
-                out.push(GstCmd::Decide(action));
-            }
-        }
-        if i.consume_key(Modifiers::NONE, Key::Enter) {
-            out.push(GstCmd::Open);
-        }
-        if i.consume_key(Modifiers::NONE, Key::Escape) {
-            out.push(GstCmd::Close);
-        }
-        if i.consume_key(Modifiers::CTRL, Key::E) {
-            out.push(GstCmd::ExportJson);
-        }
-    });
-    out
-}
-
 impl Screen for GstScreen {
     fn title(&self) -> String {
         "GST returns".to_owned()
@@ -1433,17 +964,27 @@ impl Screen for GstScreen {
 
     fn keys(&self) -> Vec<crate::screen::KeyHint> {
         use crate::screen::KeyHint;
-        let mut keys = vec![
-            KeyHint::new("1 2 3", "Tabs"),
-            KeyHint::new("J / K", "Move"),
-            KeyHint::new("Enter", "Open voucher"),
-            KeyHint::new("Ctrl+E", "Export JSON"),
-        ];
-        if self.tab == GstTab::Reconciliation {
-            keys.push(KeyHint::new("A R P", "IMS action"));
+        // The mock's key bars (index.html:1721). On the 2B tab the IMS keys are offered only
+        // when there are rows to act on; Y and X need the engine's match (engine item E-3).
+        match (self.tab, &self.recon) {
+            (GstTab::Gstr1 | GstTab::Gstr3b, _) => vec![
+                KeyHint::new("1 2 3", "Tabs"),
+                KeyHint::new("J / K", "Move"),
+                KeyHint::new("Enter", "Open"),
+                KeyHint::new("Ctrl+E", "Export JSON"),
+                KeyHint::new("Esc", "Back"),
+            ],
+            (GstTab::Reconciliation, Feed::Loaded(_)) => vec![
+                KeyHint::new("J / K", "Move"),
+                KeyHint::new("A", "Accept"),
+                KeyHint::new("R", "Reject"),
+                KeyHint::new("P", "Pending"),
+                KeyHint::new("Esc", "Back"),
+            ],
+            (GstTab::Reconciliation, Feed::NotLoaded | Feed::Unsupported(_)) => {
+                vec![KeyHint::new("1 2 3", "Tabs"), KeyHint::new("Esc", "Back")]
+            }
         }
-        keys.push(KeyHint::new("Esc", "Back"));
-        keys
     }
 
     fn ui(&mut self, ui: &mut Ui, ctx: &mut AppCtx) -> ScreenAction {
@@ -1451,6 +992,13 @@ impl Screen for GstScreen {
         if self.is_loading() {
             ui.ctx().request_repaint();
         }
-        self.draw(ui)
+        let action = self.draw(ui);
+        // Enter or a double click asked for a voucher: open it on top, as the day book does.
+        match (action, self.take_drill_request()) {
+            (ScreenAction::Stay, Some(id)) => ScreenAction::Push(Box::new(
+                crate::screens::report_view::VoucherViewScreen::new(id),
+            )),
+            (action, _) => action,
+        }
     }
 }

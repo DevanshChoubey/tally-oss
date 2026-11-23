@@ -77,6 +77,8 @@ pub enum Icon {
     Sliders,
     /// `plus` (create).
     Plus,
+    /// `upload` (export a file, import a file).
+    Upload,
 }
 
 impl Icon {
@@ -131,6 +133,7 @@ impl Icon {
                 "M4 6h9 M17 6h3 M15 4v4 M4 12h3 M11 12h9 M9 10v4 M4 18h11 M19 18h1 M17 16v4"
             }
             Icon::Plus => "M12 5v14 M5 12h14",
+            Icon::Upload => "M12 16V4 M7 9l5-5 5 5 M4 20h16",
         }
     }
 }

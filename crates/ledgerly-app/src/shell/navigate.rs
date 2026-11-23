@@ -583,8 +583,8 @@ pub fn return_label(period: Period) -> String {
 /// [`NavError::Unsupported`] when the company has no GST registration, or more than one (the
 /// screen cannot choose between them yet); [`NavError::Period`] for an invalid financial year.
 pub fn gst_screen(books: &Books) -> Result<GstScreen, NavError> {
-    let gstin = match books.company.registrations.as_slice() {
-        [only] => only.gstin.clone(),
+    let (gstin, state) = match books.company.registrations.as_slice() {
+        [only] => (only.gstin.clone(), only.state),
         [] => {
             return Err(NavError::Unsupported {
                 what: "GST returns".to_owned(),
@@ -602,7 +602,7 @@ pub fn gst_screen(books: &Books) -> Result<GstScreen, NavError> {
         }
     };
     let period = gst_return_period(books, today())?;
-    let mut screen = GstScreen::new(return_label(period), Some(gstin.clone()));
+    let mut screen = GstScreen::new(return_label(period), Some(gstin.clone())).with_state(state);
     screen.switch_tab(GstTab::Gstr1);
     screen.request_load(gstin, period);
     Ok(screen)

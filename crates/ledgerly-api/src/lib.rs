@@ -21,7 +21,9 @@ pub use command::{Command, CommandResult, CreatedId};
 // crate only, so the report model is re-exported here instead of adding a manifest dependency.
 pub use error::ApiError;
 pub use facade::Api;
-pub use gst::{Bucket, BucketedVoucher, Gstr1, Gstr1Return, Gstr3bWorking, RulePack};
+pub use gst::{
+    Bucket, BucketedVoucher, Gstr1, Gstr1Return, Gstr3bTaxAmounts, Gstr3bWorking, RulePack,
+};
 pub use ledgerly_gst::compute::GstBreakup;
 pub use ledgerly_model::{
     Address, Books, Company, EntityKind, Features, NegativeStockPolicy, Voucher,

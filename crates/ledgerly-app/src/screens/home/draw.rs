@@ -426,7 +426,7 @@ fn grid<T>(ui: &mut Ui, items: &[T], per_row: usize, draw: &mut impl FnMut(&mut 
     clippy::float_arithmetic,
     reason = "placing the right column after the left"
 )]
-fn split(ui: &mut Ui, left: impl FnOnce(&mut Ui), right: impl FnOnce(&mut Ui)) {
+pub(crate) fn split(ui: &mut Ui, left: impl FnOnce(&mut Ui), right: impl FnOnce(&mut Ui)) {
     let width = ui.available_width();
     if let Some((left_w, right_w)) = main_columns(width) {
         let top = ui.cursor().min;
@@ -461,7 +461,7 @@ fn split(ui: &mut Ui, left: impl FnOnce(&mut Ui), right: impl FnOnce(&mut Ui)) {
 
 /// A card heading in the card title size. Called first in each panel card, it also makes the
 /// card fill its column, as the mock's grid cells do.
-fn title(ui: &mut Ui, text: &str) {
+pub(crate) fn title(ui: &mut Ui, text: &str) {
     ui.set_min_width(ui.available_width());
     let t = tokens(ui);
     let font = bold_font(ui, TEXT_H2);
