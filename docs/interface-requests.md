@@ -245,3 +245,14 @@ Filed from the r2/* fix branches. Each line names the card and the request; the 
   the report and writes CSV or XLSX. Both are additions; nothing frozen changed.
 - Why: the mock's Export button and Ctrl+E (index.html:1576, 1624). Tests:
   `rp8_exports::csv_file_holds_exactly_the_csv_text`, `w1_api::an_exported_report_is_*`.
+
+## W4: AI tier and AI activity log (AI and privacy screen)
+- Crate/file: `crates/ledgerly-api/src/ai.rs` (new), `crates/ledgerly-api/src/error.rs`, `crates/ledgerly-app/src/screen.rs`.
+- Added (no frozen item changed): `AiTier { Off, Local, Cloud }` (re-exported as `ledgerly_app::AiTier`, which
+  replaces the app's own enum with the same variants), `Api::ai_tier`, `Api::set_ai_tier`, `Api::ai_log`,
+  `Api::export_ai_log`, `AiLogEntry`, and `ApiError::UnknownAiTier` / `ApiError::AiLogWrite`.
+- Storage: the tier is a `SettingChanged` event under the key `ai.tier` (the last one in sequence order
+  is in force), so every change is audited. The log is the existing `AiProposalRecorded` events.
+- Cloud is refused with `Outcome::Unsupported` until a keychain store is wired into the app (spec 9). The
+  company file never holds a key.
+- Tests: `ledgerly-api/tests/w4_ai_settings.rs`, `ledgerly-app/tests/w4_ai_settings.rs`.

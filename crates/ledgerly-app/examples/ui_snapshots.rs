@@ -485,6 +485,17 @@ fn shots() -> Vec<Shot> {
         shot("balance-sheet.ledger", &to_debtors()).then(&[(Key::Enter, NONE)]),
         shot("day-book.default", &[(Key::D, NONE)]),
         shot("gst.gstr1", &[(Key::G, NONE), (Key::Num1, NONE)]),
+        // AI and privacy is reached from the palette (index.html:1920 keys: 1 Off, 2 On this
+        // computer, 3 Cloud). The capture company has no stored tier, so each state presses its key.
+        shot("ai-settings.local", &[palette])
+            .query("AI and privacy")
+            .then(&[(Key::Enter, NONE), (Key::Num2, NONE)]),
+        shot("ai-settings.off", &[palette])
+            .query("AI and privacy")
+            .then(&[(Key::Enter, NONE), (Key::Num1, NONE)]),
+        shot("ai-settings.cloud", &[palette])
+            .query("AI and privacy")
+            .then(&[(Key::Enter, NONE), (Key::Num3, NONE)]),
         // The tabs are 1 GSTR-1, 2 GSTR-3B, 3 reconciliation (`screens/gst.rs`). The capture
         // company has no 2B data, so the reconciliation tab is the mock's empty state.
         shot("gst.gstr3b", &[(Key::G, NONE), (Key::Num2, NONE)]),

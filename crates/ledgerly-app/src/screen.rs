@@ -21,17 +21,9 @@ impl KeyHint {
     }
 }
 
-/// The AI tier the open company is set to. The top bar's AI chip shows it; `None` on
-/// [`AppCtx::ai_tier`] means no tier has been stored yet, and the chip says so.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum AiTier {
-    /// AI is off for this company.
-    Off,
-    /// The local model on this computer. Nothing leaves the computer.
-    Local,
-    /// A cloud provider with the user's own key.
-    Cloud,
-}
+/// The AI tier the open company is set to (`ledgerly_api::AiTier`). The top bar's AI chip shows
+/// it; `None` on [`AppCtx::ai_tier`] means no tier has been stored yet, and the chip says so.
+pub use ledgerly_api::AiTier;
 
 /// One screen on the screen stack (spec 7).
 pub trait Screen {
