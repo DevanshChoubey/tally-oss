@@ -33,8 +33,10 @@
 //!
 //! # Not built here (reported, not guessed)
 //!
-//! Godown and batch allocation, bill references on a bill-wise party, units other than the item's
-//! own, and inline creation of masters are `Unsupported` ([`InvoiceError::Unsupported`]).
+//! Godown and batch allocation, bill references on a bill-wise party, and units other than the
+//! item's own are `Unsupported` ([`InvoiceError::Unsupported`]). Alt+C creates a ledger from the
+//! party or sales/purchase ledger field (the `create` submodule); it creates no stock item, since
+//! the pages read document Alt+C on ledger fields only.
 //! The place of supply is never defaulted: the user sets it.
 //!
 //! # Keys are fixed here (deliberate exception)
@@ -46,6 +48,7 @@
 //! place to switch over; until then remapping a key in the keymap does not change this screen.
 
 mod compute;
+mod create;
 mod draft;
 mod draw;
 mod keys;
@@ -53,6 +56,7 @@ mod nav;
 mod picker;
 
 use self::picker::ledger_hits;
+use crate::screens::voucher_entry::{CreateForm, CreateLedgerRequest};
 use crate::screens::voucher_entry::{
     EntryDateError, LedgerHit, OpenError, format_entry_date, parse_entry_date,
 };
@@ -67,7 +71,7 @@ use ledgerly_core::{
 use ledgerly_model::{
     BaseVoucherKind, Books, LedgerLine, Masters, NumberingMethod, StoredGst, Voucher,
 };
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
 use std::str::FromStr;
 use thiserror::Error;
 
@@ -432,6 +436,7 @@ enum KeyCmd {
     Escape,
     DiscardYes,
     DiscardNo,
+    Create,
 }
 
 /// The item invoice entry screen (card U5).
@@ -459,6 +464,16 @@ pub struct ItemInvoiceScreen {
     posting: Option<Ticket<CommandReply>>,
     /// The tax computation the worker is running, with the voucher it is for.
     computing: Option<(Voucher, Ticket<compute::ComputeReply>)>,
+    /// The create-ledger form Alt+C opened, with the field it is for.
+    create: Option<(create::CreateFor, CreateForm)>,
+    /// Ledgers the user asked to create, not yet sent to the worker or taken by the host.
+    master_requests: Vec<CreateLedgerRequest>,
+    /// Requests waiting for the worker, oldest first.
+    create_queue: VecDeque<CreateLedgerRequest>,
+    /// The ledger create the worker is running: the name asked for, and the ticket.
+    creating: Option<(String, Ticket<CommandReply>)>,
+    /// Fields waiting for a ledger the engine has not named yet, with the name asked for.
+    waiting: Vec<(create::CreateFor, String)>,
 }
 
 impl ItemInvoiceScreen {
@@ -508,6 +523,11 @@ impl ItemInvoiceScreen {
             computing: None,
             confirming_save: false,
             lock_date: None,
+            create: None,
+            master_requests: Vec::new(),
+            create_queue: VecDeque::new(),
+            creating: None,
+            waiting: Vec::new(),
         }))
     }
 

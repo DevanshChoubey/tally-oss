@@ -1,10 +1,92 @@
 //! Creating a ledger inline (Alt+C): the form and the host request.
 
+use egui::Ui;
 use ledgerly_core::{GroupId, LedgerId};
 use ledgerly_model::Masters;
 
 use super::draft::LedgerRef;
 use super::state::{CreateForm, CreateLedgerRequest, Field, Notice, VoucherEntryScreen};
+
+/// Checks a ledger the user asked to create with Alt+C: a group that exists, a name, and no
+/// ledger (or request still waiting in `queued`) with the same name in any case. Returns the
+/// trimmed name and the group, or what to tell the user.
+pub(crate) fn check_new_ledger(
+    masters: &Masters,
+    name: &str,
+    group: Option<GroupId>,
+    queued: &[CreateLedgerRequest],
+) -> Result<(String, GroupId), String> {
+    let name = name.trim();
+    let Some(group) = group else {
+        return Err("Choose a group for the new ledger.".to_owned());
+    };
+    if name.is_empty() {
+        return Err("Type a name for the new ledger.".to_owned());
+    }
+    if !masters.groups.contains_key(&group) {
+        return Err("That group does not exist.".to_owned());
+    }
+    let lower = name.to_lowercase();
+    let taken = masters
+        .ledgers
+        .values()
+        .any(|l| l.name.to_lowercase() == lower)
+        || queued.iter().any(|r| r.name.to_lowercase() == lower);
+    if taken {
+        return Err(format!(
+            "A ledger called '{name}' already exists; pick it from the list."
+        ));
+    }
+    Ok((name.to_owned(), group))
+}
+
+/// What the user did in the create-ledger form this frame.
+pub(crate) enum FormAnswer {
+    /// Nothing yet: the form stays open.
+    Open,
+    /// Pressed Create.
+    Confirm,
+    /// Pressed Cancel.
+    Cancel,
+}
+
+/// Draws the create-ledger form: the name, a group list (its id salted with `salt`), Create and
+/// Cancel.
+pub(crate) fn create_form_ui(
+    ui: &mut Ui,
+    form: &mut CreateForm,
+    masters: &Masters,
+    salt: &str,
+) -> FormAnswer {
+    let mut answer = FormAnswer::Open;
+    ui.group(|ui| {
+        ui.label("Create ledger");
+        ui.horizontal(|ui| {
+            ui.label("Name");
+            ui.add(egui::TextEdit::singleline(&mut form.name).desired_width(280.0));
+        });
+        let selected = form
+            .group
+            .and_then(|g| masters.groups.get(&g))
+            .map_or("Choose a group", |g| g.name.as_str());
+        egui::ComboBox::from_id_salt(salt)
+            .selected_text(selected)
+            .show_ui(ui, |ui| {
+                for (id, group) in &masters.groups {
+                    ui.selectable_value(&mut form.group, Some(*id), group.name.as_str());
+                }
+            });
+        ui.horizontal(|ui| {
+            if ui.button("Create").clicked() {
+                answer = FormAnswer::Confirm;
+            }
+            if ui.button("Cancel (Esc)").clicked() {
+                answer = FormAnswer::Cancel;
+            }
+        });
+    });
+    answer
+}
 
 impl VoucherEntryScreen {
     // ---- creating a ledger inline (Alt+C) ----
@@ -30,30 +112,11 @@ impl VoucherEntryScreen {
 
     /// Confirms the create form: records a [`CreateLedgerRequest`] and marks the line pending.
     pub fn confirm_create(&mut self, masters: &Masters, name: &str, group: Option<GroupId>) {
-        let name = name.trim();
-        let Some(group) = group else {
-            return self.fail("Choose a group for the new ledger.");
+        let (name, group) = match check_new_ledger(masters, name, group, &self.master_requests) {
+            Ok(checked) => checked,
+            Err(message) => return self.fail(message),
         };
-        if name.is_empty() {
-            return self.fail("Type a name for the new ledger.");
-        }
-        if !masters.groups.contains_key(&group) {
-            return self.fail("That group does not exist.");
-        }
-        let lower = name.to_lowercase();
-        let taken = masters
-            .ledgers
-            .values()
-            .any(|l| l.name.to_lowercase() == lower)
-            || self
-                .master_requests
-                .iter()
-                .any(|r| r.name.to_lowercase() == lower);
-        if taken {
-            return self.fail(format!(
-                "A ledger called '{name}' already exists; pick it from the list."
-            ));
-        }
+        let name = name.as_str();
         let Field::Ledger(i) = self.focus else {
             return self.fail("Put the cursor on a ledger field first.");
         };

@@ -184,12 +184,17 @@ matching to propose a ledger, which is not built).
 - **by design: "Create {kind}" follows the tab.** The mock's button always says "Create ledger";
   ours names the kind on screen ("Create stock item"), since Alt+C creates that kind.
 - **by design: the filter is on every tab.** The mock's items tab has no filter box.
-- **bug: "Alt+C creates anywhere" is not true yet.** The subtitle is the mock's word for word.
-  The mock means Alt+C on any master field creates that master there (index.html:916 "Create
-  master here", 1325 on the sales invoice: "The form opens on top and returns with it
-  selected"). Ours does that on this screen and on a voucher's ledger field only; the sales
-  invoice's item field and the purchase bill have no Alt+C yet. Needs Alt+C on those fields,
-  or the subtitle to drop "anywhere".
+- **by design: Alt+C creates where TallyPrime documents it.** Alt+C is "To create another master
+  on the fly while creating masters and vouchers" (help.tallysolutions.com/keyboard-shortcuts-
+  tally-prime/). Ours does it on this screen's list (the tab's kind), on the ledger form's Under
+  (a new group, and the ledger comes back with it under; help.tallysolutions.com/ledgers-in-
+  tallyprime/), and on a voucher's ledger selection fields ("In the Voucher Creation screen, when
+  your cursor is on the ledger selection field, press Alt+C", same page): voucher entry's ledger
+  lines and the item invoice's party and sales or purchase ledger.
+- **deferred: Alt+C on the item invoice's item field.** The mock creates an item there
+  (index.html:390, 1253). None of the TallyPrime pages read documents Alt+C on a stock item
+  field, so it stays out until a cited page does; Enter on an unknown item still says to create
+  it on the masters screen. The purchase bill screen is a stub with no fields yet.
 - **by design: Enter walks every field, as Tab does.** Enter in a one-line field moves to the next
   field and Shift+Enter to the previous one (index.html:1831, 1344), including the lists and
   switches between them; in a multi-line field (the address) Enter is a new line. Enter on a

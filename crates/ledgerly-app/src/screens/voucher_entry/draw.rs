@@ -7,6 +7,7 @@ use ledgerly_core::SignedAmount;
 use ledgerly_model::Masters;
 
 use super::amount::eval_amount;
+use super::create::{FormAnswer, create_form_ui};
 use super::date::parse_entry_date;
 use super::display::{format_amount, format_signed, side_label};
 use super::draft::{Balance, DraftRow, LedgerRef};
@@ -413,35 +414,13 @@ impl VoucherEntryScreen {
         let Some(form) = self.create.as_mut() else {
             return;
         };
-        let mut confirmed = false;
-        let mut cancelled = false;
-        ui.group(|ui| {
-            ui.label("Create ledger");
-            ui.horizontal(|ui| {
-                ui.label("Name");
-                ui.add(egui::TextEdit::singleline(&mut form.name).desired_width(280.0));
-            });
-            let selected = form
-                .group
-                .and_then(|g| masters.groups.get(&g))
-                .map_or("Choose a group", |g| g.name.as_str());
-            egui::ComboBox::from_id_salt("u4-create-group")
-                .selected_text(selected)
-                .show_ui(ui, |ui| {
-                    for (id, group) in &masters.groups {
-                        ui.selectable_value(&mut form.group, Some(*id), group.name.as_str());
-                    }
-                });
-            ui.horizontal(|ui| {
-                confirmed = ui.button("Create").clicked();
-                cancelled = ui.button("Cancel (Esc)").clicked();
-            });
-        });
-        let (name, group) = (form.name.clone(), form.group);
-        if confirmed {
-            self.confirm_create(masters, &name, group);
-        } else if cancelled {
-            self.create = None;
+        match create_form_ui(ui, form, masters, "u4-create-group") {
+            FormAnswer::Open => {}
+            FormAnswer::Confirm => {
+                let (name, group) = (form.name.clone(), form.group);
+                self.confirm_create(masters, &name, group);
+            }
+            FormAnswer::Cancel => self.create = None,
         }
     }
 

@@ -57,9 +57,12 @@ pub(super) enum Notice {
     Info(String),
 }
 
-pub(super) struct CreateForm {
-    pub(super) name: String,
-    pub(super) group: Option<GroupId>,
+/// The create-ledger form Alt+C opens: the name and the group typed so far.
+pub(crate) struct CreateForm {
+    /// The new ledger's name.
+    pub(crate) name: String,
+    /// The group to create it under, once chosen.
+    pub(crate) group: Option<GroupId>,
 }
 
 /// The accounting voucher entry screen (card U4).

@@ -5,7 +5,7 @@ use ledgerly_api::{Command, CreatedId};
 use ledgerly_core::{LedgerId, Paise, SignedAmount};
 use ledgerly_model::Ledger;
 
-use super::state::{Notice, VoucherEntryScreen};
+use super::state::{CreateLedgerRequest, Notice, VoucherEntryScreen};
 use crate::AppCtx;
 use crate::shell::submit::{self, CommandReply};
 
@@ -62,23 +62,7 @@ impl VoucherEntryScreen {
             return;
         }
         if let Some(request) = self.create_queue.pop_front() {
-            let ledger = Ledger {
-                ineligible_itc: None,
-                id: LedgerId(0),
-                name: request.name.clone(),
-                aliases: Vec::new(),
-                group: request.group,
-                opening: SignedAmount::dr(Paise::ZERO),
-                bill_wise: None,
-                cost_centres_applicable: false,
-                party: None,
-                bank: None,
-                tax: None,
-                gst: None,
-                reserved: None,
-                tally: None,
-            };
-            let ticket = submit::send(worker, Command::CreateLedger(ledger));
+            let ticket = submit::send(worker, Command::CreateLedger(new_ledger(&request)));
             self.creating = Some((request.name, ticket));
         }
     }
@@ -95,32 +79,58 @@ impl VoucherEntryScreen {
         };
         let name = std::mem::take(name);
         self.creating = None;
-        match reply {
-            CommandReply::Booked(result) => match result.created {
-                Some(CreatedId::Ledger(id)) => self.resolve_created_ledger(&name, id),
-                Some(
-                    other @ (CreatedId::Group(_)
-                    | CreatedId::Unit(_)
-                    | CreatedId::StockGroup(_)
-                    | CreatedId::StockItem(_)
-                    | CreatedId::Godown(_)
-                    | CreatedId::Batch(_)
-                    | CreatedId::CostCategory(_)
-                    | CreatedId::CostCentre(_)),
-                ) => self.reject_created_ledger(
-                    &name,
-                    &format!("the engine reported a different master ({other:?})"),
-                ),
-                None => {
-                    self.reject_created_ledger(&name, "the engine did not report the new ledger");
-                }
-            },
-            CommandReply::Unsupported(u) => {
-                let why = format!("not supported yet: {} ({})", u.what, u.reason);
-                self.reject_created_ledger(&name, &why);
-            }
-            CommandReply::Failed(reason) => self.reject_created_ledger(&name, &reason),
+        match created_ledger(reply) {
+            Ok(id) => self.resolve_created_ledger(&name, id),
+            Err(why) => self.reject_created_ledger(&name, &why),
         }
         ui.ctx().request_repaint();
+    }
+}
+
+/// The ledger an Alt+C request sends to the worker: the name and group the user gave, nothing
+/// else set. It goes out with id 0; the API assigns the real id and reports it in
+/// `CommandResult::created`.
+pub(crate) fn new_ledger(request: &CreateLedgerRequest) -> Ledger {
+    Ledger {
+        ineligible_itc: None,
+        id: LedgerId(0),
+        name: request.name.clone(),
+        aliases: Vec::new(),
+        group: request.group,
+        opening: SignedAmount::dr(Paise::ZERO),
+        bill_wise: None,
+        cost_centres_applicable: false,
+        party: None,
+        bank: None,
+        tax: None,
+        gst: None,
+        reserved: None,
+        tally: None,
+    }
+}
+
+/// The id of the ledger the worker created, or why there is none.
+pub(crate) fn created_ledger(reply: CommandReply) -> Result<LedgerId, String> {
+    match reply {
+        CommandReply::Booked(result) => match result.created {
+            Some(CreatedId::Ledger(id)) => Ok(id),
+            Some(
+                other @ (CreatedId::Group(_)
+                | CreatedId::Unit(_)
+                | CreatedId::StockGroup(_)
+                | CreatedId::StockItem(_)
+                | CreatedId::Godown(_)
+                | CreatedId::Batch(_)
+                | CreatedId::CostCategory(_)
+                | CreatedId::CostCentre(_)),
+            ) => Err(format!(
+                "the engine reported a different master ({other:?})"
+            )),
+            None => Err("the engine did not report the new ledger".to_owned()),
+        },
+        CommandReply::Unsupported(u) => {
+            Err(format!("not supported yet: {} ({})", u.what, u.reason))
+        }
+        CommandReply::Failed(reason) => Err(reason),
     }
 }

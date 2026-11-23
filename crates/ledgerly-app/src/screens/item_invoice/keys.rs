@@ -68,6 +68,9 @@ pub(super) fn read_keys(
         if picker_open && i.consume_key(Modifiers::NONE, Key::ArrowUp) {
             out.push(KeyCmd::PickUp);
         }
+        if !prompt.discard && !prompt.save && consume_exact(i, Key::C, Modifiers::ALT) {
+            out.push(KeyCmd::Create);
+        }
         if escape_wanted && i.consume_key(Modifiers::NONE, Key::Escape) {
             out.push(KeyCmd::Escape);
         }
@@ -97,9 +100,12 @@ impl ItemInvoiceScreen {
             KeyCmd::DiscardNo => {
                 self.answer_discard(false);
             }
+            KeyCmd::Create => self.begin_create(),
             KeyCmd::Escape => {
                 if self.confirm_discard {
                     self.confirm_discard = false;
+                } else if self.create.is_some() {
+                    self.cancel_create();
                 } else if self.confirming_save {
                     self.confirming_save = false;
                 } else if self.searching() {

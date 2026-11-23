@@ -51,7 +51,7 @@ impl ItemInvoiceScreen {
         self.pick_index = 0;
     }
 
-    fn advance(&mut self) {
+    pub(super) fn advance(&mut self) {
         let last_row = self.draft.rows.len().saturating_sub(1);
         if let Field::Discount(i) | Field::Amount(i) = self.focus
             && i == last_row
@@ -104,6 +104,29 @@ impl ItemInvoiceScreen {
         }
     }
 
+    /// Enter on a party or ledger field whose text names no ledger: says the ledger is still being
+    /// created when it was asked for, or how to create it.
+    fn no_ledger_match(&mut self) -> Step {
+        let text = match self.focus {
+            Field::Account => self.draft.account_text.clone(),
+            Field::Date
+            | Field::Number
+            | Field::Party
+            | Field::Place
+            | Field::Reference
+            | Field::Item(_)
+            | Field::Qty(_)
+            | Field::Rate(_)
+            | Field::Discount(_)
+            | Field::Amount(_)
+            | Field::Narration => self.draft.party_text.clone(),
+        };
+        if self.is_waiting_for(&text) {
+            return self.refuse(format!("Ledger '{}' is still being created.", text.trim()));
+        }
+        self.refuse("No ledger matches; press Alt+C to create one.".to_owned())
+    }
+
     fn refuse(&mut self, message: String) -> Step {
         self.fail(message);
         Step::Stay
@@ -145,7 +168,7 @@ impl ItemInvoiceScreen {
                 self.draft.party_text = hit.name;
                 Step::Next
             }
-            None => self.refuse("No ledger matches; create it on the masters screen.".to_owned()),
+            None => self.no_ledger_match(),
         }
     }
 
@@ -159,7 +182,7 @@ impl ItemInvoiceScreen {
                 self.draft.account_text = hit.name;
                 Step::Next
             }
-            None => self.refuse("No ledger matches; create it on the masters screen.".to_owned()),
+            None => self.no_ledger_match(),
         }
     }
 

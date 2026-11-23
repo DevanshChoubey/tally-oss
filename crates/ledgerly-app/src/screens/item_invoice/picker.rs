@@ -75,7 +75,8 @@ pub fn search_items(masters: &Masters, query: &str) -> Vec<ItemHit> {
     found.into_iter().map(|(_, hit)| hit).collect()
 }
 
-/// The ledgers matching `query`, without the "create" entry (this screen creates no masters).
+/// The ledgers matching `query`, without the "create" entry: on this screen Alt+C opens the create
+/// form instead (the `create` submodule).
 pub(super) fn ledger_hits(
     masters: &Masters,
     query: &str,

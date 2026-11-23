@@ -612,6 +612,7 @@ impl ItemInvoiceScreen {
     /// asked to close the screen.
     fn run_keys(&mut self, ui: &Ui, masters: &Masters, labels: &[String]) -> (bool, bool) {
         let escape_wanted = self.confirm_discard
+            || self.create.is_some()
             || self.confirming_save
             || self.searching()
             || !self.draft.is_blank();
@@ -681,9 +682,10 @@ impl ItemInvoiceScreen {
             }
         });
         self.draw_notes(ui);
+        self.draw_create_form(ui, masters);
 
         let mut events = Vec::new();
-        let enabled = !self.confirm_discard;
+        let enabled = !self.confirm_discard && self.create.is_none();
         ui.add_enabled_ui(enabled, |ui| {
             card(ui, |ui| {
                 self.draw_header(ui, base, masters, &labels, &mut events);
@@ -736,6 +738,7 @@ impl Screen for ItemInvoiceScreen {
             KeyHint::new("Enter", "Next field"),
             KeyHint::new("Shift+Enter", "Previous field"),
             KeyHint::new("Up / Down", "List"),
+            KeyHint::new("Alt+C", "Create master"),
             KeyHint::new("Ctrl+A", "Save"),
         ]
     }
@@ -755,6 +758,8 @@ impl Screen for ItemInvoiceScreen {
         };
         if ctx.api.is_some() {
             self.send_saves(ctx);
+            self.poll_ledger_create(ui);
+            self.send_ledger_creates(ctx);
         }
         action
     }
