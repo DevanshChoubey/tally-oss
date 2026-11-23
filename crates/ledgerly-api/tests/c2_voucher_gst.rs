@@ -37,10 +37,10 @@ use ledgerly_model::seed_godowns::MAIN_LOCATION;
 use ledgerly_model::seed_groups::reserved_groups;
 use ledgerly_model::seed_voucher_types::default_voucher_types;
 use ledgerly_model::{
-    Address, BaseVoucherKind, Company, EntityKind, Features, GodownAllocation, GstHistory,
-    GstRegistration, InventoryLine, Ledger, LedgerLine, NegativeStockPolicy, PartyDetails,
-    RegistrationType, ReservedGroup, StockItem, TaxDetails, TaxLedgerKind, Taxability, Unit,
-    UnitKind, ValuationMethod, Voucher, VoucherMode, VoucherStatus,
+    Address, BaseVoucherKind, Company, EntityKind, Features, GodownAllocation, GstClassification,
+    GstHistory, GstRegistration, InventoryLine, Ledger, LedgerLine, NegativeStockPolicy,
+    PartyDetails, RegistrationType, ReservedGroup, StockItem, TaxDetails, TaxLedgerKind,
+    Taxability, Unit, UnitKind, ValuationMethod, Voucher, VoucherMode, VoucherStatus,
 };
 use time::OffsetDateTime;
 use time::macros::date;
@@ -618,4 +618,111 @@ fn gstr3b_with_a_purchase_names_the_pending_itc_entry() {
         }
         other @ Outcome::Value(_) => panic!("expected Unsupported, got {other:?}"),
     }
+}
+
+// ---------------------------------------------------------------------------------------------
+// Accounting invoices: particulars are ledgers with amounts, the engine adds the rest
+// ---------------------------------------------------------------------------------------------
+
+/// A sales ledger for services, classified taxable at 18% (the base of an accounting invoice is a
+/// ledger line whose ledger carries a GST classification).
+const SERVICES: LedgerId = LedgerId(22);
+
+fn services(api: &mut Api) {
+    ok(api.execute(Command::CreateLedger(Ledger {
+        gst: Some(GstClassification {
+            hsn: None,
+            taxability: Taxability::Taxable,
+            rate_percent: Some(Rate(Decimal::from(18))),
+        }),
+        ..plain(SERVICES, "Service Charges", ReservedGroup::SalesAccounts)
+    })));
+}
+
+/// An accounting-invoice sale with only the particulars typed.
+fn accounting_sale(party: LedgerId, pos: Option<u8>, particulars: Vec<LedgerLine>) -> Voucher {
+    invoice(
+        BaseVoucherKind::Sales,
+        VoucherMode::AccountingInvoice,
+        party,
+        pos,
+        particulars,
+    )
+}
+
+/// Derivation: TallyPrime records a sale of services "in accounting invoice mode": the party,
+/// then the ledger under Particulars with its Amount
+/// (<https://help.tallysolutions.com/sales-of-goods-services/>, read 2026-11-23). Intra-state
+/// (company and buyer in 29), Service Charges Cr 10,000.00 at 18%: CGST 9% = 900.00, SGST 9% =
+/// 900.00, invoice 11,800.00, no round-off. The engine's lines are party Dr 11,800.00, the
+/// particular as typed, then CGST Cr 900.00 and SGST Cr 900.00; the voucher posts with them.
+#[test]
+fn an_accounting_invoice_gets_its_party_and_tax_lines_from_the_engine() {
+    let (_dir, mut api) = company_file();
+    services(&mut api);
+    let draft = accounting_sale(KA_BUYER, Some(29), vec![cr(SERVICES, 1_000_000)]);
+    let built = ok(api.invoice_gst(&draft));
+    assert_eq!(built.invoice_total, Paise::new(1_180_000));
+    assert_eq!(
+        built.ledger_lines,
+        vec![
+            dr(KA_BUYER, 1_180_000),
+            cr(SERVICES, 1_000_000),
+            cr(CGST, 90_000),
+            cr(SGST, 90_000),
+        ]
+    );
+    let mut v = draft;
+    v.ledger_lines = built.ledger_lines;
+    v.gst = Some(built.stored);
+    let result = ok(api.execute(Command::PostVoucher(v)));
+    assert!(result.posted.unwrap().gst.is_some());
+}
+
+/// Derivation: a particular whose ledger has no GST classification is not a taxable base, so the
+/// engine's taxable value would leave it out and the party line would not cover it. Rather than
+/// post a party line short of what was typed, the lines are not built.
+#[test]
+fn an_accounting_invoice_with_an_unclassified_particular_is_unsupported() {
+    let (_dir, mut api) = company_file();
+    services(&mut api);
+    let draft = accounting_sale(
+        KA_BUYER,
+        Some(29),
+        vec![cr(SERVICES, 1_000_000), cr(SALES, 50_000)],
+    );
+    match api.invoice_gst(&draft).unwrap() {
+        Outcome::Unsupported(u) => assert!(u.reason.contains("GST classification"), "{u:?}"),
+        other @ Outcome::Value(_) => panic!("expected Unsupported, got {other:?}"),
+    }
+}
+
+/// Derivation: the engine adds the tax lines itself, so a tax ledger typed as a particular is not
+/// built on (it would be taxed twice or disagree).
+#[test]
+fn an_accounting_invoice_with_a_tax_ledger_particular_is_unsupported() {
+    let (_dir, mut api) = company_file();
+    services(&mut api);
+    let draft = accounting_sale(
+        KA_BUYER,
+        Some(29),
+        vec![cr(SERVICES, 1_000_000), cr(CGST, 90_000)],
+    );
+    assert!(matches!(
+        api.invoice_gst(&draft).unwrap(),
+        Outcome::Unsupported(_)
+    ));
+}
+
+/// Derivation: a sale credits its income ledgers; a particular on the debit side of a sale is
+/// not built on.
+#[test]
+fn an_accounting_sale_with_a_debit_particular_is_unsupported() {
+    let (_dir, mut api) = company_file();
+    services(&mut api);
+    let draft = accounting_sale(KA_BUYER, Some(29), vec![dr(SERVICES, 1_000_000)]);
+    assert!(matches!(
+        api.invoice_gst(&draft).unwrap(),
+        Outcome::Unsupported(_)
+    ));
 }

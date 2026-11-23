@@ -108,10 +108,11 @@ impl Api {
         };
         match v.mode {
             VoucherMode::ItemInvoice if v.ledger_lines.is_empty() => {}
+            VoucherMode::AccountingInvoice if v.inventory_lines.is_empty() => {}
             VoucherMode::ItemInvoice | VoucherMode::AccountingInvoice | VoucherMode::AsVoucher => {
                 return Ok(Outcome::unsupported(
                     "accounting lines for this voucher",
-                    "only an item invoice without ledger lines gets its lines from the tax engine",
+                    "only an item invoice without ledger lines, or an accounting invoice with only its particulars, gets its lines from the tax engine",
                 ));
             }
         }
@@ -449,17 +450,20 @@ fn build_invoice(
             "set the party first",
         ));
     };
-    let mut accounts: BTreeMap<LedgerId, Paise> = BTreeMap::new();
-    for inventory in &v.inventory_lines {
-        let Some(ledger) = inventory.ledger else {
+    let accounts = match v.mode {
+        VoucherMode::ItemInvoice => item_accounts(v)?,
+        VoucherMode::AccountingInvoice => particulars(books, v, party, side, &breakup)?,
+        VoucherMode::AsVoucher => {
             return Ok(Outcome::unsupported(
-                "accounting lines for an inventory line without a ledger",
-                "every line needs the sales or purchase ledger it posts to",
+                "accounting lines for a voucher entered as plain Dr/Cr lines",
+                "only invoices get their lines from the tax engine",
             ));
-        };
-        let sum = accounts.entry(ledger).or_insert(Paise::ZERO);
-        *sum = sum.checked_add(inventory.amount)?;
-    }
+        }
+    };
+    let accounts = match accounts {
+        Outcome::Value(accounts) => accounts,
+        Outcome::Unsupported(u) => return Ok(Outcome::Unsupported(u)),
+    };
     let ledgers = all_tax_ledgers(books);
     let Some(stored) = stored_gst(&breakup, &ledgers)? else {
         return Ok(Outcome::unsupported(
@@ -497,6 +501,85 @@ fn build_invoice(
         ledger_lines: lines,
         stored,
     }))
+}
+
+/// The sales or purchase ledgers of an item invoice, with the sum of its inventory lines on each.
+fn item_accounts(v: &Voucher) -> Result<Outcome<Vec<(LedgerId, Paise)>>, GstError> {
+    let mut accounts: BTreeMap<LedgerId, Paise> = BTreeMap::new();
+    for inventory in &v.inventory_lines {
+        let Some(ledger) = inventory.ledger else {
+            return Ok(Outcome::unsupported(
+                "accounting lines for an inventory line without a ledger",
+                "every line needs the sales or purchase ledger it posts to",
+            ));
+        };
+        let sum = accounts.entry(ledger).or_insert(Paise::ZERO);
+        *sum = sum.checked_add(inventory.amount)?;
+    }
+    Ok(Outcome::Value(accounts.into_iter().collect()))
+}
+
+/// The particulars of an accounting invoice, as typed, in order. Each must be on the tax side,
+/// on a ledger with a GST classification, and neither the party nor a tax ledger: the party line
+/// is the engine's taxable value plus tax, so a particular the engine does not tax would be left
+/// out of it, and the tax lines are the engine's own. Their sum must be the engine's taxable value.
+fn particulars(
+    books: &Books,
+    v: &Voucher,
+    party: LedgerId,
+    side: DrCr,
+    breakup: &GstBreakup,
+) -> Result<Outcome<Vec<(LedgerId, Paise)>>, GstError> {
+    let refuse = |reason: String| {
+        Ok(Outcome::unsupported(
+            "accounting lines for this accounting invoice",
+            reason,
+        ))
+    };
+    if v.ledger_lines.is_empty() {
+        return refuse("type at least one ledger under Particulars".to_owned());
+    }
+    let mut out = Vec::with_capacity(v.ledger_lines.len());
+    let mut sum = Paise::ZERO;
+    for l in &v.ledger_lines {
+        let Some(ledger) = books.masters.ledgers.get(&l.ledger) else {
+            return refuse(format!("ledger {} does not exist", l.ledger.0));
+        };
+        if l.ledger == party {
+            return refuse(format!(
+                "'{}' is the party; it is not a particular",
+                ledger.name
+            ));
+        }
+        if ledger.tax.is_some() {
+            return refuse(format!(
+                "'{}' is a tax ledger; the engine adds the tax lines itself",
+                ledger.name
+            ));
+        }
+        if ledger.gst.is_none() {
+            return refuse(format!(
+                "'{}' has no GST classification, so the engine does not tax it and the party line would leave it out; set its GST details in the ledger master",
+                ledger.name
+            ));
+        }
+        if l.amount.side != side {
+            return refuse(format!(
+                "'{}' is on the {:?} side; this kind of invoice posts its particulars on the {side:?} side",
+                ledger.name, l.amount.side
+            ));
+        }
+        sum = sum.checked_add(l.amount.amount)?;
+        out.push((l.ledger, l.amount.amount));
+    }
+    if sum != breakup.taxable_total {
+        return refuse(format!(
+            "the particulars total Rs {} but the engine's taxable value is Rs {}",
+            sum.to_rupees(),
+            breakup.taxable_total.to_rupees()
+        ));
+    }
+    Ok(Outcome::Value(out))
 }
 
 /// Every GST tax ledger of the masters.
