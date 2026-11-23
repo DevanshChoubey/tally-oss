@@ -403,6 +403,26 @@ fn the_chips_say_not_known_when_the_data_is_missing() {
 }
 
 #[test]
+fn a_first_hint_with_no_key_is_the_bars_name_not_a_keycap() {
+    // provenance: derived from the mock, `design/mock-v2/index.html:913` (`renderKeys`): the
+    // first entry of a screen's `keys()` with an empty key (`i===0&&k===''`) is drawn as the bold
+    // context (`.ctx`), not as a keycap. The review and AI screens list their name that way
+    // (index.html:1920). The shell already draws the name as the context, so the entry is
+    // dropped from the keycap list. Catches the blank keycap seen in review.empty.
+    let screen = [
+        KeyHint::new("", "Review queue"),
+        KeyHint::new("J / K", "Move"),
+    ];
+    assert_eq!(
+        key_hints(&screen, true),
+        vec![
+            ("J / K".to_owned(), "Move".to_owned()),
+            ("Esc".to_owned(), "Back".to_owned()),
+        ]
+    );
+}
+
+#[test]
 fn the_key_bar_shows_the_screen_keys_before_the_shells_own() {
     // provenance: derived from the mock, `design/mock-v2/index.html:910-914` (`renderKeys`): the
     // bar lists the screen's keys, then Esc when the stack can go back; Ctrl+K and `?` sit at the

@@ -99,8 +99,12 @@ pub(super) fn breadcrumbs(ui: &mut Ui, trail: &[String], t: &Tokens) -> Vec<Chro
 /// mock's `renderKeys` draws them; the tab and sidebar keys are in the keyboard map.
 #[must_use]
 pub fn key_hints(screen: &[KeyHint], can_go_back: bool) -> Vec<(String, String)> {
+    // A first hint with no key is the screen's name (index.html:913 draws it as `.ctx`); the bar
+    // already draws the name as its context, so it is not a keycap.
+    let named = usize::from(screen.first().is_some_and(|hint| hint.keys.is_empty()));
     let mut out: Vec<(String, String)> = screen
         .iter()
+        .skip(named)
         .map(|hint| (hint.keys.clone(), hint.label.clone()))
         .collect();
     // A screen that names Esc itself (such as "Esc Back up") gets no second Esc.

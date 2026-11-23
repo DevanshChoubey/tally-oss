@@ -1,17 +1,20 @@
 # App against mock
 
-36 app captures are paired with a mock capture of the same theme and state id. SSIM is 1 for identical images; lower is a bigger difference, and the list runs worst first.
+40 app captures are paired with a mock capture of the same theme and state id. SSIM is 1 for identical images; lower is a bigger difference, and the list runs worst first.
 
 | Theme | State | SSIM |
 | --- | --- | --- |
 | hc | home.default | 0.4651 |
 | dark | home.default | 0.5662 |
 | light | home.default | 0.5777 |
+| light | ai-settings.cloud | 0.5902 |
+| light | ai-settings.local | 0.6072 |
 | light | masters.ledgers | 0.6234 |
 | light | sales-invoice.default | 0.6269 |
 | light | palette.voucher | 0.6282 |
 | light | palette.entry | 0.6287 |
 | light | palette.ask | 0.6317 |
+| light | ai-settings.off | 0.6336 |
 | light | palette.no-results | 0.6352 |
 | light | balance-sheet.detailed | 0.6431 |
 | light | gst.gstr1 | 0.6523 |
@@ -39,6 +42,7 @@
 | light | setup.keyboard | 0.7677 |
 | light | masters.create-ledger | 0.7916 |
 | light | setup.done | 0.8147 |
+| light | review.empty | 0.8269 |
 | light | gst.recon-empty | 0.8323 |
 
 ## hc / home.default
@@ -74,6 +78,30 @@ SSIM 0.5777
 <tr>
 <td><img src="mock-v2/captures/states/light/home.default.webp" width="480" alt="mock light home.default"></td>
 <td><img src="app-captures/light/home.default.webp" width="480" alt="app light home.default"></td>
+</tr>
+</table>
+
+## light / ai-settings.cloud
+
+SSIM 0.5902
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/ai-settings.cloud.webp" width="480" alt="mock light ai-settings.cloud"></td>
+<td><img src="app-captures/light/ai-settings.cloud.webp" width="480" alt="app light ai-settings.cloud"></td>
+</tr>
+</table>
+
+## light / ai-settings.local
+
+SSIM 0.6072
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/ai-settings.local.webp" width="480" alt="mock light ai-settings.local"></td>
+<td><img src="app-captures/light/ai-settings.local.webp" width="480" alt="app light ai-settings.local"></td>
 </tr>
 </table>
 
@@ -134,6 +162,18 @@ SSIM 0.6317
 <tr>
 <td><img src="mock-v2/captures/states/light/palette.ask.webp" width="480" alt="mock light palette.ask"></td>
 <td><img src="app-captures/light/palette.ask.webp" width="480" alt="app light palette.ask"></td>
+</tr>
+</table>
+
+## light / ai-settings.off
+
+SSIM 0.6336
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/ai-settings.off.webp" width="480" alt="mock light ai-settings.off"></td>
+<td><img src="app-captures/light/ai-settings.off.webp" width="480" alt="app light ai-settings.off"></td>
 </tr>
 </table>
 
@@ -461,6 +501,18 @@ SSIM 0.8147
 </tr>
 </table>
 
+## light / review.empty
+
+SSIM 0.8269
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/review.empty.webp" width="480" alt="mock light review.empty"></td>
+<td><img src="app-captures/light/review.empty.webp" width="480" alt="app light review.empty"></td>
+</tr>
+</table>
+
 ## light / gst.recon-empty
 
 SSIM 0.8323
@@ -475,7 +527,7 @@ SSIM 0.8323
 
 ## Mock states with no app capture yet
 
-### light (55)
+### light (51)
 
 - `home.loading`
 - `home.empty`
@@ -527,11 +579,7 @@ SSIM 0.8323
 - `masters.gstin-error`
 - `masters.suggested-ledger`
 - `review.default`
-- `review.empty`
 - `setup.gstin-error`
-- `ai-settings.local`
-- `ai-settings.cloud`
-- `ai-settings.off`
 
 ### dark (88)
 
