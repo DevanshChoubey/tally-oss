@@ -186,8 +186,12 @@ fn frame(
     input: RawInput,
 ) -> ScreenAction {
     let mut action = ScreenAction::Stay;
+    // egui may run the closure twice (input only in the first pass); keep the first action.
     let out = ctx.run_ui(input, |ui| {
-        action = screen.ui(ui, app);
+        let a = screen.ui(ui, app);
+        if matches!(action, ScreenAction::Stay) {
+            action = a;
+        }
     });
     out.drop_without_applying_deltas();
     action
@@ -463,7 +467,10 @@ fn every_tab_and_secondary_kind_draws() {
         frame(&ctx, &mut s, &mut app, RawInput::default());
         assert_eq!(s.kind(), kind);
     }
-    // A selected ledger draws with its detail panel: the cursor starts on the first row.
+    // A selected ledger draws. Spec change 2026-11-23: the cursor starts on the first row, Alpha
+    // Stores (id 2), when the list is first drawn (index.html:1797), so one step down is Mid Co
+    // (id 3). It used to start on no row, and the step landed on Alpha Stores. The detail panel
+    // beside the list is gone: the mock's list is full width.
     let mut s = MastersScreen::new();
     frame(&ctx, &mut s, &mut app, RawInput::default());
     let masters = app.books.as_ref().unwrap().masters.clone();
@@ -472,7 +479,7 @@ fn every_tab_and_secondary_kind_draws() {
         s.selected(),
         Some(MasterRef {
             kind: MasterKind::Ledger,
-            id: 2
+            id: 3
         })
     );
     frame(&ctx, &mut s, &mut app, RawInput::default());
@@ -559,4 +566,163 @@ fn a_create_from_the_palette_without_books_says_why() {
     let mut s = MastersScreen::creating_ledger("Ramesh Kirana");
     frame(&ctx, &mut s, &mut app, RawInput::default());
     assert!(!s.is_form_open());
+}
+
+// ---- the look of 2026-11-23 (design/mock-v2/index.html, `SCREENS.masters` at 1791-1832) --------
+
+fn pairs(s: &MastersScreen) -> Vec<(String, String)> {
+    s.keys().into_iter().map(|k| (k.keys, k.label)).collect()
+}
+
+fn owned(list: &[(&str, &str)]) -> Vec<(String, String)> {
+    list.iter()
+        .map(|(k, l)| ((*k).to_owned(), (*l).to_owned()))
+        .collect()
+}
+
+#[test]
+fn the_breadcrumb_reads_masters_on_every_kind() {
+    // provenance: index.html:1794: `phead([['Home',..],['Masters']], ..)`, on the Ledgers and the
+    // Stock items tab alike. Catches "Masters: Ledgers" in the breadcrumb.
+    for kind in MasterKind::ALL {
+        assert_eq!(MastersScreen::with_kind(kind).title(), "Masters");
+    }
+}
+
+#[test]
+fn the_list_key_bar_reads_like_the_mocks() {
+    // provenance: index.html:1831: "J / K" Move, Enter Open, Alt+C Create, Ctrl+Enter Alter, Esc
+    // Back. Catches "Up / Down". Derived: Alt+D Delete and Alt+Left / Right Change kind are keys
+    // this screen has and the mock does not; they stay, before Esc, and are listed in
+    // design/PARITY-GAPS.md.
+    let s = MastersScreen::new();
+    assert_eq!(
+        pairs(&s),
+        owned(&[
+            ("J / K", "Move"),
+            ("Enter", "Open"),
+            ("Alt+C", "Create"),
+            ("Ctrl+Enter", "Alter"),
+            ("Alt+D", "Delete"),
+            ("Alt+Left / Right", "Change kind"),
+            ("Esc", "Back"),
+        ])
+    );
+}
+
+#[test]
+fn enter_is_offered_only_where_it_opens_something() {
+    // provenance: index.html:1797-1799: a ledger row opens (`data-go`), a stock item row has no
+    // `data-go`. Derived: Enter is offered only on the ledgers, where it opens the ledger's
+    // vouchers.
+    let s = MastersScreen::with_kind(MasterKind::StockItem);
+    assert!(
+        !pairs(&s).iter().any(|(k, _)| k == "Enter"),
+        "{:?}",
+        pairs(&s)
+    );
+    assert_eq!(pairs(&s).first().map(|(k, _)| k.as_str()), Some("J / K"));
+}
+
+#[test]
+fn the_form_key_bar_reads_like_the_mocks_and_names_the_kind() {
+    // provenance: index.html:1831: in the ledger form the key bar is named "Ledger" and reads
+    // Enter Next field, Ctrl+A Save, Esc Back. Derived: in this form Tab moves to the next field
+    // and Enter does not yet, so the bar says Tab (design/PARITY-GAPS.md). Catches "Esc Cancel"
+    // and the bar named "Masters".
+    let ctx = egui::Context::default();
+    let mut app = app_with(fixture());
+    let mut s = MastersScreen::new();
+    assert_eq!(s.key_bar_name(), "Masters");
+    frame(&ctx, &mut s, &mut app, key(Key::C, Modifiers::ALT));
+    assert!(s.is_form_open());
+    assert_eq!(s.key_bar_name(), "Ledger");
+    assert_eq!(
+        pairs(&s),
+        owned(&[("Tab", "Next field"), ("Ctrl+A", "Save"), ("Esc", "Back")])
+    );
+}
+
+#[test]
+fn the_ledger_filter_matches_the_group_too() {
+    // provenance: index.html:1796-1797: the filter's placeholder is "Filter ledgers: name, group,
+    // GSTIN or alias" and each row's `data-q` holds the group's name. Spec change 2026-11-23: the
+    // filter did not match the group. "cash" keeps only Mid Co, the one ledger under Cash-in-hand.
+    assert_eq!(
+        view::filter_hint(MasterKind::Ledger),
+        "Filter ledgers: name, group, GSTIN or alias"
+    );
+    let rows = view::ledger_rows(&fixture(), "cash");
+    let names: Vec<&str> = rows.iter().map(|r| r.name.as_str()).collect();
+    assert_eq!(names, ["Mid Co"]);
+}
+
+fn ledger_ref(id: u64) -> MasterRef {
+    MasterRef {
+        kind: MasterKind::Ledger,
+        id,
+    }
+}
+
+#[test]
+fn the_cursor_starts_on_the_first_row() {
+    // provenance: index.html:1797: the first row is drawn `sel`. Rows are in name order, so the
+    // first is Alpha Stores (id 2).
+    let ctx = egui::Context::default();
+    let mut app = app_with(fixture());
+    let mut s = MastersScreen::new();
+    frame(&ctx, &mut s, &mut app, RawInput::default());
+    assert_eq!(s.selected(), Some(ledger_ref(2)));
+}
+
+#[test]
+fn j_and_k_move_the_cursor_but_not_while_typing_in_the_filter() {
+    // provenance: index.html:1831 "J / K" Move, and 1826-1828: the list keys apply when the
+    // filter does not have the keyboard. Name order: Alpha Stores (2), Mid Co (3), Zeta Traders (1).
+    let ctx = egui::Context::default();
+    let mut app = app_with(fixture());
+    let mut s = MastersScreen::new();
+    frame(&ctx, &mut s, &mut app, RawInput::default());
+    frame(&ctx, &mut s, &mut app, key(Key::J, Modifiers::NONE));
+    assert_eq!(s.selected(), Some(ledger_ref(3)));
+    frame(&ctx, &mut s, &mut app, key(Key::K, Modifiers::NONE));
+    assert_eq!(s.selected(), Some(ledger_ref(2)));
+    ctx.memory_mut(|m| m.request_focus(ledgerly_app::screens::masters::filter_id()));
+    frame(&ctx, &mut s, &mut app, RawInput::default());
+    frame(&ctx, &mut s, &mut app, key(Key::J, Modifiers::NONE));
+    assert_eq!(
+        s.selected(),
+        Some(ledger_ref(2)),
+        "J went to the filter, not the list"
+    );
+}
+
+#[test]
+fn enter_on_a_ledger_opens_its_vouchers() {
+    // provenance: index.html:1797: Enter on a ledger row goes to the ledger's own view
+    // (`hashFor('balance-sheet','ledger',..)`, its vouchers). Derived: the ledger vouchers report
+    // (`ReportKind::LedgerVouchers`), as the palette opens a ledger (shell/navigate.rs). Catches
+    // Enter doing nothing in the list.
+    let ctx = egui::Context::default();
+    let mut app = app_with(fixture());
+    let mut s = MastersScreen::new();
+    frame(&ctx, &mut s, &mut app, RawInput::default());
+    let action = frame(&ctx, &mut s, &mut app, key(Key::Enter, Modifiers::NONE));
+    assert!(
+        matches!(action, ScreenAction::Push(_)),
+        "Enter opened nothing"
+    );
+}
+
+#[test]
+fn a_valid_gstin_says_its_pan_and_state() {
+    // provenance: index.html:1810: under a valid GSTIN, "Check character OK" then "PAN AAJFJ5521N
+    // · state 27 Maharashtra". Derived for `GSTIN_VALID`: characters 3 to 12 are the PAN
+    // ABCDE1234F and the first two are state code 29, Karnataka (GST state code list). An invalid
+    // one gives nothing.
+    assert_eq!(
+        view::gstin_hint(GSTIN_VALID).as_deref(),
+        Some("PAN ABCDE1234F \u{00B7} state 29 Karnataka")
+    );
+    assert_eq!(view::gstin_hint("29ABCDE1234F1ZX"), None);
 }

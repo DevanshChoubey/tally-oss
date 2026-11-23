@@ -394,9 +394,35 @@ fn shots() -> Vec<Shot> {
         shot("gst.gstr3b", &[(Key::G, NONE), (Key::Num2, NONE)]),
         shot("gst.recon-empty", &[(Key::G, NONE), (Key::Num3, NONE)]),
         shot("masters.ledgers", &[(Key::M, NONE)]),
+        // The mock's party detail is the alter form of a bill-wise party ledger (index.html:1803).
+        // The cursor starts on the first row; Sample Buyer Pvt Ltd is the tenth ledger of the
+        // capture company, so nine steps down, then Ctrl+Enter alters it.
         shot(
             "masters.ledger-detail",
-            &[(Key::M, NONE), (Key::ArrowDown, NONE)],
+            &[
+                (Key::M, NONE),
+                (Key::J, NONE),
+                (Key::J, NONE),
+                (Key::J, NONE),
+                (Key::J, NONE),
+                (Key::J, NONE),
+                (Key::J, NONE),
+                (Key::J, NONE),
+                (Key::J, NONE),
+                (Key::J, NONE),
+                (Key::Enter, Modifiers::COMMAND),
+            ],
+        ),
+        // Alt+Right walks the kinds from Ledger; the fourth step is Stock item.
+        shot(
+            "masters.items",
+            &[
+                (Key::M, NONE),
+                (Key::ArrowRight, Modifiers::ALT),
+                (Key::ArrowRight, Modifiers::ALT),
+                (Key::ArrowRight, Modifiers::ALT),
+                (Key::ArrowRight, Modifiers::ALT),
+            ],
         ),
         shot(
             "masters.create-ledger",

@@ -79,6 +79,10 @@ pub enum Icon {
     Plus,
     /// `upload` (export a file, import a file).
     Upload,
+    /// `save` (the form's Save button).
+    Save,
+    /// `x` (a field's error, a close).
+    X,
 }
 
 impl Icon {
@@ -134,6 +138,8 @@ impl Icon {
             }
             Icon::Plus => "M12 5v14 M5 12h14",
             Icon::Upload => "M12 16V4 M7 9l5-5 5 5 M4 20h16",
+            Icon::Save => "M5 4h11l3 3v13H5z M8 4v5h7V4 M8 20v-6h8v6",
+            Icon::X => "M6 6l12 12 M18 6L6 18",
         }
     }
 }

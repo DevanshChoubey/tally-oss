@@ -1214,8 +1214,11 @@ fn alt_arrows_change_kind_and_arrows_move_the_cursor() {
     let mut s = MastersScreen::with_kind(MasterKind::Group);
     frame(&ctx, &mut s, &mut app, key(Key::ArrowRight, Modifiers::ALT));
     assert_eq!(s.kind(), MasterKind::Ledger);
-    frame(&ctx, &mut s, &mut app, key(Key::ArrowDown, Modifiers::NONE));
     // provenance: derived; the first ledger alphabetically is Cash (id 1), the second Kaveri (id 5).
+    // Spec change 2026-11-23: the cursor starts on the first row (mock v2 index.html:1797, `sel`
+    // on the first row), so the list shows Cash selected before any key, and the first Down
+    // goes to Kaveri. It used to start on no row, and the first Down landed on Cash.
+    frame(&ctx, &mut s, &mut app, RawInput::default());
     assert_eq!(s.selected().map(|r| r.id), Some(CASH.0));
     frame(&ctx, &mut s, &mut app, key(Key::ArrowDown, Modifiers::NONE));
     assert_eq!(s.selected().map(|r| r.id), Some(KAVERI.0));

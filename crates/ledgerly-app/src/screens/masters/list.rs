@@ -74,6 +74,10 @@ fn ledger_entries(m: &Masters) -> Vec<Entry> {
                 ));
             }
             let mut search = with_aliases(&l.name, &l.aliases);
+            // The group's name is searched too (mock v2 index.html:1797, the row's `data-q`).
+            if let Some(g) = m.groups.get(&l.group) {
+                search.push(g.name.clone());
+            }
             if let Some(g) = l.party.as_ref().and_then(|p| p.gstin.as_ref()) {
                 detail.push_str(&format!(", GSTIN {g}"));
                 search.push(g.as_str().to_owned());
@@ -211,8 +215,8 @@ fn other_entries(m: &Masters, kind: MasterKind) -> Vec<Entry> {
     }
 }
 
-/// The masters of one kind whose name, alias or GSTIN contains `filter` (ignoring case), sorted
-/// by name and then id. An empty filter lists them all.
+/// The masters of one kind whose name, alias or GSTIN (and for a ledger, its group's name)
+/// contains `filter` (ignoring case), sorted by name and then id. An empty filter lists them all.
 #[must_use]
 pub fn list_rows(masters: &Masters, kind: MasterKind, filter: &str) -> Vec<MasterRow> {
     let entries = match kind {

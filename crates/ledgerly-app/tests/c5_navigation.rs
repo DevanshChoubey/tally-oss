@@ -699,7 +699,8 @@ fn the_mock_screens_have_palette_rows_that_open_them_with_their_titles() {
     // provenance: derived. The titles are the mock's (design/mock-v2/index.html, SCREENS[...].title
     // and the NAV list): "Review queue", "Ask your books", "Plain-words entry", "Purchase from bill
     // photo", "Keyboard map", "AI and privacy", "Company setup". The masters screen titles itself
-    // with the kind it shows, "Masters: Ledgers" by default (masters.rs). The bank screen titles
+    // "Masters" (spec change 2026-11-23: index.html:1794, the breadcrumb reads "Masters" on every
+    // kind; it read "Masters: Ledgers"). The bank screen titles
     // itself "Bank reconciliation: <ledger>", so with the one bank ledger of the fixture (HDFC
     // Current) the row opens it. The import row opens the import screen, titled "Import from
     // another app" too (owner decision 3 in docs/status/2026-11-22-ui-parity-report.md).
@@ -713,7 +714,7 @@ fn the_mock_screens_have_palette_rows_that_open_them_with_their_titles() {
         ("Keyboard map", "Keyboard map"),
         ("AI and privacy", "AI and privacy"),
         ("Company setup", "Company setup"),
-        ("Masters", "Masters: Ledgers"),
+        ("Masters", "Masters"),
         ("Bank reconciliation", "Bank reconciliation: HDFC Current"),
         ("Import from another app", "Import from another app"),
     ];

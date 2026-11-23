@@ -1,6 +1,6 @@
 # App against mock
 
-26 app captures are paired with a mock capture of the same theme and state id. SSIM is 1 for identical images; lower is a bigger difference, and the list runs worst first.
+27 app captures are paired with a mock capture of the same theme and state id. SSIM is 1 for identical images; lower is a bigger difference, and the list runs worst first.
 
 | Theme | State | SSIM |
 | --- | --- | --- |
@@ -8,11 +8,11 @@
 | dark | home.default | 0.5420 |
 | light | sales-invoice.default | 0.5438 |
 | light | home.default | 0.5837 |
-| light | masters.ledgers | 0.6005 |
 | light | bank.default | 0.6271 |
 | light | palette.voucher | 0.6275 |
 | light | palette.entry | 0.6283 |
 | light | palette.ask | 0.6312 |
+| light | masters.ledgers | 0.6328 |
 | light | palette.no-results | 0.6344 |
 | light | keys.standard | 0.6380 |
 | light | balance-sheet.detailed | 0.6409 |
@@ -24,11 +24,12 @@
 | light | gst.gstr1 | 0.6610 |
 | light | bank.brs | 0.6619 |
 | light | balance-sheet.default | 0.6703 |
-| light | masters.ledger-detail | 0.6840 |
 | light | palette.commands | 0.6899 |
 | light | gst.gstr3b | 0.7000 |
-| light | masters.create-ledger | 0.7247 |
+| light | masters.ledger-detail | 0.7264 |
+| light | masters.items | 0.7507 |
 | light | day-book.default | 0.7570 |
+| light | masters.create-ledger | 0.7784 |
 | light | gst.recon-empty | 0.8231 |
 
 ## hc / home.default
@@ -79,18 +80,6 @@ SSIM 0.5837
 </tr>
 </table>
 
-## light / masters.ledgers
-
-SSIM 0.6005
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/light/masters.ledgers.webp" width="480" alt="mock light masters.ledgers"></td>
-<td><img src="app-captures/light/masters.ledgers.webp" width="480" alt="app light masters.ledgers"></td>
-</tr>
-</table>
-
 ## light / bank.default
 
 SSIM 0.6271
@@ -136,6 +125,18 @@ SSIM 0.6312
 <tr>
 <td><img src="mock-v2/captures/states/light/palette.ask.webp" width="480" alt="mock light palette.ask"></td>
 <td><img src="app-captures/light/palette.ask.webp" width="480" alt="app light palette.ask"></td>
+</tr>
+</table>
+
+## light / masters.ledgers
+
+SSIM 0.6328
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/masters.ledgers.webp" width="480" alt="mock light masters.ledgers"></td>
+<td><img src="app-captures/light/masters.ledgers.webp" width="480" alt="app light masters.ledgers"></td>
 </tr>
 </table>
 
@@ -271,18 +272,6 @@ SSIM 0.6703
 </tr>
 </table>
 
-## light / masters.ledger-detail
-
-SSIM 0.6840
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/light/masters.ledger-detail.webp" width="480" alt="mock light masters.ledger-detail"></td>
-<td><img src="app-captures/light/masters.ledger-detail.webp" width="480" alt="app light masters.ledger-detail"></td>
-</tr>
-</table>
-
 ## light / palette.commands
 
 SSIM 0.6899
@@ -307,15 +296,27 @@ SSIM 0.7000
 </tr>
 </table>
 
-## light / masters.create-ledger
+## light / masters.ledger-detail
 
-SSIM 0.7247
+SSIM 0.7264
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
 <tr>
-<td><img src="mock-v2/captures/states/light/masters.create-ledger.webp" width="480" alt="mock light masters.create-ledger"></td>
-<td><img src="app-captures/light/masters.create-ledger.webp" width="480" alt="app light masters.create-ledger"></td>
+<td><img src="mock-v2/captures/states/light/masters.ledger-detail.webp" width="480" alt="mock light masters.ledger-detail"></td>
+<td><img src="app-captures/light/masters.ledger-detail.webp" width="480" alt="app light masters.ledger-detail"></td>
+</tr>
+</table>
+
+## light / masters.items
+
+SSIM 0.7507
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/masters.items.webp" width="480" alt="mock light masters.items"></td>
+<td><img src="app-captures/light/masters.items.webp" width="480" alt="app light masters.items"></td>
 </tr>
 </table>
 
@@ -328,6 +329,18 @@ SSIM 0.7570
 <tr>
 <td><img src="mock-v2/captures/states/light/day-book.default.webp" width="480" alt="mock light day-book.default"></td>
 <td><img src="app-captures/light/day-book.default.webp" width="480" alt="app light day-book.default"></td>
+</tr>
+</table>
+
+## light / masters.create-ledger
+
+SSIM 0.7784
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/masters.create-ledger.webp" width="480" alt="mock light masters.create-ledger"></td>
+<td><img src="app-captures/light/masters.create-ledger.webp" width="480" alt="app light masters.create-ledger"></td>
 </tr>
 </table>
 
@@ -345,7 +358,7 @@ SSIM 0.8231
 
 ## Mock states with no app capture yet
 
-### light (65)
+### light (64)
 
 - `home.loading`
 - `home.empty`
@@ -396,7 +409,6 @@ SSIM 0.8231
 - `bank.empty`
 - `bank.import-error`
 - `bank.offline-ai`
-- `masters.items`
 - `masters.gstin-error`
 - `masters.suggested-ledger`
 - `review.default`

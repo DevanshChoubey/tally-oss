@@ -230,3 +230,36 @@ fn address_text(ledger: &Ledger) -> String {
     }
     fields.join(", ")
 }
+
+/// The placeholder of the list's filter for `kind`. It names only what the filter really matches
+/// (mock v2 index.html:1796 for the ledgers: "name, group, GSTIN or alias").
+#[must_use]
+pub fn filter_hint(kind: MasterKind) -> String {
+    match kind {
+        MasterKind::Ledger => "Filter ledgers: name, group, GSTIN or alias".to_owned(),
+        MasterKind::StockItem => "Filter stock items: name or alias".to_owned(),
+        MasterKind::Group
+        | MasterKind::VoucherType
+        | MasterKind::Unit
+        | MasterKind::StockGroup
+        | MasterKind::Godown
+        | MasterKind::Batch
+        | MasterKind::CostCategory
+        | MasterKind::CostCentre => {
+            format!("Filter {}: name or alias", kind.plural().to_lowercase())
+        }
+    }
+}
+
+/// What the form says after a GSTIN that passes every check (mock v2 index.html:1810): the PAN
+/// inside it and its state, as `PAN AAJFJ5521N · state 27 Maharashtra`. `None` when `text` is
+/// not a valid GSTIN. Both parts are read out of the GSTIN; nothing is looked up.
+#[must_use]
+pub fn gstin_hint(text: &str) -> Option<String> {
+    let gstin = Gstin::parse(text.trim()).ok()?;
+    let pan = gstin.pan_str();
+    Some(match gstin.state() {
+        Some(code) => format!("PAN {pan} \u{00B7} state {:02} {}", code.get(), code.name()),
+        None => format!("PAN {pan}"),
+    })
+}

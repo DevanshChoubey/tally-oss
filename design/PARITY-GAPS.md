@@ -17,8 +17,8 @@ feature that is not built), **data** (the capture company lacks what the mock's 
   "3 sections ready, 1 needs correction", "Ledger · Sundry debtors · 1,93,500.00 Dr"
   (index.html:1115). Ours keep the detail the row had when chosen. Live details need the engine's
   figures at reopen time.
-- **bug: "Up / Down" on other screens.** The palette shows "↑ ↓" and the balance sheet and day
-  book "J / K" (the mock's words); the masters, generic report and invoice screens still say
+- **bug: "Up / Down" on other screens.** The palette shows "↑ ↓" and the balance sheet, day
+  book and masters "J / K" (the mock's words); the generic report and invoice screens still say
   "Up / Down".
 - **deferred: Alt+C keycap on 'Create ledger "q"'** (index.html:1129). Not drawn because the
   palette takes the keyboard, so Alt+C would not work there. Needs the palette to pass row
@@ -37,7 +37,8 @@ feature that is not built), **data** (the capture company lacks what the mock's 
   Export of the report on screen is not built, so neither the button nor the key is offered.
 - **bug: other tables keep the older row height.** The balance sheet and the day book draw the
   mock's `table.t` lines by hand (34-point rows, rules, the selected bar: `ui::table::paint_row`).
-  The masters, bank, invoice and generic report tables still use `TableBuilder` at 30 points
+  The masters list moved over in its round. The bank, invoice and generic report tables still
+  use `TableBuilder` at 30 points
   with egui's selection tint; each moves over in its own round.
 - **needs a decision: sub-groups in the condensed view.** The mock's condensed statement shows
   each top group's sub-groups (Loans > Secured loans; index.html:1588, `depth===0` children).
@@ -130,3 +131,46 @@ four `recon` states need a 2B file, which the app cannot read.
 - **data: the capture company.** It has five vouchers in November and the GSTIN
   27ABCDE1234F1Z0; the mock shows Godavari Drip's figures.
 
+## Masters (round of 2026-11-23)
+
+Captured states: `masters.ledgers`, `masters.ledger-detail`, `masters.items`,
+`masters.create-ledger`. Not captured: `gstin-error` (the capture types no keys into a field, so
+it cannot enter a bad GSTIN; needs typed text in the capture) and `suggested-ledger` (needs bank
+matching to propose a ledger, which is not built).
+
+- **deferred: the Balance column** (index.html:1796, `prov('eng','engine')`). The engine has the
+  figures (`ReportKind::TrialBalance`), but the masters screen has no report feed and no way to
+  know when a posting has made them stale. Each cell shows a dash and the heading says why on
+  hover. Wire it through the report worker the way report views refresh, joined by ledger id,
+  with an absent row left blank, never 0.00.
+- **deferred: Stock and Value on the items tab** (index.html:1798, `prov('eng','stock engine')`)
+  and the "Closing stock" total row. Same reason; the engine has `ReportKind::StockSummary`.
+- **deferred: Open bills on the party detail** (index.html:1806). The engine has
+  `ReportKind::Outstanding`. The alter form of a bill-wise ledger shows the card with a sentence
+  saying the bills are not shown here yet.
+- **deferred: the Balance field on the party detail** (index.html:1805). Same as the column.
+- **by design: Alt+D Delete and Alt+Left / Right Change kind stay in the key bar.** The mock's
+  masters have only ledgers and stock items; ours keep every master kind TallyPrime has (groups,
+  voucher types, units, godowns, batches, cost categories and centres), so changing kind and
+  deleting need keys. The other kinds sit in a "More master kinds" list in the page head.
+- **by design: "Create {kind}" follows the tab.** The mock's button always says "Create ledger";
+  ours names the kind on screen ("Create stock item"), since Alt+C creates that kind.
+- **by design: the filter is on every tab.** The mock's items tab has no filter box.
+- **bug: "Alt+C creates anywhere" is not true yet.** The subtitle is the mock's word for word,
+  but Alt+C creates a master only on this screen; the shell has no global Alt+C. Needs the shell
+  to open the create form from any screen, or the subtitle to drop "anywhere".
+- **bug: Enter does not move to the next field in the form.** The mock's form keys are "Enter
+  Next field" (index.html:1831); ours offer Tab, which is what egui moves focus with. Needs an
+  Enter-advances-focus rule for single-line fields that does not break multi-line ones.
+- **by design: the forms have more fields than the mock.** Opening balance, cost centres, party,
+  bank, tax and GST details follow the TallyPrime ledger master; the mock's form shows the party
+  fields only. They come after the mock's fields, in the same four-column sheet.
+- **by design: no Delete button under the list.** Deleting is Alt+D, as on every other list;
+  the old Alter and Delete buttons are gone because the mock has none.
+- **by design: Enter opens a ledger's vouchers.** On the mock, Enter on a row opens the ledger
+  report (`hashFor('balance-sheet','ledger')`) or, for one party, the detail. Ours opens the
+  ledger's vouchers for every ledger, and Ctrl+Enter opens the detail (the alter form). Enter is
+  not offered on other kinds, which have no report.
+- **data: the capture company.** Fictional Traders has ten ledgers and no stock items, so the
+  items capture is the empty state, and Sample Buyer Pvt Ltd is not bill-wise, so the party
+  detail has no Open bills card. The mock shows Godavari Drip's ledgers and seven items.
