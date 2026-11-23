@@ -2237,6 +2237,7 @@ dependencies = [
  "ledgerly-api",
  "ledgerly-core",
  "ledgerly-model",
+ "ledgerly-store",
  "rfd",
  "serde",
  "thiserror 2.0.21",

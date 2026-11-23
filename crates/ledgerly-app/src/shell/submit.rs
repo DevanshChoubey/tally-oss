@@ -62,6 +62,14 @@ pub fn fetch_books(worker: &ApiWorker) -> Ticket<BooksReply> {
     })
 }
 
+/// The answer to a stored AI tier read: the tier, or the reason it could not be read.
+pub type AiTierReply = Result<Option<ledgerly_api::AiTier>, String>;
+
+/// Reads the stored AI tier on the worker (card W4).
+pub fn fetch_ai_tier(worker: &ApiWorker) -> Ticket<AiTierReply> {
+    worker.run(|api| api.ai_tier().map_err(|e| e.to_string()))
+}
+
 /// Checks a books ticket without blocking. `None` while the worker is still reading.
 pub fn settle_books(ticket: &mut Ticket<BooksReply>) -> Option<BooksReply> {
     match ticket.poll() {

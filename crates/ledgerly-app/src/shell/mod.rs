@@ -61,11 +61,11 @@ use crate::palette::{
     Palette, PaletteChoice, PaletteEntry, PaletteMode, PaletteSearch, PaletteTarget,
 };
 use crate::theme::{self, ThemeKind, Tokens};
-use crate::worker::Ticket;
+use crate::worker::{Poll, Ticket};
 use crate::{AppCtx, Screen, ScreenAction};
 use chrome::ChromeCmd;
 use sidebar::CommandRoute;
-use submit::BooksReply;
+use submit::{AiTierReply, BooksReply};
 
 pub use crate::screen::{AiTier, KeyHint};
 
@@ -125,6 +125,9 @@ pub struct Shell {
     books_ticket: Option<Ticket<BooksReply>>,
     /// Why the books could not be read, when the last fetch failed.
     books_problem: Option<String>,
+    /// The stored AI tier fetch in progress, if any. It runs with each books fetch, so the top
+    /// bar's AI chip follows the company file (card W4).
+    ai_ticket: Option<Ticket<AiTierReply>>,
     /// The key map the palette chords come from.
     keymap: Keymap,
     /// The command palette.
@@ -157,6 +160,7 @@ impl Shell {
             books_seen: submit::change_count(),
             books_ticket: None,
             books_problem: None,
+            ai_ticket: None,
             keymap,
             palette: Palette::new(),
             search: PaletteSearch::new(),
@@ -389,8 +393,10 @@ impl Shell {
             self.books_seen = count;
             self.books_problem = None;
             self.books_ticket = self.app_ctx.api.as_ref().map(submit::fetch_books);
+            self.ai_ticket = self.app_ctx.api.as_ref().map(submit::fetch_ai_tier);
             if self.books_ticket.is_none() {
                 self.app_ctx.books = None;
+                self.app_ctx.ai_tier = None;
             }
         }
         // A worker put into the context without a change note still gets its books.
@@ -399,6 +405,25 @@ impl Shell {
             && self.books_problem.is_none()
         {
             self.books_ticket = self.app_ctx.api.as_ref().map(submit::fetch_books);
+            self.ai_ticket = self.app_ctx.api.as_ref().map(submit::fetch_ai_tier);
+        }
+        if let Some(ticket) = self.ai_ticket.as_mut() {
+            match ticket.poll() {
+                Poll::Pending | Poll::Taken => {}
+                Poll::Ready(Ok(tier)) => {
+                    self.ai_ticket = None;
+                    self.app_ctx.ai_tier = tier;
+                }
+                Poll::Ready(Err(reason)) => {
+                    self.ai_ticket = None;
+                    tracing::warn!("the AI tier could not be read: {reason}");
+                    self.app_ctx.ai_tier = None;
+                }
+                Poll::Lost => {
+                    self.ai_ticket = None;
+                    self.app_ctx.ai_tier = None;
+                }
+            }
         }
         let Some(ticket) = self.books_ticket.as_mut() else {
             return;

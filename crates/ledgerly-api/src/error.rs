@@ -65,6 +65,20 @@ pub enum ApiError {
         /// The statement lines of the refused match.
         lines: Vec<u32>,
     },
+    /// The company file holds an AI tier word this build does not know. The tier is not guessed.
+    #[error("the company file holds the AI tier '{value}', which this build does not know")]
+    UnknownAiTier {
+        /// The stored word.
+        value: String,
+    },
+    /// The AI activity log could not be written to the chosen file.
+    #[error("the AI activity log could not be written to {}: {source}", path.display())]
+    AiLogWrite {
+        /// The file the export was asked to write.
+        path: std::path::PathBuf,
+        /// Why the write failed.
+        source: std::io::Error,
+    },
     /// A change was saved, but the books could not be reloaded afterwards, so figures are not
     /// computed until a command or [`crate::Api::open`] reloads them.
     #[error(

@@ -300,3 +300,35 @@ matching to propose a ledger, which is not built).
   supplier ledger" (help.tallysolutions.com/tally-prime/purchase-process/purchase-goods-and-services-tally/),
   both read 2026-11-23. Neither says which ledgers the list shows or leaves out. Limiting it to
   cash, bank and party groups needs a page that documents the list before it is changed.
+
+## AI and privacy (round of 2026-11-23, card W4)
+
+- **deferred: the cloud tier.** `ai-settings.cloud` (index.html:1907, 1912-1913) shows the provider
+  card as set with its key in the system keychain, and a "Removed before sending" list. The app
+  has no keychain store wired in and no provider form, so the engine refuses the choice
+  (`Api::set_ai_tier(Cloud)` is `Unsupported`, reason shown on screen) and the cloud panel reads
+  "Not available" with that reason. The "Removed before sending" switches are not drawn.
+- **deferred: the local model rows.** index.html:1914 shows the bill reader (410 MB) and the
+  small model (1.8 GB) as on disk and "None used" verified. No local model is built, so the panel
+  says "Not installed" for each row and the network row says nothing is sent yet.
+- **deferred: the feature switches.** index.html:1908-1910 draws an On switch per feature. None of
+  these features exists, so the table shows a Status column ("Off" or "Not built yet") instead.
+- **by design: no tier is chosen by default.** The mock's first state is "On this computer", which
+  would claim a tier nobody chose. A company with no stored tier shows neither option as current,
+  with a note that nothing is sent until one is chosen. The top bar says "AI: not set up".
+- **by design: the log headers.** index.html:1915 has Feature and Input columns. The company file
+  records the model, an input hash, the output and the decision, not the feature or the input text,
+  so the columns are When, Model, Input hash, Output and Your decision. The hash shows its first 12
+  characters.
+- **data: no log rows yet.** The mock's five sample rows (index.html:1896-1900) are not drawn. No
+  AI feature writes `AiProposalRecorded` events yet, so the log says no activity is recorded. Ctrl+E
+  is offered only when rows exist, and it writes CSV through the save dialog.
+- **deferred: the empty-log wording.** The mock's off state says "No AI events since AI was turned
+  off" (index.html:1915). It is not used: the log is empty for every tier until a feature records
+  an event.
+- **deferred: AI off and the screens it hides.** The off note (index.html:1911) is shown, but the
+  screens it names (bill reading, plain-words entry, bank suggestions, Ask) hide themselves only
+  through the existing home panel; the other screens are not yet wired to the tier.
+- **by design: the "Current" badge.** The mock marks the chosen card with a border only
+  (index.html:1905-1907). The app puts a "Current" badge on the tier stored in the company file, so
+  a refused cloud choice still shows the stored tier as current. The app draws no border.
