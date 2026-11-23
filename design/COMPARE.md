@@ -25,11 +25,11 @@
 | light | gst.gstr3b | 0.7000 |
 | light | receipt.default | 0.7151 |
 | light | bank.brs | 0.7249 |
-| light | masters.ledger-detail | 0.7333 |
 | light | payment.default | 0.7334 |
 | light | masters.items | 0.7409 |
+| light | masters.ledger-detail | 0.7564 |
 | light | day-book.default | 0.7570 |
-| light | masters.create-ledger | 0.7782 |
+| light | masters.create-ledger | 0.7781 |
 | light | gst.recon-empty | 0.8231 |
 
 ## hc / home.default
@@ -284,18 +284,6 @@ SSIM 0.7249
 </tr>
 </table>
 
-## light / masters.ledger-detail
-
-SSIM 0.7333
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/light/masters.ledger-detail.webp" width="480" alt="mock light masters.ledger-detail"></td>
-<td><img src="app-captures/light/masters.ledger-detail.webp" width="480" alt="app light masters.ledger-detail"></td>
-</tr>
-</table>
-
 ## light / payment.default
 
 SSIM 0.7334
@@ -320,6 +308,18 @@ SSIM 0.7409
 </tr>
 </table>
 
+## light / masters.ledger-detail
+
+SSIM 0.7564
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/masters.ledger-detail.webp" width="480" alt="mock light masters.ledger-detail"></td>
+<td><img src="app-captures/light/masters.ledger-detail.webp" width="480" alt="app light masters.ledger-detail"></td>
+</tr>
+</table>
+
 ## light / day-book.default
 
 SSIM 0.7570
@@ -334,7 +334,7 @@ SSIM 0.7570
 
 ## light / masters.create-ledger
 
-SSIM 0.7782
+SSIM 0.7781
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
