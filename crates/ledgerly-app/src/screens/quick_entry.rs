@@ -177,7 +177,7 @@ impl Screen for QuickEntryScreen {
     }
 
     fn ui(&mut self, ui: &mut Ui, ctx: &mut AppCtx) -> ScreenAction {
-        let gate = self.gate.gate(ctx);
+        let gate = self.gate.gate(ui, ctx);
         self.last = Some(gate.clone());
         let (f5, f6) = ui.input_mut(|i| {
             (

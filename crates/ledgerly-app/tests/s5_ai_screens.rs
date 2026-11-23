@@ -415,3 +415,53 @@ fn no_tier_chosen_is_said_and_not_taken_for_off() {
     assert!(!text.contains("AI is off"));
     assert_eq!(app.ai_tier, None);
 }
+
+#[test]
+fn a_tier_changed_after_opening_is_read_again() {
+    let path = file_with_tier("s5_reread.ledgerly", Some(AiTier::Off));
+    let mut app = open(&path);
+    let mut screen = AskScreen::default();
+    let text = settle(&mut screen, &mut app, AskScreen::loaded);
+    assert!(text.contains(ASK_OFF));
+    // AI and privacy stores Local on the worker and notes the change, as its screen does.
+    let ticket = app
+        .api
+        .as_ref()
+        .unwrap()
+        .run(|api| api.set_ai_tier(AiTier::Local).map_err(|e| e.to_string()));
+    let mut ticket = ticket;
+    let mut stored = None;
+    for _ in 0..2000 {
+        if let ledgerly_app::worker::Poll::Ready(result) = ticket.poll() {
+            stored = Some(result);
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(2));
+    }
+    assert_eq!(stored, Some(Ok(Outcome::Value(()))));
+    ledgerly_app::shell::submit::note_changed();
+    // provenance: derived (see the_reason_follows_the_tier_for_each_feature): the Local wording.
+    let mut text = frame(&mut screen, &mut app, &[]).0;
+    for _ in 0..2000 {
+        if text.contains("No local model is installed") {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(2));
+        text = frame(&mut screen, &mut app, &[]).0;
+    }
+    assert!(
+        text.contains("No local model is installed"),
+        "the new tier was not read: {text}"
+    );
+    assert_eq!(app.ai_tier, Some(AiTier::Local));
+}
+
+#[test]
+fn bill_photo_names_its_key_bar_and_keeps_purchase_selected() {
+    let screen = PurchaseBillScreen::default();
+    // provenance: index.html:1422, the crumbs Home, Purchase, From bill photo: the sidebar's
+    // Purchase entry stays selected. The key bar name is derived: the mock's "Draft purchase"
+    // (index.html:1455) names a draft that never exists here, so the bar names the screen.
+    assert_eq!(screen.sidebar_title(), "Purchase");
+    assert_eq!(screen.key_bar_name(), "Bill photo");
+}

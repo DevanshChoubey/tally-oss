@@ -199,7 +199,7 @@ impl Screen for AskScreen {
     }
 
     fn ui(&mut self, ui: &mut Ui, ctx: &mut AppCtx) -> ScreenAction {
-        let gate = self.gate.gate(ctx);
+        let gate = self.gate.gate(ui, ctx);
         self.last = Some(gate.clone());
         page_head(ui, TITLE, Some(SUBTITLE), |_| {});
         ai_gate::input_box(ui, Icon::Spark, QUESTION_HINT);

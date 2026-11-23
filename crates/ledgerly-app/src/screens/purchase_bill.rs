@@ -37,6 +37,9 @@ pub const NO_IMAGE_TITLE: &str = "No bill photo";
 /// The image column's sentence when no bill is read.
 pub const NO_IMAGE_SENTENCE: &str = "This build reads no bill, so no image is chosen or kept.";
 
+/// The sidebar entry selected on this screen: Purchase (the sidebar's label, `navigate::sidebar`).
+pub const SIDEBAR_TITLE: &str = "Purchase";
+
 /// The key bar's name for the screen. The mock names its key bar by the draft ("Draft purchase",
 /// index.html:1455); there is no draft here, so it names the screen.
 pub const KEY_BAR_NAME: &str = "Bill photo";
@@ -157,6 +160,12 @@ impl Screen for PurchaseBillScreen {
         PAGE_TITLE.to_owned()
     }
 
+    /// The sidebar keeps Purchase selected, as the mock does (index.html:1422: the crumbs run
+    /// Home, Purchase, From bill photo).
+    fn sidebar_title(&self) -> String {
+        SIDEBAR_TITLE.to_owned()
+    }
+
     fn key_bar_name(&self) -> String {
         KEY_BAR_NAME.to_owned()
     }
@@ -170,7 +179,7 @@ impl Screen for PurchaseBillScreen {
     }
 
     fn ui(&mut self, ui: &mut Ui, ctx: &mut AppCtx) -> ScreenAction {
-        let gate = self.gate.gate(ctx);
+        let gate = self.gate.gate(ui, ctx);
         self.last = Some(gate.clone());
         if ui.input_mut(|i| i.consume_key(Modifiers::NONE, Key::F9)) {
             return self.opened(ai_gate::open_voucher(Action::NewPurchase, ctx));

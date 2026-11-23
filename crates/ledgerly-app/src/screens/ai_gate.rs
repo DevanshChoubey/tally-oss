@@ -167,8 +167,9 @@ impl TierGate {
 
     /// Takes the worker's answer when it has come, starts a read when none was made or a change
     /// was saved since, and returns what is known now. A tier read here is also put in
-    /// [`AppCtx::ai_tier`], so the top bar's chip agrees with the screen.
-    pub fn gate(&mut self, ctx: &mut AppCtx) -> Gate {
+    /// [`AppCtx::ai_tier`], so the top bar's chip agrees with the screen. While a read runs it
+    /// asks `ui` for another frame, so the answer is drawn when it comes.
+    pub fn gate(&mut self, ui: &Ui, ctx: &mut AppCtx) -> Gate {
         let Some(worker) = ctx.api.as_ref() else {
             return Gate::NoCompany;
         };
@@ -190,6 +191,7 @@ impl TierGate {
             self.start(worker);
         }
         if self.latest.is_pending() {
+            ui.ctx().request_repaint();
             return Gate::Reading;
         }
         match &self.read {

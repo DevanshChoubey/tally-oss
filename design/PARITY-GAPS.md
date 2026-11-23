@@ -412,7 +412,8 @@ accounting product has no AI features, so these follow the mock and spec 6.8 onl
 - **gap: the bill photo's head.** The mock's crumbs are Home, Purchase, From bill photo and its
   head has "Read another" (Alt+O) and the subtitle "... Alt+O read another bill · the image is
   kept with the voucher" (index.html:1422). Ours: Home, Purchase from bill photo; no Alt+O; the
-  subtitle is "F9 purchase". The key bar is named "Bill photo", not "Draft purchase".
+  subtitle is "F9 purchase". The key bar is named "Bill photo", not "Draft purchase". The
+  sidebar keeps Purchase selected, as the mock does.
 - **by design: the review queue's unlisted sources stay.** Bill drafts and plain-words drafts stay
   in `Api::review_queue`'s unlisted list (`ledgerly-api/src/review.rs`), since no draft store
   exists.

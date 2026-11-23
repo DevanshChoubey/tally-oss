@@ -32,7 +32,7 @@
 | light | bank.brs | 0.7218 |
 | light | payment.default | 0.7360 |
 | light | balance-sheet.ledger | 0.7380 |
-| light | purchase-bill.offline-ai | 0.7398 |
+| light | purchase-bill.offline-ai | 0.7407 |
 | light | balance-sheet.group | 0.7446 |
 | light | setup.ai | 0.7493 |
 | light | setup.welcome | 0.7520 |
@@ -385,7 +385,7 @@ SSIM 0.7380
 
 ## light / purchase-bill.offline-ai
 
-SSIM 0.7398
+SSIM 0.7407
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
