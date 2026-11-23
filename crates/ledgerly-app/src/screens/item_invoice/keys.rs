@@ -71,6 +71,9 @@ pub(super) fn read_keys(
         if !prompt.discard && !prompt.save && consume_exact(i, Key::C, Modifiers::ALT) {
             out.push(KeyCmd::Create);
         }
+        if !prompt.discard && !prompt.save && consume_exact(i, Key::H, Modifiers::COMMAND) {
+            out.push(KeyCmd::ChangeMode);
+        }
         if escape_wanted && i.consume_key(Modifiers::NONE, Key::Escape) {
             out.push(KeyCmd::Escape);
         }
@@ -101,6 +104,7 @@ impl ItemInvoiceScreen {
                 self.answer_discard(false);
             }
             KeyCmd::Create => self.begin_create(),
+            KeyCmd::ChangeMode => self.change_mode(),
             KeyCmd::Escape => {
                 if self.confirm_discard {
                     self.confirm_discard = false;

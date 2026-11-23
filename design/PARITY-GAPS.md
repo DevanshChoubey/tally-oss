@@ -256,9 +256,10 @@ matching to propose a ledger, which is not built).
   the mock (index.html, `sales-invoice`) shows Godavari Drip's three-item invoice with its tax.
   The pair cannot match until the capture company keeps inventory or the mock has an accounting
   invoice state.
-- **deferred: Ctrl+H (change mode).** The mock's "Item invoice Ctrl+H" button and TallyPrime's
-  Ctrl+H switch between item invoice, accounting invoice and as-voucher modes. The screen opens
-  in one mode and cannot switch yet; "as voucher" mode is not built (the GST engine refuses it).
+- **deferred: As Voucher mode.** TallyPrime's Ctrl+H offers Item Invoice, Accounting Invoice
+  and As Voucher (help.tallysolutions.com/sales-of-goods-services/). Ctrl+H here switches
+  between the first two only, as the mock's toast says; As Voucher is not built (the GST engine
+  refuses it).
 - **bug: the sidebar does not highlight Sales or Purchase while its invoice is open.** The
   screen's title is "Sales invoice" or "Purchase invoice" and `selected_label` only matches a
   title equal to the row's label or the label and a colon.

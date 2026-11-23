@@ -83,6 +83,8 @@ enum Click {
     Cancel,
     /// Discard the invoice.
     Discard,
+    /// Change the mode (Ctrl+H).
+    ChangeMode,
 }
 
 /// One line of the table as the screen shows it. Every figure is the engine's, or empty until
@@ -858,6 +860,10 @@ impl ItemInvoiceScreen {
         let mut clicks: Option<Click> = None;
         let locked = self.locked_on().is_some();
         let subtitle = self.subtitle().unwrap_or_default();
+        let mode_label = match self.draft.mode {
+            InvoiceMode::Item => "Item invoice",
+            InvoiceMode::Accounting => "Accounting invoice",
+        };
         page_head(ui, &self.page_title(), Some(subtitle.as_str()), |ui| {
             let saved = ui
                 .add_enabled_ui(!locked, |ui| {
@@ -866,6 +872,11 @@ impl ItemInvoiceScreen {
                 .inner;
             if saved {
                 clicks = Some(Click::Save);
+            }
+            // The head lays buttons out right to left: the mode button sits left of Save, as in
+            // the mock.
+            if button(ui, mode_label, Some("Ctrl+H"), ButtonKind::Secondary).clicked() {
+                clicks = Some(Click::ChangeMode);
             }
         });
         self.draw_notes(ui);
@@ -893,6 +904,7 @@ impl ItemInvoiceScreen {
         match clicks {
             Some(Click::Cancel) => self.confirming_save = false,
             Some(Click::Save) => self.save(masters),
+            Some(Click::ChangeMode) => self.change_mode(),
             Some(Click::Discard) | None => {}
         }
         if any_key || self.focus_pending {
@@ -953,6 +965,7 @@ impl Screen for ItemInvoiceScreen {
             KeyHint::new("Shift+Enter", "Previous field"),
             KeyHint::new("Up / Down", "List"),
             KeyHint::new("Alt+C", "Create master"),
+            KeyHint::new("Ctrl+H", "Change mode"),
             KeyHint::new("Ctrl+A", "Save"),
         ]
     }

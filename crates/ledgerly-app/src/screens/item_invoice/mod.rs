@@ -467,11 +467,23 @@ enum KeyCmd {
     DiscardYes,
     DiscardNo,
     Create,
+    ChangeMode,
+}
+
+/// Whether the company maintains inventory.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Stock {
+    /// Maintain Inventory is on: the item mode has stock items to pick.
+    Kept,
+    /// Maintain Inventory is off: the item mode has nothing to pick.
+    NotKept,
 }
 
 /// The item invoice entry screen (card U5).
 pub struct ItemInvoiceScreen {
     type_name: String,
+    /// Whether the item mode has stock items to pick.
+    stock: Stock,
     fy: FinancialYear,
     draft: InvoiceDraft,
     balances: BTreeMap<LedgerId, SignedAmount>,
@@ -556,6 +568,11 @@ impl ItemInvoiceScreen {
         };
         Ok(Outcome::Value(ItemInvoiceScreen {
             type_name: vt.name.clone(),
+            stock: if books.company.features.inventory {
+                Stock::Kept
+            } else {
+                Stock::NotKept
+            },
             fy,
             draft: InvoiceDraft::new(type_id, kind, manual, format_entry_date(today)).in_mode(mode),
             balances: BTreeMap::new(),
@@ -828,6 +845,57 @@ impl ItemInvoiceScreen {
     pub fn save_failed(&mut self, reason: &str) {
         self.outbox = None;
         self.fail(format!("Not saved: {reason}"));
+    }
+
+    /// Ctrl+H: changes the mode between item invoice and accounting invoice. TallyPrime: "Press
+    /// Ctrl+H (Change Mode) > select" the mode (help.tallysolutions.com/sales-of-goods-services/,
+    /// read 2026-11-23); As Voucher is the third mode there and is not built here.
+    ///
+    /// Product choices (the pages read are silent on them): the header is kept, each mode keeps
+    /// its own lines so switching back brings them back, and the keyboard moves to the first line
+    /// field of the new mode when it was on a field the new mode does not have. A company that does
+    /// not maintain inventory refuses the item mode: it has no stock items to pick.
+    pub fn change_mode(&mut self) {
+        let next = match self.draft.mode {
+            InvoiceMode::Item => InvoiceMode::Accounting,
+            InvoiceMode::Accounting => InvoiceMode::Item,
+        };
+        if next == InvoiceMode::Item && self.stock == Stock::NotKept {
+            return self.fail(
+                "Item invoice needs stock items: this company does not maintain inventory."
+                    .to_owned(),
+            );
+        }
+        self.draft.mode = next;
+        self.pick_index = 0;
+        self.confirming_save = false;
+        self.create = None;
+        let (moved, label) = match next {
+            InvoiceMode::Accounting => (
+                matches!(
+                    self.focus,
+                    Field::Account
+                        | Field::Item(_)
+                        | Field::Qty(_)
+                        | Field::Rate(_)
+                        | Field::Discount(_)
+                        | Field::Amount(_)
+                ),
+                "Accounting invoice",
+            ),
+            InvoiceMode::Item => (
+                matches!(self.focus, Field::Ledger(_) | Field::LedgerAmount(_)),
+                "Item invoice",
+            ),
+        };
+        if moved {
+            self.focus = match next {
+                InvoiceMode::Accounting => Field::Ledger(0),
+                InvoiceMode::Item => Field::Account,
+            };
+        }
+        self.focus_pending = true;
+        self.notice = Some(Notice::Info(format!("{label}.")));
     }
 
     fn fail(&mut self, message: String) {
