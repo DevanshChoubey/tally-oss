@@ -15,7 +15,7 @@
 
 use std::path::PathBuf;
 
-use egui::{Align, Key, Layout, Modifiers, RichText, Sense, Stroke, Ui};
+use egui::{Align, Key, Layout, Modifiers, RichText, Sense, Ui};
 use egui_extras::{Column, Size, StripBuilder};
 use ledgerly_api::{AiLogEntry, AiTier, Api};
 use ledgerly_core::Outcome;
@@ -559,13 +559,7 @@ fn rule_rows(ui: &mut Ui, items: &[(&str, &str)]) {
 
 /// Draws the rule along the bottom of a table cell (`table.t` lines in index.html).
 fn cell_rule(ui: &Ui) {
-    let t = tokens(ui);
-    let rect = ui.max_rect();
-    ui.painter().hline(
-        rect.x_range(),
-        rect.bottom() - 0.5,
-        Stroke::new(1.0, t.border),
-    );
+    table::paint_cell_rule(ui, ui.max_rect());
 }
 
 /// The features table: what each feature sees, and whether it runs (index.html:1908). The On

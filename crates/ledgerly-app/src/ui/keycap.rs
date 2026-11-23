@@ -50,9 +50,11 @@ pub fn paint(
     edge: Color32,
     ink: Color32,
 ) {
-    // A 1 px border, and one more point of edge along the bottom (`border-bottom-width:2px`).
+    // The theme's border width (`border:var(--bw)`: 1 px, or 2 px in high contrast), and one
+    // more point of edge along the bottom (`border-bottom-width:2px`).
+    let bw = theme::border_width(theme::current(painter.ctx()));
     painter.rect_filled(rect, RADIUS_XS, fill);
-    painter.rect_stroke(rect, RADIUS_XS, Stroke::new(1.0, edge), StrokeKind::Inside);
+    painter.rect_stroke(rect, RADIUS_XS, Stroke::new(bw, edge), StrokeKind::Inside);
     let bottom = rect.max.y - BOTTOM_EDGE + 0.5;
     painter.line_segment(
         [

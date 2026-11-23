@@ -10,7 +10,7 @@ use egui::{Frame, Id, Margin, Rect, Response, RichText, Sense, Stroke, Ui};
 use super::icon::{Icon, icon};
 use super::keycap::keycap;
 use super::{bold_font, kind, para, tokens};
-use crate::theme::{RADIUS_M, TEXT_BODY, TEXT_META, border_width};
+use crate::theme::{RADIUS_M, TEXT_BODY, TEXT_META, ThemeKind, border_width};
 
 /// Padding inside a card, left and right (`.opt-card{padding:12px 14px}`).
 const PAD_X: i8 = 14;
@@ -20,9 +20,18 @@ const PAD_Y: i8 = 12;
 const ICON_GAP: f32 = 12.0;
 /// Space between cards of a grid (`.grid{gap:12px}`).
 pub const GRID_GAP: f32 = 12.0;
-/// The chosen card's edge: the 1 px accent border and the 1 px inset accent shadow
-/// (`border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)`).
-pub const SELECTED_STROKE: f32 = 2.0;
+/// The inset accent shadow inside the chosen card's border (`box-shadow:inset 0 0 0 1px
+/// var(--accent)`). The chosen card's edge is the theme's border width plus this
+/// ([`selected_stroke`]).
+pub const SELECTED_INSET: f32 = 1.0;
+
+/// The chosen card's edge in `kind`: the accent border at the theme's width (`var(--bw)`) and
+/// the 1 px inset accent shadow, so 2 px, or 3 px in high contrast.
+#[must_use]
+#[allow(clippy::float_arithmetic, reason = "a border and an inset, added")]
+pub fn selected_stroke(kind: ThemeKind) -> f32 {
+    border_width(kind) + SELECTED_INSET
+}
 
 /// What one card shows.
 #[derive(Debug, Clone, Copy)]
@@ -116,7 +125,7 @@ pub fn option_card(
     let t = tokens(ui);
     let k = kind(ui);
     let (fill, stroke) = if card.selected {
-        (t.accent_soft, Stroke::new(SELECTED_STROKE, t.accent))
+        (t.accent_soft, Stroke::new(selected_stroke(k), t.accent))
     } else {
         (t.surface, Stroke::new(border_width(k), t.border))
     };
