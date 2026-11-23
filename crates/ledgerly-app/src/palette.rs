@@ -37,6 +37,7 @@ use crate::keymap::{Action, Keymap};
 use crate::screen::KeyHint;
 
 mod draw;
+mod recent;
 mod scope;
 mod search;
 
@@ -571,6 +572,17 @@ impl Palette {
             title: entry.title,
             mode,
         })
+    }
+
+    /// Replaces the details of the recent rows named in `details` with live ones (a ledger's
+    /// balance, the date a report opens at; see [`PaletteSearch`]). Rows not named keep theirs.
+    pub fn set_recent_details(&mut self, details: Vec<(PaletteTarget, String)>) {
+        for (target, detail) in details {
+            if let Some(row) = self.recent_rows.iter_mut().find(|r| r.target == target) {
+                row.detail = detail;
+            }
+        }
+        self.rebuild();
     }
 
     /// The recent choices (targets), most recent first. Session only: see the module docs.

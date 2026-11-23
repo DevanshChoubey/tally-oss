@@ -2,6 +2,7 @@
 
 use ledgerly_api::SearchHit;
 
+use super::recent::live_details;
 use super::{Palette, PaletteEntry, PaletteTarget};
 use crate::screens::wire::{Done, Latest};
 use crate::shell::navigate::{REPORT_OR_SCREEN, ledger_key, report_key, voucher_key};
@@ -94,6 +95,10 @@ fn matched_text(matched: ledgerly_api::MatchedOn) -> &'static str {
 /// The answer a search brings back: the text it searched for, and the hits.
 type SearchAnswer = (String, Vec<SearchHit>);
 
+/// The live details of the recent rows: the targets asked about, and a detail per target that
+/// has one.
+type RecentAnswer = (Vec<PaletteTarget>, Vec<(PaletteTarget, String)>);
+
 /// What [`PaletteSearch`] last handled.
 #[derive(Debug, Default, PartialEq, Eq)]
 enum Handled {
@@ -118,6 +123,11 @@ pub struct PaletteSearch {
     handled: Handled,
     /// The search in flight.
     latest: Latest<SearchAnswer>,
+    /// Whether the recent rows' live details were asked for since the palette opened. They are
+    /// asked again on every opening, since a posting since then changes a balance.
+    recent_asked: bool,
+    /// The recent rows' live details in flight.
+    recent: Latest<RecentAnswer>,
 }
 
 impl PaletteSearch {
@@ -130,7 +140,7 @@ impl PaletteSearch {
     /// Whether a search is running whose answer is still wanted.
     #[must_use]
     pub fn is_pending(&self) -> bool {
-        self.latest.is_pending()
+        self.latest.is_pending() || self.recent.is_pending()
     }
 
     /// Advances the search by one step: takes a finished answer, then starts a search when the
@@ -140,8 +150,11 @@ impl PaletteSearch {
         if !palette.is_open() {
             self.handled = Handled::Nothing;
             self.latest = Latest::default();
+            self.recent_asked = false;
+            self.recent = Latest::default();
             return;
         }
+        self.tick_recent(palette, worker);
         let wanted: Option<String> = palette.search_text().map(str::to_owned);
         if let Some(done) = self.latest.poll() {
             Self::apply(palette, wanted.as_deref(), done);
@@ -167,6 +180,29 @@ impl PaletteSearch {
             // Not settled: with no company there is no ledger to create and no voucher to
             // search, so the no-match rows are not offered; the note says why.
         }
+    }
+
+    /// Asks once per opening for the recent rows' live details, and shows them when they arrive
+    /// for the recent rows still listed. Until then, and with no company open, the rows keep the
+    /// detail they had when chosen, which holds no figure.
+    fn tick_recent(&mut self, palette: &mut Palette, worker: Option<&ApiWorker>) {
+        if let Some(Done::Ready((asked, details))) = self.recent.poll()
+            && asked.as_slice() == palette.recents()
+        {
+            palette.set_recent_details(details);
+        }
+        if self.recent_asked || palette.recents().is_empty() {
+            return;
+        }
+        let Some(worker) = worker else {
+            return;
+        };
+        self.recent_asked = true;
+        let targets = palette.recents().to_vec();
+        self.recent.start(worker, move |api| {
+            let details = live_details(api, &targets);
+            (targets, details)
+        });
     }
 
     /// Shows a finished answer, if it is for the text searched now.

@@ -18,8 +18,8 @@
 | light | keys.standard | 0.6536 |
 | light | keys.classic | 0.6548 |
 | light | palette.search | 0.6589 |
-| light | palette.default | 0.6591 |
 | light | balance-sheet.default | 0.6731 |
+| light | palette.default | 0.6754 |
 | light | bank.default | 0.6839 |
 | light | palette.commands | 0.6934 |
 | light | gst.gstr3b | 0.7035 |
@@ -202,18 +202,6 @@ SSIM 0.6589
 </tr>
 </table>
 
-## light / palette.default
-
-SSIM 0.6591
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/light/palette.default.webp" width="480" alt="mock light palette.default"></td>
-<td><img src="app-captures/light/palette.default.webp" width="480" alt="app light palette.default"></td>
-</tr>
-</table>
-
 ## light / balance-sheet.default
 
 SSIM 0.6731
@@ -223,6 +211,18 @@ SSIM 0.6731
 <tr>
 <td><img src="mock-v2/captures/states/light/balance-sheet.default.webp" width="480" alt="mock light balance-sheet.default"></td>
 <td><img src="app-captures/light/balance-sheet.default.webp" width="480" alt="app light balance-sheet.default"></td>
+</tr>
+</table>
+
+## light / palette.default
+
+SSIM 0.6754
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/palette.default.webp" width="480" alt="mock light palette.default"></td>
+<td><img src="app-captures/light/palette.default.webp" width="480" alt="app light palette.default"></td>
 </tr>
 </table>
 

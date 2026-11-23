@@ -465,3 +465,116 @@ fn the_suggested_export_name_has_no_path_or_reserved_characters() {
     assert_eq!(export_file_name(" . "), "Report.csv");
     assert_eq!(export_file_name("Trial Balance"), "Trial Balance.csv");
 }
+
+// ---- the palette's Recent rows, live from the engine -------------------------------------------
+
+/// Chooses each of `entries` in the palette so they become its recent rows, then reopens it on
+/// the empty query and lets `search` fetch the live details from `worker`.
+fn recent_rows(
+    entries: Vec<ledgerly_app::palette::PaletteEntry>,
+    worker: &ApiWorker,
+) -> ledgerly_app::palette::Palette {
+    use ledgerly_app::palette::{Palette, PaletteMode, PaletteSearch};
+    let mut palette = Palette::new();
+    let titles: Vec<String> = entries.iter().map(|e| e.title.clone()).collect();
+    palette.set_entries(entries);
+    for title in titles {
+        palette.open(PaletteMode::OnTop);
+        palette.set_query(title);
+        assert!(palette.accept().is_some());
+    }
+    let mut search = PaletteSearch::new();
+    palette.open(PaletteMode::OnTop);
+    search.tick(&mut palette, Some(worker));
+    for _ in 0..2000 {
+        if !search.is_pending() {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(5));
+        search.tick(&mut palette, Some(worker));
+    }
+    assert!(
+        !search.is_pending(),
+        "the details did not arrive within the bound"
+    );
+    palette
+}
+
+fn detail_of(palette: &ledgerly_app::palette::Palette, title: &str) -> String {
+    palette
+        .results()
+        .into_iter()
+        .find(|e| e.title == title)
+        .map(|e| e.detail.clone())
+        .unwrap()
+}
+
+#[test]
+fn a_recent_ledger_shows_its_group_and_the_engines_balance() {
+    // provenance: index.html:1115: a recent ledger reads "Ledger · Sundry debtors · 1,93,500.00
+    // Dr". Derived from the fixture: voucher 2 credits Customer One 5,000 and nothing else
+    // touches it, so its balance is 5,000.00 Cr; it sits in Sundry Debtors.
+    use ledgerly_app::palette::{PaletteEntry, PaletteTarget};
+    use ledgerly_app::shell::navigate::ledger_key;
+    let worker = ApiWorker::spawn(setup("w7_recent_ledger.ledgerly")).unwrap();
+    let palette = recent_rows(
+        vec![
+            PaletteEntry::new(PaletteTarget::Master(ledger_key(CUSTOMER)), "Customer One")
+                .with_detail("Ledger, found by name"),
+        ],
+        &worker,
+    );
+    assert_eq!(
+        detail_of(&palette, "Customer One"),
+        "Ledger \u{00B7} Sundry Debtors \u{00B7} 5,000.00 Cr"
+    );
+}
+
+#[test]
+fn a_recent_balance_sheet_says_the_date_it_opens_at() {
+    // provenance: index.html:1115: the recent Balance sheet reads "As at 21 Nov 2026". Derived:
+    // a report opens at the last voucher date of the year (`default_period`), and both fixture
+    // vouchers are dated 10 Apr 2026.
+    use ledgerly_app::palette::{PaletteEntry, PaletteTarget};
+    let worker = ApiWorker::spawn(setup("w7_recent_bs.ledgerly")).unwrap();
+    let palette = recent_rows(
+        vec![
+            PaletteEntry::new(
+                PaletteTarget::Report("balance-sheet".to_owned()),
+                "Balance Sheet",
+            )
+            .with_detail("Report"),
+        ],
+        &worker,
+    );
+    assert_eq!(detail_of(&palette, "Balance Sheet"), "As at 10 Apr 2026");
+}
+
+#[test]
+fn a_recent_ledger_the_engine_cannot_compute_shows_why_and_no_figure() {
+    // provenance: derived. The ledger report is Unsupported for the reserved Profit and Loss
+    // ledger (ledgerly-reports `ledger.rs`, "folds in prior-year profit at query time"), so the
+    // row says the balance was not computed and why; it never shows 0.00.
+    use ledgerly_app::palette::{PaletteEntry, PaletteTarget};
+    use ledgerly_app::shell::navigate::ledger_key;
+    const PL: LedgerId = LedgerId(9);
+    let mut api = setup("w7_recent_pl.ledgerly");
+    let mut pl = plain(PL, "Profit & Loss A/c", ReservedGroup::CapitalAccount);
+    pl.reserved = Some(ledgerly_model::ReservedLedger::ProfitAndLoss);
+    value(api.execute(Command::CreateLedger(pl)));
+    let worker = ApiWorker::spawn(api).unwrap();
+    let palette = recent_rows(
+        vec![PaletteEntry::new(
+            PaletteTarget::Master(ledger_key(PL)),
+            "Profit & Loss A/c",
+        )],
+        &worker,
+    );
+    let detail = detail_of(&palette, "Profit & Loss A/c");
+    assert!(
+        detail.starts_with("Ledger \u{00B7} Capital Account \u{00B7} not computed: "),
+        "{detail}"
+    );
+    assert!(detail.contains("prior-year profit"), "{detail}");
+    assert!(!detail.contains("0.00"), "{detail}");
+}

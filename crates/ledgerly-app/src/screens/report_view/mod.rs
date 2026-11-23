@@ -154,6 +154,13 @@ fn save_dialog(suggested: &str) -> Option<PathBuf> {
         .save_file()
 }
 
+/// What an engine report cell shows on screen (see [`text::cell_text`]): the palette's Recent
+/// rows show a ledger's closing balance with it.
+#[must_use]
+pub fn engine_cell_text(cell: &ledgerly_api::Cell) -> String {
+    text::cell_text(&remote::view_cell(cell))
+}
+
 /// The file name the save dialog suggests for a report titled `title`: the title with path
 /// separators and the characters Windows refuses (`/ \\ < > : " | ? *`) turned into `-`, edge
 /// spaces and dots dropped, and `.csv` added. An empty result is "Report".

@@ -458,7 +458,11 @@ fn shots() -> Vec<Shot> {
         shot("home.default", &[]),
         shot("home.default", &[]).themed(Theme::Dark),
         shot("home.default", &[]).themed(Theme::Hc),
-        shot("palette.default", &[palette]),
+        // Recent needs a choice first: open the balance sheet from the palette, go back, and
+        // reopen the palette on the empty query (index.html:1115 lists recents there).
+        shot("palette.default", &[palette])
+            .query("Balance sheet")
+            .then(&[(Key::Enter, NONE), ESC, palette]),
         shot("palette.search", &[palette]).query("bal"),
         shot("palette.voucher", &[palette]).query("#0412"),
         shot("palette.ask", &[palette]).query("?who owes us"),

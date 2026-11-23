@@ -14,10 +14,11 @@ feature that is not built), **data** (the capture company lacks what the mock's 
   has Read a bill photo, Import bank statement, Import 2B / IMS JSON, Export GSTR-1 JSON, Switch
   theme, Collapse side bar and Back up now (index.html:1110). Ours follows with the keymap's
   other commands; the mock's are not built as commands.
-- **bug: Recent rows have a plain detail.** The mock's Recent rows say "As at 21 Nov 2026",
-  "3 sections ready, 1 needs correction", "Ledger · Sundry debtors · 1,93,500.00 Dr"
-  (index.html:1115). Ours keep the detail the row had when chosen. Live details need the engine's
-  figures at reopen time.
+- **gap: a recent GSTR-1 row has no live detail.** The mock's Recent rows say "As at 21 Nov
+  2026", "3 sections ready, 1 needs correction" and "Ledger · Sundry debtors · 1,93,500.00 Dr"
+  (index.html:1115). A recent balance sheet and a recent ledger now show the date it opens at and
+  the engine's balance, fetched on every opening (`palette/recent.rs`). The GST return is a
+  screen, not a palette target, so it is never a recent row; its section count is not built.
 - **deferred: Alt+C keycap on 'Create ledger "q"'** (index.html:1129). Not drawn because the
   palette takes the keyboard, so Alt+C would not work there. Needs the palette to pass row
   shortcuts through.
