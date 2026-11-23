@@ -11,18 +11,20 @@
     clippy::expect_used,
     clippy::panic,
     clippy::indexing_slicing,
-    reason = "test code: rule B2 lets tests unwrap and panic"
+    clippy::float_arithmetic,
+    clippy::cast_precision_loss,
+    reason = "test code: rule B2 lets tests unwrap and panic; layout checks measure in points"
 )]
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use egui::epaint::{ClippedShape, Shape};
-use egui::{Event, Key, Modifiers, RawInput};
+use egui::{Color32, Event, FontFamily, Key, Modifiers, Pos2, RawInput, Rect, vec2};
 use ledgerly_api::{AiTier, Api};
 use ledgerly_app::screens::ai_settings::{
     AiSettingsScreen, CLOUD_STATUS, LOG_EMPTY, LOG_META, LOG_META_EMPTY, NEVER, OFF_NOTE,
-    OPTION_CLOUD, OPTION_LOCAL, OPTION_OFF, UNSET_NOTE, key_hints,
+    OPTION_CLOUD, OPTION_LOCAL, OPTION_OFF, UNSET_NOTE, key_hints, read_probe,
 };
 use ledgerly_app::shell::Shell;
 use ledgerly_app::shell::topbar::ai_chip;
@@ -391,4 +393,320 @@ fn no_cloud_key_reaches_the_company_file() {
     let bytes = std::fs::read(&path).unwrap();
     assert!(!bytes.windows(3).any(|w| w == b"sk-"));
     assert!(!bytes.windows(8).any(|w| w == b"keychain"));
+}
+
+/// What one frame painted, as the layout tests read it.
+struct Painted {
+    /// Every text galley, one per line.
+    text: String,
+    /// Every filled rectangle, with its fill.
+    fills: Vec<(Rect, Color32)>,
+    /// Every stroked rectangle, with its stroke colour.
+    strokes: Vec<(Rect, Color32)>,
+    /// Every line segment, as the rectangle its two ends span.
+    lines: Vec<Rect>,
+    /// The text of every galley laid out justified.
+    justified: Vec<String>,
+    /// The text of every galley set in the bold family.
+    bold: Vec<String>,
+    /// Where every text galley is drawn, as the rectangle its layout covers.
+    texts: Vec<Rect>,
+}
+
+fn walk_painted(shape: &Shape, out: &mut Painted) {
+    match shape {
+        Shape::Text(text) => {
+            let line = text.galley.text().to_owned();
+            out.texts
+                .push(Rect::from_min_size(text.pos, text.galley.size()));
+            out.text.push_str(&line);
+            out.text.push('\n');
+            if text.galley.job.justify {
+                out.justified.push(line.clone());
+            }
+            let bold = text
+                .galley
+                .job
+                .sections
+                .first()
+                .is_some_and(|s| s.format.font_id.family != FontFamily::Proportional);
+            if bold {
+                out.bold.push(line);
+            }
+        }
+        Shape::Rect(rect) => {
+            out.fills.push((rect.rect, rect.fill));
+            if rect.stroke.width > 0.0 {
+                out.strokes.push((rect.rect, rect.stroke.color));
+            }
+        }
+        Shape::LineSegment { points, .. } => {
+            out.lines.push(Rect::from_two_pos(points[0], points[1]));
+        }
+        Shape::Vec(shapes) => {
+            for shape in shapes {
+                walk_painted(shape, out);
+            }
+        }
+        Shape::Noop
+        | Shape::Circle(_)
+        | Shape::Ellipse(_)
+        | Shape::Path(_)
+        | Shape::Band(_)
+        | Shape::Mesh(_)
+        | Shape::QuadraticBezier(_)
+        | Shape::CubicBezier(_)
+        | Shape::Callback(_) => {}
+    }
+}
+
+/// One frame on the content area beside the 208 wide sidebar and the page margins: 1024 by 900, reading what it painted. The context is the caller's, so
+/// the layout probes the screen records stay readable after the frame.
+fn paint(
+    ctx: &egui::Context,
+    screen: &mut AiSettingsScreen,
+    app: &mut AppCtx,
+    keys: &[(Key, Modifiers)],
+) -> Painted {
+    let events = keys
+        .iter()
+        .map(|&(key, modifiers)| Event::Key {
+            key,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers,
+        })
+        .collect();
+    let input = RawInput {
+        events,
+        screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1024.0, 900.0))),
+        ..RawInput::default()
+    };
+    let out = ctx.run_ui(input, |ui| {
+        let _stay = screen.ui(ui, app);
+    });
+    let mut painted = Painted {
+        text: String::new(),
+        fills: Vec::new(),
+        strokes: Vec::new(),
+        lines: Vec::new(),
+        justified: Vec::new(),
+        texts: Vec::new(),
+        bold: Vec::new(),
+    };
+    for clipped in &out.shapes {
+        walk_painted(&clipped.shape, &mut painted);
+    }
+    out.drop_without_applying_deltas();
+    painted
+}
+
+/// Frames until `done` holds, then one more frame, so the layout is settled.
+fn paint_until(
+    ctx: &egui::Context,
+    screen: &mut AiSettingsScreen,
+    app: &mut AppCtx,
+    keys: &[(Key, Modifiers)],
+    done: impl Fn(&AiSettingsScreen) -> bool,
+) -> Painted {
+    paint(ctx, screen, app, keys);
+    for _ in 0..2000 {
+        if done(screen) {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(2));
+        paint(ctx, screen, app, &[]);
+    }
+    assert!(done(screen), "the worker's answer did not arrive");
+    paint(ctx, screen, app, &[])
+}
+
+/// The local state, laid out. Returns the context (for the layout probes) and the last frame.
+fn local_layout(name: &str) -> (egui::Context, Painted) {
+    let path = new_file(name);
+    let mut app = open(&path);
+    let mut screen = AiSettingsScreen::default();
+    let ctx = egui::Context::default();
+    // The bold family is installed by the theme, as the app does at start-up.
+    ledgerly_app::theme::apply(&ctx, ledgerly_app::theme::ThemeKind::Light);
+    paint_until(&ctx, &mut screen, &mut app, &[], AiSettingsScreen::loaded);
+    let painted = paint_until(&ctx, &mut screen, &mut app, &[(Key::Num2, NONE)], |s| {
+        s.stored() == Some(AiTier::Local)
+    });
+    (ctx, painted)
+}
+
+/// A layout probe the screen records each frame. Missing means the screen did not draw it.
+fn probe<T: Clone + Send + Sync + 'static>(ctx: &egui::Context, name: &str) -> T {
+    read_probe::<T>(ctx, name).unwrap_or_else(|| panic!("no layout probe named {name}"))
+}
+
+#[test]
+fn the_feature_table_sits_beside_the_never_card_without_overlap() {
+    // The mock's row: the table takes about two thirds of the width, the never card the rest
+    // (side-by-side comparison with design/mock-v2/index.html:1908-1916, screenshot in
+    // claude-tmp/sbs). The two-thirds figure is read from that comparison, not computed.
+    let (ctx, _) = local_layout("w4_layout_table.ledgerly");
+    let table: Rect = probe(&ctx, "ai-settings.features");
+    let never: Rect = probe(&ctx, "ai-settings.never");
+    assert!(
+        table.max.x <= never.min.x,
+        "the table {table:?} runs into the never card {never:?}"
+    );
+    let share = table.width() / (table.width() + never.width());
+    assert!(
+        (0.6..=0.75).contains(&share),
+        "the table takes {share:.2} of the row, the mock about two thirds"
+    );
+}
+
+#[test]
+fn the_selected_tier_card_has_the_accent_stroke_and_fill_and_the_others_do_not() {
+    let (ctx, painted) = local_layout("w4_layout_accent.ledgerly");
+    let accent: Color32 = probe(&ctx, "ai-settings.accent");
+    let accent_soft: Color32 = probe(&ctx, "ai-settings.accent_soft");
+    let card = |n: usize| -> Rect { probe(&ctx, &format!("ai-settings.card.{n}")) };
+    let stroked_with = |rect: Rect, colour: Color32| {
+        painted
+            .strokes
+            .iter()
+            .any(|(r, c)| *c == colour && (r.center() - rect.center()).length() < 1.0)
+    };
+    let filled_with = |rect: Rect, colour: Color32| {
+        painted
+            .fills
+            .iter()
+            .any(|(r, c)| *c == colour && (r.center() - rect.center()).length() < 1.0)
+    };
+    // Local is the second card (index 1) in this state.
+    assert!(
+        stroked_with(card(1), accent),
+        "selected card has no accent stroke"
+    );
+    assert!(
+        filled_with(card(1), accent_soft),
+        "selected card has no accent fill"
+    );
+    assert!(
+        !stroked_with(card(0), accent),
+        "an unselected card has the accent stroke"
+    );
+    assert!(
+        !stroked_with(card(2), accent),
+        "an unselected card has the accent stroke"
+    );
+}
+
+#[test]
+fn each_option_card_draws_its_icon_before_a_bold_title() {
+    let (ctx, painted) = local_layout("w4_layout_icons.ledgerly");
+    for n in 0..3 {
+        let icon: Rect = probe(&ctx, &format!("ai-settings.icon.{n}"));
+        let title: Rect = probe(&ctx, &format!("ai-settings.title.{n}"));
+        assert!(
+            icon.max.x <= title.min.x,
+            "card {n}: the icon {icon:?} is not before the title {title:?}"
+        );
+    }
+    for title in ["Off", "On this computer", "Cloud, your own key"] {
+        assert!(
+            painted.bold.iter().any(|t| t == title),
+            "the title {title} is not set in the bold family"
+        );
+    }
+}
+
+#[test]
+fn the_option_bodies_are_left_aligned_not_justified() {
+    let (_, painted) = local_layout("w4_layout_justify.ledgerly");
+    assert!(
+        painted.text.contains("Redaction runs"),
+        "the cloud body is drawn"
+    );
+    assert!(
+        !painted
+            .justified
+            .iter()
+            .any(|t| t.contains("Redaction runs")),
+        "the cloud card's body is justified: {:?}",
+        painted.justified
+    );
+}
+
+#[test]
+fn the_local_panel_spans_the_width_of_the_three_option_cards() {
+    let (ctx, _) = local_layout("w4_layout_full.ledgerly");
+    let local: Rect = probe(&ctx, "ai-settings.local");
+    let cards: Vec<Rect> = (0..3)
+        .map(|n| probe(&ctx, &format!("ai-settings.card.{n}")))
+        .collect();
+    let left = cards.iter().map(|r| r.min.x).fold(f32::INFINITY, f32::min);
+    let right = cards
+        .iter()
+        .map(|r| r.max.x)
+        .fold(f32::NEG_INFINITY, f32::max);
+    assert!(
+        (local.min.x - left).abs() < 1.0 && (local.max.x - right).abs() < 1.0,
+        "the local panel {local:?} does not span the cards {cards:?}"
+    );
+}
+
+#[test]
+fn the_local_panel_rows_are_separated_by_rules() {
+    let (ctx, painted) = local_layout("w4_layout_rules.ledgerly");
+    let local: Rect = probe(&ctx, "ai-settings.local");
+    let rules = painted
+        .lines
+        .iter()
+        .filter(|l| local.expand(2.0).contains_rect(**l))
+        .count();
+    assert!(
+        rules >= 3,
+        "the local panel has {rules} rules; the mock has one under each row"
+    );
+}
+
+#[test]
+fn the_feature_table_has_an_on_column_and_no_status_column() {
+    let (_, painted) = local_layout("w4_layout_on.ledgerly");
+    assert!(
+        painted.text.lines().any(|l| l == "On"),
+        "the feature table has no On header"
+    );
+    assert!(
+        !painted.text.lines().any(|l| l == "Status"),
+        "the feature table still has a Status column"
+    );
+}
+
+#[test]
+fn the_feature_text_clears_the_on_column_with_room_to_spare() {
+    // The mock sets "What the model sees" text in its column with room to spare (index.html:
+    // 1908-1910). In the captured app the longest line ran to the On column and was cut ("on
+    // this co..."), so every feature line must end at least 12 before the On header.
+    let (ctx, painted) = local_layout("w4_layout_text.ledgerly");
+    let table: Rect = probe(&ctx, "ai-settings.features");
+    let on_header = painted
+        .texts
+        .iter()
+        .zip(painted.text.lines())
+        .find(|(_, line)| *line == "On")
+        .map(|(rect, _)| rect.min.x)
+        .expect("the feature table has no On header");
+    let feature_lines: Vec<(&Rect, &str)> = painted
+        .texts
+        .iter()
+        .zip(painted.text.lines())
+        .filter(|(rect, _)| table.intersects(**rect) && rect.min.x < on_header)
+        .filter(|(_, line)| line.contains("on this computer") || line.starts_with("Nothing"))
+        .collect();
+    assert!(!feature_lines.is_empty(), "no feature lines were drawn");
+    for (rect, line) in feature_lines {
+        assert!(
+            on_header - rect.max.x >= 12.0,
+            "\"{line}\" ends at {} and the On column starts at {on_header}",
+            rect.max.x
+        );
+    }
 }

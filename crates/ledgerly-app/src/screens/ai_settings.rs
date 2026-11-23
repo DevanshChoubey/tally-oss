@@ -15,21 +15,22 @@
 
 use std::path::PathBuf;
 
-use egui::{Align, Key, Layout, Modifiers, RichText, Sense, Ui};
-use egui_extras::Column;
+use egui::{Align, Frame, Key, Layout, Margin, Modifiers, RichText, Sense, Stroke, Ui, pos2, vec2};
+use egui_extras::{Column, Size, StripBuilder};
 use ledgerly_api::{AiLogEntry, AiTier, Api};
 use ledgerly_core::Outcome;
 
 use crate::screen::KeyHint;
 use crate::screens::wire::{Done, Latest, unsupported_text};
 use crate::shell::submit;
-use crate::theme::{TEXT_BODY, TEXT_META};
+use crate::theme::{RADIUS_M, TEXT_BODY, TEXT_META, border_width, shadow_1};
 use crate::ui::badge::{BadgeKind, badge};
 use crate::ui::card::card;
+use crate::ui::icon::{Icon, icon};
 use crate::ui::note::{NoteKind, note};
 use crate::ui::page_head::{HEAD_GAP, page_head};
 use crate::ui::table::{self, ROW_HEIGHT};
-use crate::ui::{para_text, tokens};
+use crate::ui::{bold_font, kind, para, para_text, tokens};
 use crate::worker::ApiWorker;
 use crate::{AppCtx, Screen, ScreenAction};
 
@@ -97,6 +98,27 @@ pub const NEVER: [&str; 5] = [
     "Change a locked period or an IMS action.",
     "Send anything to the cloud without your confirmation.",
 ];
+
+/// The option and panel cards' padding, as the kit's card (`card.rs`).
+const CARD_PAD_X: i8 = 16;
+/// The option and panel cards' vertical padding.
+const CARD_PAD_Y: i8 = 14;
+/// The border of the selected option card: the accent, heavier than the hairline.
+const ACCENT_STROKE: f32 = 1.5;
+/// The label column of the local and provider panels, in points.
+const LABEL_COLUMN: f32 = 120.0;
+/// The feature column of the features table, in points.
+const FEATURE_COLUMN: f32 = 180.0;
+/// The On column of the features table, in points (`th` width 60px in index.html:1908).
+const ON_COLUMN: f32 = 64.0;
+/// A switch's width and height, in points (`.switch` in the mock).
+const SWITCH_WIDTH: f32 = 34.0;
+/// A switch's height, in points.
+const SWITCH_HEIGHT: f32 = 18.0;
+/// How far the switch's knob sits in from its end, in points.
+const KNOB_INSET: f32 = 9.0;
+/// The knob's radius, in points.
+const KNOB_RADIUS: f32 = 7.0;
 
 /// The log card's title (index.html:1915).
 pub const LOG_TITLE: &str = "AI activity log";
@@ -254,6 +276,33 @@ impl AiSettingsScreen {
     }
 
     /// Chooses `tier` from a key or a click. Cloud also shows the cloud panel at once.
+    /// The keys this screen answers: 1, 2 and 3 choose a tier; Ctrl+E exports the log when it
+    /// has rows.
+    fn read_keys(&mut self, ui: &Ui, ctx: &AppCtx) {
+        let (one, two, three, export) = ui.input_mut(|i| {
+            (
+                i.consume_key(Modifiers::NONE, Key::Num1),
+                i.consume_key(Modifiers::NONE, Key::Num2),
+                i.consume_key(Modifiers::NONE, Key::Num3),
+                i.consume_key(Modifiers::COMMAND, Key::E),
+            )
+        });
+        let worker = ctx.api.as_ref();
+        if one {
+            self.pick(worker, AiTier::Off);
+        } else if two {
+            self.pick(worker, AiTier::Local);
+        } else if three {
+            self.pick(worker, AiTier::Cloud);
+        }
+        if export
+            && !self.log.is_empty()
+            && let (Some(worker), Some(path)) = (worker, save_dialog())
+        {
+            self.export(worker, path);
+        }
+    }
+
     fn pick(&mut self, worker: Option<&ApiWorker>, tier: AiTier) {
         self.cloud_asked = tier == AiTier::Cloud;
         if let Some(worker) = worker {
@@ -335,28 +384,7 @@ impl Screen for AiSettingsScreen {
             self.start_load(worker);
         }
 
-        let (one, two, three, export) = ui.input_mut(|i| {
-            (
-                i.consume_key(Modifiers::NONE, Key::Num1),
-                i.consume_key(Modifiers::NONE, Key::Num2),
-                i.consume_key(Modifiers::NONE, Key::Num3),
-                i.consume_key(Modifiers::COMMAND, Key::E),
-            )
-        });
-        let worker = ctx.api.as_ref();
-        if one {
-            self.pick(worker, AiTier::Off);
-        } else if two {
-            self.pick(worker, AiTier::Local);
-        } else if three {
-            self.pick(worker, AiTier::Cloud);
-        }
-        if export
-            && !self.log.is_empty()
-            && let (Some(worker), Some(path)) = (worker, save_dialog())
-        {
-            self.export(worker, path);
-        }
+        self.read_keys(ui, ctx);
 
         let company = ctx
             .books
@@ -385,33 +413,26 @@ impl Screen for AiSettingsScreen {
         }
         ui.add_space(14.0);
 
-        match panel {
-            Panel::Unset => {
-                note(ui, NoteKind::Info, UNSET_NOTE);
-            }
-            Panel::Off => {
-                note(ui, NoteKind::Info, OFF_NOTE);
-            }
-            Panel::Local => {
-                draw_local(ui);
-            }
-            Panel::Cloud => {
-                draw_cloud(ui, self.cloud_reason.as_deref());
-            }
-        }
+        draw_panel(ui, panel, self.cloud_reason.as_deref());
         ui.add_space(14.0);
 
-        ui.columns(2, |cols| {
-            if let [left, right] = cols {
-                draw_features(left, panel);
-                left.add_space(14.0);
-                draw_log(left, &self.log, !self.loaded);
-                draw_never(right);
-            }
-        });
+        StripBuilder::new(ui)
+            .size(Size::relative(TABLE_SHARE))
+            .size(Size::remainder())
+            .horizontal(|mut strip| {
+                strip.cell(|left| {
+                    draw_features(left, panel);
+                    left.add_space(14.0);
+                    draw_log(left, &self.log, !self.loaded);
+                });
+                strip.cell(draw_never);
+            });
         ScreenAction::Stay
     }
 }
+
+/// The share of the row the features table and the log take; the never card takes the rest.
+const TABLE_SHARE: f32 = 0.66;
 
 /// The system save dialog for the log export, CSV only.
 fn save_dialog() -> Option<PathBuf> {
@@ -422,22 +443,49 @@ fn save_dialog() -> Option<PathBuf> {
         .save_file()
 }
 
+/// Records where the screen drew a part, so the layout tests can read it back by name. The
+/// value lives in the context's memory for the frame and is read after the frame.
+pub fn record_probe<T: Clone + Send + Sync + 'static>(ui: &Ui, name: &str, value: T) {
+    let id = egui::Id::unique(name);
+    ui.ctx().data_mut(|d| d.insert_temp(id, value));
+}
+
+/// The value a layout probe recorded under `name` in the last frame, if the screen drew it.
+#[must_use]
+pub fn read_probe<T: Clone + Send + Sync + 'static>(ctx: &egui::Context, name: &str) -> Option<T> {
+    ctx.data(|d| d.get_temp::<T>(egui::Id::unique(name)))
+}
+
 /// Draws the three option cards in a row and returns the tier clicked this frame, if any.
 /// The "Current" badge marks the tier stored in the company file, not the panel shown: a refused
 /// cloud choice leaves the stored tier unchanged.
+/// The panel under the option cards: what the chosen tier means, or the note for no tier.
+fn draw_panel(ui: &mut Ui, panel: Panel, cloud_reason: Option<&str>) {
+    match panel {
+        Panel::Unset => {
+            note(ui, NoteKind::Info, UNSET_NOTE);
+        }
+        Panel::Off => {
+            note(ui, NoteKind::Info, OFF_NOTE);
+        }
+        Panel::Local => draw_local(ui),
+        Panel::Cloud => draw_cloud(ui, cloud_reason),
+    }
+}
+
 fn draw_options(ui: &mut Ui, stored: Option<AiTier>) -> Option<AiTier> {
     let mut clicked = None;
     let options = [
-        (AiTier::Off, OPTION_OFF),
-        (AiTier::Local, OPTION_LOCAL),
-        (AiTier::Cloud, OPTION_CLOUD),
+        (AiTier::Off, Icon::Off, OPTION_OFF),
+        (AiTier::Local, Icon::Cpu, OPTION_LOCAL),
+        (AiTier::Cloud, Icon::Cloud, OPTION_CLOUD),
     ];
     ui.columns(3, |cols| {
-        for (n, ((tier, (title, body)), col)) in
+        for (n, ((tier, glyph, (title, body)), col)) in
             options.into_iter().zip(cols.iter_mut()).enumerate()
         {
             let current = stored == Some(tier);
-            let response = option_card(col, n, current, title, body);
+            let response = option_card(col, n, current, glyph, title, body);
             if response.clicked() {
                 clicked = Some(tier);
             }
@@ -446,19 +494,51 @@ fn draw_options(ui: &mut Ui, stored: Option<AiTier>) -> Option<AiTier> {
     clicked
 }
 
-/// One option card: a click target with its title, a "Current" badge on the shown tier, and its
-/// body.
-fn option_card(ui: &mut Ui, n: usize, current: bool, title: &str, body: &str) -> egui::Response {
-    let inner = card(ui, |ui| {
-        ui.set_min_height(72.0);
-        ui.horizontal(|ui| {
-            ui.label(RichText::new(title).strong().color(tokens(ui).text));
-            if current {
-                badge(ui, BadgeKind::Accent, "Current");
-            }
+/// One option card: a click target with its icon and bold title, a "Current" badge on the
+/// shown tier, and its body. The shown tier has the accent border and fill (`aria-checked` in
+/// index.html:1905-1907); the body is ragged right, never justified.
+fn option_card(
+    ui: &mut Ui,
+    n: usize,
+    current: bool,
+    glyph: Icon,
+    title: &str,
+    body: &str,
+) -> egui::Response {
+    let t = tokens(ui);
+    let k = kind(ui);
+    record_probe(ui, "ai-settings.accent", t.accent);
+    record_probe(ui, "ai-settings.accent_soft", t.accent_soft);
+    let (fill, stroke) = if current {
+        (t.accent_soft, Stroke::new(ACCENT_STROKE, t.accent))
+    } else {
+        (t.surface, Stroke::new(border_width(k), t.border))
+    };
+    let inner = Frame::new()
+        .fill(fill)
+        .stroke(stroke)
+        .corner_radius(RADIUS_M)
+        .inner_margin(Margin::symmetric(CARD_PAD_X, CARD_PAD_Y))
+        .shadow(shadow_1(k))
+        .show(ui, |ui| {
+            ui.set_min_size(vec2(ui.available_width(), 72.0));
+            ui.horizontal(|ui| {
+                let picture = icon(ui, glyph, t.text_2);
+                record_probe(ui, &format!("ai-settings.icon.{n}"), picture.rect);
+                ui.add_space(6.0);
+                let heading = ui.add(egui::Label::new(
+                    RichText::new(title)
+                        .font(bold_font(ui, TEXT_BODY))
+                        .color(t.text),
+                ));
+                record_probe(ui, &format!("ai-settings.title.{n}"), heading.rect);
+                if current {
+                    badge(ui, BadgeKind::Accent, "Current");
+                }
+            });
+            para(ui, body, TEXT_BODY, t.text_2);
         });
-        ui.label(para_text(body, TEXT_BODY, tokens(ui).text_2));
-    });
+    record_probe(ui, &format!("ai-settings.card.{n}"), inner.response.rect);
     ui.interact(
         inner.response.rect,
         egui::Id::unique(("ai-option", n)),
@@ -466,11 +546,13 @@ fn option_card(ui: &mut Ui, n: usize, current: bool, title: &str, body: &str) ->
     )
 }
 
-/// The local panel. No model is built into this version, so each row says so.
+/// The local panel: the local model's reader, language and network rows, across the full width
+/// of the option cards (index.html:1906 and the local-model card at 1914).
 fn draw_local(ui: &mut Ui) {
-    card(ui, |ui| {
-        ui.label(RichText::new("Local model").strong());
-        rows(
+    let local = card(ui, |ui| {
+        ui.set_min_width(ui.available_width());
+        panel_heading(ui, Icon::Cpu, "Local model");
+        rule_rows(
             ui,
             &[
                 (
@@ -482,13 +564,15 @@ fn draw_local(ui: &mut Ui) {
             ],
         );
     });
+    record_probe(ui, "ai-settings.local", local.response.rect);
 }
 
 /// The cloud panel: the provider is not available, with the engine's reason.
 fn draw_cloud(ui: &mut Ui, reason: Option<&str>) {
     card(ui, |ui| {
-        ui.label(RichText::new("Provider").strong());
-        rows(
+        ui.set_min_width(ui.available_width());
+        panel_heading(ui, Icon::Cloud, "Provider");
+        rule_rows(
             ui,
             &[
                 ("Status", CLOUD_STATUS),
@@ -502,31 +586,82 @@ fn draw_cloud(ui: &mut Ui, reason: Option<&str>) {
     });
 }
 
-/// Label and text rows, two columns, in the kit's text colours.
-fn rows(ui: &mut Ui, items: &[(&str, &str)]) {
+/// A panel heading: its icon, then the title in the bold family.
+fn panel_heading(ui: &mut Ui, glyph: Icon, title: &str) {
     let t = tokens(ui);
-    egui::Grid::new("ai-settings-rows")
-        .num_columns(2)
-        .spacing([16.0, 6.0])
-        .show(ui, |ui| {
+    ui.horizontal(|ui| {
+        icon(ui, glyph, t.text_2);
+        ui.add_space(6.0);
+        ui.label(
+            RichText::new(title)
+                .font(bold_font(ui, TEXT_BODY))
+                .color(t.text),
+        );
+    });
+    ui.add_space(6.0);
+}
+
+/// Label and text rows across the card, a rule under each row. The label column is fixed; the
+/// value takes the rest. Each cell draws its own part of the rule, so the rules join up.
+fn rule_rows(ui: &mut Ui, items: &[(&str, &str)]) {
+    let t = tokens(ui);
+    table::builder(ui)
+        .column(Column::exact(LABEL_COLUMN))
+        .column(Column::remainder())
+        .body(|mut body| {
             for (label, value) in items {
-                ui.label(RichText::new(*label).size(TEXT_META).color(t.text_2));
-                ui.label(RichText::new(*value).size(TEXT_BODY).color(t.text));
-                ui.end_row();
+                body.row(ROW_HEIGHT, |mut row| {
+                    row.col(|ui| {
+                        ui.label(RichText::new(*label).size(TEXT_META).color(t.text_2));
+                        cell_rule(ui);
+                    });
+                    row.col(|ui| {
+                        table::text(ui, value);
+                        cell_rule(ui);
+                    });
+                });
             }
         });
 }
 
-/// The features table: what each feature sees, and whether it runs. Nothing runs yet, so the
-/// status says so (PARITY-GAPS: the mock's switches are not drawn).
+/// Draws the rule along the bottom of a table cell (`table.t` lines in index.html).
+fn cell_rule(ui: &Ui) {
+    let t = tokens(ui);
+    let rect = ui.max_rect();
+    ui.painter().hline(
+        rect.x_range(),
+        rect.bottom() - 0.5,
+        Stroke::new(1.0, t.border),
+    );
+}
+
+/// A read-only switch, drawn as the mock's `.switch`: the accent when on, the border colour when
+/// off. Nothing in this build changes it yet (PARITY-GAPS).
+fn switch(ui: &mut Ui, on: bool) {
+    let t = tokens(ui);
+    let (rect, _) = ui.allocate_exact_size(vec2(SWITCH_WIDTH, SWITCH_HEIGHT), Sense::hover());
+    let fill = if on { t.accent } else { t.border };
+    ui.painter().rect_filled(rect, SWITCH_HEIGHT / 2.0, fill);
+    let knob_x = if on {
+        rect.right() - KNOB_INSET
+    } else {
+        rect.left() + KNOB_INSET
+    };
+    ui.painter()
+        .circle_filled(pos2(knob_x, rect.center().y), KNOB_RADIUS, t.surface);
+}
+
+/// The features table: what each feature sees, and whether it runs (index.html:1908). The On
+/// switch is read-only: nothing runs yet (PARITY-GAPS).
 fn draw_features(ui: &mut Ui, panel: Panel) {
     let off = matches!(panel, Panel::Off | Panel::Unset);
     let cloud = panel == Panel::Cloud;
-    card(ui, |ui| {
+    let t = tokens(ui);
+    let features = card(ui, |ui| {
         table::builder(ui)
-            .column(Column::auto().at_least(180.0))
-            .column(Column::remainder())
-            .column(Column::auto().at_least(110.0))
+            .column(Column::initial(FEATURE_COLUMN).at_least(160.0).clip(true))
+            .column(Column::remainder().at_least(160.0).clip(true))
+            .column(Column::exact(ON_COLUMN))
             .header(ROW_HEIGHT, |mut row| {
                 table::header(&mut row, "Feature", false);
                 let second = if cloud {
@@ -535,12 +670,15 @@ fn draw_features(ui: &mut Ui, panel: Panel) {
                     "What the model sees"
                 };
                 table::header(&mut row, second, false);
-                table::header(&mut row, "Status", false);
+                table::header(&mut row, "On", false);
             })
             .body(|mut body| {
                 for (feature, sees, sent) in FEATURES {
                     body.row(ROW_HEIGHT, |mut row| {
-                        row.col(|ui| table::text(ui, feature));
+                        row.col(|ui| {
+                            ui.label(RichText::new(feature).size(TEXT_BODY).color(t.text));
+                            cell_rule(ui);
+                        });
                         row.col(|ui| {
                             let text = if off {
                                 "Nothing: off".to_owned()
@@ -550,12 +688,27 @@ fn draw_features(ui: &mut Ui, panel: Panel) {
                                 format!("{sees}, on this computer")
                             };
                             table::text(ui, &text);
+                            cell_rule(ui);
                         });
-                        row.col(|ui| table::text(ui, if off { "Off" } else { "Not built yet" }));
+                        row.col(|ui| {
+                            switch(ui, !off);
+                            cell_rule(ui);
+                        });
                     });
                 }
             });
+        if !off {
+            // Nothing runs in this build; the switch says the feature is on, this line says why
+            // nothing happens (PARITY-GAPS).
+            ui.add_space(6.0);
+            ui.label(
+                RichText::new("Not built yet")
+                    .size(TEXT_META)
+                    .color(t.text_3),
+            );
+        }
     });
+    record_probe(ui, "ai-settings.features", features.response.rect);
 }
 
 /// The AI activity log: the file's real rows, or a line saying there are none.
@@ -629,7 +782,7 @@ fn short_hash(hash: &str) -> String {
 
 /// The "What AI may never do here" card (index.html:1916).
 fn draw_never(ui: &mut Ui) {
-    card(ui, |ui| {
+    let never = card(ui, |ui| {
         let t = tokens(ui);
         ui.label(RichText::new("What AI may never do here").strong());
         ui.add_space(6.0);
@@ -640,4 +793,5 @@ fn draw_never(ui: &mut Ui) {
             });
         }
     });
+    record_probe(ui, "ai-settings.never", never.response.rect);
 }

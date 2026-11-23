@@ -311,8 +311,9 @@ matching to propose a ledger, which is not built).
 - **deferred: the local model rows.** index.html:1914 shows the bill reader (410 MB) and the
   small model (1.8 GB) as on disk and "None used" verified. No local model is built, so the panel
   says "Not installed" for each row and the network row says nothing is sent yet.
-- **deferred: the feature switches.** index.html:1908-1910 draws an On switch per feature. None of
-  these features exists, so the table shows a Status column ("Off" or "Not built yet") instead.
+- **deferred: the feature switches.** index.html:1908-1910 draws an On switch per feature. The app
+  draws the same switch in an On column, read-only, because no feature can be turned on yet. The
+  "Not built yet" note sits under the features table when the tier is not Off, not in a column.
 - **by design: no tier is chosen by default.** The mock's first state is "On this computer", which
   would claim a tier nobody chose. A company with no stored tier shows neither option as current,
   with a note that nothing is sent until one is chosen. The top bar says "AI: not set up".
@@ -331,4 +332,5 @@ matching to propose a ledger, which is not built).
   through the existing home panel; the other screens are not yet wired to the tier.
 - **by design: the "Current" badge.** The mock marks the chosen card with a border only
   (index.html:1905-1907). The app puts a "Current" badge on the tier stored in the company file, so
-  a refused cloud choice still shows the stored tier as current. The app draws no border.
+  a refused cloud choice still shows the stored tier as current. The app also draws the selected
+  card with an accent fill and border, so the stored tier stands out in both ways.
