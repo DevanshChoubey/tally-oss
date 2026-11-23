@@ -964,10 +964,12 @@ impl Screen for GstScreen {
 
     fn keys(&self) -> Vec<crate::screen::KeyHint> {
         use crate::screen::KeyHint;
-        // The mock's key bars (index.html:1721). On the 2B tab the IMS keys are offered only
-        // when there are rows to act on; Y and X need the engine's match (engine item E-3).
+        // The mock's key bars (index.html:1721), less keys with nothing to act on: GSTR-3B has
+        // no rows and exports nothing, and on the 2B tab the IMS keys need rows; Y and X need
+        // the engine's match (engine item E-3).
         match (self.tab, &self.recon) {
-            (GstTab::Gstr1 | GstTab::Gstr3b, _) => vec![
+            (GstTab::Gstr3b, _) => vec![KeyHint::new("1 2 3", "Tabs"), KeyHint::new("Esc", "Back")],
+            (GstTab::Gstr1, _) => vec![
                 KeyHint::new("1 2 3", "Tabs"),
                 KeyHint::new("J / K", "Move"),
                 KeyHint::new("Enter", "Open"),

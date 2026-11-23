@@ -20,13 +20,13 @@
 | light | keys.classic | 0.6493 |
 | light | palette.search | 0.6576 |
 | light | palette.default | 0.6588 |
-| light | gst.gstr1 | 0.6593 |
 | light | payment.default | 0.6601 |
+| light | gst.gstr1 | 0.6610 |
 | light | bank.brs | 0.6619 |
 | light | balance-sheet.default | 0.6703 |
 | light | masters.ledger-detail | 0.6840 |
 | light | palette.commands | 0.6899 |
-| light | gst.gstr3b | 0.6982 |
+| light | gst.gstr3b | 0.7000 |
 | light | masters.create-ledger | 0.7247 |
 | light | day-book.default | 0.7570 |
 | light | gst.recon-empty | 0.8231 |
@@ -223,18 +223,6 @@ SSIM 0.6588
 </tr>
 </table>
 
-## light / gst.gstr1
-
-SSIM 0.6593
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/light/gst.gstr1.webp" width="480" alt="mock light gst.gstr1"></td>
-<td><img src="app-captures/light/gst.gstr1.webp" width="480" alt="app light gst.gstr1"></td>
-</tr>
-</table>
-
 ## light / payment.default
 
 SSIM 0.6601
@@ -244,6 +232,18 @@ SSIM 0.6601
 <tr>
 <td><img src="mock-v2/captures/states/light/payment.default.webp" width="480" alt="mock light payment.default"></td>
 <td><img src="app-captures/light/payment.default.webp" width="480" alt="app light payment.default"></td>
+</tr>
+</table>
+
+## light / gst.gstr1
+
+SSIM 0.6610
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/gst.gstr1.webp" width="480" alt="mock light gst.gstr1"></td>
+<td><img src="app-captures/light/gst.gstr1.webp" width="480" alt="app light gst.gstr1"></td>
 </tr>
 </table>
 
@@ -297,7 +297,7 @@ SSIM 0.6899
 
 ## light / gst.gstr3b
 
-SSIM 0.6982
+SSIM 0.7000
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>

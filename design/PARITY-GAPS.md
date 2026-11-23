@@ -82,8 +82,9 @@ feature that is not built), **data** (the capture company lacks what the mock's 
 ## GST returns (round of 2026-11-23)
 
 Captured states: `gst.gstr1`, `gst.gstr3b`, `gst.recon-empty`. Not captured yet:
-`gstr1-correction`, `recon`, `recon-explain`, `recon-error` and `recon-locked`. The app cannot
-reach them, because no 2B file can be read.
+`gstr1-correction`, `recon`, `recon-explain`, `recon-error` and `recon-locked`. The capture
+company has no voucher that needs correction, so `gstr1-correction` has nothing to show; the
+four `recon` states need a 2B file, which the app cannot read.
 
 - **deferred: GSTR-1 by section** (index.html:1673-1676). The mock's table has one row per
   return section (4A B2B, 5 B2C large, 7 B2C others, 9B notes, 12 HSN, 13 documents), with
@@ -111,6 +112,11 @@ reach them, because no 2B file can be read.
   offers no import button and no key.
 - **deferred: Y Take suggestion and X Explain on the 2B tab** (index.html:1721). They need the
   engine's match and explanation (E-3). The key bar offers A, R and P only when rows are loaded.
+- **deferred: the GSTR-3B key bar** (index.html:1721). The mock offers J / K, Enter and Ctrl+E
+  there. Ours has no rows on that tab and exports only GSTR-1, so it offers just 1 2 3 and Esc.
+- **needs a decision: "monthly" in the subtitle.** It comes from the shell, which always opens
+  one calendar month (`gst_return_period`), not from the registration. Quarterly filing (QRMP)
+  is not modelled; the registration needs a filing frequency first.
 - **deferred: the match table's look.** The loaded 2B table still uses egui's grid inside a card.
   It cannot be reached or captured until 2B import exists; restyle it then.
 - **gap: Re-apply masters and Export IMS action file.** The view model records both requests

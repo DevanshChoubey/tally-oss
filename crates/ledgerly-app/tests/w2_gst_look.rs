@@ -76,19 +76,23 @@ fn the_subtitle_names_the_gstin_the_state_the_period_and_the_frequency() {
 #[test]
 fn the_return_tabs_key_bar_reads_like_the_mocks() {
     // provenance: index.html:1721: on GSTR-1 and GSTR-3B the keys are "1 2 3" Tabs, "J / K" Move,
-    // Enter Open, Ctrl+E Export JSON, Esc Back. Catches "Open voucher".
-    let expected = owned(&[
-        ("1 2 3", "Tabs"),
-        ("J / K", "Move"),
-        ("Enter", "Open"),
-        ("Ctrl+E", "Export JSON"),
-        ("Esc", "Back"),
-    ]);
+    // Enter Open, Ctrl+E Export JSON, Esc Back. Catches "Open voucher". Spec change 2026-11-23
+    // (derived, same rule as the 2B tab): the GSTR-3B tab has no rows to move through or open
+    // and exports nothing, so it offers only the tabs and Esc (design/PARITY-GAPS.md).
     let mut s = GstScreen::new("November 2026", None);
     s.switch_tab(GstTab::Gstr1);
-    assert_eq!(pairs(&s), expected);
+    assert_eq!(
+        pairs(&s),
+        owned(&[
+            ("1 2 3", "Tabs"),
+            ("J / K", "Move"),
+            ("Enter", "Open"),
+            ("Ctrl+E", "Export JSON"),
+            ("Esc", "Back"),
+        ])
+    );
     s.switch_tab(GstTab::Gstr3b);
-    assert_eq!(pairs(&s), expected);
+    assert_eq!(pairs(&s), owned(&[("1 2 3", "Tabs"), ("Esc", "Back")]));
 }
 
 #[test]
