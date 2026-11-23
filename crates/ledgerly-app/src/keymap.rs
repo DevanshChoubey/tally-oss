@@ -64,6 +64,10 @@ pub enum Action {
     NewSales,
     /// Create a purchase voucher.
     NewPurchase,
+    /// Create a credit note.
+    NewCreditNote,
+    /// Create a debit note.
+    NewDebitNote,
     /// Change the date or the report period.
     ChangePeriod,
     /// Switch or select the company.
@@ -125,6 +129,8 @@ impl Action {
         Action::NewJournal,
         Action::NewSales,
         Action::NewPurchase,
+        Action::NewCreditNote,
+        Action::NewDebitNote,
         Action::ChangePeriod,
         Action::SwitchCompany,
         Action::CompanyFeatures,
@@ -162,6 +168,8 @@ impl Action {
             Action::NewJournal => "new-journal",
             Action::NewSales => "new-sales",
             Action::NewPurchase => "new-purchase",
+            Action::NewCreditNote => "new-credit-note",
+            Action::NewDebitNote => "new-debit-note",
             Action::ChangePeriod => "change-period",
             Action::SwitchCompany => "switch-company",
             Action::CompanyFeatures => "company-features",
@@ -206,6 +214,8 @@ impl Action {
             Action::NewJournal => "New journal voucher",
             Action::NewSales => "New sales voucher",
             Action::NewPurchase => "New purchase voucher",
+            Action::NewCreditNote => "New credit note",
+            Action::NewDebitNote => "New debit note",
             Action::ChangePeriod => "Change date or period",
             Action::SwitchCompany => "Switch company",
             Action::CompanyFeatures => "Company features",

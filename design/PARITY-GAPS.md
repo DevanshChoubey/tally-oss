@@ -259,9 +259,8 @@ matching to propose a ledger, which is not built).
 - **deferred: Ctrl+H (change mode).** The mock's "Item invoice Ctrl+H" button and TallyPrime's
   Ctrl+H switch between item invoice, accounting invoice and as-voucher modes. The screen opens
   in one mode and cannot switch yet; "as voucher" mode is not built (the GST engine refuses it).
-- **deferred: Purchase, credit note and debit note as accounting invoices.** Only Sales routes
-  to the invoice screen. The screen enters the other three in accounting mode, but the shell has
-  no entry point that opens them there: New purchase (F9) opens no screen yet, and the notes have
-  no command.
+- **bug: the sidebar does not highlight Sales or Purchase while its invoice is open.** The
+  screen's title is "Sales invoice" or "Purchase invoice" and `selected_label` only matches a
+  title equal to the row's label or the label and a colon.
 - **deferred: More details (Ctrl+I), the e-Invoice status, the voucher number in the title, the
   party balance line and the place-of-supply note** (index.html, `sales-invoice`). Not built.

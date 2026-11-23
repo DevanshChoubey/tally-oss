@@ -319,6 +319,8 @@ impl Shell {
             | Action::NewSales
             | Action::Help
             | Action::NewPurchase
+            | Action::NewCreditNote
+            | Action::NewDebitNote
             | Action::ChangePeriod
             | Action::SwitchCompany
             | Action::CompanyFeatures

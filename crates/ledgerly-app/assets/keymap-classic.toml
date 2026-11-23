@@ -34,6 +34,9 @@ new-receipt = ["F6"]
 new-journal = ["F7"]
 new-sales = ["F8"]
 new-purchase = ["F9"]
+# Alt+F6 Credit Note and Alt+F5 Debit Note: Tally's keyboard shortcut page, read 2026-11-23.
+new-credit-note = ["Alt+F6"]
+new-debit-note = ["Alt+F5"]
 
 # Context and screens.
 change-period = ["F2"]

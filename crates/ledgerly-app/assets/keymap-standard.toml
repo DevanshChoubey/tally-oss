@@ -25,6 +25,9 @@ new-receipt = ["Ctrl+Shift+R", "F6"]
 new-journal = ["Ctrl+Shift+J", "F7"]
 new-sales = ["Ctrl+Shift+S", "F8"]
 new-purchase = ["Ctrl+Shift+P", "F9"]
+# The mock names no standard key for the notes; Tally's Alt+F6 and Alt+F5 stay as in classic.
+new-credit-note = ["Alt+F6"]
+new-debit-note = ["Alt+F5"]
 
 # Context and screens.
 change-period = ["F2"]

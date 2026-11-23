@@ -469,9 +469,18 @@ fn consume_finds_the_pressed_action() {
 #[test]
 fn consume_needs_the_modifiers_to_match_exactly() {
     // provenance: derived — keymap.rs docs: with F5 bound to Payment, Alt+F5 must not open one;
-    // Alt+F1 is the detail toggle, not Help (F1).
+    // Alt+F1 is the detail toggle, not Help (F1). Alt+F5 is the debit note
+    // (help.tallysolutions.com/tally-prime/keyboard-shortcuts/keyboard-shortcuts-tally-prime/,
+    // read 2026-11-23), so Alt+F5 gives that and never Payment.
     let km = classic();
-    assert_eq!(consumed(&km, press(Key::F5, Modifiers::ALT)), None);
+    assert_eq!(
+        consumed(&km, press(Key::F5, Modifiers::ALT)),
+        Some(Action::NewDebitNote)
+    );
+    assert_eq!(
+        consumed(&km, press(Key::F5, Modifiers::NONE)),
+        Some(Action::NewPayment)
+    );
     assert_eq!(consumed(&km, press(Key::A, Modifiers::NONE)), None);
     assert_eq!(
         consumed(&km, press(Key::A, Modifiers::COMMAND | Modifiers::SHIFT)),

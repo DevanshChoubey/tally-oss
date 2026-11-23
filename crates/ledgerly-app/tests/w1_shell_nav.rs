@@ -187,11 +187,10 @@ fn each_sidebar_entry_opens_its_target_or_says_why_it_cannot() {
 }
 
 #[test]
-fn the_sidebar_shows_the_mock_entries_and_hides_the_purchase_with_no_screen() {
-    // provenance: derived from the sidebar groups of design/mock-v2/DESIGN.md ("Side bar groups").
-    // Purchase is the mock's, but no screen enters a purchase voucher (the voucher entry screen
-    // and the item invoice do not), so its command has no route and the row is hidden (rule B3).
-    // Catches a dead Purchase row coming back.
+fn the_sidebar_shows_the_mock_entries() {
+    // provenance: derived from the sidebar groups of design/mock-v2/DESIGN.md ("Side bar groups":
+    // Enter is Sales F8, Purchase F9, Payment F5, Receipt F6, Plain-words entry). Purchase opens
+    // the invoice screen (tests/w2_purchase_invoice.rs), so its row shows, after Sales.
     let shown = labels();
     assert_eq!(
         shown,
@@ -199,6 +198,7 @@ fn the_sidebar_shows_the_mock_entries_and_hides_the_purchase_with_no_screen() {
             "Home",
             "Review queue",
             "Sales",
+            "Purchase",
             "Payment",
             "Receipt",
             "Plain-words entry",
@@ -294,6 +294,9 @@ fn no_palette_row_is_a_dead_command() {
         Action::OpenPalette,
         Action::Help,
         Action::NewPayment,
+        Action::NewPurchase,
+        Action::NewCreditNote,
+        Action::NewDebitNote,
     ] {
         assert!(commands.contains(&listed), "{listed:?} should be listed");
     }
@@ -303,7 +306,6 @@ fn no_palette_row_is_a_dead_command() {
         Action::SwitchCompany,
         Action::CompanyFeatures,
         Action::Configure,
-        Action::NewPurchase,
         Action::Save,
         Action::Print,
     ] {

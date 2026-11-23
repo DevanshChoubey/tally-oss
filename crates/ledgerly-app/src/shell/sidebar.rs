@@ -50,10 +50,10 @@ pub enum CommandRoute {
 
 /// What each keymap command does (rule B3: a command with no route is hidden, not listed).
 ///
-/// `Screen`: a new sales, payment, receipt, contra or journal voucher opens the voucher entry
-/// screen (sales opens the item invoice when the company keeps inventory), and Help opens the
-/// keyboard map. `Hidden`: a purchase voucher (no screen enters it yet), the period and company
-/// changes (no screens), and every key that belongs to a screen.
+/// `Screen`: a new payment, receipt, contra or journal voucher opens the voucher entry screen; a
+/// new sales, purchase, credit note or debit note opens the invoice screen (item mode when the
+/// company keeps inventory, accounting mode otherwise); Help opens the keyboard map. `Hidden`:
+/// the period and company changes (no screens), and every key that belongs to a screen.
 #[must_use]
 pub fn command_route(action: Action) -> CommandRoute {
     match action {
@@ -67,9 +67,11 @@ pub fn command_route(action: Action) -> CommandRoute {
         | Action::NewReceipt
         | Action::NewJournal
         | Action::NewSales
+        | Action::NewPurchase
+        | Action::NewCreditNote
+        | Action::NewDebitNote
         | Action::Help => CommandRoute::Screen,
-        Action::NewPurchase
-        | Action::ChangePeriod
+        Action::ChangePeriod
         | Action::SwitchCompany
         | Action::CompanyFeatures
         | Action::Configure
@@ -142,6 +144,9 @@ pub fn screen_for(target: &PaletteTarget, ctx: &AppCtx) -> Result<Box<dyn Screen
 fn command_screen(action: Action, ctx: &AppCtx) -> Result<Box<dyn Screen>, NavError> {
     match action {
         Action::NewSales => navigate::sales_screen(loaded(ctx)?, navigate::today()),
+        Action::NewPurchase => invoice(ctx, BaseVoucherKind::Purchase),
+        Action::NewCreditNote => invoice(ctx, BaseVoucherKind::CreditNote),
+        Action::NewDebitNote => invoice(ctx, BaseVoucherKind::DebitNote),
         Action::NewContra => entry_screen(ctx, BaseVoucherKind::Contra),
         Action::NewPayment => entry_screen(ctx, BaseVoucherKind::Payment),
         Action::NewReceipt => entry_screen(ctx, BaseVoucherKind::Receipt),
@@ -154,7 +159,6 @@ fn command_screen(action: Action, ctx: &AppCtx) -> Result<Box<dyn Screen>, NavEr
         | Action::Back
         | Action::OpenPalette
         | Action::SwitchPalette
-        | Action::NewPurchase
         | Action::ChangePeriod
         | Action::SwitchCompany
         | Action::CompanyFeatures
@@ -204,6 +208,11 @@ fn type_of(books: &Books, kind: BaseVoucherKind) -> Result<ledgerly_core::Vouche
 }
 
 /// Voucher entry for a new voucher of `kind`, dated today.
+/// The invoice screen for a new voucher of `kind`.
+fn invoice(ctx: &AppCtx, kind: BaseVoucherKind) -> Result<Box<dyn Screen>, NavError> {
+    navigate::invoice_screen(loaded(ctx)?, kind, navigate::today())
+}
+
 fn entry_screen(ctx: &AppCtx, kind: BaseVoucherKind) -> Result<Box<dyn Screen>, NavError> {
     let books = loaded(ctx)?;
     let id = type_of(books, kind)?;

@@ -827,27 +827,42 @@ fn report_key_error(key: &str) -> NavError {
 }
 
 /// A new sales invoice of the company's first active sales voucher type, dated `today`. Every
-/// way in (F8 on Home, the sidebar's Sales row, the palette command) opens it here.
+/// way in (F8 on Home, the sidebar's Sales row, the palette command) opens it here; it is
+/// [`invoice_screen`] for [`BaseVoucherKind::Sales`].
+///
+/// # Errors
+/// As [`invoice_screen`].
+pub fn sales_screen(books: &Books, today: Date) -> Result<Box<dyn Screen>, NavError> {
+    invoice_screen(books, BaseVoucherKind::Sales, today)
+}
+
+/// A new invoice of the company's first active voucher type of `kind` (sales, purchase, credit
+/// note or debit note), dated `today`. F9, Alt+F6 and Alt+F5 open purchase and the notes here.
 ///
 /// A company that keeps inventory gets an item invoice. One that does not gets an accounting
 /// invoice: ledgers under Particulars, the mode TallyPrime documents for a sale without stock
-/// items (help.tallysolutions.com/sales-of-goods-services/, read 2026-11-23). Choosing the mode
-/// from Maintain Inventory is a product choice: the pages read are silent on what that setting
-/// does to the mode. Switching mode on the screen (Ctrl+H there) is not built yet
-/// (`design/PARITY-GAPS.md`).
+/// items (help.tallysolutions.com/sales-of-goods-services/, read 2026-11-23) and for a purchase of
+/// services (help.tallysolutions.com/purchase-goods-and-services-tally/, read 2026-11-23).
+/// Choosing the mode from Maintain Inventory is a product choice: the pages read are silent on
+/// what that setting does to the mode.
 ///
 /// # Errors
-/// [`NavError::Unsupported`] when the company has no active sales voucher type or the screen
-/// cannot open it.
-pub fn sales_screen(books: &Books, today: Date) -> Result<Box<dyn Screen>, NavError> {
+/// [`NavError::Unsupported`] when `kind` is not entered as an invoice, the company has no active
+/// voucher type of that kind, or the screen cannot open it.
+pub fn invoice_screen(
+    books: &Books,
+    kind: BaseVoucherKind,
+    today: Date,
+) -> Result<Box<dyn Screen>, NavError> {
+    let what = format!("a new {kind:?} invoice");
     let id = books
         .masters
         .voucher_types
         .values()
-        .find(|t| t.base == BaseVoucherKind::Sales && t.active)
+        .find(|t| t.base == kind && t.active)
         .map(|t| t.id)
         .ok_or_else(|| NavError::Unsupported {
-            what: "a new sales invoice".to_owned(),
+            what: what.clone(),
             reason: "the company has no active voucher type of this kind".to_owned(),
         })?;
     let mode = if books.company.features.inventory {
@@ -865,7 +880,7 @@ pub fn sales_screen(books: &Books, today: Date) -> Result<Box<dyn Screen>, NavEr
             reason: u.reason,
         }),
         Err(e) => Err(NavError::Unsupported {
-            what: "a new sales invoice".to_owned(),
+            what,
             reason: e.to_string(),
         }),
     }

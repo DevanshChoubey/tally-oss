@@ -47,6 +47,8 @@ const MOCK_GROUPS: [(&str, &[(Action, &str)]); 4] = [
         &[
             (Action::NewSales, "Sales"),
             (Action::NewPurchase, "Purchase"),
+            (Action::NewCreditNote, "Credit note"),
+            (Action::NewDebitNote, "Debit note"),
             (Action::NewPayment, "Payment"),
             (Action::NewReceipt, "Receipt"),
             (Action::NewContra, "Contra"),
