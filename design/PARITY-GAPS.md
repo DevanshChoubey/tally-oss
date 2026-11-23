@@ -285,3 +285,10 @@ matching to propose a ledger, which is not built).
   refuses it).
 - **deferred: More details (Ctrl+I), the e-Invoice status, the voucher number in the title, the
   party balance line and the place-of-supply note** (index.html, `sales-invoice`). Not built.
+- **needs a decision: the party list offers every ledger.** The Customer and Supplier fields list
+  all ledgers (Capital, Output CGST, Sales, ...). TallyPrime's pages say what to pick there:
+  "Select Cash or Bank for cash sales and the party name for credit sales"
+  (help.tallysolutions.com/sales-of-goods-services/) and "For credit purchases, select the
+  supplier ledger" (help.tallysolutions.com/tally-prime/purchase-process/purchase-goods-and-services-tally/),
+  both read 2026-11-23. Neither says which ledgers the list shows or leaves out. Limiting it to
+  cash, bank and party groups needs a page that documents the list before it is changed.
