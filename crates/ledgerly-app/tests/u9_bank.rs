@@ -19,8 +19,9 @@
 
 use egui::{Event, Key, Modifiers, RawInput};
 use ledgerly_app::screens::bank::{
-    BankScreen, BankScreenError, BrsRow, BrsView, Confidence, Flow, LineStatus, OpenVoucherView,
-    StatementLineView, SuggestionView, Tab, format_flow, format_line_date, kind_label,
+    BankScreen, BankScreenError, BrsRow, BrsRowKind, BrsView, Confidence, Flow, LineStatus,
+    OpenVoucherView, StatementLineView, SuggestionView, Tab, format_flow, format_line_date,
+    kind_label,
 };
 use ledgerly_app::{AppCtx, Screen, ScreenAction};
 use ledgerly_core::{BankStatementId, Date, Outcome, Paise, VoucherId};
@@ -512,6 +513,7 @@ fn the_statement_is_unsupported_until_the_engine_supplies_it() {
         rows: vec![BrsRow {
             label: "Balance as per books".to_owned(),
             amount: Paise::new(123_456_700),
+            kind: BrsRowKind::Books,
         }],
     }));
     assert!(matches!(s.brs(), Outcome::Value(v) if v.rows.len() == 1));

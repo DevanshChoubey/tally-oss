@@ -134,6 +134,22 @@ pub struct OpenVoucherView {
     pub flow: Flow,
 }
 
+/// Which line of the mock's reconciliation statement a row is (`design/mock-v2/index.html`
+/// lines 1741-1745), which sets how it is drawn.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BrsRowKind {
+    /// The balance as per the books: a semibold line on `surface-2` (`tr.sub`).
+    Books,
+    /// An amount not yet reflected in the bank: a plain line, indented one level (`td.ind1`).
+    Uncleared,
+    /// The balance the bank should show: the total line (`tr.total`).
+    Expected,
+    /// The balance in the imported statement: a plain line.
+    Statement,
+    /// The difference between the two: a plain line in bold.
+    Difference,
+}
+
 /// One row of the reconciliation statement as the engine computed it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BrsRow {
@@ -141,6 +157,26 @@ pub struct BrsRow {
     pub label: String,
     /// The amount, as computed.
     pub amount: Paise,
+    /// Which line of the statement it is.
+    pub kind: BrsRowKind,
+}
+
+/// The height of each line of the reconciliation statement, top to bottom: the total line is
+/// 36 points and every other line 34 (`table.t`, `design/mock-v2/index.html` lines 148-158).
+#[must_use]
+pub fn brs_line_heights(view: &BrsView) -> Vec<f32> {
+    view.rows.iter().map(|r| brs_line_height(r.kind)).collect()
+}
+
+/// The height of one line of the reconciliation statement.
+fn brs_line_height(kind: BrsRowKind) -> f32 {
+    match kind {
+        BrsRowKind::Expected => crate::ui::table::T_TOTAL_HEIGHT,
+        BrsRowKind::Books
+        | BrsRowKind::Uncleared
+        | BrsRowKind::Statement
+        | BrsRowKind::Difference => crate::ui::table::T_ROW_HEIGHT,
+    }
 }
 
 /// The bank reconciliation statement as the engine computed it (card K3).

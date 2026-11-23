@@ -31,8 +31,8 @@ use ledgerly_core::{BankStatementId, Date, LedgerId, Outcome, Paise};
 use ledgerly_model::{BankMatch, MatchKind};
 
 use super::{
-    BankScreen, BrsRow, BrsView, Confidence, Flow, LineState, LineStatus, StatementLineView,
-    SuggestionView, import,
+    BankScreen, BrsRow, BrsRowKind, BrsView, Confidence, Flow, LineState, LineStatus,
+    StatementLineView, SuggestionView, import,
 };
 use crate::screens::wire::{Done, Latest, unsupported_text};
 use crate::worker::ApiWorker;
@@ -550,20 +550,34 @@ fn view_of(candidate: &Candidate) -> SuggestionView {
 /// says why the statement side is missing when it is.
 fn brs_view(as_of: Date, brs: &Brs) -> (BrsView, Option<String>) {
     let mut rows = vec![
-        row("Balance as per company books", brs.books_balance),
+        row(
+            "Balance as per company books",
+            brs.books_balance,
+            BrsRowKind::Books,
+        ),
         row(
             "Amounts not reflected in bank: deposits",
             brs.uncleared_deposits_total,
+            BrsRowKind::Uncleared,
         ),
         row(
             "Amounts not reflected in bank: payments",
             brs.uncleared_payments_total,
+            BrsRowKind::Uncleared,
         ),
-        row("Balance as per bank", brs.balance_as_per_bank),
+        row(
+            "Balance as per bank",
+            brs.balance_as_per_bank,
+            BrsRowKind::Expected,
+        ),
     ];
     let mut note = None;
     match &brs.statement_balance {
-        Outcome::Value(paise) => rows.push(row("Balance as per imported bank statement", *paise)),
+        Outcome::Value(paise) => rows.push(row(
+            "Balance as per imported bank statement",
+            *paise,
+            BrsRowKind::Statement,
+        )),
         Outcome::Unsupported(u) => {
             note = Some(format!(
                 "Balance as per imported bank statement: {}",
@@ -572,14 +586,15 @@ fn brs_view(as_of: Date, brs: &Brs) -> (BrsView, Option<String>) {
         }
     }
     if let Outcome::Value(paise) = &brs.difference {
-        rows.push(row("Difference", *paise));
+        rows.push(row("Difference", *paise, BrsRowKind::Difference));
     }
     (BrsView { as_of, rows }, note)
 }
 
-fn row(label: &str, amount: Paise) -> BrsRow {
+fn row(label: &str, amount: Paise, kind: BrsRowKind) -> BrsRow {
     BrsRow {
         label: label.to_owned(),
         amount,
+        kind,
     }
 }

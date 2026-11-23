@@ -36,8 +36,8 @@ feature that is not built), **data** (the capture company lacks what the mock's 
 - **bug: other tables keep the older row height.** The balance sheet, the day book, the masters
   list and the generic report table (every drill: group summary, ledger vouchers) draw the
   mock's `table.t` lines by hand (34-point rows, rules, the selected bar: `ui::table::paint_row`).
-  The bank and invoice tables still use `TableBuilder` at 30 points with egui's selection tint;
-  each moves over in its own round.
+  So does the bank reconciliation statement. The bank lines and invoice tables still use
+  `TableBuilder` at 30 points with egui's selection tint; each moves over in its own round.
 - **bug: no sidebar entry is selected during a drill.** The mock's group and ledger states are
   states of the `balance-sheet` screen, so Balance sheet stays selected (index.html:1594, 1600).
   Ours selects by the top screen's title, and "Group Summary: Sundry Debtors" names no entry.
@@ -246,6 +246,22 @@ matching to propose a ledger, which is not built).
   opening stock and no movement (so no other screen's figures move), so the items capture shows
   0 quantities and 0.00 values. Sample Buyer Pvt Ltd is bill-wise with 30 credit days and one
   open bill (SI-3, not due), so the party detail's card has one line where the mock has two. The mock shows Godavari Drip's ledgers and seven items with stock.
+
+## Bank reconciliation (round of 2026-11-23)
+
+- **data: the statement lists totals, the mock lists each line.** The mock's statement
+  (index.html:1741-1745) heads "In the bank, not yet in the books" and "In the books, not yet in
+  the bank" and lists each line under them, with provenance chips (books, engine, statement).
+  Ours shows the engine's totals ("Amounts not reflected in bank: deposits" and "payments"),
+  drawn as the mock's indented lines. Listing them needs the engine's `Brs` to carry the lines.
+- **bug: no reconciled card beside the statement.** The mock has a card with "Reconciled" or
+  "Not yet reconciled" and Review suggestions (index.html:1746). Not built.
+- **bug: an "as of" line above the statement.** Ours says "Reconciliation statement as of 20 Nov
+  2026" over the card; the mock has the account and month in the subtitle and nothing above the
+  card. The tabs (All lines, Reconciliation statement) are also ours only.
+- **data: the lines table is not captured.** The capture company has no imported statement, so
+  `bank.default` shows the empty state and the lines table (still `TableBuilder`, with the
+  mock's rows wrapping to several lines) has no capture to compare with.
 
 ## Sales invoice (round of 2026-11-23)
 

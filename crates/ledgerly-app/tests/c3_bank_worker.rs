@@ -30,7 +30,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 
 use ledgerly_api::{Api, ApiError, Command};
-use ledgerly_app::screens::bank::{BankScreen, LineStatus};
+use ledgerly_app::screens::bank::{BankScreen, BrsRowKind, LineStatus};
 use ledgerly_app::worker::ApiWorker;
 use ledgerly_core::{
     Clock, CompanyId, GroupId, LedgerId, Outcome, Paise, SignedAmount, StateCode, VoucherId,
@@ -253,6 +253,33 @@ fn the_screen_shows_a_brs_and_the_statement_lines_from_the_worker() {
     let s = screen.suggestion_for(4).unwrap();
     assert_eq!(s.vouchers, vec![VoucherId(1)]);
     assert_eq!(s.bank_date, date!(2026 - 04 - 05));
+}
+
+#[test]
+fn each_statement_row_says_which_line_of_the_mock_it_is() {
+    // provenance: design/mock-v2/index.html:1741-1745: the books balance is a `tr.sub`, the
+    // amounts not yet in the bank are indented lines, the expected bank balance is the
+    // `tr.total`, the statement's closing balance a plain line and the difference bold. Our rows
+    // in order (the labels asserted above): books, deposits, payments, bank, imported statement,
+    // difference.
+    let worker = ApiWorker::spawn(setup("c3_screen_kinds.ledgerly")).unwrap();
+    let mut screen = BankScreen::worker("Bank Current Account", BANK, date!(2026 - 04 - 30));
+    settle(&mut screen, &worker);
+    let Outcome::Value(view) = screen.brs() else {
+        panic!("expected a BRS");
+    };
+    let kinds: Vec<BrsRowKind> = view.rows.iter().map(|r| r.kind).collect();
+    assert_eq!(
+        kinds,
+        [
+            BrsRowKind::Books,
+            BrsRowKind::Uncleared,
+            BrsRowKind::Uncleared,
+            BrsRowKind::Expected,
+            BrsRowKind::Statement,
+            BrsRowKind::Difference,
+        ]
+    );
 }
 
 #[test]

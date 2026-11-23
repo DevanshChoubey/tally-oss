@@ -8,15 +8,16 @@
 //! Mock states without an app counterpart yet (the AI suggestions and the new-ledger proposal)
 //! are wave 3 work and are not drawn here.
 
-use egui::{Sense, Ui};
+use egui::{FontId, Frame, Rect, Sense, Stroke, Ui, pos2, vec2};
 use egui_extras::{Column, Size, StripBuilder};
 
 use super::import;
 use super::{
-    BankScreen, Flow, LineState, LineStatus, PAGE_TITLE, SuggestionView, Tab, confidence_label,
-    format_flow, format_line_date, kind_label, status_label,
+    BankScreen, BrsRow, BrsRowKind, Flow, LineState, LineStatus, PAGE_TITLE, SuggestionView, Tab,
+    brs_line_height, confidence_label, format_flow, format_line_date, kind_label, status_label,
 };
 use crate::screens::wire::unsupported_text;
+use crate::theme::{RADIUS_M, TEXT_BODY, border_width, shadow_1};
 use crate::ui::badge::{BadgeKind, badge};
 use crate::ui::button::{ButtonKind, button};
 use crate::ui::card::card;
@@ -24,8 +25,9 @@ use crate::ui::empty::empty_state;
 use crate::ui::format;
 use crate::ui::note::{NoteKind, note};
 use crate::ui::page_head::page_head;
-use crate::ui::table;
+use crate::ui::table::{self, CellPlace, RowState};
 use crate::ui::tabs::tabs;
+use crate::ui::{bold_font, kind, tokens};
 use ledgerly_core::{Outcome, VoucherId};
 use ledgerly_model::MatchKind;
 
@@ -510,24 +512,7 @@ impl BankScreen {
                     "Reconciliation statement as of {}",
                     format_line_date(view.as_of)
                 ));
-                card(ui, |ui| {
-                    table::builder(ui)
-                        .column(Column::remainder().at_least(240.0))
-                        .column(Column::exact(160.0))
-                        .header(table::HEADER_HEIGHT, |mut row| {
-                            table::header(&mut row, "Line", false);
-                            table::header(&mut row, "Amount", true);
-                        })
-                        .body(|body| {
-                            body.rows(table::ROW_HEIGHT, view.rows.len(), |mut row| {
-                                let Some(r) = view.rows.get(row.index()) else {
-                                    return;
-                                };
-                                row.col(|ui| table::text(ui, &r.label));
-                                row.col(|ui| table::numeric(ui, &format::amount(r.amount)));
-                            });
-                        });
-                });
+                statement_lines(ui, &view.rows);
                 if let Some(text) = self.brs_note() {
                     note(ui, NoteKind::Info, text);
                 }
@@ -556,4 +541,91 @@ impl BankScreen {
             Err(text) => self.import_notice = Some(text),
         }
     }
+}
+
+/// Width of the amount column of the reconciliation statement (as the balance sheet's).
+const BRS_AMOUNT_WIDTH: f32 = 200.0;
+
+/// The reconciliation statement's lines in a card, drawn to the mock's `table.t` (index.html
+/// lines 1741-1745): no heading line, each row styled by its [`BrsRowKind`].
+fn statement_lines(ui: &mut Ui, rows: &[BrsRow]) {
+    let t = tokens(ui);
+    let k = kind(ui);
+    Frame::new()
+        .fill(t.surface)
+        .stroke(Stroke::new(border_width(k), t.border))
+        .corner_radius(RADIUS_M)
+        .shadow(shadow_1(k))
+        .show(ui, |ui| {
+            ui.set_min_width(ui.available_width());
+            ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
+            let width = ui.available_width();
+            for row in rows {
+                let height = brs_line_height(row.kind);
+                let (rect, _) = ui.allocate_exact_size(vec2(width, height), Sense::hover());
+                paint_statement_line(ui, rect, row);
+            }
+        });
+}
+
+/// One line of the reconciliation statement: its fill and rules, the label and the amount.
+fn paint_statement_line(ui: &Ui, rect: Rect, row: &BrsRow) {
+    let t = tokens(ui);
+    let plain = RowState {
+        selected: false,
+        hovered: false,
+        sub: false,
+    };
+    let (rule, bold, depth) = match row.kind {
+        BrsRowKind::Books => {
+            table::paint_row(ui, rect, RowState { sub: true, ..plain });
+            (1.0, true, 0)
+        }
+        BrsRowKind::Uncleared => {
+            table::paint_row(ui, rect, plain);
+            (1.0, false, 1)
+        }
+        BrsRowKind::Expected => {
+            table::paint_total_rules(ui, rect);
+            (3.0, true, 0)
+        }
+        BrsRowKind::Statement => {
+            table::paint_row(ui, rect, plain);
+            (1.0, false, 0)
+        }
+        BrsRowKind::Difference => {
+            table::paint_row(ui, rect, plain);
+            (1.0, true, 0)
+        }
+    };
+    let font = if bold {
+        bold_font(ui, TEXT_BODY)
+    } else {
+        FontId::proportional(TEXT_BODY)
+    };
+    let label = Rect::from_min_max(
+        rect.min,
+        pos2(
+            (rect.right() - BRS_AMOUNT_WIDTH).max(rect.left()),
+            rect.bottom(),
+        ),
+    );
+    table::paint_cell_text(
+        ui,
+        label,
+        rule,
+        &row.label,
+        font.clone(),
+        t.text,
+        CellPlace::Left(table::indent(depth)),
+    );
+    table::paint_cell_text(
+        ui,
+        rect,
+        rule,
+        &format::amount(row.amount),
+        font,
+        t.text,
+        CellPlace::Right,
+    );
 }
