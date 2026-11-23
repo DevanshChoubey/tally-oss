@@ -47,11 +47,6 @@ feature that is not built), **data** (the capture company lacks what the mock's 
   mock's `table.t` lines by hand (34-point rows, rules, the selected bar: `ui::table::paint_row`).
   So does the bank reconciliation statement. The bank lines and invoice tables still use
   `TableBuilder` at 30 points with egui's selection tint; each moves over in its own round.
-- **bug: no sidebar entry is selected during a drill.** The mock's group and ledger states are
-  states of the `balance-sheet` screen, so Balance sheet stays selected (index.html:1594, 1600).
-  Ours selects by the top screen's title, and "Group Summary: Sundry Debtors" names no entry.
-  `w1_shell_nav` expects no selection for a screen outside the sidebar pushed over Masters, so
-  the fix is a drill keeping its origin's entry, not a walk down the stack.
 - **data: the drill reports' columns and wording.** Captured as `balance-sheet.group` and
   `balance-sheet.ledger`. The mock's group drill lists Ledger or group, GSTIN, Opening, Debit,
   Credit and Closing, with "Group total, same as the balance sheet row"; ours is the engine's

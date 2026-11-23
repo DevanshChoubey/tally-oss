@@ -161,13 +161,23 @@ pub fn voucher_view(books: &Books, id: VoucherId) -> Result<VoucherView, Voucher
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VoucherViewScreen {
     id: VoucherId,
+    /// The sidebar title of the report the voucher was opened from (see
+    /// [`Screen::sidebar_title`]).
+    origin: Option<String>,
 }
 
 impl VoucherViewScreen {
     /// A screen for voucher `id`. It reads the voucher from the shared books each frame.
     #[must_use]
     pub fn new(id: VoucherId) -> Self {
-        Self { id }
+        Self { id, origin: None }
+    }
+
+    /// The same screen, opened from a drill that started at the screen titled `origin`.
+    #[must_use]
+    pub fn with_origin(mut self, origin: impl Into<String>) -> Self {
+        self.origin = Some(origin.into());
+        self
     }
 
     /// The voucher this screen shows.
@@ -213,6 +223,10 @@ impl VoucherViewScreen {
 impl Screen for VoucherViewScreen {
     fn title(&self) -> String {
         format!("Voucher #{}", self.id.0)
+    }
+
+    fn sidebar_title(&self) -> String {
+        self.origin.clone().unwrap_or_else(|| self.title())
     }
 
     fn ui(&mut self, ui: &mut Ui, ctx: &mut AppCtx) -> ScreenAction {

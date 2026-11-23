@@ -55,6 +55,14 @@ pub trait Screen {
         None
     }
 
+    /// The title the sidebar selects its entry by. Defaults to [`Screen::title`]. A screen a
+    /// drill opened returns the title of the screen the drill started from, so that screen's
+    /// entry stays selected (index.html:1568, 1594, 1600: the group, ledger and voucher states
+    /// belong to the balance sheet).
+    fn sidebar_title(&self) -> String {
+        self.title()
+    }
+
     /// The keys this screen handles, shown in the key bar before the shell's own keys. Defaults
     /// to none, so a screen that has not opted in shows only the shell's keys.
     fn keys(&self) -> Vec<KeyHint> {

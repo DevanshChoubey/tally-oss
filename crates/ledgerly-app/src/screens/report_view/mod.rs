@@ -247,6 +247,8 @@ pub struct ReportViewScreen {
     export_wanted: bool,
     /// The save dialog.
     export_picker: ExportPicker,
+    /// For a screen a drill opened, the sidebar title of the screen the drill started from.
+    origin: Option<String>,
     /// The export in flight.
     export: Latest<Exported>,
 }
@@ -270,6 +272,7 @@ impl ReportViewScreen {
             selected_line: None,
             export_wanted: false,
             export_picker: Box::new(save_dialog),
+            origin: None,
             export: Latest::default(),
         })
     }
@@ -317,6 +320,7 @@ impl ReportViewScreen {
             selected_line: None,
             export_wanted: false,
             export_picker: Box::new(save_dialog),
+            origin: None,
             export: Latest::default(),
         })
     }
@@ -544,7 +548,7 @@ impl ReportViewScreen {
             Ok(Outcome::Value(DrillTarget::Screen(screen))) => ScreenAction::Push(screen),
             Ok(Outcome::Value(DrillTarget::Report(report))) => {
                 match ReportViewScreen::new(report, self.source.clone()) {
-                    Ok(screen) => ScreenAction::Push(Box::new(screen)),
+                    Ok(screen) => ScreenAction::Push(Box::new(self.drilled(screen))),
                     Err(e) => {
                         self.fail(e.to_string());
                         ScreenAction::Stay
@@ -554,12 +558,19 @@ impl ReportViewScreen {
         }
     }
 
+    /// `screen`, opened by a drill from this one: it keeps this screen's sidebar entry.
+    fn drilled(&self, mut screen: ReportViewScreen) -> ReportViewScreen {
+        screen.origin = Some(self.sidebar_title());
+        screen
+    }
+
     /// Drill in worker mode: a group or ledger opens a new worker-mode report with the same
     /// period and detail; a voucher opens the read-only voucher screen. The new screen asks the worker itself on its first frame.
     fn drill_worker(&mut self, key: &ViewKey) -> ScreenAction {
         // A voucher is a screen, not a report: open it read-only (see `voucher_view.rs`).
         if let ViewKey::Voucher(id) = key {
-            return ScreenAction::Push(Box::new(VoucherViewScreen::new(*id)));
+            let view = VoucherViewScreen::new(*id).with_origin(self.sidebar_title());
+            return ScreenAction::Push(Box::new(view));
         }
         let base = self
             .worker
@@ -576,7 +587,7 @@ impl ReportViewScreen {
             }
             Ok(params) => {
                 if let Some(screen) = ReportViewScreen::worker(ReportSource::worker(params)) {
-                    ScreenAction::Push(Box::new(screen))
+                    ScreenAction::Push(Box::new(self.drilled(screen)))
                 } else {
                     self.fail("The drilled report could not be set up.");
                     ScreenAction::Stay
@@ -1086,6 +1097,10 @@ impl Screen for ReportViewScreen {
                 self.report.params.detail.label()
             )),
         }
+    }
+
+    fn sidebar_title(&self) -> String {
+        self.origin.clone().unwrap_or_else(|| self.title())
     }
 
     fn keys(&self) -> Vec<KeyHint> {

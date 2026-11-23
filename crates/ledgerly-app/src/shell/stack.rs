@@ -150,6 +150,12 @@ impl ScreenStack {
         self.screens.last().map_or_default(|s| s.title())
     }
 
+    /// The title the sidebar selects by for the top screen ([`Screen::sidebar_title`]).
+    #[must_use]
+    pub fn top_sidebar_title(&self) -> String {
+        self.screens.last().map_or_default(|s| s.sidebar_title())
+    }
+
     /// The page title of the top screen ([`Screen::page_title`]), which the key bar names.
     #[must_use]
     pub fn top_page_title(&self) -> String {

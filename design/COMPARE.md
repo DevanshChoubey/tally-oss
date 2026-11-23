@@ -26,8 +26,8 @@
 | light | receipt.default | 0.7190 |
 | light | bank.brs | 0.7218 |
 | light | payment.default | 0.7360 |
-| light | balance-sheet.ledger | 0.7361 |
-| light | balance-sheet.group | 0.7438 |
+| light | balance-sheet.ledger | 0.7380 |
+| light | balance-sheet.group | 0.7446 |
 | light | masters.items | 0.7552 |
 | light | day-book.default | 0.7618 |
 | light | masters.ledger-detail | 0.7672 |
@@ -300,7 +300,7 @@ SSIM 0.7360
 
 ## light / balance-sheet.ledger
 
-SSIM 0.7361
+SSIM 0.7380
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -312,7 +312,7 @@ SSIM 0.7361
 
 ## light / balance-sheet.group
 
-SSIM 0.7438
+SSIM 0.7446
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>

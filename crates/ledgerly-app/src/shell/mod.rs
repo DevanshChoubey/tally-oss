@@ -190,7 +190,7 @@ impl Shell {
     /// The sidebar entry selected for the screen on top of the active stack, if one names it.
     #[must_use]
     pub fn selected_sidebar(&self) -> Option<&'static str> {
-        let title = self.tabs.active_stack()?.top_title();
+        let title = self.tabs.active_stack()?.top_sidebar_title();
         sidebar::selected_label(&title)
     }
 
