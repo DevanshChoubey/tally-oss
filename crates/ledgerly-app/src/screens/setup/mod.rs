@@ -4,8 +4,9 @@
 //! This file draws the steps and runs them. Creating the company file runs on a background
 //! thread, as the welcome screen does, and the new company then replaces the open one.
 //!
-//! Three choices have no store yet, so their steps say so and save nothing: the keyboard preset,
-//! the AI tier and the backup folder (see `design/PARITY-GAPS.md`).
+//! Two choices have no store yet, so their steps say so and save nothing: the keyboard preset and
+//! the backup folder. The AI tier is stored with the new company, except the cloud tier, which
+//! the engine refuses (see `design/PARITY-GAPS.md`).
 
 pub mod form;
 
@@ -24,7 +25,20 @@ use self::form::{
 };
 use crate::shell::navigate::{self, MASTERS_KEY};
 use crate::shell::{GatewayScreen, hand_over, spawn_file_job};
+use crate::theme::{
+    RADIUS_M, RADIUS_S, TEXT_BODY, TEXT_CAP, TEXT_H1, TEXT_INPUT, TEXT_META, border_width, shadow_1,
+};
+use crate::ui::badge::{BadgeKind, badge};
+use crate::ui::button::{ButtonKind, button};
+use crate::ui::icon::{self, ICON_SIZE, Icon, icon};
+use crate::ui::keycap;
+use crate::ui::note::{NoteKind, note};
+use crate::ui::option_card::{OptionCard, option_grid};
+use crate::ui::probe::record_probe;
+use crate::ui::switch::switch;
+use crate::ui::{bold_font, kind, para, tokens};
 use crate::{AppCtx, Screen, ScreenAction};
+use egui::FontId;
 
 /// `true` when the frame's input has a press of `key`.
 fn pressed_key(ui: &egui::Ui, key: Key) -> bool {
@@ -41,7 +55,41 @@ fn is_key_event(event: &egui::Event, key: Key) -> bool {
 }
 
 /// The width of the step rail, as the mock's card gives it (index.html:311, 240 px).
-const RAIL_WIDTH: f32 = 220.0;
+const RAIL_WIDTH: f32 = 240.0;
+/// The widest the card gets (`.setup{max-width:980px}`, index.html:311).
+const CARD_MAX_WIDTH: f32 = 980.0;
+/// The space above the card (`.setup{margin:12px auto}`).
+const CARD_MARGIN_TOP: f32 = 12.0;
+/// A rail row's height: the 22 px marker and 8 px of padding above and below (index.html:313).
+const RAIL_ROW_HEIGHT: f32 = 38.0;
+/// A rail row's padding at the left (`padding:8px 10px`).
+const RAIL_PAD_X: f32 = 10.0;
+/// The space between a marker and the step's name (`gap:10px`).
+const RAIL_LABEL_GAP: f32 = 10.0;
+/// A rail marker's diameter (`.steps button i{width:22px;height:22px}`, index.html:314).
+const MARKER_SIZE: f32 = 22.0;
+/// The check inside a passed step's marker.
+const CHECK_SIZE: f32 = 14.0;
+/// The space above Back and Continue (`margin-top:22px`, index.html:1861).
+const NAV_GAP: f32 = 22.0;
+/// The field grid's gap between columns (`.vhead{gap:12px 16px}`, index.html:234).
+const FIELD_GAP_X: f32 = 16.0;
+/// The field grid's gap between rows.
+const FIELD_GAP_Y: f32 = 12.0;
+/// A feature row's padding (`table.t td`).
+const FEATURE_PAD: f32 = 8.0;
+/// The space between a feature's switch and its text (the 44 px switch column).
+const FEATURE_SWITCH_GAP: f32 = 10.0;
+/// A launch card's height on Done (two lines of label and the padding).
+const LAUNCH_HEIGHT: f32 = 58.0;
+/// The gap between launch cards (`.launch{gap:6px}`, index.html:193).
+const LAUNCH_GAP: f32 = 6.0;
+/// A launch card's padding, left and right (`padding:9px 10px`, index.html:195).
+const LAUNCH_PAD_X: f32 = 10.0;
+/// A launch card's padding, top and bottom.
+const LAUNCH_PAD_Y: f32 = 9.0;
+/// The space between a launch card's icon and its label (`gap:10px`).
+const LAUNCH_ICON_GAP: f32 = 10.0;
 
 /// The answer of the background create: the open company and what the engine said about the
 /// AI choice when it was not stored, or why the file could not be created.
@@ -296,45 +344,43 @@ impl SetupScreen {
         }
     }
 
-    /// The step rail, a list down the left of the card (index.html:1860). A step already passed
-    /// can be revisited by clicking it, until the company exists: revisiting would create a second.
+    /// The step rail down the left of the card (index.html:1860, CSS 312-317). A step already
+    /// passed can be revisited by clicking it, until the company exists: revisiting would create
+    /// a second.
     fn rail(&mut self, ui: &mut egui::Ui) {
+        ui.spacing_mut().item_spacing.y = 0.0;
         for step in Step::ALL {
-            let current = step == self.step;
-            let done = step.index() < self.step.index();
-            let mark = if done {
-                "✓".to_owned()
-            } else {
-                (step.index() + 1).to_string()
-            };
-            let label = format!("{mark}  {}", step.label());
-            let enabled = done && self.step != Step::Done;
-            let button = egui::Button::new(label)
-                .selected(current)
-                .min_size(egui::vec2(RAIL_WIDTH, 28.0));
-            if ui.add_enabled(enabled, button).clicked() {
+            let marker = rail_marker(step, self.step);
+            let clickable = marker == Marker::Passed && self.step != Step::Done;
+            if rail_row(ui, step, marker, clickable).clicked() {
                 self.step = step;
                 self.notice = None;
             }
         }
     }
 
-    /// Back and Continue (index.html:1861).
+    /// Back and Continue (index.html:1861): a secondary Back with its Esc keycap at the left,
+    /// the primary Continue with its Enter keycap at the right.
     fn footer(&mut self, ui: &mut egui::Ui) {
-        ui.add_space(16.0);
+        nav_gap(ui);
         ui.horizontal(|ui| {
-            let back = self.step.back();
-            let back_pressed = back.is_some() && ui.button("Back  (Esc)").clicked();
-            if let Some(back) = back.filter(|_| back_pressed) {
-                self.step = back;
-                self.notice = None;
+            if let Some(back) = self.step.back() {
+                let pressed = button(ui, "Back", Some("Esc"), ButtonKind::Secondary);
+                record_probe(ui, "setup.back", pressed.rect);
+                if pressed.clicked() {
+                    self.step = back;
+                    self.notice = None;
+                }
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 let (label, enabled) = self.continue_label_and_gate();
-                if ui
-                    .add_enabled(enabled, egui::Button::new(format!("{label}  (Enter)")))
-                    .clicked()
-                {
+                let pressed = ui
+                    .add_enabled_ui(enabled, |ui| {
+                        button(ui, label, Some("Enter"), ButtonKind::Primary)
+                    })
+                    .inner;
+                record_probe(ui, "setup.continue", pressed.rect);
+                if pressed.clicked() {
                     self.continue_step();
                 }
             });
@@ -373,69 +419,88 @@ impl SetupScreen {
         outcome
     }
 
-    /// The Welcome step. Create is the one choice that works; the others say why they wait.
-    fn draw_welcome(ui: &mut egui::Ui) {
-        ui.heading("Welcome to Ledgerly");
-        ui.label("Accounting, GST and bank reconciliation on your own computer. Your books are a file you own.");
-        ui.add_space(12.0);
-        ui.columns(2, |cols| {
-            let [c0, c1] = cols else { return };
-            option_card(
-                c0,
-                true,
-                true,
-                "Create a company",
-                "About 3 minutes. Name, GSTIN, financial year.",
-            );
-            option_card(
-                c1,
-                false,
-                false,
-                "Import from another accounting app",
-                "Not available in this wizard yet (PARITY-GAPS).",
-            );
-        });
-        ui.columns(2, |cols| {
-            let [c0, c1] = cols else { return };
-            option_card(
-                c0,
-                false,
-                false,
-                "Open a Ledgerly file",
-                "Not available in this wizard yet (PARITY-GAPS).",
-            );
-            option_card(
-                c1,
-                false,
-                false,
-                "Try the sample company",
-                "No sample data ships yet (PARITY-GAPS).",
-            );
-        });
+    /// The launch a key opens on Done (index.html:1889: M the masters, B a bank statement), when
+    /// no field has focus. The key is taken out of the input.
+    fn take_launch_key(&self, ui: &mut egui::Ui) -> Option<&'static str> {
+        if self.step != Step::Done || ui.ctx().text_edit_focused() {
+            return None;
+        }
+        ui.input_mut(|i| {
+            if i.consume_key(egui::Modifiers::NONE, Key::M) {
+                Some(MASTERS_KEY)
+            } else if i.consume_key(egui::Modifiers::NONE, Key::B) {
+                Some(navigate::BANK_RECON_KEY)
+            } else {
+                None
+            }
+        })
     }
 
-    /// The Company step (index.html:1866-1874).
+    /// The Welcome step (index.html:1863). Create is the one choice that works; the others say
+    /// why they wait.
+    fn draw_welcome(ui: &mut egui::Ui) {
+        pane_head(
+            ui,
+            "Welcome to Ledgerly",
+            "Accounting, GST and bank reconciliation on your own computer. Your books are a file you own.",
+        );
+        let cards = [
+            OptionCard::new(
+                Icon::Plus,
+                "Create a company",
+                "About 3 minutes. Name, GSTIN, financial year.",
+            )
+            .selected(true),
+            OptionCard::new(
+                Icon::Upload,
+                "Import from another accounting app",
+                "Masters and vouchers from an XML or spreadsheet export. A report shows what moved.",
+            )
+            .unavailable("Not available in this wizard yet."),
+            OptionCard::new(
+                Icon::File,
+                "Open a Ledgerly file",
+                "From a backup or another computer.",
+            )
+            .unavailable("Not available in this wizard yet."),
+            OptionCard::new(
+                Icon::Eye,
+                "Try the sample company",
+                "Godavari Drip & Pump Works, fictional data. Nothing you do there is kept.",
+            )
+            .unavailable("No sample data ships yet."),
+        ];
+        let drawn = option_grid(ui, egui::Id::unique("setup-welcome"), 2, &cards);
+        for (n, card) in drawn.iter().enumerate() {
+            record_probe(ui, &format!("setup.option.{n}"), card.card);
+        }
+    }
+
+    /// The Company step (index.html:1866-1874): the mock's four-column field grid, each label
+    /// above its field. The widgets are made in the order name, type, city, GSTIN, state, books
+    /// date, file, so Tab walks them in that order.
     fn draw_company(&mut self, ui: &mut egui::Ui) {
-        ui.heading("Your company");
-        ui.label("You can change all of this later except the financial year start.");
-        ui.add_space(8.0);
-        egui::Grid::new("setup-company")
-            .num_columns(2)
-            .spacing([16.0, 8.0])
-            .show(ui, |ui| {
-                ui.label("Company name");
+        pane_head(
+            ui,
+            "Your company",
+            "You can change all of this later except the financial year start.",
+        );
+        let col = field_column(ui);
+        ui.horizontal_top(|ui| {
+            ui.spacing_mut().item_spacing.x = FIELD_GAP_X;
+            field(ui, span(col, 2), "Company name", |ui, w| {
                 let name = ui.add(
                     egui::TextEdit::singleline(&mut self.name)
                         .id_salt("setup-name")
-                        .desired_width(360.0),
+                        .desired_width(w),
                 );
                 if std::mem::take(&mut self.focus_name) {
                     name.request_focus();
                 }
-                ui.end_row();
-
-                ui.label("Type");
+            });
+            field(ui, col, "Type", |ui, w| {
                 egui::ComboBox::from_id_salt("setup-kind")
+                    .width(w)
                     .selected_text(kind_label(self.kind))
                     .show_ui(ui, |ui| {
                         for kind in [
@@ -448,55 +513,30 @@ impl SetupScreen {
                             ui.selectable_value(&mut self.kind, kind, kind_label(kind));
                         }
                     });
-                ui.end_row();
-
-                ui.label("City");
-                ui.add(egui::TextEdit::singleline(&mut self.city).desired_width(360.0));
-                ui.end_row();
-
-                ui.label("GSTIN");
+            });
+            field(ui, col, "City", |ui, w| {
+                ui.add(egui::TextEdit::singleline(&mut self.city).desired_width(w));
+            });
+        });
+        ui.add_space(FIELD_GAP_Y);
+        ui.horizontal_top(|ui| {
+            ui.spacing_mut().item_spacing.x = FIELD_GAP_X;
+            field(ui, span(col, 2), "GSTIN", |ui, w| {
                 ui.add(
                     egui::TextEdit::singleline(&mut self.gstin)
                         .hint_text("15 characters, or blank")
-                        .desired_width(360.0),
+                        .desired_width(w),
                 );
-                ui.end_row();
+                self.fill_state_from_gstin();
+                self.gstin_hint(ui);
             });
-        self.fill_state_from_gstin();
-        ui.add_space(4.0);
-        let check = self.state.map(|state| check_gstin(&self.gstin, state));
-        match check {
-            None => ui.weak("Choose the state below."),
-            Some(GstinCheck::Blank) => {
-                ui.weak("Leave blank if the business is not registered for GST yet.")
-            }
-            Some(GstinCheck::Valid(gstin)) => ui.weak(format!(
-                "Check character OK. PAN {} · fills the state.",
-                gstin.pan_str()
-            )),
-            Some(GstinCheck::Invalid(reason)) => {
-                ui.colored_label(ui.visuals().error_fg_color, reason)
-            }
-            Some(GstinCheck::Mismatch { message, .. }) => {
-                ui.colored_label(ui.visuals().error_fg_color, message)
-            }
-        };
-        self.draw_company_rest(ui);
-    }
-
-    /// The state, filing, financial year, books date and file of the company step.
-    fn draw_company_rest(&mut self, ui: &mut egui::Ui) {
-        ui.add_space(8.0);
-        egui::Grid::new("setup-company-2")
-            .num_columns(2)
-            .spacing([16.0, 8.0])
-            .show(ui, |ui| {
-                ui.label("State");
+            field(ui, col, "State", |ui, w| {
                 let selected = self.state.map_or_else(
                     || "Choose a state".to_owned(),
                     |s| format!("{:02} {}", s.get(), s.name()),
                 );
                 egui::ComboBox::from_id_salt("setup-state")
+                    .width(w)
                     .selected_text(selected)
                     .show_ui(ui, |ui| {
                         for state in StateCode::all() {
@@ -504,181 +544,596 @@ impl SetupScreen {
                             ui.selectable_value(&mut self.state, Some(state), label);
                         }
                     });
-                ui.end_row();
+            });
+            field(ui, col, "GST filing", |ui, _| {
+                read_only(ui, "Monthly");
+                hint(ui, "Not saved yet: no filing frequency is kept.");
+            });
+        });
+        self.draw_company_dates(ui, col);
+    }
 
-                ui.label("GST filing");
-                ui.weak("Monthly. Not saved yet: the model has no filing frequency (PARITY-GAPS).");
-                ui.end_row();
-
-                ui.label("Financial year");
+    /// The financial year, books date and file rows of the company step.
+    fn draw_company_dates(&mut self, ui: &mut egui::Ui, col: f32) {
+        ui.add_space(FIELD_GAP_Y);
+        ui.horizontal_top(|ui| {
+            ui.spacing_mut().item_spacing.x = FIELD_GAP_X;
+            field(ui, span(col, 2), "Financial year", |ui, _| {
                 let fy_end = financial_year_end(self.fy_start)
                     .map_or_else(|_| "the end of March".to_owned(), long_date);
-                ui.label(format!("{} to {fy_end}", long_date(self.fy_start)));
-                ui.end_row();
-
-                ui.label("Books begin from");
+                read_only(ui, &format!("{} to {fy_end}", long_date(self.fy_start)));
+            });
+            field(ui, span(col, 2), "Books begin from", |ui, w| {
                 ui.add(
                     egui::TextEdit::singleline(&mut self.books_begin)
                         .hint_text("YYYY-MM-DD")
-                        .desired_width(160.0),
+                        .desired_width(w),
                 );
-                ui.end_row();
-
-                ui.label("Company file");
-                ui.add(
-                    egui::TextEdit::singleline(&mut self.file)
-                        .hint_text("blank: Documents/Ledgerly/<company>.ledgerly")
-                        .desired_width(360.0),
+                hint(
+                    ui,
+                    "Use a later date if you are moving in mid-year; opening balances go on this date.",
                 );
-                ui.end_row();
             });
-        ui.weak(
-            "Use a later date if you are moving in mid-year; opening balances go on this date.",
-        );
+        });
+        ui.add_space(FIELD_GAP_Y);
+        field(ui, span(col, 4), "Company file", |ui, w| {
+            ui.add(
+                egui::TextEdit::singleline(&mut self.file)
+                    .hint_text("blank: Documents/Ledgerly/<company>.ledgerly")
+                    .desired_width(w),
+            );
+        });
     }
 
-    /// The Features step (index.html:1871-1878). Only the switches the model has are working.
-    fn draw_features(&mut self, ui: &mut egui::Ui) {
-        ui.heading("What do you need?");
-        ui.label("Turn on only what you use. Each one adds fields and screens.");
-        ui.add_space(8.0);
-        for row in feature_rows() {
-            if let Some(switch) = row.switch {
-                let flag = switch(&mut self.features);
-                ui.checkbox(flag, row.label);
-                ui.weak(row.hint);
-            } else {
-                let mut off = false;
-                ui.add_enabled(false, egui::Checkbox::new(&mut off, row.label));
-                let reason = row.unavailable.unwrap_or("not built yet");
-                ui.weak(format!("{} Not available: {reason}", row.hint));
+    /// The line under the GSTIN: the check result, or why the GSTIN cannot be used
+    /// (index.html:1868).
+    fn gstin_hint(&self, ui: &mut egui::Ui) {
+        let t = tokens(ui);
+        match self.state.map(|state| check_gstin(&self.gstin, state)) {
+            None => hint(ui, "Choose the state."),
+            Some(GstinCheck::Blank) => {
+                hint(
+                    ui,
+                    "Leave blank if the business is not registered for GST yet.",
+                );
             }
-            ui.add_space(6.0);
+            Some(GstinCheck::Valid(gstin)) => {
+                ui.horizontal_wrapped(|ui| {
+                    badge(ui, BadgeKind::Ok, "Check character OK");
+                    ui.label(
+                        egui::RichText::new(format!("PAN {} · fills the state", gstin.pan_str()))
+                            .size(TEXT_META)
+                            .color(t.text_3),
+                    );
+                });
+            }
+            Some(
+                GstinCheck::Invalid(reason)
+                | GstinCheck::Mismatch {
+                    message: reason, ..
+                },
+            ) => {
+                para(ui, &reason, TEXT_META, t.bad);
+            }
+        }
+    }
+
+    /// The Features step (index.html:1871-1878): a row per feature with its switch, bold title
+    /// and muted line. Only the switches the model has work; the others say why.
+    fn draw_features(&mut self, ui: &mut egui::Ui) {
+        pane_head(
+            ui,
+            "What do you need?",
+            "Turn on only what you use. Each one adds fields and screens.",
+        );
+        let t = tokens(ui);
+        let rule = egui::Stroke::new(border_width(kind(ui)), t.border);
+        for row in feature_rows() {
+            let drawn = ui.horizontal_top(|ui| {
+                ui.add_space(FEATURE_PAD);
+                ui.vertical(|ui| {
+                    ui.add_space(FEATURE_PAD);
+                    if let Some(flip) = row.switch {
+                        let flag = flip(&mut self.features);
+                        if switch(ui, *flag, egui::Sense::click()).clicked() {
+                            *flag = !*flag;
+                        }
+                    } else {
+                        switch(ui, false, egui::Sense::hover());
+                    }
+                });
+                ui.add_space(FEATURE_SWITCH_GAP);
+                ui.vertical(|ui| {
+                    ui.add_space(FEATURE_PAD);
+                    ui.spacing_mut().item_spacing.y = 2.0;
+                    ui.label(
+                        egui::RichText::new(row.label)
+                            .font(bold_font(ui, TEXT_BODY))
+                            .color(t.text),
+                    );
+                    let line = match (row.switch, row.unavailable) {
+                        (Some(_), _) => row.hint.to_owned(),
+                        (None, reason) => format!(
+                            "{} Not available: {}",
+                            row.hint,
+                            reason.unwrap_or("not built yet")
+                        ),
+                    };
+                    para(ui, &line, TEXT_BODY, t.text_2);
+                    ui.add_space(FEATURE_PAD);
+                });
+            });
+            let r = drawn.response.rect;
+            ui.painter()
+                .hline(r.left()..=ui.max_rect().right(), r.bottom(), rule);
         }
     }
 
     /// The Keyboard step (index.html:1883-1886). The preset is not stored yet.
     fn draw_keyboard(&mut self, ui: &mut egui::Ui) {
-        ui.heading("Which keys do you know?");
-        ui.label("Both presets have every action on a key. Mouse works everywhere too.");
-        ui.add_space(8.0);
-        ui.columns(2, |cols| {
-            let [c0, c1] = cols else { return };
-            let classic = option_card(
-                c0,
-                self.keyboard_classic,
-                true,
+        pane_head(
+            ui,
+            "Which keys do you know?",
+            "Both presets have every action on a key. Mouse works everywhere too.",
+        );
+        let cards = [
+            OptionCard::new(
+                Icon::Kbd,
                 "Classic accountant keys (recommended)",
                 "F8 sales, F9 purchase, F5 payment, F6 receipt, Ctrl+A save, Enter to move on, Esc to go back.",
-            );
-            if classic.clicked() {
-                self.keyboard_classic = true;
-            }
-            let standard = option_card(
-                c1,
-                !self.keyboard_classic,
-                true,
+            )
+            .selected(self.keyboard_classic)
+            .keys(&["F8", "F5", "Ctrl+A", "Enter", "Esc"]),
+            OptionCard::new(
+                Icon::Kbd,
                 "Standard desktop keys",
                 "Ctrl+S save, Ctrl+N new, Tab to move on. Function keys still work as aliases.",
-            );
-            if standard.clicked() {
-                self.keyboard_classic = false;
+            )
+            .selected(!self.keyboard_classic)
+            .keys(&["Ctrl+S", "Ctrl+N", "Tab"]),
+        ];
+        let drawn = option_grid(ui, egui::Id::unique("setup-keyboard"), 2, &cards);
+        for (n, card) in drawn.iter().enumerate() {
+            record_probe(ui, &format!("setup.option.{n}"), card.card);
+            if card.response.clicked() {
+                self.keyboard_classic = n == 0;
             }
-        });
-        ui.add_space(8.0);
+        }
         if let Some(notice) = unsaved_notice(Step::Keyboard) {
-            ui.weak(notice);
+            step_text(ui, notice);
         }
     }
 
     /// The AI step (index.html:1879-1884). The tier is stored when the company is created; the
     /// cloud tier is refused by the engine, and [`ai_notice`] says so.
     fn draw_ai(&mut self, ui: &mut egui::Ui) {
-        ui.heading("AI and privacy");
-        ui.label("AI only drafts. You accept every draft, and the engine computes every amount. Pick per company; change any time.");
-        ui.add_space(8.0);
-        ui.columns(3, |cols| {
-            let [c0, c1, c2] = cols else { return };
-            let off = option_card(c0, self.ai == AiTier::Off, true, "Off", "No AI anywhere. Exact and rule matching still work.");
-            if off.clicked() {
-                self.ai = AiTier::Off;
+        pane_head(
+            ui,
+            "AI and privacy",
+            "AI only drafts. You accept every draft, and the engine computes every amount. Pick per company; change any time.",
+        );
+        let tiers = [AiTier::Off, AiTier::Local, AiTier::Cloud];
+        let cards = [
+            OptionCard::new(
+                Icon::Off,
+                "Off",
+                "No AI anywhere. Exact and rule matching still work.",
+            ),
+            OptionCard::new(
+                Icon::Cpu,
+                "On this computer",
+                "A small local model. Nothing leaves this computer. Slower on old machines.",
+            ),
+            OptionCard::new(
+                Icon::Cloud,
+                "Cloud, with your own key",
+                "Better reading of poor photos. You confirm each document before it is sent; bank numbers, PAN and phone numbers are removed first.",
+            ),
+        ];
+        let cards = cards
+            .into_iter()
+            .zip(tiers)
+            .map(|(card, tier)| card.selected(self.ai == tier))
+            .collect::<Vec<_>>();
+        let drawn = option_grid(ui, egui::Id::unique("setup-ai"), 3, &cards);
+        for (n, (card, tier)) in drawn.iter().zip(tiers).enumerate() {
+            record_probe(ui, &format!("setup.option.{n}"), card.card);
+            if card.response.clicked() {
+                self.ai = tier;
             }
-            let local = option_card(c1, self.ai == AiTier::Local, true, "On this computer", "A small local model. Nothing leaves this computer. Slower on old machines.");
-            if local.clicked() {
-                self.ai = AiTier::Local;
-            }
-            let cloud = option_card(c2, self.ai == AiTier::Cloud, true, "Cloud, with your own key", "Better reading of poor photos. You confirm each document before it is sent; bank numbers, PAN and phone numbers are removed first.");
-            if cloud.clicked() {
-                self.ai = AiTier::Cloud;
-            }
-        });
-        ui.add_space(8.0);
+        }
+        step_text(
+            ui,
+            "You can see every AI event later in AI and privacy: what was read, by which model, and what you decided.",
+        );
         if let Some(notice) = ai_notice(self.ai) {
-            ui.weak(notice);
+            step_text(ui, notice);
         }
     }
 
     /// The Backup step (index.html:1885). The folder is not stored and no backup runs on a schedule.
     fn draw_backup(&mut self, ui: &mut egui::Ui) {
-        ui.heading("Backups");
-        ui.label(
+        pane_head(
+            ui,
+            "Backups",
             "Ledgerly saves as you type. A backup is a separate copy, made every day you work.",
         );
-        ui.add_space(8.0);
-        egui::Grid::new("setup-backup")
-            .num_columns(2)
-            .spacing([16.0, 8.0])
-            .show(ui, |ui| {
-                ui.label("Backup folder");
+        let col = field_column(ui);
+        ui.horizontal_top(|ui| {
+            ui.spacing_mut().item_spacing.x = FIELD_GAP_X;
+            field(ui, span(col, 2), "Backup folder", |ui, w| {
                 ui.add(
                     egui::TextEdit::singleline(&mut self.backup_folder)
                         .hint_text("Documents/Ledgerly backups")
-                        .desired_width(360.0),
+                        .desired_width(w),
                 );
-                ui.end_row();
-                ui.label("Keep");
-                ui.weak("Last 30 days. Not saved yet.");
-                ui.end_row();
-                ui.label("When");
-                ui.weak("On close, daily. Not saved yet.");
-                ui.end_row();
             });
-        ui.add_space(8.0);
-        ui.weak("Companies that keep books electronically must keep a daily backup on a server located in India. This firm is a partnership, but the habit is good. Ledgerly makes the file; where you copy it is your choice.");
+            field(ui, col, "Keep", |ui, _| {
+                read_only(ui, "Last 30 days");
+                hint(ui, "Not saved yet.");
+            });
+            field(ui, col, "When", |ui, _| {
+                read_only(ui, "On close, daily");
+                hint(ui, "Not saved yet.");
+            });
+        });
+        ui.add_space(14.0);
+        note(
+            ui,
+            NoteKind::Info,
+            "Companies that keep books electronically must keep a daily backup on a server located in India. This firm is a partnership, but the habit is good. Ledgerly makes the file; where you copy it is your choice.",
+        );
         if let Some(notice) = unsaved_notice(Step::Backup) {
-            ui.weak(notice);
+            step_text(ui, notice);
         }
     }
 
-    /// The Done step (index.html:1889-1894). Returns the screen to open, if a launch was chosen.
-    fn draw_done(
-        &mut self,
-        ui: &mut egui::Ui,
-        ctx: &AppCtx,
-    ) -> Result<Option<ScreenAction>, String> {
-        let name = self.created_name.clone().unwrap_or_default();
-        ui.heading(format!("{name} is ready"));
-        ui.label("Three good first steps. Each has a key.");
-        ui.add_space(8.0);
-        let mut chosen = None;
+    /// The Done step (index.html:1889-1894): three launch cards, each with its icon, bold label
+    /// and key, and the primary "Go to Home". Returns the launch or Home chosen, if any.
+    fn draw_done(ui: &mut egui::Ui, name: &str) -> Option<DoneChoice> {
+        let t = tokens(ui);
         ui.horizontal(|ui| {
-            if ui.button("Enter opening balances  (Masters)").clicked() {
-                chosen = Some(MASTERS_KEY);
-            }
-            if ui.button("Import a bank statement").clicked() {
-                chosen = Some(navigate::BANK_RECON_KEY);
-            }
-            ui.add_enabled(false, egui::Button::new("Make your first invoice"));
+            icon(ui, Icon::Check, t.text);
+            ui.label(
+                egui::RichText::new(format!("{name} is ready"))
+                    .font(bold_font(ui, TEXT_H1))
+                    .color(t.text),
+            );
         });
-        match chosen {
-            None => Ok(None),
-            Some(key) => match navigate::screen_for_key(key, ctx) {
-                Some(Ok(screen)) => Ok(Some(ScreenAction::Push(screen))),
-                Some(Err(e)) => Err(e.to_string()),
-                None => Err("that screen is not available yet".to_owned()),
+        ui.add_space(6.0);
+        para(
+            ui,
+            "Three good first steps. Each has a key.",
+            TEXT_BODY,
+            t.text_2,
+        );
+        ui.add_space(18.0);
+        let launches = [
+            Launch {
+                glyph: Icon::Users,
+                label: "Enter opening balances",
+                place: Some("Masters"),
+                key: "M",
+                choice: Some(DoneChoice::Open(MASTERS_KEY)),
             },
+            Launch {
+                glyph: Icon::Sale,
+                label: "Make your first invoice",
+                place: None,
+                key: "F8",
+                choice: None,
+            },
+            Launch {
+                glyph: Icon::Bank,
+                label: "Import a bank statement",
+                place: None,
+                key: "B",
+                choice: Some(DoneChoice::Open(navigate::BANK_RECON_KEY)),
+            },
+        ];
+        let mut chosen = None;
+        ui.scope(|ui| {
+            ui.spacing_mut().item_spacing.x = LAUNCH_GAP;
+            ui.columns(launches.len(), |cols| {
+                for (n, (launch, col)) in launches.iter().zip(cols.iter_mut()).enumerate() {
+                    let response = launch_card(col, launch);
+                    record_probe(col, &format!("setup.launch.{n}"), response.rect);
+                    if response.clicked() {
+                        chosen = launch.choice;
+                    }
+                }
+            });
+        });
+        nav_gap(ui);
+        // Inside a row, so the right-to-left layout is one button high, not the pane's height.
+        ui.horizontal(|ui| {
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let home = button(ui, "Go to Home", Some("Enter"), ButtonKind::Primary);
+                record_probe(ui, "setup.home", home.rect);
+                if home.clicked() {
+                    chosen = Some(DoneChoice::Home);
+                }
+            });
+        });
+        chosen
+    }
+}
+
+/// What Done's launches and button lead to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DoneChoice {
+    /// The screen with this palette key.
+    Open(&'static str),
+    /// Home.
+    Home,
+}
+
+/// One launch card of Done (index.html:1892).
+struct Launch {
+    /// The icon at the card's left.
+    glyph: Icon,
+    /// The bold label.
+    label: &'static str,
+    /// The place named before the key, such as "Masters".
+    place: Option<&'static str>,
+    /// The key that opens it.
+    key: &'static str,
+    /// Where it leads; `None` while there is no route from the wizard (PARITY-GAPS).
+    choice: Option<DoneChoice>,
+}
+
+/// Draws a launch card (`.launch button`, index.html:193-197): a bordered row with the icon, the
+/// bold label and, at the right, the place and the key. A card with no route senses hover only
+/// and draws its label muted.
+fn launch_card(ui: &mut egui::Ui, launch: &Launch) -> egui::Response {
+    let t = tokens(ui);
+    let bw = border_width(kind(ui));
+    let sense = if launch.choice.is_some() {
+        egui::Sense::click()
+    } else {
+        egui::Sense::hover()
+    };
+    let (rect, response) =
+        ui.allocate_exact_size(egui::vec2(ui.available_width(), LAUNCH_HEIGHT), sense);
+    let edge = if response.hovered() && launch.choice.is_some() {
+        t.border_strong
+    } else {
+        t.border
+    };
+    let painter = ui.painter();
+    if response.hovered() && launch.choice.is_some() {
+        painter.rect_filled(rect, RADIUS_S, t.hover);
+    }
+    painter.rect_stroke(
+        rect,
+        RADIUS_S,
+        egui::Stroke::new(bw, edge),
+        egui::StrokeKind::Inside,
+    );
+    let inner = rect.shrink2(egui::vec2(LAUNCH_PAD_X, LAUNCH_PAD_Y));
+    let icon_rect = egui::Rect::from_center_size(
+        egui::pos2(inner.left() + ICON_SIZE / 2.0, inner.center().y),
+        egui::Vec2::splat(ICON_SIZE),
+    );
+    icon::paint(painter, icon_rect, launch.glyph, t.text_2);
+    // The key at the right edge, the place above it when there is one, as the mock's span wraps.
+    let key_w = keycap::width(ui, launch.key);
+    let place_galley = launch.place.map(|place| {
+        painter.layout_no_wrap(place.to_owned(), FontId::proportional(TEXT_BODY), t.text)
+    });
+    let right_w = place_galley
+        .as_ref()
+        .map_or(key_w, |g| g.size().x.max(key_w));
+    let right = inner.right();
+    let key_top = match &place_galley {
+        Some(g) => {
+            let top = inner.center().y - f32::midpoint(g.size().y, keycap::KEYCAP_HEIGHT);
+            painter.galley(egui::pos2(right - g.size().x, top), g.clone(), t.text);
+            top + g.size().y
+        }
+        None => inner.center().y - keycap::KEYCAP_HEIGHT / 2.0,
+    };
+    let key_rect = egui::Rect::from_min_size(
+        egui::pos2(right - key_w, key_top),
+        egui::vec2(key_w, keycap::KEYCAP_HEIGHT),
+    );
+    keycap::paint(
+        painter,
+        key_rect,
+        launch.key,
+        t.surface_2,
+        t.border,
+        t.text_2,
+    );
+    let label_left = icon_rect.right() + LAUNCH_ICON_GAP;
+    let label_w = (right - right_w - LAUNCH_ICON_GAP - label_left).max(0.0);
+    let ink = if launch.choice.is_some() {
+        t.text
+    } else {
+        t.text_3
+    };
+    let galley = painter.layout(
+        launch.label.to_owned(),
+        bold_font(ui, TEXT_BODY),
+        ink,
+        label_w,
+    );
+    let top = inner.center().y - galley.size().y / 2.0;
+    painter.galley(egui::pos2(label_left, top), galley, ink);
+    if launch.choice.is_none() {
+        return response.on_hover_text("No route to a sales invoice from the wizard yet.");
+    }
+    response
+}
+
+/// How a rail marker is drawn (index.html:1860).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Marker {
+    /// A step already passed: a green check.
+    Passed,
+    /// The step on screen: its number on the accent.
+    Current,
+    /// A step still ahead: its number in a circle.
+    Ahead,
+}
+
+/// The marker of `step` while `on` is the step on screen.
+fn rail_marker(step: Step, on: Step) -> Marker {
+    match step.index().cmp(&on.index()) {
+        std::cmp::Ordering::Less => Marker::Passed,
+        std::cmp::Ordering::Equal => Marker::Current,
+        std::cmp::Ordering::Greater => Marker::Ahead,
+    }
+}
+
+/// Draws one rail row (`.steps button`, index.html:313-317): the round marker, then the step's
+/// name. The current row is accent-soft with the accent-ink name in bold.
+#[expect(clippy::float_arithmetic, reason = "laying out the marker in its row")]
+fn rail_row(ui: &mut egui::Ui, step: Step, marker: Marker, clickable: bool) -> egui::Response {
+    let t = tokens(ui);
+    let bw = border_width(kind(ui));
+    let sense = if clickable {
+        egui::Sense::click()
+    } else {
+        egui::Sense::hover()
+    };
+    let (rect, response) =
+        ui.allocate_exact_size(egui::vec2(ui.available_width(), RAIL_ROW_HEIGHT), sense);
+    let n = step.index();
+    record_probe(ui, &format!("setup.rail.row.{n}"), rect);
+    let painter = ui.painter();
+    if marker == Marker::Current {
+        painter.rect_filled(rect, RADIUS_S, t.accent_soft);
+    } else if clickable && response.hovered() {
+        painter.rect_filled(rect, RADIUS_S, t.hover);
+    }
+    let dot = egui::Rect::from_min_size(
+        egui::pos2(
+            rect.left() + RAIL_PAD_X,
+            rect.center().y - MARKER_SIZE / 2.0,
+        ),
+        egui::Vec2::splat(MARKER_SIZE),
+    );
+    record_probe(ui, &format!("setup.rail.marker.{n}"), dot);
+    let radius = MARKER_SIZE / 2.0;
+    let number = (n + 1).to_string();
+    let cap = bold_font(ui, TEXT_CAP);
+    match marker {
+        Marker::Passed => {
+            painter.circle_filled(dot.center(), radius, t.ok);
+            let check = egui::Rect::from_center_size(dot.center(), egui::Vec2::splat(CHECK_SIZE));
+            icon::paint(painter, check, Icon::Check, t.surface);
+        }
+        Marker::Current => {
+            painter.circle_filled(dot.center(), radius, t.accent);
+            painter.text(
+                dot.center(),
+                egui::Align2::CENTER_CENTER,
+                number,
+                cap,
+                t.on_accent,
+            );
+        }
+        Marker::Ahead => {
+            painter.circle_stroke(
+                dot.center(),
+                radius - bw / 2.0,
+                egui::Stroke::new(bw, t.border_strong),
+            );
+            painter.text(
+                dot.center(),
+                egui::Align2::CENTER_CENTER,
+                number,
+                cap,
+                t.text_2,
+            );
         }
     }
+    let (font, ink) = if marker == Marker::Current {
+        (bold_font(ui, TEXT_BODY), t.accent_ink)
+    } else {
+        (FontId::proportional(TEXT_BODY), t.text_2)
+    };
+    painter.text(
+        egui::pos2(dot.right() + RAIL_LABEL_GAP, rect.center().y),
+        egui::Align2::LEFT_CENTER,
+        step.label(),
+        font,
+        ink,
+    );
+    response
+}
+
+/// The 22 points above Back and Continue or Go to Home (index.html:1861, 1893), less the item
+/// spacing egui adds after the widget before it.
+fn nav_gap(ui: &mut egui::Ui) {
+    #[expect(clippy::float_arithmetic, reason = "the gap less the item spacing")]
+    let gap = (NAV_GAP - ui.spacing().item_spacing.y).max(0.0);
+    ui.add_space(gap);
+}
+
+/// The pane's heading and the line under it (`<h1>` and `<p class="t2" style="margin:6px 0
+/// 18px">`, index.html:1863).
+fn pane_head(ui: &mut egui::Ui, title: &str, sub: &str) {
+    let t = tokens(ui);
+    ui.label(
+        egui::RichText::new(title)
+            .font(bold_font(ui, TEXT_H1))
+            .color(t.text),
+    );
+    ui.add_space(6.0);
+    para(ui, sub, TEXT_BODY, t.text_2);
+    ui.add_space(18.0);
+}
+
+/// A muted line under a step's cards (`<p class="meta" style="margin-top:12px">`,
+/// index.html:1882).
+fn step_text(ui: &mut egui::Ui, text: &str) {
+    let t = tokens(ui);
+    ui.add_space(12.0);
+    para(ui, text, TEXT_META, t.text_3);
+}
+
+/// The width of one column of the pane's four-column field grid (`.vhead`, index.html:234:
+/// four equal columns, 16 points apart).
+#[expect(clippy::float_arithmetic, reason = "four columns and three gaps")]
+fn field_column(ui: &egui::Ui) -> f32 {
+    ((ui.available_width() - 3.0 * FIELD_GAP_X) / 4.0).max(60.0)
+}
+
+/// The width of a field spanning `columns` grid columns, gaps included.
+#[expect(
+    clippy::float_arithmetic,
+    clippy::cast_precision_loss,
+    reason = "columns is at most 4, exact in f32"
+)]
+fn span(col: f32, columns: usize) -> f32 {
+    let n = columns as f32;
+    col * n + FIELD_GAP_X * (n - 1.0)
+}
+
+/// One field of the grid (`.fld`, index.html:235-237): the label above, then what `add` draws
+/// in the field's width.
+fn field(ui: &mut egui::Ui, width: f32, label: &str, add: impl FnOnce(&mut egui::Ui, f32)) {
+    let t = tokens(ui);
+    ui.vertical(|ui| {
+        ui.set_width(width);
+        ui.spacing_mut().item_spacing.y = 4.0;
+        ui.label(egui::RichText::new(label).size(TEXT_META).color(t.text_2));
+        add(ui, width);
+    });
+}
+
+/// A value the user cannot change, in the field's place (`.ro`).
+fn read_only(ui: &mut egui::Ui, text: &str) {
+    let t = tokens(ui);
+    ui.label(egui::RichText::new(text).size(TEXT_INPUT).color(t.text));
+}
+
+/// A field's muted hint (`.fld .hint`).
+fn hint(ui: &mut egui::Ui, text: &str) {
+    let t = tokens(ui);
+    para(ui, text, TEXT_META, t.text_3);
 }
 
 /// A date as the mock writes it: `1 Apr 2026`.
@@ -698,31 +1153,27 @@ fn kind_label(kind: EntityKind) -> &'static str {
     }
 }
 
-/// One option card: a selectable button with the title and a line of text (the mock's `optCard`).
-fn option_card(
-    ui: &mut egui::Ui,
-    selected: bool,
-    enabled: bool,
-    title: &str,
-    text: &str,
-) -> egui::Response {
-    ui.add_enabled(
-        enabled,
-        egui::Button::new(format!("{title}\n{text}"))
-            .selected(selected)
-            .min_size(egui::vec2(ui.available_width(), 72.0)),
-    )
-}
-
 impl Screen for SetupScreen {
     fn title(&self) -> String {
         "Company setup".to_owned()
     }
 
+    /// The key bar's name (index.html:1891): the step's place among the seven.
+    fn key_bar_name(&self) -> String {
+        format!(
+            "Setup, step {} of {}",
+            self.step.index() + 1,
+            Step::ALL.len()
+        )
+    }
+
+    /// The key bar (index.html:1891): the step's place, then Enter, Esc and Tab.
     fn keys(&self) -> Vec<crate::shell::KeyHint> {
         vec![
+            crate::shell::KeyHint::new("", self.key_bar_name()),
             crate::shell::KeyHint::new("Enter", "Continue"),
             crate::shell::KeyHint::new("Esc", "Back"),
+            crate::shell::KeyHint::new("Tab", "Next field"),
         ]
     }
 
@@ -746,38 +1197,113 @@ impl Screen for SetupScreen {
             }
             KeyOutcome::Pass => {}
         }
-        let mut action = ScreenAction::Stay;
-        egui::Frame::group(ui.style()).show(ui, |ui| {
-            ui.horizontal_top(|ui| {
-                ui.vertical(|ui| {
-                    ui.set_width(RAIL_WIDTH);
-                    self.rail(ui);
+        let mut chosen = self.take_launch_key(ui).map(DoneChoice::Open);
+        if let Some(next) = self.draw_card(ui) {
+            chosen = Some(next);
+        }
+        match chosen {
+            None => ScreenAction::Stay,
+            Some(DoneChoice::Home) => ScreenAction::Replace(Box::new(GatewayScreen::new())),
+            Some(DoneChoice::Open(key)) => match navigate::screen_for_key(key, ctx) {
+                Some(Ok(screen)) => ScreenAction::Push(screen),
+                Some(Err(e)) => {
+                    self.notice = Some(e.to_string());
+                    ScreenAction::Stay
+                }
+                None => {
+                    self.notice = Some("that screen is not available yet".to_owned());
+                    ScreenAction::Stay
+                }
+            },
+        }
+    }
+}
+
+impl SetupScreen {
+    /// The wizard's card (index.html:1894, CSS 311-318): the rail, the rule and the step's pane,
+    /// at most 980 points wide and centred. Returns a Done choice.
+    fn draw_card(&mut self, ui: &mut egui::Ui) -> Option<DoneChoice> {
+        let mut chosen = None;
+        let t = tokens(ui);
+        let k = kind(ui);
+        let width = ui.available_width().min(CARD_MAX_WIDTH);
+        #[expect(clippy::float_arithmetic, reason = "centring the card")]
+        let left = ((ui.available_width() - width) / 2.0).max(0.0);
+        ui.add_space(CARD_MARGIN_TOP);
+        ui.horizontal_top(|ui| {
+            ui.add_space(left);
+            let card = egui::Frame::new()
+                .fill(t.surface)
+                .stroke(egui::Stroke::new(border_width(k), t.border))
+                .corner_radius(RADIUS_M)
+                .shadow(shadow_1(k))
+                .show(ui, |ui| {
+                    // The card's outline is `width` wide, its border included.
+                    #[expect(clippy::float_arithmetic, reason = "the border, both sides")]
+                    let inner = width - 2.0 * border_width(k);
+                    ui.set_width(inner);
+                    ui.spacing_mut().item_spacing.x = 0.0;
+                    let row = ui.horizontal_top(|ui| {
+                        let rail = ui.vertical(|ui| {
+                            ui.set_width(RAIL_WIDTH);
+                            egui::Frame::new()
+                                .inner_margin(egui::Margin::symmetric(8, 18))
+                                .show(ui, |ui| {
+                                    ui.set_width(ui.available_width());
+                                    self.rail(ui);
+                                });
+                        });
+                        record_probe(ui, "setup.rail", rail.response.rect);
+                        ui.vertical(|ui| {
+                            egui::Frame::new()
+                                .inner_margin(egui::Margin::symmetric(28, 22))
+                                .show(ui, |ui| {
+                                    ui.set_width(ui.available_width());
+                                    ui.spacing_mut().item_spacing.x = 8.0;
+                                    if let Some(next) = self.draw_pane(ui) {
+                                        chosen = Some(next);
+                                    }
+                                });
+                        });
+                        rail.response.rect.right()
+                    });
+                    // The rule between the rail and the pane, the card's full height
+                    // (index.html:312).
+                    let x = row.inner;
+                    ui.painter().vline(
+                        x,
+                        ui.min_rect().y_range(),
+                        egui::Stroke::new(border_width(k), t.border),
+                    );
                 });
-                ui.separator();
-                ui.vertical(|ui| {
-                    ui.set_min_width(ui.available_width());
-                    match self.step {
-                        Step::Welcome => Self::draw_welcome(ui),
-                        Step::Company => self.draw_company(ui),
-                        Step::Features => self.draw_features(ui),
-                        Step::Keyboard => self.draw_keyboard(ui),
-                        Step::Ai => self.draw_ai(ui),
-                        Step::Backup => self.draw_backup(ui),
-                        Step::Done => match self.draw_done(ui, ctx) {
-                            Ok(Some(next)) => action = next,
-                            Ok(None) => {}
-                            Err(reason) => self.notice = Some(reason),
-                        },
-                    }
-                    if let Some(notice) = &self.notice {
-                        ui.colored_label(ui.visuals().error_fg_color, notice.as_str());
-                    }
-                    if self.step != Step::Done {
-                        self.footer(ui);
-                    }
-                });
-            });
+            record_probe(ui, "setup.card", card.response.rect);
         });
-        action
+        chosen
+    }
+
+    /// The step's pane: its content, any notice, and Back and Continue. Returns a Done choice.
+    fn draw_pane(&mut self, ui: &mut egui::Ui) -> Option<DoneChoice> {
+        let mut chosen = None;
+        match self.step {
+            Step::Welcome => Self::draw_welcome(ui),
+            Step::Company => self.draw_company(ui),
+            Step::Features => self.draw_features(ui),
+            Step::Keyboard => self.draw_keyboard(ui),
+            Step::Ai => self.draw_ai(ui),
+            Step::Backup => self.draw_backup(ui),
+            Step::Done => {
+                let name = self.created_name.clone().unwrap_or_default();
+                chosen = Self::draw_done(ui, &name);
+            }
+        }
+        if let Some(notice) = &self.notice {
+            let t = tokens(ui);
+            ui.add_space(12.0);
+            para(ui, notice, TEXT_META, t.bad);
+        }
+        if self.step != Step::Done {
+            self.footer(ui);
+        }
+        chosen
     }
 }

@@ -21,10 +21,13 @@ pub mod format;
 pub mod icon;
 pub mod keycap;
 pub mod note;
+pub mod option_card;
 pub mod page_head;
+pub mod probe;
 pub mod prop;
 pub mod prov;
 pub mod skeleton;
+pub mod switch;
 pub mod table;
 pub mod tabs;
 

@@ -15,7 +15,7 @@
 
 use std::path::PathBuf;
 
-use egui::{Align, Frame, Key, Layout, Margin, Modifiers, RichText, Sense, Stroke, Ui, pos2, vec2};
+use egui::{Align, Key, Layout, Modifiers, RichText, Sense, Stroke, Ui};
 use egui_extras::{Column, Size, StripBuilder};
 use ledgerly_api::{AiLogEntry, AiTier, Api};
 use ledgerly_core::Outcome;
@@ -23,14 +23,15 @@ use ledgerly_core::Outcome;
 use crate::screen::KeyHint;
 use crate::screens::wire::{Done, Latest, unsupported_text};
 use crate::shell::submit;
-use crate::theme::{RADIUS_M, TEXT_BODY, TEXT_META, border_width, shadow_1};
-use crate::ui::badge::{BadgeKind, badge};
+use crate::theme::{TEXT_BODY, TEXT_META};
 use crate::ui::card::card;
 use crate::ui::icon::{Icon, icon};
 use crate::ui::note::{NoteKind, note};
+use crate::ui::option_card::{OptionCard, option_grid};
 use crate::ui::page_head::{HEAD_GAP, page_head};
+use crate::ui::switch::switch;
 use crate::ui::table::{self, ROW_HEIGHT};
-use crate::ui::{bold_font, kind, para, para_text, tokens};
+use crate::ui::{bold_font, para_text, tokens};
 use crate::worker::ApiWorker;
 use crate::{AppCtx, Screen, ScreenAction};
 
@@ -99,26 +100,12 @@ pub const NEVER: [&str; 5] = [
     "Send anything to the cloud without your confirmation.",
 ];
 
-/// The option and panel cards' padding, as the kit's card (`card.rs`).
-const CARD_PAD_X: i8 = 16;
-/// The option and panel cards' vertical padding.
-const CARD_PAD_Y: i8 = 14;
-/// The border of the selected option card: the accent, heavier than the hairline.
-const ACCENT_STROKE: f32 = 1.5;
 /// The label column of the local and provider panels, in points.
 const LABEL_COLUMN: f32 = 120.0;
 /// The feature column of the features table, in points.
 const FEATURE_COLUMN: f32 = 180.0;
 /// The On column of the features table, in points (`th` width 60px in index.html:1908).
 const ON_COLUMN: f32 = 64.0;
-/// A switch's width and height, in points (`.switch` in the mock).
-const SWITCH_WIDTH: f32 = 34.0;
-/// A switch's height, in points.
-const SWITCH_HEIGHT: f32 = 18.0;
-/// How far the switch's knob sits in from its end, in points.
-const KNOB_INSET: f32 = 9.0;
-/// The knob's radius, in points.
-const KNOB_RADIUS: f32 = 7.0;
 
 /// The log card's title (index.html:1915).
 pub const LOG_TITLE: &str = "AI activity log";
@@ -443,22 +430,8 @@ fn save_dialog() -> Option<PathBuf> {
         .save_file()
 }
 
-/// Records where the screen drew a part, so the layout tests can read it back by name. The
-/// value lives in the context's memory for the frame and is read after the frame.
-pub fn record_probe<T: Clone + Send + Sync + 'static>(ui: &Ui, name: &str, value: T) {
-    let id = egui::Id::unique(name);
-    ui.ctx().data_mut(|d| d.insert_temp(id, value));
-}
+pub use crate::ui::probe::{read_probe, record_probe};
 
-/// The value a layout probe recorded under `name` in the last frame, if the screen drew it.
-#[must_use]
-pub fn read_probe<T: Clone + Send + Sync + 'static>(ctx: &egui::Context, name: &str) -> Option<T> {
-    ctx.data(|d| d.get_temp::<T>(egui::Id::unique(name)))
-}
-
-/// Draws the three option cards in a row and returns the tier clicked this frame, if any.
-/// The "Current" badge marks the tier stored in the company file, not the panel shown: a refused
-/// cloud choice leaves the stored tier unchanged.
 /// The panel under the option cards: what the chosen tier means, or the note for no tier.
 fn draw_panel(ui: &mut Ui, panel: Panel, cloud_reason: Option<&str>) {
     match panel {
@@ -473,77 +446,37 @@ fn draw_panel(ui: &mut Ui, panel: Panel, cloud_reason: Option<&str>) {
     }
 }
 
+/// Draws the three option cards in a row and returns the tier clicked this frame, if any.
+/// The "Current" badge marks the tier stored in the company file, not the panel shown: a refused
+/// cloud choice leaves the stored tier unchanged.
 fn draw_options(ui: &mut Ui, stored: Option<AiTier>) -> Option<AiTier> {
-    let mut clicked = None;
+    let t = tokens(ui);
+    record_probe(ui, "ai-settings.accent", t.accent);
+    record_probe(ui, "ai-settings.accent_soft", t.accent_soft);
     let options = [
         (AiTier::Off, Icon::Off, OPTION_OFF),
         (AiTier::Local, Icon::Cpu, OPTION_LOCAL),
         (AiTier::Cloud, Icon::Cloud, OPTION_CLOUD),
     ];
-    ui.columns(3, |cols| {
-        for (n, ((tier, glyph, (title, body)), col)) in
-            options.into_iter().zip(cols.iter_mut()).enumerate()
-        {
-            let current = stored == Some(tier);
-            let response = option_card(col, n, current, glyph, title, body);
-            if response.clicked() {
-                clicked = Some(tier);
-            }
-        }
+    // The shown tier has the accent border and fill (`aria-checked` in index.html:1905-1907) and
+    // a "Current" badge.
+    let cards = options.map(|(tier, glyph, (title, body))| {
+        let current = stored == Some(tier);
+        OptionCard::new(glyph, title, body)
+            .selected(current)
+            .badge(current.then_some("Current"))
     });
+    let drawn = option_grid(ui, egui::Id::unique("ai-option"), 3, &cards);
+    let mut clicked = None;
+    for (n, (card, (tier, _, _))) in drawn.iter().zip(options).enumerate() {
+        record_probe(ui, &format!("ai-settings.icon.{n}"), card.icon);
+        record_probe(ui, &format!("ai-settings.title.{n}"), card.title);
+        record_probe(ui, &format!("ai-settings.card.{n}"), card.card);
+        if card.response.clicked() {
+            clicked = Some(tier);
+        }
+    }
     clicked
-}
-
-/// One option card: a click target with its icon and bold title, a "Current" badge on the
-/// shown tier, and its body. The shown tier has the accent border and fill (`aria-checked` in
-/// index.html:1905-1907); the body is ragged right, never justified.
-fn option_card(
-    ui: &mut Ui,
-    n: usize,
-    current: bool,
-    glyph: Icon,
-    title: &str,
-    body: &str,
-) -> egui::Response {
-    let t = tokens(ui);
-    let k = kind(ui);
-    record_probe(ui, "ai-settings.accent", t.accent);
-    record_probe(ui, "ai-settings.accent_soft", t.accent_soft);
-    let (fill, stroke) = if current {
-        (t.accent_soft, Stroke::new(ACCENT_STROKE, t.accent))
-    } else {
-        (t.surface, Stroke::new(border_width(k), t.border))
-    };
-    let inner = Frame::new()
-        .fill(fill)
-        .stroke(stroke)
-        .corner_radius(RADIUS_M)
-        .inner_margin(Margin::symmetric(CARD_PAD_X, CARD_PAD_Y))
-        .shadow(shadow_1(k))
-        .show(ui, |ui| {
-            ui.set_min_size(vec2(ui.available_width(), 72.0));
-            ui.horizontal(|ui| {
-                let picture = icon(ui, glyph, t.text_2);
-                record_probe(ui, &format!("ai-settings.icon.{n}"), picture.rect);
-                ui.add_space(6.0);
-                let heading = ui.add(egui::Label::new(
-                    RichText::new(title)
-                        .font(bold_font(ui, TEXT_BODY))
-                        .color(t.text),
-                ));
-                record_probe(ui, &format!("ai-settings.title.{n}"), heading.rect);
-                if current {
-                    badge(ui, BadgeKind::Accent, "Current");
-                }
-            });
-            para(ui, body, TEXT_BODY, t.text_2);
-        });
-    record_probe(ui, &format!("ai-settings.card.{n}"), inner.response.rect);
-    ui.interact(
-        inner.response.rect,
-        egui::Id::unique(("ai-option", n)),
-        Sense::click(),
-    )
 }
 
 /// The local panel: the local model's reader, language and network rows, across the full width
@@ -635,22 +568,6 @@ fn cell_rule(ui: &Ui) {
     );
 }
 
-/// A read-only switch, drawn as the mock's `.switch`: the accent when on, the border colour when
-/// off. Nothing in this build changes it yet (PARITY-GAPS).
-fn switch(ui: &mut Ui, on: bool) {
-    let t = tokens(ui);
-    let (rect, _) = ui.allocate_exact_size(vec2(SWITCH_WIDTH, SWITCH_HEIGHT), Sense::hover());
-    let fill = if on { t.accent } else { t.border };
-    ui.painter().rect_filled(rect, SWITCH_HEIGHT / 2.0, fill);
-    let knob_x = if on {
-        rect.right() - KNOB_INSET
-    } else {
-        rect.left() + KNOB_INSET
-    };
-    ui.painter()
-        .circle_filled(pos2(knob_x, rect.center().y), KNOB_RADIUS, t.surface);
-}
-
 /// The features table: what each feature sees, and whether it runs (index.html:1908). The On
 /// switch is read-only: nothing runs yet (PARITY-GAPS).
 fn draw_features(ui: &mut Ui, panel: Panel) {
@@ -691,7 +608,7 @@ fn draw_features(ui: &mut Ui, panel: Panel) {
                             cell_rule(ui);
                         });
                         row.col(|ui| {
-                            switch(ui, !off);
+                            switch(ui, !off, Sense::hover());
                             cell_rule(ui);
                         });
                     });

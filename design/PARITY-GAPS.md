@@ -392,6 +392,19 @@ financial year starts. The model supports that (`Company::books_begin`), so it i
 - **gap: import, open-file and sample cards on Start are shown, not working.** Import needs the
   import wizard (not routed from here); open-file is on the welcome screen; no sample data ships.
 - **gap: Done's "Make your first invoice" is disabled.** No route to a sales invoice from the
-  wizard yet; the other two launches open their screens.
+  wizard yet, so its card is drawn with a muted label, takes no click and F8 does nothing there;
+  the other two launches open their screens, by click or by their keys M and B.
+- **gap: a breadcrumb sits above the setup card.** The mock draws the card with no crumbs; the
+  shell draws "Home > Company setup" for every screen opened over Home.
+- **gap: the unavailable cards on Start carry a muted line saying why.** The mock draws the
+  import, open-file and sample cards as plain choices; ours cannot be chosen (see above), so each
+  says so under its text.
+- **gap: no F11 on the Features step.** The mock's line ends "F11 changes this later"; no F11
+  feature screen exists, so the sentence is left out. Rows the model has no switch for show an
+  off switch that does not move and say why.
+- **gap: the backup note has no info icon.** The kit's note draws text only.
+- **gap: fields are the kit's text inputs and combo boxes.** The mock's inputs on Company and
+  Backup are drawn by the shared egui styling, not the mock's `.fld input`; read-only values
+  (GST filing, Keep, When) are text with a "Not saved yet" hint instead of inputs.
 - **data: the mock's sample is prefilled; the wizard starts blank.** The capture types the mock's
   company (name, GSTIN, file). The mock's City "Pune" is not typed.

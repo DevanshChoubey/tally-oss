@@ -73,6 +73,8 @@ pub enum Icon {
     Spark,
     /// `file` (a voucher).
     File,
+    /// `eye` (look without keeping, such as the sample company).
+    Eye,
     /// `sliders` (a command).
     Sliders,
     /// `plus` (create).
@@ -133,6 +135,11 @@ impl Icon {
                 "M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z M19 15.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z"
             }
             Icon::File => "M6 3h9l4 4v14H6z M14 3v5h5",
+            // The mock's `eye` writes its curves with the smooth commands `s` and `S`, which the
+            // parser does not read; here they are written out as the cubics they stand for.
+            Icon::Eye => {
+                "M2 12C2 12 5.5 5 12 5C18.5 5 22 12 22 12C22 12 18.5 19 12 19C5.5 19 2 12 2 12z M12 9a3 3 0 1 0 0 6a3 3 0 0 0 0-6z"
+            }
             Icon::Sliders => {
                 "M4 6h9 M17 6h3 M15 4v4 M4 12h3 M11 12h9 M9 10v4 M4 18h11 M19 18h1 M17 16v4"
             }
