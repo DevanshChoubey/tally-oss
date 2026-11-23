@@ -20,7 +20,7 @@ use ledgerly_model::{EntityKind, Features};
 use self::form::{
     CompanyForm, GstinCheck, KeyInput, KeyOutcome, Step, build_company, check_gstin,
     default_features, feature_rows, financial_year_end, financial_year_start, parse_books_begin,
-    state_from_gstin, step_outcome,
+    state_from_gstin, step_outcome, unsaved_notice,
 };
 use crate::shell::navigate::{self, MASTERS_KEY};
 use crate::shell::{GatewayScreen, hand_over, spawn_create};
@@ -591,7 +591,9 @@ impl SetupScreen {
             }
         });
         ui.add_space(8.0);
-        ui.weak("This choice is not saved yet: every company uses the classic keys until keyboard presets are stored (PARITY-GAPS).");
+        if let Some(notice) = unsaved_notice(Step::Keyboard) {
+            ui.weak(notice);
+        }
     }
 
     /// The AI step (index.html:1879-1884). The choice is not stored yet.
@@ -615,7 +617,9 @@ impl SetupScreen {
             }
         });
         ui.add_space(8.0);
-        ui.weak("This choice is not saved yet. Until an AI setting is stored, the top bar says AI is not set up (PARITY-GAPS).");
+        if let Some(notice) = unsaved_notice(Step::Ai) {
+            ui.weak(notice);
+        }
     }
 
     /// The Backup step (index.html:1885). The folder is not stored and no backup runs on a schedule.
@@ -645,7 +649,9 @@ impl SetupScreen {
             });
         ui.add_space(8.0);
         ui.weak("Companies that keep books electronically must keep a daily backup on a server located in India. This firm is a partnership, but the habit is good. Ledgerly makes the file; where you copy it is your choice.");
-        ui.weak("This folder is not saved and no backup runs on a schedule yet (PARITY-GAPS).");
+        if let Some(notice) = unsaved_notice(Step::Backup) {
+            ui.weak(notice);
+        }
     }
 
     /// The Done step (index.html:1889-1894). Returns the screen to open, if a launch was chosen.

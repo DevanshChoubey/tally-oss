@@ -37,8 +37,8 @@
 | light | setup.backup | 0.7660 |
 | light | masters.ledger-detail | 0.7672 |
 | light | setup.keyboard | 0.7677 |
-| light | setup.done | 0.7784 |
 | light | masters.create-ledger | 0.7916 |
+| light | setup.done | 0.8147 |
 | light | gst.recon-empty | 0.8323 |
 
 ## hc / home.default
@@ -437,18 +437,6 @@ SSIM 0.7677
 </tr>
 </table>
 
-## light / setup.done
-
-SSIM 0.7784
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/light/setup.done.webp" width="480" alt="mock light setup.done"></td>
-<td><img src="app-captures/light/setup.done.webp" width="480" alt="app light setup.done"></td>
-</tr>
-</table>
-
 ## light / masters.create-ledger
 
 SSIM 0.7916
@@ -458,6 +446,18 @@ SSIM 0.7916
 <tr>
 <td><img src="mock-v2/captures/states/light/masters.create-ledger.webp" width="480" alt="mock light masters.create-ledger"></td>
 <td><img src="app-captures/light/masters.create-ledger.webp" width="480" alt="app light masters.create-ledger"></td>
+</tr>
+</table>
+
+## light / setup.done
+
+SSIM 0.8147
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/setup.done.webp" width="480" alt="mock light setup.done"></td>
+<td><img src="app-captures/light/setup.done.webp" width="480" alt="app light setup.done"></td>
 </tr>
 </table>
 

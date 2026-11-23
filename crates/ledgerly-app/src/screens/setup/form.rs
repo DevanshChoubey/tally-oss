@@ -119,6 +119,24 @@ pub enum KeyOutcome {
     Pass,
 }
 
+/// What a step says when its choice cannot be stored yet, or `None` when the step saves what it
+/// asks. The keyboard preset, AI tier and backup folder have no store (design/PARITY-GAPS.md).
+#[must_use]
+pub fn unsaved_notice(step: Step) -> Option<&'static str> {
+    match step {
+        Step::Keyboard => Some(
+            "This choice is not saved yet: every company uses the classic keys until keyboard presets are stored (PARITY-GAPS).",
+        ),
+        Step::Ai => Some(
+            "This choice is not saved yet. Until an AI setting is stored, the top bar says AI is not set up (PARITY-GAPS).",
+        ),
+        Step::Backup => {
+            Some("This folder is not saved and no backup runs on a schedule yet (PARITY-GAPS).")
+        }
+        Step::Welcome | Step::Company | Step::Features | Step::Done => None,
+    }
+}
+
 /// What a key does on `step`. Enter and Escape do nothing while a field has focus (index.html:1887
 /// and 1888 check `isTyping()`), and Escape does nothing on the first step or on Done.
 #[must_use]

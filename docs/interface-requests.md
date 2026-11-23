@@ -245,3 +245,17 @@ Filed from the r2/* fix branches. Each line names the card and the request; the 
   the report and writes CSV or XLSX. Both are additions; nothing frozen changed.
 - Why: the mock's Export button and Ctrl+E (index.html:1576, 1624). Tests:
   `rp8_exports::csv_file_holds_exactly_the_csv_text`, `w1_api::an_exported_report_is_*`.
+
+## S4 (company setup): stores for the keyboard preset, AI tier and backup folder (2026-11-23)
+
+The setup wizard collects three choices that no store holds. Until these exist, the steps say the
+choice is not saved (`screens::setup::form::unsaved_notice`), and the gaps stay in
+`design/PARITY-GAPS.md`.
+
+- Keyboard preset per company: a stored value that `keymap::preset` reads when the company opens.
+- AI tier per company: a stored value that sets `AppCtx::ai_tier` when the company opens.
+- Backup folder and schedule per company: a stored folder, and a daily backup on close that calls
+  `Api::backup_to`. The schedule needs a timer or a close hook from the shell.
+
+Each needs a store field (and a schema migration if the company file changes) and a facade method
+to read and set it. Request: a settings event on the company file that carries these three values.

@@ -395,6 +395,9 @@ struct Shot {
     after: Vec<Inject>,
 }
 
+/// Frames a setup shot waits after its keys, so the background company file job can finish.
+const SETUP_SETTLE_FRAMES: u32 = 900;
+
 /// One thing the harness sends after a shot's setup: a key press or typed text (the company setup
 /// wizard's name and GSTIN fields need text).
 #[derive(Clone, Copy)]
@@ -756,7 +759,14 @@ impl eframe::App for Snapshots {
                 }
             }
             Stage::Settle => {
-                if self.inject.is_empty() && self.frames > 60 {
+                // The wizard's Finish creates a company file on a background thread, and the screen
+                // moves to Done only when that finishes, so the setup shots wait longer.
+                let settle = if self.shots[self.index].state.starts_with("setup.") {
+                    SETUP_SETTLE_FRAMES
+                } else {
+                    60
+                };
+                if self.inject.is_empty() && self.frames > settle {
                     let slot = Arc::clone(&self.image);
                     ui.ctx().request_screenshot(move |image| {
                         if let Ok(mut held) = slot.lock() {

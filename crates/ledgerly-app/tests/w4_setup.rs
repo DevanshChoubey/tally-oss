@@ -18,7 +18,7 @@ use ledgerly_api::Api;
 use ledgerly_app::screens::setup::form::{
     CompanyForm, GstinCheck, KeyInput, KeyOutcome, Step, build_company, check_gstin,
     default_features, feature_rows, financial_year_start, gstin_allows_continue, parse_books_begin,
-    state_from_gstin, step_outcome,
+    state_from_gstin, step_outcome, unsaved_notice,
 };
 use ledgerly_core::{Clock, OffsetDateTime, Outcome, StateCode};
 use ledgerly_model::EntityKind;
@@ -230,4 +230,20 @@ fn a_company_with_a_mismatched_gstin_is_not_built() {
     let mut form = godavari_form();
     form.state = StateCode::new(24).unwrap();
     assert!(build_company(&form, default_features()).is_err());
+}
+
+#[test]
+fn the_steps_that_cannot_save_their_choice_say_so_on_that_step() {
+    // Keyboard preset, AI tier and backup folder have no store yet (design/PARITY-GAPS.md). Each
+    // such step must say the choice is not saved; the other steps must not claim a gap.
+    for step in [Step::Keyboard, Step::Ai, Step::Backup] {
+        let notice = unsaved_notice(step);
+        assert!(
+            notice.is_some_and(|n| n.contains("not saved")),
+            "{step:?} must say its choice is not saved, got {notice:?}"
+        );
+    }
+    for step in [Step::Welcome, Step::Company, Step::Features, Step::Done] {
+        assert_eq!(unsaved_notice(step), None, "{step:?} saves what it asks");
+    }
 }
