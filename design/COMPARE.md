@@ -1,6 +1,6 @@
 # App against mock
 
-40 app captures are paired with a mock capture of the same theme and state id. SSIM is 1 for identical images; lower is a bigger difference, and the list runs worst first.
+42 app captures are paired with a mock capture of the same theme and state id. SSIM is 1 for identical images; lower is a bigger difference, and the list runs worst first.
 
 | Theme | State | SSIM |
 | --- | --- | --- |
@@ -32,6 +32,7 @@
 | light | bank.brs | 0.7218 |
 | light | payment.default | 0.7360 |
 | light | balance-sheet.ledger | 0.7380 |
+| light | purchase-bill.offline-ai | 0.7398 |
 | light | balance-sheet.group | 0.7446 |
 | light | setup.ai | 0.7493 |
 | light | setup.welcome | 0.7520 |
@@ -41,6 +42,7 @@
 | light | masters.ledger-detail | 0.7672 |
 | light | setup.keyboard | 0.7677 |
 | light | masters.create-ledger | 0.7916 |
+| light | ask.offline-ai | 0.8040 |
 | light | setup.done | 0.8148 |
 | light | review.empty | 0.8269 |
 | light | gst.recon-empty | 0.8323 |
@@ -381,6 +383,18 @@ SSIM 0.7380
 </tr>
 </table>
 
+## light / purchase-bill.offline-ai
+
+SSIM 0.7398
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/purchase-bill.offline-ai.webp" width="480" alt="mock light purchase-bill.offline-ai"></td>
+<td><img src="app-captures/light/purchase-bill.offline-ai.webp" width="480" alt="app light purchase-bill.offline-ai"></td>
+</tr>
+</table>
+
 ## light / balance-sheet.group
 
 SSIM 0.7446
@@ -489,6 +503,18 @@ SSIM 0.7916
 </tr>
 </table>
 
+## light / ask.offline-ai
+
+SSIM 0.8040
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/ask.offline-ai.webp" width="480" alt="mock light ask.offline-ai"></td>
+<td><img src="app-captures/light/ask.offline-ai.webp" width="480" alt="app light ask.offline-ai"></td>
+</tr>
+</table>
+
 ## light / setup.done
 
 SSIM 0.8148
@@ -527,7 +553,7 @@ SSIM 0.8323
 
 ## Mock states with no app capture yet
 
-### light (51)
+### light (49)
 
 - `home.loading`
 - `home.empty`
@@ -537,7 +563,6 @@ SSIM 0.8323
 - `ask.loading`
 - `ask.low-confidence`
 - `ask.unsupported`
-- `ask.offline-ai`
 - `sales-invoice.gst-inter-state`
 - `sales-invoice.b2c`
 - `sales-invoice.item-list`
@@ -550,7 +575,6 @@ SSIM 0.8323
 - `purchase-bill.low-confidence`
 - `purchase-bill.mismatch`
 - `purchase-bill.duplicate`
-- `purchase-bill.offline-ai`
 - `purchase-bill.cloud-consent`
 - `purchase-bill.error`
 - `purchase-bill.accepted`
@@ -762,4 +786,8 @@ SSIM 0.8323
 - `ai-settings.local`
 - `ai-settings.cloud`
 - `ai-settings.off`
+
+## App captures with no mock capture
+
+- `light/quick-entry.offline-ai`
 

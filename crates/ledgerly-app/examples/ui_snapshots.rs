@@ -507,6 +507,17 @@ fn setup_shot(state: &'static str, after_company: usize) -> Shot {
     shot
 }
 
+/// A capture of `screen` with AI off for the company: the palette opens AI and privacy, 1 stores
+/// Off, Esc goes back to Home, and the palette opens `screen` by its title.
+fn ai_off_shot(state: &'static str, screen: &'static str) -> Shot {
+    let palette = (Key::K, Modifiers::COMMAND);
+    shot(state, &[palette])
+        .query("AI and privacy")
+        .then(&[(Key::Enter, NONE), (Key::Num1, NONE), ESC, palette])
+        .type_text(screen)
+        .press(&[(Key::Enter, NONE)])
+}
+
 /// The registry: one entry per image, named by the mock state id it should match.
 fn shots() -> Vec<Shot> {
     let palette = (Key::K, Modifiers::COMMAND);
@@ -552,6 +563,13 @@ fn shots() -> Vec<Shot> {
         shot("ai-settings.cloud", &[palette])
             .query("AI and privacy")
             .then(&[(Key::Enter, NONE), (Key::Num3, NONE)]),
+        // The AI-off states of the assistant screens: AI and privacy stores Off (key 1, as
+        // ai-settings.off), Esc goes back, and the palette opens the screen. The capture company
+        // has no stored tier, so each state sets it first. quick-entry has no AI-off state in the
+        // mock; its capture shows the screen as built (PARITY-GAPS).
+        ai_off_shot("ask.offline-ai", "Ask your books"),
+        ai_off_shot("purchase-bill.offline-ai", "Purchase from bill photo"),
+        ai_off_shot("quick-entry.offline-ai", "Plain-words entry"),
         // The tabs are 1 GSTR-1, 2 GSTR-3B, 3 reconciliation (`screens/gst.rs`). The capture
         // company has no 2B data, so the reconciliation tab is the mock's empty state.
         shot("gst.gstr3b", &[(Key::G, NONE), (Key::Num2, NONE)]),
