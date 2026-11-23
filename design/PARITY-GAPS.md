@@ -216,7 +216,10 @@ matching to propose a ledger, which is not built).
 - **needs a decision: Bill-wise is a checkbox.** The mock shows a read-only "On" badge
   (index.html:1805, 1811). Ours is editable; a badge would need Bill-wise set somewhere else.
 - **deferred: no City field** (index.html:1805). The ledger model has an address and PIN code,
-  not a city. Needs a city in `PartyDetails`.
+  not a city, and the city goes in the address lines. Before a city is added to `PartyDetails`,
+  check that the ledger master has one: the Tally help pages read so far ("Entering Mailing
+  Details for Ledger Accounts", "Set Up Party Ledgers for GST") say "mailing details" without
+  naming the fields, so whether a separate city exists is not confirmed.
 - **by design: the tabs and More master kinds are dimmed while a form is open.** Switching kind
   would drop the draft; the mock never shows them with a form open in another kind.
 - **by design: ledgers are in name order.** The mock lists its sample in its own order. Ours
