@@ -7,16 +7,16 @@
 | hc | home.default | 0.4651 |
 | dark | home.default | 0.5662 |
 | light | home.default | 0.5777 |
-| light | ai-settings.cloud | 0.5902 |
-| light | ai-settings.local | 0.6072 |
+| light | ai-settings.cloud | 0.5852 |
+| light | ai-settings.local | 0.6054 |
 | light | masters.ledgers | 0.6234 |
 | light | sales-invoice.default | 0.6269 |
 | light | palette.voucher | 0.6282 |
 | light | palette.entry | 0.6287 |
 | light | palette.ask | 0.6317 |
-| light | ai-settings.off | 0.6336 |
 | light | palette.no-results | 0.6352 |
 | light | balance-sheet.detailed | 0.6431 |
+| light | ai-settings.off | 0.6448 |
 | light | gst.gstr1 | 0.6523 |
 | light | keys.standard | 0.6536 |
 | light | keys.classic | 0.6548 |
@@ -26,22 +26,22 @@
 | light | bank.default | 0.6839 |
 | light | palette.commands | 0.6934 |
 | light | gst.gstr3b | 0.7035 |
-| light | setup.features | 0.7161 |
+| light | setup.features | 0.7057 |
 | light | receipt.default | 0.7190 |
-| light | setup.company | 0.7192 |
 | light | bank.brs | 0.7218 |
 | light | payment.default | 0.7360 |
 | light | balance-sheet.ledger | 0.7380 |
+| light | setup.company | 0.7425 |
 | light | balance-sheet.group | 0.7446 |
-| light | setup.ai | 0.7493 |
-| light | setup.welcome | 0.7520 |
 | light | masters.items | 0.7552 |
+| light | setup.welcome | 0.7587 |
 | light | day-book.default | 0.7618 |
-| light | setup.backup | 0.7660 |
+| light | setup.ai | 0.7631 |
 | light | masters.ledger-detail | 0.7672 |
-| light | setup.keyboard | 0.7677 |
+| light | setup.backup | 0.7722 |
+| light | setup.keyboard | 0.7794 |
 | light | masters.create-ledger | 0.7916 |
-| light | setup.done | 0.8148 |
+| light | setup.done | 0.8226 |
 | light | review.empty | 0.8269 |
 | light | gst.recon-empty | 0.8323 |
 
@@ -83,7 +83,7 @@ SSIM 0.5777
 
 ## light / ai-settings.cloud
 
-SSIM 0.5902
+SSIM 0.5852
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -95,7 +95,7 @@ SSIM 0.5902
 
 ## light / ai-settings.local
 
-SSIM 0.6072
+SSIM 0.6054
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -165,18 +165,6 @@ SSIM 0.6317
 </tr>
 </table>
 
-## light / ai-settings.off
-
-SSIM 0.6336
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/light/ai-settings.off.webp" width="480" alt="mock light ai-settings.off"></td>
-<td><img src="app-captures/light/ai-settings.off.webp" width="480" alt="app light ai-settings.off"></td>
-</tr>
-</table>
-
 ## light / palette.no-results
 
 SSIM 0.6352
@@ -198,6 +186,18 @@ SSIM 0.6431
 <tr>
 <td><img src="mock-v2/captures/states/light/balance-sheet.detailed.webp" width="480" alt="mock light balance-sheet.detailed"></td>
 <td><img src="app-captures/light/balance-sheet.detailed.webp" width="480" alt="app light balance-sheet.detailed"></td>
+</tr>
+</table>
+
+## light / ai-settings.off
+
+SSIM 0.6448
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/ai-settings.off.webp" width="480" alt="mock light ai-settings.off"></td>
+<td><img src="app-captures/light/ai-settings.off.webp" width="480" alt="app light ai-settings.off"></td>
 </tr>
 </table>
 
@@ -311,7 +311,7 @@ SSIM 0.7035
 
 ## light / setup.features
 
-SSIM 0.7161
+SSIM 0.7057
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -330,18 +330,6 @@ SSIM 0.7190
 <tr>
 <td><img src="mock-v2/captures/states/light/receipt.default.webp" width="480" alt="mock light receipt.default"></td>
 <td><img src="app-captures/light/receipt.default.webp" width="480" alt="app light receipt.default"></td>
-</tr>
-</table>
-
-## light / setup.company
-
-SSIM 0.7192
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/light/setup.company.webp" width="480" alt="mock light setup.company"></td>
-<td><img src="app-captures/light/setup.company.webp" width="480" alt="app light setup.company"></td>
 </tr>
 </table>
 
@@ -381,6 +369,18 @@ SSIM 0.7380
 </tr>
 </table>
 
+## light / setup.company
+
+SSIM 0.7425
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/setup.company.webp" width="480" alt="mock light setup.company"></td>
+<td><img src="app-captures/light/setup.company.webp" width="480" alt="app light setup.company"></td>
+</tr>
+</table>
+
 ## light / balance-sheet.group
 
 SSIM 0.7446
@@ -390,30 +390,6 @@ SSIM 0.7446
 <tr>
 <td><img src="mock-v2/captures/states/light/balance-sheet.group.webp" width="480" alt="mock light balance-sheet.group"></td>
 <td><img src="app-captures/light/balance-sheet.group.webp" width="480" alt="app light balance-sheet.group"></td>
-</tr>
-</table>
-
-## light / setup.ai
-
-SSIM 0.7493
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/light/setup.ai.webp" width="480" alt="mock light setup.ai"></td>
-<td><img src="app-captures/light/setup.ai.webp" width="480" alt="app light setup.ai"></td>
-</tr>
-</table>
-
-## light / setup.welcome
-
-SSIM 0.7520
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/light/setup.welcome.webp" width="480" alt="mock light setup.welcome"></td>
-<td><img src="app-captures/light/setup.welcome.webp" width="480" alt="app light setup.welcome"></td>
 </tr>
 </table>
 
@@ -429,6 +405,18 @@ SSIM 0.7552
 </tr>
 </table>
 
+## light / setup.welcome
+
+SSIM 0.7587
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/setup.welcome.webp" width="480" alt="mock light setup.welcome"></td>
+<td><img src="app-captures/light/setup.welcome.webp" width="480" alt="app light setup.welcome"></td>
+</tr>
+</table>
+
 ## light / day-book.default
 
 SSIM 0.7618
@@ -441,15 +429,15 @@ SSIM 0.7618
 </tr>
 </table>
 
-## light / setup.backup
+## light / setup.ai
 
-SSIM 0.7660
+SSIM 0.7631
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
 <tr>
-<td><img src="mock-v2/captures/states/light/setup.backup.webp" width="480" alt="mock light setup.backup"></td>
-<td><img src="app-captures/light/setup.backup.webp" width="480" alt="app light setup.backup"></td>
+<td><img src="mock-v2/captures/states/light/setup.ai.webp" width="480" alt="mock light setup.ai"></td>
+<td><img src="app-captures/light/setup.ai.webp" width="480" alt="app light setup.ai"></td>
 </tr>
 </table>
 
@@ -465,9 +453,21 @@ SSIM 0.7672
 </tr>
 </table>
 
+## light / setup.backup
+
+SSIM 0.7722
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/setup.backup.webp" width="480" alt="mock light setup.backup"></td>
+<td><img src="app-captures/light/setup.backup.webp" width="480" alt="app light setup.backup"></td>
+</tr>
+</table>
+
 ## light / setup.keyboard
 
-SSIM 0.7677
+SSIM 0.7794
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -491,7 +491,7 @@ SSIM 0.7916
 
 ## light / setup.done
 
-SSIM 0.8148
+SSIM 0.8226
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
