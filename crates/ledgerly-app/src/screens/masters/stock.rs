@@ -193,6 +193,38 @@ impl ItemStockFigures {
         }
     }
 
+    /// Why item `id`'s Stock cell has no figure, for its hover: the engine's reason; `None` for a
+    /// figure, an item with no row, or before the figures are here (the heading says why then).
+    #[must_use]
+    pub fn qty_why(&self, id: StockItemId) -> Option<String> {
+        match &self.state {
+            StockState::Loaded(figures) => match figures.items.get(&id) {
+                Some(ItemStock { qty: Err(why), .. }) => Some(why.clone()),
+                Some(ItemStock { qty: Ok(_), .. }) | None => None,
+            },
+            StockState::NotAsked | StockState::Unsupported(_) => None,
+        }
+    }
+
+    /// Why item `id`'s value cell is a dash or provisional, for its hover; `None` for a final
+    /// figure, an item with no row, or before the figures are here.
+    #[must_use]
+    pub fn value_why(&self, id: StockItemId) -> Option<String> {
+        match &self.state {
+            StockState::Loaded(figures) => figures.items.get(&id).and_then(|i| value_why(&i.value)),
+            StockState::NotAsked | StockState::Unsupported(_) => None,
+        }
+    }
+
+    /// Why the "Closing stock" figure is a dash or provisional, for its hover.
+    #[must_use]
+    pub fn total_why(&self) -> Option<String> {
+        match &self.state {
+            StockState::Loaded(figures) => value_why(&figures.total),
+            StockState::NotAsked | StockState::Unsupported(_) => None,
+        }
+    }
+
     /// The headings' hover text: why there are no figures, or `None` once they are here.
     #[must_use]
     pub fn heading_hint(&self) -> Option<&'static str> {
@@ -221,6 +253,15 @@ fn value_text(value: &StockValue) -> String {
         StockValue::Final(amount) => amount_figure(*amount),
         StockValue::Provisional(amount, _) => format!("{} (provisional)", amount_figure(*amount)),
         StockValue::Unsupported(_) => DASH.to_owned(),
+    }
+}
+
+/// Why a value is not a plain final figure.
+fn value_why(value: &StockValue) -> Option<String> {
+    match value {
+        StockValue::Final(_) => None,
+        StockValue::Provisional(_, reason) => Some(format!("The value is provisional: {reason}")),
+        StockValue::Unsupported(why) => Some(why.clone()),
     }
 }
 

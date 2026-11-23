@@ -143,10 +143,11 @@ matching to propose a ledger, which is not built).
   out a ledger with a nil balance, and the screen does not fill in a figure the engine did not
   give, so the mock's "0.00 Dr" rows (Rupa Polymers, CGST input) are blank here. Showing 0.00
   needs the engine to give a row for every ledger.
-- **bug: one ledger's unsupported balance is only a dash.** When the whole trial balance fails,
-  a note above the list gives the engine's reason. When the engine cannot compute one ledger's
-  cell, that cell shows a dash and the reason (`BalanceCell::Unsupported`) is kept but not shown.
-  Needs a hover on the cell, which the painted list rows do not have yet.
+- **by design: a figure the engine could not give says why on hover.** When the whole trial
+  balance or stock summary fails, a note above the list gives the engine's reason. When one
+  cell cannot be computed it shows a dash, and its hover gives the engine's reason; a
+  provisional stock value's hover says why it is provisional, and so does the Closing stock
+  line's. The mock has no such cells.
 - **by design: balances are as of the last voucher date**, the date the balance sheet opens on
   (`navigate::default_period`). The mock does not say which date its balances are as of, and
   the list does not say it either; a date in the subtitle would make it plain.
@@ -158,7 +159,7 @@ matching to propose a ledger, which is not built).
 - **by design: a credit or provisional stock value is marked.** The mock's value is
   `inr(max(qty,0)*cost)`, so stock below zero shows 0.00. Ours shows the engine's figure: a
   credit value keeps "Cr", and a value the engine marks provisional (negative stock) says
-  "(provisional)". The cell's reason is kept but not shown, as with the balances (bug above).
+  "(provisional)", with the engine's reason on hover.
 - **by design: stock is over the stock summary's opening period**, the financial year to its
   last voucher, as the stock summary report opens.
 - **by design: an open bill's badge names the outstanding report's bucket, not a day count**

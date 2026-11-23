@@ -1136,6 +1136,7 @@ impl MastersScreen {
                 let total = self.stock.total_text().map(|value| look::TotalLine {
                     label: CLOSING_STOCK,
                     value,
+                    why: self.stock.total_why(),
                 });
                 look::list_card(ui, "items", &cols, &rows, selected, scroll, total.as_ref())
             }
@@ -1605,7 +1606,10 @@ fn ledger_cells(
                 },
                 look::Cell::Quiet(r.group.clone()),
                 look::Cell::Quiet(r.gstin.clone()),
-                look::Cell::Text(balances.text(LedgerId(r.master.id))),
+                look::Cell::text_why(
+                    balances.text(LedgerId(r.master.id)),
+                    balances.why(LedgerId(r.master.id)).map(str::to_owned),
+                ),
             ]
         })
         .collect()
@@ -1633,8 +1637,14 @@ fn item_cells(rows: &[view::ItemRow], figures: &stock::ItemStockFigures) -> Vec<
                 look::Cell::Text(r.name.clone()),
                 hsn,
                 look::Cell::Text(rate),
-                look::Cell::Text(figures.qty_text(StockItemId(r.master.id), &r.unit)),
-                look::Cell::Text(figures.value_text(StockItemId(r.master.id))),
+                look::Cell::text_why(
+                    figures.qty_text(StockItemId(r.master.id), &r.unit),
+                    figures.qty_why(StockItemId(r.master.id)),
+                ),
+                look::Cell::text_why(
+                    figures.value_text(StockItemId(r.master.id)),
+                    figures.value_why(StockItemId(r.master.id)),
+                ),
             ]
         })
         .collect()

@@ -135,6 +135,20 @@ impl LedgerBalances {
         }
     }
 
+    /// Why ledger `id`'s cell has no figure, for its hover: the engine's reason when it could not
+    /// compute the balance; `None` for a figure, a ledger with no row, or before the figures are
+    /// here (the heading says why then).
+    #[must_use]
+    pub fn why(&self, id: LedgerId) -> Option<&str> {
+        match &self.state {
+            BalanceState::Loaded(map) => match map.get(&id) {
+                Some(BalanceCell::Unsupported(why)) => Some(why),
+                Some(BalanceCell::Amount(_)) | None => None,
+            },
+            BalanceState::NotAsked | BalanceState::Unsupported(_) => None,
+        }
+    }
+
     /// The Balance heading's hover text: why there are no figures, or `None` once they are here.
     #[must_use]
     pub fn heading_hint(&self) -> Option<&'static str> {

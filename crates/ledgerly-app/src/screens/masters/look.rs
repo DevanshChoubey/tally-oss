@@ -118,6 +118,24 @@ pub(super) enum Cell {
     },
     /// A badge (`badge(..)` in a cell).
     Badge(BadgeKind, &'static str),
+    /// Text in the body ink that says why under the pointer: a dash or a provisional figure
+    /// with the engine's reason (rule A1).
+    Explained {
+        /// The text shown.
+        text: String,
+        /// The reason, shown on hover.
+        why: String,
+    },
+}
+
+impl Cell {
+    /// Body text, explained on hover when there is a reason.
+    pub(super) fn text_why(text: String, why: Option<String>) -> Self {
+        match why {
+            Some(why) => Self::Explained { text, why },
+            None => Self::Text(text),
+        }
+    }
 }
 
 /// The total line under a list (`tr.total`, index.html:1800): the label across every column but
@@ -128,6 +146,8 @@ pub(super) struct TotalLine {
     pub label: &'static str,
     /// The figure, as the engine gave it.
     pub value: String,
+    /// Why the figure is a dash or provisional, shown on hover.
+    pub why: Option<String>,
 }
 
 /// What the pointer did to the list this frame.
@@ -204,7 +224,7 @@ pub(super) fn list_card(
                             sub: false,
                         };
                         table::paint_row(ui, rect, state);
-                        paint_cells(ui, cols, rect, row);
+                        paint_cells(ui, cols, rect, row, &response);
                         if state.selected && scroll_to_selected {
                             response.scroll_to_me(None);
                         }
@@ -216,9 +236,12 @@ pub(super) fn list_card(
                         }
                     }
                     if let Some(line) = total {
-                        let (rect, _) =
+                        let (rect, response) =
                             ui.allocate_exact_size(vec2(width, T_TOTAL_HEIGHT), Sense::hover());
                         paint_total(ui, cols, rect, line);
+                        if let Some(why) = &line.why {
+                            response.on_hover_text(why);
+                        }
                     }
                 });
         });
@@ -309,8 +332,8 @@ fn paint_total(ui: &Ui, cols: &[Col], rect: Rect, line: &TotalLine) {
     table::paint_cell_text(ui, *last, 3.0, &line.value, font, t.text, CellPlace::Right);
 }
 
-/// The cells of one row.
-fn paint_cells(ui: &mut Ui, cols: &[Col], rect: Rect, row: &[Cell]) {
+/// The cells of one row; `response` is the row's, for an explained cell's hover.
+fn paint_cells(ui: &mut Ui, cols: &[Col], rect: Rect, row: &[Cell], response: &egui::Response) {
     let t = tokens(ui);
     let font = FontId::proportional(TEXT_BODY);
     for ((col, r), cell) in cols.iter().zip(column_rects(cols, rect)).zip(row) {
@@ -322,6 +345,12 @@ fn paint_cells(ui: &mut Ui, cols: &[Col], rect: Rect, row: &[Cell]) {
         match cell {
             Cell::Text(text) => {
                 table::paint_cell_text(ui, r, 1.0, text, font.clone(), t.text, place);
+            }
+            Cell::Explained { text, why } => {
+                table::paint_cell_text(ui, r, 1.0, text, font.clone(), t.text, place);
+                if response.hover_pos().is_some_and(|p| r.contains(p)) {
+                    response.clone().on_hover_text(why);
+                }
             }
             Cell::Quiet(text) => {
                 table::paint_cell_text(ui, r, 1.0, text, font.clone(), t.text_2, place);

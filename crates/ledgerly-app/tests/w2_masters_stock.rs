@@ -422,3 +422,53 @@ fn when_the_engine_cannot_give_the_figures_the_list_says_why() {
     assert!(note.contains("the stock summary failed"), "{note}");
     assert!(note.contains("Nothing is estimated"), "{note}");
 }
+
+#[test]
+fn a_stock_figure_without_a_plain_number_says_why_on_hover() {
+    // provenance: derived (rule A1: an unsupported value is shown with its reason). A dash's
+    // hover gives the engine's reason, which names what could not be computed ("closing
+    // quantity") and why ("for the test", from `nope`). A provisional value's hover gives the
+    // engine's reason it is provisional. A plain figure has nothing to explain. Bug found
+    // 2026-11-23 in the masters round (design/PARITY-GAPS.md): the reason was kept, not shown.
+    let r = report(
+        vec![
+            row(
+                Some(DrillKey::Item(BOLT)),
+                RowKind::Item,
+                Cell::Unsupported(nope("closing quantity")),
+                Cell::Unsupported(nope("closing value")),
+            ),
+            row(
+                Some(DrillKey::Item(NUT)),
+                RowKind::Item,
+                qty(1),
+                Cell::Provisional {
+                    amount: SignedAmount::dr(rs(100)),
+                    reason: "negative stock".to_owned(),
+                },
+            ),
+            row(
+                Some(DrillKey::Item(WASHER)),
+                RowKind::Item,
+                qty(2),
+                Cell::Amount(SignedAmount::dr(rs(10))),
+            ),
+        ],
+        Cell::Unsupported(nope("total")),
+    );
+    let mut f = ItemStockFigures::new();
+    f.set(from_report(&r));
+    let said = |text: Option<String>, words: &[&str]| {
+        let text = text.expect("a reason");
+        for word in words {
+            assert!(text.contains(word), "{text:?} does not say {word:?}");
+        }
+    };
+    said(f.qty_why(BOLT), &["closing quantity", "for the test"]);
+    said(f.value_why(BOLT), &["closing value", "for the test"]);
+    said(f.value_why(NUT), &["provisional", "negative stock"]);
+    said(f.total_why(), &["total", "for the test"]);
+    assert_eq!(f.qty_why(NUT), None);
+    assert_eq!(f.qty_why(WASHER), None);
+    assert_eq!(f.value_why(WASHER), None);
+}

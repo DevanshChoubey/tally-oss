@@ -455,3 +455,22 @@ fn the_alter_form_shows_the_ledgers_balance() {
     screen.begin_create(&books).unwrap();
     assert_eq!(screen.form_balance_text(), None);
 }
+
+#[test]
+fn a_balance_the_engine_cannot_compute_says_why_on_hover() {
+    // provenance: derived (rule A1: an unsupported value is shown with its reason). The cell
+    // shows a dash, and its hover gives the engine's reason as it came. A balance with a figure,
+    // and a ledger with no row, have nothing to explain. Bug found 2026-11-23 in the masters
+    // round (design/PARITY-GAPS.md): the reason was kept but never shown.
+    let mut b = LedgerBalances::new();
+    let mut map = BTreeMap::new();
+    map.insert(CASH, BalanceCell::Amount(SignedAmount::dr(rs(1_000))));
+    map.insert(
+        CAPITAL,
+        BalanceCell::Unsupported("the capital account is not posted".to_owned()),
+    );
+    b.set(BalanceState::Loaded(map));
+    assert_eq!(b.why(CAPITAL), Some("the capital account is not posted"));
+    assert_eq!(b.why(CASH), None);
+    assert_eq!(b.why(CUSTOMER), None);
+}
