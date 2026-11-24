@@ -64,6 +64,17 @@ enum Cmd {
     },
     /// Run the golden conformance cases and check the pass-list ratchet (rule A6).
     Conformance(ConformanceArgs),
+    /// Serve the MCP server over stdio for an AI client (spec 6.8). Read queries and
+    /// `propose_voucher` only; nothing is posted.
+    Mcp(McpArgs),
+}
+
+/// Arguments of `mcp`.
+#[derive(Debug, Args)]
+struct McpArgs {
+    /// The company file to serve. It must exist; the command never creates one.
+    #[arg(long)]
+    company: PathBuf,
 }
 
 /// Arguments of `import-tally`.
@@ -168,6 +179,10 @@ fn run(cmd: &Cmd) -> anyhow::Result<ExitCode> {
         Cmd::Conformance(args) => {
             let _span = tracing::info_span!("command", name = "conformance").entered();
             conformance(args)
+        }
+        Cmd::Mcp(args) => {
+            let _span = tracing::info_span!("command", name = "mcp").entered();
+            mcp(args)
         }
     }
 }
@@ -315,6 +330,17 @@ fn rebuild_check(file: &Path) -> anyhow::Result<ExitCode> {
             Ok(ExitCode::from(EXIT_CHECK_FAILED))
         }
     }
+}
+
+/// Serves the MCP protocol over this process's standard input and output until the client closes
+/// its input. Standard output carries protocol messages only; logs go to standard error.
+fn mcp(args: &McpArgs) -> anyhow::Result<ExitCode> {
+    let api = open_company(&args.company)?;
+    let stdin = std::io::stdin();
+    let stdout = std::io::stdout();
+    ledgerly_mcp::server::serve(&api, stdin.lock(), stdout.lock())
+        .context("the MCP server stopped with an error")?;
+    Ok(ExitCode::SUCCESS)
 }
 
 fn conformance(args: &ConformanceArgs) -> anyhow::Result<ExitCode> {

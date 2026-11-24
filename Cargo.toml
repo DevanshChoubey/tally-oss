@@ -25,6 +25,7 @@ ledgerly-bankfmt = { path = "crates/ledgerly-bankfmt" }
 ledgerly-assist = { path = "crates/ledgerly-assist" }
 ledgerly-print = { path = "crates/ledgerly-print" }
 ledgerly-api = { path = "crates/ledgerly-api" }
+ledgerly-mcp = { path = "crates/ledgerly-mcp" }
 ledgerly-conformance = { path = "crates/ledgerly-conformance" }
 # Numbers and time (rule A3: money is Paise(i64); quantities and rates are Decimal)
 rust_decimal = { version = "1.43", default-features = false, features = ["std", "serde-str"] }

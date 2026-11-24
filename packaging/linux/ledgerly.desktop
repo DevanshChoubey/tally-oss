@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Ledgerly
+GenericName=Accounting
+Comment=Accounting for Indian businesses and their accountants
+Exec=ledgerly-app
+Icon=ledgerly
+Terminal=false
+Categories=Office;Finance;
+Keywords=accounts;ledger;GST;bookkeeping;
+StartupWMClass=ledgerly-app
