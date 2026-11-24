@@ -98,8 +98,13 @@ fn draw_picker(ui: &mut Ui, i: usize, rc: &RowCtx<'_>, events: &mut Vec<UiEvent>
     if rc.focused == Field::Ledger(i) && !rc.items.is_empty() {
         ui.group(|ui| {
             for (j, item) in rc.items.iter().enumerate() {
+                // Click-only, as the invoice list: Tab leaves the field, Up and Down move the
+                // highlight and Enter picks it.
                 if ui
-                    .selectable_label(j == rc.pick, item_label(item))
+                    .add(
+                        egui::Button::selectable(j == rc.pick, item_label(item))
+                            .sense(egui::Sense::CLICK),
+                    )
                     .clicked()
                 {
                     events.push(UiEvent::Pick(j));

@@ -14,7 +14,7 @@
     reason = "test code: rule B2 lets tests unwrap and panic"
 )]
 
-use egui::accesskit::{Node, NodeId, Role, TreeUpdate};
+use egui::accesskit::{Node, NodeId, Role, Toggled, TreeUpdate};
 use egui::{Context, Event, Key, Modifiers, Pos2, RawInput, Rect, Ui, Vec2};
 use ledgerly_app::screens::item_invoice::ItemInvoiceScreen;
 use ledgerly_app::theme::{self, ThemeKind};
@@ -255,8 +255,8 @@ fn tab_visits_the_header_and_line_fields_in_reading_order() {
     // derived: from the party field (where the screen starts), Tab moves through the header in
     // reading order: "Place of supply" (first row), "Sales ledger" (account), "Order or reference"
     // (reference, the second row of the grid), then the first line's "Item", "Qty" and "Rate"
-    // (draw_header, draw_lines in item_invoice/draw.rs). The suggestion buttons of an open field
-    // are skipped here; they are a known gap, see the Accessibility section of PARITY-GAPS.
+    // (draw_header, draw_lines in item_invoice/draw.rs). This test keeps to the fields; the
+    // suggestion entries are not Tab stops at all, which the tests below check.
     let ctx = context();
     let b = books();
     let mut screen = open(&b);
@@ -304,4 +304,117 @@ fn shift_tab_from_the_party_field_goes_back_to_the_date() {
         vec!["Date".to_owned()],
         "back from the party field was {back:?}"
     );
+}
+
+/// The labels of the entries highlighted (selected) in `update`.
+fn highlighted(update: &TreeUpdate) -> Vec<String> {
+    update
+        .nodes
+        .iter()
+        .filter(|(_, node)| node.toggled() == Some(Toggled::True))
+        .filter_map(|(_, node)| node.label().map(str::to_owned))
+        .collect()
+}
+
+/// One key press, then a settling frame, returning the entries highlighted afterwards.
+fn highlight_after(ctx: &Context, key: Key, body: &mut impl FnMut(&mut Ui)) -> Vec<String> {
+    frame(ctx, Some((key, Modifiers::NONE)), body);
+    highlighted(&frame(ctx, None, body))
+}
+
+#[test]
+fn tab_from_an_open_suggestion_list_goes_straight_to_the_next_field() {
+    // Tally: "To move to the next field" is Tab (help.tallysolutions.com/keyboard-shortcuts-tally-prime/,
+    // read 2026-11-24, Vouchers and Masters table). The suggestion list under the party field is
+    // open when the screen starts, so a single Tab must land on "Place of supply", not on one of
+    // the list's entries. A suggestion entry is a button, not a field, so its role is not TextInput.
+    let ctx = context();
+    let b = books();
+    let mut screen = open(&b);
+    let mut app = sales_app(&b);
+    let mut body = |ui: &mut Ui| {
+        let _ = screen.ui(ui, &mut app);
+    };
+    for _ in 0..3 {
+        frame(&ctx, None, &mut body);
+    }
+    let landed = press(&ctx, Key::Tab, false, &mut body);
+    let role = landed.as_ref().map(|(role, _)| *role);
+    assert_eq!(
+        role,
+        Some(Role::TextInput),
+        "one Tab from the party field landed on {landed:?}"
+    );
+}
+
+#[test]
+fn arrow_keys_move_the_highlighted_suggestion() {
+    // Tally: "To move one line down in a list" is Down arrow and "To move one line up in a list" is
+    // Up arrow (help.tallysolutions.com/keyboard-shortcuts-tally-prime/, read 2026-11-24). The mock
+    // (design/mock-v2/index.html, the transaction option list) moves its highlight the same way.
+    // derived: while the list is open exactly one entry is highlighted; Down moves the highlight
+    // off the first entry and Up moves it back.
+    let ctx = context();
+    let b = books();
+    let mut screen = open(&b);
+    let mut app = sales_app(&b);
+    let mut body = |ui: &mut Ui| {
+        let _ = screen.ui(ui, &mut app);
+    };
+    for _ in 0..3 {
+        frame(&ctx, None, &mut body);
+    }
+    let start = highlighted(&frame(&ctx, None, &mut body));
+    assert_eq!(
+        start.len(),
+        1,
+        "one entry should be highlighted, got {start:?}"
+    );
+    let down = highlight_after(&ctx, Key::ArrowDown, &mut body);
+    assert_eq!(
+        down.len(),
+        1,
+        "one entry should be highlighted after Down, got {down:?}"
+    );
+    assert_ne!(down, start, "Down did not move the highlight");
+    let up = highlight_after(&ctx, Key::ArrowUp, &mut body);
+    assert_eq!(up, start, "Up did not move the highlight back");
+}
+
+#[test]
+fn enter_picks_the_highlighted_suggestion() {
+    // Tally: the list is driven by Up and Down arrows and a choice is confirmed with Enter
+    // (help.tallysolutions.com/keyboard-shortcuts-tally-prime/, read 2026-11-24). derived: the
+    // party list opens on the first ledger, "Output CGST" (ledgers sort by name, "Output CGST" is
+    // before "Sales - Local" and "Sharma Traders"); one Down highlights the second, and Enter
+    // must put that ledger's name into the party field.
+    let ctx = context();
+    let b = books();
+    let mut screen = open(&b);
+    let mut app = sales_app(&b);
+    let mut body = |ui: &mut Ui| {
+        let _ = screen.ui(ui, &mut app);
+    };
+    for _ in 0..3 {
+        frame(&ctx, None, &mut body);
+    }
+    let before = highlighted(&frame(&ctx, None, &mut body));
+    let down = highlight_after(&ctx, Key::ArrowDown, &mut body);
+    assert_ne!(down, before, "Down did not move the highlight");
+    let picked = highlighted(&frame(&ctx, Some((Key::Enter, Modifiers::NONE)), &mut body));
+    let party = party_value(&frame(&ctx, None, &mut body));
+    assert_eq!(
+        party,
+        down.first().cloned(),
+        "Enter put {party:?} in the party field, but {down:?} was highlighted (highlighted after Enter: {picked:?})"
+    );
+}
+
+/// The text of the field named "Customer" in `update`, read from its AccessKit value.
+fn party_value(update: &TreeUpdate) -> Option<String> {
+    update
+        .nodes
+        .iter()
+        .find(|(_, node)| node.role() == Role::TextInput && node.label() == Some("Customer"))
+        .and_then(|(_, node)| node.value().map(str::to_owned))
 }

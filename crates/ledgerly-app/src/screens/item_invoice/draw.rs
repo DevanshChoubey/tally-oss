@@ -356,7 +356,12 @@ fn draw_picker(
             .min_scrolled_height(PICKER_MAX_HEIGHT)
             .show(ui, |ui| {
                 for (j, label) in labels.iter().enumerate() {
-                    let row = ui.selectable_label(j == pick, label.as_str());
+                    // Click-only: a list entry is not a Tab stop, so Tab leaves the field for the
+                    // next one. Up, Down and Enter move and pick the highlighted entry instead.
+                    let row = ui.add(
+                        egui::Button::selectable(j == pick, label.as_str())
+                            .sense(egui::Sense::CLICK),
+                    );
                     if j == pick {
                         row.scroll_to_me(None);
                     }
