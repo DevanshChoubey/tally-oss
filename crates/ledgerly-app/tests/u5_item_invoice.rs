@@ -897,7 +897,10 @@ fn confirmed_save_starts_a_fresh_invoice_and_a_failed_save_keeps_the_screen() {
     assert!(s.error_text().unwrap().contains("period is locked"));
     assert!(!s.draft().is_blank());
     s.confirm_saved();
-    assert!(s.draft().is_blank());
+    // The mock's saved state keeps the party and the date and has no lines (design/mock-v2/
+    // index.html line 1269), so the lines are what must be empty.
+    assert!(s.draft().rows.iter().all(|r| r.item.is_none()));
+    assert!(s.draft().narration.is_empty());
     assert_eq!(s.focus(), Field::Party);
     assert!(matches!(s.gst_status(m), GstStatus::Incomplete(_)));
     assert_eq!(s.info_text(), Some("Saved."));
@@ -1315,4 +1318,24 @@ fn no_type_ahead_list_hangs_over_the_narration_after_the_lines_end() {
         frame(&ctx, &mut s, &mut app, RawInput::default());
     }
     assert!(s.picker_rect().is_none());
+}
+
+#[test]
+fn a_save_carries_the_party_and_place_and_opens_no_party_list() {
+    // provenance: the mock's saved state `{party:'sgt', date, lines:[]}` (design/mock-v2/index.html
+    // line 1269): the next invoice keeps the buyer and the date, with no lines, and the keyboard
+    // stays on the party field, which holds a party, so no type-ahead list opens over the form.
+    let b = books();
+    let m = &b.masters;
+    let (mut s, _) = answered(&b);
+    s.draft_mut().place_text = "27".to_owned();
+    s.save(m);
+    let _ = s.take_save_request().unwrap();
+    s.confirm_saved_as(Some("SI/0418"));
+    assert_eq!(s.draft().party, Some(SHARMA));
+    assert_eq!(s.draft().party_text, "Sharma Traders");
+    assert_eq!(s.draft().place_text, "27");
+    assert!(s.draft().rows.iter().all(|r| r.item.is_none()));
+    assert_eq!(s.focus(), Field::Party);
+    assert!(s.pick_labels(m).is_empty());
 }

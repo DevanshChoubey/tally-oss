@@ -960,6 +960,13 @@ impl ItemInvoiceScreen {
             (Some(_) | None, Some(_) | None) => None,
         };
         self.extras.forget_number();
+        // The party and the place of supply carry over, as the mock's saved state shows (a run of
+        // invoices to one buyer); the lines, the number and the narration start empty.
+        let (party, party_text, place_text) = (
+            self.draft.party,
+            std::mem::take(&mut self.draft.party_text),
+            std::mem::take(&mut self.draft.place_text),
+        );
         self.draft = InvoiceDraft::new(
             self.draft.type_id,
             self.draft.kind,
@@ -967,6 +974,9 @@ impl ItemInvoiceScreen {
             self.draft.date_text.clone(),
         )
         .in_mode(self.draft.mode);
+        self.draft.party = party;
+        self.draft.party_text = party_text;
+        self.draft.place_text = place_text;
         self.requested = None;
         self.answer = None;
         self.outbox = None;
