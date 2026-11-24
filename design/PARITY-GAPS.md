@@ -727,6 +727,9 @@ titles; dark and high-contrast `setup.welcome` captures are not yet reshot cold.
 The mock has no state for the profit and loss, trial balance, outstanding, stock summary or
 register reports, so they have no capture to compare. They draw as the generic table, which now
 shares the drill levels' fixes (bare Debit and Credit figures, footnote style).
+s9: the profit and loss and trial balance run over the new sample seed through the same engine
+reports the balance sheet uses (Opening stock now sits under Direct Expenses, the provisional
+reason names the item); no state to compare with, so nothing further was changed.
 
 ## Masters, GST, keys (round of 2026-11-24, card S8)
 

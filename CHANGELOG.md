@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Balance sheet: the default view lists each group with its sub-groups, and Alt+F1 adds ledgers.
+- Day book: Entered by, Origin and the narration are shown.
+- GSTR-1: a table per section of the return (records, taxable value, tax, status); the tiles count
+  sections; the period button is drawn.
+- The sample company's figures match the design mock (capital, profit, opening stock).
+- A provisional stock figure names the item that is negative.
+
 ## [1.0.1] - 2026-11-24
 
 ### Fixed
