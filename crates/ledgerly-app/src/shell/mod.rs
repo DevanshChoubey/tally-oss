@@ -129,6 +129,9 @@ pub struct Shell {
     /// The stored AI tier fetch in progress, if any. It runs with each books fetch, so the top
     /// bar's AI chip follows the company file (card W4).
     ai_ticket: Option<Ticket<AiTierReply>>,
+    /// The lock date fetch in progress, if any. It runs with each books fetch, so a period lock
+    /// shows as soon as it is saved.
+    lock_ticket: Option<Ticket<Option<ledgerly_core::Date>>>,
     /// The key map the palette chords come from.
     keymap: Keymap,
     /// The command palette.
@@ -162,6 +165,7 @@ impl Shell {
             books_ticket: None,
             books_problem: None,
             ai_ticket: None,
+            lock_ticket: None,
             keymap,
             palette: Palette::new(),
             search: PaletteSearch::new(),
@@ -395,9 +399,11 @@ impl Shell {
             self.books_problem = None;
             self.books_ticket = self.app_ctx.api.as_ref().map(submit::fetch_books);
             self.ai_ticket = self.app_ctx.api.as_ref().map(submit::fetch_ai_tier);
+            self.lock_ticket = self.app_ctx.api.as_ref().map(submit::fetch_lock_date);
             if self.books_ticket.is_none() {
                 self.app_ctx.books = None;
                 self.app_ctx.ai_tier = None;
+                self.app_ctx.lock_date = None;
             }
         }
         // A worker put into the context without a change note still gets its books.
@@ -407,6 +413,20 @@ impl Shell {
         {
             self.books_ticket = self.app_ctx.api.as_ref().map(submit::fetch_books);
             self.ai_ticket = self.app_ctx.api.as_ref().map(submit::fetch_ai_tier);
+            self.lock_ticket = self.app_ctx.api.as_ref().map(submit::fetch_lock_date);
+        }
+        if let Some(ticket) = self.lock_ticket.as_mut() {
+            match ticket.poll() {
+                Poll::Pending | Poll::Taken => {}
+                Poll::Ready(lock) => {
+                    self.lock_ticket = None;
+                    self.app_ctx.lock_date = lock;
+                }
+                Poll::Lost => {
+                    self.lock_ticket = None;
+                    self.app_ctx.lock_date = None;
+                }
+            }
         }
         if let Some(ticket) = self.ai_ticket.as_mut() {
             match ticket.poll() {
