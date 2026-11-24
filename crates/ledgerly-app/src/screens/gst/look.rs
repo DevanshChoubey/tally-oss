@@ -9,6 +9,34 @@
 use ledgerly_api::{Gstr3bTaxAmounts, Gstr3bWorking};
 use ledgerly_core::Paise;
 
+use crate::i18n::Tr;
+
+/// The English words of the GSTR-3B table, its figure headings and its sources, with the key of
+/// each one's translation. The words are the ones [`gstr3b_lines`] and [`GSTR3B_COLUMNS`] build
+/// the table from; the form names and tax heads (IGST, CGST, SGST, Cess) stay in Latin letters.
+const TABLE_WORDS: [(&str, &str); 10] = [
+    ("Table", "gst.3b.table"),
+    ("Taxable", "gst.3b.taxable"),
+    ("3.1(a) Outward taxable supplies", "gst.3b.outward"),
+    ("4 Eligible ITC", "gst.3b.eligible_itc"),
+    ("In your books", "gst.3b.in_books"),
+    ("Blocked or ineligible, not claimed", "gst.3b.blocked"),
+    ("sales vouchers", "gst.3b.src_sales"),
+    ("purchase vouchers", "gst.3b.src_purchase"),
+    ("From the return", "gst.figures.from_return"),
+    ("Amount", "gst.figures.amount"),
+];
+
+/// A GSTR-3B table word in the words of `tr`. A word with no key in the table of words is shown
+/// as it is, so a new table row is never blank.
+#[must_use]
+pub fn text_in(text: &str, tr: &Tr) -> String {
+    TABLE_WORDS
+        .iter()
+        .find(|(en, _)| *en == text)
+        .map_or_else(|| text.to_owned(), |(_, key)| tr.t(key))
+}
+
 /// The column headings of the GSTR-3B table. The mock has Table, Taxable, IGST, CGST and SGST;
 /// Cess is added because the engine works it out and a figure is never dropped.
 pub const GSTR3B_COLUMNS: [&str; 6] = ["Table", "Taxable", "IGST", "CGST", "SGST", "Cess"];
@@ -66,6 +94,15 @@ pub fn gstr3b_lines(w: &Gstr3bWorking) -> Vec<Line3b> {
             tax: heads(w.itc_not_claimable),
         },
     ]
+}
+
+/// [`recon_empty`] in the words of `tr`. The title carries the period label as given.
+#[must_use]
+pub fn recon_empty_in(period_label: &str, tr: &Tr) -> (String, String) {
+    (
+        tr.tf("gst.recon.empty.title", &[("period", period_label)]),
+        tr.t("gst.recon.empty.sentence"),
+    )
 }
 
 /// The title and sentence of the 2B and IMS tab when no 2B file has been read for

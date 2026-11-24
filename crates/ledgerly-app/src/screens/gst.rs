@@ -68,6 +68,16 @@ pub enum GstTab {
 }
 
 impl GstTab {
+    /// Tab title in the words of `tr`. The form names stay in Latin letters.
+    #[must_use]
+    pub fn label_in(self, tr: &Tr) -> String {
+        match self {
+            GstTab::Gstr1 => "GSTR-1".to_owned(),
+            GstTab::Gstr3b => "GSTR-3B".to_owned(),
+            GstTab::Reconciliation => tr.t("gst.tab.reconciliation"),
+        }
+    }
+
     /// The tabs in display order (as in the mock).
     pub const ALL: [GstTab; 3] = [GstTab::Gstr1, GstTab::Gstr3b, GstTab::Reconciliation];
 
@@ -116,6 +126,17 @@ pub enum Bucket {
 }
 
 impl Bucket {
+    /// Chip label in the words of `tr`.
+    #[must_use]
+    pub fn label_in(self, tr: &Tr) -> String {
+        match self {
+            Bucket::Ready => tr.t("gst.bucket.ready"),
+            Bucket::NotRelevant => tr.t("gst.bucket.not_relevant"),
+            Bucket::Mismatch => tr.t("gst.bucket.mismatch"),
+            Bucket::NeedsCorrection => tr.t("gst.bucket.needs_correction"),
+        }
+    }
+
     /// The buckets in display order.
     pub const ALL: [Bucket; 4] = [
         Bucket::Ready,
@@ -172,6 +193,26 @@ pub enum ImsAction {
 }
 
 impl ImsAction {
+    /// Button label in the words of `tr`.
+    #[must_use]
+    pub fn label_in(self, tr: &Tr) -> String {
+        match self {
+            ImsAction::Accept => tr.t("gst.ims.accept"),
+            ImsAction::Reject => tr.t("gst.ims.reject"),
+            ImsAction::Pending => tr.t("gst.ims.pending"),
+        }
+    }
+
+    /// Past tense in the words of `tr`, for the notice line.
+    #[must_use]
+    pub fn past_in(self, tr: &Tr) -> String {
+        match self {
+            ImsAction::Accept => tr.t("gst.ims.past.accept"),
+            ImsAction::Reject => tr.t("gst.ims.past.reject"),
+            ImsAction::Pending => tr.t("gst.ims.past.pending"),
+        }
+    }
+
     /// The actions in display order.
     pub const ALL: [ImsAction; 3] = [ImsAction::Accept, ImsAction::Reject, ImsAction::Pending];
 
@@ -224,6 +265,19 @@ pub enum MatchState {
 }
 
 impl MatchState {
+    /// Label of the match column in the words of `tr`.
+    #[must_use]
+    pub fn label_in(self, tr: &Tr) -> String {
+        match self {
+            MatchState::Matched => tr.t("gst.match.matched"),
+            MatchState::ValueDiffers => tr.t("gst.match.value_differs"),
+            MatchState::DateDiffers => tr.t("gst.match.date_differs"),
+            MatchState::NotInBooks => tr.t("gst.match.not_in_books"),
+            MatchState::PossibleDuplicate => tr.t("gst.match.possible_duplicate"),
+            MatchState::NotIn2b => tr.t("gst.match.not_in_2b"),
+        }
+    }
+
     /// Label of the match column.
     #[must_use]
     pub fn label(self) -> &'static str {
@@ -412,6 +466,8 @@ fn remembered_for(
 /// The GST workspace screen.
 #[derive(Debug)]
 pub struct GstScreen {
+    /// The strings of the language the user chose, set each frame from the app context.
+    tr: Tr,
     period_label: String,
     own_gstin: Option<Gstin>,
     /// The state of the registration, named in the subtitle.
@@ -464,6 +520,7 @@ impl GstScreen {
     #[must_use]
     pub fn new(period_label: impl Into<String>, own_gstin: Option<Gstin>) -> Self {
         GstScreen {
+            tr: Tr::default(),
             period_label: period_label.into(),
             own_gstin,
             state: None,
@@ -509,6 +566,17 @@ impl GstScreen {
     /// are monthly because the shell opens one calendar month
     /// ([`crate::shell::navigate::gst_return_period`]).
     pub fn subtitle(&self) -> String {
+        self.subtitle_with("monthly")
+    }
+
+    /// The subtitle in the words of `tr` (the period word is `gst.monthly`).
+    #[must_use]
+    pub fn subtitle_in(&self, tr: &Tr) -> String {
+        self.subtitle_with(&tr.t("gst.monthly"))
+    }
+
+    /// The subtitle with the period word `monthly` given by the caller.
+    fn subtitle_with(&self, monthly: &str) -> String {
         let mut parts: Vec<String> = Vec::new();
         if let Some(g) = &self.own_gstin {
             parts.push(g.to_string());
@@ -517,7 +585,7 @@ impl GstScreen {
             parts.push(state.name().to_owned());
         }
         parts.push(self.period_label.clone());
-        parts.push("monthly".to_owned());
+        parts.push(monthly.to_owned());
         parts.join(" \u{00B7} ")
     }
 
@@ -579,10 +647,11 @@ impl GstScreen {
         self.recon = feed;
         let after = self.remembered_actions();
         if before.len() > after.len() {
-            self.notice = Some(format!(
-                "{} confirmed IMS action(s) were dropped because the invoice is no longer in 2B.",
-                before.len().saturating_sub(after.len())
-            ));
+            let dropped = before.len().saturating_sub(after.len()).to_string();
+            self.notice = Some(
+                self.tr
+                    .tf("gst.notice.dropped", &[("count", dropped.as_str())]),
+            );
         }
         if before != after {
             self.bump();
@@ -822,10 +891,7 @@ impl GstScreen {
     pub fn request_export(&mut self) {
         let actions = self.confirmed_actions();
         if actions.is_empty() {
-            self.notice = Some(
-                "Nothing to export: no IMS action is confirmed yet. Press A, R or P on a row."
-                    .to_owned(),
-            );
+            self.notice = Some(self.tr.t("gst.notice.nothing_to_export"));
         } else {
             self.export = Some(actions);
         }
@@ -849,10 +915,11 @@ impl GstScreen {
                     Feed::Loaded(rows) => rows.get(row).map(|r| r.invoice_no.clone()),
                     Feed::NotLoaded | Feed::Unsupported(_) => None,
                 };
-                self.notice = Some(format!(
-                    "{}: {}. Saved here only; nothing is uploaded to IMS.",
-                    invoice.unwrap_or_default(),
-                    action.past()
+                let invoice = invoice.unwrap_or_default();
+                let past = action.past_in(&self.tr);
+                self.notice = Some(self.tr.tf(
+                    "gst.notice.decided",
+                    &[("invoice", invoice.as_str()), ("action", past.as_str())],
                 ));
             }
             Err(e) => self.notice = Some(e.to_string()),
@@ -861,14 +928,12 @@ impl GstScreen {
 
     fn decide_focused(&mut self, action: ImsAction) {
         if self.tab != GstTab::Reconciliation {
-            self.notice = Some(
-                "IMS actions are set on the 2B and IMS reconciliation tab (press 2).".to_owned(),
-            );
+            self.notice = Some(self.tr.t("gst.notice.ims_tab_only"));
             return;
         }
         match self.focused_index() {
             Some(row) => self.decide_with_notice(row, action),
-            None => self.notice = Some("No row is selected.".to_owned()),
+            None => self.notice = Some(self.tr.t("gst.notice.no_row")),
         }
     }
 
@@ -885,16 +950,13 @@ impl GstScreen {
 
     fn open_focused(&mut self) {
         let Some(index) = self.focused_index() else {
-            self.notice = Some("No row is selected.".to_owned());
+            self.notice = Some(self.tr.t("gst.notice.no_row"));
             return;
         };
         match self.voucher_at(index) {
             Some(v) => self.drill = Some(v),
             None => {
-                self.notice = Some(
-                    "This row has no voucher in your books, so there is nothing to open."
-                        .to_owned(),
-                );
+                self.notice = Some(self.tr.t("gst.notice.no_voucher"));
             }
         }
     }
@@ -950,47 +1012,57 @@ fn is_open(row: &ReconRow, decision: Option<ImsAction>) -> bool {
     row.in_2b() && matches!(decision, None | Some(ImsAction::Pending))
 }
 
+/// The key bar of a tab, in the words of `tr`. `reconciliation_loaded` says whether the 2B feed
+/// is loaded: the IMS keys are offered only then. The key names stay as written.
+pub fn key_hints(tab: GstTab, reconciliation_loaded: bool, tr: &Tr) -> Vec<crate::screen::KeyHint> {
+    use crate::screen::KeyHint;
+    let tabs = tr.t("gst.key.tabs");
+    let back = tr.t("chrome.back");
+    let move_keys = tr.t("keys.move");
+    match (tab, reconciliation_loaded) {
+        (GstTab::Gstr3b, _) => vec![KeyHint::new("1 2 3", tabs), KeyHint::new("Esc", back)],
+        (GstTab::Gstr1, _) => vec![
+            KeyHint::new("1 2 3", tabs),
+            KeyHint::new("J / K", move_keys),
+            KeyHint::new("Enter", tr.t("gst.key.open")),
+            KeyHint::new("Ctrl+E", tr.t("gst.export_json")),
+            KeyHint::new("Esc", back),
+        ],
+        (GstTab::Reconciliation, true) => vec![
+            KeyHint::new("J / K", move_keys),
+            KeyHint::new("A", tr.t("gst.ims.accept")),
+            KeyHint::new("R", tr.t("gst.ims.reject")),
+            KeyHint::new("P", tr.t("gst.ims.pending")),
+            KeyHint::new("Esc", back),
+        ],
+        (GstTab::Reconciliation, false) => {
+            vec![KeyHint::new("1 2 3", tabs), KeyHint::new("Esc", back)]
+        }
+    }
+}
+
 impl Screen for GstScreen {
-    fn title(&self, _tr: &Tr) -> String {
-        "GST returns".to_owned()
+    fn title(&self, tr: &Tr) -> String {
+        tr.t("gst.title")
     }
 
-    fn page_title(&self, _tr: &Tr) -> String {
-        "GST returns".to_owned()
+    fn page_title(&self, tr: &Tr) -> String {
+        tr.t("gst.title")
     }
 
-    fn subtitle(&self, _tr: &Tr) -> Option<String> {
-        Some(GstScreen::subtitle(self))
+    fn subtitle(&self, tr: &Tr) -> Option<String> {
+        Some(self.subtitle_in(tr))
     }
 
-    fn keys(&self, _tr: &Tr) -> Vec<crate::screen::KeyHint> {
-        use crate::screen::KeyHint;
+    fn keys(&self, tr: &Tr) -> Vec<crate::screen::KeyHint> {
         // The mock's key bars (index.html:1721), less keys with nothing to act on: GSTR-3B has
         // no rows and exports nothing, and on the 2B tab the IMS keys need rows; Y and X need
         // the engine's match (engine item E-3).
-        match (self.tab, &self.recon) {
-            (GstTab::Gstr3b, _) => vec![KeyHint::new("1 2 3", "Tabs"), KeyHint::new("Esc", "Back")],
-            (GstTab::Gstr1, _) => vec![
-                KeyHint::new("1 2 3", "Tabs"),
-                KeyHint::new("J / K", "Move"),
-                KeyHint::new("Enter", "Open"),
-                KeyHint::new("Ctrl+E", "Export JSON"),
-                KeyHint::new("Esc", "Back"),
-            ],
-            (GstTab::Reconciliation, Feed::Loaded(_)) => vec![
-                KeyHint::new("J / K", "Move"),
-                KeyHint::new("A", "Accept"),
-                KeyHint::new("R", "Reject"),
-                KeyHint::new("P", "Pending"),
-                KeyHint::new("Esc", "Back"),
-            ],
-            (GstTab::Reconciliation, Feed::NotLoaded | Feed::Unsupported(_)) => {
-                vec![KeyHint::new("1 2 3", "Tabs"), KeyHint::new("Esc", "Back")]
-            }
-        }
+        key_hints(self.tab, matches!(self.recon, Feed::Loaded(_)), tr)
     }
 
     fn ui(&mut self, ui: &mut Ui, ctx: &mut AppCtx) -> ScreenAction {
+        self.tr = ctx.tr.clone();
         self.tick(ctx.api.as_ref());
         if self.is_loading() {
             ui.ctx().request_repaint();

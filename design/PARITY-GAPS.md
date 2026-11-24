@@ -543,7 +543,7 @@ Left, in order of the brief:
   or a key at the call site. Acronyms (GSTIN, PAN, IFSC, HSN/SAC, UQC, CGST and the rest) and
   "Dr"/"Cr" stay Latin on purpose.
 - **bank screen: done in the fourth round** (see that section).
-- **GST screen: not started.** `screens/gst/` (draw.rs, look.rs).
+- **GST screen: done in the fourth round** (see that section).
 - **company setup: not started.** `screens/setup/` (mod.rs, form.rs).
 - **AI screens: not started.** `ai_gate.rs`, `ask.rs`, `assist.rs`, `ai_settings.rs`.
 - **print messages: not started.** `screens/print_job.rs`.
@@ -571,4 +571,24 @@ Left, for the bank screen:
 - **bank: error texts stay English.** The `BankScreenError` messages (thiserror, `bank.rs`) show
   through the error note with the "Error:" prefix from the file. Each message needs a key.
 - **bank: captures not retaken.** No `hi.bank.*` shot is in the registry yet.
+
+Done: the GST screen (`tests/i18n_gst.rs`). Its title, subtitle period word, page head and export
+button, the tabs and the key bar, the exception buckets and their chips, the GSTR-1 tiles and
+next-step notes, the GSTR-3B notes and table words, the 2B and IMS headings, match and IMS action
+words, the notices the screen writes itself, and the JSON export dialog and its messages come from
+the translation files. The form names (GSTR-1, GSTR-3B, IMS, 2B) and the tax heads (IGST, CGST,
+SGST, Cess) stay in Latin letters. `GstTab::label()`, `Bucket::label()`, `ImsAction::label()` and the
+other English `label()` functions remain beside their `label_in(tr)` versions, because the existing
+tests read them.
+
+Left, for the GST screen:
+
+- **GST: worker-side notices stay English.** `screens/gst/worker.rs`: the load failures ("the
+  background worker stopped before the return was built", "no company is open, so no return can be
+  built") and the JSON build notices. They need a `Tr` on the worker side or keys for each text.
+- **GST: GSTR-3B table words are a lookup.** `look::text_in` translates the known table, source and
+  figure words (`TABLE_WORDS`). A new row label is shown as given until it has a key there.
+- **GST: error texts stay English.** The `GstError` messages (thiserror, `gst.rs`) and the engine's
+  reasons ("Not supported" texts) are not in the files.
+- **GST: captures not retaken.** No `hi.gst.*` shot is in the registry yet.
 
