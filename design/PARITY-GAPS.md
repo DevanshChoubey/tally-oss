@@ -640,13 +640,53 @@ failing against English stubs before the strings moved.
 Still English in Hindi, on purpose or pending:
 
 - **quick entry and purchase bill still use the English `gate_note` and `reason` wrappers.**
-  Their call sites need `_in(tr)` versions.
-- **home queue (`screens/home/draw.rs`, `review_row`) still shows the English `row.kind`.** It
-  compiles because `kind` is `&'static str`. It should use `kind_word`.
-- **shared confidence words (`ui::conf`) and the format kit stay English.**
+  Closed in the sixth round: the gate notes use `_in(tr)`.
+- **home queue (`screens/home/draw.rs`, `review_row`) still shows the English `row.kind`.** Closed
+  in the sixth round: it shows `shown_kind()`.
+- **shared confidence words (`ui::conf`) and the format kit stay English.** Closed in the sixth
+  round for the confidence and date words; the date callers left are in the sixth-round section.
 - **Given as data, not translated:** engine reasons, field labels from the assistant, ledger names,
   query text, and Dr/Cr (Latin by design).
 - **Export file name and CSV filter** stay English.
 - **captures not retaken.** There are no Hindi captures for the AI screens.
 - **Hindi terms are unsourced.** Every AI-screen Hindi line is marked `# unsourced` in `hi.toml`
   and needs a native-speaker check.
+
+## Hindi UI, sixth round (card s7 v1.1, 2026-11-24)
+
+Done, each with a test in `crates/ledgerly-app/tests/` that saw the English fail first:
+
+- Plain-words entry and the bill photo gate notes go through `ai_gate::reason_in` (`i18n_ai.rs`).
+- Home review rows show the localized kind word, `QueueRow::shown_kind` (`i18n_home.rs`).
+- The confidence band words (High, Medium, Low, Rule) (`ui/conf.rs`, `i18n_ui.rs`). Note: `ui::conf`
+  is the confidence band, not the confirmation dialogs; see the first gap below.
+- Date month and weekday words: `ui::format::date_in` and `long_date_in` (`i18n_ui.rs`). Digits stay
+  Latin and the Indian grouping is unchanged.
+- Print job notices and the Save as PDF title (`print_job.rs`, `i18n_print.rs`).
+
+Left:
+
+- **gap: quick entry and bill photo screen text stays English.** Titles, subtitles, the rules card,
+  "Type it myself", the Payment, Receipt and Purchase buttons and the sentence hint in
+  `quick_entry.rs` and `purchase_bill.rs`. The gate notes are done; these were not in the brief.
+- **gap: dates in tables and reports stay English.** `ui::format::date` (English month) is still
+  called without a language in: `palette/search.rs`, `palette/recent.rs`, `screens/bank.rs`,
+  `screens/voucher_entry/draw.rs`, `screens/item_invoice/draw.rs` and `mod.rs`,
+  `screens/report_view/balance.rs` and `day_book.rs` (table cells), and `screens/review.rs` is done.
+  `screens/setup/mod.rs` has its own `long_date`. Each call site needs a `tr` passed down; the
+  day book cells need the table to carry the language.
+- **gap: confirmation dialogs were not audited.** The brief named `ui::conf` for confirmation
+  dialogs, but that module has only the confidence band. The dialogs live in the screens: the
+  voucher and item invoice discard prompts (`voucher_entry/keys.rs`, `item_invoice/mod.rs`), the
+  masters delete confirmation (`masters.rs` `draw_confirm`, translated in an earlier round) and the
+  import confirmation (`import/wizard.rs`). Not checked this round.
+- **by design, needs a decision: printed PDF bodies stay English.** The print crate is ASCII-only:
+  the built-in Helvetica with WinAnsi encoding cannot draw Devanagari. Hindi in a PDF needs an
+  embedded Devanagari font (the app already bundles Noto Sans Devanagari for egui), a shaping step
+  for conjuncts and matras, and a decision to lift the ASCII rule in `ledgerly-print`. The
+  template and column labels (`pdf.rs`, about 40 literals) wait on that. `ledgerly-print` takes no
+  locale today, so none was added.
+- **gap: the PDF open-failure message stays English.** `print_job::open_in_viewer` returns an English
+  error text that `open_saved` shows as is.
+- **gap: Hindi terms are unsourced.** The new words (months, weekdays, confidence, print notices)
+  are marked `# unsourced` in `hi.toml`. No public glossary was read in this round.
