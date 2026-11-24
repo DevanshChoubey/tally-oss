@@ -489,3 +489,23 @@ financial year starts. The model supports that (`Company::books_begin`), so it i
   and the voucher screen have no Print key, so neither shows Ctrl+P. The key map lists
   "Print" under Reports (index.html:1839; `keymap_map::layout`), and Ctrl+P prints the open
   report or voucher.
+
+## Accessibility (card S7, round of 2026-11-24)
+
+Contrast is checked by `crates/ledgerly-app/tests/s7_contrast.rs` (WCAG 2.1 formula, thresholds
+4.5:1 text in light and dark, 7:1 text in high contrast, 3:1 non-text). Text and accent pairs
+pass in all three themes; token values are unchanged.
+
+- **gap: divider border fails 3:1 non-text in light and dark.** `border` (light `#E2DFD8`, dark
+  `#34322E`) measures 1.33:1 on the light surface and 1.35:1 on the dark surface. It is used for
+  hairline dividers. Pinned by `divider_border_is_a_known_gap_below_the_non_text_minimum`; if a
+  control outline is ever drawn with it, use `border_strong` (passes 3:1 in light and dark).
+- **gap: some text inputs have no accessible name.** Masters, voucher entry, company setup and
+  the welcome screen still draw their `TextEdit`s without a name; the sales invoice fields are
+  named. Screen readers read these as unlabelled edit boxes.
+- **gap: masters, GST and bank table rows are not named.** Rows are painted as click areas with
+  no role or label. The generic report and the item invoice rows are named (line text as drawn).
+- **gap: balance sheet and day book rows are not covered by a test.** Their naming is in code,
+  but the test harness has no worker to draw them, so the generic report path is the one tested.
+- **gap: UI zoom and focus-order tests are not in this card.** Ctrl+= / Ctrl+- / Ctrl+0 zoom
+  is session-only (the theme is not persisted either); see the shell notes in `shell/mod.rs`.
