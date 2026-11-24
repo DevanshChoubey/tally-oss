@@ -270,6 +270,7 @@ key = "purch"
 name = "Purchases"
 group = "PurchaseAccounts"
 gst = { taxability = "Taxable", rate = "18" }
+eligible_itc = true
 
 [[ledger]]
 key = "freight"

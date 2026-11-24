@@ -137,6 +137,10 @@ pub(crate) struct LedgerSeed {
     pub(crate) credit_days: Option<u32>,
     pub(crate) bank: Option<BankSeed>,
     pub(crate) gst: Option<GstClassSeed>,
+    /// The user's "eligible for input credit" setting on a purchase ledger: `true` marks the
+    /// ledger eligible (the credit is claimed whatever the HSN), as a person would after reading
+    /// CGST Act s.17(5). Unset leaves the choice to the engine's HSN rules.
+    pub(crate) eligible_itc: Option<bool>,
 }
 
 /// A stock item master.

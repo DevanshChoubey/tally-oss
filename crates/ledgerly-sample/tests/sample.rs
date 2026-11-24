@@ -392,3 +392,26 @@ fn gstr1_sections_count_what_the_return_holds() {
     ];
     assert_eq!(rows, want);
 }
+
+#[test]
+fn gstr3b_computes_on_the_sample_and_matches_the_mocks_tables() {
+    // provenance: design/mock-v2/index.html `gstr3b()` over the same books (run with node on
+    // 2026-11-25): table 3.1(a) taxable 3,53,225.00 with IGST 20,370.00, CGST 15,323.65 and SGST
+    // 15,323.65 (screenshot design/mock-v2/captures/states/light/gst.gstr3b.webp), and "In your
+    // books" ITC of IGST 29,520.00 with no CGST or SGST.
+    let (_dir, api) = sample();
+    let books = api.books().unwrap().value().unwrap();
+    let gstin = books.company.registrations[0].gstin.clone();
+    let period = Period::new(date!(2026 - 11 - 01), date!(2026 - 11 - 30)).unwrap();
+    let w = match api.gstr3b(&gstin, period).unwrap() {
+        Outcome::Value(w) => w,
+        Outcome::Unsupported(u) => panic!("{u:?}"),
+    };
+    assert_eq!(w.outward_taxable_value.get(), 35_322_500);
+    assert_eq!(w.outward_tax.integrated.get(), 2_037_000);
+    assert_eq!(w.outward_tax.central.get(), 1_532_365);
+    assert_eq!(w.outward_tax.state_ut.get(), 1_532_365);
+    assert_eq!(w.itc_all_other.integrated.get(), 2_952_000);
+    assert_eq!(w.itc_all_other.central.get(), 0);
+    assert_eq!(w.itc_all_other.state_ut.get(), 0);
+}

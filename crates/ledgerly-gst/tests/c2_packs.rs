@@ -22,9 +22,10 @@
     reason = "test code: rule B2 lets tests unwrap and panic"
 )]
 
+use ledgerly_core::Hsn;
 use ledgerly_core::Outcome;
 use ledgerly_gst::gstr1::{B2CL_THRESHOLD_ID, HSN_CREDIT_NOTES_ID};
-use ledgerly_gst::itc::BLOCKED_RULE_IDS;
+use ledgerly_gst::itc::{BLOCKED_RULE_IDS, blocked_category_for};
 use ledgerly_gst::pack::{RulePack, RuleSet, load_pack};
 use time::macros::date;
 
@@ -94,24 +95,42 @@ fn hsn_credit_note_treatment_is_pending() {
     assert!(entry.params().contains_key("source_note"));
 }
 
-/// Derived: s.17(5) names no HSN code, so every `itc.blocked.*` entry stays pending and names the
-/// section it was read from; none may evaluate to a value.
+/// Derived from the Act text (CGST Act s.17(5), cbic-gst.gov.in, read 2026-11-25): the section names
+/// no code, so the pack lists the tariff headings under which the named goods and services are
+/// classified, widely. Headings, from the GST Council rate schedules read 2026-11-25: motor
+/// vehicles 8702 and 8703; vessels and aircraft 8801, 8802 and 8901 to 8906; food, health, beauty,
+/// club, vehicle rental and insurance services 9963, 9993, 9995, 9996, 9997, 9966 and 9971. Each
+/// entry is usable (not pending), names its clause, and a code under a listed heading is in the
+/// category while a code under none is not.
 #[test]
-fn blocked_credit_entries_are_pending_with_a_source_note() {
+fn blocked_credit_entries_list_the_tariff_headings_of_s17_5() {
     let pack = rules();
     let set = on(&pack, date!(2026 - 10 - 05));
     for id in BLOCKED_RULE_IDS {
         assert!(
-            matches!(set.get(id), Outcome::Unsupported(_)),
-            "{id} must be Unsupported"
+            matches!(set.get(id), Outcome::Value(_)),
+            "{id} must be usable"
         );
         let entry = pack.entries().iter().find(|e| e.id() == id).unwrap();
-        assert!(entry.is_pending(), "{id}");
+        assert!(!entry.is_pending(), "{id}");
         assert!(
-            entry.params()["source_note"].contains("17(5)"),
-            "{id}: source_note must cite s.17(5)"
+            entry.legal_ref().unwrap().contains("17(5)"),
+            "{id}: legal_ref must cite s.17(5)"
         );
     }
+    let section = |code: &str| match blocked_category_for(&Hsn::parse(code).unwrap(), &set).unwrap()
+    {
+        Outcome::Value(s) => s,
+        Outcome::Unsupported(u) => panic!("{u:?}"),
+    };
+    assert_eq!(section("87032190").as_deref(), Some("17(5)(a)"));
+    assert_eq!(section("8702").as_deref(), Some("17(5)(a)"));
+    assert_eq!(section("8802").as_deref(), Some("17(5)(aa)"));
+    assert_eq!(section("996331").as_deref(), Some("17(5)(b)"));
+    assert_eq!(section("999721").as_deref(), Some("17(5)(b)"));
+    // A pump (heading 8413) and a pipe (heading 3917) are in no blocked category.
+    assert_eq!(section("84137010"), None);
+    assert_eq!(section("39172390"), None);
 }
 
 fn merged() -> RulePack {

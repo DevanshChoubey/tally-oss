@@ -277,7 +277,7 @@ fn ledger(l: &LedgerSeed, id: LedgerId) -> Result<Ledger, SampleError> {
         None => None,
     };
     Ok(Ledger {
-        ineligible_itc: None,
+        ineligible_itc: l.eligible_itc.map(|eligible| !eligible),
         id,
         name: l.name.clone(),
         aliases: l.aliases.clone(),

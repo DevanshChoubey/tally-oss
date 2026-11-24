@@ -30,31 +30,56 @@ pending = true
 [entry.params]
 source_note = "tutorial.gst.gov.in GSTR-1 user guide and help.tallysolutions.com HSN/SAC summary page read 2026-11-21: neither states whether credit notes reduce the Table 12 rows (net) or are left out (exclude)"
 
-# CGST Act s.17(5), read in <https://cbic-gst.gov.in/pdf/CGST-Act-Updated-31082021.pdf> on 2026-11-21:
-# (a) motor vehicles seating up to thirteen persons including the driver, unless used for further
-# supply of such vehicles, carrying passengers or driving training; (aa) vessels and aircraft,
-# with their own exceptions; (b)(i) food and beverages, outdoor catering, beauty treatment, health
-# services, cosmetic and plastic surgery, club and similar items, with a proviso. The section
-# names no HSN or SAC code and its exceptions depend on how the item is used, so a code list
-# (`hsn_prefixes`) cannot be read from it. A list written from memory could let blocked credit
-# through, so each entry stays pending and ITC stays Unsupported.
+# CGST Act s.17(5), text read in the CBIC copy of the Act <https://cbic-gst.gov.in/pdf/CGST-Act-Updated-31082021.pdf>
+# on 2026-11-25 (extracted with pdftotext): (a) "motor vehicles for transportation of persons having
+# approved seating capacity of not more than thirteen persons (including the driver), except when
+# they are used for ... further supply of such motor vehicles; or transportation of passengers; or
+# imparting training on driving such motor vehicles"; (aa) vessels and aircraft with their own
+# exceptions; (ab) general insurance, servicing, repair and maintenance of those; (b)(i) "food and
+# beverages, outdoor catering, beauty treatment, health services, cosmetic and plastic surgery,
+# leasing, renting or hiring of motor vehicles, vessels or aircraft ... life insurance and health
+# insurance", with a proviso for use in an outward supply of the same category; (b)(ii) "membership
+# of a club, health and fitness centre".
+#
+# The section names no HSN or SAC code and its exceptions depend on use, which the books do not
+# record. So `hsn_prefixes` is a deliberately WIDE list of the tariff headings under which those
+# goods and services are classified: a line under one of them is never claimed silently, the engine
+# returns Unsupported and asks the user to mark the item or ledger eligible or ineligible; a line
+# under no listed heading is Eligible. A wide list can only cost the user a click; a narrow one could
+# let blocked credit through. The headings are read in the GST Council's consolidated rate
+# schedules, both on 2026-11-25:
+#   goods: <https://www.gstcouncil.gov.in/sites/default/files/2024-02/gstgoodsrates.pdf>: heading
+#     8702 (buses, motor vehicles for ten or more persons including the driver), 8703 (motor cars and
+#     other motor vehicles principally designed for the transport of persons), 8801 (balloons) and
+#     8802 (aircraft), 8901 (cruise ships and other vessels) with 8902 to 8906 (Chapter 89 vessels).
+#   services: <https://www.gstcouncil.gov.in/sites/default/files/2024-02/gstservicerates.pdf>: heading
+#     9963 (accommodation, food and beverage services, outdoor catering), 9993 (human health
+#     services), 9995 (membership of organisations), 9996 (recreational services), 9997 (other
+#     services: beauty and physical well-being), 9966 (renting of motor vehicles and other transport
+#     equipment), 9971 (financial and insurance services, including life and health insurance).
+# Items outside any of these headings (for example pumps, pipes and ordinary goods) are Eligible.
+# Not read: the Customs Tariff itself; a motor vehicle under a heading not listed here (for example
+# a heading added later) would not be caught, so the list is reviewed with each tariff change.
 [[entry]]
 id = "itc.blocked.motor_vehicles"
 effective_from = "2017-07-01"
-pending = true
+legal_ref = "CGST Act s.17(5)(a) and (ab)"
 [entry.params]
-source_note = "CGST Act s.17(5)(a) read at cbic-gst.gov.in 2026-11-21: the section names no HSN code and its exceptions depend on use, so no hsn_prefixes list can be read from it"
+section = "17(5)(a)"
+hsn_prefixes = "8702,8703"
 
 [[entry]]
 id = "itc.blocked.vessels_aircraft"
 effective_from = "2017-07-01"
-pending = true
+legal_ref = "CGST Act s.17(5)(aa) and (ab)"
 [entry.params]
-source_note = "CGST Act s.17(5)(aa) read at cbic-gst.gov.in 2026-11-21: the section names no HSN code and its exceptions depend on use, so no hsn_prefixes list can be read from it"
+section = "17(5)(aa)"
+hsn_prefixes = "8801,8802,8901,8902,8903,8904,8905,8906"
 
 [[entry]]
 id = "itc.blocked.food_beverages"
 effective_from = "2017-07-01"
-pending = true
+legal_ref = "CGST Act s.17(5)(b)"
 [entry.params]
-source_note = "CGST Act s.17(5)(b) read at cbic-gst.gov.in 2026-11-21: the section names no SAC code and its proviso depends on use, so no hsn_prefixes list can be read from it"
+section = "17(5)(b)"
+hsn_prefixes = "9963,9993,9995,9996,9997,9966,9971"
