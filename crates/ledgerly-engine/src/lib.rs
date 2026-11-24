@@ -6,6 +6,7 @@ mod error;
 pub mod locks;
 pub mod masters_accounts;
 pub mod masters_stock;
+pub mod masters_voucher_type;
 pub mod numbering;
 pub mod scenario;
 pub mod vouchers;

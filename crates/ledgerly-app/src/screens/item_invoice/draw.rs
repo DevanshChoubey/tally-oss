@@ -326,6 +326,23 @@ fn text_field(
     response
 }
 
+/// A text field that shows `shown` in place of its text while the keyboard is not on it (the mock
+/// shows `21 Nov 2026` and `3,850.00`; typing still works on the raw text). With no `shown`, or
+/// while the field has the keyboard, it is [`text_field`].
+fn text_field_shown(
+    ui: &mut Ui,
+    cx: &mut Cx<'_>,
+    spec: &FieldSpec,
+    text: &mut String,
+    style: Style,
+    shown: Option<String>,
+) -> Response {
+    match shown {
+        Some(mut copy) if cx.focus != spec.field => text_field(ui, cx, spec, &mut copy, style),
+        Some(_) | None => text_field(ui, cx, spec, text, style),
+    }
+}
+
 /// A cell of plain text in the line table, in the secondary ink unless `strong`.
 fn cell_text(ui: &mut Ui, text: &str, strong: bool) {
     let t = tokens(ui);
@@ -574,7 +591,8 @@ impl ItemInvoiceScreen {
                         // stays a field, so Tab and a screen reader still reach it.
                         let s = spec("date", "Date", Field::Date, "dd-mm-yyyy");
                         let style = if date_plain { CELL } else { BOXED };
-                        text_field(ui, cx, &s, &mut self.draft.date_text, style);
+                        let shown = date_value.filter(|_| date_plain).map(crate::ui::format::date);
+                        text_field_shown(ui, cx, &s, &mut self.draft.date_text, style, shown);
                     },
                 );
                 note_field("Date", shown.response.rect);
@@ -761,7 +779,8 @@ impl ItemInvoiceScreen {
                     4 => cell_text(ui, &line.unit, false),
                     5 => {
                         let s = spec("rate", "Rate", Field::Rate(r));
-                        text_field(ui, cx, &s, &mut cells.rate_text, CELL_NUM);
+                        let shown = crate::ui::format::grouped_text(&cells.rate_text);
+                        text_field_shown(ui, cx, &s, &mut cells.rate_text, CELL_NUM, shown);
                     }
                     6 => {
                         let s = spec("disc", "Discount", Field::Discount(r));

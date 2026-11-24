@@ -720,3 +720,54 @@ fn the_tax_box_lists_each_head_at_each_rate() {
     ];
     assert_eq!(got, want);
 }
+
+/// Model: TallyPrime lets a voucher type be given Prefix Details, a Starting Number and a Width of
+/// Numerical Part, with "Prefill with zero" giving 0001 (<https://help.tallysolutions.com/use-voucher-numbering-methods/>,
+/// fetched 2026-11-25). Derivation: with prefix "SI/" and width 4 the first number of an empty
+/// Sales series is "SI/" + "0001"; after one posting the counter is 2, so "SI/0002".
+#[test]
+fn a_voucher_type_with_a_prefix_and_width_numbers_its_vouchers_with_them() {
+    let (_dir, mut api) = billed_file(true);
+    let ty = vtype(BaseVoucherKind::Sales);
+    let mut sales = default_voucher_types()
+        .into_iter()
+        .find(|t| t.id == ty)
+        .unwrap();
+    sales.numbering.prefix = "SI/".to_owned();
+    sales.numbering.width = 4;
+    ok(api.execute(Command::AlterVoucherType(sales)));
+    let first = match api.next_voucher_number(ty, date!(2026 - 10 - 05)).unwrap() {
+        Outcome::Value(Some(n)) => n,
+        Outcome::Value(None) => panic!("an automatic type has a next number"),
+        Outcome::Unsupported(u) => panic!("{u:?}"),
+    };
+    assert_eq!(first, "SI/0001");
+    let mut v = item_sale(KA_BUYER, Some(29), 10, 1_000_000);
+    let built = ok(api.invoice_gst(&v));
+    v.ledger_lines = built.ledger_lines;
+    v.gst = Some(built.stored);
+    let posted = ok(api.execute(Command::PostVoucher(v))).posted.unwrap();
+    assert_eq!(posted.number.as_deref(), Some("SI/0001"));
+    let second = match api.next_voucher_number(ty, date!(2026 - 10 - 05)).unwrap() {
+        Outcome::Value(Some(n)) => n,
+        Outcome::Value(None) => panic!("an automatic type has a next number"),
+        Outcome::Unsupported(u) => panic!("{u:?}"),
+    };
+    assert_eq!(second, "SI/0002");
+}
+
+/// A voucher type's base kind is its behaviour, so an alter that changes it is refused, and so is
+/// an alter of a type that does not exist.
+#[test]
+fn a_voucher_types_base_kind_cannot_change_and_an_unknown_type_is_refused() {
+    let (_dir, mut api) = billed_file(true);
+    let mut sales = default_voucher_types()
+        .into_iter()
+        .find(|t| t.base == BaseVoucherKind::Sales)
+        .unwrap();
+    sales.base = BaseVoucherKind::Purchase;
+    assert!(api.execute(Command::AlterVoucherType(sales)).is_err());
+    let mut ghost = default_voucher_types().remove(0);
+    ghost.id = VoucherTypeId(999);
+    assert!(api.execute(Command::AlterVoucherType(ghost)).is_err());
+}

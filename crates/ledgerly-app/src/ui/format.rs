@@ -33,6 +33,34 @@ fn group_indian(rupees: u64) -> String {
     out.iter().rev().collect()
 }
 
+/// A typed rate as the mock shows a rate that is not being edited: the integer digits grouped the
+/// Indian way and at least two decimals, `3850` becoming `3,850.00` and `12.345` becoming
+/// `12.345`. Only text of digits with at most one point is changed; anything else, and the empty
+/// text, gives `None` so the caller shows what was typed. The digits themselves are never
+/// rounded or altered: this only inserts commas and pads zeros after the point.
+#[must_use]
+pub fn grouped_text(text: &str) -> Option<String> {
+    let t = text.trim();
+    let (int, frac) = match t.split_once('.') {
+        Some((i, f)) => (i, f),
+        None => (t, ""),
+    };
+    let digits = |s: &str| s.bytes().all(|b| b.is_ascii_digit());
+    if t.is_empty() || !digits(int) || !digits(frac) || (int.is_empty() && frac.is_empty()) {
+        return None;
+    }
+    let int = if int.is_empty() { "0" } else { int };
+    let mut grouped: Vec<char> = Vec::new();
+    for (i, digit) in int.chars().rev().enumerate() {
+        if i == 3 || (i > 3 && i.saturating_sub(3) % 2 == 0) {
+            grouped.push(',');
+        }
+        grouped.push(digit);
+    }
+    let int: String = grouped.iter().rev().collect();
+    Some(format!("{int}.{frac:0<2}"))
+}
+
 /// A date as the mock shows it: day without a leading zero, the month abbreviated, the year.
 /// `2026-11-21` becomes `21 Nov 2026`, and `2026-11-05` becomes `5 Nov 2026`.
 #[must_use]

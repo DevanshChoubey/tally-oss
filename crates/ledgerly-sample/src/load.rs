@@ -181,11 +181,41 @@ pub(crate) fn build(seed: &Seed, path: &Path, clock: Clock) -> Result<Built, Sam
         source: Box::new(source),
     })?;
     let keys = masters(seed, &mut api)?;
+    number_series(&mut api)?;
     vouchers(seed, &mut api, &keys)?;
     statements(seed, &mut api, &keys)?;
     let until = parse_date("lock_until", &seed.lock_until)?;
     run(&mut api, "locking the books", Command::LockPeriod(until))?;
     Ok(Built { api })
+}
+
+/// The number series of the sample company's voucher types: a prefix and four digits, as its
+/// vouchers' numbers read (SI/0417, PY/0318). A type not listed keeps the seeded bare counter.
+const SERIES: [(BaseVoucherKind, &str); 6] = [
+    (BaseVoucherKind::Sales, "SI/"),
+    (BaseVoucherKind::Purchase, "PB/"),
+    (BaseVoucherKind::Payment, "PY/"),
+    (BaseVoucherKind::Receipt, "RC/"),
+    (BaseVoucherKind::Journal, "JV/"),
+    (BaseVoucherKind::Contra, "CT/"),
+];
+
+/// Gives the sample's voucher types their prefixes and the four-digit width.
+fn number_series(api: &mut Api) -> Result<(), SampleError> {
+    for (kind, prefix) in SERIES {
+        let mut vt = default_voucher_types()
+            .into_iter()
+            .find(|t| t.base == kind)
+            .ok_or_else(|| value_error("voucher type", format!("no default type for {kind:?}")))?;
+        vt.numbering.prefix = prefix.to_owned();
+        vt.numbering.width = 4;
+        run(
+            api,
+            "numbering a voucher type",
+            Command::AlterVoucherType(vt),
+        )?;
+    }
+    Ok(())
 }
 
 fn company(seed: &Seed) -> Result<Company, SampleError> {

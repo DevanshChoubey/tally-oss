@@ -378,3 +378,37 @@ fn the_sales_invoice_fields_are_named_by_their_captions_and_columns() {
     }
     assert!(named(&update, Role::Button, "Save").is_some());
 }
+
+/// Provenance: the mock writes the date as `fmtDate` does, `21 Nov 2026` (design/mock-v2/index.html
+/// line 1287) and the rate as `3,850.00` (the lines table, `INV_SEED` lines 1261-1269). Derived:
+/// 3850 with Indian grouping is `3,850` and the two decimals are `.00`; 123456 groups as
+/// `1,23,456`. A figure typed with three decimals keeps all three.
+#[test]
+fn a_date_and_a_rate_read_as_the_mock_writes_them_until_the_keyboard_is_on_them() {
+    let ctx = context();
+    let b = books();
+    let mut screen = open(&b);
+    screen.draft_mut().rows[0].rate_text = "3850".to_owned();
+    let mut app = AppCtx {
+        books: Some(b.clone()),
+        api: None,
+        lock_date: Some(TODAY),
+        ai_tier: None,
+    };
+    let update = tree(&ctx, 3, |ui| {
+        let _ = screen.ui(ui, &mut app);
+    });
+    let date = named(&update, Role::TextInput, "Date").unwrap();
+    assert_eq!(date.value(), Some("21 Nov 2026"));
+    let rate = named(&update, Role::TextInput, "Rate").unwrap();
+    assert_eq!(rate.value(), Some("3,850.00"));
+    assert_eq!(
+        ledgerly_app::ui::format::grouped_text("123456").as_deref(),
+        Some("1,23,456.00")
+    );
+    assert_eq!(
+        ledgerly_app::ui::format::grouped_text("12.345").as_deref(),
+        Some("12.345")
+    );
+    assert_eq!(ledgerly_app::ui::format::grouped_text("1,000"), None);
+}

@@ -248,3 +248,28 @@ fn stock_after_the_november_sales_is_the_bought_quantity_less_what_was_sold() {
     assert_eq!(closing("HDPE pipe coil 32 mm"), "58");
     assert_eq!(closing("Monoblock pump 1 HP"), "12");
 }
+
+/// The mock's next numbers (`design/mock-v2/index.html`): the sales invoice is SI/0418 (lines
+/// 1287-1297, the seeded vouchers run to SI/0417), the payment is PY/0319 (the seeded ones run to
+/// PY/0318, `payScreen` at line 1380), and the journal that follows JV/0032 is JV/0033.
+#[test]
+fn the_next_voucher_numbers_continue_the_seeded_series() {
+    use ledgerly_model::BaseVoucherKind;
+    use ledgerly_model::seed_voucher_types::default_voucher_types;
+    let (_dir, api) = sample();
+    let next = |kind: BaseVoucherKind| {
+        let id = default_voucher_types()
+            .into_iter()
+            .find(|t| t.base == kind)
+            .unwrap()
+            .id;
+        match api.next_voucher_number(id, date!(2026 - 11 - 21)).unwrap() {
+            Outcome::Value(Some(n)) => n,
+            Outcome::Value(None) => panic!("{kind:?} has automatic numbering"),
+            Outcome::Unsupported(u) => panic!("{u:?}"),
+        }
+    };
+    assert_eq!(next(BaseVoucherKind::Sales), "SI/0418");
+    assert_eq!(next(BaseVoucherKind::Payment), "PY/0319");
+    assert_eq!(next(BaseVoucherKind::Journal), "JV/0033");
+}

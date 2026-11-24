@@ -245,15 +245,26 @@ impl VoucherEntryScreen {
                     |ui| {
                         // Bare like the mock's read-only date until the keyboard or pointer is on
                         // it; it stays a field so Tab and a screen reader still reach it.
-                        text_field(
-                            ui,
-                            cx,
-                            &date_spec,
-                            &mut self.draft.date_text,
-                            Look::Cell,
-                            false,
-                            None,
-                        );
+                        // Not being edited, it reads as the mock writes it (`21 Nov 2026`).
+                        let mut long = super::parse_entry_date(&self.draft.date_text, self.fy)
+                            .ok()
+                            .map(crate::ui::format::date);
+                        match long.as_mut() {
+                            Some(text) if cx.focus != Field::Date => {
+                                text_field(ui, cx, &date_spec, text, Look::Cell, false, None);
+                            }
+                            Some(_) | None => {
+                                text_field(
+                                    ui,
+                                    cx,
+                                    &date_spec,
+                                    &mut self.draft.date_text,
+                                    Look::Cell,
+                                    false,
+                                    None,
+                                );
+                            }
+                        }
                     },
                 );
                 fields.push(("Date", shown.response.rect));
