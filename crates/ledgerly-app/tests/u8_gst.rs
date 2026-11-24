@@ -61,7 +61,7 @@ fn row(
 fn rows() -> Vec<ReconRow> {
     let mut date_row = row(
         "Omkar Printers",
-        "27AAMPO4471D1Z",
+        "27ZZZZZ0117Z1Z",
         "OP-0912",
         MatchState::DateDiffers,
         Bucket::Mismatch,
@@ -72,7 +72,7 @@ fn rows() -> Vec<ReconRow> {
     date_row.portal_date = Some(date!(2026 - 11 - 21));
     let mut no_books = row(
         "Sahyadri Electricals",
-        "27ABUPS3307K1Z",
+        "27ZZZZZ0118Z1Z",
         "SE/774",
         MatchState::NotInBooks,
         Bucket::NeedsCorrection,
@@ -84,7 +84,7 @@ fn rows() -> Vec<ReconRow> {
     no_books.tax_books = None;
     let mut not_in_2b = row(
         "Shivneri Couriers",
-        "27AAQFS1182M1Z",
+        "27ZZZZZ0119Z1Z",
         "SC/11/448",
         MatchState::NotIn2b,
         Bucket::NotRelevant,
@@ -97,7 +97,7 @@ fn rows() -> Vec<ReconRow> {
     vec![
         row(
             "Kaveri Packaging",
-            "27AABCK7314R1Z",
+            "27ZZZZZ0113Z1Z",
             "KP/2611/0087",
             MatchState::Matched,
             Bucket::Ready,
@@ -106,7 +106,7 @@ fn rows() -> Vec<ReconRow> {
         ),
         row(
             "Vardhaman Logistics",
-            "27AAJFV6612C1Z",
+            "27ZZZZZ0116Z1Z",
             "VL-3381",
             MatchState::ValueDiffers,
             Bucket::Mismatch,
@@ -118,7 +118,7 @@ fn rows() -> Vec<ReconRow> {
         not_in_2b,
         row(
             "Annapurna Stationers",
-            "27ACZPA6619N1Z",
+            "27ZZZZZ0120Z1Z",
             "AS-2207",
             MatchState::Matched,
             Bucket::Ready,
@@ -129,7 +129,7 @@ fn rows() -> Vec<ReconRow> {
 }
 
 fn screen() -> GstScreen {
-    let mut s = GstScreen::new("November 2026", Some(gstin("27AABCK7314R1Z")));
+    let mut s = GstScreen::new("November 2026", Some(gstin("27ZZZZZ0113Z1Z")));
     s.set_recon(Feed::Loaded(rows()));
     s
 }
@@ -178,7 +178,7 @@ fn opens_on_the_reconciliation_tab_as_the_mock_does() {
         s.subtitle(),
         format!(
             "{} \u{00B7} November 2026 \u{00B7} monthly",
-            gstin("27AABCK7314R1Z")
+            gstin("27ZZZZZ0113Z1Z")
         )
     );
 }

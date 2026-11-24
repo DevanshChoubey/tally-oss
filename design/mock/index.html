@@ -303,7 +303,7 @@ nav.side kbd{background:transparent}
       Ledgerly <small>working name</small>
     </div>
     <button class="pill" id="coBtn" aria-haspopup="true" aria-expanded="false" title="Switch company (Alt+F3)">
-      <span id="coName">Vasundhara Agro Tools LLP</span><span class="sub" id="coGst">27AAQFV5532K1Z8</span>
+      <span id="coName">Vasundhara Agro Tools LLP</span><span class="sub" id="coGst">27ZZZZZ0110Z1ZN</span>
       <svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
     </button>
     <button class="pill" id="fyBtn" title="Change period (Alt+F2)"><span>FY 2026-27</span><span class="sub" id="periodLbl">1 Apr to 20 Nov 2026</span></button>
@@ -315,9 +315,9 @@ nav.side kbd{background:transparent}
     <button class="iconbtn" id="aiBtn" aria-pressed="false" title="Assistant panel (Ctrl+J)" aria-label="Assistant panel"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg></button>
   </header>
   <div class="co-menu" id="coMenu" role="menu">
-    <button class="on" data-co="0"><b>Vasundhara Agro Tools LLP</b><br><span class="g">Pune, Maharashtra  27AAQFV5532K1Z8  FY 2026-27</span></button>
-    <button data-co="1"><b>Kaveri Home Foods Pvt Ltd</b><br><span class="g">Mysuru, Karnataka  29AAICK8810F1Z2  FY 2026-27</span></button>
-    <button data-co="2"><b>Deshpande and Co (proprietor)</b><br><span class="g">Kolhapur, Maharashtra  27BXKPD4471A1ZV  FY 2026-27</span></button>
+    <button class="on" data-co="0"><b>Vasundhara Agro Tools LLP</b><br><span class="g">Pune, Maharashtra  27ZZZZZ0110Z1ZN  FY 2026-27</span></button>
+    <button data-co="1"><b>Kaveri Home Foods Pvt Ltd</b><br><span class="g">Mysuru, Karnataka  29ZZZZZ0111Z1ZI  FY 2026-27</span></button>
+    <button data-co="2"><b>Deshpande and Co (proprietor)</b><br><span class="g">Kolhapur, Maharashtra  27ZZZZZ0112Z1ZL  FY 2026-27</span></button>
   </div>
 
   <!-- side navigation -->
@@ -444,7 +444,7 @@ nav.side kbd{background:transparent}
 
     <!-- GST -->
     <section class="screen" id="s-gst" aria-label="GST returns">
-      <div class="head"><div><h1>GST returns</h1><p>Return period November 2026. GSTIN 27AAQFV5532K1Z8, regular, monthly filer.</p></div>
+      <div class="head"><div><h1>GST returns</h1><p>Return period November 2026. GSTIN 27ZZZZZ0110Z1ZN, regular, monthly filer.</p></div>
         <div class="seg"><button>Oct 2026</button><button aria-pressed="true">Nov 2026</button><button>Dec 2026</button></div></div>
       <div class="tabs" role="tablist">
         <button role="tab" aria-selected="false" data-tab="g1">GSTR-1 <kbd>1</kbd></button>
@@ -518,11 +518,11 @@ nav.side kbd{background:transparent}
 const CO_STATE='27';
 const STATES={'27':'Maharashtra','24':'Gujarat','33':'Tamil Nadu','23':'Madhya Pradesh','29':'Karnataka','07':'Delhi','09':'Uttar Pradesh','32':'Kerala','36':'Telangana','30':'Goa'};
 const PARTIES=[
- {name:'Shree Ganesh Traders',city:'Nashik',gstin:'27AAKFS4821M1Z6',st:'27'},
- {name:'Mehta Agro Industries',city:'Rajkot',gstin:'24AADCM9142P1Z3',st:'24'},
- {name:'Lakshmi Farm Supplies',city:'Coimbatore',gstin:'33AAHFL3307Q1ZB',st:'33'},
- {name:'Patil Hardware Stores',city:'Satara',gstin:'27ABHPP6620J1ZN',st:'27'},
- {name:'Kisan Seva Kendra',city:'Indore',gstin:'23AAJFK1189E1Z5',st:'23'},
+ {name:'Shree Ganesh Traders',city:'Nashik',gstin:'27ZZZZZ0105Z1ZK',st:'27'},
+ {name:'Mehta Agro Industries',city:'Rajkot',gstin:'24ZZZZZ0106Z1ZP',st:'24'},
+ {name:'Lakshmi Farm Supplies',city:'Coimbatore',gstin:'33ZZZZZ0107Z1ZP',st:'33'},
+ {name:'Patil Hardware Stores',city:'Satara',gstin:'27ZZZZZ0108Z1ZH',st:'27'},
+ {name:'Kisan Seva Kendra',city:'Indore',gstin:'23ZZZZZ0109Z1ZO',st:'23'},
  {name:'Cash sale (unregistered)',city:'Pune',gstin:'',st:'27'}];
 const ITEMS=[
  {name:'Drip lateral 16 mm, 400 m roll',hsn:'3917',gst:18,rate:3850,unit:'roll',stock:212},
@@ -852,15 +852,15 @@ function renderG3(){const out={igst:G1.reduce((s,r)=>s+r[3],0),cgst:G1.reduce((s
    ${tr('3.1(a) Outward taxable supplies, tax',out)}${tr('4(A)(5) ITC available, all other',itc)}<tr class="tot"><td>6.1 Tax payable in cash, after set-off</td><td class="num">${inr(net.igst)}</td><td class="num">${inr(net.cgst)}</td><td class="num">${inr(net.sgst)}</td><td class="num">0.00</td></tr></tbody></table>
    <p class="muted" style="font-size:12px">Set-off follows the order in section 49 and rule 88A. Change an IMS action and this page recomputes.</p>`}
 const RECON=[
- {sup:'Kaveri Packaging Pvt Ltd',g:'27AABCK7314R1Z2',inv:'KP/2611/0087',d:'03-11-2026',tb:124000,t1:[0,11160,11160],t2:[0,11160,11160],in2b:true,inb:true,st:'ok',act:'a'},
- {sup:'Nilgiri Steel Traders',g:'33AAGFN2290L1ZK',inv:'NST/1145',d:'08-11-2026',tb:100000,t1:[18000,0,0],t2:[18000,0,0],in2b:true,inb:true,st:'ok',act:'a'},
- {sup:'Bharat Seals and Gaskets',g:'24AAKCB9051H1Z4',inv:'BSG/26-27/219',d:'10-11-2026',tb:66000,t1:[11880,0,0],t2:[11880,0,0],in2b:true,inb:true,st:'ok',act:'a'},
- {sup:'Vardhaman Logistics',g:'27AAJFV6612C1Z9',inv:'VL-3381',d:'01-11-2026',tb:42500,tb2:45200,t1:[0,3825,3825],t2:[0,4068,4068],in2b:true,inb:true,st:'val',act:'p'},
- {sup:'Omkar Printers',g:'27AAMPO4471D1ZX',inv:'OP-0912',d:'12-11-2026',d2:'21-11-2026',tb:18400,t1:[0,1656,1656],t2:[0,1656,1656],in2b:true,inb:true,st:'date',act:'p'},
- {sup:'Sahyadri Electricals',g:'27ABUPS3307K1ZQ',inv:'SE/774',d:'15-11-2026',tb:0,tb2:9600,t1:[0,0,0],t2:[0,864,864],in2b:true,inb:false,st:'nobooks',act:'p'},
- {sup:'Kaveri Packaging Pvt Ltd',g:'27AABCK7314R1Z2',inv:'KP/2611/0102',d:'16-11-2026',tb:0,tb2:31000,t1:[0,0,0],t2:[0,2790,2790],in2b:true,inb:false,st:'dup',act:'r'},
- {sup:'Shivneri Couriers',g:'27AAQFS1182M1Z0',inv:'SC/11/448',d:'17-11-2026',tb:5200,t1:[0,468,468],t2:null,in2b:false,inb:true,st:'no2b',act:null},
- {sup:'Annapurna Stationers',g:'27ACZPA6619N1Z3',inv:'AS-2207',d:'18-11-2026',tb:3400,t1:[0,306,306],t2:[0,306,306],in2b:true,inb:true,st:'ok',act:'p'}];
+ {sup:'Kaveri Packaging Pvt Ltd',g:'27ZZZZZ0113Z1ZK',inv:'KP/2611/0087',d:'03-11-2026',tb:124000,t1:[0,11160,11160],t2:[0,11160,11160],in2b:true,inb:true,st:'ok',act:'a'},
+ {sup:'Nilgiri Steel Traders',g:'33ZZZZZ0114Z1ZQ',inv:'NST/1145',d:'08-11-2026',tb:100000,t1:[18000,0,0],t2:[18000,0,0],in2b:true,inb:true,st:'ok',act:'a'},
+ {sup:'Bharat Seals and Gaskets',g:'24ZZZZZ0115Z1ZO',inv:'BSG/26-27/219',d:'10-11-2026',tb:66000,t1:[11880,0,0],t2:[11880,0,0],in2b:true,inb:true,st:'ok',act:'a'},
+ {sup:'Vardhaman Logistics',g:'27ZZZZZ0116Z1ZH',inv:'VL-3381',d:'01-11-2026',tb:42500,tb2:45200,t1:[0,3825,3825],t2:[0,4068,4068],in2b:true,inb:true,st:'val',act:'p'},
+ {sup:'Omkar Printers',g:'27ZZZZZ0117Z1ZG',inv:'OP-0912',d:'12-11-2026',d2:'21-11-2026',tb:18400,t1:[0,1656,1656],t2:[0,1656,1656],in2b:true,inb:true,st:'date',act:'p'},
+ {sup:'Sahyadri Electricals',g:'27ZZZZZ0118Z1ZF',inv:'SE/774',d:'15-11-2026',tb:0,tb2:9600,t1:[0,0,0],t2:[0,864,864],in2b:true,inb:false,st:'nobooks',act:'p'},
+ {sup:'Kaveri Packaging Pvt Ltd',g:'27ZZZZZ0113Z1ZK',inv:'KP/2611/0102',d:'16-11-2026',tb:0,tb2:31000,t1:[0,0,0],t2:[0,2790,2790],in2b:true,inb:false,st:'dup',act:'r'},
+ {sup:'Shivneri Couriers',g:'27ZZZZZ0119Z1ZE',inv:'SC/11/448',d:'17-11-2026',tb:5200,t1:[0,468,468],t2:null,in2b:false,inb:true,st:'no2b',act:null},
+ {sup:'Annapurna Stationers',g:'27ZZZZZ0120Z1ZL',inv:'AS-2207',d:'18-11-2026',tb:3400,t1:[0,306,306],t2:[0,306,306],in2b:true,inb:true,st:'ok',act:'p'}];
 const STL={ok:['ok','Matched'],val:['warn','Value differs'],date:['warn','Date differs'],nobooks:['bad','Not in books'],dup:['bad','Possible duplicate'],no2b:['info','Not in 2B yet']};
 let reconFilter='all',reconFocus=0;
 function renderRecon(){
@@ -896,7 +896,7 @@ const ENG='<span class="badge eng" title="Computed by the engine"><svg viewBox="
 const AST='<span class="badge asst" title="Proposed by the assistant"><svg viewBox="0 0 10 10"><path d="M5 0l1.2 3.8L10 5 6.2 6.2 5 10 3.8 6.2 0 5l3.8-1.2z"/></svg>assistant</span>';
 function billInit(){
   $('#ai-bill').innerHTML=`<div class="bill" aria-label="Photo of a supplier bill">
-   <div class="bt">SHIVAM PIPES &amp; FITTINGS</div><div>Bhosari MIDC, Pune 411026<br>GSTIN 27AAXFS5530B1Z7</div>
+   <div class="bt">SHIVAM PIPES &amp; FITTINGS</div><div>Bhosari MIDC, Pune 411026<br>GSTIN 27ZZZZZ0121Z1ZK</div>
    <div style="display:flex;justify-content:space-between;margin-top:6px"><span>Tax invoice SPF/2026/1187</span><span>18/11/2026</span></div>
    <table><tr><td>PVC ball valve 50mm (8481)</td><td style="text-align:right">80 x 312.50</td><td style="text-align:right">25,000.00</td></tr>
    <tr><td>HDPE pipe coil 32mm (3917)</td><td style="text-align:right">10 x 2,500</td><td style="text-align:right">25,000.00</td></tr>

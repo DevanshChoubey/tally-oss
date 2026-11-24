@@ -486,7 +486,7 @@ let SCREENS;
    amounts are fictional. GST rates are illustrative.
    ===================================================================== */
 const R = n => Math.round(n * 100);           // rupees literal -> paise (seed data only)
-const CO = {name:'Godavari Drip & Pump Works', short:'Godavari Drip', gstin:'27AAGFG4417K1ZA', state:'27', city:'Pune',
+const CO = {name:'Godavari Drip & Pump Works', short:'Godavari Drip', gstin:'27ZZZZZ0000Z1ZQ', state:'27', city:'Pune',
   fy:'2026-27', fyStart:'01-04-2026', fyEnd:'31-03-2027', today:'21-11-2026', lock:'31-10-2026', kind:'Partnership firm'};
 const STATES = {'27':'Maharashtra','24':'Gujarat','33':'Tamil Nadu','23':'Madhya Pradesh','29':'Karnataka','07':'Delhi','09':'Uttar Pradesh','32':'Kerala','36':'Telangana','30':'Goa'};
 
@@ -518,20 +518,20 @@ const LEDGERS = [
  ['ananya','Ananya Kulkarni, capital','capital',-R(1500000)],
  ['rohan','Rohan Deshpande, capital','capital',-R(500000)],
  ['mulaloan','Mula Valley Co-op Bank, term loan','secured',-R(840000)],
- ['kaveri','Kaveri Packaging Pvt Ltd','creditors',-R(214300),{gstin:'29AAECK5530L1Z8',st:'29',city:'Mysuru',days:30}],
- ['nilgiri','Nilgiri Steel Traders','creditors',-R(200150),{gstin:'29AAFFN2276R1ZH',st:'29',city:'Bengaluru',days:30}],
- ['vardhaman','Vardhaman Logistics','creditors',-R(150000),{gstin:'27AAFFV8812D1Z4',st:'27',city:'Pune',days:15}],
- ['rupa','Rupa Polymers','creditors',0,{gstin:'24AAKFR6604B1ZJ',st:'24',city:'Ahmedabad',days:30}],
+ ['kaveri','Kaveri Packaging Pvt Ltd','creditors',-R(214300),{gstin:'29ZZZZZ0101Z1ZK',st:'29',city:'Mysuru',days:30}],
+ ['nilgiri','Nilgiri Steel Traders','creditors',-R(200150),{gstin:'29ZZZZZ0102Z1ZJ',st:'29',city:'Bengaluru',days:30}],
+ ['vardhaman','Vardhaman Logistics','creditors',-R(150000),{gstin:'27ZZZZZ0103Z1ZM',st:'27',city:'Pune',days:15}],
+ ['rupa','Rupa Polymers','creditors',0,{gstin:'24ZZZZZ0104Z1ZR',st:'24',city:'Ahmedabad',days:30}],
  ['cgstout','CGST output','duties',0],['sgstout','SGST output','duties',0],['igstout','IGST output','duties',0],
  ['cgstin','CGST input','duties',0],['sgstin','SGST input','duties',0],['igstin','IGST input','duties',0],
  ['tdspay','TDS payable','duties',-R(12500)],
  ['audit','Audit fee payable','provisions',-R(45000)],['salpay','Salary payable','provisions',-R(286000)],
  ['plant','Plant and machinery','fixed',R(1840000)],['furn','Furniture and fixtures','fixed',R(235000)],['comp','Computers','fixed',R(303179)],
- ['sgt','Shree Ganesh Traders','debtors',R(120000),{gstin:'27AAKFS4821M1ZQ',st:'27',city:'Nashik',days:30,alias:'SGT'}],
- ['mai','Mehta Agro Industries','debtors',0,{gstin:'24AADCM9142P1Z1',st:'24',city:'Rajkot',days:30}],
- ['lfs','Lakshmi Farm Supplies','debtors',R(96250),{gstin:'33AAHFL3307Q1Z4',st:'33',city:'Coimbatore',days:30}],
- ['phs','Patil Hardware Stores','debtors',R(88420),{gstin:'27ABHPP6620J1ZE',st:'27',city:'Satara',days:30}],
- ['ksk','Kisan Seva Kendra','debtors',R(147384.5),{gstin:'23AAJFK1189E1ZH',st:'23',city:'Indore',days:30,alias:'KSK'}],
+ ['sgt','Shree Ganesh Traders','debtors',R(120000),{gstin:'27ZZZZZ0105Z1ZK',st:'27',city:'Nashik',days:30,alias:'SGT'}],
+ ['mai','Mehta Agro Industries','debtors',0,{gstin:'24ZZZZZ0106Z1ZP',st:'24',city:'Rajkot',days:30}],
+ ['lfs','Lakshmi Farm Supplies','debtors',R(96250),{gstin:'33ZZZZZ0107Z1ZP',st:'33',city:'Coimbatore',days:30}],
+ ['phs','Patil Hardware Stores','debtors',R(88420),{gstin:'27ZZZZZ0108Z1ZH',st:'27',city:'Satara',days:30}],
+ ['ksk','Kisan Seva Kendra','debtors',R(147384.5),{gstin:'23ZZZZZ0109Z1ZO',st:'23',city:'Indore',days:30,alias:'KSK'}],
  ['cashsale','Cash sale (unregistered)','debtors',0,{gstin:'',st:'27',city:'Pune',days:0}],
  ['cash','Cash','cash',R(48215.5)],
  ['saptagiri','Saptagiri Commercial Bank A/c','bank',R(610000),{acct:'XXXX 4471'}],
@@ -1462,10 +1462,10 @@ document.addEventListener('click',e=>{const b=e.target.closest('.prop [data-act]
 function billImage(st){
   const smudge=st==='low-confidence'||st==='cloud-consent';
   return `<div class="bill" id="bill" aria-label="Photo of a fictional supplier bill">
-   <h4 data-b="sup">RUPA POLYMERS</h4><div class="c">14, Naroda GIDC, Ahmedabad 382330</div><div class="c" data-b="gstin">GSTIN 24AAKFR6604B1ZJ</div>
+   <h4 data-b="sup">RUPA POLYMERS</h4><div class="c">14, Naroda GIDC, Ahmedabad 382330</div><div class="c" data-b="gstin">GSTIN 24ZZZZZ0104Z1ZR</div>
    <div class="c" style="margin:6px 0;font-weight:700">TAX INVOICE</div>
    <div style="display:flex;justify-content:space-between"><span data-b="no">Inv No: RP/5521</span><span data-b="date">Dt: 17/11/2026</span></div>
-   <div>To: Godavari Drip &amp; Pump Works, Pune</div><div>GSTIN 27AAGFG4417K1ZA · POS: 27</div>
+   <div>To: Godavari Drip &amp; Pump Works, Pune</div><div>GSTIN 27ZZZZZ0000Z1ZQ · POS: 27</div>
    <table><thead><tr><th>Description</th><th>HSN</th><th class="r">Qty</th><th class="r">Rate</th><th class="r">Amount</th></tr></thead><tbody>
     <tr data-b="l1"><td>HDPE PIPE COIL 32MM</td><td>3917</td><td class="r">20</td><td class="r">2500.00</td><td class="r">50000.00</td></tr>
     <tr data-b="l2"><td>BALL VALVE 2" PVC</td><td>8481</td><td class="r">100</td><td class="r ${smudge?'smudge':''}" data-b="l2rate">180.00</td><td class="r ${smudge?'smudge':''}">18000.00</td></tr></tbody></table>
@@ -1494,7 +1494,7 @@ function billProposal(st,d){
    <div class="grid g2" style="margin-top:12px;align-items:start"><div class="meta">Purchase ledger: <b>Purchases</b> ${prov('ai','AI match')}, the purchase ledger set on both item masters. Tax ledgers, round off and totals are the engine's.</div>
     <div class="taxbox">${v?`<div class="taxrow"><span class="lab">Taxable value</span><span class="num">${inr(v.taxable)}</span></div><div class="taxrow"><span class="lab">IGST 18%</span><span class="num">${inr(v.igst)}</span></div><div class="taxrow tot"><span class="lab">Engine total ${prov('eng','engine')}</span><span class="num">${inr(v.total)}</span></div>`:`<div class="taxrow"><span class="lab">Engine total</span><span class="t2">Not computed: line 2 rate is blank</span></div>`}
      <div class="taxrow" data-f="total"><span class="lab">Printed total ${prov('doc','from bill')}</span><span class="num">${inr(d.printedTotal)}</span></div></div></div>`;
-  const checks=[['ok','GSTIN 24AAKFR6604B1ZJ: check character valid; state 24 Gujarat matches the supplier master.'],['ok','Bill date is after the lock date (31 Oct 2026).'],
+  const checks=[['ok','GSTIN 24ZZZZZ0104Z1ZR: check character valid; state 24 Gujarat matches the supplier master.'],['ok','Bill date is after the lock date (31 Oct 2026).'],
    v?(match?['ok',`Engine total ${inr(v.total)} equals the printed total.`]:['bad',`Engine total ${inr(v.total)} differs from the printed total ${inr(d.printedTotal)} by ${inr(d.printedTotal-v.total)}. Check line 2 against the bill, or record the supplier's figure with a reason. Accept stays blocked.`]):['bad','Engine total cannot be computed until line 2 has a rate. The field is blank because the reading was below the confidence threshold; nothing was guessed.'],
    v&&match?['ok',`Rate × taxable: 18% of ${inr(v.taxable)} is ${inr(v.igst)}, same as printed.`]:['info','Tax check waits for the total check.'],
    st==='duplicate'?['bad','Same image (hash 9f3c…e1) was read on 19 Nov; that draft is in the review queue. Reject this one, or open the other.']:['ok','No purchase in the books has supplier Rupa Polymers with bill RP/5521.'],
@@ -1690,7 +1690,7 @@ SCREENS.gst={title:'GST returns',default:'gstr1',
     <tr class="total"><td>Payable in cash, rounded to rupees</td><td class="num">${inr(s.cashTotal)}</td>${c(s.cash.igst,s.cash.cgst,s.cash.sgst)}</tr></tbody></table></div>
     <div class="card pad"><h2>Read this before filing</h2><ul class="t2" style="padding-left:18px;margin:0;display:grid;gap:6px"><li>Credit counts only what you accepted in IMS. Records with no action are shown apart.</li><li>Set-off order: IGST credit first, then CGST, then SGST, as the rule pack says.</li><li>Your books show ITC of ${inr(s.books.igst)} IGST; accepted 2B shows ${inr(s.itc.igst)}. The 2B and IMS tab explains each record.</li></ul><div class="actions" style="margin-top:10px"><button class="btn" data-go="${hashFor('gst','recon')}">2B and IMS ${kb('3')}</button></div></div></div>`;}
   if(st==='recon-empty')return head+`<div class="card"><div class="empty">${ic('upload')}<h2>No 2B file for November yet</h2><p>On the GST portal, open Returns, then GSTR-2B, choose November 2026 and download the JSON. Drop it here or press ${kb('Ctrl+O')}. The engine matches it to your purchase vouchers; nothing is sent anywhere.</p><button class="btn primary" data-go="${hashFor('gst','recon')}">${ic('upload')}Import 2B JSON ${kb('Ctrl+O')}</button></div></div>`;
-  if(st==='recon-error')return head+`<div class="note bad" role="alert">${ic('alert')}<div><b>Not imported: this 2B file is for GSTIN 27AAKFS4821M1ZQ, not ${CO.gstin}.</b><div>The file looks like a customer's 2B. Nothing was imported or changed. Download the file again while signed in as ${esc(CO.name)}.</div><div class="actions" style="margin-top:8px"><button class="btn" data-go="${hashFor('gst','recon-empty')}">${ic('upload')}Choose another file</button></div></div></div>`;
+  if(st==='recon-error')return head+`<div class="note bad" role="alert">${ic('alert')}<div><b>Not imported: this 2B file is for GSTIN 27ZZZZZ0105Z1ZK, not ${CO.gstin}.</b><div>The file looks like a customer's 2B. Nothing was imported or changed. Download the file again while signed in as ${esc(CO.name)}.</div><div class="actions" style="margin-top:8px"><button class="btn" data-go="${hashFor('gst','recon-empty')}">${ic('upload')}Choose another file</button></div></div></div>`;
   const locked=st==='recon-locked'; const rows=locked?OCT_2B.map(r=>({...r,status:'Matched',kind:'Exact',suggest:r.action})):recon();
   const sel=locked?'O1':st==='recon-explain'?'G2':'G2';
   const actOf=r=>locked?r.action:(IMS_ACT[r.id]!==undefined?IMS_ACT[r.id]:r.action);
@@ -1786,7 +1786,7 @@ SCREENS.bank={title:'Bank reconciliation',default:'default',
 
 /* ---------- masters ---------- */
 function gstinWith(base){for(const c of GC){if(gstinCheck(base+c).ok)return base+c}return base+'?'}
-const NEW_GSTIN=gstinWith('27AAJFJ5521N1Z');
+const NEW_GSTIN=gstinWith('27ZZZZZ0100Z1Z');
 const BAD_GSTIN=NEW_GSTIN.slice(0,14)+(NEW_GSTIN[14]==='7'?'8':'7');
 SCREENS.masters={title:'Masters',default:'ledgers',
  render(st){
@@ -1807,7 +1807,7 @@ SCREENS.masters={title:'Masters',default:'ledgers',
   if(st==='create-ledger'||st==='gstin-error'){const gv=st==='gstin-error'?BAD_GSTIN:NEW_GSTIN;const g=gstinCheck(gv);
    return head+`<div class="card vsheet" style="max-width:880px"><div class="vhead">
     <div class="fld span2"><label for="cl-name">Name</label><input id="cl-name" value="Jadhav Irrigation Services"></div><div class="fld"><label>Under</label><input value="Sundry debtors"></div><div class="fld"><label>Bill-wise</label><div class="ro">${badge('On','b-ok')}</div></div>
-    <div class="fld span2"><label for="cl-gstin">GSTIN</label><input id="cl-gstin" class="${g.ok?'':'invalid'}" value="${gv}" aria-invalid="${!g.ok}" aria-describedby="cl-gstin-m">${g.ok?`<span class="hint" id="cl-gstin-m">${badge('Check character OK','b-ok','check')} PAN AAJFJ5521N · state ${g.state} ${g.stateName}</span>`:`<span class="err" id="cl-gstin-m" role="alert">${ic('x')}${esc(g.reason)}</span>`}</div>
+    <div class="fld span2"><label for="cl-gstin">GSTIN</label><input id="cl-gstin" class="${g.ok?'':'invalid'}" value="${gv}" aria-invalid="${!g.ok}" aria-describedby="cl-gstin-m">${g.ok?`<span class="hint" id="cl-gstin-m">${badge('Check character OK','b-ok','check')} PAN ZZZZZ0100Z · state ${g.state} ${g.stateName}</span>`:`<span class="err" id="cl-gstin-m" role="alert">${ic('x')}${esc(g.reason)}</span>`}</div>
     <div class="fld"><label>State</label><div class="ro">${g.ok?`27 Maharashtra ${prov('eng','from GSTIN')}`:'<span class="t2">Waiting for a valid GSTIN</span>'}</div></div><div class="fld"><label>Credit days</label><input class="num" value="30"></div></div>
     <div class="vfoot"><div class="meta">The check character is verified on this computer. Ledgerly does not look the GSTIN up online.</div><div class="actions" style="justify-content:flex-end"><button class="btn" data-go="${hashFor('masters','ledgers')}">Cancel ${kb('Esc')}</button><button class="btn primary" ${g.ok?'':'disabled'}>${ic('save')}Save ${kb('Ctrl+A')}</button></div></div></div>`}
   if(st==='suggested-ledger')return head+`<div class="grid g-main" style="align-items:start"><div>${proposal({kind:'New ledger',by:'bank matching',src:[srcChip('bank','UPI/QUICKPRINT XEROX/7781'),srcChip('bank','UPI/QUICKPRINT XEROX/7799'),srcChip('cpu','Local model')],conf:2,acceptLabel:'Create ledger',
@@ -1865,7 +1865,7 @@ SCREENS.setup={title:'Company setup',default:'welcome',
   if(st==='company'||st==='gstin-error'){const bad=st==='gstin-error';const g=gstinCheck(CO.gstin);
    pane=`<h1>Your company</h1><p class="t2" style="margin:6px 0 18px">You can change all of this later except the financial year start.</p><div class="vhead" style="padding:0;border:0">
     <div class="fld span2"><label>Company name</label><input value="${esc(CO.name)}"></div><div class="fld"><label>Type</label><input value="Partnership firm"></div><div class="fld"><label>City</label><input value="Pune"></div>
-    <div class="fld span2"><label for="s-gstin">GSTIN</label><input id="s-gstin" value="${CO.gstin}" class="${bad?'invalid':''}" aria-invalid="${bad}">${bad?`<span class="err" role="alert">${ic('x')}This GSTIN starts with 27 (Maharashtra), but the state is set to 24 Gujarat. Change the state to Maharashtra, or check the first two digits.</span>`:`<span class="hint">${badge('Check character OK','b-ok','check')} PAN AAGFG4417K · fills the state</span>`}</div>
+    <div class="fld span2"><label for="s-gstin">GSTIN</label><input id="s-gstin" value="${CO.gstin}" class="${bad?'invalid':''}" aria-invalid="${bad}">${bad?`<span class="err" role="alert">${ic('x')}This GSTIN starts with 27 (Maharashtra), but the state is set to 24 Gujarat. Change the state to Maharashtra, or check the first two digits.</span>`:`<span class="hint">${badge('Check character OK','b-ok','check')} PAN ZZZZZ0000Z · fills the state</span>`}</div>
     <div class="fld"><label>State</label><input value="${bad?'24 Gujarat':'27 Maharashtra'}" class="${bad?'invalid':''}"></div><div class="fld"><label>GST filing</label><input value="Monthly"></div>
     <div class="fld span2"><label>Financial year</label><div class="ro">1 Apr 2026 to 31 Mar 2027 ${prov('rule','April to March')}</div></div><div class="fld span2"><label>Books begin from</label><input value="1 Apr 2026"><span class="hint">Use a later date if you are moving in mid-year; opening balances go on this date.</span></div></div>${nav('features')}`}
   if(st==='features')pane=`<h1>What do you need?</h1><p class="t2" style="margin:6px 0 18px">Turn on only what you use. Each one adds fields and screens. ${kb('F11')} changes this later.</p>

@@ -260,7 +260,7 @@ pub fn filter_hint(kind: MasterKind) -> String {
 }
 
 /// What the form says after a GSTIN that passes every check (mock v2 index.html:1810): the PAN
-/// inside it and its state, as `PAN AAJFJ5521N · state 27 Maharashtra`. `None` when `text` is
+/// inside it and its state, as `PAN ZZZZZ0100Z · state 27 Maharashtra`. `None` when `text` is
 /// not a valid GSTIN. Both parts are read out of the GSTIN; nothing is looked up.
 #[must_use]
 pub fn gstin_hint(text: &str) -> Option<String> {

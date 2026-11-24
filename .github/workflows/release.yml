@@ -7,8 +7,10 @@ name: release
 #
 # Actions used: actions/checkout, dtolnay/rust-toolchain (no build cache, so a cache cannot reach
 # a release),
-# actions/upload-artifact and actions/download-artifact (GitHub's own). Everything else is a
-# shell command on the runner.
+# actions/upload-artifact and actions/download-artifact (GitHub's own), and
+# actions/attest-build-provenance (signed SLSA provenance for every release artifact, checked
+# with `gh attestation verify`). Every action is pinned to a full commit SHA. Everything else is
+# a shell command on the runner.
 
 on:
   push:
@@ -25,8 +27,8 @@ jobs:
   linux:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.100
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: dtolnay/rust-toolchain@d5e4d57b030548f435d0befec15ff413a2c60eff # 1.100
       - name: Set reproducible build flags
         run: |
           echo "SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)" >> "$GITHUB_ENV"
@@ -35,7 +37,7 @@ jobs:
         run: cargo build --release --locked -p ledgerly-app -p ledgerly-cli
       - name: Package tar.gz and deb
         run: bash packaging/linux/package.sh "${GITHUB_REF_NAME}" target/release dist
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: linux
           path: dist/*
@@ -44,8 +46,8 @@ jobs:
   windows:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.100
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: dtolnay/rust-toolchain@d5e4d57b030548f435d0befec15ff413a2c60eff # 1.100
       - name: Set reproducible build flags
         shell: pwsh
         run: |
@@ -64,12 +66,12 @@ jobs:
           $iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6'
           $env:PATH = "$iscc;$env:PATH"
           ./packaging/windows/package.ps1 -Version $env:GITHUB_REF_NAME -ReleaseDir target\release -OutDir dist
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: windows
           path: dist/*.zip
           if-no-files-found: error
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: windows-installer
           path: dist/*-setup.exe
@@ -78,8 +80,8 @@ jobs:
   macos:
     runs-on: macos-26
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.100
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: dtolnay/rust-toolchain@d5e4d57b030548f435d0befec15ff413a2c60eff # 1.100
       - name: Set reproducible build flags
         run: |
           echo "SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)" >> "$GITHUB_ENV"
@@ -90,7 +92,7 @@ jobs:
         run: brew install librsvg
       - name: Package .app in a .dmg
         run: bash packaging/macos/package.sh "${GITHUB_REF_NAME}" target/release dist
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: macos
           path: dist/*.dmg
@@ -101,9 +103,11 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      id-token: write
+      attestations: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           path: artifacts
           merge-multiple: true
@@ -112,6 +116,10 @@ jobs:
         run: |
           sha256sum * > SHA256SUMS.txt
           cat SHA256SUMS.txt
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: artifacts/*
       - name: Create the release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

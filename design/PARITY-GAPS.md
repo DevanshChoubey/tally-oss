@@ -250,9 +250,9 @@ captured: `suggested-ledger` (needs bank matching to propose a ledger, which is 
 - **gap: the create form is not the mock's compact one (s9-all).** The capture types the mock's
   values (Jadhav Metals, GSTIN, credit days) through the real form, which is longer than the
   mock's and shows the sample's own GSTIN on the company line.
-- **needs a decision: the GSTIN error's words.** Ours says "check character is 7, expected Z; the
+- **needs a decision: the GSTIN error's words.** Ours says "check character is 7, expected P; the
   GSTIN has a typing error" (the engine's `GstinError`); the mock says "Check character should be
-  Z, not 7. One of the first 14 characters is probably mistyped." `tests/w2_masters.rs` pins
+  P, not 7. One of the first 14 characters is probably mistyped." `tests/w2_masters.rs` pins
   "expected <character>" in the reason, so taking the mock's words means changing that test's expectation
   on purpose, with a decision, not in a capture round.
 - **bug: Save stays enabled with a bad GSTIN, and the field has no red border.** The mock
@@ -912,7 +912,43 @@ Mismatches between the mock's totals and the engine's, and why:
   tax panel. The seed's own invoices are posted with their bill references through the API.
 - **by design: identifiers differ from the mock.** GSTINs use the fake PAN pattern `ZZZZZ####Z`
   with a valid check character (company 27ZZZZZ0000Z1ZQ); bank accounts, IFSC codes and phone
-  numbers are obviously fake. The mock's GSTIN (27AAGFG4417K1ZA) and the like are not used.
+  numbers are obviously fake. The mock now uses the same synthetic GSTINs (27ZZZZZ0000Z1ZQ and the like).
 - **by design: UQC codes.** Units map to the GST portal's UQC codes from the portal's published
   list as the author remembers it (roll ROL, set SET, nos NOS), and the coil unit maps to OTH;
   the list was not re-read for this card.
+
+## Mock reference captures to re-shoot (s10-security)
+
+The mock text now uses synthetic GSTINs (PAN `ZZZZZ####Z`, valid check character) instead of realistic-looking ones, so these `design/mock-v2/captures/states/{light,dark,hc}/<state>.webp` files still show the old text and must be re-shot with `node design/mock-v2/capture.mjs` (webp files were not edited by hand; `--check` reports them stale until then; transitions that pass through these states need re-shooting too):
+
+- sales-invoice.default
+- sales-invoice.gst-inter-state
+- sales-invoice.item-list
+- sales-invoice.validation-error
+- sales-invoice.period-locked
+- sales-invoice.save-confirm
+- sales-invoice.saved
+- purchase-bill.reading
+- purchase-bill.proposal
+- purchase-bill.low-confidence
+- purchase-bill.mismatch
+- purchase-bill.duplicate
+- purchase-bill.offline-ai
+- purchase-bill.cloud-consent
+- purchase-bill.accepted
+- balance-sheet.group
+- balance-sheet.ledger
+- gst.gstr1
+- gst.gstr1-correction
+- gst.gstr3b
+- gst.recon
+- gst.recon-explain
+- gst.recon-empty
+- gst.recon-error
+- gst.recon-locked
+- masters.ledgers
+- masters.ledger-detail
+- masters.create-ledger
+- masters.gstin-error
+- setup.company
+- setup.gstin-error

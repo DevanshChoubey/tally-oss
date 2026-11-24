@@ -799,7 +799,7 @@ fn debtors_voucher(state: &'static str) -> Shot {
 /// The company name the setup captures type (the mock's sample company, index.html:489).
 const SETUP_NAME: &str = "Godavari Drip & Pump Works";
 /// The GSTIN the setup captures type; its first two digits fill the state (index.html:1868).
-const SETUP_GSTIN: &str = "27AAGFG4417K1ZA";
+const SETUP_GSTIN: &str = "27ZZZZZ0000Z1ZQ";
 /// The city the setup captures type (the mock's, index.html:1867).
 const SETUP_CITY: &str = "Pune";
 /// The home folder the setup captures run with, relative to the repository root, so the default
@@ -1057,7 +1057,7 @@ fn light_shots() -> Vec<Shot> {
         ),
         // The mock's new party ledger (index.html:1790-1810), typed through the real form: the
         // GSTIN's check character is right here and wrong in `masters.gstin-error`.
-        jadhav_form("masters.create-ledger", "27AAJFJ5521N1ZZ"),
+        jadhav_form("masters.create-ledger", "27ZZZZZ0100Z1ZP"),
         shot("keys.classic", &[palette])
             .query("Keyboard map")
             .then(&[(Key::Enter, NONE)]),
@@ -1189,8 +1189,8 @@ fn light_shots() -> Vec<Shot> {
         // Under list or ticks its boxes: the mock's name, Under = Sundry Debtors (the list scrolled
         // to its end, where the scroll stops, so the row is always at the same place), Party details
         // on, the mock's GSTIN with a wrong check character (index.html:1790: the check character of
-        // 27AAJFJ5521N1Z is Z, so the mock's bad GSTIN ends in 7), Bill-wise on and 30 credit days.
-        jadhav_form("masters.gstin-error", "27AAJFJ5521N1Z7"),
+        // 27ZZZZZ0100Z1Z is P, so the mock's bad GSTIN ends in 7), Bill-wise on and 30 credit days.
+        jadhav_form("masters.gstin-error", "27ZZZZZ0100Z1Z7"),
         // The company step as setup.company, then the State list opened by a click (no key opens
         // it) and the mock's 24 Gujarat chosen against the GSTIN's 27. The list is scrolled to its
         // end (where the scroll stops) and back up, so 24 is always at the same row.

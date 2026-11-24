@@ -716,7 +716,7 @@ fn enter_on_a_ledger_opens_its_vouchers() {
 
 #[test]
 fn a_valid_gstin_says_its_pan_and_state() {
-    // provenance: index.html:1810: under a valid GSTIN, "Check character OK" then "PAN AAJFJ5521N
+    // provenance: index.html:1810: under a valid GSTIN, "Check character OK" then "PAN ZZZZZ0100Z
     // · state 27 Maharashtra". Derived for `GSTIN_VALID`: characters 3 to 12 are the PAN
     // ABCDE1234F and the first two are state code 29, Karnataka (GST state code list). An invalid
     // one gives nothing.

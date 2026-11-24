@@ -32,7 +32,7 @@ fn godavari_form() -> CompanyForm {
         kind: EntityKind::Partnership,
         city: "Pune".to_owned(),
         // index.html:1868 (the mock's company GSTIN, with the "Check character OK" badge).
-        gstin: "27AAGFG4417K1ZA".to_owned(),
+        gstin: "27ZZZZZ0000Z1ZQ".to_owned(),
         state: StateCode::new(27).unwrap(),
         // derived: 23 Nov 2026 is in April to March 2026-27, so the year starts 1 April 2026.
         fy_start: date!(2026 - 04 - 01),
@@ -95,7 +95,7 @@ fn enter_continues_and_escape_goes_back_unless_a_field_has_focus() {
 #[test]
 fn a_gstin_fills_the_state_from_its_first_two_digits() {
     // index.html:1868 says the GSTIN "fills the state"; 27 is Maharashtra (mock STATES, index.html:491).
-    let state = state_from_gstin("27AAGFG4417K1ZA").unwrap();
+    let state = state_from_gstin("27ZZZZZ0000Z1ZQ").unwrap();
     assert_eq!(state.get(), 27);
     assert_eq!(state.name(), "Maharashtra");
 }
@@ -104,7 +104,7 @@ fn a_gstin_fills_the_state_from_its_first_two_digits() {
 fn a_gstin_for_another_state_blocks_continue_with_the_mocks_wording() {
     // The state is Gujarat (24) while the GSTIN starts with 27: the mock's error state.
     let gujarat = StateCode::new(24).unwrap();
-    let check = check_gstin("27AAGFG4417K1ZA", gujarat);
+    let check = check_gstin("27ZZZZZ0000Z1ZQ", gujarat);
     // index.html:1868: the exact message the mock shows, naming the fix.
     let expected = "This GSTIN starts with 27 (Maharashtra), but the state is set to 24 Gujarat. \
                     Change the state to Maharashtra, or check the first two digits.";
@@ -122,7 +122,7 @@ fn a_gstin_for_another_state_blocks_continue_with_the_mocks_wording() {
 fn a_matching_gstin_and_a_blank_one_allow_continue() {
     let maharashtra = StateCode::new(27).unwrap();
     assert!(gstin_allows_continue(&check_gstin(
-        "27AAGFG4417K1ZA",
+        "27ZZZZZ0000Z1ZQ",
         maharashtra
     )));
     // derived: a GSTIN is optional in the company form (a business may not be registered yet).
@@ -133,7 +133,7 @@ fn a_matching_gstin_and_a_blank_one_allow_continue() {
 fn a_gstin_with_a_bad_check_character_blocks_continue() {
     // derived: change the last character of the valid GSTIN; the check character no longer agrees.
     let maharashtra = StateCode::new(27).unwrap();
-    let check = check_gstin("27AAGFG4417K1ZB", maharashtra);
+    let check = check_gstin("27ZZZZZ0000Z1ZR", maharashtra);
     assert!(matches!(check, GstinCheck::Invalid(_)));
     assert!(!gstin_allows_continue(&check));
 }
@@ -222,7 +222,7 @@ fn a_created_company_file_opens_with_the_chosen_name_state_and_year() {
     assert_eq!(books.company.registrations.len(), 1);
     assert_eq!(
         books.company.registrations[0].gstin.as_str(),
-        "27AAGFG4417K1ZA"
+        "27ZZZZZ0000Z1ZQ"
     );
 }
 

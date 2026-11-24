@@ -49,8 +49,13 @@ fn char_value(c: u8) -> Option<u32> {
 /// multiply alternately by 2 and 1 (starting with 2); add `product / 36 + product % 36` for each;
 /// the check value is `(36 - sum % 36) % 36`.
 ///
-/// Provenance: the algorithm is recalled, not yet quoted from a GSTN publication. It reproduces
-/// a widely published sample GSTIN. Quote the source here before release (rule A4).
+/// Provenance: no GSTN specification is public. The algorithm is the one the open-source
+/// python-stdnum library documents for Indian GSTINs (Luhn mod 36 over the first 14
+/// characters), <https://arthurdejong.org/python-stdnum/doc/stdnum.in_.gstin>, read 2026-11-25.
+/// Hand derivation for the synthetic `27ZZZZZ0000Z1Z`: from the right the values and weights are
+/// Z=35x2, 1x1, Z=35x2, 0x1, 0x2, 0x1, 0x2, Z=35x1, Z=35x2, Z=35x1, Z=35x2, Z=35x1, 7x2, 2x1; the
+/// folded terms (`p / 36 + p % 36`) are 35, 1, 35, 0, 0, 0, 0, 35, 35, 35, 35, 35, 14, 2, which
+/// sum to 262; `262 mod 36 = 10`, and `(36 - 10) mod 36 = 26`, which is `Q`.
 ///
 /// Returns `None` when the input is not 14 characters of `0-9A-Z`.
 pub fn gstin_check_character(first14: &str) -> Option<char> {

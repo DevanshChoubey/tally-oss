@@ -266,7 +266,7 @@ fn company_script(file: &str) -> Vec<Event> {
     events.push(Event::Text("Pune".to_owned()));
     events.push(key(Key::Tab));
     // index.html:1868, the mock's GSTIN; its first two digits fill the state.
-    events.push(Event::Text("27AAGFG4417K1ZA".to_owned()));
+    events.push(Event::Text("27ZZZZZ0000Z1ZQ".to_owned()));
     events.extend([key(Key::Tab), key(Key::Tab), key(Key::Tab), key(Key::Tab)]);
     events.push(Event::Text(file.to_owned()));
     events.extend([key(Key::Tab), key(Key::Tab)]);

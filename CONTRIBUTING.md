@@ -65,3 +65,11 @@ smallest example with made-up names and amounts.
 Contributions are licensed under the licence of the crates they touch (see `LICENSING.md`).
 Sign off each commit (`git commit -s`) to certify the
 [Developer Certificate of Origin](https://developercertificate.org/).
+
+CI enforces this: the `dco` job in `.github/workflows/ci.yml` fails a pull request if any
+non-merge commit in it lacks a `Signed-off-by: Your Name <you@example.com>` line. To fix it:
+
+```bash
+git commit -s --amend                  # the last commit
+git rebase --signoff origin/main       # every commit on your branch, then push with --force-with-lease
+```

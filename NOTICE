@@ -30,5 +30,27 @@ crates/ledgerly-app/assets/fonts/
     Copyright 2015-2020 Google LLC
     SIL Open Font License 1.1 (OFL.txt)
 
+Fonts bundled inside the egui/epaint crates (epaint_default_fonts 0.37.0, from the `default_fonts`
+feature of eframe). They are compiled into the app as fallback fonts; their licence texts ship in
+the crate source (fonts/ directory of epaint_default_fonts):
+
+    Hack Regular
+    Copyright 2018 Source Foundry Authors, MIT License (Hack-Regular.txt). Hack derives from
+    DejaVu (public domain) and Bitstream Vera Sans Mono, Copyright 2003 Bitstream Inc., under the
+    Bitstream Vera Licence with Reserved Font Names "Bitstream" and "Vera".
+
+    Ubuntu Light
+    Copyright 2011 Canonical Ltd (from the font file), Ubuntu Font Licence 1.0 (UFL.txt)
+
+    egui-icons (a five-glyph subset of emoji-icon-font: the Android, Windows, GitHub, "git" and
+    Apple logo glyphs egui exposes as special_emojis)
+    Copyright 2014 John Slegers, MIT License (emoji-icon-font-mit-license.txt)
+
+    Noto Emoji (Regular) and the full emoji-icon-font (MIT, as above) are only compiled in when
+    epaint's `monochrome_emoji_fonts` feature is on; Ledgerly does not enable it. If it is ever
+    enabled, Noto Emoji is Copyright 2013 Google Inc. under the SIL Open Font License 1.1 (OFL.txt).
+
+The epaint_default_fonts crate itself is (MIT OR Apache-2.0) AND OFL-1.1 AND Ubuntu-font-1.0.
+
 Third-party Rust crates keep their own licences; `cargo deny check licenses` lists and checks
 them against deny.toml.

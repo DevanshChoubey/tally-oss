@@ -560,8 +560,8 @@ fn the_company_step_shows_dates_as_the_mock_does_and_still_reads_typed_ones() {
 
 #[test]
 fn the_fills_the_state_hint_stays_on_one_line() {
-    // provenance: mock index.html:1868 draws the badge and "PAN AAGFG4417K . fills the state" on
-    // one line (the PAN is the GSTIN's characters 3 to 12, "AAGFG4417K" of 27AAGFG4417K1ZA).
+    // provenance: mock index.html:1868 draws the badge and "PAN ZZZZZ0000Z . fills the state" on
+    // one line (the PAN is the GSTIN's characters 3 to 12, "ZZZZZ0000Z" of 27ZZZZZ0000Z1ZQ).
     let (ctx, mut shell) = cold();
     press(&ctx, &mut shell, Key::Enter);
     frame(
@@ -575,13 +575,13 @@ fn the_fills_the_state_hint_stays_on_one_line() {
     frame(
         &ctx,
         &mut shell,
-        vec![Event::Text("27AAGFG4417K1ZA".to_owned())],
+        vec![Event::Text("27ZZZZZ0000Z1ZQ".to_owned())],
     );
     let painted = frame(&ctx, &mut shell, vec![]);
     assert!(
         painted
             .iter()
-            .any(|(t, _)| t == "PAN AAGFG4417K \u{b7} fills the state"),
+            .any(|(t, _)| t == "PAN ZZZZZ0000Z \u{b7} fills the state"),
         "{painted:?}"
     );
 }
