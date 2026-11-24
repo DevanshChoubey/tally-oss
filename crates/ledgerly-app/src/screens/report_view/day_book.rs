@@ -386,25 +386,28 @@ fn paint_voucher(
     let cell = |i: usize| row.cells.get(i);
     let [date, kind, number, particulars, amount, status] = column_rects(rect);
     let left = CellPlace::Left(table::CELL_PAD_X);
-    let texts = [
-        (date, cell(columns.date).map_or_default(date_text), t.text),
-        (kind, cell(columns.kind).map_or_default(cell_text), t.text_2),
-        (
-            number,
-            cell(columns.number).map_or_default(cell_text),
-            t.text,
-        ),
-        (particulars, row.label.clone(), t.text),
-        (
-            status,
-            cell(columns.status).map_or_default(cell_text),
-            t.text_2,
-        ),
-    ];
+    // The cells as text, once each, so the spoken name and the painted cells agree.
+    let date_text_of = cell(columns.date).map_or_default(date_text);
+    let kind_text_of = cell(columns.kind).map_or_default(cell_text);
+    let number_text_of = cell(columns.number).map_or_default(cell_text);
+    let status_text_of = cell(columns.status).map_or_default(cell_text);
     let figure = cell(columns.amount).map_or_default(amount_text);
-    let mut spoken: Vec<&str> = texts.iter().map(|(_, text, _)| text.as_str()).collect();
-    spoken.push(figure.as_str());
-    let name = a11y::join(&spoken);
+    // Spoken in the order the columns are drawn: date, type, number, particulars, amount, status.
+    let name = a11y::join(&[
+        date_text_of.as_str(),
+        kind_text_of.as_str(),
+        number_text_of.as_str(),
+        row.label.as_str(),
+        figure.as_str(),
+        status_text_of.as_str(),
+    ]);
+    let texts = [
+        (date, date_text_of, t.text),
+        (kind, kind_text_of, t.text_2),
+        (number, number_text_of, t.text),
+        (particulars, row.label.clone(), t.text),
+        (status, status_text_of, t.text_2),
+    ];
     for (r, text, ink) in texts {
         table::paint_cell_text(ui, r, 1.0, &text, font.clone(), ink, left);
     }
@@ -433,4 +436,83 @@ fn paint_total(ui: &Ui, rect: Rect, report: &ViewReport, columns: DayColumns) {
         .get(columns.amount)
         .map_or_default(amount_text);
     table::paint_cell_text(ui, amount, 3.0, &figure, font, t.text, CellPlace::Right);
+}
+
+#[cfg(test)]
+mod a11y_names {
+    //! Card S7: a voucher row reads its cells in the order they are drawn, so a screen reader
+    //! hears the same sequence as the eye.
+    //!
+    //! derived: the day book draws Date, Voucher type, Voucher no., particulars (the row label),
+    //! Amount and Status from left to right (`column_rects`). The spoken name follows that order.
+    #![allow(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        reason = "test code: the fixture is known to build"
+    )]
+
+    use super::*;
+    use crate::screens::report_view::{ReportToken, ViewDetail, ViewParams, ViewRow, ViewRowKind};
+    use crate::ui::table::RowState;
+    use egui::{RawInput, pos2, vec2};
+    use ledgerly_core::{Paise, Period, SignedAmount};
+    use time::macros::date;
+
+    fn voucher_report() -> ViewReport {
+        ViewReport {
+            token: ReportToken("day book".to_owned()),
+            title: "Day Book".to_owned(),
+            params: ViewParams {
+                period: Period::new(date!(2026 - 11 - 01), date!(2026 - 11 - 30)).unwrap(),
+                detail: ViewDetail::Condensed,
+            },
+            columns: ["Date", "Voucher type", "Voucher no.", "Amount", "Status"]
+                .map(str::to_owned)
+                .to_vec(),
+            rows: vec![ViewRow {
+                key: None,
+                label: "Sharma Traders".to_owned(),
+                depth: 0,
+                kind: ViewRowKind::Voucher,
+                cells: vec![
+                    ViewCell::Date(date!(2026 - 11 - 20)),
+                    ViewCell::Text("Sales".to_owned()),
+                    ViewCell::Text("12".to_owned()),
+                    ViewCell::Amount(SignedAmount::dr(Paise::new(120_000))),
+                    ViewCell::Text("Paid".to_owned()),
+                ],
+            }],
+            totals: Vec::new(),
+            notes: Vec::new(),
+        }
+    }
+
+    /// What `paint_voucher` returns for the first row of `report`, drawn in a headless context.
+    fn spoken(report: &ViewReport) -> String {
+        let columns = day_columns(&report.columns).expect("the day book headings");
+        let ctx = egui::Context::default();
+        let mut name = String::new();
+        let out = ctx.run_ui(RawInput::default(), |ui| {
+            let rect = egui::Rect::from_min_size(pos2(0.0, 0.0), vec2(800.0, 24.0));
+            let state = RowState {
+                selected: false,
+                hovered: false,
+                sub: false,
+            };
+            name = paint_voucher(ui, rect, report, columns, 0, state);
+        });
+        out.drop_without_applying_deltas();
+        name
+    }
+
+    #[test]
+    fn a_voucher_row_reads_its_cells_in_column_order() {
+        // derived: the cells in drawn order are the date, the type, the number, the particulars,
+        // the amount and then the status. The amount is the voucher total (1,200.00, debit, so no
+        // side word), and the date is written as the mock writes it (20 Nov 2026).
+        assert_eq!(
+            spoken(&voucher_report()),
+            "20 Nov 2026, Sales, 12, Sharma Traders, 1,200.00, Paid"
+        );
+    }
 }

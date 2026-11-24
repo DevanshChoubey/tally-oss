@@ -492,23 +492,22 @@ financial year starts. The model supports that (`Company::books_begin`), so it i
 
 ## Accessibility (card S7, round of 2026-11-24)
 
-Tests: `s7_a11y_labels`, `s7_a11y_screens` (names, read from the AccessKit tree), `s7_contrast`
-(WCAG 2.1 ratios over theme pairs), `s7_focus` (Tab order), `s7_zoom` (Ctrl+= / Ctrl+- / Ctrl+0),
-`s7_colour` (status words). Token values are unchanged.
+Tests: `s7_a11y_inputs` (every text input named by its caption), `s7_a11y_rows` (masters rows
+read their cells), `s7_a11y_labels`, `s7_a11y_screens` (names, read from the AccessKit tree),
+`s7_contrast` (WCAG 2.1 ratios over theme pairs), `s7_focus` (Tab order; suggestion entries are
+not Tab stops; Up, Down and Enter move and pick the highlighted entry), `s7_zoom` (Ctrl+= /
+Ctrl+- / Ctrl+0), `s7_colour` (status words). Unit tests name GST, bank, balance sheet and day
+book rows from their cells, the day book in drawn column order. Token values are unchanged.
+
+Keys for the suggestion lists are from help.tallysolutions.com/keyboard-shortcuts-tally-prime/
+(read 2026-11-24): Up and Down move one line in a list, Tab and Shift+Tab move between fields.
 
 - **gap: divider border fails 3:1 non-text in light and dark.** `border` (light `#E2DFD8`, dark
   `#34322E`) measures 1.33:1 and 1.35:1 on the surface. It is used for hairline dividers.
   Pinned by `divider_border_is_a_known_gap_below_the_non_text_minimum`. A control outline should
   use `border_strong`, which passes 3:1 in light and dark.
-- **gap: some text inputs have no accessible name.** Masters, voucher entry, company setup and
-  the welcome screen still draw their text fields without a name. The sales invoice fields are named.
-- **gap: masters, GST and bank table rows are not named.** They are painted click areas with no
-  role or label. The generic report rows and the item invoice lines are named as drawn.
-- **gap: balance sheet and day book rows are not covered by a test.** The naming is in code, but
-  the test harness has no worker to draw them; the generic report path is the one tested.
-- **gap: Tab stops on the suggestion list of an open field.** While the party or ledger field has
-  focus, its suggestion buttons take Tab stops before the next field. The header's field order is
-  reading order (`s7_focus`, which skips the suggestion buttons). Arrow keys are not wired to the list.
+- **gap: voucher entry's ledger list has no Tab test.** It is click-only like the invoice list, so
+  Tab should leave the field, but no test drives the voucher screen's open list yet.
 - **by design: zoom is egui's built-in, session-only.** Ctrl+= / Ctrl+- / Ctrl+0 step the scale
   by 0.1 between 0.2 and 5.0 (egui 0.37 `gui_zoom.rs`). The scale lives in the egui context, so it
   lasts the session and is not saved, the same as the theme. The mock (`design/mock-v2/index.html`)
