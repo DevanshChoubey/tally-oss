@@ -484,13 +484,12 @@ fn padded(ui: &mut Ui, add_contents: impl FnOnce(&mut Ui)) {
 fn kpi(ui: &mut Ui, label: &str, value: &str, foot: &str, on: bool) -> Response {
     let t = tokens(ui);
     let k = kind(ui);
-    let edge = if on { t.accent } else { t.border };
+    // The mock's `.kpi` is a plain `div`, not a `.card` (index.html:180, 1675): no fill, border or
+    // shadow. The accent border shows for the bucket the table is filtered to, and on hover
+    // (`.kpi:hover{border-color:var(--accent)}`).
     let inner = Frame::new()
-        .fill(t.surface)
-        .stroke(Stroke::new(border_width(k), edge))
         .corner_radius(RADIUS_M)
         .inner_margin(Margin::symmetric(16, 14))
-        .shadow(shadow_1(k))
         .show(ui, |ui| {
             ui.set_min_width(ui.available_width());
             ui.spacing_mut().item_spacing.y = 0.0;
@@ -506,6 +505,14 @@ fn kpi(ui: &mut Ui, label: &str, value: &str, foot: &str, on: bool) -> Response 
         });
     let id = ui.scope_id().with(("gst-kpi", label));
     let response = ui.interact(inner.response.rect, id, Sense::click());
+    if on || response.hovered() {
+        ui.painter().rect_stroke(
+            inner.response.rect,
+            RADIUS_M,
+            Stroke::new(border_width(k), t.accent),
+            egui::StrokeKind::Inside,
+        );
+    }
     let spoken = format!("{label}, {value} {foot}");
     response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, spoken.as_str()));
     response

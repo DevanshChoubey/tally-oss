@@ -16,7 +16,7 @@ use crate::theme::{SPACE_2, SPACE_3, TEXT_BODY, TEXT_META, Tokens};
 use crate::ui::card::card;
 use crate::ui::keycap::keycap;
 use crate::ui::page_head::page_head;
-use crate::ui::tabs::tabs;
+use crate::ui::tabs::{tab_strip_with_keys, tab_strip_with_keys_width};
 use crate::ui::{bold_font, tokens};
 use crate::{AppCtx, Screen, ScreenAction};
 
@@ -75,6 +75,9 @@ const MOCK_GROUPS: [(&str, &[(Action, &str)]); 4] = [
         ],
     ),
 ];
+
+/// The size of a card title (`h3`, `--t-h3:14px`, index.html:24).
+const TEXT_H3: f32 = 14.0;
 
 /// The note under the tabs for the classic preset, as the mock words it.
 const CLASSIC_NOTE: &str = "Classic keeps the function keys accountants already use: F8 sales, F5 payment, Ctrl+A save, Enter to move on.";
@@ -167,7 +170,7 @@ const KEYS_WIDTH: f32 = 120.0;
 /// column and the words wrap, so a long label never widens the card past the column.
 fn group_ui(ui: &mut Ui, group: &KeyGroup, keymap: &Keymap, t: &Tokens) {
     ui.set_width(ui.available_width());
-    let heading = bold_font(ui, TEXT_BODY);
+    let heading = bold_font(ui, TEXT_H3);
     ui.label(RichText::new(group.title).font(heading).color(t.text));
     ui.add_space(SPACE_2);
     for row in &group.rows {
@@ -219,6 +222,10 @@ impl Screen for KeymapScreen {
         vec![KeyHint::new("1", "Classic"), KeyHint::new("2", "Standard")]
     }
 
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one screen's layout, read top to bottom"
+    )]
     fn ui(&mut self, ui: &mut Ui, _ctx: &mut AppCtx) -> ScreenAction {
         let id = ui.scope_id().with(VIEW_SALT);
         let t = tokens(ui);
@@ -239,9 +246,21 @@ impl Screen for KeymapScreen {
 
         let title = self.title();
         let subtitle = self.subtitle();
-        page_head(ui, &title, subtitle.as_deref(), |_ui| {});
-
-        if let Some(clicked) = tabs(ui, &TAB_LABELS, view).clicked {
+        // index.html:1845: the two presets are tabs at the right of the head, each with its key,
+        // and no rule under them.
+        let items = [(TAB_LABELS[0], "1"), (TAB_LABELS[1], "2")];
+        let mut clicked = None;
+        page_head(ui, &title, subtitle.as_deref(), |ui| {
+            let size = egui::vec2(tab_strip_with_keys_width(ui, &items), ui.available_height());
+            clicked = ui
+                .allocate_ui_with_layout(
+                    size,
+                    egui::Layout::left_to_right(egui::Align::Center),
+                    |ui| tab_strip_with_keys(ui, &items, Some(view)).clicked,
+                )
+                .inner;
+        });
+        if let Some(clicked) = clicked {
             view = clicked;
         }
         ui.ctx().data_mut(|d| d.insert_temp(id, view));
@@ -265,8 +284,8 @@ impl Screen for KeymapScreen {
         } else {
             STANDARD_NOTE
         };
-        ui.add_space(SPACE_2);
-        crate::ui::para(ui, note, TEXT_BODY, t.text_2);
+        // `p.meta` (index.html:1846): 12 point, the tertiary colour.
+        crate::ui::para(ui, note, TEXT_META, t.text_3);
         ui.label(
             RichText::new(format!(
                 "Keys in use now: {}. Changing the preset is not available yet; this map shows {} for reference.",
@@ -274,7 +293,7 @@ impl Screen for KeymapScreen {
                 tab_label(shown_name)
             ))
             .size(TEXT_META)
-            .color(t.text_2),
+            .color(t.text_3),
         );
         ui.add_space(SPACE_3);
 

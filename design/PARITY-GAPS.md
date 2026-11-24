@@ -329,9 +329,9 @@ captured: `suggested-ledger` (needs bank matching to propose a ledger, which is 
   `bank.default` shows the empty state and the lines table (still `TableBuilder`, with the
   mock's rows wrapping to several lines) has no capture to compare with. Fictional Pumps (the
   third capture company) has a stored statement and could serve it in a later round.
-- **gap: the empty state's look.** `bank.empty`: the mock's card has an icon, a narrower wrapped
-  sentence and the account number and month in the subtitle; ours has the tabs, a File layout
-  row under the card and the account name in the breadcrumb.
+- **gap: the empty state's look.** `bank.empty` now has the 36 px icon, the 420 px sentence and
+  an Upload-icon button, and hides the tabs. Left: the account number and month in the subtitle,
+  a File layout row under the card (functional) and the account name in the breadcrumb.
 - **deferred: `bank.import-error` is not captured.** The engine refuses a statement whose running
   balances do not add up, but Import opens the system file dialog, which the capture harness
   cannot drive. Needs a way to hand the screen a file without the dialog.
@@ -435,7 +435,15 @@ Fictional Traders figures are unchanged.
   card as set with its key in the system keychain, and a "Removed before sending" list. The app
   has no keychain store wired in and no provider form, so the engine refuses the choice
   (`Api::set_ai_tier(Cloud)` is `Unsupported`, reason shown on screen) and the cloud panel reads
-  "Not available" with that reason. The "Removed before sending" switches are not drawn.
+  "Not available" with that reason. Since 2026-11-24 the refusal is drawn as the mock draws a
+  state, not a banner: the Provider card shows a "Not available" badge and the engine's reason,
+  and the "Removed before sending" card is drawn with read-only switches and a "Not built yet"
+  line. The mock's Endpoint and "Stored in system keychain: Set" rows are not claimed.
+- **gap: the redaction list.** The mock lists email addresses among the removed items; our redactor
+  does not remove them, so the list names only what it does (bank accounts and IFSC, PAN, GSTIN
+  and Aadhaar, phone numbers). The mock's Ctrl+E keycap in the log meta is plain text in ours
+  (a test pins the single `LOG_META` string); the local-model "None used" badge is data.
+- **by design: the features and log cards have a 12 px gap**; the mock draws them touching.
 - **deferred: the local model rows.** index.html:1914 shows the bill reader (410 MB) and the
   small model (1.8 GB) as on disk and "None used" verified. No local model is built, so the panel
   says "Not installed" for each row and the network row says nothing is sent yet.
@@ -627,3 +635,19 @@ quick-entry offline-AI state has no dark or hc mock capture). Theme differences 
 - **gap: the hc focus ring is 3 px.** theme.rs `focus_width` widens it on purpose; the mock keeps
   2 px. The masters filter box draws a literal 2 px outline (masters/look.rs), which matches the
   mock but not the app's own hc focus width.
+
+## Masters, GST, keys (round of 2026-11-24, card S8)
+
+- **gap: the items filter box.** The mock's items tab has no filter; ours keeps one because it
+  is functional (masters.items).
+- **gap: "Missing: add HSN" badge.** The mock draws an alert triangle on a Bad badge; the kit has
+  no such BadgeKind and adding one touches every exhaustive match.
+- **gap: create-ledger and ledger-detail field sets.** They follow the engine's fields, not the
+  mock's; the sidebar hover highlight in captures is a capture artifact.
+- **deferred: GSTR-1 per-section table.** The mock sums per section; ours lists per-voucher rows
+  from the engine because the UI never sums. The period button (Alt+F2) is not built.
+- **by design: the keys note keeps the "Keys in use now" line**, which is true of the app.
+- **data: `bank.import-error` has no capture** (see the Bank section); `bank.default` shows the
+  empty state because the fixture has no statement.
+- **gap: GST KPI tiles** are unboxed as in the mock but the light capture is pixel-identical to
+  before; remaining GST difference is data (the fixture's rows).

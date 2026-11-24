@@ -125,3 +125,26 @@ pub fn button_icon(
     a11y::focus_ring(ui, &response, rect);
     response
 }
+
+/// Styles the combo boxes drawn in `ui` after this call as the secondary button (`.btn`: 32
+/// high, a strong border, radius 6, 12 points of padding), so a drop-down that sits in a page
+/// head or an empty state looks like the buttons beside it. Call it inside a scope.
+pub fn style_combo(ui: &mut Ui) {
+    let t = tokens(ui);
+    let bw = border_width(kind(ui));
+    let style = ui.style_mut();
+    style.spacing.interact_size.y = HEIGHT;
+    style.spacing.button_padding.x = PAD_X;
+    for w in [
+        &mut style.visuals.widgets.inactive,
+        &mut style.visuals.widgets.hovered,
+        &mut style.visuals.widgets.active,
+        &mut style.visuals.widgets.open,
+    ] {
+        w.weak_bg_fill = t.surface;
+        w.bg_stroke = Stroke::new(bw, t.border_strong);
+        w.fg_stroke.color = t.text;
+        w.corner_radius = egui::CornerRadius::same(RADIUS_S);
+        w.expansion = 0.0;
+    }
+}

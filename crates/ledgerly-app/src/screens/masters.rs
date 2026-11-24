@@ -1154,6 +1154,8 @@ impl MastersScreen {
         let current = self.kind;
         let mut chosen: Option<MasterKind> = None;
         ui.add_enabled_ui(enabled, |ui| {
+            // Drawn as the kit's secondary button.
+            crate::ui::button::style_combo(ui);
             egui::ComboBox::from_id_salt("masters-more-kinds")
                 .selected_text(shown.as_str())
                 .show_ui(ui, |ui| {

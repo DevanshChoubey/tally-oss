@@ -22,3 +22,17 @@ pub fn card<R>(ui: &mut Ui, add_contents: impl FnOnce(&mut Ui) -> R) -> InnerRes
         .shadow(shadow_1(k))
         .show(ui, add_contents)
 }
+
+/// A card with no padding, for a table that runs edge to edge (`.card` with a `table.t` inside
+/// and no `.pad`, index.html:133). The frame is the same; its rules reach the border.
+pub fn card_flush<R>(ui: &mut Ui, add_contents: impl FnOnce(&mut Ui) -> R) -> InnerResponse<R> {
+    let t = tokens(ui);
+    let k = kind(ui);
+    Frame::new()
+        .fill(t.surface)
+        .stroke(Stroke::new(border_width(k), t.border))
+        .corner_radius(RADIUS_M)
+        .inner_margin(Margin::ZERO)
+        .shadow(shadow_1(k))
+        .show(ui, add_contents)
+}
