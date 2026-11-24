@@ -83,7 +83,12 @@ fn lines(report: &ViewReport) -> Vec<(String, u8, String)> {
                 ViewCell::Amount(a) | ViewCell::Provisional { amount: a, .. } => {
                     format!("{}", a.amount.get())
                 }
-                other => panic!("{other:?}"),
+                other @ (ViewCell::Signed(_)
+                | ViewCell::Qty(_)
+                | ViewCell::Text(_)
+                | ViewCell::Date(_)
+                | ViewCell::Empty
+                | ViewCell::Unsupported(_)) => panic!("{other:?}"),
             };
             (r.label.clone(), r.depth, text)
         })
@@ -165,7 +170,13 @@ fn the_day_book_rows_carry_narration_entered_by_and_origin() {
         .cells[c.unwrap()]
     {
         ViewCell::Text(t) => t.clone(),
-        other => panic!("{other:?}"),
+        other @ (ViewCell::Amount(_)
+        | ViewCell::Signed(_)
+        | ViewCell::Qty(_)
+        | ViewCell::Date(_)
+        | ViewCell::Empty
+        | ViewCell::Provisional { .. }
+        | ViewCell::Unsupported(_)) => panic!("{other:?}"),
     };
     assert_eq!(r.rows.len(), 5);
     let number = r.columns.iter().position(|c| c == "Voucher no.").unwrap();

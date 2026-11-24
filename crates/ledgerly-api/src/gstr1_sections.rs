@@ -23,7 +23,7 @@ use ledgerly_core::{MoneyError, Paise};
 use ledgerly_gst::gstr1::Bucket;
 use ledgerly_gst_formats::gstr1::{B2bInvoice, B2clInvoice, CdnrNote, ItemTax, LineItem};
 
-use crate::gst::Gstr1Return;
+use crate::gst::{Gstr1, Gstr1Return};
 
 /// One row of the section table.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -49,11 +49,11 @@ fn count(n: usize) -> u64 {
 }
 
 fn line_tax(line: &LineItem) -> Result<Paise, MoneyError> {
-    Ok(match line.tax {
+    match line.tax {
         ItemTax::Igst(igst) => igst,
         ItemTax::CgstSgst { cgst, sgst } => cgst.checked_add(sgst)?,
     }
-    .checked_add(line.cess)?)
+    .checked_add(line.cess)
 }
 
 #[derive(Default)]
@@ -93,6 +93,113 @@ fn row(
     }
 }
 
+type Rows = Result<Gstr1Section, MoneyError>;
+
+fn b2b_row(r: &Gstr1) -> Rows {
+    let mut sum = Sum::default();
+    let mut n = 0_usize;
+    for party in &r.b2b {
+        for inv in &party.invoices {
+            let B2bInvoice { items, .. } = inv;
+            sum.lines(items)?;
+            n = n.saturating_add(1);
+        }
+    }
+    Ok(row("4A", "B2B invoices", count(n), Some(sum), true))
+}
+
+fn b2cl_row(r: &Gstr1) -> Rows {
+    let mut sum = Sum::default();
+    let mut n = 0_usize;
+    for group in &r.b2cl {
+        for inv in &group.invoices {
+            let B2clInvoice { items, .. } = inv;
+            sum.lines(items)?;
+            n = n.saturating_add(1);
+        }
+    }
+    let name = "B2C large (inter-state)";
+    Ok(row("5", name, count(n), Some(sum), true))
+}
+
+fn b2cs_row(r: &Gstr1) -> Rows {
+    let mut sum = Sum::default();
+    for line in &r.b2cs {
+        sum.lines(std::slice::from_ref(&line.line))?;
+    }
+    Ok(row("7", "B2C others", count(r.b2cs.len()), Some(sum), true))
+}
+
+fn cdn_row(r: &Gstr1) -> Rows {
+    let mut sum = Sum::default();
+    let mut n = 0_usize;
+    for party in &r.cdnr {
+        for note in &party.notes {
+            let CdnrNote { items, .. } = note;
+            sum.lines(items)?;
+            n = n.saturating_add(1);
+        }
+    }
+    for note in &r.cdnur {
+        sum.lines(&note.items)?;
+        n = n.saturating_add(1);
+    }
+    let name = "Credit and debit notes";
+    Ok(row("9B", name, count(n), Some(sum), true))
+}
+
+fn export_row(r: &Gstr1) -> Rows {
+    let mut sum = Sum::default();
+    let mut n = 0_usize;
+    for group in &r.exp {
+        for inv in &group.invoices {
+            for item in &inv.items {
+                sum.taxable = sum.taxable.checked_add(item.taxable)?;
+                sum.tax = sum.tax.checked_add(item.igst)?.checked_add(item.cess)?;
+            }
+            n = n.saturating_add(1);
+        }
+    }
+    Ok(row("6A", "Exports", count(n), Some(sum), true))
+}
+
+fn nil_row(r: &Gstr1) -> Rows {
+    let mut sum = Sum::default();
+    for line in &r.nil {
+        sum.taxable = sum
+            .taxable
+            .checked_add(line.nil_rated)?
+            .checked_add(line.exempt)?
+            .checked_add(line.non_gst)?;
+    }
+    let name = "Nil-rated, exempt and non-GST";
+    Ok(row("8", name, count(r.nil.len()), Some(sum), false))
+}
+
+fn hsn_row(r: &Gstr1) -> Rows {
+    let mut sum = Sum::default();
+    for line in &r.hsn {
+        sum.taxable = sum.taxable.checked_add(line.taxable)?;
+    }
+    Ok(row(
+        "12",
+        "HSN summary",
+        count(r.hsn.len()),
+        Some(sum),
+        false,
+    ))
+}
+
+fn docs_row(r: &Gstr1) -> Gstr1Section {
+    let mut docs = 0_u64;
+    for series in &r.doc_issue {
+        for range in &series.ranges {
+            docs = docs.saturating_add(u64::from(range.total));
+        }
+    }
+    row("13", "Documents issued", docs, None, false)
+}
+
 impl Gstr1Return {
     /// The section table of this return, in the form's order.
     ///
@@ -100,143 +207,42 @@ impl Gstr1Return {
     /// [`MoneyError`] when a sum overflows.
     pub fn sections(&self) -> Result<Vec<Gstr1Section>, MoneyError> {
         let r = &self.gstr1;
-        let mut out = Vec::with_capacity(8);
-
-        let mut b2b = Sum::default();
-        let mut n = 0_usize;
-        for party in &r.b2b {
-            for inv in &party.invoices {
-                let B2bInvoice { items, .. } = inv;
-                b2b.lines(items)?;
-                n = n.saturating_add(1);
-            }
-        }
-        out.push(row("4A", "B2B invoices", count(n), Some(b2b), true));
-
-        let mut b2cl = Sum::default();
-        let mut n = 0_usize;
-        for group in &r.b2cl {
-            for inv in &group.invoices {
-                let B2clInvoice { items, .. } = inv;
-                b2cl.lines(items)?;
-                n = n.saturating_add(1);
-            }
-        }
-        out.push(row(
-            "5",
-            "B2C large (inter-state)",
-            count(n),
-            Some(b2cl),
-            true,
-        ));
-
-        let mut b2cs = Sum::default();
-        for line in &r.b2cs {
-            b2cs.lines(std::slice::from_ref(&line.line))?;
-        }
-        out.push(row(
-            "7",
-            "B2C others",
-            count(r.b2cs.len()),
-            Some(b2cs),
-            true,
-        ));
-
-        let mut cdn = Sum::default();
-        let mut n = 0_usize;
-        for party in &r.cdnr {
-            for note in &party.notes {
-                let CdnrNote { items, .. } = note;
-                cdn.lines(items)?;
-                n = n.saturating_add(1);
-            }
-        }
-        for note in &r.cdnur {
-            cdn.lines(&note.items)?;
-            n = n.saturating_add(1);
-        }
-        out.push(row(
-            "9B",
-            "Credit and debit notes",
-            count(n),
-            Some(cdn),
-            true,
-        ));
-
+        let mut out = vec![b2b_row(r)?, b2cl_row(r)?, b2cs_row(r)?, cdn_row(r)?];
         if !r.exp.is_empty() {
-            let mut exp = Sum::default();
-            let mut n = 0_usize;
-            for group in &r.exp {
-                for inv in &group.invoices {
-                    for item in &inv.items {
-                        exp.taxable = exp.taxable.checked_add(item.taxable)?;
-                        exp.tax = exp.tax.checked_add(item.igst)?.checked_add(item.cess)?;
-                    }
-                    n = n.saturating_add(1);
-                }
-            }
-            out.push(row("6A", "Exports", count(n), Some(exp), true));
+            out.push(export_row(r)?);
         }
-
         if !r.nil.is_empty() {
-            let mut nil = Sum::default();
-            for line in &r.nil {
-                nil.taxable = nil
-                    .taxable
-                    .checked_add(line.nil_rated)?
-                    .checked_add(line.exempt)?
-                    .checked_add(line.non_gst)?;
-            }
-            out.push(row(
-                "8",
-                "Nil-rated, exempt and non-GST",
-                count(r.nil.len()),
-                Some(nil),
-                false,
-            ));
+            out.push(nil_row(r)?);
         }
+        out.push(hsn_row(r)?);
+        out.push(docs_row(r));
+        out.extend(self.held_row());
+        Ok(out)
+    }
 
-        let mut hsn = Sum::default();
-        for line in &r.hsn {
-            hsn.taxable = hsn.taxable.checked_add(line.taxable)?;
-        }
-        out.push(row(
-            "12",
-            "HSN summary",
-            count(r.hsn.len()),
-            Some(hsn),
-            false,
-        ));
-
-        let mut docs = 0_u64;
-        for series in &r.doc_issue {
-            for range in &series.ranges {
-                docs = docs.saturating_add(u64::from(range.total));
-            }
-        }
-        out.push(row("13", "Documents issued", docs, None, false));
-
+    /// The last row: the vouchers held back, with the worst status among them.
+    fn held_row(&self) -> Option<Gstr1Section> {
         let held: Vec<Bucket> = self
             .buckets
             .iter()
             .map(|b| b.bucket)
             .filter(|b| matches!(b, Bucket::NeedsCorrection | Bucket::Mismatch))
             .collect();
-        if !held.is_empty() {
-            let status = if held.contains(&Bucket::NeedsCorrection) {
-                Bucket::NeedsCorrection
-            } else {
-                Bucket::Mismatch
-            };
-            out.push(Gstr1Section {
-                code: "held",
-                name: "Vouchers held back",
-                records: count(held.len()),
-                taxable: None,
-                tax: None,
-                status,
-            });
+        if held.is_empty() {
+            return None;
         }
-        Ok(out)
+        let status = if held.contains(&Bucket::NeedsCorrection) {
+            Bucket::NeedsCorrection
+        } else {
+            Bucket::Mismatch
+        };
+        Some(Gstr1Section {
+            code: "held",
+            name: "Vouchers held back",
+            records: count(held.len()),
+            taxable: None,
+            tax: None,
+            status,
+        })
     }
 }

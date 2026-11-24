@@ -13,7 +13,7 @@
 use std::collections::BTreeMap;
 
 use ledgerly_api::{Api, Cell, ColumnSpec, Detail, Report, ReportFilter, ReportKind, ReportParams};
-use ledgerly_core::{Clock, Date, Outcome, Period, SignedAmount};
+use ledgerly_core::{Clock, Date, Outcome, Paise, Period, SignedAmount};
 use ledgerly_model::Scenario;
 use time::OffsetDateTime;
 use time::macros::date;
@@ -284,7 +284,12 @@ fn the_balance_sheet_carries_the_mocks_capital_profit_and_current_liabilities() 
 fn signed_or_provisional(cell: &Cell) -> i64 {
     match cell {
         Cell::Provisional { amount, .. } => to_signed(*amount),
-        other => signed(other),
+        other @ (Cell::Amount(_) | Cell::Empty) => signed(other),
+        other @ (Cell::Signed(_)
+        | Cell::Qty(_)
+        | Cell::Text(_)
+        | Cell::Date(_)
+        | Cell::Unsupported(_)) => panic!("not an amount: {other:?}"),
     }
 }
 
@@ -299,7 +304,13 @@ fn the_day_book_says_who_entered_each_november_voucher_and_how() {
     let col = |name: &str| r.columns.iter().position(|c| c.label == name).unwrap();
     let text = |row: &ledgerly_api::ReportRow, c: usize| match &row.cells[c] {
         Cell::Text(t) => t.clone(),
-        other => panic!("{other:?}"),
+        other @ (Cell::Amount(_)
+        | Cell::Signed(_)
+        | Cell::Qty(_)
+        | Cell::Date(_)
+        | Cell::Empty
+        | Cell::Provisional { .. }
+        | Cell::Unsupported(_)) => panic!("{other:?}"),
     };
     let (no, by, origin, narr) = (
         col("Voucher no."),
@@ -358,32 +369,26 @@ fn gstr1_sections_count_what_the_return_holds() {
     let gstin = books.company.registrations[0].gstin.clone();
     let period = Period::new(date!(2026 - 11 - 01), date!(2026 - 11 - 30)).unwrap();
     let ret = api.gstr1(&gstin, period).unwrap().value().unwrap();
-    let rows: Vec<(String, u64, Option<i64>, Option<i64>, String)> = ret
+    let rows: Vec<String> = ret
         .sections()
         .unwrap()
         .into_iter()
         .map(|s| {
-            (
-                s.code.to_owned(),
-                s.records,
-                s.taxable.map(|p| p.get()),
-                s.tax.map(|p| p.get()),
-                format!("{:?}", s.status),
+            let (taxable, tax) = (s.taxable.map(Paise::get), s.tax.map(Paise::get));
+            format!(
+                "{} {} {taxable:?} {tax:?} {:?}",
+                s.code, s.records, s.status
             )
         })
         .collect();
     let want = vec![
-        ("4A", 4, Some(34_358_500), Some(5_053_530), "Ready"),
-        ("5", 0, Some(0), Some(0), "NotRelevant"),
-        ("7", 0, Some(0), Some(0), "NotRelevant"),
-        ("9B", 0, Some(0), Some(0), "NotRelevant"),
-        ("12", 5, Some(34_358_500), None, "Ready"),
-        ("13", 5, None, None, "Ready"),
-        ("held", 1, None, None, "NeedsCorrection"),
+        "4A 4 Some(34358500) Some(5053530) Ready",
+        "5 0 Some(0) Some(0) NotRelevant",
+        "7 0 Some(0) Some(0) NotRelevant",
+        "9B 0 Some(0) Some(0) NotRelevant",
+        "12 5 Some(34358500) None Ready",
+        "13 5 None None Ready",
+        "held 1 None None NeedsCorrection",
     ];
-    let want: Vec<(String, u64, Option<i64>, Option<i64>, String)> = want
-        .into_iter()
-        .map(|(c, r, t, x, s)| (c.to_owned(), r, t, x, s.to_owned()))
-        .collect();
     assert_eq!(rows, want);
 }

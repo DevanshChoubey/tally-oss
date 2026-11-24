@@ -54,7 +54,7 @@ pub(crate) fn run(
             Outcome::Value(report) if p.columns == ColumnSpec::Single => {
                 Outcome::Value(annotate(store, books, report)?)
             }
-            other => other,
+            other @ (Outcome::Value(_) | Outcome::Unsupported(_)) => other,
         },
         ReportKind::Register(kind) => register(books, p, *kind)?,
         ReportKind::Outstanding { receivable } => outstanding(books, p, *receivable)?,

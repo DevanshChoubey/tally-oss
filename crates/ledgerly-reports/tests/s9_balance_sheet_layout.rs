@@ -82,7 +82,7 @@ fn ledger(id: u64, name: &str, group: u64) -> Ledger {
     }
 }
 
-fn books() -> Books {
+fn masters() -> Masters {
     use ReservedGroup as R;
     let mut m = Masters::default();
     for g in [
@@ -162,6 +162,11 @@ fn books() -> Books {
             tally: None,
         },
     );
+    m
+}
+
+fn books() -> Books {
+    let m = masters();
     let date = Date::from_calendar_date(2026, Month::April, 1).unwrap();
     // 1: Dr Cash 10,00,000 Cr Capital. 2: Dr Furniture 2,00,000 Cr Loan. 3: Dr Cash 50,000 Cr Sales.
     let pair = |n: u64, dr: u64, cr: u64, amount: Paise| {
@@ -252,7 +257,12 @@ fn labels(r: &Report) -> Vec<(&str, u8)> {
 fn amount(c: &Cell) -> (DrCr, Paise) {
     match c {
         Cell::Amount(a) | Cell::Provisional { amount: a, .. } => (a.side, a.amount),
-        other => panic!("not an amount: {other:?}"),
+        other @ (Cell::Signed(_)
+        | Cell::Qty(_)
+        | Cell::Text(_)
+        | Cell::Date(_)
+        | Cell::Empty
+        | Cell::Unsupported(_)) => panic!("not an amount: {other:?}"),
     }
 }
 
@@ -433,7 +443,13 @@ fn provisional_reason(books: &Books) -> String {
         .cells[1]
     {
         Cell::Provisional { reason, .. } => reason.clone(),
-        other => panic!("{other:?}"),
+        other @ (Cell::Amount(_)
+        | Cell::Signed(_)
+        | Cell::Qty(_)
+        | Cell::Text(_)
+        | Cell::Date(_)
+        | Cell::Empty
+        | Cell::Unsupported(_)) => panic!("{other:?}"),
     }
 }
 

@@ -142,7 +142,13 @@ fn day_book(api: &Api) -> Report {
 fn text(cell: &Cell) -> &str {
     match cell {
         Cell::Text(t) => t,
-        other => panic!("{other:?}"),
+        other @ (Cell::Amount(_)
+        | Cell::Signed(_)
+        | Cell::Qty(_)
+        | Cell::Date(_)
+        | Cell::Empty
+        | Cell::Provisional { .. }
+        | Cell::Unsupported(_)) => panic!("{other:?}"),
     }
 }
 

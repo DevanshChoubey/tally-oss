@@ -614,6 +614,25 @@ impl<'a> Walker<'a> {
         }
     }
 
+    /// The Stock-in-Hand group is the closing stock: one row where the group stands.
+    fn stock_group(&mut self, net: Paise, depth: u8, side: Side) -> Result<GroupOut, ReportError> {
+        self.stock_placed = true;
+        let provisional = self.stock.provisional.as_deref();
+        let row = ReportRow {
+            key: None,
+            label: STOCK_LABEL.to_owned(),
+            depth,
+            kind: RowKind::Item,
+            cells: place(side, figure(self.stock.value, provisional)?),
+        };
+        Ok(GroupOut {
+            net: net.checked_add(self.stock.value)?,
+            rows: vec![row],
+            shown: true,
+            provisional: provisional.is_some(),
+        })
+    }
+
     fn group(&mut self, group: &Group, depth: u8, side: Side) -> Result<GroupOut, ReportError> {
         if depth > MAX_DEPTH {
             return Err(ReportError::Invalid {
@@ -665,22 +684,7 @@ impl<'a> Walker<'a> {
             && !self.stock_placed
             && (!self.stock.value.is_zero() || self.stock.provisional.is_some())
         {
-            // The Stock-in-Hand group is the closing stock: one row where the group stands.
-            self.stock_placed = true;
-            let provisional = self.stock.provisional.as_deref();
-            let row = ReportRow {
-                key: None,
-                label: STOCK_LABEL.to_owned(),
-                depth,
-                kind: RowKind::Item,
-                cells: place(side, figure(self.stock.value, provisional)?),
-            };
-            return Ok(GroupOut {
-                net: net.checked_add(self.stock.value)?,
-                rows: vec![row],
-                shown: true,
-                provisional: provisional.is_some(),
-            });
+            return self.stock_group(net, depth, side);
         }
         let mut rows = Vec::with_capacity(body.len().saturating_add(1));
         let reason = if provisional {
