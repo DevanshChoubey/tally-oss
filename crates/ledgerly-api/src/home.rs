@@ -22,9 +22,9 @@ use crate::facade::Api;
 /// Deepest group nesting followed when looking for a reserved ancestor.
 const MAX_GROUP_DEPTH: usize = 256;
 /// A customer bill counts as late once it is more than this many days past its due date.
-const CUSTOMER_LATE_DAYS: i64 = 30;
+pub const CUSTOMER_LATE_DAYS: i64 = 30;
 /// A supplier bill counts as late once it is any days past its due date.
-const SUPPLIER_LATE_DAYS: i64 = 0;
+pub const SUPPLIER_LATE_DAYS: i64 = 0;
 
 /// Cash in hand and bank accounts together.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -403,14 +403,14 @@ fn sales_by_month(books: &Books, as_of: Date) -> Outcome<Vec<MonthSales>> {
             return refuse("a posting falls outside the listed months".to_owned());
         };
         // Credit adds to sales, a debit (a return) takes away.
-        let next = match posting.amount.side {
+        let total = match posting.amount.side {
             DrCr::Cr => slot.checked_add(posting.amount.amount),
             DrCr::Dr => slot.checked_sub(posting.amount.amount),
         };
-        let Ok(next) = next else {
+        let Ok(total) = total else {
             return refuse("the sales are too large to add".to_owned());
         };
-        *slot = next;
+        *slot = total;
     }
     let mut out = Vec::with_capacity(months.len());
     for (month_start, sales) in months.drain(..).zip(net) {
@@ -464,11 +464,12 @@ fn month_starts(first: Date, last: Date) -> Option<Vec<Date>> {
 
 /// The first day of the month after `start`'s.
 fn next_month(start: Date) -> Option<Date> {
-    let (year, month) = match start.month() {
-        Month::December => (start.year().checked_add(1)?, Month::January),
-        other => (start.year(), other.next()),
+    let year = if start.month() == Month::December {
+        start.year().checked_add(1)?
+    } else {
+        start.year()
     };
-    Date::from_calendar_date(year, month, 1).ok()
+    Date::from_calendar_date(year, start.month().next(), 1).ok()
 }
 
 /// The last day of `start`'s month.

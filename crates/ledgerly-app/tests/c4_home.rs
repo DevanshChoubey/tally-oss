@@ -221,34 +221,61 @@ fn view<'a>(views: &'a [KpiView], label: &str) -> &'a KpiView {
 }
 
 #[test]
-fn home_kpis_are_the_closing_group_balances_derived_by_hand() {
+fn home_kpis_are_the_four_tiles_derived_by_hand() {
     // provenance: derived. Posted: V1 Cash Dr 1,00,000 / Capital Cr 1,00,000; V2 Cash Dr 5,000 /
     // Customer One Cr 5,000; V3 Customer Two Dr 30,000 / Capital Cr 30,000; V4 Capital Dr 8,000 /
     // Supplier Cr 8,000.
-    // Cash in hand: only Cash, Dr 1,00,000 + 5,000 = 1,05,000.00.
-    // Bank accounts: no ledger in the group, so a nil balance: 0.00.
+    // Cash and bank (one tile, the mock's "Cash and bank"): only Cash, Dr 1,00,000 + 5,000 =
+    // 1,05,000.00, and there is no bank ledger, so the line under it says "Cash and 0 bank
+    // accounts".
     // Receivables (Sundry Debtors): Customer One Cr 5,000 + Customer Two Dr 30,000 = Dr 25,000.00.
     // Payables (Sundry Creditors): Supplier Cr 8,000.00, the usual side for creditors.
-    // GST cash payable: the engine has no payable-after-set-off figure, so the tile is not supported.
+    // The customer and supplier ledgers keep no bill-wise detail, so how many of their bills are
+    // late cannot be known: each line under a figure says the count is not given, never a zero.
+    // GST cash payable: set-off needs the accepted input credit from GSTR-2B, which has no
+    // reader, so the tile is not supported. Its title carries the month of the as-of date.
     // Indian grouping: 1,05,000.00 (last three digits, then pairs).
-    // Footnote date: 30 Apr 2026, the as-of date of `refreshed`, in the mock's date form
-    // ("21 Nov 2026" in design/mock-v2/captures/states/light/home.default.webp).
+    // Changed from the earlier "Cash in hand" and "Bank accounts" tiles by card s9 so that the
+    // tiles are the mock's four (design/mock-v2/index.html, SCREENS.home, lines 1061 to 1065).
     let worker = ApiWorker::spawn(setup("c4_home_kpis.ledgerly", true)).unwrap();
     let views = refreshed(&worker);
 
+    let labels: Vec<&str> = views.iter().map(|v| v.label.as_str()).collect();
     assert_eq!(
-        view(&views, "Cash in hand").value_text,
+        labels,
+        vec![
+            "Cash and bank",
+            "Receivables",
+            "Payables",
+            "GST cash payable, Apr"
+        ]
+    );
+    assert_eq!(
+        view(&views, "Cash and bank").value_text,
         "\u{20B9}1,05,000.00"
     );
-    assert_eq!(view(&views, "Bank accounts").value_text, "\u{20B9}0.00");
-    assert_eq!(view(&views, "Receivables").value_text, "\u{20B9}25,000.00");
     assert_eq!(
-        view(&views, "Receivables").footnote_text,
-        "Closing balance as of 30 Apr 2026"
+        view(&views, "Cash and bank").footnote_text,
+        "Cash and 0 bank accounts"
+    );
+    assert_eq!(view(&views, "Receivables").value_text, "\u{20B9}25,000.00");
+    assert!(
+        view(&views, "Receivables")
+            .footnote_text
+            .contains("not counted"),
+        "{}",
+        view(&views, "Receivables").footnote_text
     );
     assert_eq!(view(&views, "Payables").value_text, "\u{20B9}8,000.00");
+    assert!(
+        view(&views, "Payables")
+            .footnote_text
+            .contains("not counted"),
+        "{}",
+        view(&views, "Payables").footnote_text
+    );
     assert_eq!(
-        view(&views, "GST cash payable").value_text,
+        view(&views, "GST cash payable, Apr").value_text,
         "Not supported yet"
     );
 }
@@ -270,7 +297,7 @@ fn a_balance_on_the_unusual_side_is_not_shown_as_a_plain_figure() {
     );
     // The cash tile is still its own hand-derived figure: Dr 1,00,000 + 5,000.
     assert_eq!(
-        view(&views, "Cash in hand").value_text,
+        view(&views, "Cash and bank").value_text,
         "\u{20B9}1,05,000.00"
     );
 }

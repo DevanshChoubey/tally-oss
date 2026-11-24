@@ -30,7 +30,9 @@ pub use facade::Api;
 pub use gst::{
     Bucket, BucketedVoucher, Gstr1, Gstr1Return, Gstr3bTaxAmounts, Gstr3bWorking, RulePack,
 };
-pub use home::{CashAndBank, HomeFigures, LateBills, MonthSales};
+pub use home::{
+    CUSTOMER_LATE_DAYS, CashAndBank, HomeFigures, LateBills, MonthSales, SUPPLIER_LATE_DAYS,
+};
 pub use ledgerly_gst::compute::GstBreakup;
 pub use ledgerly_model::{
     Address, Books, Company, EntityKind, Features, NegativeStockPolicy, Voucher,

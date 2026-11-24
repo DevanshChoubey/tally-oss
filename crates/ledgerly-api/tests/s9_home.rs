@@ -253,6 +253,7 @@ fn create(name: &str) -> Api {
 }
 
 /// The shared company, as of 20 Nov 2026.
+#[allow(clippy::too_many_lines, reason = "a table of the fixture's vouchers")]
 fn books(name: &str) -> Api {
     let mut api = create(name);
     masters(&mut api, SignedAmount::dr(rs(2_500)), true);

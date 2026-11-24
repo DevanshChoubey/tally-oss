@@ -89,13 +89,12 @@ pub fn gstr1_next_due(today: Date) -> Option<(Period, Date)> {
         let first_day = last_day.replace_day(1).ok()?;
         return Some((Period::new(first_day, last_day).ok()?, due_this_month));
     }
-    let next_month = match this_month.month() {
-        Month::December => {
-            Date::from_calendar_date(this_month.year().checked_add(1)?, Month::January, 1)
-        }
-        other => Date::from_calendar_date(this_month.year(), other.next(), 1),
-    }
-    .ok()?;
+    let next_year = if this_month.month() == Month::December {
+        this_month.year().checked_add(1)?
+    } else {
+        this_month.year()
+    };
+    let next_month = Date::from_calendar_date(next_year, this_month.month().next(), 1).ok()?;
     let period = Period::new(this_month, next_month.previous_day()?).ok()?;
     Some((period, next_month.replace_day(GSTR1_DUE_DAY).ok()?))
 }

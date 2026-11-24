@@ -8,25 +8,37 @@ Kinds: **bug** (the app is wrong or missing something it should do), **deferred*
 feature that is not built), **data** (the capture company lacks what the mock's sample shows),
 **by design** (we differ on purpose; kept here so nobody "fixes" it back).
 
-## Home (light states round of 2026-11-24)
+## Home (round S9, 2026-11-25)
 
-Captured: `home.empty` (Fictional Traders' masters with no voucher, a second capture company)
-and `home.ai-off`. Not captured: `home.loading` and `home.nudge-open`.
+Captured: `home.default`, `home.empty`, `home.ai-off`, `home.nudge-open` (light, dark, hc). Not
+captured: `home.loading`. The four tiles, the November bars, the review rows, the nudges and the
+new-company card (book icon, three buttons with icons, info note) follow the mock; every figure
+comes from `Api::home_figures` and `Api::home_nudges`.
 
-- **gap: the new-company card has no icon and no "Import from another app" button.** The mock's
-  card (index.html, `SCREENS.home`, `empty`) has a book icon over the heading, icons on its
-  buttons and a middle button that opens setup's import. The import wizard is not routed from
-  Home, so the button is left out; the icons are not drawn. The note under the card has no info
-  icon and is not full width. The line under the title now names the financial year with its
-  days, as the mock's does (`home::new_company_line`, tested in `tests/s6_home_empty.rs`).
-- **gap: the AI-off note.** The mock's note (`home.ai-off`) starts with a bold clause, has an
-  icon and an "AI and privacy" button; ours is the plain note. The KPI tiles' layout differs, and
-  the mock shows the chart and the nudges, which are not built (see "Review queue").
+- **gap: GST cash payable is unsupported.** The mock shows 39,498.00 "after accepted ITC". The
+  engine has no GSTR-2B reader, so accepted credit is unknown; the tile keeps its slot and says
+  "Not supported yet" with the reason. Its text is longer than the mock's figure, so that tile is
+  taller than the other three.
+- **gap: no IMS nudge.** "3 2B records have no IMS action" needs the 2B reader above.
+- **gap: GSTR-1 due date is the monthly one.** The 11th of the next month (CBIC Notification
+  83/2020-Central Tax). Quarterly (QRMP) filers' 13th and holiday shifts are not modelled; no
+  filing record is kept, so the nudge shows until the month passes. The count is of vouchers
+  needing correction, not "items"; "Open GSTR-1" opens the GST returns screen.
+- **gap: the compare dialog is shorter than the mock's.** It has no bank-line row, no "books are
+  on bank statements" check, and no "Adjust rule" or "Not a duplicate" buttons: the engine has no
+  bank matching for these payments and no way to record that a pair is not a duplicate. Esc closes
+  it; Investigate (Ctrl+A) opens the day book. The nudge names the debit ledger (Electricity), not a
+  payee, because rule D-02 compares ledgers. D-02 is our own rule (documented on
+  `Api::home_nudges`); the seed's PY/0304 narration was set to "City Power, October bill" so that
+  it can fire on Godavari.
+- **gap: review rows.** No age ("2 min ago"): proposals carry no timestamps. Every row shows the
+  bank icon (no camera/bill origin yet, the unlisted sources are named in the footer note). The
+  review queue does not list duplicates. J/K/Enter on Home open the generic queue, not the row.
+- **gap: the entry bar.** It says "not connected in this build" where the mock says "runs on this
+  computer"; the greeting has no name and the "Start" card is dropped, by design.
+- **gap: new `Icon` variants** (Alert, Info, Clock, Camera) are drawn from the mock's paths.
 - **deferred: `home.loading` is not captured.** The skeleton shows only while a refresh waits on
-  the worker, which takes a few frames on the capture company; the harness cannot hold it there.
-  Capturing it needs a way to hold the worker (a job that blocks until released).
-- **deferred: `home.nudge-open` is not reachable.** It expands a possible-duplicate nudge; the
-  nudge rules (D-02) are not built, so Home has no nudge to open.
+  the worker; the harness cannot hold it there.
 
 ## Palette (round of 2026-11-23, commit d4f0bcb)
 
