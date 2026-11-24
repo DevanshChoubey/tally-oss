@@ -590,8 +590,10 @@ financial year starts. The model supports that (`Company::books_begin`), so it i
   against a GSTIN starting 27, by clicks on the State list) shows the mock's words and disables
   Continue, as the mock does, but the GSTIN and State fields are not outlined in red and the
   message has no cross icon. The rule is tested in `tests/w4_setup.rs`.
-- **gap: the import card on Start is shown, not working.** Import needs the import wizard (not
-  routed from here). "Open a Ledgerly file" works (round of 2026-11-24, card S8): the system file
+- **gap: the import card on Start opens a screen that cannot finish with no company.** The card
+  is a choice like the others (arrows move onto it, Enter opens the import screen). With no
+  company open the screen says "No company is open yet" and its import button is disabled: the
+  one-step import writes into an open, empty company file. "Open a Ledgerly file" works (round of 2026-11-24, card S8): the system file
   dialog, then the company opens and Home replaces the wizard. "Try the sample company" works
   (S8, sample company): it builds Godavari Drip & Pump Works from `ledgerly-sample` into a
   throwaway file under the user's cache folder (`$XDG_CACHE_HOME` or `~/.cache`, else the system
@@ -607,8 +609,16 @@ financial year starts. The model supports that (`Company::books_begin`), so it i
 - **gap: a breadcrumb sits above the setup card when it is opened over Home.** The mock draws the
   card with no crumbs. The first launch (`Shell::cold_start`, no company) has none, as the mock;
   opened from the palette or sidebar over an open company, the shell draws "Home > Company setup".
-- **gap: the import card on Start carries a muted line saying why.** The mock draws it as a plain
-  choice; ours cannot be chosen (see above), so it says so under its text.
+- **gap: the import screen's step-by-step path is not connected.** The five-step wizard
+  (detect, choose, pull, map, reconcile) is a state machine nothing in the shell drives, so its
+  "Look for a running app" and "Read exported file" controls are drawn disabled with the reason
+  (`STEP_BY_STEP_CONNECTED` in `screens/import/view.rs`). Only the one-step import works. The
+  mock has no import state; the screen is designed in the app's own kit (page head, card, step
+  line, kit buttons, notes and badges).
+- **by design: refusals are a toast.** Messages that used to be red text in the key bar are a dark
+  pill above it (`ui::toast`, the mock's `.toast`, index.html:290), gone after 6 seconds. With no
+  company, F4-F9 and D, B, M, G, and screens that need a company, say "X needs a company. Create or
+  open one first." with a "Create a company" action.
 - **gap: first-launch chrome.** With no company the top bar shows the mock's one "New company"
   chip, but the AI chip says "AI: not set up" where the mock says "AI on this computer" (nothing
   is stored to name), and the sidebar footer shows the app version where the mock shows "Engine

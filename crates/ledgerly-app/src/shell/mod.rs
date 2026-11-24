@@ -83,6 +83,7 @@ pub(crate) fn books_print(books: &ledgerly_api::Books) -> BooksPrint {
         books.vouchers.keys().next_back().copied(),
     )
 }
+pub use chrome::unique_tab_labels;
 pub use gateway::GatewayScreen;
 pub use stack::{ScreenStack, StackChange, Tabs};
 pub use welcome::{WelcomeScreen, company_from_form};
@@ -141,7 +142,29 @@ pub struct Shell {
     search: PaletteSearch,
     /// Why the last pick or chip opened nothing, or why the key map could not be read.
     notice: Option<String>,
+    /// The toast's action button: its label and what it does.
+    notice_action: Option<(String, ChromeCmd)>,
+    /// The notice on screen and the time it first showed, for the toast's timeout.
+    notice_born: Option<(String, f64)>,
 }
+
+/// How long a toast stays, in seconds (the mock's is 2.6; ours reads a little longer).
+const TOAST_SECONDS: f64 = 6.0;
+
+/// The keys that open a company's screens, with what each opens: with no company open they
+/// answer with a toast instead of doing nothing.
+const COMPANY_KEYS: [(Key, &str, &str); 10] = [
+    (Key::F4, "F4", "Contra"),
+    (Key::F5, "F5", "Payment"),
+    (Key::F6, "F6", "Receipt"),
+    (Key::F7, "F7", "Journal"),
+    (Key::F8, "F8", "Sales"),
+    (Key::F9, "F9", "Purchase"),
+    (Key::D, "D", "Day book"),
+    (Key::B, "B", "Balance sheet"),
+    (Key::M, "M", "Masters"),
+    (Key::G, "G", "GST returns"),
+];
 
 impl Shell {
     /// A shell with one tab showing `root`, in the light theme, with the full sidebar.
@@ -171,6 +194,8 @@ impl Shell {
             palette: Palette::new(),
             search: PaletteSearch::new(),
             notice,
+            notice_action: None,
+            notice_born: None,
         }
     }
 
@@ -189,6 +214,12 @@ impl Shell {
     #[must_use]
     pub fn notice(&self) -> Option<&str> {
         self.notice.as_deref()
+    }
+
+    /// The label of the toast's action button, when the notice offers one.
+    #[must_use]
+    pub fn notice_action(&self) -> Option<&str> {
+        self.notice_action.as_ref().map(|(label, _)| label.as_str())
     }
 
     /// Whether the sidebar is the 60 px rail.
@@ -379,7 +410,34 @@ impl Shell {
                 }
                 self.notice = None;
             }
-            Err(e) => self.notice = Some(e.to_string()),
+            Err(e) => self.refuse(&e),
+        }
+    }
+
+    /// Shows why a screen did not open. With no company open, a screen that needs one says so in
+    /// plain words and offers the setup wizard.
+    fn refuse(&mut self, e: &navigate::NavError) {
+        if self.app_ctx.api.is_some() {
+            self.notice = Some(e.to_string());
+            return;
+        }
+        match e {
+            navigate::NavError::NoCompanyOpen(screen) => {
+                self.say_need_company(format!(
+                    "{screen} needs a company. Create or open one first."
+                ));
+            }
+            navigate::NavError::NoCompany => {
+                self.say_need_company(
+                    "That screen needs a company. Create or open one first.".to_owned(),
+                );
+            }
+            other @ (navigate::NavError::BadKey(_)
+            | navigate::NavError::Unsupported { .. }
+            | navigate::NavError::VoucherNotFound(_)
+            | navigate::NavError::Period(_)
+            | navigate::NavError::NotNavigation
+            | navigate::NavError::Setup) => self.notice = Some(other.to_string()),
         }
     }
 
@@ -525,7 +583,7 @@ impl Shell {
         egui::CentralPanel::default().frame(stage).show(ui, |ui| {
             // The mock has one page and no tab strip.
             if self.tabs.len() > 1 {
-                cmds.extend(chrome::tab_strip(ui, &self.tabs));
+                cmds.extend(chrome::tab_strip(ui, &self.tabs, t));
             }
             // The root screen has no breadcrumbs (`phead(null, ..)` on Home in the mock).
             if trail.len() > 1 {
@@ -602,9 +660,6 @@ impl Shell {
             .frame(panel_frame(&t, egui::Margin::symmetric(12, 0)))
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
-                    if let Some(notice) = &self.notice {
-                        ui.colored_label(ui.visuals().error_fg_color, notice.as_str());
-                    }
                     chrome::key_bar(ui, &context, &hints, &t);
                 });
             });
@@ -622,14 +677,15 @@ impl Shell {
         self.palette_frame(ui);
 
         cmds.extend(self.stage(ui, &trail, &t));
-        cmds.extend(Self::key_cmds(ui, can_go_back));
+        cmds.extend(Self::key_cmds(ui, can_go_back, self.app_ctx.api.is_none()));
+        cmds.extend(self.toast_frame(ui.ctx()));
         for cmd in cmds {
             self.run_cmd(cmd);
         }
     }
 
     /// Reads Esc, Ctrl+T, Ctrl+W and Ctrl+\. Esc counts only if no screen consumed it this frame.
-    fn key_cmds(ui: &egui::Ui, can_go_back: bool) -> Vec<ChromeCmd> {
+    fn key_cmds(ui: &egui::Ui, can_go_back: bool, no_company: bool) -> Vec<ChromeCmd> {
         let text_focused = ui.ctx().text_edit_focused();
         let mut cmds = Vec::new();
         ui.input_mut(|i| {
@@ -646,6 +702,17 @@ impl Shell {
                 cmds.push(ChromeCmd::Back);
             }
         });
+        // With no company open, a key that opens a company's screen answers instead of waiting.
+        if no_company && !text_focused {
+            for (key, name, what) in COMPANY_KEYS {
+                if ui.input_mut(|i| i.consume_key(Modifiers::NONE, key)) {
+                    cmds.push(ChromeCmd::NeedCompany(format!(
+                        "{what} ({name}) needs a company. Create or open one first."
+                    )));
+                    break;
+                }
+            }
+        }
         // `?` opens the keyboard map (the mock's key bar: "? all keys"), but not while a text
         // field has focus, where it is a typed character.
         if !text_focused && ui.input_mut(|i| i.consume_key(Modifiers::NONE, Key::Questionmark)) {
@@ -687,6 +754,57 @@ impl Shell {
             ChromeCmd::OpenOnTop(target) => self.open_in_tab(&target, PaletteMode::OnTop),
             ChromeCmd::Replace(target) => self.open_in_tab(&target, PaletteMode::Replace),
             ChromeCmd::Say(text) => self.notice = Some(text),
+            ChromeCmd::NeedCompany(text) => self.say_need_company(text),
+            ChromeCmd::ToSetup => self.go_to_setup(),
+        }
+    }
+
+    /// Shows `text` as a toast with the action that fixes it: the setup wizard.
+    fn say_need_company(&mut self, text: String) {
+        self.notice = Some(text);
+        self.notice_born = None;
+        self.notice_action = Some(("Create a company".to_owned(), ChromeCmd::ToSetup));
+    }
+
+    /// Takes the active tab back to its root and makes sure that root is the setup wizard.
+    fn go_to_setup(&mut self) {
+        if let Some(stack) = self.tabs.active_stack_mut() {
+            stack.truncate_to(1);
+            if stack.top_title() != SETUP_TITLE {
+                stack.replace(Box::new(SetupScreen::default()));
+            }
+        }
+        self.notice = None;
+    }
+
+    /// Draws the notice as a toast, times it out, and returns what its action asked for.
+    fn toast_frame(&mut self, ctx: &egui::Context) -> Option<ChromeCmd> {
+        let Some(text) = self.notice.clone() else {
+            self.notice_born = None;
+            self.notice_action = None;
+            return None;
+        };
+        let now = ctx.input(|i| i.time);
+        let born = match &self.notice_born {
+            Some((seen, born)) if *seen == text => *born,
+            _ => {
+                self.notice_born = Some((text.clone(), now));
+                now
+            }
+        };
+        if now - born > TOAST_SECONDS {
+            self.notice = None;
+            self.notice_action = None;
+            self.notice_born = None;
+            return None;
+        }
+        ctx.request_repaint_after(std::time::Duration::from_millis(500));
+        let label = self.notice_action.as_ref().map(|(label, _)| label.clone());
+        let outcome = crate::ui::toast::toast(ctx, &text, label.as_deref());
+        if outcome.action {
+            self.notice_action.take().map(|(_, cmd)| cmd)
+        } else {
+            None
         }
     }
 }
@@ -717,6 +835,10 @@ pub fn run() -> eframe::Result<()> {
     eframe::run_native(
         "Ledgerly",
         options,
-        Box::new(|_cc| Ok(Box::new(Shell::cold_start()))),
+        Box::new(|_cc| {
+            // The real window is the one place a native file dialog may open.
+            crate::screens::setup::enable_system_dialogs();
+            Ok(Box::new(Shell::cold_start()))
+        }),
     )
 }

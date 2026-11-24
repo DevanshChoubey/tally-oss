@@ -29,9 +29,11 @@ pub mod probe;
 pub mod prop;
 pub mod prov;
 pub mod skeleton;
+pub mod step_marker;
 pub mod switch;
 pub mod table;
 pub mod tabs;
+pub mod toast;
 
 use egui::{Align, Color32, FontFamily, FontId, Layout, Response, RichText, Ui};
 

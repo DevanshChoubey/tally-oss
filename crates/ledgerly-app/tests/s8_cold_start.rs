@@ -301,7 +301,7 @@ fn screens_that_only_show_a_companys_data_do_not_open_with_no_company() {
         );
         let notice = shell.notice().unwrap_or_default().to_owned();
         assert!(
-            notice.contains("no company is open") && notice.contains(name),
+            notice == format!("{name} needs a company. Create or open one first."),
             "{name}: {notice:?}"
         );
     }

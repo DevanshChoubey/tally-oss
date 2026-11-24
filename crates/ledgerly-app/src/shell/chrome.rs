@@ -8,7 +8,8 @@ use egui::{RichText, Ui};
 
 use super::stack::Tabs;
 use crate::screen::KeyHint;
-use crate::theme::{TEXT_META, Tokens};
+use crate::theme::{TEXT_META, Tokens, border_width};
+use crate::ui::button::{ButtonKind, button_icon};
 use crate::ui::icon::{self, Icon};
 use crate::ui::{a11y, bold_font, keycap, tabs};
 
@@ -37,39 +38,83 @@ pub(super) enum ChromeCmd {
     Replace(crate::palette::PaletteTarget),
     /// Show this line in the key bar: why a chip or a row cannot do its job yet.
     Say(String),
+    /// Show this text as a toast offering "Create a company".
+    NeedCompany(String),
+    /// Go to the setup wizard at the root of the active tab.
+    ToSetup,
 }
 
-/// Tab strip: the open tabs with the active one underlined, then the new-tab and close-tab
-/// buttons. Close-tab shows only when more than one tab is open, because the last tab stays.
-pub(super) fn tab_strip(ui: &mut Ui, tabs_set: &Tabs) -> Vec<ChromeCmd> {
+/// Labels for the tab strip: a title that two tabs share gets its place number after it for the
+/// later ones ("Company setup", "Company setup 2"), so every tab reads differently.
+#[must_use]
+pub fn unique_tab_labels(titles: &[String]) -> Vec<String> {
+    titles
+        .iter()
+        .enumerate()
+        .map(|(i, title)| {
+            let before = titles.iter().take(i).filter(|t| *t == title).count();
+            if before == 0 {
+                title.clone()
+            } else {
+                format!("{title} {}", before.saturating_add(1))
+            }
+        })
+        .collect()
+}
+
+/// Tab strip: the open tabs in the kit's tab style (the active one underlined, a rule beneath),
+/// then the new-tab and close-tab buttons at the right in the kit's buttons. Close-tab shows
+/// only when more than one tab is open, because the last tab stays.
+pub(super) fn tab_strip(ui: &mut Ui, tabs_set: &Tabs, t: &Tokens) -> Vec<ChromeCmd> {
     let mut cmds = Vec::new();
-    ui.horizontal(|ui| {
-        let titles = tabs_set.titles();
+    let slot = ui.painter().add(egui::Shape::Noop);
+    let row = ui.horizontal(|ui| {
+        let titles = unique_tab_labels(&tabs_set.titles());
         let labels: Vec<&str> = titles.iter().map(String::as_str).collect();
-        let response = tabs::tabs(ui, &labels, tabs_set.active_index());
+        let response = tabs::tab_strip(ui, &labels, Some(tabs_set.active_index()));
         if let Some(index) = response.clicked {
             cmds.push(ChromeCmd::SelectTab(index));
         }
-        let new_tab = ui.small_button("+").on_hover_text("New tab (Ctrl+T)");
-        // The bare "+" is what is drawn; a screen reader is told what it does.
-        a11y::name(ui, &new_tab, egui::Role::Button, "New tab (Ctrl+T)");
-        if new_tab.clicked() {
-            cmds.push(ChromeCmd::NewTab);
-        }
-        if tabs_set.len() > 1 && close_tab_button(ui).clicked() {
-            cmds.push(ChromeCmd::CloseActiveTab);
-        }
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if tabs_set.len() > 1
+                && button_icon(
+                    ui,
+                    Some(Icon::X),
+                    "Close tab",
+                    Some("Ctrl+W"),
+                    ButtonKind::Secondary,
+                )
+                .clicked()
+            {
+                cmds.push(ChromeCmd::CloseActiveTab);
+            }
+            if button_icon(
+                ui,
+                Some(Icon::Plus),
+                "New tab",
+                Some("Ctrl+T"),
+                ButtonKind::Secondary,
+            )
+            .clicked()
+            {
+                cmds.push(ChromeCmd::NewTab);
+            }
+        });
     });
+    let rect = row.response.rect;
+    let clip = ui.max_rect();
+    ui.painter().set(
+        slot,
+        egui::Shape::line_segment(
+            [
+                egui::pos2(clip.min.x, rect.bottom()),
+                egui::pos2(clip.max.x, rect.bottom()),
+            ],
+            egui::Stroke::new(border_width(crate::ui::kind(ui)), t.border),
+        ),
+    );
+    ui.add_space(10.0);
     cmds
-}
-
-/// The close-tab button: "Close tab", with its key as the hover text and the spoken name.
-fn close_tab_button(ui: &mut Ui) -> egui::Response {
-    let close = ui
-        .small_button("Close tab")
-        .on_hover_text("Close tab (Ctrl+W)");
-    a11y::name(ui, &close, egui::Role::Button, "Close tab (Ctrl+W)");
-    close
 }
 
 /// Breadcrumb trail for the active tab (`.crumbs`: meta size, `text-3`, earlier crumbs in
