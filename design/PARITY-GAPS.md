@@ -356,19 +356,21 @@ the foot box shows Paid out or Received, Balance now and Balance after (engine, 
 `Api::balance_change`), the crumb is "Home > Payment", and the Payment or Receipt sidebar row is
 the selected one.
 
-- **deferred: `payment.bill-wise` is not reachable.** The engine now takes bill allocations on a
-  voucher (`BillAllocation`, tests in `ledgerly-api/tests/s9_invoice_bills.rs`), but voucher entry
-  still refuses bill-wise ledgers on a payment (`voucher_entry::draft::entry_support`) and has no
-  bill popup. The invoice screen has the inline bill panel only.
-- **deferred: `payment.overdraft` is not reachable.** No warning is given when a payment takes a
-  bank or cash ledger below zero; there is no such check in voucher entry or the engine.
-- **deferred: the Mode field.** The mock's "NEFT / UPI" is not a field of our voucher.
-- **gap: the account hint has no account number** ("XXXX 4471 ..."); the ledger master keeps none
-  in the sample.
-- **gap: the number reads 1, not PY/0319.** The sample company's Payment and Sales types have no
-  prefix, and no command alters a voucher type, so the engine's next number is a bare counter.
-- **gap: the date reads 21-11-2026, not 21 Nov 2026.** The date is a field (it must take
-  typing); it is drawn bare until the pointer or keyboard is on it.
+- **closed (s9): `payment.bill-wise`, `receipt.default` and `payment.overdraft`.** Entering the
+  amount of a bill-wise party opens the bill popup with the open bills from the engine
+  (`Api::open_bills`); Enter accepts when the bills add up to the line, none typed means On
+  Account. The overdraft note comes from `Api::balance_change` (Cr after). The Mode field is
+  stored on the bank line (`BankAllocation.instrument`).
+- **gap: the popup shows its narration empty.** The mock draws the popup over a filled narration;
+  here the narration is entered after the popup closes, so the shot with the popup open has none.
+- **by design: the Mode is a typed field** (NEFT, RTGS, UPI, Cheque ...) after a bank account, not
+  the mock's read-only "NEFT / UPI"; a cash account has none. No overdraft limit or block policy
+  exists, so saving is allowed and the note says so.
+- **gap: the account hint** under the Account field is not drawn in the capture (the balance sits
+  in the foot box); the mock's "XXXX 4471 · balance now ..." line is not built.
+- **closed (s9): the number and the date.** The sample's voucher types carry the mock's prefixes
+  (SI/, PB/, PY/, RC/, JV/, width 4) through `Command::AlterVoucherType`; titles read PY/0319.
+  The date reads 21 Nov 2026 and rates 3,850.00 until the keyboard is on the field.
 - **gap: contra and journal** have no mock state; they got the number in the title, the crumb and
   the date look only.
 
@@ -385,8 +387,7 @@ the selected one.
   on what that setting does to the mode.
 - **closed (s9): the capture is Godavari Drip's three-item invoice** (SI/0418 to Shree Ganesh
   Traders, order no. SGT/PO/1131, narration), entered through the real keyboard path.
-  Fictional Traders (no inventory) still opens an accounting invoice. The number reads 1, not
-  SI/0418: the sample's Sales type has no "SI/" prefix and no command alters a voucher type.
+  Fictional Traders (no inventory) still opens an accounting invoice.
 - **deferred: As Voucher mode.** TallyPrime's Ctrl+H offers Item Invoice, Accounting Invoice
   and As Voucher (help.tallysolutions.com/sales-of-goods-services/). Ctrl+H here switches
   between the first two only, as the mock's toast says; As Voucher is not built (the GST engine
@@ -397,8 +398,10 @@ the selected one.
   and On Account (https://help.tallysolutions.com/advances-received/ and
   https://help.tallysolutions.com/sales-of-goods-services/, read 2026-11-25). The voucher number as
   default New Ref name is our own choice; the page only says the number may be used.
-- **gap: the e-Invoice cell** says "Not built yet" (or "Not applicable: B2C"). No INV-01 builder
-  is wired to a voucher, so the mock's "JSON ready (INV-01)" would be a claim we cannot back.
+- **gap: the e-Invoice cell** says "Not built yet" (or "Not applicable: B2C"). `ledgerly-gst-formats`
+  has the INV-01 type, validator and JSON writer, but nothing maps a voucher to an `EInvoice`
+  (seller address, HSN per item, tax per item), so "JSON ready (INV-01)" would be a claim we
+  cannot back. Needs that mapping first.
 - **gap: the sample GSTIN is synthetic** (`27ZZZZZ0005Z1ZL`, not the mock's), by the sample's
   privacy rule; the rule pack reads "2026.1-slabs", not "2026.11".
 - **gap: the toast has no Undo Ctrl+Z.** No undo exists.
@@ -435,9 +438,10 @@ Fictional Traders figures are unchanged.
 - **by design: the period-locked banner reads "lock date".** The bar is the mock's (inside the
   card, above the head, lock icon, bold lead). Ours says "Choose a later date to save" where the
   mock says "Press F2 to change the date": the date is a plain field here, F2 is not bound.
-- **deferred: save confirmation.** `sales-invoice.save-confirm` draws the mock's green bar inside
-  the card with Yes and No; the bar's lead says "Save this invoice?" because the voucher number
-  is not shown (see above). The mock scrolls the page to the bar, ours does not.
+- **closed (s9): save confirmation.** `sales-invoice.save-confirm` draws the mock's green bar
+  inside the card with Yes and No, and scrolls to it so it is not cut off at the foot.
+- **closed (s9): after a save the party and place carry over**, as the mock's saved state shows
+  (test `a_save_carries_the_party_and_place_and_opens_no_party_list`).
 - **fixed: the saved state.** `sales-invoice.saved` drew nothing because the screen replaced
   itself with a bare "Saving..." label while the worker posted, and the capture waited 60 frames.
   The form now stays up, disabled, with "Saving..." in the foot (test

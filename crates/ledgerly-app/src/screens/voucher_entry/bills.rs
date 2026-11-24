@@ -33,7 +33,7 @@ impl VoucherEntryScreen {
         let t = tokens(ui);
         let k = kind(ui);
         let at = pos2(
-            ui.max_rect().right() - 40.0 - WIDTH,
+            ui.max_rect().right().min(ui.ctx().content_rect().right()) - 40.0 - WIDTH,
             ui.max_rect().top() + 190.0,
         );
         Area::new(base.with("bill-panel"))
@@ -180,11 +180,19 @@ impl VoucherEntryScreen {
                         .and_then(|r| r.bills.iter().find(|b| b.name == bill.name))
                         .and_then(|b| eval_amount(&b.amount_text).ok())
                         .and_then(|part| bill.open.amount.checked_sub(part).ok());
-                    ui.label(para_text(
-                        &format!("Left open on {} after saving", bill.name),
-                        TEXT_CAP,
+                    // The mock's note runs across the first four columns (colspan 4), so it is
+                    // painted from the first cell without asking the column for its width.
+                    let (rect, _) = ui.allocate_exact_size(
+                        egui::vec2(1.0, crate::ui::line_height(TEXT_CAP)),
+                        egui::Sense::hover(),
+                    );
+                    ui.painter().text(
+                        rect.left_center(),
+                        egui::Align2::LEFT_CENTER,
+                        format!("Left open on {} after saving", bill.name),
+                        egui::FontId::proportional(TEXT_CAP),
                         t.text_3,
-                    ));
+                    );
                     ui.label("");
                     ui.label("");
                     ui.label("");

@@ -448,7 +448,7 @@ fn list_caption(focus: Field) -> &'static str {
 fn save_bar(ui: &mut Ui, clicks: &mut Option<Click>, title: &str) {
     let t = tokens(ui);
     let width = ui.available_width() - 32.0;
-    Frame::new()
+    let drawn = Frame::new()
         .outer_margin(Margin {
             left: 16,
             right: 16,
@@ -496,6 +496,9 @@ fn save_bar(ui: &mut Ui, clicks: &mut Option<Click>, title: &str) {
                 });
             });
         });
+    // The bar is the question the keyboard is on: scroll to it when the sheet is taller than the
+    // window, so it is never cut off at the foot.
+    ui.scroll_to_rect(drawn.response.rect, Some(egui::Align::BOTTOM));
 }
 
 impl ItemInvoiceScreen {
@@ -1321,7 +1324,10 @@ impl ItemInvoiceScreen {
                 events: &mut events,
                 anchor: &mut anchor,
             };
-            let drawn = sheet::sheet(ui, |ui| {
+            // The sheet scrolls when it is taller than the window (the mock scrolls its page), so
+            // the save bar at its foot is never cut off.
+            let drawn = egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
+              sheet::sheet(ui, |ui| {
                 if let Some((date, lock)) = locked {
                     let (left, top, width) = (ui.cursor().min.x, ui.cursor().min.y, ui.available_width());
                     sheet::lock_bar(
@@ -1345,7 +1351,8 @@ impl ItemInvoiceScreen {
                     self.draw_more(ui, base, masters, &mut cx);
                 }
                 self.draw_foot(ui, base, masters, &mut cx, &mut clicks);
-            });
+              })
+            }).inner;
             self.shown.sheet = Some(drawn.response.rect);
         });
         if let Some(anchor) = anchor

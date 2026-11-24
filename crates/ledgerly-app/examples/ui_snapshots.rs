@@ -1026,24 +1026,51 @@ fn light_shots() -> Vec<Shot> {
         ))
         .press(&[(Key::Enter, NONE)])
         .type_text(SI_NARRATION),
-        // The mock's receipt: 1,00,000 from Mehta Agro into the Saptagiri account.
+        // The mock's receipt: 1,00,000 from Mehta Agro into the Saptagiri account. Mehta tracks
+        // bills, so the bill-wise popup opens on the amount, as the mock draws it.
         shot("receipt.default", &[(Key::F6, NONE)])
             .type_text("Saptagiri")
+            .press(&[(Key::Enter, NONE)])
+            .type_text("NEFT")
             .press(&[(Key::Enter, NONE)])
             .type_text("Mehta")
             .press(&[(Key::Enter, NONE)])
             .type_text("100000")
-            .press(&[(Key::Enter, NONE), (Key::Enter, NONE)])
-            .type_text("NEFT, part against SI/0401"),
+            .press(&[(Key::Enter, NONE)]),
         // The mock's payment: 6,500 of freight from the Saptagiri account.
         shot("payment.default", &[(Key::F5, NONE)])
             .type_text("Saptagiri")
+            .press(&[(Key::Enter, NONE)])
+            .type_text("NEFT")
             .press(&[(Key::Enter, NONE)])
             .type_text("Freight inward")
             .press(&[(Key::Enter, NONE)])
             .type_text("6500")
             .press(&[(Key::Enter, NONE), (Key::Enter, NONE)])
             .type_text("Freight, Vardhaman Logistics, LR 4471"),
+        // The mock's bill allocation: 1,50,000 to Vardhaman Logistics against VL/861.
+        shot("payment.bill-wise", &[(Key::F5, NONE)])
+            .type_text("Saptagiri")
+            .press(&[(Key::Enter, NONE)])
+            .type_text("NEFT")
+            .press(&[(Key::Enter, NONE)])
+            .type_text("Vardhaman")
+            .press(&[(Key::Enter, NONE)])
+            .type_text("150000")
+            .press(&[(Key::Enter, NONE)]),
+        // The mock's overdraft: 2,50,000 from the Mulacur account takes it below zero. The mock
+        // pays Nilgiri Steel Traders; Nilgiri tracks bills here, which opens the bill popup first
+        // (tested in `s9_voucher_screens`), so the capture pays a ledger that does not.
+        shot("payment.overdraft", &[(Key::F5, NONE)])
+            .type_text("Mulacur")
+            .press(&[(Key::Enter, NONE)])
+            .type_text("RTGS")
+            .press(&[(Key::Enter, NONE)])
+            .type_text("Freight inward")
+            .press(&[(Key::Enter, NONE)])
+            .type_text("250000")
+            .press(&[(Key::Enter, NONE), (Key::Enter, NONE)])
+            .type_text("RTGS to Nilgiri Steel Traders"),
         shot("bank.default", &[palette])
             .query("Bank Reconciliation")
             .then(&[(Key::Enter, NONE)]),
