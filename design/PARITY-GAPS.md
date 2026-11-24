@@ -745,22 +745,19 @@ How the figures agree with the mock (engine, light captures, 21 Nov 2026):
   3,49,385.00 with the pickaxe missing its HSN, and the Review queue badge (6).
 
 Mismatches between the mock's totals and the engine's, and why:
-- **data: capital and profit differ, their sum does not.** The mock's Capital account is
-  20,00,000.00 and Profit and loss 16,96,569.70; the engine's are 13,62,164.00 and 26,08,570.06.
-  The mock holds no history before 1 Nov, so the seed invents it (monthly receipt summaries,
-  purchases, payments, a depreciation journal) to reach the mock's 31 Oct balances. Capital is the
-  balancing figure of the opening trial balance. The difference in profit, 9,12,000.36, is the
-  6,37,836.00 less capital plus the 2,74,164.36 of IGST below.
+- **closed (s9): capital, profit, IGST and Opening stock now match the mock.** Capital account
+  20,00,000.00, Profit and loss 16,96,569.70 and Current liabilities 10,72,967.30 come out of the
+  engine (tested in `ledgerly-sample/tests/sample.rs`). Three seed items had caused the old gap:
+  the mock's Opening stock ledger (9,12,000.00 Dr, an expense-nature ledger under Direct expenses,
+  now seeded as an opening balance), the October IGST input credit on the stock bill RP/5398
+  (2,74,164.36, now set off by a journal against IGST collected in October's receipts, so IGST is
+  nil on 1 Nov as in the mock and 9,150.00 Dr on 21 Nov) and that bill's round off (0.36, now
+  cleared in the same journal). Capital is no longer the balancing figure: the partners' opening
+  capital is 24,00,000 and 11,00,000 less drawings of 9,00,000 and 6,00,000. The stock items still
+  have no April quantity (the engine's balance sheet refuses valued opening stock), so the stock
+  register shows the quantities as bought in October.
 - **data: GST ledgers are one per head.** The mock keeps CGST/SGST/IGST output and input ledgers;
-  the engine's GST report needs one ledger per tax head, so the sample has CGST, SGST, IGST. The
-  October stock purchase from Rupa Polymers (Karnataka, inter-state) leaves IGST at 2,83,314.36
-  Dr (input 2,74,164.36 from that purchase plus November's 29,520.00, less 20,370.00 output). The
-  mock's Current liabilities (10,72,967.30) minus the engine's (7,98,802.94) is exactly 2,74,164.36.
-- **data: Opening stock ledger left out.** The mock's trial balance has an "Opening stock" ledger;
-  the engine takes opening stock from the stock ledger, and refuses the balance sheet with stock
-  before the books begin, so the stock is bought by a voucher in the books.
-- **data: Round off.** The engine has a Round off ledger carrying paise (0.36 on PB/0125); the mock
-  rounds in the invoice only.
+  the engine's GST report needs one ledger per tax head, so the sample has CGST, SGST, IGST.
 - **data: opening-bill invoices (SI/0372, 0350, 0381, 0390) have no tax split.** They are dated
   before 1 Nov and carry only the party, sales and bill lines the mock states.
 - **data: voucher numbering.** Numbers are typed on each voucher as the mock shows them; the mock's

@@ -7,7 +7,7 @@
 # Sections: [company] and [[unit]], [[ledger]], [[item]] are the masters; [[voucher]] entries with
 # section = "history" are INVENTED to reach the mock's balances on 1 Nov 2026 (design/mock-v2/index.html
 # lines 517-549, the `ob` column); section = "november" are the mock's own vouchers (lines 566-581).
-# Opening balances are those of 1 Apr 2026, derived by hand in design/PARITY-GAPS.md ("Sample company").
+# Opening balances are those of 1 Apr 2026: the mock's 1 Nov balance less what the history moves, derived by hand (design/PARITY-GAPS.md, "Sample company").
 # GSTINs use the fake PAN pattern ZZZZZ####Z with a computed check character; they differ from the
 # mock's on purpose (privacy). Bank accounts and IFSC codes are obviously fake.
 
@@ -49,13 +49,13 @@ uqc = "OTH"
 key = "ananya"
 name = "Ananya Kulkarni, capital"
 group = "CapitalAccount"
-opening_cr = "2146623.00"
+opening_cr = "2400000.00"
 
 [[ledger]]
 key = "rohan"
 name = "Rohan Deshpande, capital"
 group = "CapitalAccount"
-opening_cr = "715541.00"
+opening_cr = "1100000.00"
 
 [[ledger]]
 key = "mulaloan"
@@ -237,7 +237,7 @@ opening_dr = "48215.50"
 key = "saptagiri"
 name = "Saptagiri Commercial Bank A/c"
 group = "BankAccounts"
-opening_dr = "1115438.50"
+opening_dr = "841274.50"
 bank = { name = "Saptagiri Commercial Bank", account = "99990004471", ifsc = "ZZZZ0000471", branch = "Pune main" }
 
 [[ledger]]
@@ -320,6 +320,14 @@ group = "IndirectExpenses"
 key = "disc"
 name = "Discount received"
 group = "IndirectIncomes"
+
+# The mock's "Opening stock" ledger (index.html:549, 9,12,000 Dr, expense nature): the stock on
+# hand on 1 Apr, expensed against the closing stock the engine adds to the profit.
+[[ledger]]
+key = "ostock"
+name = "Opening stock"
+group = "DirectExpenses"
+opening_dr = "912000.00"
 
 [[item]]
 key = "lat16"
@@ -436,8 +444,8 @@ kind = "receipt"
 date = "2026-10-31"
 number = "RC/0214"
 narration = "Sales receipts for the month, summary (10/2026)"
-dr = [{ ledger = "saptagiri", amount = "1192615.50" }]
-cr = [{ ledger = "sales", amount = "1192615.50" }]
+dr = [{ ledger = "saptagiri", amount = "1466779.50" }]
+cr = [{ ledger = "sales", amount = "1466779.50" }]
 
 [[voucher]]
 section = "history"
@@ -576,6 +584,15 @@ number = "JV/0031"
 narration = "Depreciation, April to October"
 dr = [{ ledger = "dep", amount = "107331.00" }]
 cr = [{ ledger = "plant", amount = "107331.00" }]
+
+[[voucher]]
+section = "history"
+kind = "journal"
+date = "2026-10-31"
+number = "JV/0030"
+narration = "IGST collected in October's receipts (summary), set off against the credit on RP/5398 (invented history)"
+dr = [{ ledger = "sales", amount = "274164.00" }, { ledger = "roundoff", amount = "0.36" }]
+cr = [{ ledger = "igst", amount = "274164.36" }]
 
 [[voucher]]
 section = "november"
