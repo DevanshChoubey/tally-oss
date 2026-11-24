@@ -63,6 +63,16 @@ pub enum Tier {
 }
 
 impl Tier {
+    /// The description in the words of `tr`, shown in the panel header.
+    #[must_use]
+    pub fn describe_in(self, tr: &Tr) -> String {
+        tr.t(match self {
+            Tier::Off => "assist.tier.off",
+            Tier::Local => "assist.tier.local",
+            Tier::Cloud => "assist.tier.cloud",
+        })
+    }
+
     /// Short description shown in the panel header.
     #[must_use]
     pub fn describe(self) -> &'static str {
@@ -92,6 +102,12 @@ impl ProposedField {
     #[must_use]
     pub fn display_value(&self) -> &str {
         self.value.as_deref().unwrap_or(BLANK_TEXT)
+    }
+
+    /// The text to draw in the words of `tr`: the value, or the blank text when there is none.
+    #[must_use]
+    pub fn display_value_in(&self, tr: &Tr) -> String {
+        self.value.clone().unwrap_or_else(|| tr.t("assist.blank"))
     }
 
     /// Whether the field is blank.
@@ -320,15 +336,21 @@ impl AssistScreen {
         self.waiting
     }
 
-    /// Sends the text box content as a request. Does nothing for blank text. When the assistant
-    /// is off, shows [`OFF_TEXT`] instead and sends nothing.
+    /// Sends the text box content as a request, in English: [`Self::submit_input_in`] with the
+    /// English file.
     pub fn submit_input(&mut self) {
+        self.submit_input_in(&Tr::default());
+    }
+
+    /// Sends the text box content as a request. Does nothing for blank text. When the assistant
+    /// is off, shows the off text of `tr` instead and sends nothing.
+    pub fn submit_input_in(&mut self, tr: &Tr) {
         let text = self.input.trim().to_owned();
         if text.is_empty() {
             return;
         }
         match self.tier {
-            Tier::Off => OFF_TEXT.clone_into(self.error.get_or_insert_with(String::new)),
+            Tier::Off => self.error = Some(tr.t("assist.off")),
             Tier::Local | Tier::Cloud => {
                 self.error = None;
                 self.waiting = true;
@@ -342,23 +364,34 @@ impl AssistScreen {
         self.request.take()
     }
 
-    /// Why Accept is disabled, or `None` when it is enabled.
+    /// Why Accept is disabled, in English: [`Self::accept_blocked_reason_in`] with the English
+    /// file.
+    #[must_use]
+    pub fn accept_blocked_reason(&self) -> Option<String> {
+        self.accept_blocked_reason_in(&Tr::default())
+    }
+
+    /// Why Accept is disabled in the words of `tr`, or `None` when it is enabled.
     ///
     /// A voucher draft needs an engine verdict of `Ok` and also no blank field or line and no
     /// ledger still to be created: a posting with any of those would carry an unresolved value.
     /// A bank match or a mapping needs `Ok` on its own [`SuggestionView::check`]. An answer to a
     /// question has nothing to accept.
     #[must_use]
-    pub fn accept_blocked_reason(&self) -> Option<String> {
+    pub fn accept_blocked_reason_in(&self, tr: &Tr) -> Option<String> {
         if self.tier == Tier::Off {
-            return Some(OFF_TEXT.to_owned());
+            return Some(tr.t("assist.off"));
         }
         match self.proposal.as_ref() {
-            None => Some("Nothing has been proposed.".to_owned()),
-            Some(ProposalView::Voucher(draft)) => voucher_blocked_reason(draft),
-            Some(ProposalView::BankMatch(view)) => check_blocked_reason(&view.check, "match"),
-            Some(ProposalView::Mapping(view)) => check_blocked_reason(&view.check, "mapping"),
-            Some(ProposalView::Report(_)) => Some("An answer has nothing to accept.".to_owned()),
+            None => Some(tr.t("assist.nothing_has_been_proposed")),
+            Some(ProposalView::Voucher(draft)) => voucher_blocked_reason(draft, tr),
+            Some(ProposalView::BankMatch(view)) => {
+                check_blocked_reason(&view.check, &tr.t("assist.noun.match"), tr)
+            }
+            Some(ProposalView::Mapping(view)) => {
+                check_blocked_reason(&view.check, &tr.t("assist.noun.mapping"), tr)
+            }
+            Some(ProposalView::Report(_)) => Some(tr.t("assist.nothing_to_accept")),
         }
     }
 
@@ -396,65 +429,70 @@ impl AssistScreen {
 // Drawing
 // ---------------------------------------------------------------------------------------------
 
-/// Why an engine verdict blocks Accept, or `None` for `Ok`. `noun` names the thing checked.
-fn check_blocked_reason(check: &EngineCheck, noun: &str) -> Option<String> {
+/// Why an engine verdict blocks Accept, in the words of `tr`, or `None` for `Ok`. `noun` names the
+/// thing checked, already in the words of `tr`.
+fn check_blocked_reason(check: &EngineCheck, noun: &str, tr: &Tr) -> Option<String> {
     match check {
         EngineCheck::Ok { .. } => None,
-        EngineCheck::NotChecked => Some(format!("The engine has not checked this {noun} yet.")),
-        EngineCheck::Blocked { field, reason } => Some(format!("Blocked at {field}: {reason}")),
-        EngineCheck::Unsupported { what, reason } => {
-            Some(format!("Not supported yet ({what}): {reason}"))
-        }
+        EngineCheck::NotChecked => Some(tr.tf("assist.check.not_checked", &[("noun", noun)])),
+        EngineCheck::Blocked { field, reason } => Some(tr.tf(
+            "assist.check.blocked",
+            &[("field", field.as_str()), ("reason", reason.as_str())],
+        )),
+        EngineCheck::Unsupported { what, reason } => Some(tr.tf(
+            "assist.check.unsupported",
+            &[("what", what.as_str()), ("reason", reason.as_str())],
+        )),
     }
 }
 
 /// Why a voucher draft cannot be accepted, or `None`. The engine's verdict comes first. Then a
 /// blank field or line (below the confidence threshold) and a ledger still to be created block
 /// Accept: the posting path would otherwise get a value nobody confirmed.
-fn voucher_blocked_reason(draft: &DraftView) -> Option<String> {
-    if let Some(reason) = check_blocked_reason(&draft.check, "draft") {
+fn voucher_blocked_reason(draft: &DraftView, tr: &Tr) -> Option<String> {
+    if let Some(reason) = check_blocked_reason(&draft.check, &tr.t("assist.noun.draft"), tr) {
         return Some(reason);
     }
     if let Some(field) = draft.fields.iter().find(|f| f.is_blank()) {
-        return Some(format!(
-            "{} is blank. Type it in before accepting.",
-            field.label
-        ));
+        return Some(tr.tf("assist.field_blank", &[("label", field.label.as_str())]));
     }
     if draft
         .lines
         .iter()
         .any(|line| line.ledger.is_blank() || line.amount.is_blank())
     {
-        return Some(
-            "A line has a blank ledger or amount. Fill it in before accepting.".to_owned(),
-        );
+        return Some(tr.t("assist.line_blank"));
     }
     draft
         .create_ledgers
         .first()
-        .map(|name| format!("Create the ledger \"{name}\" before accepting."))
+        .map(|name| tr.tf("assist.create_ledger_first", &[("name", name.as_str())]))
 }
 
-fn draw_field_row(ui: &mut Ui, field: &ProposedField) {
+/// The percentage text of a confidence in per-mille, `92.5%` for `925`, without floats.
+fn percent_text(permille: u16) -> String {
+    format!("{}.{}%", permille / 10, permille % 10)
+}
+
+fn draw_field_row(ui: &mut Ui, field: &ProposedField, tr: &Tr) {
     ui.label(&field.label);
     if field.is_blank() {
-        ui.label(RichText::new(field.display_value()).italics().weak());
+        ui.label(RichText::new(field.display_value_in(tr)).italics().weak());
     } else {
-        ui.label(field.display_value());
+        ui.label(field.display_value_in(tr));
     }
     ui.weak(format!("{}  {}", field.confidence_text(), field.source));
     ui.end_row();
 }
 
-fn draw_line_row(ui: &mut Ui, line: &ProposedLine) {
+fn draw_line_row(ui: &mut Ui, line: &ProposedLine, tr: &Tr) {
     let side = match line.side {
         DrCr::Dr => "Dr",
         DrCr::Cr => "Cr",
     };
     ui.label(side);
-    ui.label(line.ledger.display_value());
-    ui.label(line.amount.display_value());
+    ui.label(line.ledger.display_value_in(tr));
+    ui.label(line.amount.display_value_in(tr));
     ui.weak(format!(
         "{}  {}",
         line.amount.confidence_text(),
@@ -473,20 +511,20 @@ fn draw_figures(ui: &mut Ui, id: &str, figures: &[ComputedFigure]) {
     });
 }
 
-fn draw_check(ui: &mut Ui, check: &EngineCheck) {
-    ui.label(RichText::new(LABEL_ENGINE_COMPUTED).strong());
+fn draw_check(ui: &mut Ui, check: &EngineCheck, tr: &Tr) {
+    ui.label(RichText::new(tr.t("assist.label.engine_computed")).strong());
     match check {
         EngineCheck::NotChecked => {
-            ui.weak("Not checked yet. No figure is shown until the engine has run.");
+            ui.weak(tr.t("assist.check.not_checked_yet"));
         }
         EngineCheck::Ok { figures } => {
-            ui.label(RichText::new("Checked: the engine reproduced the figures.").strong());
+            ui.label(RichText::new(tr.t("assist.check.ok")).strong());
             draw_figures(ui, "u11_engine_figures", figures);
         }
         EngineCheck::Blocked { field, reason } => {
             let warn = ui.visuals().error_fg_color;
             ui.label(
-                RichText::new(format!("Blocked at {field}"))
+                RichText::new(tr.tf("assist.check.blocked_at", &[("field", field.as_str())]))
                     .color(warn)
                     .strong(),
             );
@@ -495,7 +533,7 @@ fn draw_check(ui: &mut Ui, check: &EngineCheck) {
         EngineCheck::Unsupported { what, reason } => {
             let warn = ui.visuals().warn_fg_color;
             ui.label(
-                RichText::new(format!("Not supported yet: {what}"))
+                RichText::new(tr.tf("assist.check.unsupported_title", &[("what", what.as_str())]))
                     .color(warn)
                     .strong(),
             );
@@ -504,14 +542,14 @@ fn draw_check(ui: &mut Ui, check: &EngineCheck) {
     }
 }
 
-fn draw_draft(ui: &mut Ui, draft: &DraftView) {
-    ui.label(RichText::new(LABEL_AI_PROPOSED).strong());
-    ui.label(format!("Voucher: {}", draft.kind));
+fn draw_draft(ui: &mut Ui, draft: &DraftView, tr: &Tr) {
+    ui.label(RichText::new(tr.t("assist.label.ai_proposed")).strong());
+    ui.label(tr.tf("assist.voucher", &[("kind", draft.kind.as_str())]));
     egui::Grid::new("u11_draft_fields")
         .num_columns(3)
         .show(ui, |ui| {
             for field in &draft.fields {
-                draw_field_row(ui, field);
+                draw_field_row(ui, field, tr);
             }
         });
     if !draft.lines.is_empty() {
@@ -520,19 +558,19 @@ fn draw_draft(ui: &mut Ui, draft: &DraftView) {
             .num_columns(4)
             .show(ui, |ui| {
                 for line in &draft.lines {
-                    draw_line_row(ui, line);
+                    draw_line_row(ui, line, tr);
                 }
             });
     }
     for name in &draft.create_ledgers {
-        ui.label(format!("You would need to create the ledger: {name}"));
+        ui.label(tr.tf("assist.create_ledger", &[("name", name.as_str())]));
     }
     ui.separator();
-    draw_check(ui, &draft.check);
+    draw_check(ui, &draft.check, tr);
 }
 
-fn draw_suggestion(ui: &mut Ui, view: &SuggestionView, id: &str) {
-    ui.label(RichText::new(LABEL_AI_PROPOSED).strong());
+fn draw_suggestion(ui: &mut Ui, view: &SuggestionView, id: &str, tr: &Tr) {
+    ui.label(RichText::new(tr.t("assist.label.ai_proposed")).strong());
     ui.label(&view.heading);
     egui::Grid::new(id).num_columns(2).show(ui, |ui| {
         for (left, right) in &view.rows {
@@ -544,29 +582,28 @@ fn draw_suggestion(ui: &mut Ui, view: &SuggestionView, id: &str) {
     if let Some(reason) = view.reason.as_deref() {
         ui.weak(reason);
     }
-    ui.weak(format!(
-        "Confidence {}.{}%",
-        view.confidence_permille / 10,
-        view.confidence_permille % 10
+    ui.weak(tr.tf(
+        "assist.confidence",
+        &[("value", percent_text(view.confidence_permille).as_str())],
     ));
     ui.separator();
-    draw_check(ui, &view.check);
+    draw_check(ui, &view.check, tr);
 }
 
-fn draw_report(ui: &mut Ui, view: &ReportView) {
-    ui.label(RichText::new(LABEL_AI_PROPOSED).strong());
-    ui.label(format!("Query: {}", view.query));
+fn draw_report(ui: &mut Ui, view: &ReportView, tr: &Tr) {
+    ui.label(RichText::new(tr.t("assist.label.ai_proposed")).strong());
+    ui.label(tr.tf("assist.query", &[("query", view.query.as_str())]));
     ui.separator();
-    ui.label(RichText::new(LABEL_ENGINE_COMPUTED).strong());
+    ui.label(RichText::new(tr.t("assist.label.engine_computed")).strong());
     match &view.answer {
         ReportAnswer::Pending => {
-            ui.weak("The engine has not run this query yet.");
+            ui.weak(tr.t("assist.report.not_run"));
         }
         ReportAnswer::Computed(figures) => draw_figures(ui, "u11_report_figures", figures),
         ReportAnswer::Unsupported { what, reason } => {
             let warn = ui.visuals().warn_fg_color;
             ui.label(
-                RichText::new(format!("Not supported yet: {what}"))
+                RichText::new(tr.tf("assist.check.unsupported_title", &[("what", what.as_str())]))
                     .color(warn)
                     .strong(),
             );
@@ -575,30 +612,33 @@ fn draw_report(ui: &mut Ui, view: &ReportView) {
     }
 }
 
-fn draw_proposal(ui: &mut Ui, proposal: &ProposalView) {
+fn draw_proposal(ui: &mut Ui, proposal: &ProposalView, tr: &Tr) {
     match proposal {
-        ProposalView::Voucher(draft) => draw_draft(ui, draft),
-        ProposalView::BankMatch(view) => draw_suggestion(ui, view, "u11_bank_match"),
-        ProposalView::Mapping(view) => draw_suggestion(ui, view, "u11_mapping"),
-        ProposalView::Report(view) => draw_report(ui, view),
+        ProposalView::Voucher(draft) => draw_draft(ui, draft, tr),
+        ProposalView::BankMatch(view) => draw_suggestion(ui, view, "u11_bank_match", tr),
+        ProposalView::Mapping(view) => draw_suggestion(ui, view, "u11_mapping", tr),
+        ProposalView::Report(view) => draw_report(ui, view, tr),
     }
 }
 
 impl AssistScreen {
     /// The input row. Returns whether the person asked to send.
-    fn draw_input(&mut self, ui: &mut Ui) -> bool {
+    fn draw_input(&mut self, ui: &mut Ui, tr: &Tr) -> bool {
         let mut send = false;
         ui.horizontal(|ui| {
             let edit = ui.add(
                 TextEdit::singleline(&mut self.input)
-                    .hint_text("Describe a voucher or ask a question")
+                    .hint_text(tr.t("assist.input_hint"))
                     .desired_width(ui.available_width() - 80.0),
             );
             if edit.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter)) {
                 send = true;
             }
             let enabled = self.tier != Tier::Off && !self.waiting;
-            if ui.add_enabled(enabled, Button::new("Ask")).clicked() {
+            if ui
+                .add_enabled(enabled, Button::new(tr.t("assist.ask")))
+                .clicked()
+            {
                 send = true;
             }
         });
@@ -613,69 +653,74 @@ impl AssistScreen {
     }
 
     /// The Accept and Reject buttons. Returns `(accept, reject)` clicks.
-    fn draw_buttons(&self, ui: &mut Ui) -> (bool, bool) {
+    fn draw_buttons(&self, ui: &mut Ui, tr: &Tr) -> (bool, bool) {
         let mut accept = false;
         let mut reject = false;
         let can_accept = self.can_accept();
         let is_report = matches!(self.proposal, Some(ProposalView::Report(_)));
         ui.horizontal(|ui| {
             if !is_report {
-                let button = ui.add_enabled(can_accept, Button::new("Accept (Ctrl+A)"));
+                let button = ui.add_enabled(can_accept, Button::new(tr.t("assist.accept")));
                 accept = button.clicked();
             }
-            let label = if is_report { "Dismiss" } else { "Reject" };
+            let label = if is_report {
+                tr.t("assist.dismiss")
+            } else {
+                tr.t("assist.reject")
+            };
             reject = ui.button(label).clicked();
         });
-        let reason = self.accept_blocked_reason().filter(|_| !is_report);
+        let reason = self.accept_blocked_reason_in(tr).filter(|_| !is_report);
         if let Some(reason) = reason {
-            ui.weak(format!("Accept is disabled. {reason}"));
+            ui.weak(tr.tf("assist.accept_disabled", &[("reason", reason.as_str())]));
         }
         (accept, reject)
     }
 }
 
 impl Screen for AssistScreen {
-    fn title(&self, _tr: &Tr) -> String {
-        "Assistant".to_owned()
+    fn title(&self, tr: &Tr) -> String {
+        tr.t("assist.title")
     }
 
-    fn ui(&mut self, ui: &mut Ui, _ctx: &mut AppCtx) -> ScreenAction {
+    fn ui(&mut self, ui: &mut Ui, ctx: &mut AppCtx) -> ScreenAction {
         if self.closing {
             self.closing = false;
             return ScreenAction::Pop;
         }
+        let tr = ctx.tr.clone();
         // Ctrl+A is read before the input row draws, so the text field does not also select all.
         // voucher_entry.rs reads its save key the same way. It is read only while Accept is shown,
         // so Ctrl+A keeps its normal meaning in the text field otherwise.
         let key_accept =
             self.shows_accept() && ui.input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::A));
-        ui.heading("Assistant");
-        ui.weak(self.tier.describe());
-        if self.draw_input(ui) {
-            self.submit_input();
+        ui.heading(tr.t("assist.title"));
+        ui.weak(self.tier.describe_in(&tr));
+        if self.draw_input(ui, &tr) {
+            self.submit_input_in(&tr);
         }
         if self.waiting {
             ui.horizontal(|ui| {
                 ui.spinner();
-                ui.label("Waiting for the assistant...");
+                ui.label(tr.t("assist.waiting"));
             });
         }
         if let Some(message) = self.error.as_deref() {
             let color = ui.visuals().error_fg_color;
-            ui.label(RichText::new(format!("Problem: {message}")).color(color));
+            ui.label(RichText::new(tr.tf("assist.problem", &[("message", message)])).color(color));
         }
         ui.separator();
         match self.proposal.as_ref() {
-            Some(proposal) => draw_proposal(ui, proposal),
+            Some(proposal) => draw_proposal(ui, proposal, &tr),
             None => {
-                ui.weak("Nothing proposed yet.");
+                ui.weak(tr.t("assist.nothing_proposed"));
             }
         }
         if self.proposal.is_none() {
             return ScreenAction::Stay;
         }
         ui.separator();
-        let (accept, reject) = self.draw_buttons(ui);
+        let (accept, reject) = self.draw_buttons(ui, &tr);
         if accept || key_accept {
             self.accept();
         }

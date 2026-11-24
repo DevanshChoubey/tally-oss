@@ -71,3 +71,88 @@ fn ask_title_key_bar_and_report_names_come_from_the_hindi_file() {
         assert!(!text.contains('\u{27E6}'), "missing key in {text}");
     }
 }
+
+mod assist_panel {
+    use ledgerly_app::i18n::Catalog;
+    use ledgerly_app::screens::assist::{
+        AssistScreen, DraftView, EngineCheck, OFF_TEXT, ProposalView, ProposedField, Tier,
+    };
+
+    fn field(label: &str, value: &str) -> ProposedField {
+        ProposedField {
+            label: label.to_owned(),
+            value: Some(value.to_owned()),
+            confidence_permille: 925,
+            source: "Typed text".to_owned(),
+        }
+    }
+
+    fn draft(check: EngineCheck, create: Vec<String>) -> ProposalView {
+        ProposalView::Voucher(DraftView {
+            kind: "Payment".to_owned(),
+            fields: vec![field("Party", "Acme")],
+            lines: Vec::new(),
+            create_ledgers: create,
+            check,
+        })
+    }
+
+    #[test]
+    fn assist_tier_names_come_from_the_hindi_file() {
+        let hi = Catalog::builtin().unwrap().tr("hi");
+        let en = Catalog::builtin().unwrap().tr("en");
+        // provenance: the English words are the panel's own (assist.rs `Tier::describe`).
+        assert_eq!(Tier::Local.describe(), "Assistant: local model");
+        assert_eq!(Tier::Local.describe_in(&en), "Assistant: local model");
+        assert_eq!(Tier::Local.describe_in(&hi), hi.t("assist.tier.local"));
+        assert_ne!(Tier::Local.describe_in(&hi), Tier::Local.describe());
+    }
+
+    #[test]
+    fn assist_off_message_comes_from_the_hindi_file() {
+        let hi = Catalog::builtin().unwrap().tr("hi");
+        let mut screen = AssistScreen::new(Tier::Off);
+        screen.set_input("Payment to Acme 500");
+        screen.submit_input_in(&hi);
+        // provenance: OFF_TEXT is the panel's English sentence for the off tier.
+        assert_eq!(screen.error_text(), Some(hi.t("assist.off").as_str()));
+        assert_ne!(screen.error_text(), Some(OFF_TEXT));
+    }
+
+    #[test]
+    fn assist_accept_reasons_come_from_the_hindi_file() {
+        let hi = Catalog::builtin().unwrap().tr("hi");
+        let en = Catalog::builtin().unwrap().tr("en");
+        let mut screen = AssistScreen::new(Tier::Local);
+        assert_eq!(
+            screen.accept_blocked_reason_in(&hi).as_deref(),
+            Some(hi.t("assist.nothing_has_been_proposed").as_str())
+        );
+        assert_eq!(
+            screen.accept_blocked_reason_in(&en).as_deref(),
+            Some("Nothing has been proposed.")
+        );
+
+        screen.set_proposal(draft(EngineCheck::NotChecked, Vec::new()));
+        let noun = hi.t("assist.noun.draft");
+        assert_eq!(
+            screen.accept_blocked_reason_in(&hi),
+            Some(hi.tf("assist.check.not_checked", &[("noun", noun.as_str())]))
+        );
+        assert_ne!(
+            screen.accept_blocked_reason_in(&hi),
+            screen.accept_blocked_reason()
+        );
+
+        screen.set_proposal(draft(
+            EngineCheck::Ok {
+                figures: Vec::new(),
+            },
+            vec!["Acme Traders".to_owned()],
+        ));
+        assert_eq!(
+            screen.accept_blocked_reason_in(&hi),
+            Some(hi.tf("assist.create_ledger_first", &[("name", "Acme Traders")]))
+        );
+    }
+}
