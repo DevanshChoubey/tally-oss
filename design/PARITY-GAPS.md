@@ -516,3 +516,19 @@ Keys for the suggestion lists are from help.tallysolutions.com/keyboard-shortcut
   `s7_colour` pins the words of each badge and note kind.
 - **focus rings.** The focus stroke is thicker in high contrast (`u1_theme`). No per-screen pixel
   check of the ring in all three themes was added in this card.
+
+## Dark and high-contrast themes (round of 2026-11-24)
+
+Every light state with a dark or hc mock capture is captured in both themes (40 each; the
+quick-entry offline-AI state has no dark or hc mock capture). Theme differences left:
+
+- **gap: widgets outside the kit fade when disabled.** egui's own widgets (the "More master kinds"
+  combo on the ledger detail) draw at half opacity when disabled; kit buttons keep their tokens.
+  The faded text stays readable (about 5:1) but is greyer than the mock's disabled colours.
+- **gap: keycaps do not grow in hc.** The mock's `kbd` (index.html:75) has 2 px borders and grows
+  to 20 px; ours draw the 2 px border inside the light 19 px height.
+- **gap: table rows do not grow by the extra rule pixel in hc.** Rules are 2 px in hc, drawn
+  inside the row height the light theme uses.
+- **gap: the hc focus ring is 3 px.** theme.rs `focus_width` widens it on purpose; the mock keeps
+  2 px. The masters filter box draws a literal 2 px outline (masters/look.rs), which matches the
+  mock but not the app's own hc focus width.

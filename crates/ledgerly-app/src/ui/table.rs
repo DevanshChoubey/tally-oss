@@ -27,8 +27,8 @@
 use egui::{Align, Color32, FontId, Layout, Rect, RichText, Stroke, Ui, pos2, vec2};
 use egui_extras::{TableBuilder, TableRow};
 
-use super::tokens;
-use crate::theme::{TEXT_BODY, TEXT_META, Tokens};
+use super::{kind, tokens};
+use crate::theme::{TEXT_BODY, TEXT_META, Tokens, border_width};
 
 /// Height of the header row, in points.
 pub const HEADER_HEIGHT: f32 = 28.0;
@@ -127,6 +127,14 @@ pub fn row_fill(t: &Tokens, state: RowState) -> Option<Color32> {
     }
 }
 
+/// The rule of a `table.t` line: the theme's border width (`var(--bw)`: 1 px, or 2 px in high
+/// contrast) in `color`, and the y of its centre when it lies inside `rect` along its bottom.
+#[allow(clippy::float_arithmetic, reason = "half a stroke width")]
+fn bottom_rule(ui: &Ui, rect: Rect, color: Color32) -> (f32, Stroke) {
+    let bw = border_width(kind(ui));
+    (rect.bottom() - bw / 2.0, Stroke::new(bw, color))
+}
+
 /// Paints a body line's fill, its rule and, when selected, the accent bar at its left.
 pub fn paint_row(ui: &Ui, rect: Rect, state: RowState) {
     let t = tokens(ui);
@@ -134,35 +142,43 @@ pub fn paint_row(ui: &Ui, rect: Rect, state: RowState) {
     if let Some(fill) = row_fill(&t, state) {
         painter.rect_filled(rect, 0.0, fill);
     }
-    painter.hline(
-        rect.x_range(),
-        rect.bottom() - 0.5,
-        Stroke::new(1.0, t.border),
-    );
+    let (y, rule) = bottom_rule(ui, rect, t.border);
+    painter.hline(rect.x_range(), y, rule);
     if state.selected {
         let bar = Rect::from_min_size(rect.min, vec2(SELECTED_BAR, rect.height()));
         painter.rect_filled(bar, 0.0, t.accent);
     }
 }
 
-/// Paints a total line's rules: one in `text-2` along its top and a double one along its bottom.
+/// Paints a total line's rules: one in `text-2` along its top, the theme's border width
+/// (`border-top:var(--bw)`), and a 3 px double one along its bottom (`3px double`, the same in
+/// every theme).
+#[allow(clippy::float_arithmetic, reason = "half a stroke width")]
 pub fn paint_total_rules(ui: &Ui, rect: Rect) {
     let t = tokens(ui);
     let painter = ui.painter();
+    let bw = border_width(kind(ui));
+    painter.hline(
+        rect.x_range(),
+        rect.top() + bw / 2.0,
+        Stroke::new(bw, t.text_2),
+    );
     let stroke = Stroke::new(1.0, t.text_2);
-    painter.hline(rect.x_range(), rect.top() + 0.5, stroke);
     painter.hline(rect.x_range(), rect.bottom() - 2.5, stroke);
     painter.hline(rect.x_range(), rect.bottom() - 0.5, stroke);
 }
 
 /// Paints a heading line's rule along its bottom.
 pub fn paint_head_rule(ui: &Ui, rect: Rect) {
+    paint_cell_rule(ui, rect);
+}
+
+/// Paints the `table.t` rule along the bottom of `rect` (a line or one cell of it): the theme's
+/// border width in `border`, inside `rect`.
+pub fn paint_cell_rule(ui: &Ui, rect: Rect) {
     let t = tokens(ui);
-    ui.painter().hline(
-        rect.x_range(),
-        rect.bottom() - 0.5,
-        Stroke::new(1.0, t.border),
-    );
+    let (y, rule) = bottom_rule(ui, rect, t.border);
+    ui.painter().hline(rect.x_range(), y, rule);
 }
 
 /// Paints `text` in `font` and `color`, vertically centred in `rect` (less its bottom rule of

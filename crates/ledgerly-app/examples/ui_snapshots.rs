@@ -386,6 +386,7 @@ impl Theme {
 
 /// One screenshot: the mock state it matches, its theme, and the keys that reach it. The keys go in
 /// after the return to Home, then an optional palette query, then the keys after the query.
+#[derive(Clone)]
 struct Shot {
     /// The mock state id (`design/mock-v2/states.json`), which also names the image.
     state: &'static str,
@@ -518,13 +519,32 @@ fn ai_off_shot(state: &'static str, screen: &'static str) -> Shot {
         .press(&[(Key::Enter, NONE)])
 }
 
-/// The registry: one entry per image, named by the mock state id it should match.
+/// The registry: every light shot of [`light_shots`], then a dark and a high-contrast copy of each
+/// one the mock has a capture of in that theme (`design/mock-v2/captures/states/<theme>/`).
 fn shots() -> Vec<Shot> {
+    let light = light_shots();
+    let mock = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../design/mock-v2/captures/states");
+    let mut all = light.clone();
+    for theme in [Theme::Dark, Theme::Hc] {
+        all.extend(
+            light
+                .iter()
+                .filter(|s| {
+                    mock.join(theme.dir())
+                        .join(format!("{}.webp", s.state))
+                        .is_file()
+                })
+                .map(|s| s.clone().themed(theme)),
+        );
+    }
+    all
+}
+
+/// The light registry: one entry per image, named by the mock state id it should match.
+fn light_shots() -> Vec<Shot> {
     let palette = (Key::K, Modifiers::COMMAND);
     vec![
         shot("home.default", &[]),
-        shot("home.default", &[]).themed(Theme::Dark),
-        shot("home.default", &[]).themed(Theme::Hc),
         // Recent needs a choice first: open the balance sheet from the palette, go back, and
         // reopen the palette on the empty query (index.html:1115 lists recents there).
         shot("palette.default", &[palette])

@@ -1,6 +1,6 @@
 //! Tabs with a 2 px accent underline under the selected tab (`.tabs` in the mock).
 
-use egui::{CornerRadius, FontId, Rect, Response, Role, Sense, Stroke, Ui, Vec2, pos2};
+use egui::{CornerRadius, FontId, Rect, Response, Role, Sense, Shape, Stroke, Ui, Vec2, pos2};
 
 use super::{a11y, bold_font, keycap, kind, tokens};
 use crate::theme::{TEXT_BODY, Tokens, border_width};
@@ -11,6 +11,8 @@ const TAB_HEIGHT: f32 = 34.0;
 const TAB_PAD: f32 = 12.0;
 /// Thickness of the underline of the selected tab.
 const UNDERLINE: f32 = 2.0;
+/// How far the underline reaches below the tab, onto the strip's rule (`margin-bottom:-1px`).
+const UNDERLINE_DROP: f32 = 1.0;
 /// Space between a tab's label and its key (`.tabs button{gap:8px}`).
 const KEY_GAP: f32 = 8.0;
 /// Space under the rule before the content (`.tabs{margin-bottom:14px}`).
@@ -43,14 +45,24 @@ pub fn tabs_with_keys(ui: &mut Ui, items: &[(&str, &str)], selected: usize) -> T
 }
 
 /// The tab strip with the full-width rule under it.
+///
+/// The rule is the strip's bottom border, `bw` thick below the tabs (`.tabs{border-bottom:var(--bw)}`,
+/// index.html:139). It is painted first, in a slot reserved before the tabs, so the selected tab's
+/// underline, which reaches 1 point into it (`margin-bottom:-1px`, index.html:140), lies over it.
+#[allow(clippy::float_arithmetic, reason = "the centre of the rule's stroke")]
 fn ruled(ui: &mut Ui, items: &[(&str, Option<&str>)], selected: usize) -> TabsResponse {
     let t = tokens(ui);
     let bw = border_width(kind(ui));
+    let slot = ui.painter().add(Shape::Noop);
     let (out, bottom) = strip(ui, items, Some(selected), &t);
     let clip = ui.max_rect();
-    ui.painter().line_segment(
-        [pos2(clip.min.x, bottom), pos2(clip.max.x, bottom)],
-        Stroke::new(bw, t.border),
+    let y = bottom + bw / 2.0;
+    ui.painter().set(
+        slot,
+        Shape::line_segment(
+            [pos2(clip.min.x, y), pos2(clip.max.x, y)],
+            Stroke::new(bw, t.border),
+        ),
     );
     out
 }
@@ -145,7 +157,12 @@ fn tab(
         keycap::paint(painter, cap, k, t.surface_2, t.border, t.text_2);
     }
     if selected {
-        let underline = Rect::from_min_max(pos2(rect.min.x, rect.max.y - UNDERLINE), rect.max);
+        // The tab's 2 px bottom border, moved 1 point down onto the strip's rule
+        // (`margin-bottom:-1px`, index.html:140).
+        let underline = Rect::from_min_max(
+            pos2(rect.min.x, rect.max.y + UNDERLINE_DROP - UNDERLINE),
+            pos2(rect.max.x, rect.max.y + UNDERLINE_DROP),
+        );
         painter.rect_filled(underline, CornerRadius::ZERO, t.accent);
     }
     a11y::focus_ring(ui, &response, rect);

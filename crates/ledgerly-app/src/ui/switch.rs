@@ -1,5 +1,5 @@
 //! Switch: an on/off pill with a round knob (`.switch` in the mock). The accent when on, the
-//! border colour when off.
+//! strong border colour when off (index.html:324).
 
 use egui::{Response, Role, Sense, Ui, pos2, vec2};
 
@@ -21,7 +21,7 @@ pub fn switch(ui: &mut Ui, on: bool, sense: Sense, name: &str) -> Response {
     let t = tokens(ui);
     let (rect, response) = ui.allocate_exact_size(vec2(SWITCH_WIDTH, SWITCH_HEIGHT), sense);
     a11y::name_selected(ui, &response, Role::Switch, on, name);
-    let fill = if on { t.accent } else { t.border };
+    let fill = if on { t.accent } else { t.border_strong };
     #[expect(
         clippy::float_arithmetic,
         reason = "the pill's radius is half its height"

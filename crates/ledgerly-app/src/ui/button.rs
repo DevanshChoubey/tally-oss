@@ -2,7 +2,8 @@
 //! "Save" followed by `Ctrl+A`. Every button can be used with the mouse, labelled in words.
 
 use egui::{
-    Align2, Color32, FontId, Rect, Response, Role, Sense, Stroke, StrokeKind, Ui, Vec2, pos2,
+    Align2, Color32, FontId, Painter, Rect, Response, Role, Sense, Stroke, StrokeKind, Ui, Vec2,
+    pos2,
 };
 
 use super::a11y;
@@ -49,6 +50,22 @@ pub fn colors(
     }
 }
 
+/// The painter a button draws with. A disabled `Ui` fades everything to egui's `disabled_alpha`;
+/// the mock draws a disabled button in its own tokens at full opacity (index.html:131
+/// `.btn[disabled]{opacity:1}`), so for a disabled button the fade is undone.
+fn full_opacity(ui: &Ui, enabled: bool) -> Painter {
+    let mut painter = ui.painter().clone();
+    if !enabled {
+        let alpha = ui.visuals().disabled_alpha();
+        if alpha > 0.0 {
+            #[expect(clippy::float_arithmetic, reason = "undoing one opacity factor")]
+            let restored = (ui.opacity() / alpha).min(1.0);
+            painter.set_opacity(restored);
+        }
+    }
+    painter
+}
+
 /// Draws a button reading `label`, with `key` (such as `Ctrl+A`) as a keycap at its right end.
 /// Pass `None` for a button without a key. Disabled when the surrounding `Ui` is disabled.
 pub fn button(ui: &mut Ui, label: &str, key: Option<&str>, kind_of: ButtonKind) -> Response {
@@ -79,7 +96,7 @@ pub fn button_icon(
     let (rect, response) = ui.allocate_exact_size(Vec2::new(width, HEIGHT), Sense::click());
     a11y::name(ui, &response, Role::Button, label);
     let (fill, edge, ink) = colors(kind_of, enabled, response.hovered(), &t);
-    let painter = ui.painter();
+    let painter = &full_opacity(ui, enabled);
     painter.rect_filled(rect, RADIUS_S, fill);
     painter.rect_stroke(rect, RADIUS_S, Stroke::new(bw, edge), StrokeKind::Inside);
     if let Some(i) = which {
