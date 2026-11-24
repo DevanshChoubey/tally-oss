@@ -90,6 +90,8 @@ pub struct VoucherEntryScreen {
     pub(super) create_queue: VecDeque<CreateLedgerRequest>,
     /// The ledger create the worker is running: the name asked for, and the ticket.
     pub(super) creating: Option<(String, Ticket<CommandReply>)>,
+    /// Where parts of the screen were drawn in the last frame, for layout tests.
+    pub(super) shown: super::draw::Shown,
 }
 impl VoucherEntryScreen {
     /// Opens an entry screen for voucher type `type_id`, dated `today` (in financial year `fy`).
@@ -135,6 +137,7 @@ impl VoucherEntryScreen {
             posting: None,
             create_queue: VecDeque::new(),
             creating: None,
+            shown: super::draw::Shown::default(),
         }))
     }
 
@@ -153,6 +156,28 @@ impl VoucherEntryScreen {
     #[must_use]
     pub fn focus(&self) -> Field {
         self.focus
+    }
+
+    /// Where the field captioned `name` was drawn in the last frame.
+    #[must_use]
+    pub fn field_rect(&self, name: &str) -> Option<egui::Rect> {
+        self.shown
+            .fields
+            .iter()
+            .find(|(n, _)| *n == name)
+            .map(|(_, r)| *r)
+    }
+
+    /// The line table's headings and where each was drawn in the last frame, left to right.
+    #[must_use]
+    pub fn heading_rects(&self) -> Vec<(&'static str, egui::Rect)> {
+        self.shown.heads.clone()
+    }
+
+    /// Where the open type-ahead list was drawn in the last frame; `None` when none was open.
+    #[must_use]
+    pub fn picker_rect(&self) -> Option<egui::Rect> {
+        self.shown.picker
     }
 
     /// The current error message, if any.

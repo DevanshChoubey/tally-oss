@@ -19,4 +19,5 @@ pub mod report_view;
 pub mod review;
 pub mod setup;
 pub mod voucher_entry;
+pub mod voucher_sheet;
 pub mod wire;

@@ -14,7 +14,6 @@ pub(super) enum UiEvent {
     Submit { field: Field, back: bool },
     Pick(usize),
     Side(usize),
-    Leave,
 }
 
 /// Keys read before the widgets see them.
@@ -123,8 +122,7 @@ impl VoucherEntryScreen {
             .is_some_and(|r| r.ledger.is_none() && !r.ledger_text.trim().is_empty())
     }
 
-    pub(super) fn apply_events(&mut self, masters: &Masters, events: Vec<UiEvent>) -> ScreenAction {
-        let mut action = ScreenAction::Stay;
+    pub(super) fn apply_events(&mut self, masters: &Masters, events: Vec<UiEvent>) {
         for event in events {
             match event {
                 UiEvent::Focus(field) => {
@@ -147,13 +145,7 @@ impl VoucherEntryScreen {
                     self.submit(masters);
                 }
                 UiEvent::Side(i) => self.toggle_side(i),
-                UiEvent::Leave => {
-                    if self.request_leave() {
-                        action = ScreenAction::Pop;
-                    }
-                }
             }
         }
-        action
     }
 }

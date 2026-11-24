@@ -122,8 +122,7 @@ impl ItemInvoiceScreen {
         ScreenAction::Stay
     }
 
-    pub(super) fn apply_events(&mut self, masters: &Masters, events: Vec<UiEvent>) -> ScreenAction {
-        let mut action = ScreenAction::Stay;
+    pub(super) fn apply_events(&mut self, masters: &Masters, events: Vec<UiEvent>) {
         for event in events {
             match event {
                 UiEvent::Focus(field) => {
@@ -149,14 +148,8 @@ impl ItemInvoiceScreen {
                     self.pick_index = j;
                     self.submit(masters);
                 }
-                UiEvent::Leave => {
-                    if self.request_leave() {
-                        action = ScreenAction::Pop;
-                    }
-                }
             }
         }
-        action
     }
 
     /// Typing into a picked field un-picks it.

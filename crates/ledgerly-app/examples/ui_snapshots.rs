@@ -1063,8 +1063,16 @@ fn light_shots() -> Vec<Shot> {
             "1500",
         )
         .press(&[(Key::Enter, NONE), (Key::Enter, NONE)]),
-        // sales-invoice.saved is not captured: answering the question draws an empty content
-        // area in the harness (PARITY-GAPS, Sales invoice).
+        // Yes on the save question: the invoice is posted and a fresh one opens (index.html
+        // sales-invoice.saved).
+        pumps_invoice_line(
+            "sales-invoice.saved",
+            ("Narmada", "24"),
+            "HDPE",
+            "10",
+            "1500",
+        )
+        .press(&[(Key::Enter, NONE), (Key::Enter, NONE), (Key::Enter, NONE)]),
     ]
 }
 
@@ -1274,7 +1282,9 @@ impl eframe::App for Snapshots {
                 // The wizard's Finish creates a company file on a background thread, and the screen
                 // moves to Done only when that finishes, so the Done shot waits longer. The other
                 // setup steps draw at once and settle like any shot.
-                let settle = if self.shots[self.index].state == "setup.done" {
+                let settle = if self.shots[self.index].state == "setup.done"
+                    || self.shots[self.index].state == "sales-invoice.saved"
+                {
                     SETUP_SETTLE_FRAMES
                 } else {
                     60
