@@ -49,6 +49,14 @@ pub struct QueueRow {
     pub ledger: LedgerId,
 }
 
+impl QueueRow {
+    /// The kind as the screen shows it: the word in the language the row was built in.
+    #[must_use]
+    pub fn shown_kind(&self) -> &str {
+        &self.kind_word
+    }
+}
+
 /// The queue as the screen shows it: its rows, its not-connected sources and its count.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct QueuePanel {

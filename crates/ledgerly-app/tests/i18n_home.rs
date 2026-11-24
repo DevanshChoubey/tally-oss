@@ -142,3 +142,23 @@ fn hindi_palette_words_come_from_the_hindi_file() {
             .contains("zzqx")
     );
 }
+
+#[test]
+fn review_row_kind_on_home_comes_from_the_hindi_file() {
+    use ledgerly_app::screens::review::QueueRow;
+    use ledgerly_app::ui::conf::Confidence;
+    use ledgerly_core::LedgerId;
+    let tr = hindi();
+    // provenance: the row is built by hand; the kind word is the file's `review.kind.bank_match`.
+    let row = QueueRow {
+        kind: "Bank match",
+        kind_word: tr.t("review.kind.bank_match"),
+        what: "NEFT to Acme".to_owned(),
+        source: "Lines 3, statement of 12 Nov 2026".to_owned(),
+        confidence: Confidence::High,
+        amount: None,
+        ledger: LedgerId(1),
+    };
+    assert_eq!(row.shown_kind(), tr.t("review.kind.bank_match"));
+    assert_ne!(row.shown_kind(), "Bank match");
+}

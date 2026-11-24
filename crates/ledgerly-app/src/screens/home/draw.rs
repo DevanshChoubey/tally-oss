@@ -349,7 +349,7 @@ fn review_row(ui: &mut Ui, row: &crate::screens::review::QueueRow) {
     let t = tokens(ui);
     ui.separator();
     ui.horizontal(|ui| {
-        ui.label(RichText::new(row.kind).strong());
+        ui.label(RichText::new(row.shown_kind()).strong());
         ui.label(row.what.as_str());
         conf(ui, row.confidence);
         if let Some(amount) = row.amount {
