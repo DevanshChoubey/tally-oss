@@ -4,11 +4,11 @@
 //! `Api::invoice_gst`, and shows the answer through `ItemInvoiceScreen::set_gst`. This module only
 //! moves the answer's fields into the block the screen shows: nothing is added up here.
 
-use ledgerly_api::{Api, ApiError, InvoiceGst};
+use ledgerly_api::{Api, ApiError, InvoiceGst, PartyBill};
 use ledgerly_core::Outcome;
 use ledgerly_model::Voucher;
 
-use super::{GstBlock, GstBlockLine, GstResult, GstTotal};
+use super::{GstBlock, GstBlockLine, GstRateRow, GstResult, GstTotal};
 use crate::worker::{ApiWorker, Poll, Ticket};
 
 /// The worker's answer: the API's outcome, or the text of its error.
@@ -16,9 +16,13 @@ pub(super) type ComputeReply = Result<Outcome<InvoiceGst>, String>;
 
 /// Queues the tax computation for `voucher` on the worker. Never blocks.
 #[must_use]
-pub(super) fn send(worker: &ApiWorker, voucher: Voucher) -> Ticket<ComputeReply> {
+pub(super) fn send(
+    worker: &ApiWorker,
+    voucher: Voucher,
+    bills: Vec<PartyBill>,
+) -> Ticket<ComputeReply> {
     worker.run(move |api: &mut Api| {
-        api.invoice_gst(&voucher)
+        api.invoice_gst_with_bills(&voucher, &bills)
             .map_err(|e: ApiError| e.to_string())
     })
 }
@@ -73,6 +77,16 @@ fn to_block(gst: InvoiceGst) -> GstBlock {
             })
             .collect(),
         taxable_total: gst.breakup.taxable_total,
+        rate_rows: gst
+            .rate_rows
+            .iter()
+            .map(|r| GstRateRow {
+                head: r.head.clone(),
+                rate_percent: r.rate_percent,
+                taxable: r.taxable,
+                amount: r.amount,
+            })
+            .collect(),
         heads,
         round_off: gst.breakup.round_off,
         invoice_total: gst.invoice_total,

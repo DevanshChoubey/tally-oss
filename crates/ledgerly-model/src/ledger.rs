@@ -45,6 +45,11 @@ pub enum ReservedLedger {
     Cash,
     /// Profit and loss account.
     ProfitAndLoss,
+    /// The ledger an invoice's round-off to the whole rupee is posted to. TallyPrime sets one with
+    /// the ledger type Invoice Rounding
+    /// (<https://help.tallysolutions.com/tally-prime/gst-master-setup/india-gst-expense-income-non-revenue-invoice-round-off-ledgers-tally/>,
+    /// read 2026-11-21). A company may hold one.
+    InvoiceRounding,
 }
 
 /// Bill-wise settings of a ledger.

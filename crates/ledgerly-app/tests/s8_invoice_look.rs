@@ -195,7 +195,7 @@ fn the_party_list_floats_under_its_field_and_moves_nothing() {
     let b = books();
     let mut s = open(&b);
     draw(&mut s, &b, None, 3);
-    let party = rect(&s, "Customer");
+    let party = rect(&s, "Party");
     let ledger_open = rect(&s, "Sales ledger");
     let list = s
         .picker_rect()
@@ -231,13 +231,13 @@ fn the_head_is_four_columns_with_the_party_across_two() {
     draw(&mut s, &b, None, 3);
     let (date, party, place) = (
         rect(&s, "Date"),
-        rect(&s, "Customer"),
+        rect(&s, "Party"),
         rect(&s, "Place of supply"),
     );
     let (gstin, ledger, order) = (
         rect(&s, "Party GSTIN"),
         rect(&s, "Sales ledger"),
-        rect(&s, "Order or reference"),
+        rect(&s, "Buyer's order no."),
     );
     let unit = date.width();
     assert!(

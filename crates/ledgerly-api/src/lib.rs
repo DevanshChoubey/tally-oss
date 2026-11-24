@@ -5,6 +5,7 @@
 //! settings. Every figure comes from the engine or the report engines (spec section 4).
 
 mod ai;
+mod balance;
 mod bank;
 mod command;
 mod day_book_meta;
@@ -13,8 +14,8 @@ mod events;
 pub mod facade;
 mod gst;
 mod gst_filing;
-mod home;
 mod gstr1_sections;
+mod home;
 mod maintenance;
 mod nudges;
 mod print;
@@ -25,6 +26,7 @@ mod tally_import;
 mod voucher_gst;
 
 pub use ai::{AiLogEntry, AiTier};
+pub use balance::BalanceChange;
 pub use command::{Command, CommandResult, CreatedId};
 pub use gst_filing::GstFiling;
 // Report types the app names when it builds and reads reports (card W7). The app depends on this
@@ -34,10 +36,11 @@ pub use facade::Api;
 pub use gst::{
     Bucket, BucketedVoucher, Gstr1, Gstr1Return, Gstr3bTaxAmounts, Gstr3bWorking, RulePack,
 };
+pub use gstr1_sections::{Gstr1Section, TaxableAgreement};
 pub use home::{
     CUSTOMER_LATE_DAYS, CashAndBank, HomeFigures, LateBills, MonthSales, SUPPLIER_LATE_DAYS,
 };
-pub use gstr1_sections::{Gstr1Section, TaxableAgreement};
+pub use ledgerly_engine::bills::OpenBill;
 pub use ledgerly_gst::compute::GstBreakup;
 pub use ledgerly_model::{
     Address, Books, Company, EntityKind, Features, NegativeStockPolicy, Voucher,
@@ -53,7 +56,7 @@ pub use nudges::{DuplicatePayment, Gstr1Due, HomeNudges, PaymentRef, gstr1_next_
 pub use report::ExportFormat;
 pub use search::{MatchedOn, SearchHit};
 pub use tally_import::ImportSummary;
-pub use voucher_gst::InvoiceGst;
+pub use voucher_gst::{InvoiceGst, PartyBill, RateRow};
 
 pub use ledgerly_bank::brs::Brs;
 pub use ledgerly_bank::matcher::{Candidate, LineDirection, MatchRule};

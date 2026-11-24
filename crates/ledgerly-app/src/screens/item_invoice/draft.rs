@@ -2,12 +2,14 @@
 
 use super::{InvoiceError, InvoiceKind, InvoiceMode, parse_decimal, parse_place};
 use crate::screens::voucher_entry::{UNASSIGNED_VOUCHER_ID, eval_amount, parse_entry_date};
+use ledgerly_api::PartyBill;
 use ledgerly_core::{
     Decimal, DrCr, FinancialYear, GodownId, LedgerId, MoneyError, Paise, Qty, Rate, RoundingRule,
     SignedAmount, StockItemId, Unsupported, VoucherTypeId, round_rupees_to_paise,
 };
 use ledgerly_model::{
-    GodownAllocation, InventoryLine, LedgerLine, Masters, Voucher, VoucherMode, VoucherStatus,
+    BillRefKind, GodownAllocation, InventoryLine, LedgerLine, Masters, Voucher, VoucherMode,
+    VoucherStatus,
 };
 use std::collections::BTreeMap;
 
@@ -36,6 +38,57 @@ impl InvoiceRow {
             && self.rate_text.trim().is_empty()
             && self.discount_text.trim().is_empty()
             && self.amount_text.trim().is_empty()
+    }
+}
+
+/// One bill reference of the party line as typed: its type, its name and the part of the invoice
+/// value it takes (TallyPrime's Bill-wise Details screen:
+/// <https://help.tallysolutions.com/advances-received/>, read 2026-11-25).
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct BillRow {
+    /// The type as typed: any start of New Ref, Agst Ref, Advance or On Account. Empty is a New
+    /// Ref.
+    pub kind_text: String,
+    /// The bill's name. Empty on a New Ref means the voucher number, given when it is saved.
+    pub name: String,
+    /// The amount in rupees; empty takes what the other references leave.
+    pub amount_text: String,
+}
+
+impl BillRow {
+    pub(super) fn is_blank(&self) -> bool {
+        self.kind_text.trim().is_empty()
+            && self.name.trim().is_empty()
+            && self.amount_text.trim().is_empty()
+    }
+
+    /// The words shown for `kind`: the product's own names for the four types.
+    #[must_use]
+    pub fn kind_label(kind: BillRefKind) -> &'static str {
+        match kind {
+            BillRefKind::New => "New Ref",
+            BillRefKind::Against => "Agst Ref",
+            BillRefKind::Advance => "Advance",
+            BillRefKind::OnAccount => "On Account",
+        }
+    }
+
+    /// Reads a typed type name: any start of the four labels, in any case; `None` when it is
+    /// empty or names none of them.
+    #[must_use]
+    pub fn parse_kind(text: &str) -> Option<BillRefKind> {
+        let t = text.trim().to_lowercase();
+        if t.is_empty() {
+            return None;
+        }
+        [
+            BillRefKind::New,
+            BillRefKind::Against,
+            BillRefKind::Advance,
+            BillRefKind::OnAccount,
+        ]
+        .into_iter()
+        .find(|k| Self::kind_label(*k).to_lowercase().starts_with(&t))
     }
 }
 
@@ -166,6 +219,9 @@ pub struct InvoiceDraft {
     pub particulars: Vec<ParticularRow>,
     /// Narration.
     pub narration: String,
+    /// The bill references typed for the party line. Empty means the default: for a bill-wise
+    /// party one New Ref for the whole value, named by the voucher number.
+    pub bills: Vec<BillRow>,
 }
 
 impl InvoiceDraft {
@@ -193,6 +249,7 @@ impl InvoiceDraft {
             rows: vec![InvoiceRow::default()],
             particulars: vec![ParticularRow::default()],
             narration: String::new(),
+            bills: Vec::new(),
         }
     }
 
@@ -215,6 +272,52 @@ impl InvoiceDraft {
             && self.narration.trim().is_empty()
             && self.rows.iter().all(InvoiceRow::is_blank)
             && self.particulars.iter().all(ParticularRow::is_blank)
+            && self.bills.iter().all(BillRow::is_blank)
+    }
+
+    /// The bill references to hand the engine with the invoice; rows with nothing typed are
+    /// skipped.
+    ///
+    /// # Errors
+    /// [`InvoiceError::Bill`] when a type names none of the four or an amount is not a plain
+    /// amount.
+    pub fn party_bills(&self) -> Result<Vec<PartyBill>, InvoiceError> {
+        let mut out = Vec::with_capacity(self.bills.len());
+        for (index, row) in self.bills.iter().enumerate() {
+            if row.is_blank() {
+                continue;
+            }
+            let line = index.saturating_add(1);
+            let kind = if row.kind_text.trim().is_empty() {
+                BillRefKind::New
+            } else {
+                BillRow::parse_kind(&row.kind_text).ok_or_else(|| InvoiceError::Bill {
+                    line,
+                    reason: format!(
+                        "'{}' is not New Ref, Agst Ref, Advance or On Account",
+                        row.kind_text.trim()
+                    ),
+                })?
+            };
+            let amount = if row.amount_text.trim().is_empty() {
+                None
+            } else {
+                Some(
+                    typed_amount(&row.amount_text).map_err(|reason| InvoiceError::Bill {
+                        line,
+                        reason: format!("amount: {reason}"),
+                    })?,
+                )
+            };
+            out.push(PartyBill {
+                kind,
+                name: row.name.trim().to_owned(),
+                amount,
+                credit_days: None,
+                due_date: None,
+            });
+        }
+        Ok(out)
     }
 
     /// The voucher to hand to the tax engine: the header and the inventory lines (item invoice)
@@ -238,13 +341,8 @@ impl InvoiceDraft {
             field: self.kind.party_label(),
         };
         let party = self.party.ok_or_else(|| missing_party.clone())?;
-        let party_ledger = masters.ledgers.get(&party).ok_or(missing_party)?;
-        if party_ledger.bill_wise.is_some() {
-            return Err(InvoiceError::Unsupported(Unsupported {
-                what: "bill reference on a bill-wise party".to_owned(),
-                reason: "this screen does not enter bill references yet; the party ledger must not be bill-wise"
-                    .to_owned(),
-            }));
+        if !masters.ledgers.contains_key(&party) {
+            return Err(missing_party);
         }
         let place = parse_place(&self.place_text)?;
         let (mode, ledger_lines, inventory_lines) = match self.mode {

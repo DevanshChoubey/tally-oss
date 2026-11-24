@@ -40,6 +40,7 @@ impl VoucherEntryScreen {
             self.draft.date_text.clone(),
         );
         self.outbox = None;
+        self.extras.forget_number();
         self.notice = Some(Notice::Info("Saved. Next voucher.".to_owned()));
         self.go(Field::Ledger(0));
     }

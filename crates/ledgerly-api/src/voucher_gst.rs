@@ -42,15 +42,16 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use ledgerly_core::{
-    Decimal, DrCr, LedgerId, MoneyError, Outcome, Paise, Rate, RoundingRule, SignedAmount,
-    round_rupees_to_paise,
+    Date, Decimal, DrCr, LedgerId, MoneyError, Outcome, Paise, Rate, RoundingRule, SignedAmount,
+    VoucherTypeId, round_rupees_to_paise,
 };
 use ledgerly_engine::EngineError;
 use ledgerly_gst::GstError;
 use ledgerly_gst::compute::{GstBreakup, LineTax, compute_voucher_tax};
 use ledgerly_gst::pack::{RulePack, load_pack};
 use ledgerly_model::{
-    BaseVoucherKind, Books, GstLine, LedgerLine, StoredGst, TaxLedgerKind, Voucher, VoucherMode,
+    BaseVoucherKind, BillAllocation, BillRefKind, Books, GstLine, LedgerLine, NumberingMethod,
+    ReservedLedger, StoredGst, TaxLedgerKind, Voucher, VoucherMode,
 };
 
 use crate::error::ApiError;
@@ -62,12 +63,51 @@ use crate::gst::BUNDLED_RATE_PACK;
 pub struct InvoiceGst {
     /// The engine's tax computation the rest is built from.
     pub breakup: GstBreakup,
-    /// The invoice value: taxable value plus the tax heads (the round-off is zero here).
+    /// The invoice value: taxable value plus the tax heads plus the round-off to the whole rupee.
     pub invoice_total: Paise,
     /// The accounting lines: party, sales or purchase ledgers, tax ledgers. They balance.
     pub ledger_lines: Vec<LedgerLine>,
     /// The block to store on the voucher.
     pub stored: StoredGst,
+    /// The tax box rows: each head at each rate, by rate then head, as "CGST 9% on 1,30,085.00".
+    /// Empty when the rounded rows would not add up to the head totals (the box then lists the
+    /// head totals alone, since showing rows that disagree with the posting would be a wrong
+    /// number).
+    pub rate_rows: Vec<RateRow>,
+}
+
+/// One row of the tax box: a tax head at one rate.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RateRow {
+    /// `CGST`, `SGST`, `UTGST` or `IGST`.
+    pub head: String,
+    /// The head's own rate in percent (half the slab for CGST, SGST and UTGST).
+    pub rate_percent: Decimal,
+    /// The taxable value of the lines at this rate.
+    pub taxable: Paise,
+    /// The head's tax on them, rounded to the paisa from the unrounded line tax.
+    pub amount: Paise,
+}
+
+/// One bill reference the user typed for the party line of an invoice (TallyPrime's Bill-wise
+/// Details screen, <https://help.tallysolutions.com/advances-received/>, read 2026-11-25).
+///
+/// A bill-wise party with no references gets one [`BillRefKind::New`] for the whole invoice value.
+/// References split the value: those with an amount take it, and at most one without an amount
+/// takes what is left. They must add up to the invoice value exactly.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PartyBill {
+    /// New Ref, Agst Ref, Advance or On Account.
+    pub kind: BillRefKind,
+    /// The bill's name. Empty on a New Ref means the voucher number: the engine names it when the
+    /// voucher is posted and has its number. Ignored on On Account.
+    pub name: String,
+    /// The part of the invoice value on this reference; `None` takes the remainder.
+    pub amount: Option<Paise>,
+    /// Credit days from the voucher date; the party master's default when `None` on a New Ref.
+    pub credit_days: Option<u32>,
+    /// Due date, instead of credit days.
+    pub due_date: Option<Date>,
 }
 
 /// A tax ledger of the masters or of a voucher.
@@ -102,6 +142,20 @@ impl Api {
     /// # Errors
     /// As [`Api::voucher_gst`].
     pub fn invoice_gst(&self, v: &Voucher) -> Result<Outcome<InvoiceGst>, ApiError> {
+        self.invoice_gst_with_bills(v, &[])
+    }
+
+    /// [`Api::invoice_gst`] with the bill references typed for the party line. See [`PartyBill`]:
+    /// no references on a bill-wise party means one New Ref for the invoice value; references on a
+    /// party that is not bill-wise, or ones that do not add up to the value, are `Unsupported`.
+    ///
+    /// # Errors
+    /// As [`Api::voucher_gst`].
+    pub fn invoice_gst_with_bills(
+        &self,
+        v: &Voucher,
+        bills: &[PartyBill],
+    ) -> Result<Outcome<InvoiceGst>, ApiError> {
         let books = match self.cached_books()? {
             Outcome::Value(books) => books,
             Outcome::Unsupported(u) => return Ok(Outcome::Unsupported(u)),
@@ -121,7 +175,69 @@ impl Api {
             Outcome::Value(b) => b,
             Outcome::Unsupported(u) => return Ok(Outcome::Unsupported(u)),
         };
-        Ok(build_invoice(books, v, breakup)?)
+        Ok(build_invoice(books, v, breakup, bills)?)
+    }
+
+    /// The bills of `ledger` still open on `as_of` (the list of the payment and receipt screens'
+    /// bill-wise details). A ledger that does not track bills has none.
+    ///
+    /// # Errors
+    /// [`ApiError::Engine`] when the ledger does not exist or its bills cannot be worked out (for
+    /// example a bill-wise ledger with an opening balance, which has no bill breakup);
+    /// [`ApiError::Stale`] after a saved change whose reload failed.
+    pub fn open_bills(
+        &self,
+        ledger: LedgerId,
+        as_of: Date,
+    ) -> Result<Outcome<Vec<ledgerly_engine::bills::OpenBill>>, ApiError> {
+        let books = match self.cached_books()? {
+            Outcome::Value(books) => books,
+            Outcome::Unsupported(u) => return Ok(Outcome::Unsupported(u)),
+        };
+        Ok(Outcome::Value(ledgerly_engine::bills::open_bills(
+            books, ledger, as_of,
+        )?))
+    }
+
+    /// The number the engine will give the next voucher of type `type_id` dated `date`, for the
+    /// title of a new voucher ("Sales invoice SI/0418"). `None` when the type takes a number typed
+    /// in or has no numbers. `Unsupported` when the type has several series (the screen has no
+    /// series choice yet).
+    ///
+    /// The number is a preview: it is allocated when the voucher is posted.
+    ///
+    /// # Errors
+    /// [`ApiError::Engine`] when the type is unknown or numbering cannot continue;
+    /// [`ApiError::Stale`] after a saved change whose reload failed.
+    pub fn next_voucher_number(
+        &self,
+        type_id: VoucherTypeId,
+        date: Date,
+    ) -> Result<Outcome<Option<String>>, ApiError> {
+        let books = match self.cached_books()? {
+            Outcome::Value(books) => books,
+            Outcome::Unsupported(u) => return Ok(Outcome::Unsupported(u)),
+        };
+        let vt =
+            books
+                .masters
+                .voucher_types
+                .get(&type_id)
+                .ok_or_else(|| EngineError::NotFound {
+                    what: format!("voucher type {}", type_id.0),
+                })?;
+        match vt.numbering.method {
+            NumberingMethod::Manual | NumberingMethod::None => return Ok(Outcome::Value(None)),
+            NumberingMethod::Automatic => {}
+        }
+        if !vt.numbering.series.is_empty() {
+            return Ok(Outcome::unsupported(
+                "next number of a voucher type with several series",
+                "choose the series first; the screen has no series choice yet",
+            ));
+        }
+        let number = ledgerly_engine::numbering::next_number(vt, None, date, books)?;
+        Ok(Outcome::Value(Some(number)))
     }
 }
 
@@ -418,21 +534,151 @@ fn line(ledger: LedgerId, amount: SignedAmount) -> LedgerLine {
     }
 }
 
+/// The invoice-rounding ledger (reserved role [`ReservedLedger::InvoiceRounding`]), if the masters
+/// have one.
+fn rounding_ledger(books: &Books) -> Option<LedgerId> {
+    books
+        .masters
+        .ledgers
+        .values()
+        .find(|l| l.reserved == Some(ReservedLedger::InvoiceRounding))
+        .map(|l| l.id)
+}
+
+/// The bill allocations of the party line, for an invoice value `total` on `side`.
+///
+/// A party that is not bill-wise has none (and takes none). A bill-wise party with no typed
+/// references gets one New Ref for the whole value with the master's credit days. Typed references
+/// are resolved as [`PartyBill`] says.
+#[expect(
+    clippy::too_many_lines,
+    reason = "one pass over the typed references, with a refusal per rule; splitting it would scatter one rule"
+)]
+fn party_bills(
+    books: &Books,
+    party: LedgerId,
+    total: Paise,
+    side: DrCr,
+    typed: &[PartyBill],
+) -> Result<Outcome<Vec<BillAllocation>>, GstError> {
+    let Some(master) = books.masters.ledgers.get(&party) else {
+        return Ok(Outcome::unsupported(
+            "bill references",
+            format!("party ledger {} does not exist", party.0),
+        ));
+    };
+    let Some(config) = master.bill_wise else {
+        if typed.is_empty() {
+            return Ok(Outcome::Value(Vec::new()));
+        }
+        return Ok(Outcome::unsupported(
+            "bill references on a party that is not bill-wise",
+            format!(
+                "'{}' does not track bills; turn bill-wise on in its master or remove the references",
+                master.name
+            ),
+        ));
+    };
+    let amount = |paise: Paise| SignedAmount {
+        amount: paise,
+        side,
+    };
+    if typed.is_empty() {
+        return Ok(Outcome::Value(vec![BillAllocation {
+            kind: BillRefKind::New,
+            name: String::new(),
+            due_date: None,
+            credit_days: config.default_credit_days,
+            amount: amount(total),
+        }]));
+    }
+    let blanks = typed.iter().filter(|b| b.amount.is_none()).count();
+    if blanks > 1 {
+        return Ok(Outcome::unsupported(
+            "bill references without an amount",
+            "only one reference can take the remainder of the invoice value; type the others' amounts",
+        ));
+    }
+    let mut typed_sum = Paise::ZERO;
+    for b in typed {
+        if let Some(a) = b.amount {
+            typed_sum = typed_sum.checked_add(a)?;
+        }
+    }
+    let rest = total.checked_sub(typed_sum)?;
+    let fits = if blanks == 1 {
+        rest.get() > 0
+    } else {
+        rest.is_zero()
+    };
+    if !fits {
+        return Ok(Outcome::unsupported(
+            "bill references that do not add up to the invoice value",
+            format!(
+                "the references total Rs {} but the invoice value is Rs {}; the amounts must add up exactly",
+                format_rupees(typed_sum),
+                format_rupees(total)
+            ),
+        ));
+    }
+    let mut out = Vec::with_capacity(typed.len());
+    for b in typed {
+        let paise = b.amount.unwrap_or(rest);
+        if paise.get() <= 0 {
+            return Ok(Outcome::unsupported(
+                "bill reference with no amount",
+                "every reference needs an amount above zero",
+            ));
+        }
+        let new_ref = b.kind == BillRefKind::New;
+        out.push(BillAllocation {
+            kind: b.kind,
+            name: match b.kind {
+                BillRefKind::OnAccount => String::new(),
+                BillRefKind::New | BillRefKind::Against | BillRefKind::Advance => b.name.clone(),
+            },
+            due_date: b.due_date,
+            credit_days: if b.due_date.is_none() && new_ref {
+                b.credit_days.or(config.default_credit_days)
+            } else {
+                b.credit_days
+            },
+            amount: amount(paise),
+        });
+    }
+    Ok(Outcome::Value(out))
+}
+
+/// Rupees with Indian digit grouping and two decimals, for messages.
+fn format_rupees(p: Paise) -> String {
+    ledgerly_core::format::format_inr(p)
+}
+
 /// Builds the lines and block of an item invoice from the engine's tax.
+#[expect(
+    clippy::too_many_lines,
+    reason = "one pass that builds the lines, the per-rate rows and the party bills from one breakup"
+)]
 fn build_invoice(
     books: &Books,
     v: &Voucher,
     breakup: GstBreakup,
+    bills: &[PartyBill],
 ) -> Result<Outcome<InvoiceGst>, GstError> {
-    if !breakup.round_off.is_zero() {
-        return Ok(Outcome::unsupported(
-            "invoice round-off line",
-            format!(
-                "the engine rounds this invoice by Rs {}, and the masters have no invoice-rounding ledger to post it to (TallyPrime sets one with the ledger type Invoice Rounding); not posted",
-                breakup.round_off.to_rupees()
-            ),
-        ));
-    }
+    let round_ledger = if breakup.round_off.is_zero() {
+        None
+    } else {
+        let Some(ledger) = rounding_ledger(books) else {
+            return Ok(Outcome::unsupported(
+                "invoice round-off line",
+                format!(
+                    "the engine rounds this invoice by Rs {}, and the masters have no invoice-rounding ledger to post it to (TallyPrime sets one with the ledger type Invoice Rounding); not posted",
+                    breakup.round_off.to_rupees()
+                ),
+            ));
+        };
+        Some(ledger)
+    };
     let Some(side) = books
         .masters
         .voucher_types
@@ -475,14 +721,21 @@ fn build_invoice(
     for tax_line in &stored.lines {
         tax_total = tax_total.checked_add(tax_line.tax)?;
     }
-    let invoice_total = breakup.taxable_total.checked_add(tax_total)?;
-    let mut lines = vec![line(
+    let before_round = breakup.taxable_total.checked_add(tax_total)?;
+    let invoice_total = before_round.checked_add(breakup.round_off)?;
+    let party_bills = match party_bills(books, party, invoice_total, side.opposite(), bills)? {
+        Outcome::Value(b) => b,
+        Outcome::Unsupported(u) => return Ok(Outcome::Unsupported(u)),
+    };
+    let mut party_line = line(
         party,
         SignedAmount {
             amount: invoice_total,
             side: side.opposite(),
         },
-    )];
+    );
+    party_line.bills = party_bills;
+    let mut lines = vec![party_line];
     for (ledger, amount) in accounts {
         lines.push(line(ledger, SignedAmount { amount, side }));
     }
@@ -495,12 +748,88 @@ fn build_invoice(
             },
         ));
     }
+    if let Some(ledger) = round_ledger {
+        // The party line carries the round-off, so a positive one makes the party side bigger and
+        // the rounding ledger takes the tax side; a negative one takes the party's side.
+        let magnitude = breakup.round_off.checked_abs()?;
+        let on_tax_side = !breakup.round_off.is_negative();
+        let round_side = if on_tax_side { side } else { side.opposite() };
+        lines.push(line(
+            ledger,
+            SignedAmount {
+                amount: magnitude,
+                side: round_side,
+            },
+        ));
+    }
+    let rate_rows = rate_rows(&breakup)?;
     Ok(Outcome::Value(InvoiceGst {
         breakup,
         invoice_total,
         ledger_lines: lines,
         stored,
+        rate_rows,
     }))
+}
+
+/// Per-rate sums of one voucher: taxable value and the unrounded tax of each head.
+#[derive(Default)]
+struct RateSums {
+    taxable: Paise,
+    cgst: Decimal,
+    sgst: Decimal,
+    utgst: Decimal,
+    igst: Decimal,
+}
+
+/// The tax box rows of `breakup`: for each rate (ascending) the heads with tax, each summed over
+/// the lines at that rate and rounded once to the paisa. Empty when any head's rows do not add up
+/// to the head total the invoice posts, so the box never shows rows that disagree with it.
+fn rate_rows(breakup: &GstBreakup) -> Result<Vec<RateRow>, GstError> {
+    let mut by_rate: BTreeMap<Decimal, RateSums> = BTreeMap::new();
+    for l in &breakup.lines {
+        let sums = by_rate.entry(l.rate_percent.normalize()).or_default();
+        sums.taxable = sums.taxable.checked_add(l.taxable)?;
+        sums.cgst = sums.cgst.checked_add(l.cgst).ok_or(MoneyError::Overflow)?;
+        sums.sgst = sums.sgst.checked_add(l.sgst).ok_or(MoneyError::Overflow)?;
+        sums.utgst = sums
+            .utgst
+            .checked_add(l.utgst)
+            .ok_or(MoneyError::Overflow)?;
+        sums.igst = sums.igst.checked_add(l.igst).ok_or(MoneyError::Overflow)?;
+    }
+    let two = Decimal::from(2);
+    let mut rows = Vec::new();
+    let (mut cgst, mut sgst, mut utgst, mut igst) =
+        (Paise::ZERO, Paise::ZERO, Paise::ZERO, Paise::ZERO);
+    for (rate, sums) in &by_rate {
+        let half = rate.checked_div(two).ok_or(MoneyError::Overflow)?;
+        let heads = [
+            ("CGST", half, sums.cgst, &mut cgst),
+            ("SGST", half, sums.sgst, &mut sgst),
+            ("UTGST", half, sums.utgst, &mut utgst),
+            ("IGST", *rate, sums.igst, &mut igst),
+        ];
+        for (head, head_rate, unrounded, total) in heads {
+            if unrounded.is_zero() {
+                continue;
+            }
+            let amount = round_rupees_to_paise(unrounded, RoundingRule::HalfUpToPaise)?;
+            *total = total.checked_add(amount)?;
+            rows.push(RateRow {
+                head: head.to_owned(),
+                rate_percent: head_rate,
+                taxable: sums.taxable,
+                amount,
+            });
+        }
+    }
+    let t = &breakup.totals;
+    if cgst == t.cgst && sgst == t.sgst && utgst == t.utgst && igst == t.igst {
+        Ok(rows)
+    } else {
+        Ok(Vec::new())
+    }
 }
 
 /// The sales or purchase ledgers of an item invoice, with the sum of its inventory lines on each.

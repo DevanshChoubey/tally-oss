@@ -231,7 +231,7 @@ fn unsupported_profit_and_loss(report: &str) -> Outcome<Report> {
 fn is_profit_and_loss(ledger: &Ledger) -> bool {
     match ledger.reserved {
         Some(ReservedLedger::ProfitAndLoss) => true,
-        Some(ReservedLedger::Cash) | None => false,
+        Some(ReservedLedger::Cash | ReservedLedger::InvoiceRounding) | None => false,
     }
 }
 

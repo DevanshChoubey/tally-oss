@@ -146,12 +146,16 @@ impl ItemInvoiceScreen {
             | Field::Discount(_)
             | Field::Amount(_)
             | Field::LedgerAmount(_)
+            | Field::BillKind(_)
+            | Field::BillName(_)
+            | Field::BillAmount(_)
             | Field::Narration => None,
         }
     }
 
-    /// The lines of the type-ahead list that is open, as shown.
-    pub(super) fn pick_labels(&self, masters: &Masters) -> Vec<String> {
+    /// The lines of the open type-ahead list; empty when none is open.
+    #[must_use]
+    pub fn pick_labels(&self, masters: &Masters) -> Vec<String> {
         let Some(kind) = self.pick_kind() else {
             return Vec::new();
         };

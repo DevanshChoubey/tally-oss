@@ -7,7 +7,8 @@ use ledgerly_core::{
     VoucherTypeId,
 };
 use ledgerly_model::{
-    Ledger, LedgerLine, Masters, Voucher, VoucherError, VoucherMode, VoucherStatus,
+    BankAllocation, BillAllocation, BillRefKind, InstrumentKind, Ledger, LedgerLine, Masters,
+    Voucher, VoucherError, VoucherMode, VoucherStatus,
 };
 use thiserror::Error;
 
@@ -27,6 +28,17 @@ pub enum LedgerRef {
     Pending(String),
 }
 
+/// The part of a line's amount that settles one open bill, as typed in the bill-wise details
+/// (TallyPrime's Bill-wise Details: reference type Agst Ref,
+/// <https://help.tallysolutions.com/advances-received/>, read 2026-11-25).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BillDraft {
+    /// The name of the open bill.
+    pub name: String,
+    /// The amount settled, in rupees as typed.
+    pub amount_text: String,
+}
+
 /// One line of a voucher being entered.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DraftRow {
@@ -38,6 +50,11 @@ pub struct DraftRow {
     pub side: DrCr,
     /// The text in the amount field; may be an expression such as `1200*18%`.
     pub amount_text: String,
+    /// What the line settles, for a ledger that tracks bills: the open bills it is set against.
+    pub bills: Vec<BillDraft>,
+    /// Whether the bill-wise details of the line were accepted. With none typed they mean the
+    /// whole amount is On Account (not linked to a bill).
+    pub bills_done: bool,
 }
 
 impl DraftRow {
@@ -49,6 +66,8 @@ impl DraftRow {
             ledger_text: String::new(),
             side,
             amount_text: String::new(),
+            bills: Vec::new(),
+            bills_done: false,
         }
     }
 
@@ -113,6 +132,28 @@ pub enum DraftError {
         /// 1-based line number.
         line: usize,
     },
+    /// A line's ledger tracks bills and its bill-wise details were not accepted.
+    #[error("line {line}: settle the amount against bills first (Enter on its amount opens them)")]
+    BillsNeeded {
+        /// 1-based line number.
+        line: usize,
+    },
+    /// The bills settled on a line do not add up to the line's amount.
+    #[error("line {line}: the bills settle {} but the line is {}", crate::ui::format::amount(*settled), crate::ui::format::amount(*amount))]
+    BillsMismatch {
+        /// 1-based line number.
+        line: usize,
+        /// What the bills settle, in rupees.
+        settled: Paise,
+        /// The line's amount.
+        amount: Paise,
+    },
+    /// The mode is none of the instruments.
+    #[error("the mode '{0}' is none of Cheque, NEFT, RTGS, IMPS, UPI, Card or Other")]
+    Mode(String),
+    /// A mode is set but the account is not a bank account.
+    #[error("a mode applies to a bank account; the account is not one")]
+    ModeNeedsBank,
     /// The line does not exist.
     #[error("there is no line {line}")]
     NoSuchLine {
@@ -121,11 +162,12 @@ pub enum DraftError {
     },
 }
 
-/// `Unsupported` when `ledger` needs bill allocations or cost centres: this screen has no
-/// sub-forms for them, and a line without them would be wrong. Checked when the ledger is picked
+/// `Unsupported` when `ledger` needs cost centres, or bill allocations on a screen without the
+/// bill-wise details (`bill_details` is true on payment and receipt, which have them): a line
+/// without them would be wrong. Checked when the ledger is picked
 /// and again when the voucher is built.
-pub(super) fn entry_support(ledger: &Ledger) -> Outcome<()> {
-    if ledger.bill_wise.is_some() || ledger.cost_centres_applicable {
+pub(super) fn entry_support(ledger: &Ledger, bill_details: bool) -> Outcome<()> {
+    if (ledger.bill_wise.is_some() && !bill_details) || ledger.cost_centres_applicable {
         return Outcome::unsupported(
             format!(
                 "posting to '{}' on the accounting entry screen",
@@ -151,6 +193,8 @@ pub struct VoucherDraft {
     pub narration: String,
     /// The lines. There is always at least one.
     pub rows: Vec<DraftRow>,
+    /// The mode of a single-entry voucher as typed (NEFT, UPI, ...), kept on the bank line.
+    pub mode_text: String,
 }
 
 impl VoucherDraft {
@@ -172,6 +216,7 @@ impl VoucherDraft {
             date_text,
             narration: String::new(),
             rows,
+            mode_text: String::new(),
         }
     }
 
@@ -360,12 +405,17 @@ impl VoucherDraft {
             .ledgers
             .get(&id)
             .ok_or(VoucherError::UnknownLedger(id))?;
-        if let Outcome::Unsupported(u) = entry_support(ledger) {
+        if let Outcome::Unsupported(u) = entry_support(ledger, self.is_single_entry()) {
             return Ok(Outcome::Unsupported(u));
         }
         if amount.is_zero() {
             return Err(DraftError::ZeroAmount { line });
         }
+        let bills = if ledger.bill_wise.is_some() && !(index == 0 && self.is_single_entry()) {
+            Self::bill_allocations(row, amount, line)?
+        } else {
+            Vec::new()
+        };
         Ok(Outcome::Value(LedgerLine {
             ineligible_itc: None,
             ledger: id,
@@ -373,9 +423,80 @@ impl VoucherDraft {
                 amount,
                 side: row.side,
             },
-            bills: Vec::new(),
+            bills,
             cost: Vec::new(),
-            bank: None,
+            bank: self.bank_allocation(ledger, index)?,
+        }))
+    }
+
+    /// The bill references of a line of a bill-wise ledger: each typed amount against its open
+    /// bill, or, with the details accepted and none typed, the whole amount On Account.
+    fn bill_allocations(
+        row: &DraftRow,
+        amount: Paise,
+        line: usize,
+    ) -> Result<Vec<BillAllocation>, DraftError> {
+        if !row.bills_done {
+            return Err(DraftError::BillsNeeded { line });
+        }
+        let side = row.side;
+        let mut out = Vec::new();
+        let mut settled = Paise::ZERO;
+        for bill in row
+            .bills
+            .iter()
+            .filter(|b| !b.amount_text.trim().is_empty())
+        {
+            let part = eval_amount(&bill.amount_text)
+                .map_err(|source| DraftError::Amount { line, source })?;
+            settled = settled.checked_add(part)?;
+            out.push(BillAllocation {
+                kind: BillRefKind::Against,
+                name: bill.name.clone(),
+                due_date: None,
+                credit_days: None,
+                amount: SignedAmount { amount: part, side },
+            });
+        }
+        if out.is_empty() {
+            return Ok(vec![BillAllocation {
+                kind: BillRefKind::OnAccount,
+                name: String::new(),
+                due_date: None,
+                credit_days: None,
+                amount: SignedAmount { amount, side },
+            }]);
+        }
+        if settled != amount {
+            return Err(DraftError::BillsMismatch {
+                line,
+                settled,
+                amount,
+            });
+        }
+        Ok(out)
+    }
+
+    /// The bank instrument of the account line (line 0 of a single-entry voucher), from the mode.
+    fn bank_allocation(
+        &self,
+        ledger: &Ledger,
+        index: usize,
+    ) -> Result<Option<BankAllocation>, DraftError> {
+        if index != 0 || !self.is_single_entry() || self.mode_text.trim().is_empty() {
+            return Ok(None);
+        }
+        let instrument = parse_mode(&self.mode_text)
+            .ok_or_else(|| DraftError::Mode(self.mode_text.trim().to_owned()))?;
+        if ledger.bank.is_none() {
+            return Err(DraftError::ModeNeedsBank);
+        }
+        Ok(Some(BankAllocation {
+            instrument,
+            instrument_number: None,
+            instrument_date: None,
+            bank_date: None,
+            favouring: None,
         }))
     }
 
@@ -403,4 +524,39 @@ impl VoucherDraft {
             extra: BTreeMap::new(),
         }
     }
+}
+
+/// The words shown for `kind` in the Mode field.
+#[must_use]
+pub fn mode_label(kind: InstrumentKind) -> &'static str {
+    match kind {
+        InstrumentKind::Cheque => "Cheque",
+        InstrumentKind::Neft => "NEFT",
+        InstrumentKind::Rtgs => "RTGS",
+        InstrumentKind::Imps => "IMPS",
+        InstrumentKind::Upi => "UPI",
+        InstrumentKind::Card => "Card",
+        InstrumentKind::Other => "Other",
+    }
+}
+
+/// Reads a typed mode: any start of the seven labels, in any case; `None` when it is empty or
+/// names none of them.
+#[must_use]
+pub fn parse_mode(text: &str) -> Option<InstrumentKind> {
+    let t = text.trim().to_lowercase();
+    if t.is_empty() {
+        return None;
+    }
+    [
+        InstrumentKind::Cheque,
+        InstrumentKind::Neft,
+        InstrumentKind::Rtgs,
+        InstrumentKind::Imps,
+        InstrumentKind::Upi,
+        InstrumentKind::Card,
+        InstrumentKind::Other,
+    ]
+    .into_iter()
+    .find(|k| mode_label(*k).to_lowercase().starts_with(&t))
 }

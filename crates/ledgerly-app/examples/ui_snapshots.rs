@@ -600,7 +600,7 @@ const SETUP_SETTLE_FRAMES: u32 = 900;
 
 /// Frames the `sales-invoice.saved` shot waits after Ctrl+A: the post goes through the worker and
 /// the screen says "Saved." only when it answers (60 frames showed "Saving...").
-const SAVE_SETTLE_FRAMES: u32 = 900;
+const SAVE_SETTLE_FRAMES: u32 = 240;
 
 /// One thing the harness sends after a shot's setup: a key press or typed text (the company setup
 /// wizard's name and GSTIN fields need text).
@@ -770,40 +770,51 @@ fn ai_off_shot(state: &'static str, screen: &'static str) -> Shot {
         .press(&[(Key::Enter, NONE)])
 }
 
-/// An item invoice on Fictional Pumps (F8 opens one, since the company keeps inventory) with
-/// `party` picked, the place of supply typed as a state code (the field is not filled from the
-/// party), Sales as the sales ledger and the reference left empty, so the keyboard is on the
-/// first item.
-fn pumps_invoice(state: &'static str, party: &'static str, place: &'static str) -> Shot {
+/// The mock's invoice head on Godavari: F8 opens an item invoice, `party` and `place` typed, Sales
+/// as the sales ledger and `order` as the buyer's order number, so the keyboard is on the first
+/// item (design/mock-v2/index.html `INV_SEED`, lines 1261-1269).
+fn godavari_invoice(
+    state: &'static str,
+    party: &'static str,
+    place: &'static str,
+    order: &'static str,
+) -> Shot {
     let enter = (Key::Enter, NONE);
-    shot(state, &[(Key::F8, NONE)])
+    let mut s = shot(state, &[(Key::F8, NONE)])
         .on(Fixture::Godavari)
         .type_text(party)
         .press(&[enter])
         .type_text(place)
         .press(&[enter])
         .type_text("Sales")
-        .press(&[enter, enter])
+        .press(&[enter]);
+    if !order.is_empty() {
+        s = s.type_text(order);
+    }
+    s.press(&[enter])
 }
 
-/// [`pumps_invoice`] with one line of `item`, `qty` and `rate` entered and the discount left
-/// empty, so the keyboard is on the item of a second line.
-fn pumps_invoice_line(
-    state: &'static str,
-    (party, place): (&'static str, &'static str),
-    item: &'static str,
-    qty: &'static str,
-    rate: &'static str,
-) -> Shot {
+/// One line typed into the keyboard's current line: item, quantity, rate, and Enter on the rate
+/// goes on to the next line (the discount column is hidden).
+fn invoice_line(shot: Shot, item: &'static str, qty: &'static str, rate: &'static str) -> Shot {
     let enter = (Key::Enter, NONE);
-    pumps_invoice(state, party, place)
-        .type_text(item)
+    shot.type_text(item)
         .press(&[enter])
         .type_text(qty)
         .press(&[enter])
         .type_text(rate)
-        .press(&[enter, enter])
+        .press(&[enter])
 }
+
+/// The mock's three lines of SI/0418: 25 rolls of lateral, 67 nozzle sets, 40 sprayers.
+fn three_lines(shot: Shot) -> Shot {
+    let shot = invoice_line(shot, "Drip lateral", "25", "3850");
+    let shot = invoice_line(shot, "Brass nozzle", "67", "505");
+    invoice_line(shot, "Hand sprayer", "40", "1450")
+}
+
+/// The mock's narration of SI/0418, typed once the keyboard is past the last line.
+const SI_NARRATION: &str = "Against PO SGT/PO/1131";
 
 /// The audit set: what a user reaches from the real cold start (no company open) by the sidebar's
 /// entries, the keys and the palette, plus the first-run states with no mock state. Written to
@@ -950,16 +961,61 @@ fn light_shots() -> Vec<Shot> {
         shot("keys.standard", &[palette])
             .query("Keyboard map")
             .then(&[(Key::Enter, NONE), (Key::Num2, NONE)]),
-        // A filled invoice to a Maharashtra buyer, as the mock's default shows.
-        pumps_invoice_line(
+        // SI/0418 to Shree Ganesh Traders as the mock's default shows: three lines, the buyer's
+        // order number and the narration. A blank line after the last one moves to the narration.
+        three_lines(godavari_invoice(
             "sales-invoice.default",
-            ("Patil", "27"),
-            "HDPE",
-            "10",
-            "1500",
-        ),
-        shot("receipt.default", &[(Key::F6, NONE)]),
-        shot("payment.default", &[(Key::F5, NONE)]),
+            "Shree Ganesh",
+            "27",
+            "SGT/PO/1131",
+        ))
+        .press(&[(Key::Enter, NONE)])
+        .type_text(SI_NARRATION),
+        // The mock's receipt: 1,00,000 from Mehta Agro into the Saptagiri account. Mehta tracks
+        // bills, so the bill-wise popup opens on the amount, as the mock draws it.
+        shot("receipt.default", &[(Key::F6, NONE)])
+            .type_text("Saptagiri")
+            .press(&[(Key::Enter, NONE)])
+            .type_text("NEFT")
+            .press(&[(Key::Enter, NONE)])
+            .type_text("Mehta")
+            .press(&[(Key::Enter, NONE)])
+            .type_text("100000")
+            .press(&[(Key::Enter, NONE)]),
+        // The mock's payment: 6,500 of freight from the Saptagiri account.
+        shot("payment.default", &[(Key::F5, NONE)])
+            .type_text("Saptagiri")
+            .press(&[(Key::Enter, NONE)])
+            .type_text("NEFT")
+            .press(&[(Key::Enter, NONE)])
+            .type_text("Freight inward")
+            .press(&[(Key::Enter, NONE)])
+            .type_text("6500")
+            .press(&[(Key::Enter, NONE), (Key::Enter, NONE)])
+            .type_text("Freight, Vardhaman Logistics, LR 4471"),
+        // The mock's bill allocation: 1,50,000 to Vardhaman Logistics against VL/861.
+        shot("payment.bill-wise", &[(Key::F5, NONE)])
+            .type_text("Saptagiri")
+            .press(&[(Key::Enter, NONE)])
+            .type_text("NEFT")
+            .press(&[(Key::Enter, NONE)])
+            .type_text("Vardhaman")
+            .press(&[(Key::Enter, NONE)])
+            .type_text("150000")
+            .press(&[(Key::Enter, NONE)]),
+        // The mock's overdraft: 2,50,000 from the Mulacur account takes it below zero. The mock
+        // pays Nilgiri Steel Traders; Nilgiri tracks bills here, which opens the bill popup first
+        // (tested in `s9_voucher_screens`), so the capture pays a ledger that does not.
+        shot("payment.overdraft", &[(Key::F5, NONE)])
+            .type_text("Mulacur")
+            .press(&[(Key::Enter, NONE)])
+            .type_text("RTGS")
+            .press(&[(Key::Enter, NONE)])
+            .type_text("Freight inward")
+            .press(&[(Key::Enter, NONE)])
+            .type_text("250000")
+            .press(&[(Key::Enter, NONE), (Key::Enter, NONE)])
+            .type_text("RTGS to Nilgiri Steel Traders"),
         shot("bank.default", &[palette])
             .query("Bank Reconciliation")
             .then(&[(Key::Enter, NONE)]),
@@ -1062,27 +1118,48 @@ fn light_shots() -> Vec<Shot> {
             .then(&[(Key::Enter, NONE)]),
         // The item list open on the first line, filtered by what is typed (index.html: type-ahead
         // over item masters).
-        pumps_invoice("sales-invoice.item-list", "Mehta", "24").type_text("p"),
+        invoice_line(
+            invoice_line(
+                godavari_invoice("sales-invoice.item-list", "Shree Ganesh", "27", ""),
+                "Drip lateral",
+                "25",
+                "3850",
+            ),
+            "Brass nozzle",
+            "67",
+            "505",
+        )
+        .type_text("p"),
         // A Gujarat party: the place of supply is 24, so the engine charges IGST.
-        pumps_invoice_line(
+        three_lines(godavari_invoice(
             "sales-invoice.gst-inter-state",
-            ("Mehta", "24"),
-            "HDPE",
-            "10",
-            "1500",
-        ),
+            "Mehta",
+            "24",
+            "",
+        ))
+        .press(&[(Key::Enter, NONE)]),
         // A cash sale: Cash has no GSTIN, so the sale is B2C.
-        pumps_invoice_line(
-            "sales-invoice.b2c",
-            ("Cash sale", "27"),
-            "HDPE",
-            "2",
-            "1500",
-        ),
+        invoice_line(
+            invoice_line(
+                godavari_invoice("sales-invoice.b2c", "Cash sale", "27", ""),
+                "Hand sprayer",
+                "2",
+                "1450",
+            ),
+            "Steel pick",
+            "3",
+            "640",
+        )
+        .press(&[(Key::Enter, NONE)]),
         // An item picked with no quantity, then Ctrl+A: the save is refused with the reason.
-        pumps_invoice("sales-invoice.validation-error", "Mehta", "24")
-            .type_text("HDPE")
-            .press(&[(Key::Enter, NONE), (Key::A, Modifiers::COMMAND)]),
+        invoice_line(
+            godavari_invoice("sales-invoice.validation-error", "Shree Ganesh", "27", ""),
+            "Drip lateral",
+            "25",
+            "3850",
+        )
+        .type_text("Brass nozzle")
+        .press(&[(Key::Enter, NONE), (Key::A, Modifiers::COMMAND)]),
         // A click puts the keyboard in the date (Ctrl+A is Save on this screen, so the date is
         // cleared with End and Backspace), and 31 Oct is the lock date of Fictional Pumps
         // (index.html sales-invoice.period-locked). Enter then goes on to the customer.
@@ -1105,22 +1182,27 @@ fn light_shots() -> Vec<Shot> {
             .press(&[(Key::Enter, NONE)])
             .type_text("1500")
             .press(&[(Key::Enter, NONE), (Key::Enter, NONE)]),
-        // A blank second line ends the lines; Enter on the narration asks to save.
-        pumps_invoice_line(
+        // A blank line ends the lines; Enter on the narration asks to save.
+        three_lines(godavari_invoice(
             "sales-invoice.save-confirm",
-            ("Mehta", "24"),
-            "HDPE",
-            "10",
-            "1500",
-        )
-        .press(&[(Key::Enter, NONE), (Key::Enter, NONE)]),
+            "Shree Ganesh",
+            "27",
+            "SGT/PO/1131",
+        ))
+        .press(&[(Key::Enter, NONE)])
+        .type_text(SI_NARRATION)
+        .press(&[(Key::Enter, NONE)]),
         // Yes on the save question: the invoice is posted and a fresh one opens (index.html
         // sales-invoice.saved).
-        pumps_invoice_line("sales-invoice.saved", ("Mehta", "24"), "HDPE", "10", "1500").press(&[
-            (Key::Enter, NONE),
-            (Key::Enter, NONE),
-            (Key::Enter, NONE),
-        ]),
+        three_lines(godavari_invoice(
+            "sales-invoice.saved",
+            "Shree Ganesh",
+            "27",
+            "SGT/PO/1131",
+        ))
+        .press(&[(Key::Enter, NONE)])
+        .type_text(SI_NARRATION)
+        .press(&[(Key::Enter, NONE), (Key::Enter, NONE)]),
     ]
 }
 
@@ -1343,6 +1425,13 @@ impl eframe::App for Snapshots {
                     SETUP_SETTLE_FRAMES
                 } else if self.shots[self.index].state == "sales-invoice.saved" {
                     SAVE_SETTLE_FRAMES
+                } else if self.shots[self.index].state.starts_with("sales-invoice.")
+                    || self.shots[self.index].state.starts_with("payment.")
+                    || self.shots[self.index].state.starts_with("receipt.")
+                {
+                    // The engine answers tax, the voucher number and the balance one after the
+                    // other, each only once the one before it has settled.
+                    240
                 } else {
                     60
                 };

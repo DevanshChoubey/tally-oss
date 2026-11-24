@@ -509,6 +509,7 @@ fn row(ledger: LedgerId, side: DrCr, amount: &str) -> DraftRow {
         ledger_text: String::new(),
         side,
         amount_text: amount.to_owned(),
+        ..DraftRow::empty(DrCr::Dr)
     }
 }
 
@@ -519,6 +520,7 @@ fn draft(kind: EntryKind, date_text: &str, rows: Vec<DraftRow>) -> VoucherDraft 
         date_text: date_text.to_owned(),
         narration: String::new(),
         rows,
+        mode_text: String::new(),
     }
 }
 
@@ -1174,7 +1176,9 @@ fn the_screen_draws_with_and_without_a_company() {
     let b = books();
     let ctx = egui::Context::default();
     let mut s = open(&b, T_JOURNAL);
-    assert_eq!(s.title(), "Journal voucher");
+    // provenance: the mock's crumbs for payment and receipt are Home > <type> only
+    // (design/mock-v2/index.html line 1388, `[s.type]`); the other kinds follow the same pattern.
+    assert_eq!(s.title(), "Journal");
     let mut closed = AppCtx::default();
     assert!(matches!(
         frame(&ctx, &mut s, &mut closed, RawInput::default()),

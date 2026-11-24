@@ -141,6 +141,9 @@ pub(crate) struct LedgerSeed {
     /// ledger eligible (the credit is claimed whatever the HSN), as a person would after reading
     /// CGST Act s.17(5). Unset leaves the choice to the engine's HSN rules.
     pub(crate) eligible_itc: Option<bool>,
+    /// The ledger an invoice's round-off posts to (the engine's invoice-rounding role).
+    #[serde(default)]
+    pub(crate) invoice_rounding: bool,
 }
 
 /// A stock item master.

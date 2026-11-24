@@ -7,11 +7,15 @@ use ledgerly_model::{Books, Masters, Voucher};
 use thiserror::Error;
 
 use crate::keymap::{self, Keymap};
+use crate::screens::item_invoice::extras::Extras;
 use crate::shell::submit::CommandReply;
 use crate::worker::Ticket;
 
+use super::amount::eval_amount;
 use super::date::{format_entry_date, parse_entry_date};
-use super::draft::{Balance, DraftRow, LedgerRef, VoucherDraft, entry_support};
+use super::draft::{
+    Balance, BillDraft, DraftRow, LedgerRef, VoucherDraft, entry_support, mode_label, parse_mode,
+};
 use super::kind::EntryKind;
 use super::search::{PickerItem, search_ledgers};
 
@@ -27,6 +31,10 @@ pub enum Field {
     Ledger(usize),
     /// The amount of line `0` (0-based).
     Amount(usize),
+    /// The mode of a single-entry voucher (NEFT, UPI, ...), after a bank account.
+    Mode,
+    /// The amount settled against open bill `0` (0-based) in the bill-wise details.
+    Bill(usize),
     /// The narration.
     Narration,
 }
@@ -92,6 +100,22 @@ pub struct VoucherEntryScreen {
     pub(super) creating: Option<(String, Ticket<CommandReply>)>,
     /// Where parts of the screen were drawn in the last frame, for layout tests.
     pub(super) shown: super::draw::Shown,
+    /// The number the voucher will get and the account's balance after it, from the engine.
+    pub(super) extras: Extras,
+    /// The line whose bill-wise details are open, and whether they were filled in already.
+    pub(super) panel: Option<BillPanel>,
+    /// Whether the account is a bank account, so Enter on it goes to the mode.
+    pub(super) mode_stop: bool,
+}
+
+/// The bill-wise details that are open: the line they belong to and whether the open bills have
+/// been offered as a default yet.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) struct BillPanel {
+    /// The line (0-based).
+    pub(super) row: usize,
+    /// Whether the first open bill was given the line's amount (once the engine answered).
+    pub(super) offered: bool,
 }
 impl VoucherEntryScreen {
     /// Opens an entry screen for voucher type `type_id`, dated `today` (in financial year `fy`).
@@ -138,6 +162,9 @@ impl VoucherEntryScreen {
             create_queue: VecDeque::new(),
             creating: None,
             shown: super::draw::Shown::default(),
+            extras: Extras::default(),
+            panel: None,
+            mode_stop: false,
         }))
     }
 
@@ -228,6 +255,39 @@ impl VoucherEntryScreen {
         }
     }
 
+    /// As [`Self::after_ledger`], but a single-entry account that is a bank account is followed by
+    /// its mode, and the answer is remembered for Shift+Enter.
+    fn after_ledger_in(&mut self, masters: &Masters, i: usize) -> Field {
+        if self.draft.is_single_entry() && i == 0 {
+            self.mode_stop = match self.draft.rows.first().and_then(|r| r.ledger.as_ref()) {
+                Some(LedgerRef::Chosen(id)) => {
+                    masters.ledgers.get(id).is_some_and(|l| l.bank.is_some())
+                }
+                Some(LedgerRef::Pending(_)) | None => false,
+            };
+            if self.mode_stop {
+                return Field::Mode;
+            }
+        }
+        self.after_ledger(i)
+    }
+
+    /// Enter on the mode: accepts any start of an instrument's name, or nothing.
+    pub(super) fn submit_mode(&mut self) {
+        let text = self.draft.mode_text.trim();
+        if !text.is_empty() {
+            match parse_mode(text) {
+                Some(kind) => mode_label(kind).clone_into(&mut self.draft.mode_text),
+                None => {
+                    return self.fail(format!(
+                        "The mode '{text}' is none of Cheque, NEFT, RTGS, IMPS, UPI, Card or Other."
+                    ));
+                }
+            }
+        }
+        self.go(Field::Ledger(1));
+    }
+
     pub(super) fn remember(&mut self, id: LedgerId) {
         self.recents.retain(|r| *r != id);
         self.recents.insert(0, id);
@@ -290,7 +350,9 @@ impl VoucherEntryScreen {
         match self.focus {
             Field::Date => self.submit_date(),
             Field::Ledger(i) => self.submit_ledger(masters, i),
-            Field::Amount(i) => self.submit_amount(i),
+            Field::Amount(i) => self.submit_amount(masters, i),
+            Field::Mode => self.submit_mode(),
+            Field::Bill(k) => self.submit_bill(k),
             Field::Narration => self.save(masters),
         }
     }
@@ -299,7 +361,13 @@ impl VoucherEntryScreen {
     pub fn step_back(&mut self) {
         let previous = match self.focus {
             Field::Date | Field::Ledger(0) => Field::Date,
+            Field::Ledger(1) if self.draft.is_single_entry() && self.mode_stop => Field::Mode,
             Field::Ledger(1) if self.draft.is_single_entry() => Field::Ledger(0),
+            Field::Mode => Field::Ledger(0),
+            Field::Bill(0) => self
+                .panel
+                .map_or(Field::Ledger(0), |p| Field::Amount(p.row)),
+            Field::Bill(k) => Field::Bill(k.saturating_sub(1)),
             Field::Ledger(i) => Field::Amount(i.saturating_sub(1)),
             Field::Amount(i) => Field::Ledger(i),
             Field::Narration => Field::Amount(self.draft.rows.len().saturating_sub(1)),
@@ -322,7 +390,10 @@ impl VoucherEntryScreen {
             return;
         };
         if row.ledger.is_some() {
-            self.go(self.after_ledger(i));
+            {
+                let next = self.after_ledger_in(masters, i);
+                self.go(next);
+            }
             return;
         }
         if row.ledger_text.trim().is_empty() {
@@ -331,8 +402,10 @@ impl VoucherEntryScreen {
         }
         match self.picker_items(masters).get(self.pick_index).cloned() {
             Some(PickerItem::Ledger(hit)) => {
-                if let Some(Outcome::Unsupported(u)) =
-                    masters.ledgers.get(&hit.id).map(entry_support)
+                if let Some(Outcome::Unsupported(u)) = masters
+                    .ledgers
+                    .get(&hit.id)
+                    .map(|l| entry_support(l, self.draft.is_single_entry()))
                 {
                     return self.fail(format!("Not supported yet: {} ({})", u.what, u.reason));
                 }
@@ -341,7 +414,8 @@ impl VoucherEntryScreen {
                     r.ledger_text = hit.name;
                 }
                 self.remember(hit.id);
-                self.go(self.after_ledger(i));
+                let next = self.after_ledger_in(masters, i);
+                self.go(next);
             }
             Some(PickerItem::Create { name }) => {
                 self.create = Some(CreateForm { name, group: None });
@@ -393,7 +467,7 @@ impl VoucherEntryScreen {
         self.go(Field::Narration);
     }
 
-    pub(super) fn submit_amount(&mut self, i: usize) {
+    pub(super) fn submit_amount(&mut self, masters: &Masters, i: usize) {
         let amount = match self.draft.line_amount(i) {
             Ok(Some(amount)) => amount,
             Ok(None) => return self.fail("Type an amount."),
@@ -405,6 +479,22 @@ impl VoucherEntryScreen {
         if let Some(r) = self.draft.rows.get_mut(i) {
             r.amount_text = amount.to_rupees().to_string();
         }
+        if self.draft.is_single_entry() && self.line_tracks_bills(masters, i) {
+            // The ledger tracks bills: its bill-wise details open before the next line.
+            if let Some(r) = self.draft.rows.get_mut(i) {
+                r.bills_done = false;
+            }
+            self.panel = Some(BillPanel {
+                row: i,
+                offered: false,
+            });
+            return self.go(Field::Bill(0));
+        }
+        self.after_amount(i);
+    }
+
+    /// What follows an accepted amount: the next line, or the narration.
+    fn after_amount(&mut self, i: usize) {
         let next = i.saturating_add(1);
         if self.draft.is_single_entry() {
             // Single entry: each amount is followed by the next particulars line, which is always
@@ -424,6 +514,135 @@ impl VoucherEntryScreen {
                 Err(e) => self.fail(e.to_string()),
             },
             Err(e) => self.fail(e.to_string()),
+        }
+    }
+
+    /// Whether the ledger of line `i` tracks bills.
+    pub(super) fn line_tracks_bills(&self, masters: &Masters, i: usize) -> bool {
+        match self.draft.rows.get(i).and_then(|r| r.ledger.as_ref()) {
+            Some(LedgerRef::Chosen(id)) => masters
+                .ledgers
+                .get(id)
+                .is_some_and(|l| l.bill_wise.is_some()),
+            Some(LedgerRef::Pending(_)) | None => false,
+        }
+    }
+
+    /// The open bills offered in the bill-wise details that are open, once the engine answered.
+    #[must_use]
+    pub fn open_bills(&self) -> Option<&[ledgerly_api::OpenBill]> {
+        let panel = self.panel?;
+        let row = self.draft.rows.get(panel.row)?;
+        let LedgerRef::Chosen(ledger) = row.ledger.as_ref()? else {
+            return None;
+        };
+        let date = parse_entry_date(&self.draft.date_text, self.fy).ok()?;
+        self.extras.open_bills_for(*ledger, date)
+    }
+
+    /// Hands in the open bills of `ledger` on the voucher's date, as the engine would answer.
+    pub fn set_open_bills(&mut self, ledger: LedgerId, bills: Vec<ledgerly_api::OpenBill>) {
+        if let Ok(date) = parse_entry_date(&self.draft.date_text, self.fy) {
+            self.extras.set_open_bills(ledger, date, bills);
+            self.offer_bills();
+        }
+    }
+
+    /// Gives the first open bill the line's amount (or the bill's whole open amount when that is
+    /// less), once, when the engine's list has arrived and nothing was typed. A default the user
+    /// can overtype: the figures are the line's and the bill's own, nothing is added.
+    pub(super) fn offer_bills(&mut self) {
+        let Some(panel) = self.panel else {
+            return;
+        };
+        if panel.offered {
+            return;
+        }
+        let Some(open) = self.open_bills().map(<[_]>::to_vec) else {
+            return;
+        };
+        let amount = self.draft.line_amount(panel.row).ok().flatten();
+        let side = self.draft.rows.get(panel.row).map(|r| r.side);
+        let Some(row) = self.draft.rows.get_mut(panel.row) else {
+            return;
+        };
+        if row.bills.is_empty()
+            && let (Some(first), Some(amount), Some(side)) = (open.first(), amount, side)
+            && first.open.side != side
+        {
+            let part = first.open.amount.min(amount);
+            row.bills.push(BillDraft {
+                name: first.name.clone(),
+                amount_text: part.to_rupees().to_string(),
+            });
+        }
+        self.panel = Some(BillPanel {
+            offered: true,
+            ..panel
+        });
+    }
+
+    /// Enter on an open bill's amount: the next bill, or, after the last, accepts the details.
+    pub(super) fn submit_bill(&mut self, k: usize) {
+        let count = self.open_bills().map_or(0, <[_]>::len);
+        if k.saturating_add(1) < count {
+            return self.go(Field::Bill(k.saturating_add(1)));
+        }
+        self.accept_bills();
+    }
+
+    /// Accepts the bill-wise details of the open line: what is settled must add up to the line's
+    /// amount, or nothing is typed and the whole amount is On Account.
+    pub(super) fn accept_bills(&mut self) {
+        let Some(panel) = self.panel else {
+            return;
+        };
+        let i = panel.row;
+        let amount = match self.draft.line_amount(i) {
+            Ok(Some(amount)) => amount,
+            Ok(None) => return self.fail("Type an amount."),
+            Err(e) => return self.fail(e.to_string()),
+        };
+        let mut settled = ledgerly_core::Paise::ZERO;
+        let typed: Vec<BillDraft> = self.draft.rows.get(i).map_or_else(Vec::new, |r| {
+            r.bills
+                .iter()
+                .filter(|b| !b.amount_text.trim().is_empty())
+                .cloned()
+                .collect()
+        });
+        for bill in &typed {
+            let part = match eval_amount(&bill.amount_text) {
+                Ok(part) => part,
+                Err(e) => return self.fail(format!("{}: {e}", bill.name)),
+            };
+            if part.is_zero() {
+                return self.fail(format!("{}: an amount of zero settles nothing.", bill.name));
+            }
+            settled = match settled.checked_add(part) {
+                Ok(sum) => sum,
+                Err(e) => return self.fail(e.to_string()),
+            };
+        }
+        if !typed.is_empty() && settled != amount {
+            return self.fail(format!(
+                "The bills settle {} of {}. Make them add up to the line, or clear them to leave it On Account.",
+                crate::ui::format::amount(settled),
+                crate::ui::format::amount(amount),
+            ));
+        }
+        if let Some(row) = self.draft.rows.get_mut(i) {
+            row.bills = typed;
+            row.bills_done = true;
+        }
+        self.panel = None;
+        self.after_amount(i);
+    }
+
+    /// Esc in the bill-wise details: back to the amount, with the details not accepted.
+    pub(super) fn close_bills(&mut self) {
+        if let Some(panel) = self.panel.take() {
+            self.go(Field::Amount(panel.row));
         }
     }
 

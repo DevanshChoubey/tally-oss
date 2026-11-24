@@ -15,7 +15,7 @@ use ledgerly_core::{
 use ledgerly_engine::{EngineError, locks, masters_accounts, masters_stock, vouchers};
 use ledgerly_model::{
     BankMatch, Batch, Books, CostCategory, CostCentre, Godown, Group, Ledger, MasterSnapshot,
-    StockGroup, StockItem, Unit, Voucher, VoucherStatus,
+    StockGroup, StockItem, Unit, Voucher, VoucherStatus, VoucherType,
 };
 use ledgerly_store::{CommitReceipt, Event};
 
@@ -80,6 +80,9 @@ pub enum Command {
     DeleteCostCentre(CostCentreId),
     /// Post a new voucher. The number is allocated by the engine when the type numbers vouchers.
     PostVoucher(Voucher),
+    /// Alter a voucher type (name, abbreviation, numbering); the seeded types are never created
+    /// or deleted.
+    AlterVoucherType(VoucherType),
     /// Alter a stored voucher, matched by its id.
     AlterVoucher(Voucher),
     /// Cancel a voucher: it keeps its number and loses its amounts.
@@ -136,6 +139,9 @@ pub(crate) fn run(
         Command::DeleteCostCentre(id) => masters_stock::delete_cost_centre(id, books),
         Command::PostVoucher(v) => {
             vouchers::post_voucher_with_lock(voucher_gst::with_gst(v, books)?, books, lock)
+        }
+        Command::AlterVoucherType(vt) => {
+            ledgerly_engine::masters_voucher_type::alter_voucher_type(vt, books)
         }
         Command::AlterVoucher(v) => {
             vouchers::alter_voucher_with_lock(voucher_gst::with_gst(v, books)?, books, lock)
@@ -324,6 +330,7 @@ pub(crate) fn assign_ids(cmd: Command, books: &Books) -> Result<Command, EngineE
         | Command::AlterCostCentre(_)
         | Command::DeleteCostCentre(_)
         | Command::PostVoucher(_)
+        | Command::AlterVoucherType(_)
         | Command::AlterVoucher(_)
         | Command::CancelVoucher(_)
         | Command::DeleteVoucher(_)
