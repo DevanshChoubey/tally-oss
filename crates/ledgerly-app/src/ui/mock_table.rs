@@ -12,7 +12,7 @@
 use egui::{Align, Label, Layout, Rect, RichText, Sense, Ui, UiBuilder, pos2, vec2};
 
 use super::switch::switch;
-use super::table::{CELL_PAD_X, T_HEAD_HEIGHT, T_ROW_HEIGHT, paint_cell_rule};
+use super::table::{CELL_PAD_X, SELECTED_BAR, T_HEAD_HEIGHT, T_ROW_HEIGHT, paint_cell_rule};
 use super::{bold_font, para_text, tokens};
 use crate::theme::{TEXT_BODY, TEXT_META};
 
@@ -61,6 +61,18 @@ pub fn table(
     head: Option<&[&str]>,
     rows: Vec<Vec<Cell<'_>>>,
 ) -> Rect {
+    table_rows(ui, widths, head, rows, None).0
+}
+
+/// Draws the table like [`table`], with the line at `selected` filled and marked (`tr.sel`), and
+/// returns where the table was drawn and where each body line was.
+pub fn table_rows(
+    ui: &mut Ui,
+    widths: &[Width],
+    head: Option<&[&str]>,
+    rows: Vec<Vec<Cell<'_>>>,
+    selected: Option<usize>,
+) -> (Rect, Vec<Rect>) {
     let t = tokens(ui);
     let total = ui.available_width();
     let fixed: f32 = widths
@@ -101,7 +113,10 @@ pub fn table(
         );
         y += T_HEAD_HEIGHT;
     }
-    for row in rows {
+    let mut lines = Vec::new();
+    for (index, row) in rows.into_iter().enumerate() {
+        // The fill goes under the cells, whose height is not known until they are drawn.
+        let fill = ui.painter().add(egui::Shape::Noop);
         let mut content = 0.0_f32;
         let mut x = left;
         for (cell, w) in row.into_iter().zip(&cols) {
@@ -119,11 +134,19 @@ pub fn table(
             x += w;
         }
         let height = (content + 2.0 * PAD_Y + 1.0).max(T_ROW_HEIGHT);
-        paint_cell_rule(ui, Rect::from_min_size(pos2(left, y), vec2(total, height)));
+        let line = Rect::from_min_size(pos2(left, y), vec2(total, height));
+        if selected == Some(index) {
+            ui.painter()
+                .set(fill, egui::Shape::rect_filled(line, 0.0, t.accent_soft));
+            let bar = Rect::from_min_size(line.min, vec2(SELECTED_BAR, height));
+            ui.painter().rect_filled(bar, 0.0, t.accent);
+        }
+        paint_cell_rule(ui, line);
+        lines.push(line);
         y += height;
     }
     let (_, rect) = ui.allocate_space(vec2(total, y - top));
-    rect
+    (rect, lines)
 }
 
 /// A heading for a panel (`h2` in a `.card.pad`): the bold 16 point title, with an optional icon.

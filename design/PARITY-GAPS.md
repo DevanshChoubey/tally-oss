@@ -194,6 +194,8 @@ engine item E-3); `recon-explain` is an AI state.
   6A and 8 only when the return holds something there) and the screen shows it with Records,
   Taxable, Tax and Status. The tiles count sections. The voucher table stays beneath as the
   drill-down ("Vouchers behind the sections"), and clicking a tile still filters it.
+  The voucher table is folded under a "Show vouchers (N)" button while sections are shown (s9-all),
+  so the section table and side card fit as the mock; it stays open when no sections exist.
   Differences: (1) a held-back voucher row appears only for duplicates, which sit in no table.
   (2) Sections are selectable (J / K, Enter) with a side card. Sources: the offline tool's
   worksheets b2b, b2cl, b2cs, cdnr, hsn and docs, https://gstzen.in/a/gst-manuals-user-manuals-downloading-installing-and-uploading-invoices-in-gstr-1-taking-actions-in-gstr-2.html
@@ -245,6 +247,9 @@ Captured states: `masters.ledgers`, `masters.ledger-detail`, `masters.items`,
 `masters.create-ledger`, `masters.gstin-error` (the form filled by clicks and typed text). Not
 captured: `suggested-ledger` (needs bank matching to propose a ledger, which is not built).
 
+- **gap: the create form is not the mock's compact one (s9-all).** The capture types the mock's
+  values (Jadhav Metals, GSTIN, credit days) through the real form, which is longer than the
+  mock's and shows the sample's own GSTIN on the company line.
 - **needs a decision: the GSTIN error's words.** Ours says "check character is 7, expected Z; the
   GSTIN has a typing error" (the engine's `GstinError`); the mock says "Check character should be
   Z, not 7. One of the first 14 characters is probably mistyped." `tests/w2_masters.rs` pins
@@ -397,6 +402,10 @@ the selected one.
   (`Api::open_bills`); Enter accepts when the bills add up to the line, none typed means On
   Account. The overdraft note comes from `Api::balance_change` (Cr after). The Mode field is
   stored on the bank line (`BankAllocation.instrument`).
+- **gap: the overdraft shot's amounts.** `payment.overdraft` pays Nilgiri Steel Traders 2,50,000
+  (two bills, 2,00,000 and 50,000), which takes the bank into Cr from the sample's balances.
+  The amount reads "250000.00" while typed and the foot shows "36,000.00 Cr", where the mock
+  shows "2,50,000.00" and "-36,000.00".
 - **gap: the popup shows its narration empty.** The mock draws the popup over a filled narration;
   here the narration is entered after the popup closes, so the shot with the popup open has none.
 - **by design: the Mode is a typed field** (NEFT, RTGS, UPI, Cheque ...) after a bank account, not
@@ -533,12 +542,12 @@ The sales, purchase, payment and receipt screens draw to one shared sheet
   under Exception Reports (help.tallysolutions.com/docs/te9rel66/Reports/MIS_Reports/Display_Optional_Vouchers.htm,
   read 2026-11-23). It lists vouchers marked Optional, which are not posted. It is not a queue of
   proposals awaiting a decision, so the queue is not built from it.
-- **bug: the queue is not a table.** `review.default` (Fictional Pumps, a stored statement with
-  two suggested matches) draws each proposal as a wrapped line of text in a card, with the
-  second row out of line with the first. The mock has a table (Proposal, Source, Confidence,
-  Amount) with an icon per row, the selected row's bar, and a "How decisions work" card beside
-  it. review.empty is captured too and shows the connected-sources wording above, not the
-  mock's "Nothing to review" heading.
+- **closed (s9-all): the queue is a table.** `review.default` is a table (Proposal, Source,
+  Confidence, Amount) with a selected-row bar, beside "How decisions work" and a "Not connected
+  yet" card, as the mock. Pinned by `tests/w4_review.rs` (written after the layout, so not seen
+  failing first). Still different: the card lists only the keys that work (Enter, J/K, Esc), the
+  rows are bank matches only (no draft purchase, New ledger or 2B rows), and review.empty uses
+  Fictional Traders with the not-connected wording and no "Read a bill" button.
 
 ## AI and privacy (round of 2026-11-23, card W4)
 

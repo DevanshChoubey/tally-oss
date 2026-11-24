@@ -410,6 +410,15 @@ fn remembered_for(
         .map(|(_, _, action)| *action)
 }
 
+/// Whether the voucher table behind the GSTR-1 section table is unfolded.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum VoucherFold {
+    /// Only the section table shows.
+    Folded,
+    /// The voucher table shows beneath it.
+    Open,
+}
+
 /// The GST workspace screen.
 #[derive(Debug)]
 pub struct GstScreen {
@@ -446,6 +455,9 @@ pub struct GstScreen {
     sections: Vec<ledgerly_api::Gstr1Section>,
     /// Whether `sections` was supplied; a screen with no sections counts nothing.
     sections_loaded: bool,
+    /// Whether the voucher table behind the section table is unfolded. Folded by default, as the
+    /// mock shows the section table alone.
+    vouchers: VoucherFold,
     /// The selected section of the GSTR-1 table (J / K), when the table is loaded.
     section_focus: usize,
     /// Set when the user asked to fix the item master from the side card, until taken.
@@ -493,6 +505,7 @@ enum UiEvent {
     ExportJson,
     PeriodPicker,
     ChoosePeriod(usize),
+    ToggleVouchers,
 }
 
 impl GstScreen {
@@ -523,6 +536,7 @@ impl GstScreen {
             figures1: Figures::default(),
             sections: Vec::new(),
             sections_loaded: false,
+            vouchers: VoucherFold::Folded,
             section_focus: 0,
             fix_request: None,
             agreement: None,
@@ -598,6 +612,21 @@ impl GstScreen {
         self.section_focus = self
             .section_focus
             .min(self.sections.len().saturating_sub(1));
+    }
+
+    /// Whether the voucher table behind the section table is unfolded.
+    #[must_use]
+    pub fn vouchers_shown(&self) -> bool {
+        self.vouchers == VoucherFold::Open
+    }
+
+    /// Unfolds or folds the voucher table behind the section table.
+    pub fn show_vouchers(&mut self, open: bool) {
+        self.vouchers = if open {
+            VoucherFold::Open
+        } else {
+            VoucherFold::Folded
+        };
     }
 
     /// Forgets the GSTR-1 section table (the return could not be built).
@@ -1229,6 +1258,7 @@ impl GstScreen {
                 }
             }
             UiEvent::ChoosePeriod(month) => self.choose_period(month),
+            UiEvent::ToggleVouchers => self.show_vouchers(!self.vouchers_shown()),
         }
         self.clamp_focus();
     }

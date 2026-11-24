@@ -20,12 +20,20 @@ use ledgerly_api::{ReviewItem, ReviewQueue, ReviewSource};
 use ledgerly_core::{LedgerId, Paise};
 
 use crate::screen::{KeyHint, ScreenAction};
+use crate::screens::home::draw::{split, title};
 use crate::screens::wire::{Done, Latest};
 use crate::ui::conf::{Confidence, conf};
 use crate::ui::format;
+use crate::ui::icon::Icon;
+use crate::ui::keycap::keycap;
+use crate::ui::mock_table::{self, Cell, Width};
 use crate::ui::note::{NoteKind, note};
 use crate::ui::page_head::page_head;
-use crate::ui::{bold_font, card::card, para};
+use crate::ui::{
+    bold_font,
+    card::{card, card_flush},
+    para,
+};
 use crate::worker::ApiWorker;
 use crate::{AppCtx, Screen};
 
@@ -291,67 +299,219 @@ impl ReviewScreen {
 }
 
 impl ReviewScreen {
-    /// Draws the rows (or the empty state) and the not-connected sources.
+    /// Draws the queue as the mock does: a table of proposals beside the "How decisions work"
+    /// card, or the empty state.
     fn draw_panel(&mut self, ui: &mut Ui, panel: &QueuePanel) {
-        card(ui, |ui| {
-            if panel.rows.is_empty() {
-                let lines = match self.empty.clone() {
-                    Some(EmptyView::NotConnected(lines)) => {
-                        draw_empty_heading(ui, "Nothing waiting from the connected sources");
-                        lines
-                    }
-                    Some(EmptyView::Nothing) | None => {
-                        draw_empty_heading(ui, EMPTY_TITLE);
-                        vec![EMPTY_SENTENCE.to_owned()]
-                    }
-                };
-                for line in lines {
-                    para(
-                        ui,
-                        &line,
-                        crate::theme::TEXT_BODY,
-                        crate::ui::tokens(ui).text_2,
-                    );
+        if panel.rows.is_empty() {
+            self.draw_empty(ui);
+            return;
+        }
+        let mut clicked = None;
+        split(
+            ui,
+            |ui| {
+                card_flush(ui, |ui| clicked = self.draw_rows(ui, panel));
+            },
+            |ui| {
+                draw_how_decisions_work(ui);
+                // The sources the engine cannot list are named under the card, so a short list is
+                // never taken for a complete one.
+                if !panel.not_connected.is_empty() {
+                    ui.add_space(crate::theme::SPACE_3);
+                    card(ui, |ui| {
+                        title(ui, "Not connected yet");
+                        para(
+                            ui,
+                            "These proposals are not listed. Nothing is shown for them here, and nothing is posted.",
+                            crate::theme::TEXT_BODY,
+                            crate::ui::tokens(ui).text_2,
+                        );
+                        for line in &panel.not_connected {
+                            para(
+                                ui,
+                                line,
+                                crate::theme::TEXT_META,
+                                crate::ui::tokens(ui).text_2,
+                            );
+                        }
+                    });
                 }
-                return;
-            }
-            for (index, row) in panel.rows.iter().enumerate() {
-                let selected = index == self.selected;
-                ui.horizontal(|ui| {
-                    if ui.selectable_label(selected, row.kind).clicked() {
-                        self.selected = index;
-                    }
-                    ui.label(&row.what);
-                    conf(ui, row.confidence);
-                    if let Some(amount) = row.amount {
-                        ui.label(format::amount(amount));
-                    }
-                });
-                ui.label(&row.source);
-            }
-        });
-        // With no rows the empty state above already names the sources, so the card is not repeated.
-        if !panel.rows.is_empty() && !panel.not_connected.is_empty() {
-            ui.add_space(crate::theme::SPACE_3);
-            card(ui, |ui| {
-                draw_empty_heading(ui, "Not connected yet");
-                para(
-                    ui,
-                    "These proposals are not listed. Nothing is shown for them here, and nothing is posted.",
-                    crate::theme::TEXT_BODY,
-                    crate::ui::tokens(ui).text_2,
-                );
-                for line in &panel.not_connected {
-                    para(
-                        ui,
-                        line,
-                        crate::theme::TEXT_BODY,
-                        crate::ui::tokens(ui).text_2,
-                    );
-                }
-            });
+            },
+        );
+        if let Some(index) = clicked {
+            self.selected = index;
         }
     }
+
+    /// The proposals table: an icon, the proposal, its source, the confidence and the amount.
+    fn draw_rows(&self, ui: &mut Ui, panel: &QueuePanel) -> Option<usize> {
+        let widths = [
+            Width::Fixed(46.0),
+            Width::Rest,
+            Width::Fixed(150.0),
+            Width::Fixed(112.0),
+            Width::Fixed(112.0),
+        ];
+        let head = ["", "Proposal", "Source", "Confidence", "Amount"];
+        let rows: Vec<Vec<Cell<'_>>> = panel
+            .rows
+            .iter()
+            .map(|row| {
+                let proposal: Cell<'_> = Box::new(move |ui| {
+                    let t = crate::ui::tokens(ui);
+                    ui.label(
+                        egui::RichText::new(row.kind)
+                            .font(bold_font(ui, crate::theme::TEXT_BODY))
+                            .color(t.text),
+                    );
+                    ui.add(
+                        egui::Label::new(crate::ui::para_text(
+                            &row.what,
+                            crate::theme::TEXT_BODY,
+                            t.text_2,
+                        ))
+                        .wrap(),
+                    );
+                });
+                let icon: Cell<'_> = Box::new(|ui| {
+                    let t = crate::ui::tokens(ui);
+                    ui.add_space(2.0);
+                    crate::ui::icon::icon(ui, Icon::Bank, t.text_2);
+                });
+                let confidence: Cell<'_> = Box::new(move |ui| {
+                    conf(ui, row.confidence);
+                });
+                let amount: Cell<'_> = Box::new(move |ui| {
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
+                        let t = crate::ui::tokens(ui);
+                        match row.amount {
+                            Some(amount) => ui.label(
+                                egui::RichText::new(format::amount(amount))
+                                    .font(egui::FontId::proportional(crate::theme::TEXT_BODY))
+                                    .color(t.text),
+                            ),
+                            None => ui.label(
+                                egui::RichText::new("none")
+                                    .font(egui::FontId::proportional(crate::theme::TEXT_BODY))
+                                    .color(t.text_3),
+                            ),
+                        };
+                    });
+                });
+                vec![
+                    icon,
+                    proposal,
+                    mock_table::muted(&row.source),
+                    confidence,
+                    amount,
+                ]
+            })
+            .collect();
+        let (_, lines) =
+            mock_table::table_rows(ui, &widths, Some(&head), rows, Some(self.selected));
+        let mut clicked = None;
+        for (index, line) in lines.into_iter().enumerate() {
+            let response = ui.interact(
+                line,
+                ui.scope_id().with(("review-row", index)),
+                egui::Sense::click(),
+            );
+            if response.clicked() {
+                clicked = Some(index);
+            }
+        }
+        clicked
+    }
+
+    /// The empty state: when no source is left unlisted, the mock's; otherwise it says what the
+    /// connected sources hold and names the ones that are not connected.
+    fn draw_empty(&self, ui: &mut Ui) {
+        let (title, sentence, lines): (&str, &str, Vec<String>) = match self.empty.clone() {
+            Some(EmptyView::NotConnected(lines)) => (
+                "Nothing waiting from the connected sources",
+                "Bank matches appear here when a statement is imported. These sources are not connected, so nothing is shown for them:",
+                lines,
+            ),
+            Some(EmptyView::Nothing) | None => (EMPTY_TITLE, EMPTY_SENTENCE, Vec::new()),
+        };
+        card(ui, |ui| {
+            ui.set_min_width(ui.available_width());
+            let t = crate::ui::tokens(ui);
+            ui.vertical_centered(|ui| {
+                ui.add_space(crate::theme::SPACE_6);
+                crate::ui::icon::icon_sized(ui, Icon::Inbox, t.text_3, 36.0);
+                ui.add_space(10.0);
+                draw_empty_heading(ui, title);
+                ui.add_space(crate::theme::SPACE_4 / 2.0);
+                ui.scope(|ui| {
+                    ui.set_max_width(520.0_f32.min(ui.available_width()));
+                    ui.add(
+                        egui::Label::new(crate::ui::para_text(
+                            sentence,
+                            crate::theme::TEXT_BODY,
+                            t.text_2,
+                        ))
+                        .wrap(),
+                    );
+                    for line in &lines {
+                        ui.add_space(4.0);
+                        ui.add(
+                            egui::Label::new(crate::ui::para_text(
+                                line,
+                                crate::theme::TEXT_META,
+                                t.text_3,
+                            ))
+                            .wrap(),
+                        );
+                    }
+                });
+                ui.add_space(crate::theme::SPACE_6);
+            });
+        });
+    }
+}
+
+/// The card beside the table (the mock's "How decisions work"), limited to the keys this screen
+/// has: Y, N and Ctrl+A are not built, and accepting happens on the bank screen.
+fn draw_how_decisions_work(ui: &mut Ui) {
+    let t = crate::ui::tokens(ui);
+    card(ui, |ui| {
+        title(ui, "How decisions work");
+        let lines: [(&[&str], &str); 3] = [
+            (
+                &["Enter"],
+                "Open in context: the bank reconciliation of the proposal's account, where the matcher's suggestion is listed.",
+            ),
+            (&["J", "K"], "Next and previous."),
+            (
+                &["Esc"],
+                "Back. Nothing is posted from this list; accepting a match happens in the bank reconciliation.",
+            ),
+        ];
+        for (keys, what) in lines {
+            ui.horizontal_top(|ui| {
+                ui.allocate_ui(egui::vec2(72.0, 20.0), |ui| {
+                    ui.horizontal(|ui| {
+                        ui.spacing_mut().item_spacing.x = 4.0;
+                        for key in keys {
+                            keycap(ui, key);
+                        }
+                    });
+                });
+                ui.add(
+                    egui::Label::new(crate::ui::para_text(what, crate::theme::TEXT_BODY, t.text))
+                        .wrap(),
+                );
+            });
+            ui.add_space(6.0);
+        }
+        para(
+            ui,
+            "Amounts in this list are the bank line as imported, never a total computed here.",
+            crate::theme::TEXT_META,
+            t.text_2,
+        );
+    });
 }
 
 /// A bold heading inside a card.

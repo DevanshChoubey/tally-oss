@@ -12,17 +12,19 @@
 //! The mock's other states (reading, proposal, low confidence, mismatch, duplicate, cloud consent,
 //! unreadable file, accepted) need the reader and are listed in `design/PARITY-GAPS.md`.
 
-use egui::{Frame, Key, Margin, Modifiers, Ui, vec2};
+use egui::{
+    Align, Frame, Key, Label, Layout, Margin, Modifiers, Rect, RichText, Ui, UiBuilder, vec2,
+};
 
 use crate::keymap::Action;
 use crate::screen::KeyHint;
 use crate::screens::ai_gate::{self, Feature, Gate, TierGate};
-use crate::theme::RADIUS_M;
+use crate::theme::{RADIUS_M, SPACE_4, TEXT_BODY, TEXT_H2};
 use crate::ui::button::{ButtonKind, button};
-use crate::ui::empty::empty_state;
+use crate::ui::icon::{Icon, icon_sized};
 use crate::ui::note::{NoteKind, note};
 use crate::ui::page_head::page_head;
-use crate::ui::tokens;
+use crate::ui::{bold_font, para_text, tokens};
 use crate::{AppCtx, Screen, ScreenAction};
 
 /// The screen's title in the palette, the sidebar and the breadcrumb (index.html:1420).
@@ -125,10 +127,28 @@ fn draw_image(ui: &mut Ui) {
         .corner_radius(RADIUS_M)
         .inner_margin(Margin::same(18))
         .show(ui, |ui| {
-            ui.set_min_size(vec2(IMAGE_INNER_WIDTH, IMAGE_INNER_HEIGHT));
-            ui.set_max_width(IMAGE_INNER_WIDTH);
-            ui.add_space(IMAGE_TOP);
-            let _no_action = empty_state(ui, NO_IMAGE_TITLE, NO_IMAGE_SENTENCE, None);
+            // Laid out by hand inside the column's exact rectangle: the shared empty state centres
+            // on whatever width its parent offers, which in a row is not this column's.
+            let column =
+                Rect::from_min_size(ui.cursor().min, vec2(IMAGE_INNER_WIDTH, IMAGE_INNER_HEIGHT));
+            ui.scope_builder(
+                UiBuilder::new()
+                    .max_rect(column)
+                    .layout(Layout::top_down(Align::Center)),
+                |ui| {
+                    ui.set_min_size(column.size());
+                    ui.add_space(IMAGE_TOP);
+                    icon_sized(ui, Icon::Camera, t.text_3, 36.0);
+                    ui.add_space(10.0);
+                    ui.label(
+                        RichText::new(NO_IMAGE_TITLE)
+                            .font(bold_font(ui, TEXT_H2))
+                            .color(t.text),
+                    );
+                    ui.add_space(SPACE_4 / 2.0);
+                    ui.add(Label::new(para_text(NO_IMAGE_SENTENCE, TEXT_BODY, t.text_2)).wrap());
+                },
+            );
         });
 }
 

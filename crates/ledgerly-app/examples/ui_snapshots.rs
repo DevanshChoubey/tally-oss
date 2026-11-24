@@ -11,9 +11,11 @@
 //! and amounts are fictional; the figures on screen are whatever the engine computes, and this
 //! tool asserts none of them.
 //!
-//! Between shots the tool returns to Home: it presses Esc, one press per key cycle, until the
-//! active tab's screen stack is back at its root and the palette is closed. If [`HOME_PRESSES_MAX`]
-//! presses do not get there, the stack and the palette are closed directly, with a warning printed.
+//! Every shot starts on a fresh shell and a fresh company file ([`Snapshots::reopen`]): nothing a
+//! shot opened (a dialog, a toast, a voucher draft, a posted voucher) can reach the next one.
+//! Before its keys go in, the tool checks that the shell is on a clean Home ([`Snapshots::clean_home`]:
+//! the screen stack at its root, no palette, no comparison dialog, no toast) and stops with a
+//! message if it is not.
 
 #![allow(
     clippy::unwrap_used,
@@ -616,6 +618,9 @@ enum Inject {
     /// The mouse wheel turned at a point by the given egui wheel delta in points: negative scrolls
     /// the list under it down, positive up.
     Scroll(f32, f32, f32),
+    /// Nothing for this many frames, for an answer from the worker that the next input needs (the
+    /// open bills of a bill-wise party arrive some frames after the amount's Enter).
+    Wait(u32),
 }
 
 impl Shot {
@@ -645,6 +650,12 @@ impl Shot {
     /// The same shot with `text` typed after the keys of [`Shot::then`].
     fn type_text(mut self, text: &'static str) -> Self {
         self.after.push(Inject::Text(text));
+        self
+    }
+
+    /// The same shot with nothing sent for `frames` frames after what came before it.
+    fn wait(mut self, frames: u32) -> Self {
+        self.after.push(Inject::Wait(frames));
         self
     }
 
@@ -688,8 +699,11 @@ fn shot(state: &'static str, keys: &[(Key, Modifiers)]) -> Shot {
 const NONE: Modifiers = Modifiers::NONE;
 const ESC: (Key, Modifiers) = (Key::Escape, Modifiers::NONE);
 
-/// The most Escape presses one return to Home may take before the screens are closed directly.
-const HOME_PRESSES_MAX: u32 = 12;
+/// The title Home takes while its comparison dialog (`home.nudge-open`) is open.
+const HOME_COMPARE_TITLE: &str = "Compare vouchers";
+
+/// Frames a fresh shell may take to show a clean Home before the run stops.
+const HOME_FRAMES_MAX: u32 = 600;
 
 /// From Home to the balance sheet's Sundry Debtors drill on the sample company: B, four lines down
 /// to Current Assets, Enter, three lines down to Sundry Debtors (after Bank Accounts, Cash-in-Hand
@@ -804,6 +818,28 @@ fn invoice_line(shot: Shot, item: &'static str, qty: &'static str, rate: &'stati
         .press(&[enter])
         .type_text(rate)
         .press(&[enter])
+}
+
+/// The create-ledger form filled as the mock draws it (index.html:1790-1810), by clicks, since no
+/// key opens the Under list or ticks its boxes: Alt+C opens the form, the name is typed, Under is
+/// Sundry Debtors (the list is scrolled to its end, where the scroll stops, so the row is always
+/// at the same place), Bill-wise and Party details are on, `gstin` is typed and the credit days
+/// are 30. The clicks are at points of the 1280 x 800 window; the form's rows do not move until
+/// Party details adds the GSTIN row.
+fn jadhav_form(state: &'static str, gstin: &'static str) -> Shot {
+    shot(state, &[(Key::M, NONE), (Key::C, Modifiers::ALT)])
+        .click(456.0, 263.0)
+        .type_text("Jadhav Irrigation Services")
+        .click(995.0, 256.0)
+        .scroll(995.0, 400.0, -1200.0)
+        .click(959.0, 474.0)
+        .click(256.0, 326.0)
+        .click(472.0, 389.0)
+        // The credit days come before the GSTIN: its check line moves the rows below it.
+        .click(348.0, 389.0)
+        .type_text("30")
+        .click(456.0, 326.0)
+        .type_text(gstin)
 }
 
 /// The mock's three lines of SI/0418: 25 rolls of lateral, 67 nozzle sets, 40 sprayers.
@@ -951,10 +987,9 @@ fn light_shots() -> Vec<Shot> {
                 (Key::ArrowRight, Modifiers::ALT),
             ],
         ),
-        shot(
-            "masters.create-ledger",
-            &[(Key::M, NONE), (Key::C, Modifiers::ALT)],
-        ),
+        // The mock's new party ledger (index.html:1790-1810), typed through the real form: the
+        // GSTIN's check character is right here and wrong in `masters.gstin-error`.
+        jadhav_form("masters.create-ledger", "27AAJFJ5521N1ZZ"),
         shot("keys.classic", &[palette])
             .query("Keyboard map")
             .then(&[(Key::Enter, NONE)]),
@@ -1011,9 +1046,20 @@ fn light_shots() -> Vec<Shot> {
             .press(&[(Key::Enter, NONE)])
             .type_text("RTGS")
             .press(&[(Key::Enter, NONE)])
-            .type_text("Freight inward")
+            .type_text("Nilgiri")
             .press(&[(Key::Enter, NONE)])
             .type_text("250000")
+            .press(&[(Key::Enter, NONE)])
+            // The bill popup opens with the first bill filled in full once the worker has sent
+            // the open bills; the mock pays 2,00,000 against NST/1102 and 50,000 against NST/1145.
+            .wait(120)
+            .click(1127.0, 388.0)
+            .press(&[(Key::End, NONE)])
+            .press(&[(Key::Backspace, NONE); 12])
+            .type_text("200000")
+            .click(1127.0, 448.0)
+            .type_text("50000")
+            // Enter accepts the details; Enter on the empty second line goes to the narration.
             .press(&[(Key::Enter, NONE), (Key::Enter, NONE)])
             .type_text("RTGS to Nilgiri Steel Traders"),
         shot("bank.default", &[palette])
@@ -1069,22 +1115,7 @@ fn light_shots() -> Vec<Shot> {
         // to its end, where the scroll stops, so the row is always at the same place), Party details
         // on, the mock's GSTIN with a wrong check character (index.html:1790: the check character of
         // 27AAJFJ5521N1Z is Z, so the mock's bad GSTIN ends in 7), Bill-wise on and 30 credit days.
-        shot(
-            "masters.gstin-error",
-            &[(Key::M, NONE), (Key::C, Modifiers::ALT)],
-        )
-        .click(456.0, 263.0)
-        .type_text("Jadhav Irrigation Services")
-        .click(995.0, 256.0)
-        .scroll(995.0, 400.0, -400.0)
-        .click(958.0, 492.0)
-        .click(472.0, 389.0)
-        .click(456.0, 326.0)
-        .type_text("27AAJFJ5521N1Z7")
-        .click(903.0, 326.0)
-        .click(348.0, 413.0)
-        .type_text("30")
-        .click(456.0, 326.0),
+        jadhav_form("masters.gstin-error", "27AAJFJ5521N1Z7"),
         // The company step as setup.company, then the State list opened by a click (no key opens
         // it) and the mock's 24 Gujarat chosen against the GSTIN's 27. The list is scrolled to its
         // end (where the scroll stops) and back up, so 24 is always at the same row.
@@ -1214,7 +1245,7 @@ const SELECT_ALL: (Key, Modifiers) = (Key::A, Modifiers::COMMAND);
 enum Stage {
     /// Waiting for the books and the first figures.
     Warm,
-    /// Escape goes in, one press per key cycle, until the screen is back at Home.
+    /// A fresh shell is checked for a clean Home before the shot's keys go in.
     Home,
     /// Keys of the current shot go in on the next frame.
     Keys,
@@ -1241,23 +1272,26 @@ struct Snapshots {
     inject: VecDeque<Inject>,
     /// Frames to wait before the next queued key.
     gap: u32,
-    /// Escape presses so far in the current return to Home.
-    presses: u32,
     image: Arc<Mutex<Option<Arc<egui::ColorImage>>>>,
     /// The company file open in the shell.
     company: Fixture,
-    /// The shell has not been driven since it was built. A cold-start shot needs this, since its
-    /// keys move the wizard on and a shell remembers where it was.
-    fresh: bool,
 }
 
 impl Snapshots {
     /// Closes the open company and opens `company` on a new shell, as the start of the run does.
-    fn reopen(&mut self, company: Fixture) -> Stage {
+    fn reopen(&mut self, ctx: &egui::Context, company: Fixture) -> Stage {
+        // Scroll offsets, open popups, collapsing headers and the focus live in the egui context,
+        // not in the shell, so they are cleared too.
+        ctx.memory_mut(|m| {
+            m.data.clear();
+            m.reset_areas();
+            m.stop_text_input();
+        });
         let (shell, stage) = company.shell(&self.out);
         self.shell = shell;
         self.company = company;
-        self.fresh = true;
+        // The setup wizard never overwrites a company file; a shot that created one leaves none.
+        let _removed = std::fs::remove_file(SETUP_FILE);
         stage
     }
 
@@ -1266,14 +1300,16 @@ impl Snapshots {
         self.frames = 0;
     }
 
-    /// True when the active tab's stack is at its root and the palette is closed.
-    fn at_home(&self) -> bool {
+    /// True when the shell shows a clean Home: the active tab's stack at its root, the palette
+    /// closed, Home's comparison dialog closed and no toast on screen.
+    fn clean_home(&self) -> bool {
         !self.shell.palette().is_open()
+            && self.shell.notice().is_none()
             && self
                 .shell
                 .tabs()
                 .active_stack()
-                .is_some_and(|stack| stack.depth() == 1)
+                .is_some_and(|stack| stack.depth() == 1 && stack.top_title() != HOME_COMPARE_TITLE)
     }
 
     fn write_shot(&self, image: &egui::ColorImage) {
@@ -1303,10 +1339,10 @@ impl eframe::App for Snapshots {
         }
         if let Some(item) = self.inject.pop_front() {
             // A wheel scroll is animated over several frames; the next click waits for it to end.
-            self.gap = if matches!(item, Inject::Scroll(..)) {
-                SCROLL_SETTLE_FRAMES
-            } else {
-                6
+            self.gap = match item {
+                Inject::Scroll(..) => SCROLL_SETTLE_FRAMES,
+                Inject::Wait(frames) => frames,
+                Inject::Key(..) | Inject::Text(_) | Inject::Click(..) => 6,
             };
             match item {
                 Inject::Key(key, modifiers) => {
@@ -1321,6 +1357,7 @@ impl eframe::App for Snapshots {
                     }
                 }
                 Inject::Text(text) => raw_input.events.push(Event::Text(text.to_owned())),
+                Inject::Wait(_) => {}
                 Inject::Scroll(x, y, wheel) => {
                     raw_input.events.push(Event::PointerMoved(egui::pos2(x, y)));
                     raw_input.events.push(Event::MouseWheel {
@@ -1358,42 +1395,21 @@ impl eframe::App for Snapshots {
                 }
             }
             Stage::Home => {
-                // One Escape per key cycle: a key goes in only once the last one has been
-                // handled (inject empty, gap spent), so the check below sees its effect.
-                if self.inject.is_empty() && self.gap == 0 {
-                    if self.at_home() {
-                        self.next_stage(Stage::Keys);
-                    } else if self.presses < HOME_PRESSES_MAX {
-                        self.presses += 1;
-                        self.inject.push_back(Inject::Key(ESC.0, ESC.1));
-                    } else {
-                        // Escape did not close what is open (a form that keeps its draft, say).
-                        // Close the stack and the palette directly, and say so in the output.
-                        println!(
-                            "warning: Escape did not return to Home in {HOME_PRESSES_MAX} presses \
-                             (stack depth {:?}, palette open: {}); closing them directly",
-                            self.shell.tabs().active_stack().map(ScreenStack::depth),
-                            self.shell.palette().is_open(),
-                        );
-                        if let Some(stack) = self.shell.tabs_mut().active_stack_mut() {
-                            stack.truncate_to(1);
-                        }
-                        self.shell.palette_mut().close();
-                        self.next_stage(Stage::Keys);
-                    }
+                if self.clean_home() {
+                    self.next_stage(Stage::Keys);
+                } else {
+                    assert!(
+                        self.frames < HOME_FRAMES_MAX,
+                        "a fresh shell did not show a clean Home before {}: stack depth {:?}, \
+                         palette open: {}, notice: {:?}",
+                        self.shots[self.index].label(),
+                        self.shell.tabs().active_stack().map(ScreenStack::depth),
+                        self.shell.palette().is_open(),
+                        self.shell.notice(),
+                    );
                 }
             }
             Stage::Keys => {
-                let wanted = self.shots[self.index].company;
-                // A cold-start shot always begins from a fresh shell, since its keys move the
-                // wizard on and a shell remembers where it was.
-                if wanted != self.company || (wanted == Fixture::Cold && !self.fresh) {
-                    // Another company file: open it and wait for its books as at the start.
-                    let stage = self.reopen(wanted);
-                    self.next_stage(stage);
-                    return;
-                }
-                self.fresh = false;
                 let current = &self.shots[self.index];
                 self.shell.set_theme(current.theme.kind());
                 self.inject = current
@@ -1435,7 +1451,7 @@ impl eframe::App for Snapshots {
                 } else {
                     60
                 };
-                if self.inject.is_empty() && self.frames > settle {
+                if self.inject.is_empty() && self.gap == 0 && self.frames > settle {
                     let slot = Arc::clone(&self.image);
                     ui.ctx().request_screenshot(move |image| {
                         if let Ok(mut held) = slot.lock() {
@@ -1456,8 +1472,10 @@ impl eframe::App for Snapshots {
                         self.next_stage(Stage::Done);
                         ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
                     } else {
-                        self.presses = 0;
-                        self.next_stage(Stage::Home);
+                        // The next shot starts on a fresh shell and company file.
+                        let wanted = self.shots[self.index].company;
+                        let stage = self.reopen(ui.ctx(), wanted);
+                        self.next_stage(stage);
                     }
                 } else {
                     assert!(self.frames < 600, "no screenshot arrived");
@@ -1519,10 +1537,8 @@ fn main() -> eframe::Result<()> {
         frames: 0,
         inject: VecDeque::new(),
         gap: 0,
-        presses: 0,
         image: Arc::new(Mutex::new(None)),
         company,
-        fresh: true,
     };
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()

@@ -188,12 +188,21 @@ impl GstScreen {
         split(
             ui,
             |ui| {
+                // With the section table on show, the voucher table behind it is folded away
+                // until asked for, so the default view is the mock's (tiles, sections, card).
+                let vouchers = !self.sections_loaded || self.vouchers_shown();
                 if self.sections_loaded {
                     self.draw_sections(ui, events);
                     ui.add_space(SPACE_3);
-                    title(ui, "Vouchers behind the sections");
+                    self.draw_voucher_fold(ui, events);
                 }
-                self.draw_exceptions(ui, &self.gstr1, want_scroll, events);
+                if vouchers {
+                    if self.sections_loaded {
+                        ui.add_space(SPACE_3);
+                        title(ui, "Vouchers behind the sections");
+                    }
+                    self.draw_exceptions(ui, &self.gstr1, want_scroll, events);
+                }
                 if !self.figures1.rows.is_empty() || !self.figures1.notes.is_empty() {
                     ui.add_space(SPACE_3);
                     draw_figures(ui, &self.figures1);
@@ -202,6 +211,18 @@ impl GstScreen {
             |ui| self.draw_side_card(ui, &mut side),
         );
         events.extend(side);
+    }
+
+    /// The button that unfolds or folds the voucher table behind the section table.
+    fn draw_voucher_fold(&self, ui: &mut Ui, events: &mut Vec<UiEvent>) {
+        let label = match (self.vouchers_shown(), self.item_count(GstTab::Gstr1)) {
+            (true, _) => "Hide vouchers".to_owned(),
+            (false, Some(n)) => format!("Show vouchers ({n})"),
+            (false, None) => "Show vouchers".to_owned(),
+        };
+        if button(ui, &label, None, ButtonKind::Secondary).clicked() {
+            events.push(UiEvent::ToggleVouchers);
+        }
     }
 
     /// The four status tiles (the mock's `.kpi` in a `g4` grid). Each counts the vouchers the
@@ -350,7 +371,8 @@ impl GstScreen {
         let held = self
             .bucket_count(GstTab::Gstr1, Bucket::NeedsCorrection)
             .unwrap_or(0);
-        if held > 0 {
+        // The section table already marks the section that needs correction, as the mock does.
+        if held > 0 && !self.sections_loaded {
             let text = format!(
                 "{held} voucher(s) need correction. The JSON is held back until they are fixed; \
                  the reason is in the table."

@@ -297,3 +297,75 @@ fn the_home_card_shows_the_same_rows_as_the_review_queue() {
     }
     assert_eq!(home.review_panel(), screen.panel());
 }
+
+/// Every text the frame drew, in drawing order.
+fn drawn(shapes: &[egui::epaint::ClippedShape]) -> Vec<String> {
+    fn walk(shape: &egui::epaint::Shape, out: &mut Vec<String>) {
+        match shape {
+            egui::epaint::Shape::Text(t) => out.push(t.galley.text().to_owned()),
+            egui::epaint::Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
+            egui::epaint::Shape::Noop
+            | egui::epaint::Shape::Circle(_)
+            | egui::epaint::Shape::Ellipse(_)
+            | egui::epaint::Shape::LineSegment { .. }
+            | egui::epaint::Shape::Path(_)
+            | egui::epaint::Shape::Band(_)
+            | egui::epaint::Shape::Rect(_)
+            | egui::epaint::Shape::Mesh(_)
+            | egui::epaint::Shape::QuadraticBezier(_)
+            | egui::epaint::Shape::CubicBezier(_)
+            | egui::epaint::Shape::Callback(_) => {}
+        }
+    }
+    let mut out = Vec::new();
+    for c in shapes {
+        walk(&c.shape, &mut out);
+    }
+    out
+}
+
+#[test]
+fn the_queue_is_a_table_beside_the_how_decisions_work_card() {
+    // provenance: the mock's `SCREENS.review` (design/mock-v2/index.html) and its capture
+    // `captures/states/light/review.default.webp`: a table with the columns Proposal, Source,
+    // Confidence and Amount beside a card titled "How decisions work". The keys listed there are
+    // the ones this screen has (Enter, J, K, Esc); Y, N and Ctrl+A are not built, so they are not
+    // listed. Catches the plain stack of labels the screen drew before 2026-11-25.
+    use ledgerly_app::{AppCtx, Screen};
+    let worker = ApiWorker::spawn(setup("w4_app_look.ledgerly", true)).unwrap();
+    let mut screen = ReviewScreen::default();
+    load_queue(&mut screen, &worker);
+    let ctx = egui::Context::default();
+    let mut app = AppCtx::default();
+    let input = egui::RawInput {
+        screen_rect: Some(egui::Rect::from_min_size(
+            egui::Pos2::ZERO,
+            egui::vec2(1100.0, 800.0),
+        )),
+        ..egui::RawInput::default()
+    };
+    let out = ctx.run_ui(input, |ui| {
+        let _ = screen.ui(ui, &mut app);
+    });
+    let text = drawn(&out.shapes);
+    out.drop_without_applying_deltas();
+    for wanted in [
+        "Proposal",
+        "Source",
+        "Confidence",
+        "Amount",
+        "How decisions work",
+        "Bank match",
+    ] {
+        assert!(
+            text.iter().any(|t| t == wanted),
+            "missing {wanted:?} in {text:?}"
+        );
+    }
+    for unbuilt in ["Accept", "Reject"] {
+        assert!(
+            !text.iter().any(|t| t.contains(unbuilt)),
+            "{unbuilt} is not built, so the card must not offer it: {text:?}"
+        );
+    }
+}
