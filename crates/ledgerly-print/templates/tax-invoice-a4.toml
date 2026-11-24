@@ -1,0 +1,33 @@
+format_version = 1
+name = "Tax invoice"
+page = "A4"
+
+[[block]]
+kind = "header"
+slots = ["company_name", "company_address", "company_gstin", "document_title", "voucher_number", "voucher_date"]
+
+[[block]]
+kind = "details"
+title = "Bill to"
+slots = ["party_name", "party_address", "party_gstin", "place_of_supply"]
+
+[[block]]
+kind = "item_table"
+columns = ["serial", "description", "hsn", "quantity", "unit", "rate", "taxable_value", "tax_rate", "amount"]
+
+[[block]]
+kind = "tax_table"
+title = "Tax summary"
+columns = ["hsn", "taxable_value", "cgst_rate", "cgst_amount", "sgst_rate", "sgst_amount", "igst_rate", "igst_amount", "total_tax"]
+
+[[block]]
+kind = "totals"
+slots = ["taxable_total", "tax_total", "round_off", "grand_total"]
+
+[[block]]
+kind = "amount_in_words"
+title = "Amount in words"
+
+[[block]]
+kind = "text"
+text = "Goods once sold will not be taken back."

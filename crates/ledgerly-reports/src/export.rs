@@ -98,6 +98,52 @@ pub fn to_csv(report: &Report) -> Result<String, ReportError> {
     String::from_utf8(bytes).map_err(|e| memory_error("csv", &e.to_string()))
 }
 
+/// A report's text as the CSV export writes it, for a printed copy.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReportText {
+    /// The column headings: "Particulars", then each column's label.
+    pub headings: Vec<String>,
+    /// The rows in display order, the total row last when the report has one. Each row has one
+    /// cell per heading; an empty cell is `""`.
+    pub rows: Vec<Vec<String>>,
+    /// The notes the report carries.
+    pub notes: Vec<String>,
+}
+
+/// The engine's text for each cell of `report`, as [`to_csv`] writes it. Nothing is formatted
+/// or computed here: the figures are the ones in the report.
+///
+/// # Errors
+/// As [`to_csv`]: [`ReportError::Invalid`] when a row has more cells than the report has columns,
+/// and [`ReportError::Money`] on overflow.
+pub fn report_text(report: &Report) -> Result<ReportText, ReportError> {
+    let width = report.columns.len();
+    let mut headings = vec!["Particulars".to_owned()];
+    headings.extend(report.columns.iter().map(|column| column.label.clone()));
+    let mut rows = Vec::with_capacity(report.rows.len().saturating_add(1));
+    for row in &report.rows {
+        rows.push(value_text(&row_line(row, width)?));
+    }
+    if !report.totals.is_empty() {
+        rows.push(value_text(&line("Total", &report.totals, width)?));
+    }
+    Ok(ReportText {
+        headings,
+        rows,
+        notes: report.notes.clone(),
+    })
+}
+
+fn value_text(values: &[Value]) -> Vec<String> {
+    values
+        .iter()
+        .map(|value| match value {
+            Value::Blank => String::new(),
+            Value::Text(text) | Value::Number { text, .. } => text.clone(),
+        })
+        .collect()
+}
+
 /// Writes [`to_csv`]'s text to `path` atomically, as [`to_xlsx`] does (rule D3): on failure
 /// `path` is untouched.
 ///

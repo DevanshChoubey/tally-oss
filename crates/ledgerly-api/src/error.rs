@@ -79,6 +79,15 @@ pub enum ApiError {
         /// Why the write failed.
         source: std::io::Error,
     },
+    /// The voucher is not in the books, so there is nothing to print.
+    #[error("voucher {id} is not in the books; nothing to print")]
+    UnknownVoucher {
+        /// The voucher id asked for.
+        id: u64,
+    },
+    /// The print crate failed on a template or a voucher it should have been able to print.
+    #[error(transparent)]
+    Print(#[from] ledgerly_print::template::PrintError),
     /// A change was saved, but the books could not be reloaded afterwards, so figures are not
     /// computed until a command or [`crate::Api::open`] reloads them.
     #[error(

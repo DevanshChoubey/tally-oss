@@ -12,6 +12,7 @@ mod events;
 pub mod facade;
 mod gst;
 mod maintenance;
+mod print;
 mod report;
 mod review;
 mod search;

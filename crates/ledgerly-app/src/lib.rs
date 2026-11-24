@@ -16,4 +16,4 @@ pub mod theme;
 pub mod ui;
 pub mod worker;
 
-pub use screen::{AiTier, AppCtx, Screen, ScreenAction};
+pub use screen::{AiTier, AppCtx, KeyHint, Screen, ScreenAction};
