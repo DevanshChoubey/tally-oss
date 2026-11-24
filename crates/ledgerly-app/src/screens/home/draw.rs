@@ -324,7 +324,7 @@ fn review_list(ui: &mut Ui, tr: &Tr, review: ReviewCard<'_>, chosen: &mut Option
         note(ui, NoteKind::Info, &tr.t("home.no_proposal"));
     }
     for row in panel.rows.iter().take(REVIEW_ROWS) {
-        review_row(ui, row);
+        review_row(ui, row, tr);
     }
     let t = tokens(ui);
     if !panel.not_connected.is_empty() {
@@ -345,13 +345,13 @@ fn review_list(ui: &mut Ui, tr: &Tr, review: ReviewCard<'_>, chosen: &mut Option
 }
 
 /// One proposal line on the Home card: its kind, what it is about, its confidence and amount.
-fn review_row(ui: &mut Ui, row: &crate::screens::review::QueueRow) {
+fn review_row(ui: &mut Ui, row: &crate::screens::review::QueueRow, tr: &Tr) {
     let t = tokens(ui);
     ui.separator();
     ui.horizontal(|ui| {
         ui.label(RichText::new(row.shown_kind()).strong());
         ui.label(row.what.as_str());
-        conf(ui, row.confidence);
+        conf(ui, row.confidence, tr);
         if let Some(amount) = row.amount {
             ui.label(format::amount(amount));
         }

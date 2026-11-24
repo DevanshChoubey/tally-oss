@@ -812,3 +812,10 @@ name = "हिन्दी"
 "review.key.move" = "चलें"  # unsourced
 "review.key.open" = "संपादन के लिए खोलें"  # unsourced
 "review.key.back" = "वापस"  # unsourced
+
+# Confidence band (ui/conf.rs `word`). `conf.high`, `conf.medium` and `conf.low` repeat the
+# bank screen's `bank.confidence.*` words, which are unsourced too.
+"conf.high" = "ऊँचा"  # unsourced
+"conf.medium" = "मध्यम"  # unsourced
+"conf.low" = "कम"  # unsourced
+"conf.rule" = "नियम पर आधारित, निश्चित"  # unsourced

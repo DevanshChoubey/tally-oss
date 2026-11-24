@@ -793,3 +793,9 @@ name = "English"
 "review.key.move" = "Move"
 "review.key.open" = "Open to edit"
 "review.key.back" = "Back"
+
+# Confidence band (ui/conf.rs `word`): the word after the bars.
+"conf.high" = "High"
+"conf.medium" = "Medium"
+"conf.low" = "Low"
+"conf.rule" = "Rule, deterministic"

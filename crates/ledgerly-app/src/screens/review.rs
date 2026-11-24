@@ -406,7 +406,7 @@ impl ReviewScreen {
                         self.selected = index;
                     }
                     ui.label(&row.what);
-                    conf(ui, row.confidence);
+                    conf(ui, row.confidence, tr);
                     if let Some(amount) = row.amount {
                         ui.label(format::amount(amount));
                     }
