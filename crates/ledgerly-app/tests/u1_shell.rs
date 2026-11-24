@@ -398,18 +398,37 @@ fn the_chips_say_not_known_when_the_data_is_missing() {
     // never show a name, a tier or a lock date that is not known. Catches a chip that shows an
     // invented value (the default would then not say "not").
     assert_eq!(company_chip(&AppCtx::default()), "No company open");
-    assert_eq!(ai_chip(None), "AI: not set up");
-    assert_eq!(lock_chip(None), None, "no lock date means no lock chip");
-    assert_eq!(ai_chip(Some(AiTier::Local)), "AI on this computer");
+    assert_eq!(
+        ai_chip(None, &ledgerly_app::i18n::Tr::default()),
+        "AI: not set up"
+    );
+    assert_eq!(
+        lock_chip(None, &ledgerly_app::i18n::Tr::default()),
+        None,
+        "no lock date means no lock chip"
+    );
+    assert_eq!(
+        ai_chip(Some(AiTier::Local), &ledgerly_app::i18n::Tr::default()),
+        "AI on this computer"
+    );
     // provenance: derived from the mock, `design/mock-v2/index.html:898`, which reads
     // "Sat, 21 Nov 2026" (spec change 2026-11-22: the user asked for the app to match the mock;
     // 21 Nov 2026 is a Saturday by the calendar).
-    assert_eq!(date_chip(date!(2026 - 11 - 21)), "Sat, 21 Nov 2026");
-    assert_eq!(date_chip(date!(2026 - 04 - 10)), "Fri, 10 Apr 2026");
     assert_eq!(
-        lock_chip(Some(date!(2026 - 03 - 31)))
-            .unwrap_or_default()
-            .as_str(),
+        date_chip(date!(2026 - 11 - 21), &ledgerly_app::i18n::Tr::default()),
+        "Sat, 21 Nov 2026"
+    );
+    assert_eq!(
+        date_chip(date!(2026 - 04 - 10), &ledgerly_app::i18n::Tr::default()),
+        "Fri, 10 Apr 2026"
+    );
+    assert_eq!(
+        lock_chip(
+            Some(date!(2026 - 03 - 31)),
+            &ledgerly_app::i18n::Tr::default()
+        )
+        .unwrap_or_default()
+        .as_str(),
         "Locked to 31 Mar 2026"
     );
 }

@@ -5,6 +5,7 @@
 //! No width is fixed. Tiles and panels split the width they are given, through `Ui::columns`, so
 //! nothing clips when the window is narrow (B2).
 
+use crate::i18n::Tr;
 use egui::FontId;
 use egui::text::{LayoutJob, TextFormat};
 use egui::{
@@ -29,25 +30,6 @@ use crate::ui::page_head::page_head;
 use crate::ui::skeleton::skeleton_bar;
 use crate::ui::{bold_font, format, kind, para, tokens};
 
-/// Line under the title while the figures load (the mock's `home.loading`).
-const LOADING_LINE: &str =
-    "Loading balances and projections. Figures appear only when the engine returns them.";
-/// The AI-off note (the mock's `home.ai-off`, `index.html` line 1054).
-const AI_OFF_TEXT: &str = "AI is off for this company. Plain-words entry, bill reading and suggestions are hidden. Rule checks, matching rules and every report work as usual.";
-/// Placeholder for the plain-words line, which needs the assistant and runs nothing.
-const ENTRY_PLACEHOLDER: &str = "Plain-words entry is not built yet. This line runs nothing.";
-/// The chart's state until the engine has a monthly sales series.
-const CHART_UNSUPPORTED: &str =
-    "Not supported yet. The engine gives no monthly sales figures, so no bars are drawn.";
-/// Placeholder for the nudges until their rules exist.
-const NUDGES_PLACEHOLDER: &str = "Nudges are not built yet. Due dates and possible duplicate entries will be listed here, each with the rule that raised it.";
-/// The page title of a company with no vouchers (`home.empty`).
-const NEW_COMPANY_TITLE: &str = "Welcome to your new company";
-/// Shown when no company is open.
-const NO_FIGURES_TEXT: &str = "No figures yet. Open a company to see them.";
-/// Under the welcome card, as the mock's empty state says (`home.empty`, `index.html` line 1054).
-const WELCOME_NOTE: &str =
-    "Totals stay hidden until there is data. Ledgerly never shows a zero it did not compute.";
 /// Relative widths of the bars in a skeleton KPI card.
 const KPI_BAR_WIDTHS: [f32; 3] = [0.5, 0.8, 0.4];
 /// Relative widths of the bars in a skeleton panel; the first `rows` are used.
@@ -57,6 +39,7 @@ const PANEL_BAR_WIDTHS: [f32; 6] = [0.9, 0.7, 0.85, 0.6, 0.75, 0.5];
 /// actions. The loading and new-company bodies show no actions.
 pub(super) fn header(
     ui: &mut Ui,
+    tr: &Tr,
     shown: HomeBody,
     company: &str,
     title: &str,
@@ -64,15 +47,15 @@ pub(super) fn header(
     chosen: &mut Option<HomeTarget>,
 ) {
     let line = match shown {
-        HomeBody::Loading => LOADING_LINE.to_owned(),
+        HomeBody::Loading => tr.t("home.loading"),
         HomeBody::NewCompany { .. } => company.to_owned(),
         HomeBody::Figures | HomeBody::NoFigures => date_line.to_owned(),
     };
     // The mock's loading and empty states have their own titles (`home.loading`: "Opening
     // <company>", `home.empty`: "Welcome to your new company", index.html lines 1043, 1046).
     let title = match shown {
-        HomeBody::Loading if !company.is_empty() => format!("Opening {company}"),
-        HomeBody::NewCompany { .. } => NEW_COMPANY_TITLE.to_owned(),
+        HomeBody::Loading if !company.is_empty() => tr.tf("home.opening", &[("company", company)]),
+        HomeBody::NewCompany { .. } => tr.t("home.new_company"),
         HomeBody::Loading | HomeBody::Figures | HomeBody::NoFigures => title.to_owned(),
     };
     let sub = (!line.is_empty()).then_some(line.as_str());
@@ -120,13 +103,14 @@ pub(super) fn notice(ui: &mut Ui, text: Option<&str>) {
 /// tile was drawn, in order.
 pub(super) fn figures(
     ui: &mut Ui,
+    tr: &Tr,
     tiles: &[(KpiView, HomeTarget)],
     ai: AiPanel,
     attention: &[AttentionItem],
     review: ReviewCard<'_>,
     chosen: &mut Option<HomeTarget>,
 ) -> Vec<Rect> {
-    entry_bar(ui, ai);
+    entry_bar(ui, tr, ai);
     // `.qe{margin-bottom:14px}`; the AI-off note has 12.
     ui.add_space(match ai {
         AiPanel::Off => SPACE_3,
@@ -148,27 +132,24 @@ pub(super) fn figures(
         },
     );
     ui.add_space(SPACE_3);
-    panels(ui, ai, attention, review, chosen);
+    panels(ui, tr, ai, attention, review, chosen);
     rects
 }
 
 /// Draws the body for a company with no figures to show.
-pub(super) fn no_figures(ui: &mut Ui) {
-    note(ui, NoteKind::Info, NO_FIGURES_TEXT);
+pub(super) fn no_figures(ui: &mut Ui, tr: &Tr) {
+    note(ui, NoteKind::Info, &tr.t("home.no_figures"));
 }
 
 /// Draws the first-steps body for a company with no vouchers (the mock's `home.empty`): the
 /// welcome card with the two actions, then the note that totals stay hidden.
-pub(super) fn welcome(ui: &mut Ui, begins: Date, chosen: &mut Option<HomeTarget>) {
+pub(super) fn welcome(ui: &mut Ui, tr: &Tr, begins: Date, chosen: &mut Option<HomeTarget>) {
     let t = tokens(ui);
-    let sentence = format!(
-        "Your books start on {}. Enter opening balances, or start with today's first voucher.",
-        format::date(begins)
-    );
+    let sentence = tr.tf("home.books_start", &[("date", &format::date(begins))]);
     card(ui, |ui| {
         ui.vertical_centered(|ui| {
             ui.add_space(SPACE_6);
-            title(ui, "No vouchers yet");
+            title(ui, &tr.t("home.no_vouchers"));
             ui.add_space(SPACE_2);
             ui.label(
                 RichText::new(sentence.as_str())
@@ -177,10 +158,24 @@ pub(super) fn welcome(ui: &mut Ui, begins: Date, chosen: &mut Option<HomeTarget>
             );
             ui.add_space(SPACE_4);
             ui.horizontal(|ui| {
-                if button(ui, "Opening balances", None, ButtonKind::Primary).clicked() {
+                if button(
+                    ui,
+                    &tr.t("home.opening_balances"),
+                    None,
+                    ButtonKind::Primary,
+                )
+                .clicked()
+                {
                     *chosen = Some(HomeTarget::Masters);
                 }
-                if button(ui, "First sales invoice", Some("F8"), ButtonKind::Secondary).clicked() {
+                if button(
+                    ui,
+                    &tr.t("home.first_sales"),
+                    Some("F8"),
+                    ButtonKind::Secondary,
+                )
+                .clicked()
+                {
                     *chosen = Some(HomeTarget::SalesInvoice);
                 }
             });
@@ -188,7 +183,7 @@ pub(super) fn welcome(ui: &mut Ui, begins: Date, chosen: &mut Option<HomeTarget>
         });
     });
     ui.add_space(SPACE_3);
-    note(ui, NoteKind::Info, WELCOME_NOTE);
+    note(ui, NoteKind::Info, &tr.t("home.totals_hidden"));
 }
 
 /// Draws the loading body (the mock's `home.loading`): four skeleton KPI cards and two skeleton
@@ -221,10 +216,10 @@ pub(super) fn skeleton(ui: &mut Ui) {
 /// The one line above the tiles: the AI-off note, or the plain-words entry line. The entry is
 /// drawn in the mock's `.qe` box (strong border, radius 10, the spark icon) but says in words
 /// that it is not built; it takes no typing and runs nothing.
-fn entry_bar(ui: &mut Ui, ai: AiPanel) {
+fn entry_bar(ui: &mut Ui, tr: &Tr, ai: AiPanel) {
     match ai {
         AiPanel::Off => {
-            note(ui, NoteKind::Info, AI_OFF_TEXT);
+            note(ui, NoteKind::Info, &tr.t("home.ai_off"));
         }
         AiPanel::Placeholder => {
             let t = tokens(ui);
@@ -246,7 +241,7 @@ fn entry_bar(ui: &mut Ui, ai: AiPanel) {
                         ui.spacing_mut().item_spacing.x = SPACE_2;
                         icon::icon(ui, Icon::Spark, t.text);
                         ui.label(
-                            RichText::new(ENTRY_PLACEHOLDER)
+                            RichText::new(tr.t("home.entry_placeholder"))
                                 .size(TEXT_BODY)
                                 .color(t.text_3),
                         );
@@ -265,6 +260,7 @@ const ENTRY_GAP: f32 = 14.0;
 /// right. Side by side when the width allows, one after the other otherwise.
 fn panels(
     ui: &mut Ui,
+    tr: &Tr,
     ai: AiPanel,
     attention: &[AttentionItem],
     review: ReviewCard<'_>,
@@ -275,8 +271,8 @@ fn panels(
     let mut from_review = None;
     split(
         ui,
-        |left| left_column(left, ai, review, &mut from_review),
-        |right| right_column(right, attention, chosen),
+        |left| left_column(left, tr, ai, review, &mut from_review),
+        |right| right_column(right, tr, attention, chosen),
     );
     if from_review.is_some() {
         *chosen = from_review;
@@ -287,43 +283,45 @@ fn panels(
 const REVIEW_ROWS: usize = 4;
 
 /// The left panel: the review list (not with AI off), and the sales chart state.
-fn left_column(ui: &mut Ui, ai: AiPanel, review: ReviewCard<'_>, chosen: &mut Option<HomeTarget>) {
+fn left_column(
+    ui: &mut Ui,
+    tr: &Tr,
+    ai: AiPanel,
+    review: ReviewCard<'_>,
+    chosen: &mut Option<HomeTarget>,
+) {
     if ai == AiPanel::Placeholder {
         card(ui, |ui| {
-            title(ui, "Waiting for your review");
-            review_list(ui, review, chosen);
+            title(ui, &tr.t("home.waiting_review"));
+            review_list(ui, tr, review, chosen);
         });
         ui.add_space(SPACE_3);
     }
     card(ui, |ui| {
-        title(ui, "Sales by month, before GST");
-        note(ui, NoteKind::Info, CHART_UNSUPPORTED);
+        title(ui, &tr.t("home.sales_by_month"));
+        note(ui, NoteKind::Info, &tr.t("home.chart_unsupported"));
     });
 }
 
 /// The Home card's list: the same rows as the Review queue, the first few, with a button to the
 /// queue. The button says "All N" only when the queue's count is known (every source listed).
-fn review_list(ui: &mut Ui, review: ReviewCard<'_>, chosen: &mut Option<HomeTarget>) {
+fn review_list(ui: &mut Ui, tr: &Tr, review: ReviewCard<'_>, chosen: &mut Option<HomeTarget>) {
     let Some(panel) = review.panel else {
         match review.error {
             Some(error) => note(ui, NoteKind::Bad, error),
-            None => note(ui, NoteKind::Info, "Loading the proposals from the engine."),
+            None => note(ui, NoteKind::Info, &tr.t("home.loading_proposals")),
         };
         return;
     };
     let label = match panel.count {
-        Some(count) => format!("All {count}"),
-        None => "Review queue".to_owned(),
+        Some(count) => tr.tf("home.all_count", &[("count", &count.to_string())]),
+        None => tr.t("sidebar.review_queue"),
     };
     if button(ui, &label, None, ButtonKind::Secondary).clicked() {
         *chosen = Some(HomeTarget::ReviewQueue);
     }
     if panel.rows.is_empty() {
-        note(
-            ui,
-            NoteKind::Info,
-            "No proposal is waiting from the connected sources.",
-        );
+        note(ui, NoteKind::Info, &tr.t("home.no_proposal"));
     }
     for row in panel.rows.iter().take(REVIEW_ROWS) {
         review_row(ui, row);
@@ -340,7 +338,7 @@ fn review_list(ui: &mut Ui, review: ReviewCard<'_>, chosen: &mut Option<HomeTarg
         );
     }
     ui.label(
-        RichText::new("Every row is a proposal. Nothing posts until you accept it.")
+        RichText::new(tr.t("home.every_row"))
             .size(TEXT_META)
             .color(t.text_3),
     );
@@ -367,25 +365,30 @@ fn review_row(ui: &mut Ui, row: &crate::screens::review::QueueRow) {
 
 /// The right panel: the nudges. Each host item is a line with its word; with none, the card says
 /// the rules are not built.
-fn right_column(ui: &mut Ui, attention: &[AttentionItem], chosen: &mut Option<HomeTarget>) {
+fn right_column(
+    ui: &mut Ui,
+    tr: &Tr,
+    attention: &[AttentionItem],
+    chosen: &mut Option<HomeTarget>,
+) {
     card(ui, |ui| {
-        title(ui, "Nudges");
+        title(ui, &tr.t("home.nudges"));
         if attention.is_empty() {
-            note(ui, NoteKind::Info, NUDGES_PLACEHOLDER);
+            note(ui, NoteKind::Info, &tr.t("home.nudges_placeholder"));
         }
         for item in attention {
-            attention_row(ui, item, chosen);
+            attention_row(ui, tr, item, chosen);
         }
     });
 }
 
 /// One nudge line: its word, the headline (a button when it has a target) and the detail.
-fn attention_row(ui: &mut Ui, item: &AttentionItem, chosen: &mut Option<HomeTarget>) {
+fn attention_row(ui: &mut Ui, tr: &Tr, item: &AttentionItem, chosen: &mut Option<HomeTarget>) {
     let t = tokens(ui);
     let color = attention_color(ui, item.kind);
     ui.separator();
     ui.horizontal(|ui| {
-        ui.label(RichText::new(item.kind.word()).color(color).strong());
+        ui.label(RichText::new(item.kind.word_in(tr)).color(color).strong());
         match &item.target {
             Some(target) => {
                 if ui

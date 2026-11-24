@@ -241,22 +241,40 @@ fn the_selected_entry_follows_the_top_of_the_stack() {
     // a colon and the kind it shows ("Masters: Ledgers", "Bank reconciliation: HDFC Current"),
     // and the day book's title differs only in case. Catches a selection fixed to the first
     // entry, or one that ignores the stack.
-    assert_eq!(sidebar::selected_label("Masters: Ledgers"), Some("Masters"));
     assert_eq!(
-        sidebar::selected_label("Bank reconciliation: HDFC Current"),
+        sidebar::selected_label("Masters: Ledgers", &ledgerly_app::i18n::Tr::default()),
+        Some("Masters")
+    );
+    assert_eq!(
+        sidebar::selected_label(
+            "Bank reconciliation: HDFC Current",
+            &ledgerly_app::i18n::Tr::default()
+        ),
         Some("Bank reconciliation")
     );
-    assert_eq!(sidebar::selected_label("Day Book"), Some("Day book"));
-    assert_eq!(sidebar::selected_label("Some other screen"), None);
+    assert_eq!(
+        sidebar::selected_label("Day Book", &ledgerly_app::i18n::Tr::default()),
+        Some("Day book")
+    );
+    assert_eq!(
+        sidebar::selected_label("Some other screen", &ledgerly_app::i18n::Tr::default()),
+        None
+    );
     // An invoice titles itself "<voucher type> invoice"; the mock's sidebar row Sales is the
     // `sales-invoice` screen (index.html:888, `NAV`), so it is selected while the invoice is open.
     // Purchase opens the same screen here. A credit note has no sidebar row.
-    assert_eq!(sidebar::selected_label("Sales invoice"), Some("Sales"));
     assert_eq!(
-        sidebar::selected_label("Purchase invoice"),
+        sidebar::selected_label("Sales invoice", &ledgerly_app::i18n::Tr::default()),
+        Some("Sales")
+    );
+    assert_eq!(
+        sidebar::selected_label("Purchase invoice", &ledgerly_app::i18n::Tr::default()),
         Some("Purchase")
     );
-    assert_eq!(sidebar::selected_label("Credit Note invoice"), None);
+    assert_eq!(
+        sidebar::selected_label("Credit Note invoice", &ledgerly_app::i18n::Tr::default()),
+        None
+    );
 
     let mut shell = Shell::new(leaf("Home"));
     assert_eq!(shell.selected_sidebar(), Some("Home"));

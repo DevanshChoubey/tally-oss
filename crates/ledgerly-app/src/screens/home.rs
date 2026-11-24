@@ -57,14 +57,16 @@ use crate::worker::ApiWorker;
 use crate::{AppCtx, Screen, ScreenAction};
 
 /// Title of the page head. The mock's greeting needs a user name, which the app does not have yet.
-const PAGE_TITLE: &str = "Home";
 /// Smallest width of a KPI tile that still fits its figure, in points.
 pub const TILE_MIN_WIDTH: f32 = 200.0;
 /// Width from which the lower row shows its two panels side by side, in points (the mock's
 /// two-column main grid, which needs about 720 points).
 pub const WIDE_MIN_WIDTH: f32 = 720.0;
 /// Text shown in place of a figure the engine cannot compute yet.
-const UNSUPPORTED_WORDS: &str = "Not supported yet";
+/// The English footnote of the GST tile.
+const GST_FOOTNOTE: &str = "after accepted ITC";
+/// The start of a balance tile's footnote, before its date.
+const CLOSING_PREFIX: &str = "Closing balance as of ";
 /// Reason the cash-and-bank tile is not a figure: the engine has the two groups, not their total.
 /// Reason the GST tile is not a figure: the engine has no payable after set-off.
 const GST_REASON: &str = "the engine gives the GSTR-3B working (tax and credit separately) but no payable after set-off, and this screen does not subtract";
@@ -143,6 +145,16 @@ pub enum AttentionKind {
 impl AttentionKind {
     /// The word printed before the item, so the colour is never the only signal.
     #[must_use]
+    pub fn word_in(self, tr: &Tr) -> String {
+        match self {
+            AttentionKind::Pending => tr.t("home.attention.pending"),
+            AttentionKind::Due => tr.t("home.attention.due"),
+            AttentionKind::Done => tr.t("home.attention.done"),
+        }
+    }
+
+    /// The English word.
+    #[must_use]
     pub fn word(self) -> &'static str {
         match self {
             AttentionKind::Pending => "Pending",
@@ -194,25 +206,63 @@ pub struct KpiView {
 /// The text of a tile's figure: `₹12,34,567.00` for a value, "Not supported yet" otherwise.
 #[must_use]
 pub fn value_text(value: &Outcome<Paise>) -> String {
+    value_text_in(value, &Tr::default())
+}
+
+/// The text of a tile's figure in `tr`: the figure, or the unsupported words in that language.
+#[must_use]
+pub fn value_text_in(value: &Outcome<Paise>, tr: &Tr) -> String {
     match value {
         Outcome::Value(amount) => format!("\u{20B9}{}", format_inr(*amount)),
-        Outcome::Unsupported(_) => UNSUPPORTED_WORDS.to_owned(),
+        Outcome::Unsupported(_) => tr.t("home.not_supported"),
     }
 }
 
 /// The view of one tile. An unsupported tile shows the reason instead of its footnote, so the
 /// user learns why the number is missing.
 #[must_use]
-pub fn kpi_view(kpi: &Kpi) -> KpiView {
+pub fn kpi_view_in(kpi: &Kpi, tr: &Tr) -> KpiView {
     let (footnote_text, supported) = match &kpi.value {
-        Outcome::Value(_) => (kpi.footnote.clone(), true),
+        Outcome::Value(_) => (footnote_in(&kpi.footnote, tr), true),
         Outcome::Unsupported(u) => (format!("{}: {}", u.what, u.reason), false),
     };
     KpiView {
-        label: kpi.label.clone(),
-        value_text: value_text(&kpi.value),
+        label: tile_label_in(&kpi.label, tr),
+        value_text: value_text_in(&kpi.value, tr),
         footnote_text,
         supported,
+    }
+}
+
+/// The English view of a tile, for callers without a language of their own.
+#[must_use]
+pub fn kpi_view(kpi: &Kpi) -> KpiView {
+    kpi_view_in(kpi, &Tr::default())
+}
+
+/// A tile's title in `tr`. The English identity of each tile is its label; an unknown label is
+/// shown as it is.
+fn tile_label_in(label: &str, tr: &Tr) -> String {
+    let key = match label {
+        "Cash in hand" => "home.tile.cash_in_hand",
+        "Bank accounts" => "home.tile.bank_accounts",
+        "Receivables" => "home.tile.receivables",
+        "Payables" => "home.tile.payables",
+        "GST cash payable" => "home.tile.gst_cash_payable",
+        other => return other.to_owned(),
+    };
+    tr.t(key)
+}
+
+/// A value tile's footnote in `tr`: the closing line with its date from the formatter, or the
+/// GST line. Any other footnote is shown as it is.
+fn footnote_in(footnote: &str, tr: &Tr) -> String {
+    if footnote == GST_FOOTNOTE {
+        return tr.t("home.after_itc");
+    }
+    match footnote.strip_prefix(CLOSING_PREFIX) {
+        Some(date) => tr.tf("home.closing_as_of", &[("date", date)]),
+        None => footnote.to_owned(),
     }
 }
 
@@ -273,11 +323,11 @@ pub fn figure_parts(value_text: &str) -> (Option<&str>, &str) {
 /// The greeting for `hour` (0 to 23): "Good morning" from 05:00, "Good afternoon" from 12:00,
 /// "Good evening" from 17:00 until 05:00.
 #[must_use]
-pub fn greeting(hour: u8) -> &'static str {
+pub fn greeting(hour: u8, tr: &Tr) -> String {
     match hour {
-        5..=11 => "Good morning",
-        12..=16 => "Good afternoon",
-        _ => "Good evening",
+        5..=11 => tr.t("home.greet.morning"),
+        12..=16 => tr.t("home.greet.afternoon"),
+        _ => tr.t("home.greet.evening"),
     }
 }
 
@@ -285,13 +335,16 @@ pub fn greeting(hour: u8) -> &'static str {
 /// when known, joined by middle dots (`Saturday 21 Nov 2026 · FY 2026-27 · books locked to 31 Oct
 /// 2026`).
 #[must_use]
-pub fn date_line(today: Date, fy: Option<&str>, lock: Option<Date>) -> String {
+pub fn date_line(today: Date, fy: Option<&str>, lock: Option<Date>, tr: &Tr) -> String {
     let mut parts = vec![crate::ui::format::long_date(today)];
     if let Some(fy) = fy {
         parts.push(fy.to_owned());
     }
     if let Some(lock) = lock {
-        parts.push(format!("books locked to {}", crate::ui::format::date(lock)));
+        parts.push(tr.tf(
+            "home.locked_to",
+            &[("date", &crate::ui::format::date(lock))],
+        ));
     }
     parts.join(" \u{b7} ")
 }
@@ -421,7 +474,7 @@ fn gst_kpi() -> Kpi {
     Kpi {
         label: "GST cash payable".to_owned(),
         value: Outcome::unsupported("GST cash payable", GST_REASON),
-        footnote: "after accepted ITC".to_owned(),
+        footnote: GST_FOOTNOTE.to_owned(),
         target: HomeTarget::GstReturns {
             tab: "gstr3b".to_owned(),
         },
@@ -433,7 +486,7 @@ fn tile_kpi(api: &Api, tile: &Tile, as_of: Date) -> Kpi {
     Kpi {
         label: tile.label.to_owned(),
         value,
-        footnote: format!("Closing balance as of {}", format::date(as_of)),
+        footnote: format!("{CLOSING_PREFIX}{}", format::date(as_of)),
         target: HomeTarget::BalanceSheet {
             node: tile.node.to_owned(),
         },
@@ -555,14 +608,14 @@ const SHORTCUTS: [Shortcut; 10] = [
 /// The keys the key bar shows for this screen: the ones above that open a screen that exists.
 /// F9 and Ctrl+Shift+J are left out because they open nothing yet.
 const HOME_KEYS: [(&str, &str); 8] = [
-    ("F8", "Sales"),
-    ("F5", "Payment"),
-    ("F6", "Receipt"),
-    ("B", "Balance sheet"),
-    ("D", "Day book"),
-    ("G", "GST returns"),
-    ("M", "Masters"),
-    ("Ctrl+K", "Palette"),
+    ("F8", "sidebar.sales"),
+    ("F5", "sidebar.payment"),
+    ("F6", "sidebar.receipt"),
+    ("B", "sidebar.balance_sheet"),
+    ("D", "sidebar.day_book"),
+    ("G", "sidebar.gst_returns"),
+    ("M", "sidebar.masters"),
+    ("Ctrl+K", "home.palette"),
 ];
 
 /// The target a key opens from the home screen, or `None` for a key it does not handle.
@@ -609,7 +662,9 @@ pub struct HomeScreen {
     /// Where each KPI tile was drawn in the last frame, in order. Empty when no tile was drawn.
     tile_rects: Vec<Rect>,
     /// The greeting and the date line, set from the clock and the books on each frame.
-    head: Option<(&'static str, String)>,
+    head: Option<(String, String)>,
+    /// The language of the strings, set from the context on each frame.
+    tr: Tr,
 }
 
 impl HomeScreen {
@@ -627,6 +682,7 @@ impl HomeScreen {
             notice: None,
             tile_rects: Vec::new(),
             head: None,
+            tr: Tr::default(),
         }
     }
 
@@ -711,7 +767,11 @@ impl HomeScreen {
     /// The text each KPI tile displays, in order.
     #[must_use]
     pub fn kpi_views(&self) -> Vec<KpiView> {
-        self.data.kpis.iter().map(kpi_view).collect()
+        self.data
+            .kpis
+            .iter()
+            .map(|kpi| kpi_view_in(kpi, &self.tr))
+            .collect()
     }
 
     /// The screen rectangle of each KPI tile as it was drawn in the last frame, in order. Empty
@@ -751,25 +811,24 @@ impl HomeScreen {
         self.data
             .kpis
             .iter()
-            .map(|kpi| (kpi_view(kpi), kpi.target.clone()))
+            .map(|kpi| (kpi_view_in(kpi, &self.tr), kpi.target.clone()))
             .collect()
     }
 }
 
 impl Screen for HomeScreen {
-    fn title(&self, _tr: &Tr) -> String {
-        "Home".to_owned()
+    fn title(&self, tr: &Tr) -> String {
+        tr.t("home.title")
     }
 
-    fn page_title(&self, _tr: &Tr) -> String {
+    fn page_title(&self, tr: &Tr) -> String {
         self.head
             .as_ref()
-            .map_or(PAGE_TITLE, |(greet, _)| greet)
-            .to_owned()
+            .map_or_else(|| tr.t("home.title"), |(greet, _)| greet.clone())
     }
 
-    fn key_bar_name(&self, _tr: &Tr) -> String {
-        PAGE_TITLE.to_owned()
+    fn key_bar_name(&self, tr: &Tr) -> String {
+        tr.t("home.title")
     }
 
     fn subtitle(&self, _tr: &Tr) -> Option<String> {
@@ -780,10 +839,10 @@ impl Screen for HomeScreen {
         (!line.is_empty()).then_some(line)
     }
 
-    fn keys(&self, _tr: &Tr) -> Vec<KeyHint> {
+    fn keys(&self, tr: &Tr) -> Vec<KeyHint> {
         HOME_KEYS
             .iter()
-            .map(|(keys, label)| KeyHint::new(*keys, *label))
+            .map(|(keys, label)| KeyHint::new(*keys, tr.t(label)))
             .collect()
     }
 
@@ -799,21 +858,27 @@ impl Screen for HomeScreen {
             .filter(|books| books.vouchers.is_empty())
             .map(|books| books.company.books_begin);
         let shown = body(new_company, self.is_loading(), !self.data.kpis.is_empty());
+        let tr = ctx.tr.clone();
+        self.tr = tr.clone();
         let fy = ctx.books.as_ref().map(|books| {
-            format!(
-                "FY {}",
-                ledgerly_core::FinancialYear {
-                    start: books.company.fy_start
-                }
-                .label()
+            tr.tf(
+                "topbar.fy",
+                &[(
+                    "year",
+                    &ledgerly_core::FinancialYear {
+                        start: books.company.fy_start,
+                    }
+                    .label(),
+                )],
             )
         });
         self.head = Some((
-            greeting(crate::shell::navigate::hour_now()),
+            greeting(crate::shell::navigate::hour_now(), &tr),
             date_line(
                 crate::shell::navigate::today(),
                 fy.as_deref(),
                 ctx.lock_date,
+                &tr,
             ),
         ));
         let title = self.page_title(&ctx.tr);
@@ -825,6 +890,7 @@ impl Screen for HomeScreen {
         egui::ScrollArea::vertical().show(ui, |ui| {
             draw::header(
                 ui,
+                &tr,
                 shown,
                 &self.data.company_name,
                 &title,
@@ -833,17 +899,24 @@ impl Screen for HomeScreen {
             );
             draw::notice(ui, self.notice.as_deref());
             match shown {
-                HomeBody::NewCompany { begins } => draw::welcome(ui, begins, &mut chosen),
+                HomeBody::NewCompany { begins } => draw::welcome(ui, &tr, begins, &mut chosen),
                 HomeBody::Loading => draw::skeleton(ui),
                 HomeBody::Figures => {
                     let review = ReviewCard {
                         panel: self.review.as_ref(),
                         error: self.review_error.as_deref(),
                     };
-                    rects =
-                        draw::figures(ui, &tiles, ai, &self.data.attention, review, &mut chosen);
+                    rects = draw::figures(
+                        ui,
+                        &tr,
+                        &tiles,
+                        ai,
+                        &self.data.attention,
+                        review,
+                        &mut chosen,
+                    );
                 }
-                HomeBody::NoFigures => draw::no_figures(ui),
+                HomeBody::NoFigures => draw::no_figures(ui, &tr),
             }
         });
         self.tile_rects = rects;

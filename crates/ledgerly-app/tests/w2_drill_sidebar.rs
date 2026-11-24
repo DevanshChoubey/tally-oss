@@ -77,7 +77,10 @@ fn a_drill_keeps_the_sidebar_entry_it_started_from() {
         "Balance Sheet"
     );
     assert_eq!(
-        sidebar::selected_label(&first.sidebar_title(&ledgerly_app::i18n::Tr::default())),
+        sidebar::selected_label(
+            &first.sidebar_title(&ledgerly_app::i18n::Tr::default()),
+            &ledgerly_app::i18n::Tr::default()
+        ),
         Some("Balance sheet")
     );
     // A screen that is not a drill selects by its own title.

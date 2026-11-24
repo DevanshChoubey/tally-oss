@@ -365,14 +365,38 @@ fn the_greeting_follows_the_hour() {
     // user; the user chose the greeting without a name on 2026-11-23. The hour bands are ours:
     // morning from 05:00, afternoon from 12:00, evening from 17:00 until 05:00. Catches a
     // greeting that ignores the clock or has a gap between bands.
-    assert_eq!(greeting(5), "Good morning");
-    assert_eq!(greeting(11), "Good morning");
-    assert_eq!(greeting(12), "Good afternoon");
-    assert_eq!(greeting(16), "Good afternoon");
-    assert_eq!(greeting(17), "Good evening");
-    assert_eq!(greeting(23), "Good evening");
-    assert_eq!(greeting(0), "Good evening");
-    assert_eq!(greeting(4), "Good evening");
+    assert_eq!(
+        greeting(5, &ledgerly_app::i18n::Tr::default()),
+        "Good morning"
+    );
+    assert_eq!(
+        greeting(11, &ledgerly_app::i18n::Tr::default()),
+        "Good morning"
+    );
+    assert_eq!(
+        greeting(12, &ledgerly_app::i18n::Tr::default()),
+        "Good afternoon"
+    );
+    assert_eq!(
+        greeting(16, &ledgerly_app::i18n::Tr::default()),
+        "Good afternoon"
+    );
+    assert_eq!(
+        greeting(17, &ledgerly_app::i18n::Tr::default()),
+        "Good evening"
+    );
+    assert_eq!(
+        greeting(23, &ledgerly_app::i18n::Tr::default()),
+        "Good evening"
+    );
+    assert_eq!(
+        greeting(0, &ledgerly_app::i18n::Tr::default()),
+        "Good evening"
+    );
+    assert_eq!(
+        greeting(4, &ledgerly_app::i18n::Tr::default()),
+        "Good evening"
+    );
 }
 
 #[test]
@@ -384,16 +408,27 @@ fn the_date_line_reads_like_the_mocks() {
         date_line(
             date!(2026 - 11 - 21),
             Some("FY 2026-27"),
-            Some(date!(2026 - 10 - 31))
+            Some(date!(2026 - 10 - 31)),
+            &ledgerly_app::i18n::Tr::default()
         ),
         "Saturday 21 Nov 2026 \u{b7} FY 2026-27 \u{b7} books locked to 31 Oct 2026"
     );
     assert_eq!(
-        date_line(date!(2026 - 11 - 23), Some("FY 2026-27"), None),
+        date_line(
+            date!(2026 - 11 - 23),
+            Some("FY 2026-27"),
+            None,
+            &ledgerly_app::i18n::Tr::default()
+        ),
         "Monday 23 Nov 2026 \u{b7} FY 2026-27"
     );
     assert_eq!(
-        date_line(date!(2026 - 04 - 10), None, None),
+        date_line(
+            date!(2026 - 04 - 10),
+            None,
+            None,
+            &ledgerly_app::i18n::Tr::default()
+        ),
         "Friday 10 Apr 2026"
     );
 }

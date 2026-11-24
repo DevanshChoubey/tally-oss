@@ -259,20 +259,29 @@ fn choosing_a_tier_is_kept_in_the_file_and_the_chip_follows_it() {
     let mut app = open(&path);
     let mut screen = AiSettingsScreen::default();
     settle(&mut screen, &mut app, &[], AiSettingsScreen::loaded);
-    assert_eq!(ai_chip(app.ai_tier), "AI: not set up");
+    assert_eq!(
+        ai_chip(app.ai_tier, &ledgerly_app::i18n::Tr::default()),
+        "AI: not set up"
+    );
 
     frame(&mut screen, &mut app, &[(Key::Num2, NONE)]);
     settle(&mut screen, &mut app, &[], |s| {
         s.stored() == Some(AiTier::Local)
     });
     assert_eq!(app.ai_tier, Some(AiTier::Local));
-    assert_eq!(ai_chip(app.ai_tier), "AI on this computer");
+    assert_eq!(
+        ai_chip(app.ai_tier, &ledgerly_app::i18n::Tr::default()),
+        "AI on this computer"
+    );
 
     frame(&mut screen, &mut app, &[(Key::Num1, NONE)]);
     settle(&mut screen, &mut app, &[], |s| {
         s.stored() == Some(AiTier::Off)
     });
-    assert_eq!(ai_chip(app.ai_tier), "AI off");
+    assert_eq!(
+        ai_chip(app.ai_tier, &ledgerly_app::i18n::Tr::default()),
+        "AI off"
+    );
 
     // Read back from the file after the company is closed and opened again.
     drop(app);
@@ -303,7 +312,13 @@ fn the_top_bar_chip_reads_the_stored_tier_when_the_shell_opens_the_file() {
         std::thread::sleep(Duration::from_millis(2));
     }
     assert_eq!(shell.app_ctx_mut().ai_tier, Some(AiTier::Local));
-    assert_eq!(ai_chip(shell.app_ctx_mut().ai_tier), "AI on this computer");
+    assert_eq!(
+        ai_chip(
+            shell.app_ctx_mut().ai_tier,
+            &ledgerly_app::i18n::Tr::default()
+        ),
+        "AI on this computer"
+    );
 }
 
 #[test]

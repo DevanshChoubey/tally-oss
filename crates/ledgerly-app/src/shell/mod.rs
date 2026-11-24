@@ -230,7 +230,7 @@ impl Shell {
     #[must_use]
     pub fn selected_sidebar(&self) -> Option<&'static str> {
         let title = self.tabs.active_stack()?.top_sidebar_title(&self.tr);
-        sidebar::selected_label(&title)
+        sidebar::selected_label(&title, &self.tr)
     }
 
     /// Opens the palette for `action` (open-palette or switch-palette) with today's rows.
@@ -665,7 +665,7 @@ impl Shell {
             .exact_size(width)
             .frame(panel_frame(&t, egui::Margin::same(8)))
             .show(ui, |ui| {
-                cmds.extend(sidebar::sidebar(ui, rail, selected, &t));
+                cmds.extend(sidebar::sidebar(ui, rail, selected, &t, &self.tr));
             });
         self.palette_frame(ui);
 
