@@ -1174,13 +1174,17 @@ fn the_screen_draws_with_and_without_a_company() {
     let b = books();
     let ctx = egui::Context::default();
     let mut s = open(&b, T_JOURNAL);
-    assert_eq!(s.title(), "Journal voucher");
+    assert_eq!(
+        s.title(&ledgerly_app::i18n::Tr::default()),
+        "Journal voucher"
+    );
     let mut closed = AppCtx::default();
     assert!(matches!(
         frame(&ctx, &mut s, &mut closed, RawInput::default()),
         ScreenAction::Stay
     ));
     let mut app = AppCtx {
+        tr: ledgerly_app::i18n::Tr::default(),
         books: Some(b),
         api: None,
         lock_date: None,
@@ -1198,6 +1202,7 @@ fn ctrl_a_saves_and_reports_an_empty_voucher() {
     let ctx = egui::Context::default();
     let mut s = open(&b, T_JOURNAL);
     let mut app = AppCtx {
+        tr: ledgerly_app::i18n::Tr::default(),
         books: Some(b),
         api: None,
         lock_date: None,
@@ -1216,6 +1221,7 @@ fn escape_on_a_started_voucher_asks_then_y_closes_the_screen() {
     let mut s = open(&b, T_JOURNAL);
     s.draft_mut().narration = "x".to_owned();
     let mut app = AppCtx {
+        tr: ledgerly_app::i18n::Tr::default(),
         books: Some(b),
         api: None,
         lock_date: None,
@@ -1237,6 +1243,7 @@ fn escape_on_a_blank_voucher_is_left_for_the_shell() {
     let ctx = egui::Context::default();
     let mut s = open(&b, T_JOURNAL);
     let mut app = AppCtx {
+        tr: ledgerly_app::i18n::Tr::default(),
         books: Some(b),
         api: None,
         lock_date: None,
@@ -1266,6 +1273,7 @@ fn alt_s_does_not_switch_the_side() {
     let ctx = egui::Context::default();
     let mut s = open(&b, T_JOURNAL);
     let mut app = AppCtx {
+        tr: ledgerly_app::i18n::Tr::default(),
         books: Some(b),
         api: None,
         lock_date: None,
@@ -1283,6 +1291,7 @@ fn alt_c_opens_the_create_form_from_the_keyboard() {
     let mut s = open(&b, T_JOURNAL);
     s.set_ledger_text(0, "Gupta Hardware");
     let mut app = AppCtx {
+        tr: ledgerly_app::i18n::Tr::default(),
         books: Some(b),
         api: None,
         lock_date: None,
@@ -1301,6 +1310,7 @@ fn ctrl_s_saves_like_ctrl_a() {
     let ctx = egui::Context::default();
     let mut s = open(&b, T_JOURNAL);
     let mut app = AppCtx {
+        tr: ledgerly_app::i18n::Tr::default(),
         books: Some(b),
         api: None,
         lock_date: None,
@@ -1321,6 +1331,7 @@ fn ctrl_enter_does_not_save() {
     let ctx = egui::Context::default();
     let mut s = open(&b, T_JOURNAL);
     let mut app = AppCtx {
+        tr: ledgerly_app::i18n::Tr::default(),
         books: Some(b),
         api: None,
         lock_date: None,
@@ -1339,6 +1350,7 @@ fn arrow_down_and_up_move_the_highlight_in_a_frame() {
     let mut s = open(&b, T_JOURNAL);
     s.set_ledger_text(0, "s");
     let mut app = AppCtx {
+        tr: ledgerly_app::i18n::Tr::default(),
         books: Some(b),
         api: None,
         lock_date: None,

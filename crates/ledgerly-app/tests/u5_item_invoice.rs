@@ -408,7 +408,10 @@ fn sales_purchase_and_notes_open_every_other_kind_is_unsupported() {
 #[test]
 fn title_names_the_voucher_type() {
     let b = books();
-    assert_eq!(open(&b, T_SALES).title(), "Sales invoice");
+    assert_eq!(
+        open(&b, T_SALES).title(&ledgerly_app::i18n::Tr::default()),
+        "Sales invoice"
+    );
 }
 
 // ---- line amounts (arithmetic on typed input only) --------------------------------------------
@@ -986,6 +989,7 @@ fn the_screen_draws_with_and_without_a_company() {
         ScreenAction::Stay
     ));
     let mut app = AppCtx {
+        tr: ledgerly_app::i18n::Tr::default(),
         books: Some(b),
         api: None,
         lock_date: None,
@@ -1002,6 +1006,7 @@ fn the_screen_draws_every_gst_state() {
     let b = books();
     let ctx = egui::Context::default();
     let mut app = AppCtx {
+        tr: ledgerly_app::i18n::Tr::default(),
         books: Some(b.clone()),
         api: None,
         lock_date: None,
@@ -1034,6 +1039,7 @@ fn ctrl_a_saves_and_ctrl_enter_does_not() {
     let b = books();
     let ctx = egui::Context::default();
     let mut app = AppCtx {
+        tr: ledgerly_app::i18n::Tr::default(),
         books: Some(b.clone()),
         api: None,
         lock_date: None,
@@ -1058,6 +1064,7 @@ fn ctrl_a_on_an_incomplete_invoice_says_what_is_missing() {
     let ctx = egui::Context::default();
     let mut s = open(&b, T_SALES);
     let mut app = AppCtx {
+        tr: ledgerly_app::i18n::Tr::default(),
         books: Some(b),
         api: None,
         lock_date: None,
@@ -1073,6 +1080,7 @@ fn escape_on_a_started_invoice_asks_then_y_closes_and_a_blank_one_is_left_to_the
     let b = books();
     let ctx = egui::Context::default();
     let mut app = AppCtx {
+        tr: ledgerly_app::i18n::Tr::default(),
         books: Some(b.clone()),
         api: None,
         lock_date: None,
@@ -1141,6 +1149,7 @@ fn shift_y_does_not_discard_a_started_invoice() {
     let b = books();
     let ctx = egui::Context::default();
     let mut app = AppCtx {
+        tr: ledgerly_app::i18n::Tr::default(),
         books: Some(b.clone()),
         api: None,
         lock_date: None,

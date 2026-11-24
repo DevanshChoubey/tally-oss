@@ -7,6 +7,7 @@
 use egui::{RichText, Ui};
 
 use super::stack::Tabs;
+use crate::i18n::Tr;
 use crate::screen::KeyHint;
 use crate::theme::{TEXT_META, Tokens};
 use crate::ui::icon::{self, Icon};
@@ -41,10 +42,10 @@ pub(super) enum ChromeCmd {
 
 /// Tab strip: the open tabs with the active one underlined, then the new-tab and close-tab
 /// buttons. Close-tab shows only when more than one tab is open, because the last tab stays.
-pub(super) fn tab_strip(ui: &mut Ui, tabs_set: &Tabs) -> Vec<ChromeCmd> {
+pub(super) fn tab_strip(ui: &mut Ui, tabs_set: &Tabs, tr: &Tr) -> Vec<ChromeCmd> {
     let mut cmds = Vec::new();
     ui.horizontal(|ui| {
-        let titles = tabs_set.titles();
+        let titles = tabs_set.titles(tr);
         let labels: Vec<&str> = titles.iter().map(String::as_str).collect();
         let response = tabs::tabs(ui, &labels, tabs_set.active_index());
         if let Some(index) = response.clicked {
@@ -52,15 +53,15 @@ pub(super) fn tab_strip(ui: &mut Ui, tabs_set: &Tabs) -> Vec<ChromeCmd> {
         }
         if ui
             .small_button("+")
-            .on_hover_text("New tab (Ctrl+T)")
+            .on_hover_text(tr.t("chrome.new_tab_hint"))
             .clicked()
         {
             cmds.push(ChromeCmd::NewTab);
         }
         if tabs_set.len() > 1
             && ui
-                .small_button("Close tab")
-                .on_hover_text("Close tab (Ctrl+W)")
+                .small_button(tr.t("chrome.close_tab"))
+                .on_hover_text(tr.t("chrome.close_tab_hint"))
                 .clicked()
         {
             cmds.push(ChromeCmd::CloseActiveTab);
@@ -99,6 +100,12 @@ pub(super) fn breadcrumbs(ui: &mut Ui, trail: &[String], t: &Tokens) -> Vec<Chro
 /// mock's `renderKeys` draws them; the tab and sidebar keys are in the keyboard map.
 #[must_use]
 pub fn key_hints(screen: &[KeyHint], can_go_back: bool) -> Vec<(String, String)> {
+    key_hints_in(screen, can_go_back, &Tr::default())
+}
+
+/// [`key_hints`] with the shell's own words (Esc Back) in the language `tr`.
+#[must_use]
+pub fn key_hints_in(screen: &[KeyHint], can_go_back: bool, tr: &Tr) -> Vec<(String, String)> {
     // A first hint with no key is the screen's name (index.html:913 draws it as `.ctx`); the bar
     // already draws the name as its context, so it is not a keycap.
     let named = usize::from(screen.first().is_some_and(|hint| hint.keys.is_empty()));
@@ -109,7 +116,7 @@ pub fn key_hints(screen: &[KeyHint], can_go_back: bool) -> Vec<(String, String)>
         .collect();
     // A screen that names Esc itself (such as "Esc Back up") gets no second Esc.
     if can_go_back && !screen.iter().any(|hint| hint.keys == "Esc") {
-        out.push(("Esc".to_owned(), "Back".to_owned()));
+        out.push(("Esc".to_owned(), tr.t("chrome.back")));
     }
     out
 }
@@ -134,6 +141,15 @@ pub fn palette_key_bar(palette: &[KeyHint]) -> (String, Vec<(String, String)>) {
 /// The right end of the key bar: each keycap and the words after it (`.keys .right`).
 pub const KEY_BAR_RIGHT: [(&str, &str); 2] = [("Ctrl+K", "anything \u{00B7}"), ("?", "all keys")];
 
+/// [`KEY_BAR_RIGHT`] with its words in the language `tr`.
+#[must_use]
+pub fn key_bar_right(tr: &Tr) -> [(&'static str, String); 2] {
+    [
+        ("Ctrl+K", tr.t("chrome.anything")),
+        ("?", tr.t("chrome.all_keys")),
+    ]
+}
+
 /// Gap between key bar entries, in points (`.keys{gap:14px}`).
 const ENTRY_GAP: f32 = 14.0;
 /// Gap between a keycap and its words (`.keys span{gap:5px}`).
@@ -141,7 +157,7 @@ const KEY_GAP: f32 = 5.0;
 
 /// Draws the key bar: the screen's name in bold (`.keys .ctx`), its entries from [`key_hints`]
 /// (a keycap, then its words), and [`KEY_BAR_RIGHT`] at the right in `text-3`.
-pub(super) fn key_bar(ui: &mut Ui, context: &str, hints: &[(String, String)], t: &Tokens) {
+pub(super) fn key_bar(ui: &mut Ui, context: &str, hints: &[(String, String)], t: &Tokens, tr: &Tr) {
     ui.spacing_mut().item_spacing.x = KEY_GAP;
     ui.horizontal_centered(|ui| {
         ui.spacing_mut().item_spacing.x = KEY_GAP;
@@ -164,8 +180,12 @@ pub(super) fn key_bar(ui: &mut Ui, context: &str, hints: &[(String, String)], t:
         }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             ui.spacing_mut().item_spacing.x = KEY_GAP;
-            for (keys, label) in KEY_BAR_RIGHT.iter().rev() {
-                ui.label(RichText::new(*label).size(TEXT_META).color(t.text_3));
+            for (keys, label) in key_bar_right(tr).iter().rev() {
+                ui.label(
+                    RichText::new(label.as_str())
+                        .size(TEXT_META)
+                        .color(t.text_3),
+                );
                 keycap::keycap(ui, keys);
             }
         });

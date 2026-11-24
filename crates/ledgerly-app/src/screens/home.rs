@@ -37,6 +37,7 @@
 
 pub(crate) mod draw;
 
+use crate::i18n::Tr;
 use egui::{Event, InputState, Key, Modifiers, Rect, Ui};
 use ledgerly_api::{
     Api, Cell, ColumnSpec, Detail, Report, ReportFilter, ReportKind, ReportParams, ReviewQueue,
@@ -756,22 +757,22 @@ impl HomeScreen {
 }
 
 impl Screen for HomeScreen {
-    fn title(&self) -> String {
+    fn title(&self, _tr: &Tr) -> String {
         "Home".to_owned()
     }
 
-    fn page_title(&self) -> String {
+    fn page_title(&self, _tr: &Tr) -> String {
         self.head
             .as_ref()
             .map_or(PAGE_TITLE, |(greet, _)| greet)
             .to_owned()
     }
 
-    fn key_bar_name(&self) -> String {
+    fn key_bar_name(&self, _tr: &Tr) -> String {
         PAGE_TITLE.to_owned()
     }
 
-    fn subtitle(&self) -> Option<String> {
+    fn subtitle(&self, _tr: &Tr) -> Option<String> {
         let line = match &self.head {
             Some((_, line)) => line.clone(),
             None => sub_line(&self.data.company_name, &self.data.subtitle),
@@ -779,7 +780,7 @@ impl Screen for HomeScreen {
         (!line.is_empty()).then_some(line)
     }
 
-    fn keys(&self) -> Vec<KeyHint> {
+    fn keys(&self, _tr: &Tr) -> Vec<KeyHint> {
         HOME_KEYS
             .iter()
             .map(|(keys, label)| KeyHint::new(*keys, *label))
@@ -815,8 +816,8 @@ impl Screen for HomeScreen {
                 ctx.lock_date,
             ),
         ));
-        let title = self.page_title();
-        let line = self.subtitle().unwrap_or_default();
+        let title = self.page_title(&ctx.tr);
+        let line = self.subtitle(&ctx.tr).unwrap_or_default();
         let ai = ai_panel(ctx.ai_tier);
         let tiles = self.tile_items();
         let mut chosen = None;

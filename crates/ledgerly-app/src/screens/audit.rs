@@ -32,6 +32,7 @@
 //! [`AuditScreen::set_failed`]. An `Unsupported` outcome from RP10 is shown as such, with its
 //! reason, never as an empty table.
 
+use crate::i18n::Tr;
 use std::collections::BTreeSet;
 
 use egui_extras::{Column, TableBuilder};
@@ -685,7 +686,7 @@ fn draw_table(
 }
 
 impl Screen for AuditScreen {
-    fn title(&self) -> String {
+    fn title(&self, _tr: &Tr) -> String {
         "Audit trail".to_owned()
     }
 

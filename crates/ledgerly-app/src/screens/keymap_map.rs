@@ -7,6 +7,7 @@
 //! that no [`Action`] exists for (Alt+R, Ctrl+H, Ctrl+J, Alt+O and the list and proposal keys)
 //! are not shown: nothing in the app can say what they do.
 
+use crate::i18n::Tr;
 use egui::{Key, Modifiers, RichText, Ui};
 
 use super::wire;
@@ -204,22 +205,22 @@ impl KeymapScreen {
 }
 
 impl Screen for KeymapScreen {
-    fn title(&self) -> String {
+    fn title(&self, _tr: &Tr) -> String {
         "Keyboard map".to_owned()
     }
 
-    fn subtitle(&self) -> Option<String> {
+    fn subtitle(&self, _tr: &Tr) -> Option<String> {
         Some(
             "Every action has a key. The bar at the bottom always shows the keys for this screen."
                 .to_owned(),
         )
     }
 
-    fn keys(&self) -> Vec<KeyHint> {
+    fn keys(&self, _tr: &Tr) -> Vec<KeyHint> {
         vec![KeyHint::new("1", "Classic"), KeyHint::new("2", "Standard")]
     }
 
-    fn ui(&mut self, ui: &mut Ui, _ctx: &mut AppCtx) -> ScreenAction {
+    fn ui(&mut self, ui: &mut Ui, ctx: &mut AppCtx) -> ScreenAction {
         let id = ui.scope_id().with(VIEW_SALT);
         let t = tokens(ui);
         let mut view: usize = ui.ctx().data(|d| d.get_temp::<usize>(id)).unwrap_or(0);
@@ -237,8 +238,8 @@ impl Screen for KeymapScreen {
             view = index;
         }
 
-        let title = self.title();
-        let subtitle = self.subtitle();
+        let title = self.title(&ctx.tr);
+        let subtitle = self.subtitle(&ctx.tr);
         page_head(ui, &title, subtitle.as_deref(), |_ui| {});
 
         if let Some(clicked) = tabs(ui, &TAB_LABELS, view).clicked {

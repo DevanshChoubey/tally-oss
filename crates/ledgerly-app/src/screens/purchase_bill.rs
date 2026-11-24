@@ -12,6 +12,7 @@
 //! The mock's other states (reading, proposal, low confidence, mismatch, duplicate, cloud consent,
 //! unreadable file, accepted) need the reader and are listed in `design/PARITY-GAPS.md`.
 
+use crate::i18n::Tr;
 use egui::{Frame, Key, Margin, Modifiers, Ui, vec2};
 
 use crate::keymap::Action;
@@ -152,29 +153,29 @@ fn draw_right(ui: &mut Ui, gate: &Gate, notice: Option<&str>) -> Ask {
 }
 
 impl Screen for PurchaseBillScreen {
-    fn title(&self) -> String {
+    fn title(&self, _tr: &Tr) -> String {
         TITLE.to_owned()
     }
 
-    fn page_title(&self) -> String {
+    fn page_title(&self, _tr: &Tr) -> String {
         PAGE_TITLE.to_owned()
     }
 
     /// The sidebar keeps Purchase selected, as the mock does (index.html:1422: the crumbs run
     /// Home, Purchase, From bill photo).
-    fn sidebar_title(&self) -> String {
+    fn sidebar_title(&self, _tr: &Tr) -> String {
         SIDEBAR_TITLE.to_owned()
     }
 
-    fn key_bar_name(&self) -> String {
+    fn key_bar_name(&self, _tr: &Tr) -> String {
         KEY_BAR_NAME.to_owned()
     }
 
-    fn subtitle(&self) -> Option<String> {
+    fn subtitle(&self, _tr: &Tr) -> Option<String> {
         Some(SUBTITLE.to_owned())
     }
 
-    fn keys(&self) -> Vec<KeyHint> {
+    fn keys(&self, _tr: &Tr) -> Vec<KeyHint> {
         key_hints()
     }
 

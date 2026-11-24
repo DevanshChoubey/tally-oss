@@ -22,6 +22,7 @@
 //! voucher it cannot show yet (stock lines, stored GST) are named in words, never dropped
 //! silently.
 
+use crate::i18n::Tr;
 use egui::{Key, Modifiers, RichText, Ui};
 use ledgerly_core::{Date, SignedAmount, VoucherId};
 use ledgerly_model::{Books, VoucherStatus};
@@ -232,12 +233,12 @@ impl VoucherViewScreen {
 }
 
 impl Screen for VoucherViewScreen {
-    fn title(&self) -> String {
+    fn title(&self, _tr: &Tr) -> String {
         format!("Voucher #{}", self.id.0)
     }
 
-    fn sidebar_title(&self) -> String {
-        self.origin.clone().unwrap_or_else(|| self.title())
+    fn sidebar_title(&self, tr: &Tr) -> String {
+        self.origin.clone().unwrap_or_else(|| self.title(tr))
     }
 
     fn ui(&mut self, ui: &mut Ui, ctx: &mut AppCtx) -> ScreenAction {

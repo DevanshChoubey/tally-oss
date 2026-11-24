@@ -15,6 +15,7 @@
 //! Keys (the mock's `keys()`, `index.html` `SCREENS.review`): J and K (or the arrows) move,
 //! Enter opens the row's bank ledger, Esc goes back (the shell). Y, N and Ctrl+A are not built.
 
+use crate::i18n::Tr;
 use egui::{Key, Ui};
 use ledgerly_api::{ReviewItem, ReviewQueue, ReviewSource};
 use ledgerly_core::{LedgerId, Paise};
@@ -360,15 +361,15 @@ fn draw_empty_heading(ui: &mut Ui, text: &str) {
 }
 
 impl Screen for ReviewScreen {
-    fn title(&self) -> String {
+    fn title(&self, _tr: &Tr) -> String {
         "Review queue".to_owned()
     }
 
-    fn subtitle(&self) -> Option<String> {
+    fn subtitle(&self, _tr: &Tr) -> Option<String> {
         None
     }
 
-    fn keys(&self) -> Vec<KeyHint> {
+    fn keys(&self, _tr: &Tr) -> Vec<KeyHint> {
         [
             ("", "Review queue"),
             ("J / K", "Move"),

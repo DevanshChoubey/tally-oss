@@ -53,6 +53,7 @@ pub use search::{LedgerHit, PickerItem, search_ledgers};
 pub(crate) use state::CreateForm;
 pub use state::{CreateLedgerRequest, Field, OpenError, VoucherEntryScreen};
 
+use crate::i18n::Tr;
 use egui::Ui;
 
 use crate::keymap::Action;
@@ -60,15 +61,15 @@ use crate::screen::KeyHint;
 use crate::{AppCtx, Screen, ScreenAction};
 
 impl Screen for VoucherEntryScreen {
-    fn title(&self) -> String {
+    fn title(&self, _tr: &Tr) -> String {
         format!("{} voucher", self.type_name)
     }
 
-    fn page_title(&self) -> String {
+    fn page_title(&self, _tr: &Tr) -> String {
         self.type_name.clone()
     }
 
-    fn subtitle(&self) -> Option<String> {
+    fn subtitle(&self, _tr: &Tr) -> Option<String> {
         let (action, text) = match self.draft.kind {
             EntryKind::Payment => (
                 Action::NewPayment,
@@ -94,7 +95,7 @@ impl Screen for VoucherEntryScreen {
         })
     }
 
-    fn keys(&self) -> Vec<KeyHint> {
+    fn keys(&self, _tr: &Tr) -> Vec<KeyHint> {
         let mut hints = vec![KeyHint::new("Enter", "Next field")];
         let bound = [
             (Action::CreateMaster, "Create ledger"),
@@ -117,7 +118,7 @@ impl Screen for VoucherEntryScreen {
             return ScreenAction::Stay;
         }
         let action = if let Some(books) = ctx.books.as_ref() {
-            self.draw(ui, &books.masters)
+            self.draw(ui, &books.masters, &ctx.tr)
         } else {
             ui.label(no_books_text(ctx));
             ScreenAction::Stay

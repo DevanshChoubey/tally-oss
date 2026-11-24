@@ -155,7 +155,7 @@ struct Host {
 struct Leaf(String);
 
 impl Screen for Leaf {
-    fn title(&self) -> String {
+    fn title(&self, _tr: &ledgerly_app::i18n::Tr) -> String {
         self.0.clone()
     }
     fn ui(&mut self, ui: &mut egui::Ui, _ctx: &mut AppCtx) -> ScreenAction {
@@ -265,7 +265,11 @@ fn shell_frame(ctx: &egui::Context, shell: &mut Shell, input: RawInput) {
 }
 
 fn trail(shell: &Shell) -> Vec<String> {
-    shell.tabs().active_stack().unwrap().breadcrumbs()
+    shell
+        .tabs()
+        .active_stack()
+        .unwrap()
+        .breadcrumbs(&ledgerly_app::i18n::Tr::default())
 }
 
 fn error_text(s: &ReportViewScreen) -> String {
@@ -522,7 +526,10 @@ fn enter_on_a_group_row_opens_a_report_with_the_same_period_and_detail() {
     let ScreenAction::Push(child) = s.drill() else {
         panic!("a group row must open a screen");
     };
-    assert_eq!(child.title(), "Cash vouchers");
+    assert_eq!(
+        child.title(&ledgerly_app::i18n::Tr::default()),
+        "Cash vouchers"
+    );
     let drills = host.drills.borrow();
     assert_eq!(drills.len(), 1);
     assert_eq!(drills[0].0, ViewKey::Group(CURRENT_ASSETS));
@@ -539,7 +546,7 @@ fn enter_on_a_voucher_row_opens_the_screen_the_host_gives() {
     let ScreenAction::Push(v) = s.drill() else {
         panic!("a voucher row must open a screen");
     };
-    assert_eq!(v.title(), "Voucher 100");
+    assert_eq!(v.title(&ledgerly_app::i18n::Tr::default()), "Voucher 100");
     assert_eq!(host.drills.borrow()[0].0, ViewKey::Voucher(VOUCHER));
 }
 
@@ -818,7 +825,7 @@ fn the_editor_starts_with_the_current_period() {
 fn the_screen_draws_rows_totals_notes_and_the_editor() {
     let host = host();
     let mut s = screen_for(&host, ViewDetail::Detailed);
-    assert_eq!(s.title(), "Balances");
+    assert_eq!(s.title(&ledgerly_app::i18n::Tr::default()), "Balances");
     let ctx = egui::Context::default();
     for _ in 0..3 {
         assert!(matches!(
@@ -894,7 +901,11 @@ fn the_generic_report_names_its_move_keys_as_the_other_reports_do() {
     // well as the arrows (KeyCmd::Down on Key::J). Catches "Up / Down" coming back.
     let host = host();
     let s = screen_for(&host, ViewDetail::Condensed);
-    let first = s.keys().into_iter().next().unwrap();
+    let first = s
+        .keys(&ledgerly_app::i18n::Tr::default())
+        .into_iter()
+        .next()
+        .unwrap();
     assert_eq!(
         (first.keys.as_str(), first.label.as_str()),
         ("J / K", "Move")

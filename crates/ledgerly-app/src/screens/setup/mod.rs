@@ -10,6 +10,7 @@
 
 pub mod form;
 
+use crate::i18n::Tr;
 use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, TryRecvError};
 
@@ -1154,12 +1155,12 @@ fn kind_label(kind: EntityKind) -> &'static str {
 }
 
 impl Screen for SetupScreen {
-    fn title(&self) -> String {
+    fn title(&self, _tr: &Tr) -> String {
         "Company setup".to_owned()
     }
 
     /// The key bar's name (index.html:1891): the step's place among the seven.
-    fn key_bar_name(&self) -> String {
+    fn key_bar_name(&self, _tr: &Tr) -> String {
         format!(
             "Setup, step {} of {}",
             self.step.index() + 1,
@@ -1168,9 +1169,9 @@ impl Screen for SetupScreen {
     }
 
     /// The key bar (index.html:1891): the step's place, then Enter, Esc and Tab.
-    fn keys(&self) -> Vec<crate::shell::KeyHint> {
+    fn keys(&self, tr: &Tr) -> Vec<crate::shell::KeyHint> {
         vec![
-            crate::shell::KeyHint::new("", self.key_bar_name()),
+            crate::shell::KeyHint::new("", self.key_bar_name(tr)),
             crate::shell::KeyHint::new("Enter", "Continue"),
             crate::shell::KeyHint::new("Esc", "Back"),
             crate::shell::KeyHint::new("Tab", "Next field"),

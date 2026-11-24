@@ -355,6 +355,7 @@ fn the_screen_asks_on_open_and_again_after_a_save() {
         panic!("the books did not load");
     };
     let mut app = AppCtx {
+        tr: ledgerly_app::i18n::Tr::default(),
         books: Some(books),
         api: Some(ApiWorker::spawn(api).unwrap()),
         lock_date: None,
@@ -404,6 +405,7 @@ fn moving_the_last_voucher_later_asks_again() {
         panic!("the books did not load");
     };
     let mut app = AppCtx {
+        tr: ledgerly_app::i18n::Tr::default(),
         books: Some(books),
         api: Some(ApiWorker::spawn(api).unwrap()),
         lock_date: None,

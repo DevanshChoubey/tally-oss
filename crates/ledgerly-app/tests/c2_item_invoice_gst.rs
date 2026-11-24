@@ -279,6 +279,7 @@ fn the_screen_gets_its_tax_block_from_the_worker_and_accept_posts() {
     };
     fill(&mut screen, &books.masters);
     let mut app = AppCtx {
+        tr: ledgerly_app::i18n::Tr::default(),
         books: Some(books),
         api: Some(worker),
         lock_date: None,
@@ -347,6 +348,7 @@ fn an_invoice_with_a_round_off_shows_unsupported_and_does_not_save() {
     screen.draft_mut().rows[0].qty_text = "1".to_owned();
     screen.draft_mut().rows[0].rate_text = "100.01".to_owned();
     let mut app = AppCtx {
+        tr: ledgerly_app::i18n::Tr::default(),
         books: Some(books),
         api: Some(worker),
         lock_date: None,

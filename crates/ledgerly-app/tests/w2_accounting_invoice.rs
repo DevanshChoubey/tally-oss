@@ -265,6 +265,7 @@ fn with_the_worker_the_engine_taxes_it_and_it_saves() {
     let mut s = open(&books);
     fill(&mut s, &books);
     let mut app = AppCtx {
+        tr: ledgerly_app::i18n::Tr::default(),
         books: Some(books.clone()),
         api: Some(ApiWorker::spawn(api).unwrap()),
         lock_date: None,
@@ -320,8 +321,11 @@ fn f8_on_a_company_without_inventory_opens_the_accounting_invoice() {
     // Sales, as the accounting voucher screen does.
     let (_api, books) = setup("w2_acc_inv_f8.ledgerly");
     let screen = sales_screen(&books, date!(2026 - 11 - 21)).unwrap();
-    assert_eq!(screen.title(), "Sales invoice");
-    let subtitle = screen.subtitle().unwrap();
+    assert_eq!(
+        screen.title(&ledgerly_app::i18n::Tr::default()),
+        "Sales invoice"
+    );
+    let subtitle = screen.subtitle(&ledgerly_app::i18n::Tr::default()).unwrap();
     assert!(subtitle.starts_with("Accounting invoice"), "{subtitle}");
 }
 
@@ -421,6 +425,7 @@ fn alt_c_on_a_particular_with_the_worker_creates_the_ledger_in_the_store() {
         Some(group(ReservedGroup::SalesAccounts)),
     );
     let mut app = AppCtx {
+        tr: ledgerly_app::i18n::Tr::default(),
         books: Some(books),
         api: Some(ApiWorker::spawn(api).unwrap()),
         lock_date: None,
@@ -491,6 +496,7 @@ fn the_open_ledger_list_keeps_its_height_and_the_invoice_stays_in_the_window() {
             panic!("the screen did not open");
         };
         let mut app = AppCtx {
+            tr: ledgerly_app::i18n::Tr::default(),
             books: Some(books.clone()),
             api: None,
             lock_date: None,

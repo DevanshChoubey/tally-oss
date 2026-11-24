@@ -13,6 +13,7 @@
 //!
 //! Every difference from the mock is listed in `design/PARITY-GAPS.md`.
 
+use crate::i18n::Tr;
 use std::path::PathBuf;
 
 use egui::{Align, Key, Layout, Modifiers, RichText, Sense, Stroke, Ui};
@@ -351,11 +352,11 @@ impl AiSettingsScreen {
 }
 
 impl Screen for AiSettingsScreen {
-    fn title(&self) -> String {
+    fn title(&self, _tr: &Tr) -> String {
         TITLE.to_owned()
     }
 
-    fn keys(&self) -> Vec<KeyHint> {
+    fn keys(&self, _tr: &Tr) -> Vec<KeyHint> {
         key_hints(!self.log.is_empty())
     }
 

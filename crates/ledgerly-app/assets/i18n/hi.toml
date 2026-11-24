@@ -1,0 +1,26 @@
+# Hindi UI strings (हिन्दी).
+#
+# Sources read for accounting and GST terms (2026-11-24):
+#   * https://help.tallysolutions.com/docs/te9rel49/07_MULTI-LINGUAL_FEATURES/Multilingual_Capabilities_in_TallyERP.htm
+#     (read 2026-11-24): confirms that Hindi is a UI language of the accounting product. It gives no
+#     term translations, so no term below is taken from it.
+#   * https://abcaus.in/gst/cbic-lexicon-gst-hindi-words-phrases.html/amp (read 2026-11-24): says a
+#     CBIC Hindi GST lexicon exists. The lexicon itself could not be read, so no GST term is sourced
+#     from it.
+# No term is sourced yet. Every term without a source is marked `# unsourced` on its line.
+# Digits, dates and amounts are not in this file: they come from the formatters, Latin digits in
+# Indian grouping (12,34,567.00) in both languages.
+
+[meta]
+name = "हिन्दी"
+
+[strings]
+"chrome.new_tab" = "नया टैब"
+"chrome.new_tab_hint" = "नया टैब (Ctrl+T)"
+"chrome.close_tab" = "टैब बंद करें"
+"chrome.close_tab_hint" = "टैब बंद करें (Ctrl+W)"
+"chrome.back" = "वापस"
+"chrome.anything" = "कुछ भी ·"
+"chrome.all_keys" = "सभी कुंजियाँ"
+"chrome.language_switched" = "भाषा: {name}"
+"palette.language" = "भाषा: English / हिन्दी"

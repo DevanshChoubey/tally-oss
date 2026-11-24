@@ -122,6 +122,7 @@ fn open(books: &Books) -> ItemInvoiceScreen {
 
 fn app(books: Books, api: Option<Api>) -> AppCtx {
     AppCtx {
+        tr: ledgerly_app::i18n::Tr::default(),
         books: Some(books),
         api: api.map(|a| ApiWorker::spawn(a).unwrap()),
         lock_date: None,
@@ -366,7 +367,7 @@ fn the_key_bar_offers_alt_c() {
     // provenance: index.html:1344, the sales invoice keys: "Alt+C" Create master.
     let (_api, books) = setup("w2_inv_create_keys.ledgerly");
     let s = open(&books);
-    let keys = s.keys();
+    let keys = s.keys(&ledgerly_app::i18n::Tr::default());
     assert!(
         keys.iter()
             .any(|k| k.keys == "Alt+C" && k.label == "Create master"),

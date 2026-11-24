@@ -70,6 +70,7 @@ fn setup(name: &str) -> (Api, Books) {
 
 fn app(books: Books, api: Option<Api>) -> AppCtx {
     AppCtx {
+        tr: ledgerly_app::i18n::Tr::default(),
         books: Some(books),
         api: api.map(|a| ApiWorker::spawn(a).unwrap()),
         lock_date: None,
@@ -127,7 +128,7 @@ fn alt_c_in_the_ledger_form_opens_a_group_form() {
         panic!("Alt+C did not open a group form: {:?}", s.draft());
     };
     assert_eq!(g.name, "");
-    assert_eq!(s.key_bar_name(), "Group");
+    assert_eq!(s.key_bar_name(&ledgerly_app::i18n::Tr::default()), "Group");
     assert_eq!(s.kind(), MasterKind::Ledger);
 }
 

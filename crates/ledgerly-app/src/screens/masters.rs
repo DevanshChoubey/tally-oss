@@ -57,6 +57,7 @@ mod look;
 pub mod stock;
 pub mod view;
 
+use crate::i18n::Tr;
 use egui::{Align, Key, Layout, Modifiers, RichText, Ui};
 use ledgerly_core::{Date, LedgerId, Outcome, Period, StockItemId, Unsupported};
 use ledgerly_model::{Books, MasterSnapshot, Masters};
@@ -1741,12 +1742,12 @@ fn plain_cells(rows: &[MasterRow]) -> Vec<Vec<look::Cell>> {
 }
 
 impl Screen for MastersScreen {
-    fn title(&self) -> String {
+    fn title(&self, _tr: &Tr) -> String {
         // The breadcrumb reads "Masters" on every kind (index.html:1794).
         "Masters".to_owned()
     }
 
-    fn key_bar_name(&self) -> String {
+    fn key_bar_name(&self, _tr: &Tr) -> String {
         // The form's key bar is named after what it makes, "Ledger" (index.html:1831).
         match self.mode_tag() {
             ModeTag::Form => self
@@ -1756,15 +1757,15 @@ impl Screen for MastersScreen {
         }
     }
 
-    fn page_title(&self) -> String {
+    fn page_title(&self, _tr: &Tr) -> String {
         "Masters".to_owned()
     }
 
-    fn subtitle(&self) -> Option<String> {
+    fn subtitle(&self, _tr: &Tr) -> Option<String> {
         Some(SUBTITLE.to_owned())
     }
 
-    fn keys(&self) -> Vec<KeyHint> {
+    fn keys(&self, _tr: &Tr) -> Vec<KeyHint> {
         self.key_hints()
     }
 

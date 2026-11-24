@@ -34,6 +34,7 @@
 //! [`EngineCheck::Blocked`], and `AssistError::Unsupported` becomes [`EngineCheck::Unsupported`].
 //! See `docs/interface-requests.md` (U11).
 
+use crate::i18n::Tr;
 use egui::{Button, Key, Modifiers, RichText, TextEdit, Ui};
 use ledgerly_core::format::format_inr;
 use ledgerly_core::{DrCr, Paise};
@@ -634,7 +635,7 @@ impl AssistScreen {
 }
 
 impl Screen for AssistScreen {
-    fn title(&self) -> String {
+    fn title(&self, _tr: &Tr) -> String {
         "Assistant".to_owned()
     }
 

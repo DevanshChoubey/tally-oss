@@ -1,0 +1,16 @@
+# English UI strings. English is the fallback for every other language, so every key a screen
+# uses must exist here. Keys are stable ids: rename a key only with its translations.
+
+[meta]
+name = "English"
+
+[strings]
+"chrome.new_tab" = "New tab"
+"chrome.new_tab_hint" = "New tab (Ctrl+T)"
+"chrome.close_tab" = "Close tab"
+"chrome.close_tab_hint" = "Close tab (Ctrl+W)"
+"chrome.back" = "Back"
+"chrome.anything" = "anything ·"
+"chrome.all_keys" = "all keys"
+"chrome.language_switched" = "Language: {name}"
+"palette.language" = "Language: English / हिन्दी"

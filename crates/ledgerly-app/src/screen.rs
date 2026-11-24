@@ -1,6 +1,8 @@
 use ledgerly_core::Date;
 use ledgerly_model::Books;
 
+use crate::i18n::Tr;
+
 /// One key hint a screen shows in the key bar: the key label (such as `Ctrl+A`) and what it does.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct KeyHint {
@@ -28,22 +30,22 @@ pub use ledgerly_api::AiTier;
 /// One screen on the screen stack (spec 7).
 pub trait Screen {
     /// Title shown in the breadcrumb and tab.
-    fn title(&self) -> String;
+    fn title(&self, tr: &Tr) -> String;
 
     /// The page-head title. Defaults to [`Screen::title`]. A screen that shows a page head (see
     /// `ui::page_head`) draws this; the shell does not draw page heads itself.
-    fn page_title(&self) -> String {
-        self.title()
+    fn page_title(&self, tr: &Tr) -> String {
+        self.title(tr)
     }
 
     /// The screen's name at the left of the key bar (`.keys .ctx` in the mock). Defaults to
     /// [`Screen::page_title`]; Home, whose page title is a greeting, says "Home".
-    fn key_bar_name(&self) -> String {
-        self.page_title()
+    fn key_bar_name(&self, tr: &Tr) -> String {
+        self.page_title(tr)
     }
 
     /// The one-line purpose under the page title, when the screen has one. Defaults to none.
-    fn subtitle(&self) -> Option<String> {
+    fn subtitle(&self, _tr: &Tr) -> Option<String> {
         None
     }
 
@@ -51,13 +53,13 @@ pub trait Screen {
     /// drill opened returns the title of the screen the drill started from, so that screen's
     /// entry stays selected (index.html:1568, 1594, 1600: the group, ledger and voucher states
     /// belong to the balance sheet).
-    fn sidebar_title(&self) -> String {
-        self.title()
+    fn sidebar_title(&self, tr: &Tr) -> String {
+        self.title(tr)
     }
 
     /// The keys this screen handles, shown in the key bar before the shell's own keys. Defaults
     /// to none, so a screen that has not opted in shows only the shell's keys.
-    fn keys(&self) -> Vec<KeyHint> {
+    fn keys(&self, _tr: &Tr) -> Vec<KeyHint> {
         Vec::new()
     }
 
@@ -99,4 +101,6 @@ pub struct AppCtx {
     /// The AI tier stored for the open company. `None` until a tier store exists, so the AI chip
     /// reads "AI: not set up" and never claims a tier nothing enforces.
     pub ai_tier: Option<AiTier>,
+    /// The strings in the language the user chose (`i18n`). Screens draw their text with it.
+    pub tr: crate::i18n::Tr,
 }

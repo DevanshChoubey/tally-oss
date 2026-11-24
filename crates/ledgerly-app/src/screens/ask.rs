@@ -10,6 +10,7 @@
 //! The mock's other states (`ask.result`, `ask.loading`, `ask.low-confidence`,
 //! `ask.unsupported`) need a compiled query and are listed in `design/PARITY-GAPS.md`.
 
+use crate::i18n::Tr;
 use egui::{RichText, Ui};
 
 use crate::palette::PaletteTarget;
@@ -186,15 +187,15 @@ fn draw_reports(ui: &mut Ui) -> Option<AskReport> {
 }
 
 impl Screen for AskScreen {
-    fn title(&self) -> String {
+    fn title(&self, _tr: &Tr) -> String {
         TITLE.to_owned()
     }
 
-    fn subtitle(&self) -> Option<String> {
+    fn subtitle(&self, _tr: &Tr) -> Option<String> {
         Some(SUBTITLE.to_owned())
     }
 
-    fn keys(&self) -> Vec<KeyHint> {
+    fn keys(&self, _tr: &Tr) -> Vec<KeyHint> {
         key_hints()
     }
 

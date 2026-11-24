@@ -33,7 +33,7 @@ use time::macros::date;
 struct Leaf(&'static str);
 
 impl Screen for Leaf {
-    fn title(&self) -> String {
+    fn title(&self, _tr: &ledgerly_app::i18n::Tr) -> String {
         self.0.to_owned()
     }
     fn ui(&mut self, ui: &mut egui::Ui, _ctx: &mut AppCtx) -> ScreenAction {
@@ -176,7 +176,11 @@ fn each_sidebar_entry_opens_its_target_or_says_why_it_cannot() {
     for group in sidebar::visible_groups() {
         for entry in &group.entries {
             match sidebar::screen_for(&entry.target, &ctx) {
-                Ok(screen) => assert!(!screen.title().is_empty(), "\"{}\"", entry.label),
+                Ok(screen) => assert!(
+                    !screen.title(&ledgerly_app::i18n::Tr::default()).is_empty(),
+                    "\"{}\"",
+                    entry.label
+                ),
                 Err(NavError::Unsupported { reason, .. }) => {
                     assert!(!reason.is_empty(), "\"{}\" gave no reason", entry.label);
                 }

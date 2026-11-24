@@ -23,6 +23,7 @@
 //! read on 2026-11-21 states it (the TallyPrime company management and create-company pages are
 //! silent), so it is `pending`.
 
+use crate::i18n::Tr;
 use ledgerly_api::ReportKind;
 use ledgerly_core::{Date, FinancialYear, Outcome};
 use ledgerly_model::{BaseVoucherKind, Books};
@@ -244,24 +245,24 @@ fn only_bank_screen(books: &Books) -> Result<Box<dyn Screen>, NavError> {
 }
 
 impl Screen for GatewayScreen {
-    fn title(&self) -> String {
-        self.home.title()
+    fn title(&self, tr: &Tr) -> String {
+        self.home.title(tr)
     }
 
-    fn page_title(&self) -> String {
-        self.home.page_title()
+    fn page_title(&self, tr: &Tr) -> String {
+        self.home.page_title(tr)
     }
 
-    fn key_bar_name(&self) -> String {
-        self.home.key_bar_name()
+    fn key_bar_name(&self, tr: &Tr) -> String {
+        self.home.key_bar_name(tr)
     }
 
-    fn subtitle(&self) -> Option<String> {
-        self.home.subtitle()
+    fn subtitle(&self, tr: &Tr) -> Option<String> {
+        self.home.subtitle(tr)
     }
 
-    fn keys(&self) -> Vec<KeyHint> {
-        self.home.keys()
+    fn keys(&self, tr: &Tr) -> Vec<KeyHint> {
+        self.home.keys(tr)
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, ctx: &mut AppCtx) -> ScreenAction {

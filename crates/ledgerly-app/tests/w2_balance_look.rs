@@ -153,7 +153,9 @@ fn the_subtitle_names_the_financial_year_as_the_mock_does() {
     // Catches the subtitle without the year.
     let screen = balance_screen(Detail::Condensed);
     assert_eq!(
-        screen.subtitle().as_deref(),
+        screen
+            .subtitle(&ledgerly_app::i18n::Tr::default())
+            .as_deref(),
         Some("As at 21 Nov 2026 \u{00B7} FY 2026-27 \u{00B7} Enter opens a row, Esc goes back up")
     );
 }
@@ -163,8 +165,14 @@ fn the_breadcrumb_names_the_balance_sheet_as_the_page_does() {
     // provenance: index.html:1572: the crumb is "Balance sheet", the page title's wording.
     // Catches the engine's "Balance Sheet" in the breadcrumb under a "Balance sheet" heading.
     let screen = balance_screen(Detail::Condensed);
-    assert_eq!(screen.title(), "Balance sheet");
-    assert_eq!(screen.page_title(), "Balance sheet");
+    assert_eq!(
+        screen.title(&ledgerly_app::i18n::Tr::default()),
+        "Balance sheet"
+    );
+    assert_eq!(
+        screen.page_title(&ledgerly_app::i18n::Tr::default()),
+        "Balance sheet"
+    );
 }
 
 fn pairs(hints: &[KeyHint]) -> Vec<(String, String)> {
@@ -189,7 +197,7 @@ fn the_key_bar_reads_like_the_mocks() {
     // Down" and "Detailed or condensed".
     let condensed = balance_screen(Detail::Condensed);
     assert_eq!(
-        pairs(&condensed.keys()),
+        pairs(&condensed.keys(&ledgerly_app::i18n::Tr::default())),
         owned(&[
             ("J / K", "Move"),
             ("Enter", "Drill in"),
@@ -201,7 +209,7 @@ fn the_key_bar_reads_like_the_mocks() {
     );
     let detailed = balance_screen(Detail::Detailed);
     let alt: Vec<String> = detailed
-        .keys()
+        .keys(&ledgerly_app::i18n::Tr::default())
         .iter()
         .filter(|h| h.keys == "Alt+F1")
         .map(|h| h.label.clone())

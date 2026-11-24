@@ -1,5 +1,6 @@
 //! The screen: drawing and key handling for the wizard.
 
+use crate::i18n::Tr;
 use std::path::PathBuf;
 
 use egui::{Key, Modifiers, Ui};
@@ -184,7 +185,7 @@ impl ImportScreen {
 }
 
 impl Screen for ImportScreen {
-    fn title(&self) -> String {
+    fn title(&self, _tr: &Tr) -> String {
         "Import from another app".to_owned()
     }
 

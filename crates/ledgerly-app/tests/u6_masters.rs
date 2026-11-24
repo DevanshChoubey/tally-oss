@@ -408,6 +408,7 @@ fn key(key: Key, modifiers: Modifiers) -> RawInput {
 
 fn app_with(books: Books) -> AppCtx {
     AppCtx {
+        tr: ledgerly_app::i18n::Tr::default(),
         books: Some(books),
         api: None,
         lock_date: None,
@@ -1241,7 +1242,7 @@ fn every_screen_state_draws() {
     for kind in MasterKind::ALL {
         let mut s = MastersScreen::with_kind(kind);
         frame(&ctx, &mut s, &mut app, RawInput::default());
-        assert_ne!(s.title(), "");
+        assert_ne!(s.title(&ledgerly_app::i18n::Tr::default()), "");
         let books = app.books.clone().unwrap();
         if s.begin_create(&books).is_ok() {
             frame(&ctx, &mut s, &mut app, RawInput::default());

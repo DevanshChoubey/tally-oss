@@ -208,6 +208,7 @@ fn a_fill_is_not_something_the_host_opens() {
     // provenance: derived. The palette handles a fill itself; were one to reach the host it is
     // refused with a typed error, not opened as a screen.
     let ctx = AppCtx {
+        tr: ledgerly_app::i18n::Tr::default(),
         books: None,
         api: None,
         lock_date: None,

@@ -2,7 +2,7 @@
 //! the `?` key that opens the keyboard map.
 
 use egui::{Event, Key, Modifiers, Pos2, RawInput, pos2};
-use ledgerly_app::shell::{ScreenStack, Shell};
+use ledgerly_app::shell::Shell;
 use ledgerly_app::ui::icon::{self, Icon};
 use ledgerly_app::{AppCtx, Screen, ScreenAction};
 
@@ -92,7 +92,7 @@ fn every_icon_path_parses_to_points() {
 struct Leaf;
 
 impl Screen for Leaf {
-    fn title(&self) -> String {
+    fn title(&self, _tr: &ledgerly_app::i18n::Tr) -> String {
         "Home".to_owned()
     }
     fn ui(&mut self, _ui: &mut egui::Ui, _ctx: &mut AppCtx) -> ScreenAction {
@@ -125,6 +125,6 @@ fn question_mark_opens_the_keyboard_map() {
     let trail = shell
         .tabs()
         .active_stack()
-        .map_or_default(ScreenStack::breadcrumbs);
+        .map_or_default(|s| s.breadcrumbs(&ledgerly_app::i18n::Tr::default()));
     assert_eq!(trail, vec!["Home".to_owned(), "Keyboard map".to_owned()]);
 }

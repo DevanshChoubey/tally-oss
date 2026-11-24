@@ -392,6 +392,7 @@ fn the_screen_asks_on_open_and_shows_the_engines_figures() {
         panic!("the books did not load");
     };
     let mut app = AppCtx {
+        tr: ledgerly_app::i18n::Tr::default(),
         books: Some(books),
         api: Some(ApiWorker::spawn(api).unwrap()),
         lock_date: None,

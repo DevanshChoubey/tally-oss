@@ -142,7 +142,7 @@ fn switching_to_accounting_keeps_the_header_and_goes_to_the_first_particular() {
     assert_eq!(s.mode(), InvoiceMode::Accounting);
     assert_eq!(s.draft().party, party);
     assert_eq!(s.focus(), Field::Ledger(0));
-    let subtitle = s.subtitle().unwrap();
+    let subtitle = s.subtitle(&ledgerly_app::i18n::Tr::default()).unwrap();
     assert!(subtitle.starts_with("Accounting invoice"), "{subtitle}");
 }
 
@@ -198,8 +198,13 @@ fn ctrl_h_on_the_screen_changes_the_mode_and_the_key_bar_names_it() {
     // lists Ctrl+H.
     let books = setup("w2_mode_key.ledgerly", true);
     let mut s = open(&books, InvoiceMode::Item);
-    assert!(s.keys().iter().any(|k| k.keys == "Ctrl+H"));
+    assert!(
+        s.keys(&ledgerly_app::i18n::Tr::default())
+            .iter()
+            .any(|k| k.keys == "Ctrl+H")
+    );
     let mut app = AppCtx {
+        tr: ledgerly_app::i18n::Tr::default(),
         books: Some(books.clone()),
         api: None,
         lock_date: None,
@@ -223,7 +228,11 @@ fn the_invoice_key_bar_uses_the_mock_s_words() {
     // screen, so it is not offered.
     let books = setup("w2_mode_keybar.ledgerly", true);
     let s = open(&books, InvoiceMode::Item);
-    let pairs: Vec<(String, String)> = s.keys().into_iter().map(|k| (k.keys, k.label)).collect();
+    let pairs: Vec<(String, String)> = s
+        .keys(&ledgerly_app::i18n::Tr::default())
+        .into_iter()
+        .map(|k| (k.keys, k.label))
+        .collect();
     let want: Vec<(String, String)> = [
         ("Enter", "Next field"),
         ("Shift+Enter", "Previous"),

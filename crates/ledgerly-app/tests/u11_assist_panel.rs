@@ -499,7 +499,7 @@ fn reject_records_the_decision_drops_the_proposal_and_closes() {
 #[test]
 fn every_state_draws_and_stays() {
     let mut empty = AssistScreen::new(Tier::Off);
-    assert_eq!(empty.title(), "Assistant");
+    assert_eq!(empty.title(&ledgerly_app::i18n::Tr::default()), "Assistant");
     let (action, texts) = frames(&mut empty, &RawInput::default());
     assert!(matches!(action, ScreenAction::Stay));
     assert!(has(&texts, "Nothing proposed yet."));

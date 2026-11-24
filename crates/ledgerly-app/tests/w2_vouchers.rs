@@ -245,10 +245,10 @@ fn the_payment_subtitle_says_single_entry_with_its_key() {
     let b = books();
     let s = open(&b, T_PAYMENT);
     assert_eq!(
-        s.subtitle(),
+        s.subtitle(&ledgerly_app::i18n::Tr::default()),
         Some("F5 · single entry: pick the cash or bank account once, then the ledgers".to_owned())
     );
-    assert_eq!(s.page_title(), "Payment");
+    assert_eq!(s.page_title(&ledgerly_app::i18n::Tr::default()), "Payment");
 }
 
 #[test]

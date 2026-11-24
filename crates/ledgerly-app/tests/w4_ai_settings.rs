@@ -213,7 +213,11 @@ fn the_three_states_render_the_mock_wording_and_keys() {
         screen.panel(),
         ledgerly_app::screens::ai_settings::Panel::Local
     );
-    assert_eq!(screen.keys(), key_hints(false), "the keys without a log");
+    assert_eq!(
+        screen.keys(&ledgerly_app::i18n::Tr::default()),
+        key_hints(false),
+        "the keys without a log"
+    );
 
     // Off (mock state ai-settings.off, index.html:1905 and the off note): every feature is off.
     let off = settle(&mut screen, &mut app, &[(Key::Num1, NONE)], |s| {
@@ -327,7 +331,7 @@ fn the_log_shows_the_file_rows_and_never_sample_rows() {
     }
     assert!(
         screen
-            .keys()
+            .keys(&ledgerly_app::i18n::Tr::default())
             .iter()
             .any(|k| k.keys == "Ctrl+E" && k.label == "Export log")
     );
@@ -342,7 +346,12 @@ fn an_empty_log_says_so_and_offers_no_export() {
     assert!(text.contains(LOG_EMPTY));
     assert!(!text.contains("Ctrl+E exports it"));
     assert_eq!(screen.log().len(), 0);
-    assert!(!screen.keys().iter().any(|k| k.keys == "Ctrl+E"));
+    assert!(
+        !screen
+            .keys(&ledgerly_app::i18n::Tr::default())
+            .iter()
+            .any(|k| k.keys == "Ctrl+E")
+    );
     // Ctrl+E with no rows does nothing: no save dialog, no notice.
     frame(&mut screen, &mut app, &[(Key::E, Modifiers::COMMAND)]);
     assert_eq!(screen.notice(), None);

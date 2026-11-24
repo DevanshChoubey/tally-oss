@@ -27,7 +27,10 @@ fn gstin() -> Gstin {
 }
 
 fn pairs(s: &GstScreen) -> Vec<(String, String)> {
-    s.keys().into_iter().map(|k| (k.keys, k.label)).collect()
+    s.keys(&ledgerly_app::i18n::Tr::default())
+        .into_iter()
+        .map(|k| (k.keys, k.label))
+        .collect()
 }
 
 fn owned(list: &[(&str, &str)]) -> Vec<(String, String)> {
@@ -261,5 +264,11 @@ fn enter_on_a_gstr1_row_opens_its_voucher() {
     let ScreenAction::Push(pushed) = action else {
         panic!("Enter did not open the voucher");
     };
-    assert!(pushed.title().contains('3'), "{}", pushed.title());
+    assert!(
+        pushed
+            .title(&ledgerly_app::i18n::Tr::default())
+            .contains('3'),
+        "{}",
+        pushed.title(&ledgerly_app::i18n::Tr::default())
+    );
 }

@@ -230,7 +230,7 @@ impl Wizard {
 
     /// The key bar's name, which names the step.
     fn bar_name(&self) -> String {
-        self.screen.key_bar_name()
+        self.screen.key_bar_name(&ledgerly_app::i18n::Tr::default())
     }
 }
 
@@ -272,10 +272,13 @@ fn the_key_bar_names_the_step_and_lists_enter_esc_and_tab() {
         KeyHint::new("Esc", "Back"),
         KeyHint::new("Tab", "Next field"),
     ];
-    assert_eq!(w.screen.keys(), expected);
+    assert_eq!(w.screen.keys(&ledgerly_app::i18n::Tr::default()), expected);
     // The shell draws the name from `key_bar_name` and drops a first hint with no key
     // (index.html:913, renderKeys), so the name must come from there too.
-    assert_eq!(w.screen.key_bar_name(), "Setup, step 1 of 7");
+    assert_eq!(
+        w.screen.key_bar_name(&ledgerly_app::i18n::Tr::default()),
+        "Setup, step 1 of 7"
+    );
     w.script(vec![key(Key::Enter)]);
     // Company is the second of the STEPS (index.html:1855).
     assert_eq!(w.bar_name(), "Setup, step 2 of 7");
@@ -572,7 +575,7 @@ fn on_done_m_opens_masters_as_its_launch_card_says() {
             panic!("M on Done did not open a screen")
         }
     };
-    assert_eq!(screen.title(), "Masters");
+    assert_eq!(screen.title(&ledgerly_app::i18n::Tr::default()), "Masters");
 }
 
 #[test]

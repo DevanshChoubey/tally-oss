@@ -167,9 +167,12 @@ fn the_page_title_and_the_subtitle_name_the_return_period() {
     // ("<GSTIN> · <state> · <period> · monthly"); it was "Return period November 2026.". The
     // full form is in w2_gst_look.rs.
     let s = GstScreen::new("November 2026", None);
-    assert_eq!(s.page_title(), "GST returns");
     assert_eq!(
-        Screen::subtitle(&s),
+        s.page_title(&ledgerly_app::i18n::Tr::default()),
+        "GST returns"
+    );
+    assert_eq!(
+        Screen::subtitle(&s, &ledgerly_app::i18n::Tr::default()),
         Some("November 2026 \u{00B7} monthly".to_owned())
     );
 }
@@ -183,12 +186,20 @@ fn the_keys_show_export_json_and_the_ims_keys_only_on_the_2b_tab() {
     // key bars are in w2_gst_look.rs.
     let mut s = GstScreen::new("November 2026", None);
     s.switch_tab(GstTab::Gstr1);
-    let keys: Vec<(String, String)> = s.keys().into_iter().map(|k| (k.keys, k.label)).collect();
+    let keys: Vec<(String, String)> = s
+        .keys(&ledgerly_app::i18n::Tr::default())
+        .into_iter()
+        .map(|k| (k.keys, k.label))
+        .collect();
     assert!(keys.contains(&("Ctrl+E".to_owned(), "Export JSON".to_owned())));
     assert!(!keys.iter().any(|(k, _)| k == "A"));
     s.switch_tab(GstTab::Reconciliation);
     s.set_recon(Feed::Loaded(Vec::new()));
-    let keys: Vec<(String, String)> = s.keys().into_iter().map(|k| (k.keys, k.label)).collect();
+    let keys: Vec<(String, String)> = s
+        .keys(&ledgerly_app::i18n::Tr::default())
+        .into_iter()
+        .map(|k| (k.keys, k.label))
+        .collect();
     assert!(keys.contains(&("A".to_owned(), "Accept".to_owned())));
 }
 

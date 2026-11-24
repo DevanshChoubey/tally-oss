@@ -45,6 +45,7 @@ mod remote;
 mod text;
 mod voucher_view;
 
+use crate::i18n::Tr;
 use std::path::PathBuf;
 
 use egui::{Align, Context, Key, Layout, Modifiers, Rect, Ui};
@@ -233,6 +234,9 @@ fn look_of(kind: &ReportKind) -> Look {
 
 /// Shows one report, with row selection, drill-down, the detail toggle and the period editor.
 pub struct ReportViewScreen {
+    /// The strings the screen draws in, refreshed each frame from the app (`ui`); the drill
+    /// helpers that run without a frame use it too.
+    tr: Tr,
     report: ViewReport,
     source: ReportSource,
     selected: usize,
@@ -267,6 +271,7 @@ impl ReportViewScreen {
     pub fn new(report: ViewReport, source: ReportSource) -> Result<Self, ViewError> {
         report.check_shape()?;
         Ok(Self {
+            tr: Tr::default(),
             report,
             source,
             selected: 0,
@@ -313,6 +318,7 @@ impl ReportViewScreen {
             detail: view_detail(engine.detail),
         };
         Some(Self {
+            tr: Tr::default(),
             report: pending_report(want),
             source,
             selected: 0,
@@ -590,7 +596,7 @@ impl ReportViewScreen {
 
     /// `screen`, opened by a drill from this one: it keeps this screen's sidebar entry.
     fn drilled(&self, mut screen: ReportViewScreen) -> ReportViewScreen {
-        screen.origin = Some(self.sidebar_title());
+        screen.origin = Some(self.sidebar_title(&self.tr));
         screen
     }
 
@@ -599,7 +605,7 @@ impl ReportViewScreen {
     fn drill_worker(&mut self, key: &ViewKey) -> ScreenAction {
         // A voucher is a screen, not a report: open it read-only (see `voucher_view.rs`).
         if let ViewKey::Voucher(id) = key {
-            let view = VoucherViewScreen::new(*id).with_origin(self.sidebar_title());
+            let view = VoucherViewScreen::new(*id).with_origin(self.sidebar_title(&self.tr));
             return ScreenAction::Push(Box::new(view));
         }
         let base = self
@@ -802,8 +808,9 @@ impl ReportViewScreen {
 
     /// The page header, the day book's tabs, the loading line, the notice and the period editor.
     fn draw_head(&mut self, ui: &mut Ui, look: Look) {
-        let title = self.page_title();
-        let subtitle = self.subtitle();
+        let tr = self.tr.clone();
+        let title = self.page_title(&tr);
+        let subtitle = self.subtitle(&tr);
         let detail_switch = self.detail_switch();
         let mut toggle = false;
         let mut tab_clicked = None;
@@ -1096,16 +1103,16 @@ fn read_keys(ctx: &Context, editing: bool, look: Look) -> Vec<KeyCmd> {
 }
 
 impl Screen for ReportViewScreen {
-    fn title(&self) -> String {
+    fn title(&self, tr: &Tr) -> String {
         // The crumb uses the page title's wording for the screens drawn to the mock
         // (index.html:1572: "Balance sheet").
         match self.look() {
-            Look::BalanceSheet | Look::DayBook => self.page_title(),
+            Look::BalanceSheet | Look::DayBook => self.page_title(tr),
             Look::Generic => self.report.title.clone(),
         }
     }
 
-    fn page_title(&self) -> String {
+    fn page_title(&self, _tr: &Tr) -> String {
         match self.look() {
             Look::BalanceSheet => "Balance sheet".to_owned(),
             Look::DayBook => "Day book".to_owned(),
@@ -1113,7 +1120,7 @@ impl Screen for ReportViewScreen {
         }
     }
 
-    fn subtitle(&self) -> Option<String> {
+    fn subtitle(&self, _tr: &Tr) -> Option<String> {
         let period = self.report.params.period;
         match self.look() {
             Look::BalanceSheet => {
@@ -1132,11 +1139,11 @@ impl Screen for ReportViewScreen {
         }
     }
 
-    fn sidebar_title(&self) -> String {
-        self.origin.clone().unwrap_or_else(|| self.title())
+    fn sidebar_title(&self, tr: &Tr) -> String {
+        self.origin.clone().unwrap_or_else(|| self.title(tr))
     }
 
-    fn keys(&self) -> Vec<KeyHint> {
+    fn keys(&self, _tr: &Tr) -> Vec<KeyHint> {
         match self.look() {
             Look::BalanceSheet => vec![
                 KeyHint::new("J / K", "Move"),
@@ -1166,6 +1173,7 @@ impl Screen for ReportViewScreen {
     fn ui(&mut self, ui: &mut Ui, ctx: &mut AppCtx) -> ScreenAction {
         self.tick(ctx.api.as_ref());
         self.poll_export();
+        self.tr = ctx.tr.clone();
         let action = self.draw(ui);
         if self.print.saved_path().is_some()
             && button(ui, "Open PDF", None, ButtonKind::Secondary).clicked()

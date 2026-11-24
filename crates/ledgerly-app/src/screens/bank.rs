@@ -44,6 +44,7 @@
 //! This crate does not depend on `ledgerly-bank` (its manifest is frozen), so the screen defines
 //! its own plain view types and the host converts. See `docs/interface-requests.md`.
 
+use crate::i18n::Tr;
 use std::collections::BTreeSet;
 
 use egui::Ui;
@@ -831,19 +832,19 @@ fn status_label(s: LineStatus) -> &'static str {
 }
 
 impl Screen for BankScreen {
-    fn title(&self) -> String {
+    fn title(&self, _tr: &Tr) -> String {
         format!("Bank reconciliation: {}", self.ledger_name)
     }
 
-    fn page_title(&self) -> String {
+    fn page_title(&self, _tr: &Tr) -> String {
         PAGE_TITLE.to_owned()
     }
 
-    fn subtitle(&self) -> Option<String> {
+    fn subtitle(&self, _tr: &Tr) -> Option<String> {
         Some(self.ledger_name.clone())
     }
 
-    fn keys(&self) -> Vec<KeyHint> {
+    fn keys(&self, _tr: &Tr) -> Vec<KeyHint> {
         match self.tab {
             Tab::Matching => vec![
                 KeyHint::new("Enter", "Match"),

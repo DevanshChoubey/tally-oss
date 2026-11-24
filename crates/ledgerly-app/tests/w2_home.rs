@@ -294,12 +294,20 @@ fn the_page_title_is_home_and_the_company_line_joins_name_and_subtitle() {
     // sub-line does ("Saturday 21 Nov 2026 · FY 2026-27", index.html line 1054). After a frame
     // the title is the greeting (see `after_a_frame_home_greets_and_the_key_bar_still_says_home`).
     let screen = HomeScreen::new(four_tiles());
-    assert_eq!(screen.page_title(), "Home");
     assert_eq!(
-        screen.subtitle().as_deref(),
+        screen.page_title(&ledgerly_app::i18n::Tr::default()),
+        "Home"
+    );
+    assert_eq!(
+        screen
+            .subtitle(&ledgerly_app::i18n::Tr::default())
+            .as_deref(),
         Some("Fictional Traders \u{b7} Figures as of 30 Apr 2026")
     );
-    assert_eq!(HomeScreen::default().subtitle(), None);
+    assert_eq!(
+        HomeScreen::default().subtitle(&ledgerly_app::i18n::Tr::default()),
+        None
+    );
 }
 
 #[test]
@@ -320,7 +328,7 @@ fn the_key_bar_lists_the_working_home_keys_and_not_the_removed_lists() {
     // F6, Ctrl+K, J/K for the review list and Enter. The review list and the Enter list are not
     // on this screen (the review list needs the assistant, and the sidebar replaces the Enter
     // list), and F9 opens nothing yet, so the bar lists F8 and not J/K or Enter.
-    let keys = HomeScreen::default().keys();
+    let keys = HomeScreen::default().keys(&ledgerly_app::i18n::Tr::default());
     assert!(keys.iter().any(|k| k.keys == "F8" && k.label == "Sales"));
     assert!(keys.iter().any(|k| k.keys == "Ctrl+K"));
     assert!(!keys.iter().any(|k| k.keys == "Enter"));
@@ -407,12 +415,19 @@ fn after_a_frame_home_greets_and_the_key_bar_still_says_home() {
     });
     out.drop_without_applying_deltas();
     assert!(
-        screen.page_title().starts_with("Good "),
+        screen
+            .page_title(&ledgerly_app::i18n::Tr::default())
+            .starts_with("Good "),
         "title {}",
-        screen.page_title()
+        screen.page_title(&ledgerly_app::i18n::Tr::default())
     );
-    assert_eq!(screen.key_bar_name(), "Home");
-    let line = screen.subtitle().unwrap_or_default();
+    assert_eq!(
+        screen.key_bar_name(&ledgerly_app::i18n::Tr::default()),
+        "Home"
+    );
+    let line = screen
+        .subtitle(&ledgerly_app::i18n::Tr::default())
+        .unwrap_or_default();
     assert!(
         line.ends_with("\u{b7} FY 2026-27 \u{b7} books locked to 31 Mar 2026"),
         "line {line}"

@@ -38,6 +38,7 @@
 //! file needs. Credit notes that may stay pending for one period (spec 6.3) are not modelled: a
 //! row's `Pending` action is the user's choice, and the period rule is the engine's.
 
+use crate::i18n::Tr;
 use egui::{Key, Ui};
 use ledgerly_core::format::format_inr;
 use ledgerly_core::{Date, Gstin, Paise, StateCode, Unsupported, VoucherId};
@@ -950,19 +951,19 @@ fn is_open(row: &ReconRow, decision: Option<ImsAction>) -> bool {
 }
 
 impl Screen for GstScreen {
-    fn title(&self) -> String {
+    fn title(&self, _tr: &Tr) -> String {
         "GST returns".to_owned()
     }
 
-    fn page_title(&self) -> String {
+    fn page_title(&self, _tr: &Tr) -> String {
         "GST returns".to_owned()
     }
 
-    fn subtitle(&self) -> Option<String> {
+    fn subtitle(&self, _tr: &Tr) -> Option<String> {
         Some(GstScreen::subtitle(self))
     }
 
-    fn keys(&self) -> Vec<crate::screen::KeyHint> {
+    fn keys(&self, _tr: &Tr) -> Vec<crate::screen::KeyHint> {
         use crate::screen::KeyHint;
         // The mock's key bars (index.html:1721), less keys with nothing to act on: GSTR-3B has
         // no rows and exports nothing, and on the 2B tab the IMS keys need rows; Y and X need

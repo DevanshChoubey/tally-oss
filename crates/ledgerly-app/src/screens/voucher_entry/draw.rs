@@ -2,6 +2,7 @@
 //! notes. A single-entry voucher (payment or receipt) draws the account once, then the particulars
 //! lines; the other kinds draw every line with its own Dr / Cr switch.
 
+use crate::i18n::Tr;
 use egui::{Id, Key, Ui};
 use ledgerly_core::SignedAmount;
 use ledgerly_model::Masters;
@@ -424,7 +425,7 @@ impl VoucherEntryScreen {
         }
     }
 
-    pub(super) fn draw(&mut self, ui: &mut Ui, masters: &Masters) -> ScreenAction {
+    pub(super) fn draw(&mut self, ui: &mut Ui, masters: &Masters, tr: &Tr) -> ScreenAction {
         let base = ui.scope_id().with("voucher-entry");
         let escape_wanted = self.create.is_some()
             || self.confirm_discard
@@ -452,8 +453,8 @@ impl VoucherEntryScreen {
         if !keys.is_empty() {
             items = self.picker_items(masters);
         }
-        let title = self.page_title();
-        let subtitle = self.subtitle();
+        let title = self.page_title(tr);
+        let subtitle = self.subtitle(tr);
         let save_key = self.keymap.shortcut_label(Action::Save);
         let back_key = self.keymap.shortcut_label(Action::Back);
         if self.confirm_discard {

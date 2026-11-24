@@ -451,7 +451,10 @@ fn tsv_has_the_header_and_only_the_visible_rows() {
 
 #[test]
 fn title_is_audit_trail() {
-    assert_eq!(AuditScreen::new(fy_2026_27()).title(), "Audit trail");
+    assert_eq!(
+        AuditScreen::new(fy_2026_27()).title(&ledgerly_app::i18n::Tr::default()),
+        "Audit trail"
+    );
 }
 
 #[test]

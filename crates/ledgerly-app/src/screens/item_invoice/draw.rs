@@ -10,6 +10,7 @@ use super::compute;
 use super::draft::{InvoiceRow, ParticularRow, line_amount};
 use super::keys::{Prompt, read_keys};
 use super::{Field, GstBlock, GstStatus, InvoiceMode, ItemInvoiceScreen, Notice, UiEvent};
+use crate::i18n::Tr;
 use crate::screen::KeyHint;
 use crate::screens::voucher_entry::parse_entry_date;
 use crate::shell::submit::{self, CommandReply};
@@ -843,7 +844,7 @@ impl ItemInvoiceScreen {
         }
     }
 
-    fn draw(&mut self, ui: &mut Ui, masters: &Masters) -> ScreenAction {
+    fn draw(&mut self, ui: &mut Ui, masters: &Masters, tr: &Tr) -> ScreenAction {
         self.shown = Shown::default();
         let base = ui.scope_id().with("item-invoice");
         let mut labels = self.pick_labels(masters);
@@ -859,12 +860,12 @@ impl ItemInvoiceScreen {
 
         let mut clicks: Option<Click> = None;
         let locked = self.locked_on().is_some();
-        let subtitle = self.subtitle().unwrap_or_default();
+        let subtitle = self.subtitle(tr).unwrap_or_default();
         let mode_label = match self.draft.mode {
             InvoiceMode::Item => "Item invoice",
             InvoiceMode::Accounting => "Accounting invoice",
         };
-        page_head(ui, &self.page_title(), Some(subtitle.as_str()), |ui| {
+        page_head(ui, &self.page_title(tr), Some(subtitle.as_str()), |ui| {
             let saved = ui
                 .add_enabled_ui(!locked, |ui| {
                     button(ui, "Save", Some("Ctrl+A"), ButtonKind::Primary).clicked()
@@ -938,11 +939,11 @@ impl ItemInvoiceScreen {
 }
 
 impl Screen for ItemInvoiceScreen {
-    fn title(&self) -> String {
+    fn title(&self, _tr: &Tr) -> String {
         format!("{} invoice", self.type_name)
     }
 
-    fn subtitle(&self) -> Option<String> {
+    fn subtitle(&self, _tr: &Tr) -> Option<String> {
         let text = match self.draft.mode {
             InvoiceMode::Item => SUBTITLE,
             InvoiceMode::Accounting => ACCOUNTING_SUBTITLE,
@@ -950,7 +951,7 @@ impl Screen for ItemInvoiceScreen {
         Some(text.to_owned())
     }
 
-    fn keys(&self) -> Vec<KeyHint> {
+    fn keys(&self, _tr: &Tr) -> Vec<KeyHint> {
         if self.confirm_discard {
             return vec![KeyHint::new("Y", "Discard"), KeyHint::new("N", "Keep it")];
         }
@@ -979,7 +980,7 @@ impl Screen for ItemInvoiceScreen {
         self.lock_date = ctx.lock_date;
         self.drive_compute(ui, ctx);
         let action = if let Some(books) = ctx.books.as_ref() {
-            self.draw(ui, &books.masters)
+            self.draw(ui, &books.masters, &ctx.tr)
         } else {
             ui.label(no_books_text(ctx));
             ScreenAction::Stay
