@@ -149,12 +149,11 @@ pub type ExportPicker = Box<dyn FnMut(&str) -> Option<PathBuf>>;
 
 /// The system save dialog, offering CSV and XLSX (index.html:1624).
 fn save_dialog(suggested: &str) -> Option<PathBuf> {
-    rfd::FileDialog::new()
-        .set_title("Export report")
-        .set_file_name(suggested)
-        .add_filter("CSV", &["csv"])
-        .add_filter("Excel workbook", &["xlsx"])
-        .save_file()
+    crate::ui::dialogs::save_file(
+        "Export report",
+        Some(suggested),
+        &[("CSV", &["csv"]), ("Excel workbook", &["xlsx"])],
+    )
 }
 
 /// What an engine report cell shows on screen (see [`text::cell_text`]): the palette's Recent

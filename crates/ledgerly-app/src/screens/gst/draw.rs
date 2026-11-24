@@ -853,10 +853,8 @@ const GSTR3B_NOTES: [&str; 5] = [
 /// Asks where to save the GSTR-1 JSON and writes it there. Cancelling writes nothing. The dialog
 /// is the user's own choice of place; nothing is uploaded.
 fn save_json_file(name: &str, json: &str) -> String {
-    let Some(path) = rfd::FileDialog::new()
-        .set_file_name(name)
-        .add_filter("JSON", &["json"])
-        .save_file()
+    let Some(path) =
+        crate::ui::dialogs::save_file("Save GSTR-1 JSON", Some(name), &[("JSON", &["json"])])
     else {
         return "Export cancelled. Nothing was written.".to_owned();
     };

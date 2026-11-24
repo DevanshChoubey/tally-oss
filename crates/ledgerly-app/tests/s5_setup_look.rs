@@ -246,16 +246,21 @@ fn fresh_path(name: &str) -> PathBuf {
 }
 
 /// The capture harness's company script (`setup_shot` in `examples/ui_snapshots.rs`): Enter to
-/// Company, the name, three Tabs to the GSTIN, three Tabs to the file, two Tabs off the fields.
+/// Company, the name, two Tabs to City (Type is between), the city, a Tab to the GSTIN, four Tabs
+/// to the file (State, GST filing and Books begin are between), two Tabs off the fields. The
+/// harness leaves the file blank so the capture shows the default path; a test needs a path it
+/// can write to, so it types one.
 fn company_script(file: &str) -> Vec<Event> {
     let mut events = vec![
         key(Key::Enter),
         Event::Text("Godavari Drip & Pump Works".to_owned()),
     ];
-    events.extend([key(Key::Tab), key(Key::Tab), key(Key::Tab)]);
+    events.extend([key(Key::Tab), key(Key::Tab)]);
+    events.push(Event::Text("Pune".to_owned()));
+    events.push(key(Key::Tab));
     // index.html:1868, the mock's GSTIN; its first two digits fill the state.
     events.push(Event::Text("27AAGFG4417K1ZA".to_owned()));
-    events.extend([key(Key::Tab), key(Key::Tab), key(Key::Tab)]);
+    events.extend([key(Key::Tab), key(Key::Tab), key(Key::Tab), key(Key::Tab)]);
     events.push(Event::Text(file.to_owned()));
     events.extend([key(Key::Tab), key(Key::Tab)]);
     events

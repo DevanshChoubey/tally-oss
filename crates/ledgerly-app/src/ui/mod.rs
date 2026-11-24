@@ -17,6 +17,7 @@ pub mod button;
 pub mod card;
 pub mod chip;
 pub mod conf;
+pub mod dialogs;
 pub mod empty;
 pub mod format;
 pub mod icon;

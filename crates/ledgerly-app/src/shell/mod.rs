@@ -410,13 +410,13 @@ impl Shell {
                 }
                 self.notice = None;
             }
-            Err(e) => self.refuse(&e),
+            Err(e) => self.refuse(&e, asked_name(target)),
         }
     }
 
     /// Shows why a screen did not open. With no company open, a screen that needs one says so in
     /// plain words and offers the setup wizard.
-    fn refuse(&mut self, e: &navigate::NavError) {
+    fn refuse(&mut self, e: &navigate::NavError, asked: &str) {
         if self.app_ctx.api.is_some() {
             self.notice = Some(e.to_string());
             return;
@@ -428,9 +428,9 @@ impl Shell {
                 ));
             }
             navigate::NavError::NoCompany => {
-                self.say_need_company(
-                    "That screen needs a company. Create or open one first.".to_owned(),
-                );
+                self.say_need_company(format!(
+                    "{asked} needs a company. Create or open one first."
+                ));
             }
             other @ (navigate::NavError::BadKey(_)
             | navigate::NavError::Unsupported { .. }
@@ -841,4 +841,57 @@ pub fn run() -> eframe::Result<()> {
             Ok(Box::new(Shell::cold_start()))
         }),
     )
+}
+
+/// What to call the screen a palette target asks for, in a refusal ("Contra needs a company").
+fn asked_name(target: &PaletteTarget) -> &str {
+    match target {
+        PaletteTarget::Command(action) => match action {
+            Action::NewContra => "Contra",
+            Action::NewPayment => "Payment",
+            Action::NewReceipt => "Receipt",
+            Action::NewJournal => "Journal",
+            Action::NewSales => "Sales",
+            Action::NewPurchase => "Purchase",
+            Action::NewCreditNote => "Credit note",
+            Action::NewDebitNote => "Debit note",
+            other @ (Action::ChangePeriod
+            | Action::SwitchCompany
+            | Action::CompanyFeatures
+            | Action::Configure
+            | Action::Help
+            | Action::Back
+            | Action::OpenPalette
+            | Action::SwitchPalette
+            | Action::NewTab
+            | Action::CloseTab
+            | Action::Save
+            | Action::CreateMaster
+            | Action::AlterMaster
+            | Action::MoreDetails
+            | Action::DeleteLine
+            | Action::SwitchSide
+            | Action::DeleteVoucher
+            | Action::CancelVoucher
+            | Action::DuplicateVoucher
+            | Action::InsertVoucher
+            | Action::Undo
+            | Action::ToggleDetail
+            | Action::Print
+            | Action::Export
+            | Action::Email) => other.label(),
+        },
+        PaletteTarget::Report(key) => {
+            if key == navigate::BANK_RECON_KEY || key.starts_with("bank:") {
+                "Bank reconciliation"
+            } else {
+                "That screen"
+            }
+        }
+        PaletteTarget::Master(_)
+        | PaletteTarget::Voucher(_)
+        | PaletteTarget::Setting(_)
+        | PaletteTarget::AiIntent(_)
+        | PaletteTarget::Fill(_) => "That screen",
+    }
 }

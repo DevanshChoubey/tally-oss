@@ -11,6 +11,7 @@ mod error;
 mod events;
 pub mod facade;
 mod gst;
+mod gst_filing;
 mod maintenance;
 mod print;
 mod report;
@@ -21,6 +22,7 @@ mod voucher_gst;
 
 pub use ai::{AiLogEntry, AiTier};
 pub use command::{Command, CommandResult, CreatedId};
+pub use gst_filing::GstFiling;
 // Report types the app names when it builds and reads reports (card W7). The app depends on this
 // crate only, so the report model is re-exported here instead of adding a manifest dependency.
 pub use error::ApiError;

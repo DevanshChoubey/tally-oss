@@ -352,3 +352,131 @@ fn the_default_picker_raises_no_dialog_unless_the_real_window_switched_it_on() {
     frame(&ctx, &mut shell, vec![]);
     assert!(shell.app_ctx_mut().api.is_none());
 }
+
+#[test]
+fn the_company_is_made_with_the_filing_frequency_chosen() {
+    use ledgerly_api::{AiTier, GstFiling};
+    use ledgerly_app::screens::setup::form::{build_company, create_company_with_filing};
+    use ledgerly_core::{Clock, OffsetDateTime};
+    // provenance: derived; the wizard's GST filing choice must be what the file stores, read back
+    // by `Api::gst_filing` (round S9, the mock's "GST filing" field on the company step).
+    let path =
+        std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("s9-filing-wizard.ledgerly");
+    let _gone = std::fs::remove_file(&path);
+    let form = ledgerly_app::screens::setup::form::CompanyForm {
+        name: "Fictional Traders".to_owned(),
+        kind: ledgerly_model::EntityKind::Partnership,
+        city: "Pune".to_owned(),
+        gstin: String::new(),
+        state: ledgerly_core::StateCode::new(27).unwrap(),
+        fy_start: time::macros::date!(2026 - 04 - 01),
+        books_begin: time::macros::date!(2026 - 04 - 01),
+    };
+    let company = build_company(&form, ledgerly_model::Features::default()).unwrap();
+    let clock = Clock::Fixed(OffsetDateTime::UNIX_EPOCH);
+    let (api, _note) =
+        create_company_with_filing(&path, &company, clock, AiTier::Off, GstFiling::Quarterly)
+            .unwrap();
+    assert_eq!(api.gst_filing().unwrap(), Some(GstFiling::Quarterly));
+}
+
+#[test]
+fn the_company_step_offers_a_filing_frequency_and_keeps_it() {
+    let (ctx, mut shell) = cold();
+    press(&ctx, &mut shell, Key::Enter);
+    let painted = frame(&ctx, &mut shell, vec![]);
+    // provenance: mock index.html:1869 shows a "GST filing" field with Monthly; the old "Not
+    // saved yet" hint is true no more, since the frequency is stored with the company.
+    assert!(
+        painted.iter().any(|(t, _)| t == "GST filing"),
+        "{painted:?}"
+    );
+    assert!(painted.iter().any(|(t, _)| t == "Monthly"), "{painted:?}");
+    assert!(
+        !painted
+            .iter()
+            .any(|(t, _)| t.contains("no filing frequency is kept")),
+        "{painted:?}"
+    );
+}
+
+#[test]
+fn the_default_company_file_is_named_from_the_company_name() {
+    use ledgerly_app::screens::setup::default_file_label;
+    // provenance: derived by hand from the wizard's rule (file_path): Documents/Ledgerly, the
+    // name in lower case, each run of other characters one hyphen, no hyphen at either end.
+    assert_eq!(
+        default_file_label("Godavari Drip & Pump Works"),
+        "~/Documents/Ledgerly/godavari-drip-pump-works.ledgerly"
+    );
+    assert_eq!(
+        default_file_label("  "),
+        "~/Documents/Ledgerly/<company name>.ledgerly"
+    );
+}
+
+#[test]
+fn bank_contra_and_journal_say_which_screen_needs_a_company() {
+    // provenance: coordinator's order for round s9 (item 4): the refusal for these three read
+    // "That screen needs a company"; it must name the screen, as Masters and Home do.
+    for (query, name) in [
+        ("Bank reconciliation", "Bank reconciliation"),
+        ("Contra", "Contra"),
+        ("Journal", "Journal"),
+    ] {
+        let (ctx, mut shell) = cold();
+        frame(
+            &ctx,
+            &mut shell,
+            vec![key_event(Key::K, Modifiers::COMMAND)],
+        );
+        frame(&ctx, &mut shell, vec![]);
+        shell.palette_mut().set_query(query);
+        frame(&ctx, &mut shell, vec![]);
+        frame(
+            &ctx,
+            &mut shell,
+            vec![key_event(Key::Enter, Modifiers::NONE)],
+        );
+        frame(&ctx, &mut shell, vec![]);
+        assert_eq!(
+            shell.notice(),
+            Some(format!("{name} needs a company. Create or open one first.").as_str()),
+            "{query}"
+        );
+    }
+}
+
+#[test]
+fn only_one_module_may_raise_a_native_file_dialog_and_it_is_off_in_tests() {
+    // provenance: coordinator's order for round s9 (item 5): no test can ever open a native
+    // dialog. Every call to the `rfd` crate lives in `ui/dialogs.rs`, which answers "cancelled"
+    // until the real window switches dialogs on; this scan fails if another file calls rfd.
+    fn scan(dir: &std::path::Path, found: &mut Vec<String>) {
+        for entry in std::fs::read_dir(dir).unwrap() {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                scan(&path, found);
+            } else if path.extension().is_some_and(|e| e == "rs") {
+                let text = std::fs::read_to_string(&path).unwrap();
+                if text.contains("rfd::") && !path.ends_with("ui/dialogs.rs") {
+                    found.push(path.display().to_string());
+                }
+            }
+        }
+    }
+    let mut found = Vec::new();
+    scan(
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src"),
+        &mut found,
+    );
+    assert!(found.is_empty(), "{found:?}");
+    assert_eq!(
+        ledgerly_app::ui::dialogs::save_file("Export", Some("a.csv"), &[("CSV", &["csv"])]),
+        None
+    );
+    assert_eq!(
+        ledgerly_app::ui::dialogs::open_file("Open", &[("CSV", &["csv"])]),
+        None
+    );
+}

@@ -14,7 +14,7 @@ use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, TryRecvError};
 
 use egui::Key;
-use ledgerly_api::{AiTier, Api};
+use ledgerly_api::{AiTier, Api, GstFiling};
 use ledgerly_core::{Clock, Date, StateCode};
 use ledgerly_model::{EntityKind, Features};
 
@@ -127,6 +127,8 @@ pub struct SetupScreen {
     keyboard_classic: bool,
     /// The AI tier the user picked, stored with the new company ([`form::create_company`]).
     ai: AiTier,
+    /// How often GST returns are filed, stored with the new company.
+    filing: GstFiling,
     /// The backup folder typed. Not stored yet.
     backup_folder: String,
     /// What the last action said, shown on the step.
@@ -206,33 +208,63 @@ fn default_sample_base() -> PathBuf {
     cache.unwrap_or_else(std::env::temp_dir)
 }
 
-/// Whether the real window has switched native file dialogs on. Off in every test and capture
-/// run, so none of them can raise a dialog on someone's desktop.
-static SYSTEM_DIALOGS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-
-/// Lets the wizard's Open card raise the system file dialog. Only `shell::run` calls this.
+/// Lets the app raise native file dialogs (see [`crate::ui::dialogs`]). Only `shell::run` calls
+/// this.
 pub fn enable_system_dialogs() {
-    SYSTEM_DIALOGS.store(true, std::sync::atomic::Ordering::SeqCst);
+    crate::ui::dialogs::enable_system_dialogs();
 }
 
 /// `true` once [`enable_system_dialogs`] was called.
 #[must_use]
 pub fn system_dialogs_enabled() -> bool {
-    SYSTEM_DIALOGS.load(std::sync::atomic::Ordering::SeqCst)
+    crate::ui::dialogs::system_dialogs_enabled()
 }
 
-/// The wizard's default file dialog: the system dialog when [`enable_system_dialogs`] was
-/// called, otherwise "cancelled" at once.
+/// The wizard's default file dialog: the system dialog when dialogs were switched on, otherwise
+/// "cancelled" at once.
 #[must_use]
 pub fn default_file_dialog() -> Option<PathBuf> {
-    if system_dialogs_enabled() {
-        rfd::FileDialog::new()
-            .set_title("Open a Ledgerly file")
-            .add_filter("Ledgerly company file", &["ledgerly"])
-            .pick_file()
+    crate::ui::dialogs::open_file(
+        "Open a Ledgerly file",
+        &[("Ledgerly company file", &["ledgerly"])],
+    )
+}
+
+/// A home folder to use instead of `$HOME` for the default company file (captures and tests).
+static HOME_OVERRIDE: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+
+/// Makes the default company file go under `home` instead of the user's home folder. The first
+/// call wins; the real window never calls it.
+pub fn set_home_override(home: PathBuf) {
+    let _first = HOME_OVERRIDE.set(home);
+}
+
+/// The path the company file gets when the field is left blank, as the field shows it.
+#[must_use]
+pub fn default_file_label(name: &str) -> String {
+    let slug = file_slug(name);
+    if slug.is_empty() {
+        "~/Documents/Ledgerly/<company name>.ledgerly".to_owned()
     } else {
-        None
+        format!("~/Documents/Ledgerly/{slug}.ledgerly")
     }
+}
+
+/// The company name as a file name: lower case, each run of other characters one hyphen, no
+/// hyphen at either end.
+fn file_slug(name: &str) -> String {
+    let mut slug = String::new();
+    for c in name.trim().chars() {
+        if c.is_ascii_alphanumeric() {
+            slug.push(c.to_ascii_lowercase());
+        } else if !slug.is_empty() && !slug.ends_with('-') {
+            slug.push('-');
+        }
+    }
+    while slug.ends_with('-') {
+        slug.pop();
+    }
+    slug
 }
 
 impl Default for SetupScreen {
@@ -271,6 +303,7 @@ impl SetupScreen {
             features: default_features(),
             keyboard_classic: true,
             ai: AiTier::Local,
+            filing: GstFiling::Monthly,
             backup_folder: String::new(),
             notice: None,
             job: None,
@@ -461,8 +494,10 @@ impl SetupScreen {
                 return;
             }
         };
-        let (clock, ai) = (self.clock, self.ai);
-        match spawn_file_job(move || form::create_company(&path, &company, clock, ai)) {
+        let (clock, ai, filing) = (self.clock, self.ai, self.filing);
+        match spawn_file_job(move || {
+            form::create_company_with_filing(&path, &company, clock, ai, filing)
+        }) {
             Ok(rx) => {
                 self.job = Some(rx);
                 self.notice = Some("Working on the company file...".to_owned());
@@ -476,24 +511,16 @@ impl SetupScreen {
         if !self.file.trim().is_empty() {
             return Ok(PathBuf::from(self.file.trim()));
         }
-        let home = std::env::var_os("HOME")
-            .or_else(|| std::env::var_os("USERPROFILE"))
+        let home = HOME_OVERRIDE
+            .get()
+            .cloned()
+            .or_else(|| std::env::var_os("HOME").map(PathBuf::from))
+            .or_else(|| std::env::var_os("USERPROFILE").map(PathBuf::from))
             .ok_or_else(|| {
                 "Type where the company file goes; no home folder is known.".to_owned()
             })?;
-        let slug: String = self
-            .name
-            .trim()
-            .chars()
-            .map(|c| {
-                if c.is_ascii_alphanumeric() {
-                    c.to_ascii_lowercase()
-                } else {
-                    '-'
-                }
-            })
-            .collect();
-        Ok(PathBuf::from(home)
+        let slug = file_slug(&self.name);
+        Ok(home
             .join("Documents")
             .join("Ledgerly")
             .join(format!("{slug}.ledgerly")))
@@ -771,9 +798,15 @@ impl SetupScreen {
                         }
                     });
             });
-            field(ui, col, "GST filing", |ui, _| {
-                read_only(ui, "Monthly");
-                hint(ui, "Not saved yet: no filing frequency is kept.");
+            field(ui, col, "GST filing", |ui, w| {
+                egui::ComboBox::from_id_salt("setup-filing")
+                    .width(w)
+                    .selected_text(self.filing.label())
+                    .show_ui(ui, |ui| {
+                        for filing in [GstFiling::Monthly, GstFiling::Quarterly] {
+                            ui.selectable_value(&mut self.filing, filing, filing.label());
+                        }
+                    });
             });
         });
         self.draw_company_dates(ui, col);
@@ -806,7 +839,7 @@ impl SetupScreen {
                 ui,
                 "Company file",
                 input(&mut self.file)
-                    .hint_text("blank: Documents/Ledgerly/<company>.ledgerly")
+                    .hint_text(default_file_label(&self.name))
                     .desired_width(w),
             );
         });

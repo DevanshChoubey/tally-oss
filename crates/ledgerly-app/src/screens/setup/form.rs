@@ -7,7 +7,7 @@
 
 use std::path::Path;
 
-use ledgerly_api::{AiTier, Api};
+use ledgerly_api::{AiTier, Api, GstFiling};
 use ledgerly_core::{Clock, CompanyId, Date, Gstin, GstinError, Outcome, Pan, StateCode};
 use ledgerly_model::{
     Address, Company, EntityKind, Features, GstRegistration, NegativeStockPolicy,
@@ -173,6 +173,29 @@ pub fn create_company(
         Err(e) => Some(format!(
             "The AI choice was not saved: {e}. AI is not set up for this company."
         )),
+    };
+    Ok((api, note))
+}
+
+/// Like [`create_company`], and also stores the GST filing frequency chosen on the company step.
+///
+/// # Errors
+/// The reason the company file could not be created.
+pub fn create_company_with_filing(
+    path: &Path,
+    company: &Company,
+    clock: Clock,
+    ai: AiTier,
+    filing: GstFiling,
+) -> Result<(Api, Option<String>), String> {
+    let (mut api, note) = create_company(path, company, clock, ai)?;
+    let note = match api.set_gst_filing(filing) {
+        Ok(Outcome::Value(())) => note,
+        Ok(Outcome::Unsupported(refused)) => Some(format!(
+            "The GST filing choice was not saved: {}.",
+            refused.reason
+        )),
+        Err(e) => Some(format!("The GST filing choice was not saved: {e}.")),
     };
     Ok((api, note))
 }

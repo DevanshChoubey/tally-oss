@@ -582,9 +582,14 @@ financial year starts. The model supports that (`Company::books_begin`), so it i
   picked, and Done shows the engine's reason; the company starts with AI not set up.
 - **bug: backup folder is not saved and no backup runs on a schedule.** `backup_to` writes one
   file when called; nothing stores a folder or runs daily. The Backup step says so.
-- **gap: GST filing frequency (Monthly) is not saved.** The model has no filing-frequency field.
+- **fixed (S9): GST filing frequency is stored.** The company step has a Monthly / Quarterly list
+  like the mock's field; the choice is kept in the company file as an audited `gst.filing`
+  setting (`Api::set_gst_filing`, `Api::gst_filing`; tests in `ledgerly-api/tests/s9_gst_filing.rs`).
+  Nothing reads it yet: the GST screens do not change with it.
 - **gap: the "Company file" field is ours.** The mock has no file location; the wizard asks for
-  it, defaulting to `Documents/Ledgerly/<company>.ledgerly` when blank.
+  it. Blank, it shows the path it will use as a hint (`~/Documents/Ledgerly/<company>.ledgerly`,
+  made from the company name). The capture leaves it blank and runs with a throwaway home folder
+  (`set_home_override`), so the shot shows what a user sees and nothing is written to Documents.
 - **gap: City is kept as the first address line.** The model's `Address` has no city field.
 - **gap: the state mismatch has no red outline or icon.** `setup.gstin-error` (24 Gujarat chosen
   against a GSTIN starting 27, by clicks on the State list) shows the mock's words and disables
@@ -619,23 +624,25 @@ financial year starts. The model supports that (`Company::books_begin`), so it i
   pill above it (`ui::toast`, the mock's `.toast`, index.html:290), gone after 6 seconds. With no
   company, F4-F9 and D, B, M, G, and screens that need a company, say "X needs a company. Create or
   open one first." with a "Create a company" action.
-- **gap: first-launch chrome.** With no company the top bar shows the mock's one "New company"
-  chip, but the AI chip says "AI: not set up" where the mock says "AI on this computer" (nothing
-  is stored to name), and the sidebar footer shows the app version where the mock shows "Engine
-  0.1 mock - rule pack ...". The sidebar lists every screen with no company open, as the mock
-  does; what each does with no company is in `design/REAL-PATH-AUDIT.md`.
+- **by design: first-launch chrome words.** With no company the top bar shows the mock's one "New
+  company" chip. The AI chip says "AI: not set up" in the neutral style where the mock says "AI on
+  this computer" in the green style: nothing is stored to say the AI runs, and the app never claims
+  it. The sidebar footer keeps the mock's two lines and check icon but names the app version
+  ("Ledgerly 1.0.1") where the mock says "Engine 0.1 mock - rule pack ..." (a mock label; no rule
+  pack version is shown anywhere in the app). The key bar does not draw "Hold Alt or Ctrl for
+  more": holding Alt or Ctrl does not change our bar, so the hint would promise a feature that does
+  not exist. The sidebar lists every screen with no company open, as the mock does; what each does
+  with no company is in `design/REAL-PATH-AUDIT.md`.
 - **gap: no F11 on the Features step.** The mock's line ends "F11 changes this later"; no F11
   feature screen exists, so the sentence is left out. Rows the model has no switch for show an
   off switch that does not move and say why.
 - **gap: the backup note has no info icon.** The kit's note draws text only.
 - **fixed (S9): fields use the mock's input size.** Setup's text inputs now share one helper
   (`input()` in `screens/setup/mod.rs`: 10 x 7 margin, the input font) and combo boxes use the
-  kit's `style_combo`, so rows are the mock's height. Read-only values (GST filing, Keep, When)
+  kit's `style_combo`, so rows are the mock's height. Read-only values (Keep, When)
   are still text with a "Not saved yet" hint instead of inputs.
-- **gap: the "AI" chip and sidebar footer on first launch** are listed above; the "Hold Alt or
-  Ctrl for more" key-bar hint is not drawn.
 - **data: the mock's sample is prefilled; the wizard starts blank.** The capture types the mock's
-  company (name, GSTIN, file). The mock's City "Pune" is not typed.
+  company (name, City "Pune", GSTIN).
 
 ## Print (card P1, round of 2026-11-24)
 
@@ -713,8 +720,9 @@ quick-entry offline-AI state has no dark or hc mock capture). Theme differences 
 Full table in `design/REAL-PATH-AUDIT.md`. Fixed in S9: the import screen is in the app's kit and
 the welcome's Import card opens it; shortcuts and refusals give a toast with a "Create a company"
 action; the tab strip is styled with distinct titles. Still open: the import screen's step-by-step
-path is not connected; dark and hc `setup.welcome` SSIM is 0.8452 and 0.8121 (AI chip text,
-sidebar footer text and the "Hold Alt or Ctrl for more" hint differ).
+path is not connected. `setup.welcome` SSIM is light 0.8415, dark 0.8481, hc 0.8151; the words of
+the AI chip, the sidebar footer and the missing "Hold Alt or Ctrl for more" hint are by design
+(setup section).
 
 ## Reports not in the mock (S8)
 

@@ -68,11 +68,10 @@ pub(super) fn layout_for(path: &Path, current: &'static str) -> &'static str {
 /// # Errors
 /// The text to show when the file cannot be read.
 pub(super) fn pick_file(current: &'static str) -> Result<Option<PickedFile>, String> {
-    let Some(path) = rfd::FileDialog::new()
-        .set_title("Import bank statement")
-        .add_filter("Bank statement", &["csv", "xlsx", "mt940", "sta"])
-        .pick_file()
-    else {
+    let Some(path) = crate::ui::dialogs::open_file(
+        "Import bank statement",
+        &[("Bank statement", &["csv", "xlsx", "mt940", "sta"])],
+    ) else {
         return Ok(None);
     };
     let bytes = std::fs::read(&path).map_err(|e| format!("The file could not be read: {e}."))?;

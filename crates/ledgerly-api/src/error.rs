@@ -71,6 +71,14 @@ pub enum ApiError {
         /// The stored word.
         value: String,
     },
+    /// The company file holds a GST filing word this build does not know. It is not guessed.
+    #[error(
+        "the company file holds the GST filing frequency '{value}', which this build does not know"
+    )]
+    UnknownGstFiling {
+        /// The stored word.
+        value: String,
+    },
     /// The AI activity log could not be written to the chosen file.
     #[error("the AI activity log could not be written to {}: {source}", path.display())]
     AiLogWrite {
