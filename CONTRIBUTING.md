@@ -29,8 +29,8 @@ with Ledgerly here.
 ## Getting set up
 
 ```bash
-git clone https://github.com/DevanshChoubey/opentally
-cd opentally
+git clone https://github.com/DevanshChoubey/tally-oss
+cd tally-oss
 cargo build
 cargo run -p ledgerly-app
 ```

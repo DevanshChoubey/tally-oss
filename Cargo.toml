@@ -6,7 +6,7 @@ exclude = ["fuzz"]
 [workspace.package]
 edition = "2024"
 rust-version = "1.100"
-repository = "https://github.com/DevanshChoubey/opentally"
+repository = "https://github.com/DevanshChoubey/tally-oss"
 
 [workspace.dependencies]
 # Internal crates

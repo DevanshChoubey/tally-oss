@@ -4,7 +4,7 @@ A local-first, keyboard-driven desktop accounting app for Indian small businesse
 returns, bank reconciliation, basic inventory and printing, in one company file on your own
 computer. Written in Rust with egui.
 
-- Download: see the [releases](https://github.com/DevanshChoubey/opentally/releases) page (Linux, Windows,
+- Download: see the [releases](https://github.com/DevanshChoubey/tally-oss/releases) page (Linux, Windows,
   macOS). What is in each release and what is not yet: [RELEASE-NOTES.md](RELEASE-NOTES.md).
 - Design spec: [docs/specs/2026-11-20-ledgerly-design.md](docs/specs/2026-11-20-ledgerly-design.md).
 - Engineering rules: [docs/engineering-rules.md](docs/engineering-rules.md).

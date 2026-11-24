@@ -28,5 +28,5 @@ First release. The full list of what is in it, and its known gaps, is in
 - Light, dark and high-contrast themes; screen-reader names, Tab order and zoom.
 - Release packages for Linux, Windows and macOS; reproducible Linux builds.
 
-[Unreleased]: https://github.com/DevanshChoubey/opentally/compare/v1.0.0...HEAD
-[1.0.0]: https://github.com/DevanshChoubey/opentally/releases/tag/v1.0.0
+[Unreleased]: https://github.com/DevanshChoubey/tally-oss/compare/v1.0.0...HEAD
+[1.0.0]: https://github.com/DevanshChoubey/tally-oss/releases/tag/v1.0.0
