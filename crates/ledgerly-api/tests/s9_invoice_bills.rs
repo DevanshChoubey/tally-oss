@@ -791,5 +791,5 @@ fn the_open_bills_of_a_party_are_those_its_invoices_opened() {
     assert_eq!(bills[0].name, number);
     assert_eq!(bills[0].ledger, BILLED);
     assert_eq!(bills[0].open, SignedAmount::dr(Paise::new(1_180_000)));
-    assert!(ok(api.open_bills(KA_BUYER, date!(2026 - 10 - 31))).is_empty());
+    assert_eq!(ok(api.open_bills(KA_BUYER, date!(2026 - 10 - 31))), vec![]);
 }

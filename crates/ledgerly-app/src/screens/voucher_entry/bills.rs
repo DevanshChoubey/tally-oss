@@ -27,7 +27,7 @@ impl VoucherEntryScreen {
         let Some(panel) = self.panel else {
             return;
         };
-        let open: Vec<OpenBill> = self.open_bills().map(<[_]>::to_vec).unwrap_or_default();
+        let open: Vec<OpenBill> = self.open_bills().map_or_else(Vec::new, <[_]>::to_vec);
         let answered = self.open_bills().is_some();
         let (name, this) = self.panel_names(panel.row);
         let t = tokens(ui);
@@ -87,8 +87,7 @@ impl VoucherEntryScreen {
             .draft
             .rows
             .get(row)
-            .map(|r| r.ledger_text.clone())
-            .unwrap_or_default();
+            .map_or_else(String::new, |r| r.ledger_text.clone());
         let this = match self.draft.kind {
             EntryKind::Receipt => "receipt",
             EntryKind::Payment
@@ -102,6 +101,10 @@ impl VoucherEntryScreen {
 
     /// The table of open bills: type, bill, date, open amount and the part settled, with a line
     /// under each saying what is left open on it.
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one table drawn row by row; splitting would only pass the same borrows around"
+    )]
     fn draw_bill_rows(
         &mut self,
         ui: &mut Ui,
@@ -145,15 +148,14 @@ impl VoucherEntryScreen {
                     let Some(r) = self.draft.rows.get_mut(row) else {
                         return;
                     };
-                    let at = match r.bills.iter().position(|b| b.name == bill.name) {
-                        Some(at) => at,
-                        None => {
-                            r.bills.push(BillDraft {
-                                name: bill.name.clone(),
-                                amount_text: String::new(),
-                            });
-                            r.bills.len().saturating_sub(1)
-                        }
+                    let at = if let Some(at) = r.bills.iter().position(|b| b.name == bill.name) {
+                        at
+                    } else {
+                        r.bills.push(BillDraft {
+                            name: bill.name.clone(),
+                            amount_text: String::new(),
+                        });
+                        r.bills.len().saturating_sub(1)
                     };
                     let spec = FieldSpec {
                         id: base.with(("bill-amount", k)),

@@ -207,7 +207,7 @@ fn number_series(api: &mut Api) -> Result<(), SampleError> {
             .into_iter()
             .find(|t| t.base == kind)
             .ok_or_else(|| value_error("voucher type", format!("no default type for {kind:?}")))?;
-        vt.numbering.prefix = prefix.to_owned();
+        prefix.clone_into(&mut vt.numbering.prefix);
         vt.numbering.width = 4;
         run(
             api,

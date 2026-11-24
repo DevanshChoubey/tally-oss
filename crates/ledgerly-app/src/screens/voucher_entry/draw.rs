@@ -222,6 +222,10 @@ impl VoucherEntryScreen {
     }
 
     /// The head: the date, and for a single-entry voucher the account across two columns.
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one head row drawn left to right; splitting would only pass the same borrows around"
+    )]
     fn draw_head(&mut self, ui: &mut Ui, base: Id, cx: &mut Cx<'_>) {
         let single = self.draft.is_single_entry();
         let account_balance = match self.draft.rows.first().and_then(|r| r.ledger.as_ref()) {

@@ -277,7 +277,7 @@ impl VoucherEntryScreen {
         let text = self.draft.mode_text.trim();
         if !text.is_empty() {
             match parse_mode(text) {
-                Some(kind) => self.draft.mode_text = mode_label(kind).to_owned(),
+                Some(kind) => mode_label(kind).clone_into(&mut self.draft.mode_text),
                 None => {
                     return self.fail(format!(
                         "The mode '{text}' is none of Cheque, NEFT, RTGS, IMPS, UPI, Card or Other."
@@ -604,18 +604,13 @@ impl VoucherEntryScreen {
             Err(e) => return self.fail(e.to_string()),
         };
         let mut settled = ledgerly_core::Paise::ZERO;
-        let typed: Vec<BillDraft> = self
-            .draft
-            .rows
-            .get(i)
-            .map(|r| {
-                r.bills
-                    .iter()
-                    .filter(|b| !b.amount_text.trim().is_empty())
-                    .cloned()
-                    .collect()
-            })
-            .unwrap_or_default();
+        let typed: Vec<BillDraft> = self.draft.rows.get(i).map_or_else(Vec::new, |r| {
+            r.bills
+                .iter()
+                .filter(|b| !b.amount_text.trim().is_empty())
+                .cloned()
+                .collect()
+        });
         for bill in &typed {
             let part = match eval_amount(&bill.amount_text) {
                 Ok(part) => part,

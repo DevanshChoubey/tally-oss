@@ -900,7 +900,7 @@ fn confirmed_save_starts_a_fresh_invoice_and_a_failed_save_keeps_the_screen() {
     // The mock's saved state keeps the party and the date and has no lines (design/mock-v2/
     // index.html line 1269), so the lines are what must be empty.
     assert!(s.draft().rows.iter().all(|r| r.item.is_none()));
-    assert!(s.draft().narration.is_empty());
+    assert_eq!(s.draft().narration, "");
     assert_eq!(s.focus(), Field::Party);
     assert!(matches!(s.gst_status(m), GstStatus::Incomplete(_)));
     assert_eq!(s.info_text(), Some("Saved."));
@@ -1337,5 +1337,5 @@ fn a_save_carries_the_party_and_place_and_opens_no_party_list() {
     assert_eq!(s.draft().place_text, "27");
     assert!(s.draft().rows.iter().all(|r| r.item.is_none()));
     assert_eq!(s.focus(), Field::Party);
-    assert!(s.pick_labels(m).is_empty());
+    assert_eq!(s.pick_labels(m), Vec::<String>::new());
 }
