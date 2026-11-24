@@ -87,16 +87,16 @@ pub(super) fn filter_box(ui: &mut Ui, text: &mut String, hint: &str) -> bool {
 }
 
 /// One column of a list.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub(super) struct Col {
     /// The heading.
-    pub label: &'static str,
+    pub label: String,
     /// The width in points, or `None` for a share of what the fixed columns leave.
     pub width: Option<f32>,
     /// Figures: right-aligned heading and cells (`th.num`, `td.num`).
     pub numeric: bool,
     /// Shown when the pointer is over the heading, for a column whose figures are not here yet.
-    pub hint: Option<&'static str>,
+    pub hint: Option<String>,
     /// The figures came from the engine: the heading carries the engine provenance tag with this
     /// text (`prov('eng','engine')`, index.html:1796; `prov('eng','stock engine')`, line 1798).
     pub tag: Option<&'static str>,
@@ -143,7 +143,7 @@ impl Cell {
 #[derive(Debug, Clone)]
 pub(super) struct TotalLine {
     /// The label ("Closing stock").
-    pub label: &'static str,
+    pub label: String,
     /// The figure, as the engine gave it.
     pub value: String,
     /// Why the figure is a dash or provisional, shown on hover.
@@ -274,12 +274,12 @@ fn paint_heading(ui: &Ui, cols: &[Col], rect: Rect, response: &egui::Response) {
             ui,
             label_rect,
             1.0,
-            col.label,
+            &col.label,
             font.clone(),
             t.text_3,
             place,
         );
-        if let Some(hint) = col.hint
+        if let Some(hint) = col.hint.as_deref()
             && response.hover_pos().is_some_and(|p| r.contains(p))
         {
             response.clone().on_hover_text(hint);
@@ -324,7 +324,7 @@ fn paint_total(ui: &Ui, cols: &[Col], rect: Rect, line: &TotalLine) {
         ui,
         label_rect,
         3.0,
-        line.label,
+        &line.label,
         font.clone(),
         t.text,
         CellPlace::Left(table::CELL_PAD_X),

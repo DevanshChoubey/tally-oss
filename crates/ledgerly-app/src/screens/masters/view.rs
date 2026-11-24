@@ -243,9 +243,15 @@ fn address_text(ledger: &Ledger) -> String {
 /// (mock v2 index.html:1796 for the ledgers: "name, group, GSTIN or alias").
 #[must_use]
 pub fn filter_hint(kind: MasterKind) -> String {
+    filter_hint_in(kind, &crate::i18n::Tr::default())
+}
+
+/// The filter hint in language `tr`.
+#[must_use]
+pub fn filter_hint_in(kind: MasterKind, tr: &crate::i18n::Tr) -> String {
     match kind {
-        MasterKind::Ledger => "Filter ledgers: name, group, GSTIN or alias".to_owned(),
-        MasterKind::StockItem => "Filter stock items: name or alias".to_owned(),
+        MasterKind::Ledger => tr.t("masters.filter.ledger"),
+        MasterKind::StockItem => tr.t("masters.filter.stock_item"),
         MasterKind::Group
         | MasterKind::VoucherType
         | MasterKind::Unit
@@ -253,9 +259,10 @@ pub fn filter_hint(kind: MasterKind) -> String {
         | MasterKind::Godown
         | MasterKind::Batch
         | MasterKind::CostCategory
-        | MasterKind::CostCentre => {
-            format!("Filter {}: name or alias", kind.plural().to_lowercase())
-        }
+        | MasterKind::CostCentre => tr.tf(
+            "masters.filter.other",
+            &[("plural", &kind.plural_in(tr).to_lowercase())],
+        ),
     }
 }
 

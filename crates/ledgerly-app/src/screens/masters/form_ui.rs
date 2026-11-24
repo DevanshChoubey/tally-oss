@@ -9,6 +9,7 @@
 //! (index.html:1831 "Enter Next field"; 1344 "Shift+Enter Previous"), as Tab and Shift+Tab do. A
 //! multi-line field keeps Enter for a new line.
 
+use crate::i18n::Tr;
 use egui::{Align, Align2, FocusDirection, FontId, Id, Key, Layout, Modifiers, RichText, Ui, vec2};
 use ledgerly_core::{DrCr, StateCode};
 use ledgerly_model::{
@@ -98,13 +99,13 @@ fn one_line(ui: &mut Ui, edit: egui::TextEdit<'_>) -> egui::Response {
 /// Draws the result of the GSTIN check under the GSTIN field (index.html:1810): nothing when the
 /// field is empty; "Check character OK" with the PAN and state the GSTIN holds when every test
 /// passes; the reason in the error ink when one fails.
-pub(crate) fn draw_gstin_check(ui: &mut Ui, text: &str) {
+pub(crate) fn draw_gstin_check(ui: &mut Ui, text: &str, tr: &Tr) {
     match check_gstin(text) {
         GstinCheck::Empty => {}
         GstinCheck::Valid => {
             ui.horizontal_wrapped(|ui| {
                 ui.spacing_mut().item_spacing.x = 6.0;
-                badge(ui, BadgeKind::Ok, "Check character OK");
+                badge(ui, BadgeKind::Ok, &tr.t("masters.check_ok"));
                 if let Some(hint) = gstin_hint(text) {
                     let t = tokens(ui);
                     ui.label(RichText::new(hint).size(TEXT_META).color(t.text_3));
@@ -124,15 +125,15 @@ pub(crate) fn draw_gstin_check(ui: &mut Ui, text: &str) {
     }
 }
 
-fn registration_label(r: RegistrationType) -> &'static str {
+fn registration_label(r: RegistrationType, tr: &Tr) -> String {
     match r {
-        RegistrationType::Regular => "Regular",
-        RegistrationType::Composition => "Composition",
-        RegistrationType::Unregistered => "Unregistered",
-        RegistrationType::Consumer => "Consumer",
-        RegistrationType::Sez => "SEZ",
-        RegistrationType::Overseas => "Overseas",
-        RegistrationType::Uin => "UIN holder",
+        RegistrationType::Regular => tr.t("masters.reg.regular"),
+        RegistrationType::Composition => tr.t("masters.reg.composition"),
+        RegistrationType::Unregistered => tr.t("masters.reg.unregistered"),
+        RegistrationType::Consumer => tr.t("masters.reg.consumer"),
+        RegistrationType::Sez => tr.t("masters.reg.sez"),
+        RegistrationType::Overseas => tr.t("masters.reg.overseas"),
+        RegistrationType::Uin => tr.t("masters.reg.uin"),
     }
 }
 
@@ -146,12 +147,12 @@ const REGISTRATIONS: [RegistrationType; 7] = [
     RegistrationType::Uin,
 ];
 
-fn nature_label(n: Nature) -> &'static str {
+fn nature_label(n: Nature, tr: &Tr) -> String {
     match n {
-        Nature::Asset => "Asset",
-        Nature::Liability => "Liability",
-        Nature::Income => "Income",
-        Nature::Expense => "Expense",
+        Nature::Asset => tr.t("masters.nature.asset"),
+        Nature::Liability => tr.t("masters.nature.liability"),
+        Nature::Income => tr.t("masters.nature.income"),
+        Nature::Expense => tr.t("masters.nature.expense"),
     }
 }
 
@@ -162,12 +163,12 @@ const NATURES: [Nature; 4] = [
     Nature::Expense,
 ];
 
-fn valuation_label(v: ValuationMethod) -> &'static str {
+fn valuation_label(v: ValuationMethod, tr: &Tr) -> String {
     match v {
-        ValuationMethod::AverageCost => "Average cost",
-        ValuationMethod::Fifo => "FIFO",
-        ValuationMethod::LastPurchaseCost => "Last purchase cost",
-        ValuationMethod::StandardCost => "Standard cost",
+        ValuationMethod::AverageCost => tr.t("masters.valuation.average_cost"),
+        ValuationMethod::Fifo => tr.t("masters.valuation.fifo"),
+        ValuationMethod::LastPurchaseCost => tr.t("masters.valuation.last_purchase_cost"),
+        ValuationMethod::StandardCost => tr.t("masters.valuation.standard_cost"),
     }
 }
 
@@ -178,16 +179,16 @@ const VALUATIONS: [ValuationMethod; 4] = [
     ValuationMethod::StandardCost,
 ];
 
-fn tax_kind_label(k: TaxLedgerKind) -> &'static str {
+fn tax_kind_label(k: TaxLedgerKind, tr: &Tr) -> String {
     match k {
-        TaxLedgerKind::Cgst => "CGST",
-        TaxLedgerKind::Sgst => "SGST",
-        TaxLedgerKind::Utgst => "UTGST",
-        TaxLedgerKind::Igst => "IGST",
-        TaxLedgerKind::Cess => "Cess",
-        TaxLedgerKind::Tds => "TDS",
-        TaxLedgerKind::Tcs => "TCS",
-        TaxLedgerKind::Other => "Other",
+        TaxLedgerKind::Cgst => "CGST".to_owned(),
+        TaxLedgerKind::Sgst => "SGST".to_owned(),
+        TaxLedgerKind::Utgst => "UTGST".to_owned(),
+        TaxLedgerKind::Igst => "IGST".to_owned(),
+        TaxLedgerKind::Cess => "Cess".to_owned(),
+        TaxLedgerKind::Tds => "TDS".to_owned(),
+        TaxLedgerKind::Tcs => "TCS".to_owned(),
+        TaxLedgerKind::Other => tr.t("masters.tax_kind.other"),
     }
 }
 
@@ -202,12 +203,12 @@ const TAX_KINDS: [TaxLedgerKind; 8] = [
     TaxLedgerKind::Other,
 ];
 
-fn taxability_label(t: Taxability) -> &'static str {
+fn taxability_label(t: Taxability, tr: &Tr) -> String {
     match t {
-        Taxability::Taxable => "Taxable",
-        Taxability::Exempt => "Exempt",
-        Taxability::NilRated => "Nil rated",
-        Taxability::NonGst => "Non-GST",
+        Taxability::Taxable => tr.t("masters.taxability.taxable"),
+        Taxability::Exempt => tr.t("masters.taxability.exempt"),
+        Taxability::NilRated => tr.t("masters.taxability.nil_rated"),
+        Taxability::NonGst => tr.t("masters.taxability.non_gst"),
     }
 }
 
@@ -284,13 +285,13 @@ fn area_row(ui: &mut Ui, span: u8, id: Id, label: &str, value: &mut String) {
 }
 
 /// A switch: the label above, then a check box reading "On".
-fn switch_row(ui: &mut Ui, span: u8, label: &str, value: &mut bool) {
+fn switch_row(ui: &mut Ui, tr: &Tr, span: u8, label: &str, value: &mut bool) {
     fld(ui, span, label, |ui| {
         ui.allocate_ui_with_layout(
             vec2(ui.available_width(), FIELD_HEIGHT),
             Layout::left_to_right(Align::Center),
             |ui| {
-                ui.checkbox(value, "On");
+                ui.checkbox(value, tr.t("masters.field.on"));
             },
         );
     });
@@ -352,30 +353,30 @@ fn choose_one<T: Copy + PartialEq>(
     salt: &str,
     label: &str,
     current: &mut T,
-    options: &[(T, &'static str)],
+    options: &[(T, String)],
 ) {
     let shown = options
         .iter()
         .find(|(v, _)| *v == *current)
-        .map_or("", |(_, name)| *name);
+        .map_or("", |(_, name)| name.as_str());
     fld(ui, span, label, |ui| {
         egui::ComboBox::from_id_salt(salt)
             .selected_text(shown)
             .width(ui.available_width())
             .show_ui(ui, |ui| {
                 for (value, name) in options {
-                    ui.selectable_value(&mut *current, *value, *name);
+                    ui.selectable_value(&mut *current, *value, name.as_str());
                 }
             });
     });
 }
 
-fn labelled<T: Copy>(all: &[T], label: fn(T) -> &'static str) -> Vec<(T, &'static str)> {
+fn labelled<T: Copy>(all: &[T], label: impl Fn(T) -> String) -> Vec<(T, String)> {
     all.iter().map(|v| (*v, label(*v))).collect()
 }
 
-fn named<T: Copy>(all: &[T], label: fn(T) -> &'static str) -> Vec<(T, String)> {
-    all.iter().map(|v| (*v, label(*v).to_owned())).collect()
+fn named<T: Copy>(all: &[T], label: impl Fn(T) -> String) -> Vec<(T, String)> {
+    all.iter().map(|v| (*v, label(*v))).collect()
 }
 
 /// Sorted `(id, name)` options, skipping `exclude` (the master being altered).
@@ -389,9 +390,15 @@ fn sorted_options<T: Copy>(
 }
 
 /// A switch that adds or drops an optional section of the draft.
-fn section_switch<T>(ui: &mut Ui, label: &str, slot: &mut Option<T>, fresh: impl FnOnce() -> T) {
+fn section_switch<T>(
+    ui: &mut Ui,
+    tr: &Tr,
+    label: &str,
+    slot: &mut Option<T>,
+    fresh: impl FnOnce() -> T,
+) {
     let mut on = slot.is_some();
-    switch_row(ui, 1, label, &mut on);
+    switch_row(ui, tr, 1, label, &mut on);
     if on != slot.is_some() {
         *slot = on.then(fresh);
     }
@@ -405,6 +412,7 @@ pub(crate) fn draw_form(
     draft: &mut MasterDraft,
     editing: Option<u64>,
     balance: Option<&str>,
+    tr: &Tr,
 ) {
     enter_moves_focus(ui);
     let width = ui.available_width();
@@ -414,7 +422,7 @@ pub(crate) fn draw_form(
         |ui| {
             ui.set_width(width);
             ui.spacing_mut().item_spacing = vec2(GAP_X, GAP_Y);
-            draw_fields(ui, masters, draft, editing, balance);
+            draw_fields(ui, masters, draft, editing, balance, tr);
         },
     );
 }
@@ -426,13 +434,14 @@ fn draw_fields(
     draft: &mut MasterDraft,
     editing: Option<u64>,
     balance: Option<&str>,
+    tr: &Tr,
 ) {
     match draft {
-        MasterDraft::Group(d) => draw_group(ui, masters, d, editing),
-        MasterDraft::Ledger(d) => draw_ledger(ui, masters, d, balance),
-        MasterDraft::Unit(d) => draw_unit(ui, d),
+        MasterDraft::Group(d) => draw_group(ui, masters, d, editing, tr),
+        MasterDraft::Ledger(d) => draw_ledger(ui, masters, d, balance, tr),
+        MasterDraft::Unit(d) => draw_unit(ui, d, tr),
         MasterDraft::StockGroup(d) => {
-            text_row(ui, 2, "Name", &mut d.name);
+            text_row(ui, 2, &tr.t("masters.field.name"), &mut d.name);
             let options = sorted_options(
                 masters
                     .stock_groups
@@ -444,21 +453,21 @@ fn draw_fields(
                 ui,
                 1,
                 "sg-parent",
-                "Under",
+                &tr.t("masters.field.under"),
                 &mut d.parent,
-                "(Primary)",
+                &tr.t("masters.field.primary"),
                 &options,
             );
         }
-        MasterDraft::Godown(d) => draw_godown(ui, masters, d, editing),
-        MasterDraft::CostCategory(d) => text_row(ui, 2, "Name", &mut d.name),
-        MasterDraft::CostCentre(d) => draw_cost_centre(ui, masters, d, editing),
-        MasterDraft::StockItem(d) => draw_stock_item(ui, masters, d),
+        MasterDraft::Godown(d) => draw_godown(ui, masters, d, editing, tr),
+        MasterDraft::CostCategory(d) => text_row(ui, 2, &tr.t("masters.field.name"), &mut d.name),
+        MasterDraft::CostCentre(d) => draw_cost_centre(ui, masters, d, editing, tr),
+        MasterDraft::StockItem(d) => draw_stock_item(ui, masters, d, tr),
     }
 }
 
-fn draw_godown(ui: &mut Ui, masters: &Masters, d: &mut TreeDraft, editing: Option<u64>) {
-    text_row(ui, 2, "Name", &mut d.name);
+fn draw_godown(ui: &mut Ui, masters: &Masters, d: &mut TreeDraft, editing: Option<u64>, tr: &Tr) {
+    text_row(ui, 2, &tr.t("masters.field.name"), &mut d.name);
     let options = sorted_options(
         masters
             .godowns
@@ -470,15 +479,21 @@ fn draw_godown(ui: &mut Ui, masters: &Masters, d: &mut TreeDraft, editing: Optio
         ui,
         1,
         "gd-parent",
-        "Under",
+        &tr.t("masters.field.under"),
         &mut d.parent,
-        "(Primary)",
+        &tr.t("masters.field.primary"),
         &options,
     );
 }
 
-fn draw_cost_centre(ui: &mut Ui, masters: &Masters, d: &mut CostCentreDraft, editing: Option<u64>) {
-    text_row(ui, 2, "Name", &mut d.name);
+fn draw_cost_centre(
+    ui: &mut Ui,
+    masters: &Masters,
+    d: &mut CostCentreDraft,
+    editing: Option<u64>,
+    tr: &Tr,
+) {
+    text_row(ui, 2, &tr.t("masters.field.name"), &mut d.name);
     let categories = sorted_options(
         masters
             .cost_categories
@@ -490,9 +505,9 @@ fn draw_cost_centre(ui: &mut Ui, masters: &Masters, d: &mut CostCentreDraft, edi
         ui,
         1,
         "cc-category",
-        "Category",
+        &tr.t("masters.field.category"),
         &mut d.category,
-        "(choose)",
+        &tr.t("masters.field.choose"),
         &categories,
     );
     let centres = sorted_options(
@@ -506,16 +521,16 @@ fn draw_cost_centre(ui: &mut Ui, masters: &Masters, d: &mut CostCentreDraft, edi
         ui,
         1,
         "cc-parent",
-        "Under",
+        &tr.t("masters.field.under"),
         &mut d.parent,
-        "(Primary)",
+        &tr.t("masters.field.primary"),
         &centres,
     );
 }
 
-fn draw_group(ui: &mut Ui, masters: &Masters, d: &mut GroupDraft, editing: Option<u64>) {
-    text_row(ui, 2, "Name", &mut d.name);
-    text_row(ui, 1, "Alias", &mut d.aliases);
+fn draw_group(ui: &mut Ui, masters: &Masters, d: &mut GroupDraft, editing: Option<u64>, tr: &Tr) {
+    text_row(ui, 2, &tr.t("masters.field.name"), &mut d.name);
+    text_row(ui, 1, &tr.t("masters.field.alias"), &mut d.aliases);
     let groups = sorted_options(
         masters
             .groups
@@ -527,9 +542,9 @@ fn draw_group(ui: &mut Ui, masters: &Masters, d: &mut GroupDraft, editing: Optio
         ui,
         1,
         "g-parent",
-        "Under",
+        &tr.t("masters.field.under"),
         &mut d.parent,
-        "(Primary)",
+        &tr.t("masters.field.primary"),
         &groups,
     );
     ui.end_row();
@@ -538,26 +553,35 @@ fn draw_group(ui: &mut Ui, masters: &Masters, d: &mut GroupDraft, editing: Optio
             ui,
             1,
             "g-nature",
-            "Nature",
+            &tr.t("masters.field.nature"),
             &mut d.nature,
-            "(choose)",
-            &named(&NATURES, nature_label),
+            &tr.t("masters.field.choose"),
+            &named(&NATURES, |n| nature_label(n, tr)),
         );
-        switch_row(ui, 1, "Affects gross profit", &mut d.affects_gross_profit);
-    } else {
-        sheet_note(
+        switch_row(
             ui,
-            "Nature and gross-profit treatment come from the primary group.",
+            tr,
+            1,
+            &tr.t("masters.field.affects_gross_profit"),
+            &mut d.affects_gross_profit,
         );
+    } else {
+        sheet_note(ui, &tr.t("masters.field.nature_note"));
     }
 }
 
 /// The ledger: the mock's fields first, in its order (index.html:1803-1805: Name, Alias, Under;
 /// GSTIN, State, Credit days; Bill-wise, Balance), then the fields the mock does not show.
 /// `balance` is the altered ledger's closing balance as the engine gave it, shown read-only.
-fn draw_ledger(ui: &mut Ui, masters: &Masters, d: &mut LedgerDraft, balance: Option<&str>) {
-    text_row(ui, 2, "Name", &mut d.name);
-    text_row(ui, 1, "Alias", &mut d.aliases);
+fn draw_ledger(
+    ui: &mut Ui,
+    masters: &Masters,
+    d: &mut LedgerDraft,
+    balance: Option<&str>,
+    tr: &Tr,
+) {
+    text_row(ui, 2, &tr.t("masters.field.name"), &mut d.name);
+    text_row(ui, 1, &tr.t("masters.field.alias"), &mut d.aliases);
     let groups = sorted_options(
         masters
             .groups
@@ -565,19 +589,38 @@ fn draw_ledger(ui: &mut Ui, masters: &Masters, d: &mut LedgerDraft, balance: Opt
             .map(|g| (g.id, g.id.0, g.name.clone())),
         None,
     );
-    choose_opt(ui, 1, "l-group", "Under", &mut d.group, "(choose)", &groups);
+    choose_opt(
+        ui,
+        1,
+        "l-group",
+        &tr.t("masters.field.under"),
+        &mut d.group,
+        &tr.t("masters.field.choose"),
+        &groups,
+    );
     ui.end_row();
     if let Some(p) = d.party.as_mut() {
-        draw_party_head(ui, p);
+        draw_party_head(ui, p, tr);
     }
-    switch_row(ui, 1, "Bill-wise", &mut d.bill_wise);
+    switch_row(
+        ui,
+        tr,
+        1,
+        &tr.t("masters.field.bill_wise"),
+        &mut d.bill_wise,
+    );
     if d.bill_wise {
-        number_row(ui, 1, "Credit days", &mut d.credit_days);
+        number_row(
+            ui,
+            1,
+            &tr.t("masters.field.credit_days"),
+            &mut d.credit_days,
+        );
     }
     if let Some(text) = balance {
-        read_only_row(ui, 1, "Balance", text);
+        read_only_row(ui, 1, &tr.t("masters.field.balance"), text);
     }
-    fld(ui, 2, "Opening balance", |ui| {
+    fld(ui, 2, &tr.t("masters.field.opening_balance"), |ui| {
         ui.horizontal(|ui| {
             let side_w = 72.0;
             let text_w = (ui.available_width() - side_w - 8.0).max(40.0);
@@ -606,40 +649,75 @@ fn draw_ledger(ui: &mut Ui, masters: &Masters, d: &mut LedgerDraft, balance: Opt
         });
     });
     ui.end_row();
-    switch_row(ui, 1, "Cost centres", &mut d.cost_centres);
-    section_switch(ui, "Party details", &mut d.party, PartyDraft::default);
-    section_switch(ui, "Bank details", &mut d.bank, BankDraft::default);
-    section_switch(ui, "Tax details", &mut d.tax, || TaxDraft {
-        kind: TaxLedgerKind::Cgst,
-        rate_percent: String::new(),
-    });
+    draw_ledger_sections(ui, d, tr);
+}
+
+/// The ledger's switches and the sections they open, below the mock's fields.
+fn draw_ledger_sections(ui: &mut Ui, d: &mut LedgerDraft, tr: &Tr) {
+    switch_row(
+        ui,
+        tr,
+        1,
+        &tr.t("masters.kind_plural.cost_centre"),
+        &mut d.cost_centres,
+    );
+    section_switch(
+        ui,
+        tr,
+        &tr.t("masters.field.party_details"),
+        &mut d.party,
+        PartyDraft::default,
+    );
+    section_switch(
+        ui,
+        tr,
+        &tr.t("masters.field.bank_details"),
+        &mut d.bank,
+        BankDraft::default,
+    );
+    section_switch(
+        ui,
+        tr,
+        &tr.t("masters.field.tax_details"),
+        &mut d.tax,
+        || TaxDraft {
+            kind: TaxLedgerKind::Cgst,
+            rate_percent: String::new(),
+        },
+    );
     ui.end_row();
-    section_switch(ui, "GST classification", &mut d.gst, || GstDraft {
-        hsn: String::new(),
-        taxability: Taxability::Taxable,
-        rate_percent: String::new(),
-    });
+    section_switch(
+        ui,
+        tr,
+        &tr.t("masters.field.gst_classification"),
+        &mut d.gst,
+        || GstDraft {
+            hsn: String::new(),
+            taxability: Taxability::Taxable,
+            rate_percent: String::new(),
+        },
+    );
     ui.end_row();
     if let Some(p) = d.party.as_mut() {
-        draw_party_rest(ui, p);
+        draw_party_rest(ui, p, tr);
     }
     if let Some(b) = d.bank.as_mut() {
-        draw_bank(ui, b);
+        draw_bank(ui, b, tr);
     }
     if let Some(t) = d.tax.as_mut() {
-        draw_tax(ui, t);
+        draw_tax(ui, t, tr);
     }
     if let Some(g) = d.gst.as_mut() {
-        draw_gst(ui, g);
+        draw_gst(ui, g, tr);
     }
 }
 
 /// The party fields the mock shows on the ledger's second line: the GSTIN with its check, two
 /// columns wide, then the state (index.html:1804).
-fn draw_party_head(ui: &mut Ui, p: &mut PartyDraft) {
+fn draw_party_head(ui: &mut Ui, p: &mut PartyDraft, tr: &Tr) {
     fld(ui, 2, "GSTIN", |ui| {
         input(ui, &mut p.gstin);
-        draw_gstin_check(ui, &p.gstin);
+        draw_gstin_check(ui, &p.gstin, tr);
     });
     let states: Vec<(StateCode, String)> = StateCode::all()
         .map(|s| (s, format!("{:02} {}", s.get(), s.name())))
@@ -649,14 +727,19 @@ fn draw_party_head(ui: &mut Ui, p: &mut PartyDraft) {
         .ok()
         .and_then(|g| g.state())
         .map_or_else(
-            || "From the GSTIN".to_owned(),
-            |s| format!("{:02} {} (from GSTIN)", s.get(), s.name()),
+            || tr.t("masters.field.from_gstin"),
+            |s| {
+                tr.tf(
+                    "masters.field.state_from_gstin",
+                    &[("state", &format!("{:02} {}", s.get(), s.name()))],
+                )
+            },
         );
     choose_opt(
         ui,
         1,
         "p-state",
-        "State",
+        &tr.t("masters.field.state"),
         &mut p.state,
         &from_gstin,
         &states,
@@ -664,69 +747,100 @@ fn draw_party_head(ui: &mut Ui, p: &mut PartyDraft) {
 }
 
 /// The party fields the mock does not show, on lines of their own.
-fn draw_party_rest(ui: &mut Ui, p: &mut PartyDraft) {
+fn draw_party_rest(ui: &mut Ui, p: &mut PartyDraft, tr: &Tr) {
     choose_one(
         ui,
         1,
         "p-reg",
-        "Registration",
+        &tr.t("masters.field.registration"),
         &mut p.registration,
-        &labelled(&REGISTRATIONS, registration_label),
+        &labelled(&REGISTRATIONS, |r| registration_label(r, tr)),
     );
     text_row(ui, 1, "PAN", &mut p.pan);
-    text_row(ui, 1, "PIN code", &mut p.pincode);
-    text_row(ui, 1, "Country", &mut p.country);
+    text_row(ui, 1, &tr.t("masters.field.pin_code"), &mut p.pincode);
+    text_row(ui, 1, &tr.t("masters.field.country"), &mut p.country);
     ui.end_row();
-    area_row(ui, 2, address_id(), "Address", &mut p.address_lines);
+    area_row(
+        ui,
+        2,
+        address_id(),
+        &tr.t("masters.field.address"),
+        &mut p.address_lines,
+    );
     ui.end_row();
 }
 
-fn draw_bank(ui: &mut Ui, b: &mut BankDraft) {
-    text_row(ui, 1, "Account number", &mut b.account_number);
+fn draw_bank(ui: &mut Ui, b: &mut BankDraft, tr: &Tr) {
+    text_row(
+        ui,
+        1,
+        &tr.t("masters.field.account_number"),
+        &mut b.account_number,
+    );
     text_row(ui, 1, "IFSC", &mut b.ifsc);
-    text_row(ui, 1, "Bank name", &mut b.bank_name);
-    text_row(ui, 1, "Branch", &mut b.branch);
+    text_row(ui, 1, &tr.t("masters.field.bank_name"), &mut b.bank_name);
+    text_row(ui, 1, &tr.t("masters.field.branch"), &mut b.branch);
     ui.end_row();
 }
 
-fn draw_tax(ui: &mut Ui, t: &mut TaxDraft) {
+fn draw_tax(ui: &mut Ui, t: &mut TaxDraft, tr: &Tr) {
     choose_one(
         ui,
         1,
         "t-kind",
-        "Tax",
+        &tr.t("masters.field.tax"),
         &mut t.kind,
-        &labelled(&TAX_KINDS, tax_kind_label),
+        &labelled(&TAX_KINDS, |k| tax_kind_label(k, tr)),
     );
-    number_row(ui, 1, "Rate %", &mut t.rate_percent);
+    number_row(
+        ui,
+        1,
+        &tr.t("masters.field.rate_percent"),
+        &mut t.rate_percent,
+    );
     ui.end_row();
 }
 
-fn draw_gst(ui: &mut Ui, g: &mut GstDraft) {
+fn draw_gst(ui: &mut Ui, g: &mut GstDraft, tr: &Tr) {
     text_row(ui, 1, "HSN/SAC", &mut g.hsn);
     choose_one(
         ui,
         1,
         "g-tax",
-        "Taxability",
+        &tr.t("masters.field.taxability"),
         &mut g.taxability,
-        &labelled(&TAXABILITIES, taxability_label),
+        &labelled(&TAXABILITIES, |t| taxability_label(t, tr)),
     );
-    number_row(ui, 1, "Rate %", &mut g.rate_percent);
+    number_row(
+        ui,
+        1,
+        &tr.t("masters.field.rate_percent"),
+        &mut g.rate_percent,
+    );
     ui.end_row();
 }
 
-fn draw_unit(ui: &mut Ui, d: &mut UnitDraft) {
-    text_row(ui, 1, "Symbol", &mut d.symbol);
-    text_row(ui, 2, "Formal name", &mut d.formal_name);
-    number_row(ui, 1, "Decimal places", &mut d.decimals);
+fn draw_unit(ui: &mut Ui, d: &mut UnitDraft, tr: &Tr) {
+    text_row(ui, 1, &tr.t("masters.field.symbol"), &mut d.symbol);
+    text_row(
+        ui,
+        2,
+        &tr.t("masters.field.formal_name"),
+        &mut d.formal_name,
+    );
+    number_row(
+        ui,
+        1,
+        &tr.t("masters.field.decimal_places"),
+        &mut d.decimals,
+    );
     ui.end_row();
-    text_row(ui, 1, "GST unit code (UQC)", &mut d.uqc);
+    text_row(ui, 1, &tr.t("masters.field.uqc"), &mut d.uqc);
 }
 
-fn draw_stock_item(ui: &mut Ui, masters: &Masters, d: &mut StockItemDraft) {
-    text_row(ui, 2, "Name", &mut d.name);
-    text_row(ui, 1, "Alias", &mut d.aliases);
+fn draw_stock_item(ui: &mut Ui, masters: &Masters, d: &mut StockItemDraft, tr: &Tr) {
+    text_row(ui, 2, &tr.t("masters.field.name"), &mut d.name);
+    text_row(ui, 1, &tr.t("masters.field.alias"), &mut d.aliases);
     let groups = sorted_options(
         masters
             .stock_groups
@@ -734,7 +848,15 @@ fn draw_stock_item(ui: &mut Ui, masters: &Masters, d: &mut StockItemDraft) {
             .map(|g| (g.id, g.id.0, g.name.clone())),
         None,
     );
-    choose_opt(ui, 1, "i-group", "Under", &mut d.group, "(none)", &groups);
+    choose_opt(
+        ui,
+        1,
+        "i-group",
+        &tr.t("masters.field.under"),
+        &mut d.group,
+        &tr.t("masters.field.none"),
+        &groups,
+    );
     ui.end_row();
     let units = sorted_options(
         masters
@@ -743,15 +865,29 @@ fn draw_stock_item(ui: &mut Ui, masters: &Masters, d: &mut StockItemDraft) {
             .map(|u| (u.id, u.id.0, u.symbol.clone())),
         None,
     );
-    choose_opt(ui, 1, "i-unit", "Unit", &mut d.unit, "(choose)", &units);
+    choose_opt(
+        ui,
+        1,
+        "i-unit",
+        &tr.t("masters.field.unit"),
+        &mut d.unit,
+        &tr.t("masters.field.choose"),
+        &units,
+    );
     choose_one(
         ui,
         1,
         "i-valuation",
-        "Valuation",
+        &tr.t("masters.field.valuation"),
         &mut d.valuation,
-        &labelled(&VALUATIONS, valuation_label),
+        &labelled(&VALUATIONS, |v| valuation_label(v, tr)),
     );
     text_row(ui, 1, "HSN/SAC", &mut d.hsn);
-    switch_row(ui, 1, "Track batches", &mut d.batches);
+    switch_row(
+        ui,
+        tr,
+        1,
+        &tr.t("masters.field.track_batches"),
+        &mut d.batches,
+    );
 }
