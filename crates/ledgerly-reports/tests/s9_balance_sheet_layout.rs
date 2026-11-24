@@ -86,14 +86,50 @@ fn books() -> Books {
     use ReservedGroup as R;
     let mut m = Masters::default();
     for g in [
-        group(1, "Current Assets", None, Some(R::CurrentAssets), Some(Nature::Asset)),
-        group(2, "Current Liabilities", None, Some(R::CurrentLiabilities), Some(Nature::Liability)),
-        group(3, "Fixed Assets", None, Some(R::FixedAssets), Some(Nature::Asset)),
-        group(4, "Loans (Liability)", None, Some(R::Loans), Some(Nature::Liability)),
-        group(5, "Capital Account", None, Some(R::CapitalAccount), Some(Nature::Liability)),
+        group(
+            1,
+            "Current Assets",
+            None,
+            Some(R::CurrentAssets),
+            Some(Nature::Asset),
+        ),
+        group(
+            2,
+            "Current Liabilities",
+            None,
+            Some(R::CurrentLiabilities),
+            Some(Nature::Liability),
+        ),
+        group(
+            3,
+            "Fixed Assets",
+            None,
+            Some(R::FixedAssets),
+            Some(Nature::Asset),
+        ),
+        group(
+            4,
+            "Loans (Liability)",
+            None,
+            Some(R::Loans),
+            Some(Nature::Liability),
+        ),
+        group(
+            5,
+            "Capital Account",
+            None,
+            Some(R::CapitalAccount),
+            Some(Nature::Liability),
+        ),
         group(6, "Stock-in-Hand", Some(1), Some(R::StockInHand), None),
         group(7, "Cash-in-Hand", Some(1), Some(R::CashInHand), None),
-        group(8, "Sales Accounts", None, Some(R::SalesAccounts), Some(Nature::Income)),
+        group(
+            8,
+            "Sales Accounts",
+            None,
+            Some(R::SalesAccounts),
+            Some(Nature::Income),
+        ),
     ] {
         m.groups.insert(g.id, g);
     }
@@ -177,8 +213,11 @@ fn books() -> Books {
 fn params(detail: Detail) -> ReportParams {
     ReportParams {
         kind: ReportKind::BalanceSheet,
-        period: Period::new(Date::from_calendar_date(2026, Month::April, 1).unwrap(), d(30))
-            .unwrap(),
+        period: Period::new(
+            Date::from_calendar_date(2026, Month::April, 1).unwrap(),
+            d(30),
+        )
+        .unwrap(),
         as_of: d(30),
         scenario: Scenario::Actual,
         detail,
@@ -227,7 +266,10 @@ fn closing_stock_is_a_row_inside_current_assets_and_in_its_total() {
     // 2,00,000 Dr. Profit = sales 50,000 + closing stock 30,000 = 80,000 Cr. Capital 10,00,000
     // Cr, Loans 2,00,000 Cr. Liabilities: 10,00,000 + 2,00,000 + 80,000 = 12,80,000. Assets:
     // 10,80,000 + 2,00,000 = 12,80,000.
-    let r = run(Detail::Detailed, &closing(rs(30_000), ValuationStatus::Final));
+    let r = run(
+        Detail::Detailed,
+        &closing(rs(30_000), ValuationStatus::Final),
+    );
     assert_eq!(
         labels(&r),
         vec![
@@ -245,10 +287,19 @@ fn closing_stock_is_a_row_inside_current_assets_and_in_its_total() {
         ]
     );
     let by = |name: &str| r.rows.iter().find(|x| x.label == name).unwrap();
-    assert_eq!(amount(&by("Current Assets").cells[1]), (DrCr::Dr, rs(1_080_000)));
-    assert_eq!(amount(&by("Closing stock").cells[1]), (DrCr::Dr, rs(30_000)));
+    assert_eq!(
+        amount(&by("Current Assets").cells[1]),
+        (DrCr::Dr, rs(1_080_000))
+    );
+    assert_eq!(
+        amount(&by("Closing stock").cells[1]),
+        (DrCr::Dr, rs(30_000))
+    );
     assert_eq!(by("Closing stock").kind, RowKind::Item);
-    assert_eq!(amount(&by("Profit and Loss A/c").cells[0]), (DrCr::Cr, rs(80_000)));
+    assert_eq!(
+        amount(&by("Profit and Loss A/c").cells[0]),
+        (DrCr::Cr, rs(80_000))
+    );
     assert_eq!(amount(&r.totals[0]), (DrCr::Cr, rs(1_280_000)));
     assert_eq!(amount(&r.totals[1]), (DrCr::Dr, rs(1_280_000)));
 }
@@ -259,7 +310,10 @@ fn primary_groups_follow_the_chart_order_not_the_id_order() {
     // Current liabilities, then Fixed assets, Current assets). TallyPrime makes group order a
     // setting (balance sheet help page, read 2026-11-25), so this is the default. Ids here are
     // Current Assets 1, Fixed Assets 3, Loans 4, Capital 5, the reverse of that order.
-    let r = run(Detail::Condensed, &closing(rs(30_000), ValuationStatus::Final));
+    let r = run(
+        Detail::Condensed,
+        &closing(rs(30_000), ValuationStatus::Final),
+    );
     assert_eq!(
         labels(&r),
         vec![
@@ -288,5 +342,54 @@ fn provisional_stock_marks_current_assets_too() {
     );
     let r = run(Detail::Condensed, &stock);
     let ca = r.rows.iter().find(|x| x.label == "Current Assets").unwrap();
-    assert!(matches!(ca.cells[1], Cell::Provisional { .. }), "{:?}", ca.cells);
+    assert!(
+        matches!(ca.cells[1], Cell::Provisional { .. }),
+        "{:?}",
+        ca.cells
+    );
+}
+
+#[test]
+fn sub_groups_follow_the_chart_order_too() {
+    // provenance: derived. The mock lists Current assets as Closing stock, Sundry debtors,
+    // Cash-in-hand, Bank accounts, Loans and advances (index.html:530-540, group list order),
+    // and Current liabilities as Sundry creditors, Duties and taxes, Provisions. The chart here
+    // gives Sundry Debtors the highest id (9) and Cash-in-Hand 7, so id order would put the cash
+    // first. Customer owes 20,000 (a sale on credit): Debtors 20,000 Dr; cash is 10,50,000 Dr.
+    let mut b = books();
+    let g = group(
+        9,
+        "Sundry Debtors",
+        Some(1),
+        Some(ReservedGroup::SundryDebtors),
+        None,
+    );
+    b.masters.groups.insert(g.id, g);
+    let l = ledger(25, "Customer", 9);
+    b.masters.ledgers.insert(l.id, l);
+    for (ledger_id, amount) in [
+        (25, SignedAmount::dr(rs(20_000))),
+        (24, SignedAmount::cr(rs(20_000))),
+    ] {
+        b.postings.push(Posting {
+            voucher: VoucherId(9),
+            date: Date::from_calendar_date(2026, Month::April, 2).unwrap(),
+            ledger: LedgerId(ledger_id),
+            amount,
+            status: VoucherStatus::Regular,
+            type_id: VoucherTypeId(1),
+        });
+    }
+    let r = balance_sheet(
+        &b,
+        &params(Detail::Detailed),
+        &closing(rs(30_000), ValuationStatus::Final),
+    )
+    .unwrap()
+    .value()
+    .unwrap();
+    let names: Vec<&str> = r.rows.iter().map(|x| x.label.as_str()).collect();
+    let at = |n: &str| names.iter().position(|x| *x == n).unwrap();
+    assert!(at("Closing stock") < at("Sundry Debtors"));
+    assert!(at("Sundry Debtors") < at("Cash-in-Hand"));
 }

@@ -53,7 +53,8 @@
 //!
 //! Primary groups are listed in the chart's order, not id order: Capital Account, Loans
 //! (Liability), Current Liabilities, Fixed Assets, Investments, Current Assets, then the rest
-//! (`PRIMARY_ORDER`); groups that are not reserved keep their id order after those. The closing
+//! (`GROUP_ORDER`, which orders sub-groups too); groups that are not reserved keep their id order
+//! after those. The closing
 //! stock is the value of the Stock-in-Hand group: when the chart has that group, the report lists
 //! one `Closing stock` row where the group stands (a child of Current Assets in the reserved
 //! chart), the stock is part of its parent's total, and a provisional stock makes every group
@@ -86,30 +87,42 @@ const PROFIT_LABEL: &str = "Profit and Loss A/c";
 /// Label of the closing stock row.
 const STOCK_LABEL: &str = "Closing stock";
 
-/// The order primary groups are listed in: the design mock's (design/mock-v2/index.html,
-/// `balanceSheet`: Capital, Loans, Current liabilities; Fixed assets, Current assets), with
-/// Investments between the two asset groups. TallyPrime's Balance Sheet help says the order of
-/// groups is a setting (an index per group; its example puts Investments above Fixed Assets,
-/// help.tallysolutions.com Balance Sheet page, read 2026-11-25); this fixed order is the default
-/// until groups carry an index.
-const PRIMARY_ORDER: [ReservedGroup; 6] = [
+/// The order groups are listed in, at every level: the design mock's (design/mock-v2/index.html,
+/// `balanceSheet`: Capital, Loans, Current liabilities with its Sundry creditors, Duties and
+/// taxes, Provisions; Fixed assets, Current assets with Closing stock, Sundry debtors,
+/// Cash-in-hand, Bank accounts, Loans and advances), with Investments between the two asset
+/// groups. TallyPrime's Balance Sheet help says the order of groups is a setting (an index per
+/// group; its example puts Investments above Fixed Assets, help.tallysolutions.com Balance Sheet
+/// page, read 2026-11-25); this fixed order is the default until groups carry an index.
+const GROUP_ORDER: [ReservedGroup; 17] = [
     ReservedGroup::CapitalAccount,
+    ReservedGroup::ReservesAndSurplus,
     ReservedGroup::Loans,
+    ReservedGroup::BankOd,
+    ReservedGroup::SecuredLoans,
+    ReservedGroup::UnsecuredLoans,
     ReservedGroup::CurrentLiabilities,
+    ReservedGroup::SundryCreditors,
+    ReservedGroup::DutiesAndTaxes,
+    ReservedGroup::Provisions,
     ReservedGroup::FixedAssets,
     ReservedGroup::Investments,
     ReservedGroup::CurrentAssets,
+    ReservedGroup::StockInHand,
+    ReservedGroup::SundryDebtors,
+    ReservedGroup::CashInHand,
+    ReservedGroup::BankAccounts,
 ];
 
-/// Sort key of a primary group: its place in [`PRIMARY_ORDER`], the other reserved groups after
-/// it, then groups that are not reserved. Ties keep id order (the sort is stable).
-fn primary_rank(group: &Group) -> usize {
+/// Sort key of a group: its place in [`GROUP_ORDER`], the other reserved groups after it, then
+/// groups that are not reserved. Ties keep id order (the sort is stable).
+fn group_rank(group: &Group) -> usize {
     match group.reserved {
-        Some(r) => PRIMARY_ORDER
+        Some(r) => GROUP_ORDER
             .iter()
             .position(|p| *p == r)
-            .unwrap_or(PRIMARY_ORDER.len()),
-        None => PRIMARY_ORDER.len().saturating_add(1),
+            .unwrap_or(GROUP_ORDER.len()),
+        None => GROUP_ORDER.len().saturating_add(1),
     }
 }
 
@@ -567,6 +580,9 @@ impl<'a> Walker<'a> {
         for g in books.masters.groups.values() {
             children.entry(g.parent).or_default().push(g);
         }
+        for list in children.values_mut() {
+            list.sort_by_key(|g| group_rank(g));
+        }
         let mut ledgers: BTreeMap<GroupId, Vec<&Ledger>> = BTreeMap::new();
         for l in books.masters.ledgers.values() {
             ledgers.entry(l.group).or_default().push(l);
@@ -753,7 +769,7 @@ fn walk_primaries(
 ) -> Result<Outcome<Statement>, ReportError> {
     let mut walker = Walker::new(books, balances, detail, stock.clone());
     let mut primaries = walker.children.get(&None).cloned().unwrap_or_default();
-    primaries.sort_by_key(|g| primary_rank(g));
+    primaries.sort_by_key(|g| group_rank(g));
     let mut st = Statement::default();
     for primary in primaries {
         let role = role_of(primary);
