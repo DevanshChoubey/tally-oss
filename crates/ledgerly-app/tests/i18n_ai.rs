@@ -156,3 +156,66 @@ mod assist_panel {
         );
     }
 }
+
+mod ai_settings_screen {
+    use ledgerly_api::AiTier;
+    use ledgerly_app::i18n::Catalog;
+    use ledgerly_app::screens::ai_settings::{
+        NEVER, OFF_NOTE, OPTION_CLOUD, OPTION_LOCAL, OPTION_OFF, UNSET_NOTE, key_hints,
+        key_hints_in, never_in, off_note_in, option_in, unset_note_in,
+    };
+
+    #[test]
+    fn ai_settings_options_and_notes_come_from_the_hindi_file() {
+        let hi = Catalog::builtin().unwrap().tr("hi");
+        let en = Catalog::builtin().unwrap().tr("en");
+        // provenance: the English words are the mock's (index.html:1905-1907, 1911, 1916).
+        assert_eq!(OPTION_OFF.0, "Off");
+        assert_eq!(
+            option_in(AiTier::Off, &en),
+            (OPTION_OFF.0.to_owned(), OPTION_OFF.1.to_owned())
+        );
+        let (title, body) = option_in(AiTier::Local, &hi);
+        assert_eq!(title, hi.t("ai.settings.option.local.title"));
+        assert_ne!(title, OPTION_LOCAL.0);
+        assert_ne!(body, OPTION_LOCAL.1);
+        let (cloud_title, _) = option_in(AiTier::Cloud, &hi);
+        assert_ne!(cloud_title, OPTION_CLOUD.0);
+        assert_ne!(off_note_in(&hi), OFF_NOTE);
+        assert_ne!(unset_note_in(&hi), UNSET_NOTE);
+        assert_eq!(unset_note_in(&en), UNSET_NOTE);
+        assert_eq!(off_note_in(&en), OFF_NOTE);
+    }
+
+    #[test]
+    fn ai_settings_never_list_and_key_bar_come_from_the_hindi_file() {
+        let hi = Catalog::builtin().unwrap().tr("hi");
+        let en = Catalog::builtin().unwrap().tr("en");
+        let hindi = never_in(&hi);
+        assert_eq!(hindi.len(), NEVER.len());
+        for (line, english) in hindi.iter().zip(NEVER) {
+            assert_ne!(line, english, "never line is still English");
+            assert!(!line.contains('\u{27E6}'), "missing key in {line}");
+        }
+        assert_eq!(never_in(&en).to_vec(), NEVER.map(str::to_owned).to_vec());
+        let labels: Vec<String> = key_hints_in(true, &hi)
+            .iter()
+            .map(|k| k.label.clone())
+            .collect();
+        assert!(
+            labels.contains(&hi.t("ai.settings.key.export")),
+            "{labels:?}"
+        );
+        assert!(!labels.contains(&"Export log".to_owned()), "{labels:?}");
+        assert_eq!(
+            key_hints_in(true, &en)
+                .iter()
+                .map(|k| k.label.clone())
+                .collect::<Vec<_>>(),
+            key_hints(true)
+                .iter()
+                .map(|k| k.label.clone())
+                .collect::<Vec<_>>()
+        );
+    }
+}

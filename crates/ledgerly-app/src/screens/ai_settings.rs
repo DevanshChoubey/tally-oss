@@ -36,12 +36,6 @@ use crate::ui::{bold_font, para_text, tokens};
 use crate::worker::ApiWorker;
 use crate::{AppCtx, Screen, ScreenAction};
 
-/// The screen's title in the sidebar, the palette and the page head (index.html:891).
-pub const TITLE: &str = "AI and privacy";
-
-/// The page-head subtitle after the company name (index.html:1903).
-pub const SUBTITLE_TAIL: &str = " only. Other companies keep their own setting.";
-
 /// The "Off" option card: title and body (index.html:1905).
 pub const OPTION_OFF: (&str, &str) = (
     "Off",
@@ -66,32 +60,6 @@ pub const OFF_NOTE: &str = "AI is off. Bill reading, plain-words entry, AI bank 
 pub const UNSET_NOTE: &str =
     "No AI tier is chosen for this company yet. Nothing is sent to any model until you choose one.";
 
-/// The feature rows (index.html:1908): feature, what the model sees on this computer, and what
-/// is sent to the provider in the cloud tier.
-pub const FEATURES: [(&str, &str, &str); 5] = [
-    (
-        "Bill photo to draft purchase",
-        "The image",
-        "Image, cropped and redacted",
-    ),
-    (
-        "Plain words to draft voucher",
-        "Your sentence and ledger names",
-        "Same, no balances",
-    ),
-    ("Bank line suggestions", "Narration, date, amount", "Same"),
-    (
-        "Ask your books",
-        "Your question and the list of report types",
-        "Same; never your figures",
-    ),
-    (
-        "2B mismatch explanations",
-        "The two records and the attached image",
-        "Same, redacted",
-    ),
-];
-
 /// The "What AI may never do here" list (index.html:1916).
 pub const NEVER: [&str; 5] = [
     "Show a figure it worked out. Amounts come from the books, the document, your words or the engine.",
@@ -108,22 +76,15 @@ const FEATURE_COLUMN: f32 = 180.0;
 /// The On column of the features table, in points (`th` width 60px in index.html:1908).
 const ON_COLUMN: f32 = 64.0;
 
-/// The log card's title (index.html:1915).
-pub const LOG_TITLE: &str = "AI activity log";
 /// The log card's meta line when it has rows (index.html:1915).
 pub const LOG_META: &str = "Kept with the company file. Ctrl+E exports it.";
 /// The log card's meta line when it has no rows. The Ctrl+E promise does not hold then.
 pub const LOG_META_EMPTY: &str = "Kept with the company file.";
 /// The log card's text when it has no rows.
 pub const LOG_EMPTY: &str = "No AI activity has been recorded for this company yet.";
-/// The log's column headers. The mock also has "Feature" and "Input"; the file records the model
-/// and an input hash, not the feature (PARITY-GAPS).
-pub const LOG_HEADERS: [&str; 5] = ["When", "Model", "Input hash", "Output", "Your decision"];
 
 /// The status of the cloud provider: the cloud tier is not available in this build.
 pub const CLOUD_STATUS: &str = "Not available";
-/// The reason shown when the engine has not yet said why.
-pub const CLOUD_REASON_DEFAULT: &str = "No key store is wired into this build.";
 
 /// Which panel the screen shows. It follows the stored tier, except that choosing Cloud shows
 /// the cloud panel with the reason it is not available. The cloud choice itself is never stored.
@@ -139,20 +100,84 @@ pub enum Panel {
     Cloud,
 }
 
-/// The key bar entries for a panel (index.html:1920). Esc is the shell's. Ctrl+E is listed only
-/// when the log has rows, since it exports nothing otherwise.
+/// The option card of `tier` in the words of `tr`: title and body (index.html:1905-1907).
 #[must_use]
-pub fn key_hints(log_has_rows: bool) -> Vec<KeyHint> {
+pub fn option_in(tier: AiTier, tr: &Tr) -> (String, String) {
+    let prefix = match tier {
+        AiTier::Off => "ai.settings.option.off",
+        AiTier::Local => "ai.settings.option.local",
+        AiTier::Cloud => "ai.settings.option.cloud",
+    };
+    (
+        tr.t(&format!("{prefix}.title")),
+        tr.t(&format!("{prefix}.body")),
+    )
+}
+
+/// The note while AI is off, in the words of `tr` (index.html:1061 and 1911).
+#[must_use]
+pub fn off_note_in(tr: &Tr) -> String {
+    tr.t("ai.settings.off_note")
+}
+
+/// The note while no tier is chosen, in the words of `tr` (PARITY-GAPS).
+#[must_use]
+pub fn unset_note_in(tr: &Tr) -> String {
+    tr.t("ai.settings.unset_note")
+}
+
+/// The "What AI may never do here" list in the words of `tr` (index.html:1916).
+#[must_use]
+pub fn never_in(tr: &Tr) -> [String; 5] {
+    [
+        tr.t("ai.settings.never.1"),
+        tr.t("ai.settings.never.2"),
+        tr.t("ai.settings.never.3"),
+        tr.t("ai.settings.never.4"),
+        tr.t("ai.settings.never.5"),
+    ]
+}
+
+/// The feature rows in the words of `tr` (index.html:1908): feature, what the model sees on this
+/// computer, and what is sent to the provider in the cloud tier.
+#[must_use]
+pub fn features_in(tr: &Tr) -> [(String, String, String); 5] {
+    let row = |key: &str| {
+        (
+            tr.t(&format!("ai.settings.feature.{key}.name")),
+            tr.t(&format!("ai.settings.feature.{key}.sees")),
+            tr.t(&format!("ai.settings.feature.{key}.sent")),
+        )
+    };
+    [
+        row("bill"),
+        row("plain"),
+        row("bank"),
+        row("ask"),
+        row("mismatch"),
+    ]
+}
+
+/// The key bar entries for a panel in the words of `tr` (index.html:1920). Esc is the shell's.
+/// Ctrl+E is listed only when the log has rows, since it exports nothing otherwise.
+#[must_use]
+pub fn key_hints_in(log_has_rows: bool, tr: &Tr) -> Vec<KeyHint> {
     let mut hints = vec![
-        KeyHint::new("", TITLE),
-        KeyHint::new("1", "Off"),
-        KeyHint::new("2", "On this computer"),
-        KeyHint::new("3", "Cloud"),
+        KeyHint::new("", tr.t("ai.settings.title")),
+        KeyHint::new("1", tr.t("ai.settings.key.off")),
+        KeyHint::new("2", tr.t("ai.settings.key.local")),
+        KeyHint::new("3", tr.t("ai.settings.key.cloud")),
     ];
     if log_has_rows {
-        hints.push(KeyHint::new("Ctrl+E", "Export log"));
+        hints.push(KeyHint::new("Ctrl+E", tr.t("ai.settings.key.export")));
     }
     hints
+}
+
+/// The key bar entries for a panel, in English: [`key_hints_in`] with the English file.
+#[must_use]
+pub fn key_hints(log_has_rows: bool) -> Vec<KeyHint> {
+    key_hints_in(log_has_rows, &Tr::default())
 }
 
 /// The worker's answer to the one call this screen waits on.
@@ -285,7 +310,7 @@ impl AiSettingsScreen {
         }
         if export
             && !self.log.is_empty()
-            && let (Some(worker), Some(path)) = (worker, save_dialog())
+            && let (Some(worker), Some(path)) = (worker, save_dialog(&ctx.tr))
         {
             self.export(worker, path);
         }
@@ -300,12 +325,11 @@ impl AiSettingsScreen {
 
     /// Takes the worker's answer when it has arrived and applies it to the screen and the shell.
     fn tick(&mut self, ctx: &mut AppCtx) -> bool {
+        let tr = ctx.tr.clone();
         let reply = match self.latest.poll() {
             None => return false,
             Some(Done::Lost) => {
-                self.notice = Some(
-                    "The company file stopped responding; reopen the company file.".to_owned(),
-                );
+                self.notice = Some(tr.t("ai.settings.stopped"));
                 return true;
             }
             Some(Done::Ready(reply)) => reply,
@@ -319,7 +343,8 @@ impl AiSettingsScreen {
             }
             Reply::Loaded(Err(reason)) => {
                 self.loaded = true;
-                self.notice = Some(format!("The AI settings could not be read: {reason}"));
+                self.notice =
+                    Some(tr.tf("ai.settings.read_failed", &[("reason", reason.as_str())]));
             }
             Reply::Chosen { tier, result } => match result {
                 Ok(Outcome::Value(())) => {
@@ -339,9 +364,10 @@ impl AiSettingsScreen {
             },
             Reply::Exported { path, result } => {
                 self.notice = Some(match result {
-                    Ok(Outcome::Value(())) => {
-                        format!("Exported the AI activity log to {}.", path.display())
-                    }
+                    Ok(Outcome::Value(())) => tr.tf(
+                        "ai.settings.exported",
+                        &[("path", path.display().to_string().as_str())],
+                    ),
                     Ok(Outcome::Unsupported(u)) => unsupported_text(&u),
                     Err(reason) => reason,
                 });
@@ -352,15 +378,16 @@ impl AiSettingsScreen {
 }
 
 impl Screen for AiSettingsScreen {
-    fn title(&self, _tr: &Tr) -> String {
-        TITLE.to_owned()
+    fn title(&self, tr: &Tr) -> String {
+        tr.t("ai.settings.title")
     }
 
-    fn keys(&self, _tr: &Tr) -> Vec<KeyHint> {
-        key_hints(!self.log.is_empty())
+    fn keys(&self, tr: &Tr) -> Vec<KeyHint> {
+        key_hints_in(!self.log.is_empty(), tr)
     }
 
     fn ui(&mut self, ui: &mut Ui, ctx: &mut AppCtx) -> ScreenAction {
+        let tr = ctx.tr.clone();
         if self.tick(ctx) {
             // The top bar chip was drawn before this frame's reply arrived; draw once more.
             ui.ctx().request_repaint();
@@ -374,20 +401,16 @@ impl Screen for AiSettingsScreen {
 
         self.read_keys(ui, ctx);
 
-        let company = ctx
-            .books
-            .as_ref()
-            .map_or_else(|| "this company".to_owned(), |b| b.company.name.clone());
-        let subtitle = format!("For {company}{SUBTITLE_TAIL}");
-        page_head(ui, TITLE, Some(&subtitle), |_| {});
+        let company = ctx.books.as_ref().map_or_else(
+            || tr.t("ai.settings.company_fallback"),
+            |b| b.company.name.clone(),
+        );
+        let subtitle = tr.tf("ai.settings.subtitle", &[("company", company.as_str())]);
+        page_head(ui, &tr.t("ai.settings.title"), Some(&subtitle), |_| {});
         ui.add_space(HEAD_GAP);
 
         if ctx.api.is_none() {
-            note(
-                ui,
-                NoteKind::Info,
-                "Open a company file to see and change its AI tier.",
-            );
+            note(ui, NoteKind::Info, &tr.t("ai.settings.open_company"));
             return ScreenAction::Stay;
         }
         if let Some(line) = &self.notice {
@@ -396,12 +419,12 @@ impl Screen for AiSettingsScreen {
         }
 
         let panel = self.panel();
-        if let Some(tier) = draw_options(ui, self.stored) {
+        if let Some(tier) = draw_options(ui, self.stored, &tr) {
             self.pick(ctx.api.as_ref(), tier);
         }
         ui.add_space(14.0);
 
-        draw_panel(ui, panel, self.cloud_reason.as_deref());
+        draw_panel(ui, panel, self.cloud_reason.as_deref(), &tr);
         ui.add_space(14.0);
 
         StripBuilder::new(ui)
@@ -409,11 +432,11 @@ impl Screen for AiSettingsScreen {
             .size(Size::remainder())
             .horizontal(|mut strip| {
                 strip.cell(|left| {
-                    draw_features(left, panel);
+                    draw_features(left, panel, &tr);
                     left.add_space(14.0);
-                    draw_log(left, &self.log, !self.loaded);
+                    draw_log(left, &self.log, !self.loaded, &tr);
                 });
-                strip.cell(draw_never);
+                strip.cell(|right| draw_never(right, &tr));
             });
         ScreenAction::Stay
     }
@@ -423,9 +446,9 @@ impl Screen for AiSettingsScreen {
 const TABLE_SHARE: f32 = 0.66;
 
 /// The system save dialog for the log export, CSV only.
-fn save_dialog() -> Option<PathBuf> {
+fn save_dialog(tr: &Tr) -> Option<PathBuf> {
     rfd::FileDialog::new()
-        .set_title("Export AI activity log")
+        .set_title(tr.t("ai.settings.export_dialog"))
         .set_file_name("ai-activity-log.csv")
         .add_filter("CSV", &["csv"])
         .save_file()
@@ -434,42 +457,48 @@ fn save_dialog() -> Option<PathBuf> {
 pub use crate::ui::probe::{read_probe, record_probe};
 
 /// The panel under the option cards: what the chosen tier means, or the note for no tier.
-fn draw_panel(ui: &mut Ui, panel: Panel, cloud_reason: Option<&str>) {
+fn draw_panel(ui: &mut Ui, panel: Panel, cloud_reason: Option<&str>, tr: &Tr) {
     match panel {
         Panel::Unset => {
-            note(ui, NoteKind::Info, UNSET_NOTE);
+            note(ui, NoteKind::Info, &unset_note_in(tr));
         }
         Panel::Off => {
-            note(ui, NoteKind::Info, OFF_NOTE);
+            note(ui, NoteKind::Info, &off_note_in(tr));
         }
-        Panel::Local => draw_local(ui),
-        Panel::Cloud => draw_cloud(ui, cloud_reason),
+        Panel::Local => draw_local(ui, tr),
+        Panel::Cloud => draw_cloud(ui, cloud_reason, tr),
     }
 }
 
 /// Draws the three option cards in a row and returns the tier clicked this frame, if any.
 /// The "Current" badge marks the tier stored in the company file, not the panel shown: a refused
 /// cloud choice leaves the stored tier unchanged.
-fn draw_options(ui: &mut Ui, stored: Option<AiTier>) -> Option<AiTier> {
+fn draw_options(ui: &mut Ui, stored: Option<AiTier>, tr: &Tr) -> Option<AiTier> {
     let t = tokens(ui);
     record_probe(ui, "ai-settings.accent", t.accent);
     record_probe(ui, "ai-settings.accent_soft", t.accent_soft);
     let options = [
-        (AiTier::Off, Icon::Off, OPTION_OFF),
-        (AiTier::Local, Icon::Cpu, OPTION_LOCAL),
-        (AiTier::Cloud, Icon::Cloud, OPTION_CLOUD),
+        (AiTier::Off, Icon::Off),
+        (AiTier::Local, Icon::Cpu),
+        (AiTier::Cloud, Icon::Cloud),
     ];
     // The shown tier has the accent border and fill (`aria-checked` in index.html:1905-1907) and
     // a "Current" badge.
-    let cards = options.map(|(tier, glyph, (title, body))| {
-        let current = stored == Some(tier);
-        OptionCard::new(glyph, title, body)
-            .selected(current)
-            .badge(current.then_some("Current"))
-    });
+    let current_word = tr.t("ai.settings.option.current");
+    let texts = options.map(|(tier, _)| option_in(tier, tr));
+    let cards: Vec<OptionCard<'_>> = options
+        .iter()
+        .zip(texts.iter())
+        .map(|((tier, glyph), (title, body))| {
+            let current = stored == Some(*tier);
+            OptionCard::new(*glyph, title, body)
+                .selected(current)
+                .badge(current.then_some(current_word.as_str()))
+        })
+        .collect();
     let drawn = option_grid(ui, egui::Id::unique("ai-option"), 3, &cards);
     let mut clicked = None;
-    for (n, (card, (tier, _, _))) in drawn.iter().zip(options).enumerate() {
+    for (n, (card, (tier, _))) in drawn.iter().zip(options).enumerate() {
         record_probe(ui, &format!("ai-settings.icon.{n}"), card.icon);
         record_probe(ui, &format!("ai-settings.title.{n}"), card.title);
         record_probe(ui, &format!("ai-settings.card.{n}"), card.card);
@@ -482,19 +511,25 @@ fn draw_options(ui: &mut Ui, stored: Option<AiTier>) -> Option<AiTier> {
 
 /// The local panel: the local model's reader, language and network rows, across the full width
 /// of the option cards (index.html:1906 and the local-model card at 1914).
-fn draw_local(ui: &mut Ui) {
+fn draw_local(ui: &mut Ui, tr: &Tr) {
     let local = card(ui, |ui| {
         ui.set_min_width(ui.available_width());
-        panel_heading(ui, Icon::Cpu, "Local model");
+        panel_heading(ui, Icon::Cpu, &tr.t("ai.settings.local.title"));
         rule_rows(
             ui,
             &[
                 (
-                    "Reader",
-                    "Not installed. This build has no local bill reader.",
+                    tr.t("ai.settings.local.reader_label"),
+                    tr.t("ai.settings.local.reader"),
                 ),
-                ("Language", "Not installed. This build has no local model."),
-                ("Network", "Nothing is sent: no AI feature is built yet."),
+                (
+                    tr.t("ai.settings.local.language_label"),
+                    tr.t("ai.settings.local.language"),
+                ),
+                (
+                    tr.t("ai.settings.local.network_label"),
+                    tr.t("ai.settings.local.network"),
+                ),
             ],
         );
     });
@@ -502,18 +537,22 @@ fn draw_local(ui: &mut Ui) {
 }
 
 /// The cloud panel: the provider is not available, with the engine's reason.
-fn draw_cloud(ui: &mut Ui, reason: Option<&str>) {
+fn draw_cloud(ui: &mut Ui, reason: Option<&str>, tr: &Tr) {
     card(ui, |ui| {
         ui.set_min_width(ui.available_width());
-        panel_heading(ui, Icon::Cloud, "Provider");
+        panel_heading(ui, Icon::Cloud, &tr.t("ai.settings.cloud.title"));
+        let why = reason.map_or_else(|| tr.t("ai.settings.cloud.why_default"), str::to_owned);
         rule_rows(
             ui,
             &[
-                ("Status", CLOUD_STATUS),
-                ("Why", reason.unwrap_or(CLOUD_REASON_DEFAULT)),
                 (
-                    "Key",
-                    "Never written to the company file. It belongs in the OS keychain.",
+                    tr.t("ai.settings.cloud.status_label"),
+                    tr.t("ai.settings.cloud.status"),
+                ),
+                (tr.t("ai.settings.cloud.why_label"), why),
+                (
+                    tr.t("ai.settings.cloud.key_label"),
+                    tr.t("ai.settings.cloud.key"),
                 ),
             ],
         );
@@ -537,7 +576,7 @@ fn panel_heading(ui: &mut Ui, glyph: Icon, title: &str) {
 
 /// Label and text rows across the card, a rule under each row. The label column is fixed; the
 /// value takes the rest. Each cell draws its own part of the rule, so the rules join up.
-fn rule_rows(ui: &mut Ui, items: &[(&str, &str)]) {
+fn rule_rows(ui: &mut Ui, items: &[(String, String)]) {
     let t = tokens(ui);
     table::builder(ui)
         .column(Column::exact(LABEL_COLUMN))
@@ -546,7 +585,11 @@ fn rule_rows(ui: &mut Ui, items: &[(&str, &str)]) {
             for (label, value) in items {
                 body.row(ROW_HEIGHT, |mut row| {
                     row.col(|ui| {
-                        ui.label(RichText::new(*label).size(TEXT_META).color(t.text_2));
+                        ui.label(
+                            RichText::new(label.as_str())
+                                .size(TEXT_META)
+                                .color(t.text_2),
+                        );
                         cell_rule(ui);
                     });
                     row.col(|ui| {
@@ -571,7 +614,7 @@ fn cell_rule(ui: &Ui) {
 
 /// The features table: what each feature sees, and whether it runs (index.html:1908). The On
 /// switch is read-only: nothing runs yet (PARITY-GAPS).
-fn draw_features(ui: &mut Ui, panel: Panel) {
+fn draw_features(ui: &mut Ui, panel: Panel, tr: &Tr) {
     let off = matches!(panel, Panel::Off | Panel::Unset);
     let cloud = panel == Panel::Cloud;
     let t = tokens(ui);
@@ -581,29 +624,36 @@ fn draw_features(ui: &mut Ui, panel: Panel) {
             .column(Column::remainder().at_least(160.0).clip(true))
             .column(Column::exact(ON_COLUMN))
             .header(ROW_HEIGHT, |mut row| {
-                table::header(&mut row, "Feature", false);
+                table::header(&mut row, &tr.t("ai.settings.features.feature"), false);
                 let second = if cloud {
-                    "What is sent to your provider"
+                    tr.t("ai.settings.features.sent")
                 } else {
-                    "What the model sees"
+                    tr.t("ai.settings.features.sees")
                 };
-                table::header(&mut row, second, false);
-                table::header(&mut row, "On", false);
+                table::header(&mut row, &second, false);
+                table::header(&mut row, &tr.t("ai.settings.features.on"), false);
             })
             .body(|mut body| {
-                for (feature, sees, sent) in FEATURES {
+                for (feature, sees, sent) in features_in(tr) {
                     body.row(ROW_HEIGHT, |mut row| {
                         row.col(|ui| {
-                            ui.label(RichText::new(feature).size(TEXT_BODY).color(t.text));
+                            ui.label(
+                                RichText::new(feature.as_str())
+                                    .size(TEXT_BODY)
+                                    .color(t.text),
+                            );
                             cell_rule(ui);
                         });
                         row.col(|ui| {
                             let text = if off {
-                                "Nothing: off".to_owned()
+                                tr.t("ai.settings.features.nothing_off")
                             } else if cloud {
-                                sent.to_owned()
+                                sent
                             } else {
-                                format!("{sees}, on this computer")
+                                tr.tf(
+                                    "ai.settings.features.on_computer",
+                                    &[("sees", sees.as_str())],
+                                )
                             };
                             table::text(ui, &text);
                             cell_rule(ui);
@@ -620,7 +670,7 @@ fn draw_features(ui: &mut Ui, panel: Panel) {
             // nothing happens (PARITY-GAPS).
             ui.add_space(6.0);
             ui.label(
-                RichText::new("Not built yet")
+                RichText::new(tr.t("ai.settings.features.not_built"))
                     .size(TEXT_META)
                     .color(t.text_3),
             );
@@ -630,26 +680,34 @@ fn draw_features(ui: &mut Ui, panel: Panel) {
 }
 
 /// The AI activity log: the file's real rows, or a line saying there are none.
-fn draw_log(ui: &mut Ui, log: &[AiLogEntry], reading: bool) {
+fn draw_log(ui: &mut Ui, log: &[AiLogEntry], reading: bool, tr: &Tr) {
     card(ui, |ui| {
         let t = tokens(ui);
         ui.horizontal(|ui| {
-            ui.label(RichText::new(LOG_TITLE).strong());
+            ui.label(RichText::new(tr.t("ai.settings.log.title")).strong());
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 let meta = if log.is_empty() {
-                    LOG_META_EMPTY
+                    tr.t("ai.settings.log.meta_empty")
                 } else {
-                    LOG_META
+                    tr.t("ai.settings.log.meta")
                 };
                 ui.label(RichText::new(meta).size(TEXT_META).color(t.text_3));
             });
         });
         if reading {
-            ui.label(para_text("Reading the log...", TEXT_BODY, t.text_2));
+            ui.label(para_text(
+                &tr.t("ai.settings.log.reading"),
+                TEXT_BODY,
+                t.text_2,
+            ));
             return;
         }
         if log.is_empty() {
-            ui.label(para_text(LOG_EMPTY, TEXT_BODY, t.text_2));
+            ui.label(para_text(
+                &tr.t("ai.settings.log.empty"),
+                TEXT_BODY,
+                t.text_2,
+            ));
             return;
         }
         table::builder(ui)
@@ -659,7 +717,14 @@ fn draw_log(ui: &mut Ui, log: &[AiLogEntry], reading: bool) {
             .column(Column::remainder())
             .column(Column::auto().at_least(110.0))
             .header(ROW_HEIGHT, |mut row| {
-                for label in LOG_HEADERS {
+                let headers = [
+                    tr.t("ai.settings.log.when"),
+                    tr.t("ai.settings.log.model"),
+                    tr.t("ai.settings.log.input_hash"),
+                    tr.t("ai.settings.log.output"),
+                    tr.t("ai.settings.log.decision"),
+                ];
+                for label in &headers {
                     table::header(&mut row, label, false);
                 }
             })
@@ -671,11 +736,11 @@ fn draw_log(ui: &mut Ui, log: &[AiLogEntry], reading: bool) {
                         row.col(|ui| table::text(ui, &short_hash(&entry.input_hash)));
                         row.col(|ui| table::text(ui, &entry.output_json));
                         let decision = if entry.accepted {
-                            "Accepted"
+                            tr.t("ai.settings.log.accepted")
                         } else {
-                            "Not accepted"
+                            tr.t("ai.settings.log.not_accepted")
                         };
-                        row.col(|ui| table::text(ui, decision));
+                        row.col(|ui| table::text(ui, &decision));
                     });
                 }
             });
@@ -699,15 +764,15 @@ fn short_hash(hash: &str) -> String {
 }
 
 /// The "What AI may never do here" card (index.html:1916).
-fn draw_never(ui: &mut Ui) {
+fn draw_never(ui: &mut Ui, tr: &Tr) {
     let never = card(ui, |ui| {
         let t = tokens(ui);
-        ui.label(RichText::new("What AI may never do here").strong());
+        ui.label(RichText::new(tr.t("ai.settings.never.title")).strong());
         ui.add_space(6.0);
-        for line in NEVER {
+        for line in never_in(tr) {
             ui.horizontal_wrapped(|ui| {
                 ui.label(RichText::new("•").color(t.text_2));
-                ui.label(para_text(line, TEXT_BODY, t.text_2));
+                ui.label(para_text(&line, TEXT_BODY, t.text_2));
             });
         }
     });
