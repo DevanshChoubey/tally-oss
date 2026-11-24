@@ -459,7 +459,7 @@ fn draw_detect(
             note(
                 ui,
                 NoteKind::Info,
-                "Not available yet: the step-by-step import and its reconciliation report are not connected to the app. Use the one-step import below.",
+                "Not available yet: the step-by-step import and its reconciliation report are not connected to the app. Use the one-step import above.",
             );
         }
         match wizard.detect_state() {

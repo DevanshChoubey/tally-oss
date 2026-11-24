@@ -137,47 +137,47 @@
 | dark | balance-sheet.voucher | 0.7573 |
 | light | masters.ledger-detail | 0.7584 |
 | hc | ask.offline-ai | 0.7614 |
+| hc | setup.done | 0.7622 |
 | hc | home.empty | 0.7654 |
 | dark | setup.features | 0.7661 |
-| hc | setup.gstin-error | 0.7668 |
-| hc | setup.company | 0.7669 |
+| hc | setup.company | 0.7842 |
 | hc | bank.empty | 0.7872 |
 | dark | masters.create-ledger | 0.7894 |
 | light | masters.create-ledger | 0.7900 |
-| light | setup.gstin-error | 0.7938 |
-| hc | setup.welcome | 0.7939 |
-| light | setup.company | 0.7962 |
-| dark | setup.gstin-error | 0.7964 |
-| dark | setup.company | 0.7970 |
-| hc | setup.backup | 0.8010 |
+| hc | setup.gstin-error | 0.7927 |
+| dark | setup.company | 0.7980 |
+| light | setup.company | 0.7997 |
 | dark | home.empty | 0.8019 |
+| hc | setup.backup | 0.8025 |
 | hc | setup.ai | 0.8025 |
 | hc | day-book.empty | 0.8047 |
 | light | ask.offline-ai | 0.8055 |
 | hc | gst.recon-empty | 0.8060 |
 | light | home.empty | 0.8084 |
+| dark | setup.gstin-error | 0.8091 |
+| dark | setup.done | 0.8097 |
 | hc | review.empty | 0.8099 |
+| light | setup.gstin-error | 0.8101 |
 | dark | ask.offline-ai | 0.8112 |
+| hc | setup.welcome | 0.8121 |
 | light | bank.empty | 0.8153 |
 | dark | bank.empty | 0.8153 |
 | hc | setup.keyboard | 0.8180 |
 | dark | review.empty | 0.8226 |
-| light | setup.welcome | 0.8230 |
-| dark | setup.welcome | 0.8262 |
 | dark | gst.recon-empty | 0.8267 |
 | light | review.empty | 0.8272 |
 | light | gst.recon-empty | 0.8308 |
-| light | setup.backup | 0.8320 |
+| light | setup.backup | 0.8328 |
 | light | day-book.empty | 0.8345 |
-| dark | setup.backup | 0.8346 |
 | dark | day-book.empty | 0.8353 |
+| dark | setup.backup | 0.8354 |
+| light | setup.welcome | 0.8395 |
 | light | setup.keyboard | 0.8418 |
 | dark | setup.keyboard | 0.8423 |
+| dark | setup.welcome | 0.8452 |
 | light | setup.ai | 0.8461 |
 | dark | setup.ai | 0.8492 |
-| hc | setup.done | 0.8640 |
 | light | setup.done | 0.8904 |
-| dark | setup.done | 0.8929 |
 
 ## hc / home.default
 
@@ -1775,6 +1775,18 @@ SSIM 0.7614
 </tr>
 </table>
 
+## hc / setup.done
+
+SSIM 0.7622
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/hc/setup.done.webp" width="480" alt="mock hc setup.done"></td>
+<td><img src="app-captures/hc/setup.done.webp" width="480" alt="app hc setup.done"></td>
+</tr>
+</table>
+
 ## hc / home.empty
 
 SSIM 0.7654
@@ -1799,21 +1811,9 @@ SSIM 0.7661
 </tr>
 </table>
 
-## hc / setup.gstin-error
-
-SSIM 0.7668
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/hc/setup.gstin-error.webp" width="480" alt="mock hc setup.gstin-error"></td>
-<td><img src="app-captures/hc/setup.gstin-error.webp" width="480" alt="app hc setup.gstin-error"></td>
-</tr>
-</table>
-
 ## hc / setup.company
 
-SSIM 0.7669
+SSIM 0.7842
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1859,57 +1859,21 @@ SSIM 0.7900
 </tr>
 </table>
 
-## light / setup.gstin-error
+## hc / setup.gstin-error
 
-SSIM 0.7938
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/light/setup.gstin-error.webp" width="480" alt="mock light setup.gstin-error"></td>
-<td><img src="app-captures/light/setup.gstin-error.webp" width="480" alt="app light setup.gstin-error"></td>
-</tr>
-</table>
-
-## hc / setup.welcome
-
-SSIM 0.7939
+SSIM 0.7927
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
 <tr>
-<td><img src="mock-v2/captures/states/hc/setup.welcome.webp" width="480" alt="mock hc setup.welcome"></td>
-<td><img src="app-captures/hc/setup.welcome.webp" width="480" alt="app hc setup.welcome"></td>
-</tr>
-</table>
-
-## light / setup.company
-
-SSIM 0.7962
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/light/setup.company.webp" width="480" alt="mock light setup.company"></td>
-<td><img src="app-captures/light/setup.company.webp" width="480" alt="app light setup.company"></td>
-</tr>
-</table>
-
-## dark / setup.gstin-error
-
-SSIM 0.7964
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/dark/setup.gstin-error.webp" width="480" alt="mock dark setup.gstin-error"></td>
-<td><img src="app-captures/dark/setup.gstin-error.webp" width="480" alt="app dark setup.gstin-error"></td>
+<td><img src="mock-v2/captures/states/hc/setup.gstin-error.webp" width="480" alt="mock hc setup.gstin-error"></td>
+<td><img src="app-captures/hc/setup.gstin-error.webp" width="480" alt="app hc setup.gstin-error"></td>
 </tr>
 </table>
 
 ## dark / setup.company
 
-SSIM 0.7970
+SSIM 0.7980
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1919,15 +1883,15 @@ SSIM 0.7970
 </tr>
 </table>
 
-## hc / setup.backup
+## light / setup.company
 
-SSIM 0.8010
+SSIM 0.7997
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
 <tr>
-<td><img src="mock-v2/captures/states/hc/setup.backup.webp" width="480" alt="mock hc setup.backup"></td>
-<td><img src="app-captures/hc/setup.backup.webp" width="480" alt="app hc setup.backup"></td>
+<td><img src="mock-v2/captures/states/light/setup.company.webp" width="480" alt="mock light setup.company"></td>
+<td><img src="app-captures/light/setup.company.webp" width="480" alt="app light setup.company"></td>
 </tr>
 </table>
 
@@ -1940,6 +1904,18 @@ SSIM 0.8019
 <tr>
 <td><img src="mock-v2/captures/states/dark/home.empty.webp" width="480" alt="mock dark home.empty"></td>
 <td><img src="app-captures/dark/home.empty.webp" width="480" alt="app dark home.empty"></td>
+</tr>
+</table>
+
+## hc / setup.backup
+
+SSIM 0.8025
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/hc/setup.backup.webp" width="480" alt="mock hc setup.backup"></td>
+<td><img src="app-captures/hc/setup.backup.webp" width="480" alt="app hc setup.backup"></td>
 </tr>
 </table>
 
@@ -2003,6 +1979,30 @@ SSIM 0.8084
 </tr>
 </table>
 
+## dark / setup.gstin-error
+
+SSIM 0.8091
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/dark/setup.gstin-error.webp" width="480" alt="mock dark setup.gstin-error"></td>
+<td><img src="app-captures/dark/setup.gstin-error.webp" width="480" alt="app dark setup.gstin-error"></td>
+</tr>
+</table>
+
+## dark / setup.done
+
+SSIM 0.8097
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/dark/setup.done.webp" width="480" alt="mock dark setup.done"></td>
+<td><img src="app-captures/dark/setup.done.webp" width="480" alt="app dark setup.done"></td>
+</tr>
+</table>
+
 ## hc / review.empty
 
 SSIM 0.8099
@@ -2015,6 +2015,18 @@ SSIM 0.8099
 </tr>
 </table>
 
+## light / setup.gstin-error
+
+SSIM 0.8101
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/setup.gstin-error.webp" width="480" alt="mock light setup.gstin-error"></td>
+<td><img src="app-captures/light/setup.gstin-error.webp" width="480" alt="app light setup.gstin-error"></td>
+</tr>
+</table>
+
 ## dark / ask.offline-ai
 
 SSIM 0.8112
@@ -2024,6 +2036,18 @@ SSIM 0.8112
 <tr>
 <td><img src="mock-v2/captures/states/dark/ask.offline-ai.webp" width="480" alt="mock dark ask.offline-ai"></td>
 <td><img src="app-captures/dark/ask.offline-ai.webp" width="480" alt="app dark ask.offline-ai"></td>
+</tr>
+</table>
+
+## hc / setup.welcome
+
+SSIM 0.8121
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/hc/setup.welcome.webp" width="480" alt="mock hc setup.welcome"></td>
+<td><img src="app-captures/hc/setup.welcome.webp" width="480" alt="app hc setup.welcome"></td>
 </tr>
 </table>
 
@@ -2075,30 +2099,6 @@ SSIM 0.8226
 </tr>
 </table>
 
-## light / setup.welcome
-
-SSIM 0.8230
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/light/setup.welcome.webp" width="480" alt="mock light setup.welcome"></td>
-<td><img src="app-captures/light/setup.welcome.webp" width="480" alt="app light setup.welcome"></td>
-</tr>
-</table>
-
-## dark / setup.welcome
-
-SSIM 0.8262
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/dark/setup.welcome.webp" width="480" alt="mock dark setup.welcome"></td>
-<td><img src="app-captures/dark/setup.welcome.webp" width="480" alt="app dark setup.welcome"></td>
-</tr>
-</table>
-
 ## dark / gst.recon-empty
 
 SSIM 0.8267
@@ -2137,7 +2137,7 @@ SSIM 0.8308
 
 ## light / setup.backup
 
-SSIM 0.8320
+SSIM 0.8328
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -2159,18 +2159,6 @@ SSIM 0.8345
 </tr>
 </table>
 
-## dark / setup.backup
-
-SSIM 0.8346
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/dark/setup.backup.webp" width="480" alt="mock dark setup.backup"></td>
-<td><img src="app-captures/dark/setup.backup.webp" width="480" alt="app dark setup.backup"></td>
-</tr>
-</table>
-
 ## dark / day-book.empty
 
 SSIM 0.8353
@@ -2180,6 +2168,30 @@ SSIM 0.8353
 <tr>
 <td><img src="mock-v2/captures/states/dark/day-book.empty.webp" width="480" alt="mock dark day-book.empty"></td>
 <td><img src="app-captures/dark/day-book.empty.webp" width="480" alt="app dark day-book.empty"></td>
+</tr>
+</table>
+
+## dark / setup.backup
+
+SSIM 0.8354
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/dark/setup.backup.webp" width="480" alt="mock dark setup.backup"></td>
+<td><img src="app-captures/dark/setup.backup.webp" width="480" alt="app dark setup.backup"></td>
+</tr>
+</table>
+
+## light / setup.welcome
+
+SSIM 0.8395
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/setup.welcome.webp" width="480" alt="mock light setup.welcome"></td>
+<td><img src="app-captures/light/setup.welcome.webp" width="480" alt="app light setup.welcome"></td>
 </tr>
 </table>
 
@@ -2207,6 +2219,18 @@ SSIM 0.8423
 </tr>
 </table>
 
+## dark / setup.welcome
+
+SSIM 0.8452
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/dark/setup.welcome.webp" width="480" alt="mock dark setup.welcome"></td>
+<td><img src="app-captures/dark/setup.welcome.webp" width="480" alt="app dark setup.welcome"></td>
+</tr>
+</table>
+
 ## light / setup.ai
 
 SSIM 0.8461
@@ -2231,18 +2255,6 @@ SSIM 0.8492
 </tr>
 </table>
 
-## hc / setup.done
-
-SSIM 0.8640
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/hc/setup.done.webp" width="480" alt="mock hc setup.done"></td>
-<td><img src="app-captures/hc/setup.done.webp" width="480" alt="app hc setup.done"></td>
-</tr>
-</table>
-
 ## light / setup.done
 
 SSIM 0.8904
@@ -2252,18 +2264,6 @@ SSIM 0.8904
 <tr>
 <td><img src="mock-v2/captures/states/light/setup.done.webp" width="480" alt="mock light setup.done"></td>
 <td><img src="app-captures/light/setup.done.webp" width="480" alt="app light setup.done"></td>
-</tr>
-</table>
-
-## dark / setup.done
-
-SSIM 0.8929
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/dark/setup.done.webp" width="480" alt="mock dark setup.done"></td>
-<td><img src="app-captures/dark/setup.done.webp" width="480" alt="app dark setup.done"></td>
 </tr>
 </table>
 

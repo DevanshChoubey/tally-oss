@@ -628,9 +628,12 @@ financial year starts. The model supports that (`Company::books_begin`), so it i
   feature screen exists, so the sentence is left out. Rows the model has no switch for show an
   off switch that does not move and say why.
 - **gap: the backup note has no info icon.** The kit's note draws text only.
-- **gap: fields are the kit's text inputs and combo boxes.** The mock's inputs on Company and
-  Backup are drawn by the shared egui styling, not the mock's `.fld input`; read-only values
-  (GST filing, Keep, When) are text with a "Not saved yet" hint instead of inputs.
+- **fixed (S9): fields use the mock's input size.** Setup's text inputs now share one helper
+  (`input()` in `screens/setup/mod.rs`: 10 x 7 margin, the input font) and combo boxes use the
+  kit's `style_combo`, so rows are the mock's height. Read-only values (GST filing, Keep, When)
+  are still text with a "Not saved yet" hint instead of inputs.
+- **gap: the "AI" chip and sidebar footer on first launch** are listed above; the "Hold Alt or
+  Ctrl for more" key-bar hint is not drawn.
 - **data: the mock's sample is prefilled; the wizard starts blank.** The capture types the mock's
   company (name, GSTIN, file). The mock's City "Pune" is not typed.
 
@@ -705,12 +708,13 @@ quick-entry offline-AI state has no dark or hc mock capture). Theme differences 
   2 px. The masters filter box draws a literal 2 px outline (masters/look.rs), which matches the
   mock but not the app's own hc focus width.
 
-## Real-path audit findings (2026-11-24)
+## Real-path audit findings (2026-11-24, updated S9)
 
-Full table in `design/REAL-PATH-AUDIT.md`. Open gaps, worst first: Import screen is raw egui;
-shortcut keys are silently ignored on a cold start; refusal messages are shown in the bottom key
-bar in red with developer wording; the tab strip is unstyled with duplicate "Company setup"
-titles; dark and high-contrast `setup.welcome` captures are not yet reshot cold.
+Full table in `design/REAL-PATH-AUDIT.md`. Fixed in S9: the import screen is in the app's kit and
+the welcome's Import card opens it; shortcuts and refusals give a toast with a "Create a company"
+action; the tab strip is styled with distinct titles. Still open: the import screen's step-by-step
+path is not connected; dark and hc `setup.welcome` SSIM is 0.8452 and 0.8121 (AI chip text,
+sidebar footer text and the "Hold Alt or Ctrl for more" hint differ).
 
 ## Reports not in the mock (S8)
 
