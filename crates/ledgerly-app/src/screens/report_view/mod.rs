@@ -1193,6 +1193,24 @@ fn read_keys(ctx: &Context, editing: bool, look: Look) -> Vec<KeyCmd> {
 }
 
 impl Screen for ReportViewScreen {
+    fn cursor_label(&self, _ctx: &AppCtx) -> Option<String> {
+        let row = self.selected_row()?;
+        // A voucher line is named by its voucher number (its label is the other ledger's name,
+        // which many vouchers share).
+        if row.kind == ViewRowKind::Voucher {
+            let number = self
+                .report
+                .columns
+                .iter()
+                .position(|c| c == "Voucher No")
+                .and_then(|i| row.cells.get(i));
+            if let Some(ViewCell::Text(number)) = number {
+                return Some(number.clone());
+            }
+        }
+        Some(row.label.clone())
+    }
+
     fn title(&self) -> String {
         // The crumb uses the page title's wording for the screens drawn to the mock
         // (index.html:1572: "Balance sheet").

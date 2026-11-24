@@ -1743,6 +1743,12 @@ fn plain_cells(rows: &[MasterRow]) -> Vec<Vec<look::Cell>> {
 }
 
 impl Screen for MastersScreen {
+    fn cursor_label(&self, ctx: &AppCtx) -> Option<String> {
+        let books = ctx.books.as_ref()?;
+        let snapshot = snapshot_of(&books.masters, self.selected?)?;
+        Some(snapshot_name(&snapshot).to_owned())
+    }
+
     fn title(&self) -> String {
         // The breadcrumb reads "Masters" on every kind (index.html:1794).
         "Masters".to_owned()

@@ -568,6 +568,23 @@ impl Shell {
         &mut self.tabs
     }
 
+    /// The label of the row under the cursor of the active tab's top screen
+    /// ([`crate::Screen::cursor_label`]); the screenshot harness reads it.
+    #[must_use]
+    pub fn top_cursor_label(&self) -> Option<String> {
+        self.tabs
+            .active_stack()
+            .and_then(|stack| stack.top_cursor_label(&self.app_ctx))
+    }
+
+    /// The key bar name of the active tab's top screen.
+    #[must_use]
+    pub fn top_key_bar_name(&self) -> String {
+        self.tabs
+            .active_stack()
+            .map_or_default(ScreenStack::top_key_bar_name)
+    }
+
     /// The context handed to screens.
     pub fn app_ctx_mut(&mut self) -> &mut AppCtx {
         &mut self.app_ctx

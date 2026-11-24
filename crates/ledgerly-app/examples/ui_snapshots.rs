@@ -621,7 +621,34 @@ enum Inject {
     /// Nothing for this many frames, for an answer from the worker that the next input needs (the
     /// open bills of a bill-wise party arrive some frames after the amount's Enter).
     Wait(u32),
+    /// Press J until the cursor row of the top screen is the one with this label
+    /// ([`ledgerly_app::Screen::cursor_label`]). A flow picks a named row this way and never by a
+    /// count of key presses, so a change to the row order cannot move a capture to another row.
+    /// Panics when the row is not reached.
+    Seek(&'static str),
+    /// Panics unless the top screen is the expected one (see [`Expect`]). Every flow that drills
+    /// or picks a row ends in one, so a capture of the wrong screen stops the run.
+    Expect(Expect),
 }
+
+/// What the screen a flow reached must be. The harness waits for it to settle, then panics with
+/// what was shown instead.
+#[derive(Clone, Copy)]
+struct Expect {
+    /// The title of the top screen (its breadcrumb).
+    title: &'static str,
+    /// The key bar name of the top screen, when the flow must also be in a given mode (the
+    /// masters list names itself "Ledger" only while its form is open).
+    key_bar: Option<&'static str>,
+    /// The cursor row's label, when the screen has one.
+    cursor: Option<&'static str>,
+}
+
+/// Frames a `Seek` or `Expect` waits for a worker-loaded screen before it gives up.
+const REACH_FRAMES_MAX: u32 = 300;
+
+/// J presses a `Seek` may make before it gives up (more than any list of the sample company).
+const SEEK_PRESSES_MAX: u32 = 200;
 
 impl Shot {
     /// The `<theme>/<state-id>` label that `--only` matches against.
@@ -656,6 +683,38 @@ impl Shot {
     /// The same shot with nothing sent for `frames` frames after what came before it.
     fn wait(mut self, frames: u32) -> Self {
         self.after.push(Inject::Wait(frames));
+        self
+    }
+
+    /// The same shot with the cursor moved to the row labelled `label` after what came before it.
+    fn seek(mut self, label: &'static str) -> Self {
+        self.after.push(Inject::Seek(label));
+        self
+    }
+
+    /// The same shot with a check, after what came before it, that the top screen is titled
+    /// `title` and its cursor is on `cursor` (when given).
+    fn expect(mut self, title: &'static str, cursor: Option<&'static str>) -> Self {
+        self.after.push(Inject::Expect(Expect {
+            title,
+            key_bar: None,
+            cursor,
+        }));
+        self
+    }
+
+    /// As [`Shot::expect`], also requiring the key bar name `key_bar`.
+    fn expect_in(
+        mut self,
+        title: &'static str,
+        key_bar: &'static str,
+        cursor: &'static str,
+    ) -> Self {
+        self.after.push(Inject::Expect(Expect {
+            title,
+            key_bar: Some(key_bar),
+            cursor: Some(cursor),
+        }));
         self
     }
 
@@ -705,29 +764,36 @@ const HOME_COMPARE_TITLE: &str = "Compare vouchers";
 /// Frames a fresh shell may take to show a clean Home before the run stops.
 const HOME_FRAMES_MAX: u32 = 600;
 
-/// From Home to the balance sheet's Sundry Debtors drill on the sample company: B, four lines down
-/// to Current Assets, Enter, three lines down to Sundry Debtors (after Bank Accounts, Cash-in-Hand
-/// and Loans & Advances), Enter.
-fn to_debtors() -> Vec<(Key, Modifiers)> {
-    vec![
-        (Key::B, NONE),
-        (Key::J, NONE),
-        (Key::J, NONE),
-        (Key::J, NONE),
-        (Key::J, NONE),
-        (Key::Enter, NONE),
-        (Key::J, NONE),
-        (Key::J, NONE),
-        (Key::J, NONE),
-        (Key::Enter, NONE),
-    ]
+/// The balance sheet's Sundry Debtors group (the mock's `balance-sheet.group`): B, the Current
+/// Assets line, Enter, the Sundry Debtors line, Enter. Rows are picked by name, so a change to the
+/// statement's row order cannot change the capture.
+fn debtors_group(state: &'static str) -> Shot {
+    shot(state, &[(Key::B, NONE)])
+        .seek("Current Assets")
+        .press(&[(Key::Enter, NONE)])
+        .seek("Sundry Debtors")
+        .press(&[(Key::Enter, NONE)])
+        .expect("Sundry Debtors", Some("Shree Ganesh Traders"))
 }
 
-/// Masters, then `n` lines down the ledger list.
-fn masters_down(n: usize) -> Vec<(Key, Modifiers)> {
-    let mut keys = vec![(Key::M, NONE)];
-    keys.extend(std::iter::repeat_n((Key::J, NONE), n));
-    keys
+/// The ledger drill under [`debtors_group`] (the mock's `balance-sheet.ledger`): Shree Ganesh
+/// Traders' vouchers.
+fn debtors_ledger(state: &'static str) -> Shot {
+    debtors_group(state)
+        .seek("Shree Ganesh Traders")
+        .press(&[(Key::Enter, NONE)])
+        .expect("Shree Ganesh Traders", None)
+}
+
+/// The label of the voucher the mock's `balance-sheet.voucher` opens.
+const DEBTORS_VOUCHER_ROW: &str = "SI/0412";
+
+/// The voucher drill under [`debtors_ledger`] (the mock's `balance-sheet.voucher`): SI/0412.
+fn debtors_voucher(state: &'static str) -> Shot {
+    debtors_ledger(state)
+        .seek(DEBTORS_VOUCHER_ROW)
+        .press(&[(Key::Enter, NONE)])
+        .expect("SI/0412", None)
 }
 
 /// The company name the setup captures type (the mock's sample company, index.html:489).
@@ -945,8 +1011,8 @@ fn light_shots() -> Vec<Shot> {
         // The mock drills from the balance sheet into Sundry debtors (index.html:1594), then into
         // its first ledger (index.html:1600). Current Assets is the fourth line of the capture
         // company's condensed statement and Sundry Debtors the third line of its summary.
-        shot("balance-sheet.group", &to_debtors()),
-        shot("balance-sheet.ledger", &to_debtors()).then(&[(Key::Enter, NONE)]),
+        debtors_group("balance-sheet.group"),
+        debtors_ledger("balance-sheet.ledger"),
         shot("day-book.default", &[(Key::D, NONE)]),
         shot("gst.gstr1", &[(Key::G, NONE), (Key::Num1, NONE)]),
         // AI and privacy is reached from the palette (index.html:1920 keys: 1 Off, 2 On this
@@ -973,9 +1039,11 @@ fn light_shots() -> Vec<Shot> {
         shot("gst.recon-empty", &[(Key::G, NONE), (Key::Num3, NONE)]),
         shot("masters.ledgers", &[(Key::M, NONE)]),
         // The mock's party detail is the alter form of a bill-wise party ledger (index.html:1803).
-        // The list is alphabetical: Shree Ganesh Traders is the 35th ledger of the sample company, so
-        // 34 steps down, then Ctrl+Enter alters it.
-        shot("masters.ledger-detail", &masters_down(34)).press(&[(Key::Enter, Modifiers::COMMAND)]),
+        // The cursor goes to Shree Ganesh Traders by name, then Ctrl+Enter alters it.
+        shot("masters.ledger-detail", &[(Key::M, NONE)])
+            .seek("Shree Ganesh Traders")
+            .press(&[(Key::Enter, Modifiers::COMMAND)])
+            .expect_in("Masters", "Ledger", "Shree Ganesh Traders"),
         // Alt+Right walks the kinds from Ledger; the fourth step is Stock item.
         shot(
             "masters.items",
@@ -1087,11 +1155,13 @@ fn light_shots() -> Vec<Shot> {
         // (index.html:434 "No statement imported for this account").
         shot("bank.empty", &[palette])
             .query("Bank Reconciliation")
-            .then(&[
-                (Key::Enter, NONE),
-                (Key::ArrowDown, NONE),
-                (Key::Enter, NONE),
-            ]),
+            .then(&[(Key::Enter, NONE)])
+            .seek("Mula Valley Co-op Bank, current A/c")
+            .press(&[(Key::Enter, NONE)])
+            .expect(
+                "Bank reconciliation: Mula Valley Co-op Bank, current A/c",
+                None,
+            ),
         // F2 on the day book asks for one date; Ctrl+A selects the prefilled day so the typed one
         // replaces it. The capture company has no voucher on 21 Nov (index.html:1641 uses 21 Nov).
         shot("day-book.empty", &[(Key::D, NONE), (Key::F2, NONE)])
@@ -1110,11 +1180,7 @@ fn light_shots() -> Vec<Shot> {
         .type_text("20-11-2026")
         .press(&[(Key::Enter, NONE)]),
         // From the ledger drill (balance-sheet.ledger), Enter opens the voucher on the cursor row.
-        shot("balance-sheet.voucher", &to_debtors()).then(&[
-            (Key::Enter, NONE),
-            (Key::J, NONE),
-            (Key::Enter, NONE),
-        ]),
+        debtors_voucher("balance-sheet.voucher"),
         // AI and privacy stores Off (key 1, as ai-settings.off) and Esc goes back to Home.
         shot("home.ai-off", &[palette])
             .query("AI and privacy")
@@ -1139,19 +1205,11 @@ fn light_shots() -> Vec<Shot> {
         // Godavari with a late sale that takes the pickaxe 30 nos below zero, so closing stock is
         // provisional (the mock's `pick: -30`).
         shot("balance-sheet.provisional", &[(Key::B, NONE)]).on(Fixture::GodavariShortStock),
-        // Godavari as it is: the pickaxe has no HSN, so Table 12 needs correction. Four J
-        // presses select it, as the mock's `gstr1-correction` state does.
-        shot(
-            "gst.gstr1-correction",
-            &[
-                (Key::G, NONE),
-                (Key::Num1, NONE),
-                (Key::J, NONE),
-                (Key::J, NONE),
-                (Key::J, NONE),
-                (Key::J, NONE),
-            ],
-        ),
+        // Godavari as it is: the pickaxe has no HSN, so Table 12 needs correction. The cursor goes
+        // to table 12 by its number, as the mock's `gstr1-correction` state selects it.
+        shot("gst.gstr1-correction", &[(Key::G, NONE), (Key::Num1, NONE)])
+            .seek("12")
+            .expect("GST returns", Some("12")),
         // Fictional Pumps has a stored statement whose lines match two vouchers.
         shot("review.default", &[palette])
             .query("Review queue")
@@ -1284,9 +1342,79 @@ struct Snapshots {
     image: Arc<Mutex<Option<Arc<egui::ColorImage>>>>,
     /// The company file open in the shell.
     company: Fixture,
+    /// Frames the front `Seek` or `Expect` has waited so far.
+    reach_frames: u32,
+    /// J presses the front `Seek` has made so far.
+    seek_presses: u32,
 }
 
 impl Snapshots {
+    /// One step of a `Seek`: done when the cursor is on `label`, otherwise one J press (after
+    /// the screen had time to load its rows).
+    fn seek_step(&mut self, label: &'static str, raw_input: &mut egui::RawInput) {
+        let state = self.shots[self.index].label();
+        let cursor = self.shell.top_cursor_label();
+        if cursor.as_deref() == Some(label) {
+            self.inject.pop_front();
+            self.reach_frames = 0;
+            self.seek_presses = 0;
+            self.gap = 6;
+            return;
+        }
+        self.reach_frames += 1;
+        if cursor.is_none() && self.reach_frames < 30 {
+            return;
+        }
+        assert!(
+            self.seek_presses < SEEK_PRESSES_MAX,
+            "{state}: the cursor never reached the row {label:?} on the screen {:?} (cursor now \
+             {cursor:?}, {} J presses)",
+            self.shell.tabs().active_stack().map(ScreenStack::top_title),
+            self.seek_presses,
+        );
+        for pressed in [true, false] {
+            raw_input.events.push(Event::Key {
+                key: Key::J,
+                physical_key: None,
+                pressed,
+                repeat: false,
+                modifiers: Modifiers::NONE,
+            });
+        }
+        self.seek_presses += 1;
+        self.gap = 6;
+    }
+
+    /// One step of an `Expect`: done when the top screen is the expected one, a panic when it is
+    /// not after the screen had time to load.
+    fn expect_step(&mut self, expect: Expect) {
+        let title = self
+            .shell
+            .tabs()
+            .active_stack()
+            .map_or_default(ScreenStack::top_title);
+        let key_bar = self.shell.top_key_bar_name();
+        let cursor = self.shell.top_cursor_label();
+        let reached = title == expect.title
+            && expect.key_bar.is_none_or(|k| key_bar == k)
+            && expect.cursor.is_none_or(|c| cursor.as_deref() == Some(c));
+        if reached {
+            self.inject.pop_front();
+            self.reach_frames = 0;
+            return;
+        }
+        self.reach_frames += 1;
+        assert!(
+            self.reach_frames < REACH_FRAMES_MAX,
+            "{}: expected the screen {:?} (key bar {:?}, cursor {:?}) but the capture would show \
+             {title:?} (key bar {key_bar:?}, cursor {cursor:?})",
+            self.shots[self.index].label(),
+            expect.title,
+            expect.key_bar,
+            expect.cursor,
+        );
+    }
+
     /// Closes the open company and opens `company` on a new shell, as the start of the run does.
     fn reopen(&mut self, ctx: &egui::Context, company: Fixture) -> Stage {
         // Scroll offsets, open popups, collapsing headers and the focus live in the egui context,
@@ -1346,11 +1474,23 @@ impl eframe::App for Snapshots {
             self.gap -= 1;
             return;
         }
+        match self.inject.front().copied() {
+            Some(Inject::Seek(label)) => {
+                self.seek_step(label, raw_input);
+                return;
+            }
+            Some(Inject::Expect(expect)) => {
+                self.expect_step(expect);
+                return;
+            }
+            Some(_) | None => {}
+        }
         if let Some(item) = self.inject.pop_front() {
             // A wheel scroll is animated over several frames; the next click waits for it to end.
             self.gap = match item {
                 Inject::Scroll(..) => SCROLL_SETTLE_FRAMES,
                 Inject::Wait(frames) => frames,
+                Inject::Seek(_) | Inject::Expect(_) => 0,
                 Inject::Key(..) | Inject::Text(_) | Inject::Click(..) => 6,
             };
             match item {
@@ -1366,7 +1506,7 @@ impl eframe::App for Snapshots {
                     }
                 }
                 Inject::Text(text) => raw_input.events.push(Event::Text(text.to_owned())),
-                Inject::Wait(_) => {}
+                Inject::Wait(_) | Inject::Seek(_) | Inject::Expect(_) => {}
                 Inject::Scroll(x, y, wheel) => {
                     raw_input.events.push(Event::PointerMoved(egui::pos2(x, y)));
                     raw_input.events.push(Event::MouseWheel {
@@ -1548,6 +1688,8 @@ fn main() -> eframe::Result<()> {
         gap: 0,
         image: Arc::new(Mutex::new(None)),
         company,
+        reach_frames: 0,
+        seek_presses: 0,
     };
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()

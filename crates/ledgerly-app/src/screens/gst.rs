@@ -1284,6 +1284,10 @@ fn is_open(row: &ReconRow, decision: Option<ImsAction>) -> bool {
 }
 
 impl Screen for GstScreen {
+    fn cursor_label(&self, _ctx: &AppCtx) -> Option<String> {
+        self.selected_section().map(|s| s.code.to_owned())
+    }
+
     fn title(&self) -> String {
         "GST returns".to_owned()
     }

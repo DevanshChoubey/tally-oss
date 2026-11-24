@@ -350,6 +350,10 @@ fn paint_line(ui: &Ui, rect: Rect, row: &ChooserRow, state: RowState) {
 }
 
 impl Screen for BankChooserScreen {
+    fn cursor_label(&self, _ctx: &AppCtx) -> Option<String> {
+        self.rows.get(self.focus).map(|r| r.name.clone())
+    }
+
     fn title(&self) -> String {
         PAGE_TITLE.to_owned()
     }

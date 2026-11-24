@@ -61,6 +61,14 @@ pub trait Screen {
         Vec::new()
     }
 
+    /// The label of the row the cursor is on, for the screens that list rows (a report line, a
+    /// master, a GST table, a bank account). The screenshot harness reads it to move to a row by
+    /// name and to check it reached the screen it meant to; no screen draws from it. Defaults to
+    /// none, which also means "no row yet" while a list is still loading.
+    fn cursor_label(&self, _ctx: &AppCtx) -> Option<String> {
+        None
+    }
+
     /// Draws the screen and returns what the stack should do next.
     fn ui(&mut self, ui: &mut egui::Ui, ctx: &mut AppCtx) -> ScreenAction;
 }

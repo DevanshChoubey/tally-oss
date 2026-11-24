@@ -150,6 +150,12 @@ impl ScreenStack {
         self.screens.last().map_or_default(|s| s.title())
     }
 
+    /// The label of the row under the top screen's cursor ([`Screen::cursor_label`]).
+    #[must_use]
+    pub fn top_cursor_label(&self, ctx: &AppCtx) -> Option<String> {
+        self.screens.last().and_then(|s| s.cursor_label(ctx))
+    }
+
     /// The title the sidebar selects by for the top screen ([`Screen::sidebar_title`]).
     #[must_use]
     pub fn top_sidebar_title(&self) -> String {
