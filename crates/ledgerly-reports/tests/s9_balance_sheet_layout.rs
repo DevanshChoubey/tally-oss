@@ -22,12 +22,12 @@ use std::collections::BTreeMap;
 
 use ledgerly_core::{
     CompanyId, Date, DrCr, GroupId, LedgerId, Month, Outcome, Paise, Period, Qty, SignedAmount,
-    StateCode, StockItemId, VoucherId, VoucherTypeId,
+    StateCode, StockItemId, UnitId, VoucherId, VoucherTypeId,
 };
 use ledgerly_model::{
     Address, BaseVoucherKind, Books, Company, EntityKind, Features, Group, Ledger, Masters, Nature,
     NegativeStockPolicy, NumberingConfig, NumberingMethod, Posting, ReservedGroup, RestartPeriod,
-    Scenario, VoucherStatus, VoucherType,
+    Scenario, StockItem, ValuationMethod, VoucherStatus, VoucherType,
 };
 use ledgerly_reports::balance_sheet::balance_sheet;
 use ledgerly_reports::{
@@ -392,4 +392,72 @@ fn sub_groups_follow_the_chart_order_too() {
     let at = |n: &str| names.iter().position(|x| *x == n).unwrap();
     assert!(at("Closing stock") < at("Sundry Debtors"));
     assert!(at("Sundry Debtors") < at("Cash-in-Hand"));
+}
+
+fn named_item(id: u64, name: &str) -> StockItem {
+    StockItem {
+        ineligible_itc: None,
+        id: StockItemId(id),
+        name: name.into(),
+        aliases: vec![],
+        group: None,
+        unit: UnitId(1),
+        alt_unit: None,
+        hsn: None,
+        gst_history: vec![],
+        valuation: ValuationMethod::AverageCost,
+        batches_enabled: false,
+        opening: vec![],
+        standard_costs: vec![],
+        tally: None,
+    }
+}
+
+fn provisional_reason(books: &Books) -> String {
+    let stock = closing(
+        rs(30_000),
+        ValuationStatus::Provisional(ProvisionalReason::NegativeStock {
+            item: StockItemId(1),
+            date: d(10),
+        }),
+    );
+    let r = balance_sheet(books, &params(Detail::Detailed), &stock)
+        .unwrap()
+        .value()
+        .expect("supported");
+    match &r
+        .rows
+        .iter()
+        .find(|x| x.label == "Closing stock")
+        .unwrap()
+        .cells[1]
+    {
+        Cell::Provisional { reason, .. } => reason.clone(),
+        other => panic!("{other:?}"),
+    }
+}
+
+#[test]
+fn the_provisional_reason_names_the_item() {
+    // provenance: derived. The reason is read by a person: item 1 is "Pickaxe" in the books, so
+    // the line says "Pickaxe" and never the Rust debug text "StockItemId(1)". Nothing else in the
+    // sentence is changed: the date is 10 Sep 2026 as in the valuation's own status.
+    let mut b = books();
+    b.masters
+        .stock_items
+        .insert(StockItemId(1), named_item(1, "Pickaxe"));
+    assert_eq!(
+        provisional_reason(&b),
+        "negative stock: item Pickaxe first went below zero on 2026-09-10"
+    );
+}
+
+#[test]
+fn an_unknown_item_is_named_by_its_number_not_debug_text() {
+    // provenance: derived. An item missing from the masters cannot be named; the line gives its
+    // number, as the stock summary does ("item 1"), and not "StockItemId(1)".
+    assert_eq!(
+        provisional_reason(&books()),
+        "negative stock: item 1 first went below zero on 2026-09-10"
+    );
 }

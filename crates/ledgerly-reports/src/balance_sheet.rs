@@ -66,7 +66,9 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use ledgerly_core::{Date, GroupId, LedgerId, Outcome, Paise, SignedAmount, VoucherTypeId};
+use ledgerly_core::{
+    Date, GroupId, LedgerId, Outcome, Paise, SignedAmount, StockItemId, VoucherTypeId,
+};
 use ledgerly_model::{
     BaseVoucherKind, Books, Group, Ledger, Nature, Posting, ReservedGroup, Scenario, VoucherStatus,
     VoucherType,
@@ -203,7 +205,7 @@ pub fn balance_sheet(
             ),
         });
     }
-    let stock = supported!(stock_total(closing_stock, params.as_of)?);
+    let stock = supported!(stock_total(books, closing_stock, params.as_of)?);
     let movement = supported!(movement_by_ledger(books, params)?);
     let (balances, opening_net) = closing_balances(books, &movement)?;
     if let Some(unsupported) = unsupported_stock_books(books, &balances) {
@@ -328,7 +330,19 @@ fn unsupported_stock_books(
     None
 }
 
+/// The reason line for a stock item that went below zero: the item's name, or its number when
+/// the masters do not hold it (never the Rust debug text of its id).
+pub(crate) fn negative_stock_reason(books: &Books, item: StockItemId, date: Date) -> String {
+    let who = books
+        .masters
+        .stock_items
+        .get(&item)
+        .map_or_else(|| item.0.to_string(), |i| i.name.clone());
+    format!("negative stock: item {who} first went below zero on {date}")
+}
+
 fn stock_total(
+    books: &Books,
     input: &Outcome<Vec<StockValuation>>,
     expected: Date,
 ) -> Result<Outcome<StockTotal>, ReportError> {
@@ -364,9 +378,7 @@ fn stock_total(
         match &v.status {
             ValuationStatus::Final => {}
             ValuationStatus::Provisional(ProvisionalReason::NegativeStock { item, date }) => {
-                reasons.push(format!(
-                    "negative stock: item {item:?} first went below zero on {date}"
-                ));
+                reasons.push(negative_stock_reason(books, *item, *date));
             }
         }
     }
