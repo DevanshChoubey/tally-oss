@@ -54,9 +54,12 @@ use thiserror::Error;
 use crate::screen::KeyHint;
 use crate::{AppCtx, Screen, ScreenAction};
 
+mod chooser;
 mod import;
 mod view;
 mod worker;
+
+pub use chooser::{BankChoice, BankChooserScreen, ChooserRow};
 
 /// The page title of the screen, shown in the page head.
 pub const PAGE_TITLE: &str = "Bank reconciliation";
@@ -334,9 +337,38 @@ pub struct BankScreen {
     import_layout: &'static str,
     /// Why the last import was refused or the file could not be read. Cleared by the next import.
     import_notice: Option<String>,
+    /// The masked account number shown after the ledger name (`XXXX 4471`), when known.
+    account: Option<String>,
+    /// Whether the company has another bank ledger to switch to; set by the host each frame.
+    can_switch: bool,
+    /// The user asked to change account this frame (key `C` or the button).
+    switch_requested: bool,
 }
 
 impl BankScreen {
+    /// Shows the masked account number after the ledger name, as the mock's subtitle does.
+    #[must_use]
+    pub fn with_account(mut self, account: String) -> Self {
+        self.account = Some(account);
+        self
+    }
+
+    /// The line under the page title: the ledger, its masked account number and, in worker mode,
+    /// the month the reconciliation is as of (`design/mock-v2/index.html` line 1735).
+    fn subtitle_text(&self) -> String {
+        let mut parts = vec![self.ledger_name.clone()];
+        parts.extend(self.account.clone());
+        if let Some(run) = self.run.as_ref() {
+            let on = run.as_of_date();
+            parts.push(format!(
+                "{} {}",
+                crate::ui::format::month_name(on.month()),
+                on.year()
+            ));
+        }
+        parts.join(" \u{b7} ")
+    }
+
     /// Builds the screen for one statement of one bank ledger.
     ///
     /// The reconciliation statement starts as [`Outcome::Unsupported`] until
@@ -409,6 +441,9 @@ impl BankScreen {
             run: None,
             import_layout: import::DEFAULT_LAYOUT,
             import_notice: None,
+            account: None,
+            can_switch: false,
+            switch_requested: false,
         })
     }
 
@@ -700,11 +735,6 @@ fn check_suggestion(
 }
 
 impl BankScreen {
-    /// The ledger the statement belongs to, by name.
-    pub(super) fn ledger_name(&self) -> &str {
-        &self.ledger_name
-    }
-
     /// Whether the screen is in worker mode, where the import and the reconciliation statement
     /// come from the API.
     pub(super) fn is_worker(&self) -> bool {
@@ -840,7 +870,7 @@ impl Screen for BankScreen {
     }
 
     fn subtitle(&self) -> Option<String> {
-        Some(self.ledger_name.clone())
+        Some(self.subtitle_text())
     }
 
     fn keys(&self) -> Vec<KeyHint> {
@@ -865,7 +895,20 @@ impl Screen for BankScreen {
         if self.is_loading() {
             ui.ctx().request_repaint();
         }
+        self.can_switch = ctx
+            .books
+            .as_ref()
+            .is_some_and(|books| crate::shell::navigate::bank_ledger_count(books) > 1);
         self.draw(ui);
+        if std::mem::take(&mut self.switch_requested)
+            && self.can_switch
+            && let Some(books) = ctx.books.as_ref()
+        {
+            let current = self.run.as_ref().map(worker::Run::ledger_id);
+            if let Ok(chooser) = crate::shell::navigate::bank_chooser_screen(books, current) {
+                return ScreenAction::Replace(Box::new(chooser));
+            }
+        }
         ScreenAction::Stay
     }
 }

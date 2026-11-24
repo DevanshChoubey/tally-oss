@@ -65,7 +65,7 @@ use crate::keymap::{Action, Keymap};
 use crate::palette::{PaletteEntry, PaletteTarget, RunCommand, command_entries};
 use crate::screens::ai_settings::AiSettingsScreen;
 use crate::screens::ask::AskScreen;
-use crate::screens::bank::BankScreen;
+use crate::screens::bank::{BankChoice, BankChooserScreen, BankScreen};
 use crate::screens::gst::{GstScreen, GstTab};
 use crate::screens::import::ImportScreen;
 use crate::screens::item_invoice::{InvoiceMode, ItemInvoiceScreen};
@@ -655,37 +655,93 @@ pub fn bank_screen(books: &Books, ledger: LedgerId) -> Result<BankScreen, NavErr
         return Err(NavError::BadKey(bank_key(ledger)));
     };
     let as_of = default_period(books)?.to();
-    Ok(BankScreen::worker(&found.name, ledger, as_of))
+    let account = found
+        .bank
+        .as_ref()
+        .map(|details| masked_account(&details.account_number));
+    let mut screen = BankScreen::worker(&found.name, ledger, as_of);
+    if let Some(account) = account {
+        screen = screen.with_account(account);
+    }
+    Ok(screen)
 }
 
-/// The bank reconciliation of the company's only bank ledger.
-///
-/// # Errors
-/// [`NavError::Unsupported`] when the company has no bank ledger, or more than one (the screen
-/// cannot choose between them; the palette's "Bank Reconciliation: name" rows open each one).
-/// Otherwise as [`bank_screen`].
-pub fn sole_bank_screen(books: &Books) -> Result<BankScreen, NavError> {
-    let banks: Vec<LedgerId> = books
+/// The account number as the bank screens show it: the last four characters after `XXXX`
+/// (the mock's `XXXX 4471`), or the whole number when it has four or fewer.
+fn masked_account(number: &str) -> String {
+    let chars: Vec<char> = number.chars().collect();
+    if chars.len() <= 4 {
+        return number.to_owned();
+    }
+    let tail: String = chars.iter().skip(chars.len() - 4).collect();
+    format!("XXXX {tail}")
+}
+
+/// The bank ledgers of `books`, in ledger id order.
+fn bank_ledgers(books: &Books) -> Vec<(LedgerId, String, String)> {
+    books
         .masters
         .ledgers
         .values()
-        .filter(|ledger| ledger.bank.is_some())
-        .map(|ledger| ledger.id)
+        .filter_map(|ledger| {
+            ledger.bank.as_ref().map(|details| {
+                (
+                    ledger.id,
+                    ledger.name.clone(),
+                    masked_account(&details.account_number),
+                )
+            })
+        })
+        .collect()
+}
+
+/// How many bank ledgers `books` has.
+#[must_use]
+pub fn bank_ledger_count(books: &Books) -> usize {
+    bank_ledgers(books).len()
+}
+
+/// The chooser of the company's bank ledgers, with `focus` selected first when it is one.
+///
+/// # Errors
+/// [`NavError::Unsupported`] when the company has no bank ledger; [`NavError::Period`] for an
+/// invalid financial year.
+pub fn bank_chooser_screen(
+    books: &Books,
+    focus: Option<LedgerId>,
+) -> Result<BankChooserScreen, NavError> {
+    let banks = bank_ledgers(books);
+    if banks.is_empty() {
+        return Err(NavError::Unsupported {
+            what: "Bank reconciliation".to_owned(),
+            reason: "the company has no bank ledger".to_owned(),
+        });
+    }
+    let as_of = default_period(books)?.to();
+    let choices = banks
+        .into_iter()
+        .map(|(id, name, account)| BankChoice::new(id, &name, &account))
         .collect();
+    Ok(BankChooserScreen::new(choices, as_of, focus))
+}
+
+/// What Bank reconciliation opens: the only bank ledger's screen, or, when the company has
+/// several, the chooser that asks which account (the help page "Bank Reconciliation reports",
+/// <https://help.tallysolutions.com/bank-recon-reports/>, read 2026-11-25). The palette's
+/// "Bank Reconciliation: name" rows open one bank directly.
+///
+/// # Errors
+/// [`NavError::Unsupported`] when the company has no bank ledger. Otherwise as
+/// [`bank_screen`].
+pub fn bank_entry_screen(books: &Books) -> Result<Box<dyn Screen>, NavError> {
+    let banks = bank_ledgers(books);
     match banks.as_slice() {
-        [only] => bank_screen(books, *only),
+        [(only, _, _)] => Ok(Box::new(bank_screen(books, *only)?)),
         [] => Err(NavError::Unsupported {
             what: "Bank reconciliation".to_owned(),
             reason: "the company has no bank ledger".to_owned(),
         }),
-        many => Err(NavError::Unsupported {
-            what: "Bank reconciliation".to_owned(),
-            reason: format!(
-                "the company has {} bank ledgers and this screen cannot choose one; \
-                 pick one by name in the palette",
-                many.len()
-            ),
-        }),
+        [_, _, ..] => Ok(Box::new(bank_chooser_screen(books, None)?)),
     }
 }
 
@@ -701,9 +757,7 @@ pub fn screen_for_key(key: &str, ctx: &AppCtx) -> Option<Result<Box<dyn Screen>,
         MASTERS_KEY => {
             company_open(ctx, "Masters").map(|()| Box::new(MastersScreen::new()) as Box<dyn Screen>)
         }
-        BANK_RECON_KEY => {
-            books_of(ctx).and_then(|b| Ok(Box::new(sole_bank_screen(b)?) as Box<dyn Screen>))
-        }
+        BANK_RECON_KEY => books_of(ctx).and_then(bank_entry_screen),
         REVIEW_KEY => Ok(Box::new(ReviewScreen::default())),
         ASK_KEY => Ok(Box::new(AskScreen::default())),
         QUICK_ENTRY_KEY => Ok(Box::new(QuickEntryScreen::default())),

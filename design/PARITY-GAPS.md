@@ -378,13 +378,50 @@ captured: `suggested-ledger` (needs bank matching to propose a ledger, which is 
 - **bug: an "as of" line above the statement.** Ours says "Reconciliation statement as of 20 Nov
   2026" over the card; the mock has the account and month in the subtitle and nothing above the
   card. The tabs (All lines, Reconciliation statement) are also ours only.
-- **data: the lines table is not captured.** The capture company has no imported statement, so
-  `bank.default` shows the empty state and the lines table (still `TableBuilder`, with the
-  mock's rows wrapping to several lines) has no capture to compare with. Fictional Pumps (the
-  third capture company) has a stored statement and could serve it in a later round.
-- **gap: the empty state's look.** `bank.empty` now has the 36 px icon, the 420 px sentence and
-  an Upload-icon button, and hides the tabs. Left: the account number and month in the subtitle,
-  a File layout row under the card (functional) and the account name in the breadcrumb.
+- **closed (s9): the capture company has a statement, and the account is chosen.** Godavari has
+  two bank accounts, and Bank reconciliation used to refuse to open for any company with more
+  than one. It now opens a chooser of the bank ledgers (name, masked account number, books
+  balance from `Api::brs`), as the help page "Bank Reconciliation reports"
+  (<https://help.tallysolutions.com/bank-recon-reports/>, read 2026-11-25) has the user pick the
+  bank and switch with F4 "Bank Ledger". One bank opens directly; the palette's "Bank
+  Reconciliation: name" rows still open one bank. `bank.default` and `bank.brs` are Saptagiri's
+  (the mock's account, with the sample's imported statement of 11 lines, amounts equal to the
+  mock's), `bank.empty` is Mula Valley Co-op (no statement), all on Godavari. The subtitle reads
+  "name, XXXX 4471, November 2026" as the mock's does.
+- **gap: the chooser has no mock state.** The mock names one account (Saptagiri) and never asks.
+  `bank.chooser` (light only) is ours: the page head and one card in the reconciliation
+  statement's `table.t` style. It is captured with no mock to compare with.
+- **by design: the key that changes account is C, not F4.** F4 is Contra in this app (the shell's
+  voucher keys). The head carries a "Change account" button with the C keycap; the mock's head has
+  only Import statement and Reconciliation statement, so the head differs by that button when the
+  company has more than one bank ledger.
+- **gap: the lines table is still not the mock's.** The mock's lines card has Exact, Rule and
+  "AI suggested" badges with a confidence meter, mono narrations, `PY/0315`-style voucher
+  numbers, the tabs "AI suggestions" and "Needs a new ledger", and a proposal card with Accept,
+  Edit and Reject. Ours has the app's own matcher states (Exact, Not matched), "Matches voucher
+  23", the tabs "All lines" and "Reconciliation statement", and a small card for the focused
+  line. The lines are the same eleven with the same amounts and dates. The narration wraps to two
+  lines in its column (row height 46) where the mock wraps to up to three. This round fixed the
+  focus card running off the right edge of the window (the table's remainder column pushed it).
+- **closed (s9): the reconciliation statement on Godavari is no longer a wall of uncleared items.**
+  The sample seed gives each April to October line on Saptagiri a bank date (`cleared_days`, 2 or
+  3 days after the voucher date; all before the statement starts on 5 Nov), and the November
+  statement is an MT940 file (same eleven lines and balances as before) whose `:62F:` states its
+  end date, 20 Nov. `bank.brs` now shows: books 7,27,524.50; not reflected in bank: deposits
+  2,27,384.50 and payments 1,09,860.00 (the six November vouchers, none confirmed against the
+  statement yet); balance as per bank 6,10,000.00 (the mock's statement opening); balance as per
+  imported statement 8,23,305.50 (the mock's closing); difference 2,13,305.50. All engine values.
+- **gap: the reconciliation statement lists totals, not the mock's lines.** The mock's
+  statement has the same closing balance but is a different computation: it lists "In the bank,
+  not yet in the books" (the five unmatched lines) and treats Exact, Rule and AI-matched vouchers
+  as matched, with a difference of 95,781.00. Ours treats a voucher as cleared only once a user
+  confirms a match (spec 6.5), so the six November vouchers are uncleared and the difference is
+  2,13,305.50 (95,781.00 of lines not in the books plus 1,17,524.50 net of matched-but-unconfirmed
+  vouchers). Left: confirm the Exact matches in the sample (it would need audit events) or list
+  the lines.
+- **gap: the empty state's look.** `bank.empty` has the 36 px icon, the 420 px sentence and an
+  Upload-icon button, and hides the tabs; the subtitle now carries the account number and month.
+  Left: a File layout row under the card (functional) and the account name in the breadcrumb.
 - **deferred: `bank.import-error` is not captured.** The engine refuses a statement whose running
   balances do not add up, but Import opens the system file dialog, which the capture harness
   cannot drive. Needs a way to hand the screen a file without the dialog.
@@ -829,7 +866,7 @@ reason names the item); no state to compare with, so nothing further was changed
 ## Sample company (card S8, 2026-11-24)
 
 The sample is the crate `crates/ledgerly-sample`: a versioned, human-readable seed
-(`assets/godavari.toml`, plus the bank statement `assets/saptagiri-nov-2026.csv`) of masters and
+(`assets/godavari.toml`, plus the bank statement `assets/saptagiri-nov-2026.mt940`) of masters and
 vouchers, no totals. `ledgerly_sample::create` posts it through `ledgerly-api` (`Api::create`,
 `Command::*`, `import_bank_statement`, and `LockPeriod` last, 31 Oct 2026), so every figure on
 screen is the engine's. The capture harness opens it as `Fixture::Godavari`, with the clock fixed

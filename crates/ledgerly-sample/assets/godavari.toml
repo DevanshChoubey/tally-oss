@@ -392,7 +392,7 @@ kind = "receipt"
 date = "2026-04-30"
 number = "RC/0208"
 narration = "Sales receipts for the month, summary (04/2026)"
-dr = [{ ledger = "saptagiri", amount = "1020000.00" }]
+dr = [{ ledger = "saptagiri", amount = "1020000.00", cleared_days = 2 }]
 cr = [{ ledger = "sales", amount = "1020000.00" }]
 
 [[voucher]]
@@ -401,7 +401,7 @@ kind = "receipt"
 date = "2026-05-31"
 number = "RC/0209"
 narration = "Sales receipts for the month, summary (05/2026)"
-dr = [{ ledger = "saptagiri", amount = "1145000.00" }]
+dr = [{ ledger = "saptagiri", amount = "1145000.00", cleared_days = 2 }]
 cr = [{ ledger = "sales", amount = "1145000.00" }]
 
 [[voucher]]
@@ -410,7 +410,7 @@ kind = "receipt"
 date = "2026-06-30"
 number = "RC/0210"
 narration = "Sales receipts for the month, summary (06/2026)"
-dr = [{ ledger = "saptagiri", amount = "980000.00" }]
+dr = [{ ledger = "saptagiri", amount = "980000.00", cleared_days = 2 }]
 cr = [{ ledger = "sales", amount = "980000.00" }]
 
 [[voucher]]
@@ -419,7 +419,7 @@ kind = "receipt"
 date = "2026-07-31"
 number = "RC/0211"
 narration = "Sales receipts for the month, summary (07/2026)"
-dr = [{ ledger = "saptagiri", amount = "1210000.00" }]
+dr = [{ ledger = "saptagiri", amount = "1210000.00", cleared_days = 2 }]
 cr = [{ ledger = "sales", amount = "1210000.00" }]
 
 [[voucher]]
@@ -428,7 +428,7 @@ kind = "receipt"
 date = "2026-08-31"
 number = "RC/0212"
 narration = "Sales receipts for the month, summary (08/2026)"
-dr = [{ ledger = "saptagiri", amount = "1216580.00" }]
+dr = [{ ledger = "saptagiri", amount = "1216580.00", cleared_days = 2 }]
 cr = [{ ledger = "sales", amount = "1216580.00" }]
 
 [[voucher]]
@@ -437,7 +437,7 @@ kind = "receipt"
 date = "2026-09-30"
 number = "RC/0213"
 narration = "Sales receipts for the month, summary (09/2026)"
-dr = [{ ledger = "saptagiri", amount = "1023750.00" }]
+dr = [{ ledger = "saptagiri", amount = "1023750.00", cleared_days = 2 }]
 cr = [{ ledger = "sales", amount = "1023750.00" }]
 
 [[voucher]]
@@ -446,7 +446,7 @@ kind = "receipt"
 date = "2026-10-31"
 number = "RC/0214"
 narration = "Sales receipts for the month, summary (10/2026)"
-dr = [{ ledger = "saptagiri", amount = "1466779.50" }]
+dr = [{ ledger = "saptagiri", amount = "1466779.50", cleared_days = 2 }]
 cr = [{ ledger = "sales", amount = "1466779.50" }]
 
 [[voucher]]
@@ -549,7 +549,7 @@ date = "2026-10-20"
 number = "PY/0301"
 narration = "Rupa Polymers, bill RP/5398 paid in full"
 dr = [{ ledger = "rupa", amount = "1973016.00", against = "RP/5398" }]
-cr = [{ ledger = "saptagiri", amount = "1973016.00" }]
+cr = [{ ledger = "saptagiri", amount = "1973016.00", cleared_days = 2 }]
 
 [[voucher]]
 section = "history"
@@ -558,7 +558,7 @@ date = "2026-10-28"
 number = "PY/0304"
 narration = "City Power, October bill"
 dr = [{ ledger = "elec", amount = "14860.00" }]
-cr = [{ ledger = "saptagiri", amount = "14860.00" }]
+cr = [{ ledger = "saptagiri", amount = "14860.00", cleared_days = 3 }]
 
 [[voucher]]
 section = "history"
@@ -567,7 +567,7 @@ date = "2026-10-31"
 number = "PY/0305"
 narration = "April to October running costs, summary (invented history)"
 dr = [{ ledger = "purch", amount = "3016698.00" }, { ledger = "freight", amount = "34000.00" }, { ledger = "salaries", amount = "1410000.00" }, { ledger = "rent", amount = "175000.00" }, { ledger = "elec", amount = "81540.00" }, { ledger = "bankch", amount = "6820.00" }, { ledger = "welfare", amount = "38600.00" }, { ledger = "interest", amount = "61250.00" }]
-cr = [{ ledger = "saptagiri", amount = "4805508.00" }, { ledger = "disc", amount = "18400.00" }]
+cr = [{ ledger = "saptagiri", amount = "4805508.00", cleared_days = 2 }, { ledger = "disc", amount = "18400.00" }]
 
 [[voucher]]
 section = "history"
@@ -576,7 +576,7 @@ date = "2026-10-31"
 number = "PY/0306"
 narration = "Partners' drawings, April to October, summary (invented history)"
 dr = [{ ledger = "ananya", amount = "900000.00" }, { ledger = "rohan", amount = "600000.00" }]
-cr = [{ ledger = "saptagiri", amount = "1500000.00" }]
+cr = [{ ledger = "saptagiri", amount = "1500000.00", cleared_days = 2 }]
 
 [[voucher]]
 section = "history"
@@ -757,5 +757,5 @@ cr = [{ ledger = "plant", amount = "15333.00" }]
 
 [[statement]]
 ledger = "saptagiri"
-file = "saptagiri-nov-2026.csv"
-format = "generic-csv-split"
+file = "saptagiri-nov-2026.mt940"
+format = "generic-mt940"

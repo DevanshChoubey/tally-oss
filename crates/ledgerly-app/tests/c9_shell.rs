@@ -392,7 +392,7 @@ fn the_cash_tile_follows_a_posting() {
 }
 
 #[test]
-fn two_bank_ledgers_give_two_palette_rows_and_the_home_link_says_choose() {
+fn two_bank_ledgers_give_two_palette_rows_and_the_home_link_opens_the_chooser() {
     let ctx = egui::Context::default();
     let home = Rc::new(RefCell::new(GatewayScreen::new()));
     let mut shell = shell_over(setup("two_banks", 2), Box::new(Shared(Rc::clone(&home))));
@@ -418,13 +418,16 @@ fn two_bank_ledgers_give_two_palette_rows_and_the_home_link_says_choose() {
     );
     frame(&ctx, &mut shell, press(Key::Escape, Modifiers::NONE));
 
+    // Round s9 (branch s9/bank): with several banks the home link opens the chooser, which asks
+    // which account, instead of refusing (`s9_bank_chooser.rs`).
     home.borrow_mut()
         .home_mut()
         .request_open(ledgerly_app::screens::home::HomeTarget::UnmatchedBankLines);
     frame(&ctx, &mut shell, RawInput::default());
-    assert_eq!(titles(&shell), vec!["Home".to_owned()], "nothing opens");
-    let notice = home.borrow().notice().map(str::to_owned).unwrap();
-    assert!(notice.contains("more than one bank ledger"), "{notice}");
+    assert_eq!(
+        titles(&shell),
+        vec!["Home".to_owned(), "Bank reconciliation".to_owned()]
+    );
 }
 
 #[test]

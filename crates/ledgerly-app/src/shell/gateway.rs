@@ -116,7 +116,7 @@ impl GatewayScreen {
                 super::ask_for_palette();
                 return None;
             }
-            HomeTarget::UnmatchedBankLines => books(ctx).and_then(only_bank_screen),
+            HomeTarget::UnmatchedBankLines => books(ctx).and_then(navigate::bank_entry_screen),
             HomeTarget::PurchaseFromBill => Err(not_yet("a purchase from a photo of a bill")),
             HomeTarget::DescribeTransaction => Err(not_yet("describing a transaction")),
             HomeTarget::PendingIms => Err(not_yet("the invoice management system list")),
@@ -230,24 +230,6 @@ pub fn gst_screen_for_target(books: &Books, target: &HomeTarget) -> Result<GstSc
         screen.switch_tab(tab);
     }
     Ok(screen)
-}
-
-/// The bank reconciliation of the company's only bank ledger.
-fn only_bank_screen(books: &Books) -> Result<Box<dyn Screen>, NavError> {
-    let mut banks = books.masters.ledgers.values().filter(|l| l.bank.is_some());
-    match (banks.next(), banks.next()) {
-        (Some(only), None) => Ok(Box::new(navigate::bank_screen(books, only.id)?)),
-        (None, _) => Err(NavError::Unsupported {
-            what: "bank reconciliation".to_owned(),
-            reason: "the company has no bank ledger".to_owned(),
-        }),
-        (Some(_), Some(_)) => Err(NavError::Unsupported {
-            what: "bank reconciliation".to_owned(),
-            reason: "the company has more than one bank ledger; choose one from the palette \
-                     (Ctrl+K, \"Bank Reconciliation\")"
-                .to_owned(),
-        }),
-    }
 }
 
 impl Screen for GatewayScreen {
