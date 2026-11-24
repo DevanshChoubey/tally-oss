@@ -295,6 +295,25 @@ pub fn date_line(today: Date, fy: Option<&str>, lock: Option<Date>) -> String {
     parts.join(" \u{b7} ")
 }
 
+/// The line under the new-company title (`home.empty`): the company, then its financial year
+/// with the year's first and last day (`Fictional Traders · FY 2026-27 (1 Apr 2026 to 31 Mar
+/// 2027)`). The days are left out if the year's end cannot be worked out.
+#[must_use]
+pub fn new_company_line(company: &str, fy: ledgerly_core::FinancialYear) -> String {
+    let year = format!("FY {}", fy.label());
+    let days = fy.end().ok().map(|end| {
+        format!(
+            " ({} to {})",
+            crate::ui::format::date(fy.start),
+            crate::ui::format::date(end)
+        )
+    });
+    format!(
+        "{company} \u{b7} {year}{}",
+        days.as_deref().unwrap_or_default()
+    )
+}
+
 /// Which body of the home screen is drawn.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HomeBody {
@@ -817,6 +836,15 @@ impl Screen for HomeScreen {
         ));
         let title = self.page_title();
         let line = self.subtitle().unwrap_or_default();
+        let new_line = ctx.books.as_ref().map_or_else(
+            || self.data.company_name.clone(),
+            |books| {
+                let fy = ledgerly_core::FinancialYear {
+                    start: books.company.fy_start,
+                };
+                new_company_line(&self.data.company_name, fy)
+            },
+        );
         let ai = ai_panel(ctx.ai_tier);
         let tiles = self.tile_items();
         let mut chosen = None;
@@ -826,6 +854,7 @@ impl Screen for HomeScreen {
                 ui,
                 shown,
                 &self.data.company_name,
+                &new_line,
                 &title,
                 &line,
                 &mut chosen,

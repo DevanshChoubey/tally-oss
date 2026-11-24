@@ -54,18 +54,20 @@ const KPI_BAR_WIDTHS: [f32; 3] = [0.5, 0.8, 0.4];
 const PANEL_BAR_WIDTHS: [f32; 6] = [0.9, 0.7, 0.85, 0.6, 0.75, 0.5];
 
 /// Draws the page head: the title, the company line and, when there are figures, the two
-/// actions. The loading and new-company bodies show no actions.
+/// actions. The loading and new-company bodies show no actions. `new_line` is the line under
+/// the new-company title ([`super::new_company_line`]).
 pub(super) fn header(
     ui: &mut Ui,
     shown: HomeBody,
     company: &str,
+    new_line: &str,
     title: &str,
     date_line: &str,
     chosen: &mut Option<HomeTarget>,
 ) {
     let line = match shown {
         HomeBody::Loading => LOADING_LINE.to_owned(),
-        HomeBody::NewCompany { .. } => company.to_owned(),
+        HomeBody::NewCompany { .. } => new_line.to_owned(),
         HomeBody::Figures | HomeBody::NoFigures => date_line.to_owned(),
     };
     // The mock's loading and empty states have their own titles (`home.loading`: "Opening
