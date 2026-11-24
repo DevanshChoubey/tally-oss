@@ -174,7 +174,8 @@ fn fill(s: &mut ItemInvoiceScreen, m: &Masters) {
     "100".clone_into(&mut s.draft_mut().rows[0].qty_text);
     s.submit(m);
     "100".clone_into(&mut s.draft_mut().rows[0].rate_text);
-    s.submit(m);
+    // The discount column is hidden by default (mock line 1295), so Enter on the rate opens the
+    // next line.
     s.submit(m);
     assert_eq!(s.focus(), Field::Item(1));
 }
@@ -203,6 +204,7 @@ fn block_for_10000() -> GstBlock {
             rate_percent: Decimal::from(18),
         }],
         taxable_total: rupees(10_000),
+        rate_rows: Vec::new(),
         heads: vec![
             GstTotal {
                 head: "CGST".to_owned(),

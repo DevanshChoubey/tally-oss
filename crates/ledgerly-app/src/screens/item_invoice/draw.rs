@@ -10,9 +10,13 @@
 
 use super::compute;
 use super::draft::line_amount;
+use super::extras::BalanceShown;
 use super::keys::{Prompt, read_keys};
-use super::{Field, GstBlock, GstStatus, InvoiceMode, ItemInvoiceScreen, Notice, UiEvent};
+use super::{
+    Field, GstBlock, GstResult, GstStatus, InvoiceMode, ItemInvoiceScreen, Notice, UiEvent,
+};
 use crate::screen::KeyHint;
+use crate::screens::voucher_entry::parse_entry_date;
 use crate::screens::voucher_sheet::{self as sheet, Col, InputSpec, Look, Total};
 use crate::shell::submit::{self, CommandReply};
 use crate::theme::TEXT_BODY;
@@ -20,7 +24,7 @@ use crate::ui::a11y;
 use crate::ui::badge::{BadgeKind, badge};
 use crate::ui::button::{ButtonKind, button};
 use crate::ui::note::{NoteKind, note};
-use crate::ui::page_head::page_head;
+use crate::ui::page_head::page_head_numbered;
 use crate::ui::prov::ProvKind;
 use crate::ui::{format, para_text, tokens};
 use crate::{AppCtx, Screen, ScreenAction};
@@ -28,20 +32,31 @@ use egui::{Frame, Id, Margin, Rect, Response, RichText, Ui};
 use ledgerly_api::Command;
 use ledgerly_core::LedgerId;
 use ledgerly_core::format::amount_in_words;
-use ledgerly_model::Masters;
+use ledgerly_model::{Masters, Voucher};
 
-/// The one-line purpose under the page title of an item invoice. It says when the engine works
-/// out tax: when the invoice changes, not on every keystroke.
-const SUBTITLE: &str =
-    "Item invoice · tax is worked out by the GST engine when the invoice changes";
+/// The one-line purpose under the page title of an item invoice (index.html:1282). The screen asks
+/// the engine again after every edit that changes the invoice.
+const SUBTITLE: &str = "Item invoice · tax is recomputed by the GST engine on every keystroke";
 
 /// The one-line purpose under the page title of an accounting invoice.
-const ACCOUNTING_SUBTITLE: &str = "Accounting invoice · ledgers under Particulars; tax is worked out by the GST engine when the invoice changes";
+const ACCOUNTING_SUBTITLE: &str = "Accounting invoice · ledgers under Particulars; tax is recomputed by the GST engine on every keystroke";
 
 /// The item table: heading, width and whether the column holds figures. The mock's columns run
-/// # Item HSN Qty Unit Rate GST Amount (index.html:1283); ours adds Disc % and Typed amount, live
-/// inputs the mock has no column for, between Rate and GST.
-const LINE_COLS: [Col; 10] = [
+/// # Item HSN Qty Unit Rate GST Amount (index.html:1283).
+const LINE_COLS: [Col; 8] = [
+    Col::text("#", 36.0),
+    Col::rest("Item"),
+    Col::text("HSN", 70.0),
+    Col::num("Qty", 90.0),
+    Col::text("Unit", 60.0),
+    Col::num("Rate", 120.0),
+    Col::num("GST", 60.0),
+    Col::num("Amount", 140.0),
+];
+
+/// The item table with the discount and typed-amount columns Alt+D brings in, between Rate and
+/// GST. They are live inputs the mock has no column for, so they are hidden until asked for.
+const LINE_COLS_DISCOUNT: [Col; 10] = [
     Col::text("#", 36.0),
     Col::rest("Item"),
     Col::text("HSN", 70.0),
@@ -86,6 +101,16 @@ const BOXED: Style = Style {
     invalid: false,
 };
 
+/// A box in the head that holds figures.
+const BOXED_NUM: Style = Style {
+    look: Look::Boxed,
+    numeric: true,
+    invalid: false,
+};
+
+/// How long the toast after a save stays, in seconds.
+const TOAST_SECONDS: f64 = 6.0;
+
 /// A text cell of the line table.
 const CELL: Style = Style {
     look: Look::Cell,
@@ -118,6 +143,8 @@ enum Click {
     Cancel,
     /// Change the mode (Ctrl+H).
     ChangeMode,
+    /// Open or close the More details panel (Ctrl+I).
+    More,
 }
 
 /// One line of the table as the screen shows it. Every figure is the engine's, or empty until
@@ -154,24 +181,107 @@ fn row_of(field: Field) -> Option<usize> {
         | Field::Reference
         | Field::Ledger(_)
         | Field::LedgerAmount(_)
+        | Field::BillKind(_)
+        | Field::BillName(_)
+        | Field::BillAmount(_)
         | Field::Narration => None,
     }
 }
 
 /// The rows of the tax box above the invoice total, in display order, as (label, amount): the
-/// engine's taxable value, each tax head it returned, and the round-off. Nothing is added here.
+/// engine's taxable value, each tax head at each rate it returned ("CGST 9% on 1,30,085.00", then
+/// "SGST 9%"), or the head totals when the engine gave no per-rate rows, and the round-off.
+/// Nothing is added here.
 #[must_use]
 pub fn tax_rows(block: &GstBlock) -> Vec<(String, String)> {
     let mut rows = vec![(
         "Taxable value".to_owned(),
         format::amount(block.taxable_total),
     )];
-    for head in &block.heads {
-        rows.push((head.head.clone(), format::amount(head.amount)));
+    if block.rate_rows.is_empty() {
+        for head in &block.heads {
+            rows.push((head.head.clone(), format::amount(head.amount)));
+        }
+    } else {
+        let mut previous = None;
+        for row in &block.rate_rows {
+            let rate = row.rate_percent.normalize();
+            let label = if previous == Some(rate) {
+                format!("{} {rate}%", row.head)
+            } else {
+                format!("{} {rate}% on {}", row.head, format::amount(row.taxable))
+            };
+            previous = Some(rate);
+            rows.push((label, format::amount(row.amount)));
+        }
     }
     rows.push(("Round off".to_owned(), format::amount(block.round_off)));
     rows
 }
+
+/// A note with a small "i" in a ring and a bold run, as the mock's place-of-supply note
+/// (`.note` with an info icon, index.html:1373).
+fn info_note(ui: &mut Ui, lead: &str, bold: &str, rest: &str) {
+    let t = tokens(ui);
+    let width = ui.available_width();
+    Frame::new()
+        .fill(t.surface_2)
+        .stroke(egui::Stroke::new(
+            crate::theme::border_width(crate::ui::kind(ui)),
+            t.border,
+        ))
+        .corner_radius(crate::theme::RADIUS_S)
+        .inner_margin(Margin::symmetric(12, 10))
+        .show(ui, |ui| {
+            ui.set_width(width - 24.0 - 2.0);
+            ui.horizontal_top(|ui| {
+                ui.spacing_mut().item_spacing.x = 10.0;
+                let (rect, _) =
+                    ui.allocate_exact_size(egui::vec2(16.0, 18.0), egui::Sense::hover());
+                let c = egui::pos2(rect.center().x, rect.top() + 9.0);
+                ui.painter()
+                    .circle_stroke(c, 7.0, egui::Stroke::new(1.3, t.text_2));
+                ui.painter().text(
+                    c,
+                    egui::Align2::CENTER_CENTER,
+                    "i",
+                    egui::FontId::proportional(10.0),
+                    t.text_2,
+                );
+                let mut job = egui::text::LayoutJob::default();
+                let line = crate::ui::line_height(crate::theme::TEXT_META);
+                let plain = |color| egui::TextFormat {
+                    font_id: egui::FontId::proportional(crate::theme::TEXT_META),
+                    color,
+                    line_height: Some(line),
+                    ..egui::TextFormat::default()
+                };
+                job.append(lead, 0.0, plain(t.text_2));
+                job.append(
+                    bold,
+                    0.0,
+                    egui::TextFormat {
+                        font_id: crate::ui::bold_font(ui, crate::theme::TEXT_META),
+                        color: t.text,
+                        line_height: Some(line),
+                        ..egui::TextFormat::default()
+                    },
+                );
+                job.append(rest, 0.0, plain(t.text_2));
+                ui.add(egui::Label::new(job).wrap());
+            });
+        });
+}
+
+/// "₹1,93,500.00 Dr" for a balance the engine gave.
+fn balance_text(b: ledgerly_core::SignedAmount) -> String {
+    let side = match b.side {
+        ledgerly_core::DrCr::Dr => "Dr",
+        ledgerly_core::DrCr::Cr => "Cr",
+    };
+    format!("\u{20b9}{} {side}", format::amount(b.amount))
+}
+
 /// A text field: reports focus, typing and Enter as events, and notes where it sits so the list
 /// can hang under it.
 fn text_field(
@@ -256,6 +366,27 @@ fn gstin_line(ui: &mut Ui, masters: &Masters, party: Option<LedgerId>) {
         }
     }
 }
+/// The e-Invoice cell. This build writes no e-Invoice JSON from a voucher yet (the INV-01 writer
+/// in `ledgerly-gst-formats` is not wired to the invoice screen), so a registered buyer's cell says
+/// so rather than claiming a file is ready; an unregistered buyer is B2C, which has none.
+fn einvoice_cell(ui: &mut Ui, masters: &Masters, party: Option<LedgerId>) {
+    let t = tokens(ui);
+    let Some(party) = party else {
+        return;
+    };
+    let registered = masters
+        .ledgers
+        .get(&party)
+        .and_then(|l| l.party.as_ref())
+        .is_some_and(|p| p.gstin.is_some());
+    let (text, ink) = if registered {
+        ("Not built yet", t.text_3)
+    } else {
+        ("Not applicable: B2C", t.text_2)
+    };
+    ui.label(RichText::new(text).size(TEXT_BODY).color(ink));
+}
+
 /// The tax box for an answer the engine computed: its rows, then the invoice total with its
 /// engine tag, and the total in words.
 fn tax_box(ui: &mut Ui, block: &GstBlock) {
@@ -288,13 +419,16 @@ fn list_caption(focus: Field) -> &'static str {
         | Field::Discount(_)
         | Field::Amount(_)
         | Field::LedgerAmount(_)
+        | Field::BillKind(_)
+        | Field::BillName(_)
+        | Field::BillAmount(_)
         | Field::Narration => "Choices",
     }
 }
 
 /// The save question at the foot of the sheet (index.html `savebar`): a green bar with the
 /// question in bold, then Yes and No.
-fn save_bar(ui: &mut Ui, clicks: &mut Option<Click>) {
+fn save_bar(ui: &mut Ui, clicks: &mut Option<Click>, title: String) {
     let t = tokens(ui);
     let width = ui.available_width() - 32.0;
     Frame::new()
@@ -315,7 +449,7 @@ fn save_bar(ui: &mut Ui, clicks: &mut Option<Click>) {
                 let mut job = egui::text::LayoutJob::default();
                 let line = crate::ui::line_height(crate::theme::TEXT_META);
                 job.append(
-                    "Save this invoice?",
+                    &title,
                     0.0,
                     egui::TextFormat {
                         font_id: crate::ui::bold_font(ui, crate::theme::TEXT_META),
@@ -325,7 +459,7 @@ fn save_bar(ui: &mut Ui, clicks: &mut Option<Click>) {
                     },
                 );
                 job.append(
-                    " The engine checks it again before it is posted.",
+                    " The engine re-validates, posts, and writes the audit event in one step.",
                     0.0,
                     egui::TextFormat {
                         font_id: egui::FontId::proportional(crate::theme::TEXT_META),
@@ -404,7 +538,9 @@ impl ItemInvoiceScreen {
         shown
     }
 
-    /// The head: the fields in four equal columns, the party across two (`.vhead`).
+    /// The head: the fields in four equal columns, the party across two (`.vhead`). Date and the
+    /// sales ledger read as plain values until the keyboard is on them (index.html:1287, `.ro`);
+    /// the e-Invoice cell says what this build can say about it.
     #[expect(
         clippy::too_many_lines,
         reason = "one block of header fields, each named by its caption"
@@ -414,6 +550,10 @@ impl ItemInvoiceScreen {
         let mode = self.draft.mode;
         let required = self.draft.number_required;
         let party = self.draft.party;
+        let fy = self.fy;
+        let date_value = parse_entry_date(&self.draft.date_text, fy).ok();
+        let date_plain = cx.focus != Field::Date && date_value.is_some();
+        let account_plain = cx.focus != Field::Account && self.draft.account.is_some();
         let spec = |id: &str, name: &'static str, field: Field, hint: &'static str| FieldSpec {
             id: base.with(id),
             field,
@@ -428,10 +568,13 @@ impl ItemInvoiceScreen {
                     ui,
                     total,
                     1,
-                    |ui| sheet::caption(ui, "Date", None),
+                    |ui| sheet::caption(ui, "Date", Some("F2")),
                     |ui| {
+                        // Bare like the mock's read-only date until the keyboard is on it; it
+                        // stays a field, so Tab and a screen reader still reach it.
                         let s = spec("date", "Date", Field::Date, "dd-mm-yyyy");
-                        text_field(ui, cx, &s, &mut self.draft.date_text, BOXED);
+                        let style = if date_plain { CELL } else { BOXED };
+                        text_field(ui, cx, &s, &mut self.draft.date_text, style);
                     },
                 );
                 note_field("Date", shown.response.rect);
@@ -478,7 +621,8 @@ impl ItemInvoiceScreen {
                             |ui| sheet::caption(ui, label, None),
                             |ui| {
                                 let s = spec("account", label, Field::Account, "type to search");
-                                text_field(ui, cx, &s, &mut self.draft.account_text, BOXED);
+                                let style = if account_plain { CELL } else { BOXED };
+                                text_field(ui, cx, &s, &mut self.draft.account_text, style);
                             },
                         );
                         note_field(label, shown.response.rect);
@@ -495,11 +639,19 @@ impl ItemInvoiceScreen {
                     1,
                     |ui| sheet::caption(ui, label, None),
                     |ui| {
-                        let s = spec("ref", label, Field::Reference, "Optional");
+                        let s = spec("ref", label, Field::Reference, "");
                         text_field(ui, cx, &s, &mut self.draft.reference_text, BOXED);
                     },
                 );
                 note_field(label, shown.response.rect);
+                let shown = sheet::fld(
+                    ui,
+                    total,
+                    1,
+                    |ui| sheet::caption(ui, "e-Invoice", None),
+                    |ui| sheet::read_only(ui, |ui| einvoice_cell(ui, masters, party)),
+                );
+                note_field("e-Invoice", shown.response.rect);
             });
             if required {
                 sheet::head_row(ui, |ui| {
@@ -554,10 +706,16 @@ impl ItemInvoiceScreen {
             return self.draw_particulars(ui, base, masters, cx);
         }
         let shown = self.lines_shown(masters);
+        let with_discount = self.discount_columns();
+        let cols: &[Col] = if with_discount {
+            &LINE_COLS_DISCOUNT
+        } else {
+            &LINE_COLS
+        };
         let rows = &mut self.draft.rows;
         let rects = sheet::lines(
             ui,
-            &LINE_COLS,
+            cols,
             shown.len(),
             |r| shown.get(r).is_some_and(|l| l.focused),
             |ui, r, c| {
@@ -567,17 +725,24 @@ impl ItemInvoiceScreen {
                 let item_flag =
                     !line.focused && cells.item.is_none() && !cells.item_text.trim().is_empty();
                 let qty_flag = cells.item.is_some() && cells.qty_text.trim().is_empty();
-                let spec =
-                    |id: &str, name: &'static str, field: Field, hint: &'static str| FieldSpec {
-                        id: base.with((id, r)),
-                        field,
-                        name,
-                        hint,
-                    };
+                // The cells of the table without the two extra columns are the first six and the
+                // last two of the table with them.
+                let c = if with_discount || c < 6 {
+                    c
+                } else {
+                    c.saturating_add(2)
+                };
+                // No hints in the cells: the mock's empty row is its number and nothing else.
+                let spec = |id: &str, name: &'static str, field: Field| FieldSpec {
+                    id: base.with((id, r)),
+                    field,
+                    name,
+                    hint: "",
+                };
                 match c {
                     0 => cell_text(ui, &line.number.to_string(), false),
                     1 => {
-                        let s = spec("item", "Item", Field::Item(r), "Item: type to search");
+                        let s = spec("item", "Item", Field::Item(r));
                         let style = Style {
                             invalid: item_flag,
                             ..CELL
@@ -586,7 +751,7 @@ impl ItemInvoiceScreen {
                     }
                     2 => cell_text(ui, &line.hsn, false),
                     3 => {
-                        let s = spec("qty", "Qty", Field::Qty(r), "Qty");
+                        let s = spec("qty", "Qty", Field::Qty(r));
                         let style = Style {
                             invalid: qty_flag,
                             ..CELL_NUM
@@ -595,15 +760,15 @@ impl ItemInvoiceScreen {
                     }
                     4 => cell_text(ui, &line.unit, false),
                     5 => {
-                        let s = spec("rate", "Rate", Field::Rate(r), "Rate");
+                        let s = spec("rate", "Rate", Field::Rate(r));
                         text_field(ui, cx, &s, &mut cells.rate_text, CELL_NUM);
                     }
                     6 => {
-                        let s = spec("disc", "Discount", Field::Discount(r), "%");
+                        let s = spec("disc", "Discount", Field::Discount(r));
                         text_field(ui, cx, &s, &mut cells.discount_text, CELL_NUM);
                     }
                     7 => {
-                        let s = spec("amt", "Amount", Field::Amount(r), "optional");
+                        let s = spec("amt", "Amount", Field::Amount(r));
                         text_field(ui, cx, &s, &mut cells.amount_text, CELL_NUM);
                     }
                     8 => cell_text(ui, &line.gst, false),
@@ -612,7 +777,7 @@ impl ItemInvoiceScreen {
                 }
             },
         );
-        self.shown.heads = LINE_COLS.iter().map(|c| c.label).zip(rects).collect();
+        self.shown.heads = cols.iter().map(|c| c.label).zip(rects).collect();
     }
 
     fn draw_particulars(&mut self, ui: &mut Ui, base: Id, masters: &Masters, cx: &mut Cx<'_>) {
@@ -630,6 +795,9 @@ impl ItemInvoiceScreen {
             | Field::Rate(_)
             | Field::Discount(_)
             | Field::Amount(_)
+            | Field::BillKind(_)
+            | Field::BillName(_)
+            | Field::BillAmount(_)
             | Field::Narration => None,
         };
         let parts = &mut self.draft.particulars;
@@ -670,15 +838,36 @@ impl ItemInvoiceScreen {
         self.shown.heads = PARTICULAR_COLS.iter().map(|c| c.label).zip(rects).collect();
     }
 
-    /// The tax box, or the note that says why there is none yet.
+    /// The tax box, with the note that says why it has no figures yet when it has none. Until the
+    /// engine has answered for this exact invoice every figure is a dash, never a zero.
     fn draw_tax(&self, ui: &mut Ui, masters: &Masters) {
-        match self.gst_status(masters) {
+        let status = self.gst_status(masters);
+        if let GstStatus::Computed(block) = status {
+            return tax_box(ui, block);
+        }
+        let dash = "\u{2014}".to_owned();
+        sheet::taxbox(
+            ui,
+            &[
+                ("Taxable value".to_owned(), dash.clone()),
+                ("Round off".to_owned(), dash.clone()),
+            ],
+            Some(&Total {
+                label: "Invoice total",
+                value: &dash,
+                tag: None,
+            }),
+        );
+        ui.add_space(8.0);
+        match status {
             GstStatus::Incomplete(why) => {
-                note(
-                    ui,
-                    NoteKind::Info,
-                    &format!("Tax appears once the invoice is complete: {why}."),
-                );
+                if !self.draft.is_blank() {
+                    note(
+                        ui,
+                        NoteKind::Info,
+                        &format!("Tax appears once the invoice is complete: {why}."),
+                    );
+                }
             }
             GstStatus::NotComputedYet => {
                 note(
@@ -697,7 +886,105 @@ impl ItemInvoiceScreen {
             GstStatus::Failed(m) => {
                 note(ui, NoteKind::Bad, &format!("The tax engine failed: {m}"));
             }
-            GstStatus::Computed(block) => tax_box(ui, block),
+            GstStatus::Computed(_) => {}
+        }
+    }
+
+    /// The note under the narration that says which tax applies and where the rates come from,
+    /// built from the engine's own heads and the states on screen.
+    fn place_note(
+        &self,
+        masters: &Masters,
+        block: &GstBlock,
+    ) -> Option<(String, &'static str, String)> {
+        let place = super::parse_place(&self.draft.place_text).ok()?;
+        let _ = masters;
+        let heads: Vec<&str> = block.heads.iter().map(|h| h.head.as_str()).collect();
+        let rates = format!(
+            " Rates come from the item masters and rule pack {}.",
+            block.pack_version
+        );
+        if heads.contains(&"IGST") {
+            Some((
+                format!(
+                    "Place of supply {} ({}), you are in {} ({}). ",
+                    place.name(),
+                    place.get(),
+                    self.home_state.name(),
+                    self.home_state.get()
+                ),
+                "IGST applies.",
+                rates,
+            ))
+        } else if heads.contains(&"CGST") && (heads.contains(&"SGST") || heads.contains(&"UTGST")) {
+            let second = if heads.contains(&"SGST") {
+                "SGST"
+            } else {
+                "UTGST"
+            };
+            let bold: &'static str = if second == "SGST" {
+                "Tax splits into CGST and SGST."
+            } else {
+                "Tax splits into CGST and UTGST."
+            };
+            Some((
+                format!(
+                    "Place of supply and your state are both {} ({}). ",
+                    place.name(),
+                    place.get()
+                ),
+                bold,
+                rates,
+            ))
+        } else {
+            None
+        }
+    }
+
+    /// The voucher a computed answer belongs to, with the engine's accounting lines on it: what
+    /// the balance line asks the engine about.
+    pub(super) fn computed_voucher(&self, masters: &Masters) -> Option<Voucher> {
+        let voucher = self.draft.build_voucher(masters, self.fy).ok()?;
+        let bills = self.draft.party_bills().ok()?;
+        match self.answer_for(&voucher, &bills) {
+            Some(GstResult::Computed(block)) => {
+                let mut v = voucher;
+                v.ledger_lines.clone_from(&block.ledger_lines);
+                v.gst = Some(block.stored.clone());
+                Some(v)
+            }
+            Some(GstResult::Unsupported(_) | GstResult::Failed(_)) | None => None,
+        }
+    }
+
+    /// The line under the narration: the party's balance now and after saving, the engine's.
+    fn balance_line(&self, ui: &mut Ui, masters: &Masters) {
+        let t = tokens(ui);
+        let (Some(party), Some(voucher)) = (self.draft.party, self.computed_voucher(masters))
+        else {
+            return;
+        };
+        let name = masters.ledgers.get(&party).map_or("", |l| l.name.as_str());
+        match self.extras.balance_for(party, &voucher) {
+            Some(BalanceShown::Change(change)) => {
+                ui.label(para_text(
+                    &format!(
+                        "{name}: balance now {}, after saving {} (engine).",
+                        balance_text(change.now),
+                        balance_text(change.after)
+                    ),
+                    crate::theme::TEXT_META,
+                    t.text_2,
+                ));
+            }
+            Some(BalanceShown::Missing(why)) => {
+                ui.label(para_text(
+                    &format!("{name}: balance not shown ({why})."),
+                    crate::theme::TEXT_META,
+                    t.text_2,
+                ));
+            }
+            None => {}
         }
     }
 
@@ -712,19 +999,36 @@ impl ItemInvoiceScreen {
     ) {
         let lines = self.lines_shown(masters);
         let accounting = self.draft.mode == InvoiceMode::Accounting;
+        let recall = self
+            .last_narration
+            .as_ref()
+            .is_some_and(|(p, n)| *p == self.draft.party && n.is_some());
         let mut narration = None;
         sheet::foot(ui, |left, right| {
             sheet::fld(
                 left,
                 left.available_width(),
                 4,
-                |ui| sheet::caption(ui, "Narration", None),
+                |ui| {
+                    let t = tokens(ui);
+                    ui.horizontal(|ui| {
+                        ui.spacing_mut().item_spacing.x = 6.0;
+                        ui.label(para_text("Narration", crate::theme::TEXT_META, t.text_2));
+                        crate::ui::keycap::keycap(ui, "Alt+R");
+                        let hint = if recall {
+                            "recalls the last one for this party"
+                        } else {
+                            "recalls the last one for this party (none yet)"
+                        };
+                        ui.label(para_text(hint, crate::theme::TEXT_META, t.text_3));
+                    });
+                },
                 |ui| {
                     let s = FieldSpec {
                         id: base.with("narration"),
                         field: Field::Narration,
                         name: "Narration",
-                        hint: "Optional",
+                        hint: "",
                     };
                     narration = Some(text_field(ui, cx, &s, &mut self.draft.narration, BOXED).rect);
                 },
@@ -733,10 +1037,10 @@ impl ItemInvoiceScreen {
                 Some(Notice::Error(s)) => {
                     note(left, NoteKind::Bad, s);
                 }
-                Some(Notice::Info(s)) => {
+                Some(Notice::Info(s)) if !(s == "Saved." && self.toast.is_some()) => {
                     note(left, NoteKind::Info, s);
                 }
-                None => {}
+                Some(Notice::Info(_)) | None => {}
             }
             if !accounting {
                 for line in lines.iter().filter(|line| !line.focused) {
@@ -745,12 +1049,148 @@ impl ItemInvoiceScreen {
                     }
                 }
             }
+            if let GstStatus::Computed(block) = self.gst_status(masters)
+                && let Some((lead, bold, rest)) = self.place_note(masters, block)
+            {
+                info_note(left, &lead, bold, &rest);
+            }
+            self.balance_line(left, masters);
             self.draw_tax(right, masters);
         });
         self.shown.narration = narration;
         if self.confirming_save {
-            save_bar(ui, clicks);
+            save_bar(ui, clicks, self.save_title());
         }
+    }
+
+    /// The question the save bar asks: "Save SI/0418?" with the number the engine will give, or
+    /// "Save this invoice?" when it has none to give.
+    fn save_title(&self) -> String {
+        match &self.extras.number {
+            Some(n) => format!("Save {n}?"),
+            None => "Save this invoice?".to_owned(),
+        }
+    }
+
+    /// The More details panel: the bill references of the party line (TallyPrime's Bill-wise
+    /// Details, <https://help.tallysolutions.com/advances-received/>, read 2026-11-25). A party
+    /// that does not track bills has none to enter.
+    fn draw_more(&mut self, ui: &mut Ui, base: Id, masters: &Masters, cx: &mut Cx<'_>) {
+        let bill_wise = self
+            .draft
+            .party
+            .and_then(|p| masters.ledgers.get(&p))
+            .is_some_and(|l| l.bill_wise.is_some());
+        let rows = self.draft.bills.len();
+        sheet::head(ui, |ui, total| {
+            sheet::head_row(ui, |ui| {
+                let t = tokens(ui);
+                let text = if bill_wise {
+                    "Bill references. Leave empty for one New Ref named by the voucher number. \
+                     Types: New Ref, Agst Ref, Advance, On Account."
+                } else if self.draft.party.is_some() {
+                    "This party does not track bills, so there are no bill references to enter."
+                } else {
+                    "Choose a party first: bill references depend on whether it tracks bills."
+                };
+                ui.label(para_text(text, TEXT_BODY, t.text_2));
+            });
+            if !bill_wise {
+                return;
+            }
+            for i in 0..rows {
+                let Some(row) = self.draft.bills.get_mut(i) else {
+                    continue;
+                };
+                sheet::head_row(ui, |ui| {
+                    let kind_spec = FieldSpec {
+                        id: base.with(("bill-kind", i)),
+                        field: Field::BillKind(i),
+                        name: "Bill type",
+                        hint: "New Ref",
+                    };
+                    sheet::fld(
+                        ui,
+                        total,
+                        1,
+                        |ui| sheet::caption(ui, "Type", None),
+                        |ui| {
+                            text_field(ui, cx, &kind_spec, &mut row.kind_text, BOXED);
+                        },
+                    );
+                    let name_spec = FieldSpec {
+                        id: base.with(("bill-name", i)),
+                        field: Field::BillName(i),
+                        name: "Bill name",
+                        hint: "voucher number",
+                    };
+                    sheet::fld(
+                        ui,
+                        total,
+                        2,
+                        |ui| sheet::caption(ui, "Name", None),
+                        |ui| {
+                            text_field(ui, cx, &name_spec, &mut row.name, BOXED);
+                        },
+                    );
+                    let amount_spec = FieldSpec {
+                        id: base.with(("bill-amount", i)),
+                        field: Field::BillAmount(i),
+                        name: "Bill amount",
+                        hint: "the rest",
+                    };
+                    sheet::fld(
+                        ui,
+                        total,
+                        1,
+                        |ui| sheet::caption(ui, "Amount", None),
+                        |ui| {
+                            text_field(ui, cx, &amount_spec, &mut row.amount_text, BOXED_NUM);
+                        },
+                    );
+                });
+            }
+        });
+    }
+
+    /// The toast after a save, at the foot of the screen: dark pill, a check, the saved number,
+    /// the party and the total. It stays for a few seconds.
+    fn draw_toast(&mut self, ui: &mut Ui) {
+        let Some(toast) = self.toast.as_mut() else {
+            return;
+        };
+        let now = ui.input(|i| i.time);
+        let started = *toast.shown_at.get_or_insert(now);
+        if now - started > TOAST_SECONDS {
+            self.toast = None;
+            return;
+        }
+        let t = tokens(ui);
+        let text = toast.text.clone();
+        let screen = ui.ctx().content_rect();
+        egui::Area::new(egui::Id::unique("invoice-toast"))
+            .order(egui::Order::Foreground)
+            .fade_in(false)
+            .fixed_pos(egui::pos2(
+                screen.center().x - 240.0,
+                screen.bottom() - 84.0,
+            ))
+            .show(ui.ctx(), |ui| {
+                Frame::new()
+                    .fill(t.text)
+                    .corner_radius(crate::theme::RADIUS_S)
+                    .inner_margin(Margin::symmetric(16, 10))
+                    .show(ui, |ui| {
+                        ui.set_width(448.0);
+                        ui.horizontal(|ui| {
+                            ui.spacing_mut().item_spacing.x = 10.0;
+                            crate::ui::icon::icon(ui, crate::ui::icon::Icon::Check, t.surface);
+                            ui.label(para_text(&text, TEXT_BODY, t.surface));
+                        });
+                    });
+            });
+        ui.ctx()
+            .request_repaint_after(std::time::Duration::from_millis(500));
     }
 
     /// Reads this frame's keys and runs them. Returns whether any key came in, and whether one
@@ -820,21 +1260,31 @@ impl ItemInvoiceScreen {
             InvoiceMode::Item => "Item invoice",
             InvoiceMode::Accounting => "Accounting invoice",
         };
-        page_head(ui, &self.page_title(), Some(subtitle.as_str()), |ui| {
-            let saved = ui
-                .add_enabled_ui(locked.is_none() && !busy, |ui| {
-                    button(ui, "Save", Some("Ctrl+A"), ButtonKind::Primary).clicked()
-                })
-                .inner;
-            if saved {
-                clicks = Some(Click::Save);
-            }
-            // The head lays buttons out right to left: the mode button sits left of Save, as in
-            // the mock.
-            if button(ui, mode_label, Some("Ctrl+H"), ButtonKind::Secondary).clicked() {
-                clicks = Some(Click::ChangeMode);
-            }
-        });
+        let number = self.extras.number.clone();
+        page_head_numbered(
+            ui,
+            &self.page_title(),
+            number.as_deref(),
+            Some(subtitle.as_str()),
+            |ui| {
+                let saved = ui
+                    .add_enabled_ui(locked.is_none() && !busy, |ui| {
+                        button(ui, "Save", Some("Ctrl+A"), ButtonKind::Primary).clicked()
+                    })
+                    .inner;
+                if saved {
+                    clicks = Some(Click::Save);
+                }
+                // The head lays buttons out right to left: More details sits left of Save and the
+                // mode button left of that, as in the mock.
+                if button(ui, "More details", Some("Ctrl+I"), ButtonKind::Secondary).clicked() {
+                    clicks = Some(Click::More);
+                }
+                if button(ui, mode_label, Some("Ctrl+H"), ButtonKind::Secondary).clicked() {
+                    clicks = Some(Click::ChangeMode);
+                }
+            },
+        );
         self.draw_notes(ui);
         self.draw_create_form(ui, masters);
 
@@ -870,6 +1320,9 @@ impl ItemInvoiceScreen {
                 }
                 self.draw_head(ui, base, masters, &mut cx);
                 self.draw_lines(ui, base, masters, &mut cx);
+                if self.more_open {
+                    self.draw_more(ui, base, masters, &mut cx);
+                }
                 self.draw_foot(ui, base, masters, &mut cx, &mut clicks);
             });
             self.shown.sheet = Some(drawn.response.rect);
@@ -897,8 +1350,10 @@ impl ItemInvoiceScreen {
             Some(Click::Cancel) => self.confirming_save = false,
             Some(Click::Save) => self.save(masters),
             Some(Click::ChangeMode) => self.change_mode(),
+            Some(Click::More) => self.toggle_more(masters),
             None => {}
         }
+        self.draw_toast(ui);
         if any_key || self.focus_pending {
             ui.ctx().request_repaint();
         }
@@ -1005,6 +1460,7 @@ impl Screen for ItemInvoiceScreen {
         self.wait_for_post(ui);
         self.lock_date = ctx.lock_date;
         self.drive_compute(ui, ctx);
+        self.drive_extras(ui, ctx);
         let action = if let Some(books) = ctx.books.as_ref() {
             self.draw(ui, &books.masters)
         } else {
@@ -1046,10 +1502,47 @@ impl ItemInvoiceScreen {
         if self.computing.is_none()
             && let Some(voucher) = self.take_compute_request(&books.masters)
         {
-            let ticket = compute::send(worker, voucher.clone());
+            let ticket = compute::send(worker, voucher.clone(), self.requested_bills().to_vec());
             self.computing = Some((voucher, ticket));
         }
         if self.computing.is_some() {
+            ui.ctx().request_repaint();
+        }
+    }
+
+    /// Asks the engine for the number the voucher will get and the party's balance after it, and
+    /// finds the party's last narration for Alt+R. All three are the engine's or the books' own
+    /// words; the screen adds nothing to them.
+    fn drive_extras(&mut self, ui: &Ui, ctx: &AppCtx) {
+        let (Some(worker), Some(books)) = (ctx.api.as_ref(), ctx.books.as_ref()) else {
+            return;
+        };
+        let date = parse_entry_date(&self.draft.date_text, self.fy).ok();
+        let want = date.map(|d| (self.draft.type_id, d));
+        let number_busy = self.extras.drive_number(worker, want);
+        let balance_want = self.draft.party.zip(self.computed_voucher(&books.masters));
+        let balance_busy = self.extras.drive_balance(worker, balance_want);
+        let party = self.draft.party;
+        if self
+            .last_narration
+            .as_ref()
+            .is_none_or(|(p, _)| *p != party)
+        {
+            let text = party.and_then(|p| {
+                books
+                    .vouchers
+                    .values()
+                    .filter(|v| {
+                        v.type_id == self.draft.type_id
+                            && v.party == Some(p)
+                            && !v.narration.trim().is_empty()
+                    })
+                    .max_by_key(|v| (v.date, v.id))
+                    .map(|v| v.narration.clone())
+            });
+            self.last_narration = Some((party, text));
+        }
+        if number_busy || balance_busy {
             ui.ctx().request_repaint();
         }
     }
@@ -1084,7 +1577,10 @@ impl ItemInvoiceScreen {
     /// draft and says why nothing was saved.
     fn finish_post(&mut self, reply: CommandReply) {
         match reply {
-            CommandReply::Booked(_) => self.confirm_saved(),
+            CommandReply::Booked(result) => {
+                let number = result.posted.as_ref().and_then(|v| v.number.clone());
+                self.confirm_saved_as(number.as_deref());
+            }
             CommandReply::Unsupported(u) => {
                 self.save_failed(&format!("not supported yet: {} ({})", u.what, u.reason));
             }

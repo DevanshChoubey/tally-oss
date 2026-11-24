@@ -290,8 +290,9 @@ fn fill(s: &mut ItemInvoiceScreen, m: &Masters) {
     assert_eq!(s.focus(), Field::Rate(0));
     s.draft_mut().rows[0].rate_text = "100".to_owned();
     s.submit(m);
-    assert_eq!(s.focus(), Field::Discount(0));
-    s.submit(m);
+    // The discount and typed-amount columns are hidden by default (the mock's line table has
+    // neither, design/mock-v2/index.html line 1295), so Enter on the rate opens the next line.
+    assert_eq!(s.focus(), Field::Item(1));
 }
 
 fn rupees(r: i64) -> Paise {
@@ -330,6 +331,7 @@ fn block_for_10000() -> GstBlock {
             rate_percent: Decimal::from(18),
         }],
         taxable_total: rupees(10_000),
+        rate_rows: Vec::new(),
         heads: vec![
             GstTotal {
                 head: "CGST".to_owned(),
@@ -602,7 +604,7 @@ fn missing_pieces_are_named_and_nothing_is_defaulted() {
     let s = open(&b, T_SALES);
     assert_eq!(
         s.draft().build_voucher(m, fy()),
-        Err(InvoiceError::Missing { field: "Customer" })
+        Err(InvoiceError::Missing { field: "Party" })
     );
     // Party and lines but no place of supply: never guessed from the party or the company.
     let mut s = open(&b, T_SALES);
@@ -662,14 +664,13 @@ fn a_half_filled_line_is_an_error_not_skipped() {
 fn bill_wise_party_godowns_and_batches_are_unsupported_not_guessed() {
     let b = books();
     let m = &b.masters;
-    // pending: bill references are not entered here.
+    // Bill references are entered in More details now (s9), so a bill-wise party's invoice
+    // builds; the engine names and checks the bills (tests/s9_invoice_bills.rs in ledgerly-api).
+    // This used to assert Unsupported under "pending: bill references are not entered here".
     let mut s = open(&b, T_SALES);
     fill(&mut s, m);
     s.draft_mut().party = Some(KAVERI);
-    assert!(matches!(
-        s.draft().build_voucher(m, fy()),
-        Err(InvoiceError::Unsupported(_))
-    ));
+    assert!(s.draft().build_voucher(m, fy()).is_ok());
     // Updated on the owner's instruction (2026-11-21) that everything follows Tally. This used
     // to assert Unsupported for a company with one godown (then "pending: godown allocation").
     // The TallyPrime godowns FAQ
@@ -1065,7 +1066,7 @@ fn ctrl_a_on_an_incomplete_invoice_says_what_is_missing() {
     };
     frame(&ctx, &mut s, &mut app, RawInput::default());
     frame(&ctx, &mut s, &mut app, key(Key::A, Modifiers::COMMAND));
-    assert!(s.error_text().unwrap().contains("Customer is required"));
+    assert!(s.error_text().unwrap().contains("Party is required"));
 }
 
 #[test]

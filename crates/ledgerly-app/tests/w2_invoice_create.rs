@@ -210,6 +210,9 @@ fn alt_c_on_an_item_field_opens_nothing() {
             | Field::Amount(_)
             | Field::Ledger(_)
             | Field::LedgerAmount(_)
+            | Field::BillKind(_)
+            | Field::BillName(_)
+            | Field::BillAmount(_)
             | Field::Narration => s.submit(&m),
         }
         assert_ne!(

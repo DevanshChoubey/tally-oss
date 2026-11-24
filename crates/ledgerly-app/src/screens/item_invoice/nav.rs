@@ -1,6 +1,6 @@
 //! Moving between fields: Enter order, validation on leaving a field, and Escape.
 
-use super::draft::{InvoiceRow, ParticularRow, typed_amount};
+use super::draft::{BillRow, InvoiceRow, ParticularRow, typed_amount};
 use super::picker::{ledger_hits, search_items};
 use super::{Field, InvoiceMode, ItemInvoiceScreen, Step, parse_decimal, parse_place, place_label};
 use crate::screens::voucher_entry::{LedgerHit, format_entry_date, parse_entry_date};
@@ -18,17 +18,18 @@ impl ItemInvoiceScreen {
         match self.draft.mode {
             InvoiceMode::Item => {
                 order.extend([Field::Party, Field::Place, Field::Account, Field::Reference]);
+                order.extend(self.bill_fields());
+                let discount = self.discount_columns();
                 for i in 0..self.draft.rows.len() {
-                    order.extend([
-                        Field::Item(i),
-                        Field::Qty(i),
-                        Field::Rate(i),
-                        Field::Discount(i),
-                    ]);
+                    order.extend([Field::Item(i), Field::Qty(i), Field::Rate(i)]);
+                    if discount {
+                        order.push(Field::Discount(i));
+                    }
                 }
             }
             InvoiceMode::Accounting => {
                 order.extend([Field::Party, Field::Place, Field::Reference]);
+                order.extend(self.bill_fields());
                 for i in 0..self.draft.particulars.len() {
                     order.extend([Field::Ledger(i), Field::LedgerAmount(i)]);
                 }
@@ -36,6 +37,17 @@ impl ItemInvoiceScreen {
         }
         order.push(Field::Narration);
         order
+    }
+
+    /// The bill reference fields in Enter order: none unless More details is open on a party that
+    /// tracks bills (it holds rows only then).
+    fn bill_fields(&self) -> Vec<Field> {
+        if !self.more_open {
+            return Vec::new();
+        }
+        (0..self.draft.bills.len())
+            .flat_map(|i| [Field::BillKind(i), Field::BillName(i), Field::BillAmount(i)])
+            .collect()
     }
 
     /// Where `field` sits in the Enter order (a typed amount counts as its line's discount).
@@ -54,23 +66,48 @@ impl ItemInvoiceScreen {
             | Field::Discount(_)
             | Field::Ledger(_)
             | Field::LedgerAmount(_)
+            | Field::BillKind(_)
+            | Field::BillName(_)
+            | Field::BillAmount(_)
             | Field::Narration => field,
         };
         self.order().iter().position(|f| *f == key)
     }
 
-    fn move_to(&mut self, field: Field) {
+    pub(super) fn move_to(&mut self, field: Field) {
         self.focus = field;
         self.focus_pending = true;
         self.pick_index = 0;
+        self.list_open = false;
     }
 
     pub(super) fn advance(&mut self) {
         let last_row = self.draft.rows.len().saturating_sub(1);
-        if let Field::Discount(i) | Field::Amount(i) = self.focus
-            && i == last_row
-        {
-            self.draft.rows.push(InvoiceRow::default());
+        let row_end = |i: usize| i == last_row;
+        match self.focus {
+            Field::Discount(i) | Field::Amount(i) if row_end(i) => {
+                self.draft.rows.push(InvoiceRow::default());
+            }
+            Field::Rate(i) if row_end(i) && !self.discount_columns() => {
+                self.draft.rows.push(InvoiceRow::default());
+            }
+            Field::Date
+            | Field::Number
+            | Field::Party
+            | Field::Place
+            | Field::Account
+            | Field::Reference
+            | Field::Item(_)
+            | Field::Qty(_)
+            | Field::Rate(_)
+            | Field::Discount(_)
+            | Field::Amount(_)
+            | Field::Ledger(_)
+            | Field::LedgerAmount(_)
+            | Field::BillKind(_)
+            | Field::BillName(_)
+            | Field::BillAmount(_)
+            | Field::Narration => {}
         }
         if let Field::LedgerAmount(i) = self.focus
             && i == self.draft.particulars.len().saturating_sub(1)
@@ -112,7 +149,9 @@ impl ItemInvoiceScreen {
             }
             Field::Ledger(i) => self.submit_particular(masters, i),
             Field::LedgerAmount(i) => self.submit_particular_amount(i),
-            Field::Number | Field::Reference => Step::Next,
+            Field::Number | Field::Reference | Field::BillName(_) => Step::Next,
+            Field::BillKind(i) => self.submit_bill_kind(i),
+            Field::BillAmount(i) => self.submit_bill_amount(i),
             Field::Narration => {
                 self.ask_save(masters);
                 Step::Stay
@@ -146,6 +185,9 @@ impl ItemInvoiceScreen {
             | Field::Discount(_)
             | Field::Amount(_)
             | Field::LedgerAmount(_)
+            | Field::BillKind(_)
+            | Field::BillName(_)
+            | Field::BillAmount(_)
             | Field::Narration => self.draft.party_text.clone(),
         };
         if self.is_waiting_for(&text) {
@@ -220,7 +262,7 @@ impl ItemInvoiceScreen {
         if row.item.is_some() {
             return Step::Next;
         }
-        if row.is_blank() {
+        if row.is_blank() && !self.list_open {
             if i == 0 {
                 return self.refuse("Enter at least one item.".to_owned());
             }
@@ -266,12 +308,51 @@ impl ItemInvoiceScreen {
             | Field::Amount(_)
             | Field::Ledger(_)
             | Field::LedgerAmount(_)
+            | Field::BillKind(_)
+            | Field::BillName(_)
+            | Field::BillAmount(_)
             | Field::Narration => Ok(()),
         };
         match check {
             Ok(()) => Step::Next,
             Err(e) => self.refuse(e),
         }
+    }
+
+    /// Enter on a bill reference's type: it must be empty or one of the four types, which is
+    /// written out in full.
+    fn submit_bill_kind(&mut self, i: usize) -> Step {
+        let Some(row) = self.draft.bills.get_mut(i) else {
+            return Step::Stay;
+        };
+        if row.kind_text.trim().is_empty() {
+            return Step::Next;
+        }
+        match BillRow::parse_kind(&row.kind_text) {
+            Some(kind) => {
+                row.kind_text = BillRow::kind_label(kind).to_owned();
+                Step::Next
+            }
+            None => self.refuse("The type is New Ref, Agst Ref, Advance or On Account.".to_owned()),
+        }
+    }
+
+    /// Enter on a bill reference's amount: it must be empty or a plain amount; on the last
+    /// reference a typed one opens the next row.
+    fn submit_bill_amount(&mut self, i: usize) -> Step {
+        let Some(row) = self.draft.bills.get(i) else {
+            return Step::Stay;
+        };
+        if !row.amount_text.trim().is_empty()
+            && let Err(e) = typed_amount(&row.amount_text)
+        {
+            return self.refuse(format!("Amount: {e}"));
+        }
+        let typed = !row.is_blank();
+        if typed && i.saturating_add(1) == self.draft.bills.len() {
+            self.draft.bills.push(BillRow::default());
+        }
+        Step::Next
     }
 
     /// Enter on a particular's ledger: picks the ledger the list shows. A blank first particular

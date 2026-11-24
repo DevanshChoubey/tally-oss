@@ -74,6 +74,20 @@ pub(super) fn read_keys(
         if !prompt.discard && !prompt.save && consume_exact(i, Key::H, Modifiers::COMMAND) {
             out.push(KeyCmd::ChangeMode);
         }
+        if !prompt.discard && !prompt.save {
+            if consume_exact(i, Key::R, Modifiers::ALT) {
+                out.push(KeyCmd::RecallNarration);
+            }
+            if consume_exact(i, Key::D, Modifiers::ALT) {
+                out.push(KeyCmd::ToggleDiscount);
+            }
+            if consume_exact(i, Key::I, Modifiers::COMMAND) {
+                out.push(KeyCmd::More);
+            }
+            if consume_exact(i, Key::D, Modifiers::COMMAND) {
+                out.push(KeyCmd::DeleteLine);
+            }
+        }
         if escape_wanted && i.consume_key(Modifiers::NONE, Key::Escape) {
             out.push(KeyCmd::Escape);
         }
@@ -105,6 +119,10 @@ impl ItemInvoiceScreen {
             }
             KeyCmd::Create => self.begin_create(),
             KeyCmd::ChangeMode => self.change_mode(),
+            KeyCmd::DeleteLine => self.delete_line(),
+            KeyCmd::RecallNarration => self.recall_narration(),
+            KeyCmd::ToggleDiscount => self.toggle_discount(),
+            KeyCmd::More => self.toggle_more(masters),
             KeyCmd::Escape => {
                 if self.confirm_discard {
                     self.confirm_discard = false;
@@ -177,6 +195,9 @@ impl ItemInvoiceScreen {
             | Field::Discount(_)
             | Field::Amount(_)
             | Field::LedgerAmount(_)
+            | Field::BillKind(_)
+            | Field::BillName(_)
+            | Field::BillAmount(_)
             | Field::Narration => {}
         }
     }

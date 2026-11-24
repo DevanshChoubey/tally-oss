@@ -2,7 +2,7 @@
 //! reading order, and the focused field is the one a screen reader is told about.
 //!
 //! derived: the header is laid out in a three-column grid, row by row, left to right
-//! (`item_invoice/draw.rs` `draw_header`): Date, then the party field (captioned "Customer" for a
+//! (`item_invoice/draw.rs` `draw_header`): Date, then the party field (captioned "Party" for a
 //! sales invoice), then "Place of supply", then the reference field on the next row. Egui moves
 //! focus in widget creation order, so Tab must visit the fields in that order.
 
@@ -253,7 +253,7 @@ fn sales_app(b: &Books) -> AppCtx {
 #[test]
 fn tab_visits_the_header_and_line_fields_in_reading_order() {
     // derived: from the party field (where the screen starts), Tab moves through the header in
-    // reading order: "Place of supply" (first row), "Sales ledger" (account), "Order or reference"
+    // reading order: "Place of supply" (first row), "Sales ledger" (account), "Buyer's order no."
     // (reference, the second row of the grid), then the first line's "Item", "Qty" and "Rate"
     // (draw_header, draw_lines in item_invoice/draw.rs). This test keeps to the fields; the
     // suggestion entries are not Tab stops at all, which the tests below check.
@@ -271,7 +271,7 @@ fn tab_visits_the_header_and_line_fields_in_reading_order() {
     let expected = [
         "Place of supply",
         "Sales ledger",
-        "Order or reference",
+        "Buyer's order no.",
         "Item",
         "Qty",
         "Rate",
@@ -285,7 +285,7 @@ fn tab_visits_the_header_and_line_fields_in_reading_order() {
 
 #[test]
 fn shift_tab_from_the_party_field_goes_back_to_the_date() {
-    // derived: the screen starts with focus on the party field ("Customer", draw_header). The
+    // derived: the screen starts with focus on the party field ("Party", the mock's label, design/mock-v2/index.html line 1288; draw_head). The
     // field before it in reading order is "Date", so Shift+Tab must reach "Date" first, and a
     // second Shift+Tab must not go past it to a field below.
     let ctx = context();
@@ -412,11 +412,11 @@ fn enter_picks_the_highlighted_suggestion() {
     );
 }
 
-/// The text of the field named "Customer" in `update`, read from its AccessKit value.
+/// The text of the field named "Party" in `update`, read from its AccessKit value.
 fn party_value(update: &TreeUpdate) -> Option<String> {
     update
         .nodes
         .iter()
-        .find(|(_, node)| node.role() == Role::TextInput && node.label() == Some("Customer"))
+        .find(|(_, node)| node.role() == Role::TextInput && node.label() == Some("Party"))
         .and_then(|(_, node)| node.value().map(str::to_owned))
 }

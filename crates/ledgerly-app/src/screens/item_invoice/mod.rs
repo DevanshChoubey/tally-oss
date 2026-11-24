@@ -58,6 +58,7 @@ mod compute;
 mod create;
 mod draft;
 mod draw;
+mod extras;
 mod keys;
 mod nav;
 mod picker;
@@ -70,6 +71,7 @@ use crate::screens::voucher_entry::{
 use crate::shell::submit::CommandReply;
 use crate::ui::format;
 use crate::worker::Ticket;
+use ledgerly_api::PartyBill;
 use ledgerly_core::format::amount_in_words;
 use ledgerly_core::{
     Date, Decimal, FinancialYear, LedgerId, MoneyError, Outcome, Paise, SignedAmount, StateCode,
@@ -82,7 +84,7 @@ use std::collections::{BTreeMap, VecDeque};
 use std::str::FromStr;
 use thiserror::Error;
 
-pub use self::draft::{InvoiceDraft, InvoiceRow, ParticularRow};
+pub use self::draft::{BillRow, InvoiceDraft, InvoiceRow, ParticularRow};
 pub use self::draw::{LineShown, tax_rows};
 pub use self::picker::{ItemHit, search_items};
 
@@ -150,14 +152,16 @@ impl InvoiceKind {
 
     fn party_label(self) -> &'static str {
         match self {
-            InvoiceKind::Sales | InvoiceKind::CreditNote => "Customer",
-            InvoiceKind::Purchase | InvoiceKind::DebitNote => "Supplier",
+            InvoiceKind::Sales
+            | InvoiceKind::CreditNote
+            | InvoiceKind::Purchase
+            | InvoiceKind::DebitNote => "Party",
         }
     }
 
     fn reference_label(self) -> &'static str {
         match self {
-            InvoiceKind::Sales => "Order or reference",
+            InvoiceKind::Sales => "Buyer's order no.",
             InvoiceKind::Purchase => "Supplier invoice no.",
             InvoiceKind::CreditNote | InvoiceKind::DebitNote => "Original invoice no.",
         }
@@ -208,6 +212,14 @@ pub enum InvoiceError {
     NeedsAmount {
         /// 1-based line number.
         line: usize,
+    },
+    /// A bill reference is wrong.
+    #[error("bill reference {line}: {reason}")]
+    Bill {
+        /// 1-based reference number.
+        line: usize,
+        /// What is wrong.
+        reason: String,
     },
     /// An amount does not fit.
     #[error(transparent)]
@@ -307,6 +319,19 @@ pub struct GstTotal {
     pub amount: Paise,
 }
 
+/// One row of the tax box: a head at one rate, as the engine computed it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GstRateRow {
+    /// The head, for example `CGST`.
+    pub head: String,
+    /// The head's own rate in percent.
+    pub rate_percent: Decimal,
+    /// The taxable value of the lines at this rate.
+    pub taxable: Paise,
+    /// The head's tax on them.
+    pub amount: Paise,
+}
+
 /// What the tax engine answered for a voucher. The host fills it from the engine's output; the
 /// screen shows it and adds nothing to it.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -319,6 +344,8 @@ pub struct GstBlock {
     pub taxable_total: Paise,
     /// Tax heads, in display order.
     pub heads: Vec<GstTotal>,
+    /// Each head at each rate, for the tax box; empty when the engine gave only head totals.
+    pub rate_rows: Vec<GstRateRow>,
     /// The explicit round-off line.
     pub round_off: Paise,
     /// The invoice value.
@@ -425,6 +452,12 @@ pub enum Field {
     LedgerAmount(usize),
     /// Narration.
     Narration,
+    /// Type of bill reference `n` of the party line (More details).
+    BillKind(usize),
+    /// Name of bill reference `n`.
+    BillName(usize),
+    /// Amount of bill reference `n`.
+    BillAmount(usize),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -459,6 +492,10 @@ enum UiEvent {
 #[derive(Clone, Copy)]
 enum KeyCmd {
     Save,
+    DeleteLine,
+    RecallNarration,
+    ToggleDiscount,
+    More,
     ConfirmSave,
     PickUp,
     PickDown,
@@ -476,6 +513,14 @@ enum Stock {
     Kept,
     /// Maintain Inventory is off: the item mode has nothing to pick.
     NotKept,
+}
+
+/// The toast shown after a save.
+struct Toast {
+    /// "Saved SI/0418 · Shree Ganesh Traders · ₹2,14,400.00".
+    text: String,
+    /// The time the first frame with it was drawn, in egui seconds.
+    shown_at: Option<f64>,
 }
 
 /// The item invoice entry screen (card U5).
@@ -498,13 +543,34 @@ pub struct ItemInvoiceScreen {
     lock_date: Option<Date>,
     notice: Option<Notice>,
     requested: Option<Voucher>,
+    /// The bill references the last tax request was made with.
+    requested_bills: Vec<PartyBill>,
     answer: Option<(Voucher, GstResult)>,
+    /// The bill references the held answer was computed with.
+    answer_bills: Vec<PartyBill>,
     outbox: Option<Voucher>,
     /// The post the worker is running for this screen, if any. While it runs the screen shows
     /// "Saving..." and takes no keys, so a second save cannot start.
     posting: Option<Ticket<CommandReply>>,
     /// The tax computation the worker is running, with the voucher it is for.
     computing: Option<(Voucher, Ticket<compute::ComputeReply>)>,
+    /// Whether the discount and typed-amount columns are shown (Alt+D). They are also shown while
+    /// any line has a value in them.
+    show_discount: bool,
+    /// Whether the More details panel (bill references) is open (Ctrl+I).
+    more_open: bool,
+    /// Whether the type-ahead list was asked for with an arrow key on a field with no text yet.
+    list_open: bool,
+    /// What the worker told the screen for the title and the balance line.
+    extras: extras::Extras,
+    /// The company's own state, for the note under the head.
+    home_state: StateCode,
+    /// The toast after a save, until it times out.
+    toast: Option<Toast>,
+    /// The party's name and the invoice total of the voucher queued to be saved, for the toast.
+    save_info: Option<(String, Paise)>,
+    /// The narration of the party's last voucher of this type, for Alt+R.
+    last_narration: Option<(Option<LedgerId>, Option<String>)>,
     /// The create-ledger form Alt+C opened, with the field it is for.
     create: Option<(create::CreateFor, CreateForm)>,
     /// Ledgers the user asked to create, not yet sent to the worker or taken by the host.
@@ -582,7 +648,17 @@ impl ItemInvoiceScreen {
             confirm_discard: false,
             notice: None,
             requested: None,
+            requested_bills: Vec::new(),
             answer: None,
+            answer_bills: Vec::new(),
+            show_discount: false,
+            more_open: false,
+            list_open: false,
+            extras: extras::Extras::default(),
+            home_state: books.company.state,
+            last_narration: None,
+            toast: None,
+            save_info: None,
             outbox: None,
             posting: None,
             computing: None,
@@ -694,11 +770,17 @@ impl ItemInvoiceScreen {
     /// no answer or request for exactly this voucher exists.
     pub fn take_compute_request(&mut self, masters: &Masters) -> Option<Voucher> {
         let voucher = self.draft.build_voucher(masters, self.fy).ok()?;
-        let answered = self.answer.as_ref().is_some_and(|(v, _)| *v == voucher);
-        if answered || self.requested.as_ref() == Some(&voucher) {
+        let bills = self.draft.party_bills().ok()?;
+        let answered = self
+            .answer
+            .as_ref()
+            .is_some_and(|(v, _)| *v == voucher && self.answer_bills == bills);
+        if answered || (self.requested.as_ref() == Some(&voucher) && self.requested_bills == bills)
+        {
             return None;
         }
         self.requested = Some(voucher.clone());
+        self.requested_bills = bills;
         Some(voucher)
     }
 
@@ -714,6 +796,14 @@ impl ItemInvoiceScreen {
             GstResult::Failed(m) => GstResult::Failed(m),
         };
         self.answer = Some((voucher, result));
+        self.answer_bills.clone_from(&self.requested_bills);
+    }
+
+    /// The bill references the tax request taken last was made with; the host hands them to the
+    /// engine with the voucher.
+    #[must_use]
+    pub fn requested_bills(&self) -> &[PartyBill] {
+        &self.requested_bills
     }
 
     /// What the GST block shows for the invoice as it stands now.
@@ -723,13 +813,25 @@ impl ItemInvoiceScreen {
             Ok(v) => v,
             Err(e) => return GstStatus::Incomplete(e.to_string()),
         };
+        let bills = match self.draft.party_bills() {
+            Ok(b) => b,
+            Err(e) => return GstStatus::Incomplete(e.to_string()),
+        };
+        match self.answer_for(&voucher, &bills) {
+            Some(GstResult::Computed(block)) => GstStatus::Computed(block),
+            Some(GstResult::Unsupported(u)) => GstStatus::Unsupported(u),
+            Some(GstResult::Failed(m)) => GstStatus::Failed(m),
+            None => GstStatus::NotComputedYet,
+        }
+    }
+
+    /// The held answer, when it is for exactly `voucher` with exactly `bills`.
+    fn answer_for(&self, voucher: &Voucher, bills: &[PartyBill]) -> Option<&GstResult> {
         match &self.answer {
-            Some((for_voucher, result)) if *for_voucher == voucher => match result {
-                GstResult::Computed(block) => GstStatus::Computed(block),
-                GstResult::Unsupported(u) => GstStatus::Unsupported(u),
-                GstResult::Failed(m) => GstStatus::Failed(m),
-            },
-            Some(_) | None => GstStatus::NotComputedYet,
+            Some((for_voucher, result)) if for_voucher == voucher && self.answer_bills == bills => {
+                Some(result)
+            }
+            Some(_) | None => None,
         }
     }
 
@@ -772,15 +874,16 @@ impl ItemInvoiceScreen {
                 format::date(lock)
             ));
         }
-        let block = match &self.answer {
-            Some((for_voucher, GstResult::Computed(block))) if *for_voucher == voucher => block,
-            Some((for_voucher, GstResult::Unsupported(u))) if *for_voucher == voucher => {
+        let bills = self.draft.party_bills().map_err(|e| e.to_string())?;
+        let block = match self.answer_for(&voucher, &bills) {
+            Some(GstResult::Computed(block)) => block,
+            Some(GstResult::Unsupported(u)) => {
                 return Err(format!("Not supported yet: {} ({})", u.what, u.reason));
             }
-            Some((for_voucher, GstResult::Failed(m))) if *for_voucher == voucher => {
+            Some(GstResult::Failed(m)) => {
                 return Err(format!("The tax engine failed: {m}"));
             }
-            Some(_) | None => {
+            None => {
                 return Err("Tax has not been computed for this invoice yet.".to_owned());
             }
         };
@@ -797,11 +900,25 @@ impl ItemInvoiceScreen {
         self.confirming_save = false;
         match self.saveable(masters) {
             Ok(voucher) => {
+                self.save_info = self.save_summary(masters, &voucher);
                 self.outbox = Some(voucher);
                 self.notice = Some(Notice::Info("Saving...".to_owned()));
             }
             Err(message) => self.fail(message),
         }
+    }
+
+    /// The party's name and the engine's invoice total for the voucher about to be saved.
+    fn save_summary(&self, masters: &Masters, voucher: &Voucher) -> Option<(String, Paise)> {
+        let party = voucher.party?;
+        let name = masters.ledgers.get(&party)?.name.clone();
+        let total = voucher
+            .ledger_lines
+            .iter()
+            .find(|l| l.ledger == party)?
+            .amount
+            .amount;
+        Some((name, total))
     }
 
     /// Enter on the narration: when the invoice could be saved, asks "Save this invoice?" and
@@ -823,6 +940,22 @@ impl ItemInvoiceScreen {
 
     /// The host posted the voucher: a fresh invoice of the same type starts, with the same date.
     pub fn confirm_saved(&mut self) {
+        self.confirm_saved_as(None);
+    }
+
+    /// [`Self::confirm_saved`] with the number the engine gave the posted voucher, for the toast.
+    pub(super) fn confirm_saved_as(&mut self, number: Option<&str>) {
+        self.toast = match (number, self.save_info.take()) {
+            (Some(number), Some((party, total))) => Some(Toast {
+                text: format!(
+                    "Saved {number} \u{b7} {party} \u{b7} \u{20b9}{}",
+                    format::amount(total)
+                ),
+                shown_at: None,
+            }),
+            (Some(_) | None, Some(_) | None) => None,
+        };
+        self.extras.forget_number();
         self.draft = InvoiceDraft::new(
             self.draft.type_id,
             self.draft.kind,
@@ -838,6 +971,118 @@ impl ItemInvoiceScreen {
         self.pick_index = 0;
         self.confirming_save = false;
         self.notice = Some(Notice::Info("Saved.".to_owned()));
+    }
+
+    /// Whether the discount and typed-amount columns show: Alt+D turned them on, or a line has a
+    /// value in them (hiding a typed discount would hide a figure that changes the amount).
+    #[must_use]
+    pub fn discount_columns(&self) -> bool {
+        self.show_discount
+            || self
+                .draft
+                .rows
+                .iter()
+                .any(|r| !r.discount_text.trim().is_empty() || !r.amount_text.trim().is_empty())
+    }
+
+    /// Alt+D: shows or hides the discount and typed-amount columns. They stay while a line has a
+    /// value in them; the keyboard leaves them when they go.
+    pub fn toggle_discount(&mut self) {
+        self.show_discount = !self.show_discount;
+        if !self.discount_columns()
+            && let Field::Discount(i) | Field::Amount(i) = self.focus
+        {
+            self.focus = Field::Rate(i);
+            self.focus_pending = true;
+        }
+        self.notice = Some(Notice::Info(if self.discount_columns() {
+            "Discount and typed amount columns shown.".to_owned()
+        } else {
+            "Discount and typed amount columns hidden.".to_owned()
+        }));
+    }
+
+    /// Ctrl+I: opens or closes More details, the bill references of the party line.
+    pub fn toggle_more(&mut self, masters: &Masters) {
+        self.more_open = !self.more_open;
+        if self.more_open {
+            let bill_wise = self
+                .draft
+                .party
+                .and_then(|p| masters.ledgers.get(&p))
+                .is_some_and(|l| l.bill_wise.is_some());
+            if bill_wise && self.draft.bills.is_empty() {
+                self.draft.bills.push(BillRow::default());
+            }
+            if bill_wise {
+                self.move_to(Field::BillKind(0));
+            }
+        } else if matches!(
+            self.focus,
+            Field::BillKind(_) | Field::BillName(_) | Field::BillAmount(_)
+        ) {
+            self.move_to(Field::Narration);
+        }
+    }
+
+    /// Ctrl+D: removes the line the keyboard is on (a lone line is only emptied).
+    pub fn delete_line(&mut self) {
+        match self.focus {
+            Field::Item(i)
+            | Field::Qty(i)
+            | Field::Rate(i)
+            | Field::Discount(i)
+            | Field::Amount(i) => {
+                if self.draft.rows.len() > 1 {
+                    if i < self.draft.rows.len() {
+                        self.draft.rows.remove(i);
+                    }
+                    let last = self.draft.rows.len().saturating_sub(1);
+                    self.focus = Field::Item(i.min(last));
+                } else {
+                    self.draft.rows = vec![InvoiceRow::default()];
+                    self.focus = Field::Item(0);
+                }
+            }
+            Field::Ledger(i) | Field::LedgerAmount(i) => {
+                if self.draft.particulars.len() > 1 {
+                    if i < self.draft.particulars.len() {
+                        self.draft.particulars.remove(i);
+                    }
+                    let last = self.draft.particulars.len().saturating_sub(1);
+                    self.focus = Field::Ledger(i.min(last));
+                } else {
+                    self.draft.particulars = vec![ParticularRow::default()];
+                    self.focus = Field::Ledger(0);
+                }
+            }
+            Field::Date
+            | Field::Number
+            | Field::Party
+            | Field::Place
+            | Field::Account
+            | Field::Reference
+            | Field::BillKind(_)
+            | Field::BillName(_)
+            | Field::BillAmount(_)
+            | Field::Narration => return,
+        }
+        self.focus_pending = true;
+        self.pick_index = 0;
+        self.confirming_save = false;
+    }
+
+    /// Alt+R on the narration: fills it with the narration of the party's last voucher of this
+    /// type, when there is one.
+    pub fn recall_narration(&mut self) {
+        if self.focus != Field::Narration {
+            return;
+        }
+        if let Some((party, Some(text))) = &self.last_narration
+            && *party == self.draft.party
+        {
+            text.clone_into(&mut self.draft.narration);
+        }
     }
 
     /// The host could not post the voucher.

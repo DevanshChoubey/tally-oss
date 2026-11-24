@@ -357,7 +357,7 @@ fn open(b: &Books) -> ItemInvoiceScreen {
 #[test]
 fn the_sales_invoice_fields_are_named_by_their_captions_and_columns() {
     // provenance: the captions the invoice draws (item_invoice/draw.rs header and line table):
-    // "Date", "Customer" (InvoiceKind::Sales party label, mod.rs), "Item", "Qty", "Rate".
+    // "Date", "Party" (the mock's party label, design/mock-v2/index.html line 1288), "Item", "Qty", "Rate".
     let ctx = context();
     let b = books();
     let mut screen = open(&b);
@@ -370,7 +370,7 @@ fn the_sales_invoice_fields_are_named_by_their_captions_and_columns() {
     let update = tree(&ctx, 3, |ui| {
         let _ = screen.ui(ui, &mut app);
     });
-    for name in ["Date", "Customer", "Item", "Qty", "Rate", "Narration"] {
+    for name in ["Date", "Party", "Item", "Qty", "Rate", "Narration"] {
         assert!(
             named(&update, Role::TextInput, name).is_some(),
             "a field named {name}"

@@ -146,6 +146,9 @@ impl ItemInvoiceScreen {
             | Field::Discount(_)
             | Field::Amount(_)
             | Field::LedgerAmount(_)
+            | Field::BillKind(_)
+            | Field::BillName(_)
+            | Field::BillAmount(_)
             | Field::Narration => None,
         }
     }
