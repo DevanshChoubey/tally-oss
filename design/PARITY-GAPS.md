@@ -68,14 +68,18 @@ and `home.ai-off`. Not captured: `home.loading` and `home.nudge-open`.
   mock's `table.t` lines by hand (34-point rows, rules, the selected bar: `ui::table::paint_row`).
   So does the bank reconciliation statement. The bank lines and invoice tables still use
   `TableBuilder` at 30 points with egui's selection tint; each moves over in its own round.
-- **data: the drill reports' columns and wording.** Captured as `balance-sheet.group` and
+- **data: the drill reports' columns.** Captured as `balance-sheet.group` and
   `balance-sheet.ledger`. The mock's group drill lists Ledger or group, GSTIN, Opening, Debit,
   Credit and Closing, with "Group total, same as the balance sheet row"; ours is the engine's
-  group summary (Particulars, Debit, Credit, a "Net balance" row and Total). The mock titles the
-  screens by the group or ledger name ("Sundry debtors") with the balance sheet's subtitle; ours
-  says "Group Summary: Sundry Debtors" and "Ledger Vouchers: ...". The ledger state's side card
-  (group, GSTIN, credit days, open bills, Alter ledger) is not built. Each needs the engine's
-  report to carry the figures first; the screen computes none.
+  group summary (Particulars, Debit, Credit, a "Net balance" row and Total). The ledger state's
+  side card (group, GSTIN, credit days, open bills, Alter ledger) is not built, and the ledger
+  list has the engine's columns (Particulars, Voucher Type, Voucher No, Debit, Credit, Balance)
+  in the engine's order, not the mock's Date, Voucher, Type, Narration. Each needs the engine's
+  report to carry the figures first; the screen computes none. Closed in the S8 round (tested in
+  `tests/s8_report_parity.rs`): the drill titles and crumbs read as the group or ledger name
+  ("Sundry Debtors"), the subtitle is "As at ... Enter goes deeper, Esc goes back up", Debit and
+  Credit figures drop the Dr/Cr word, the repeated Particulars column is not drawn twice, and the
+  footnote is small text under the card.
 - **needs a decision: sub-groups in the condensed view.** The mock's condensed statement shows
   each top group's sub-groups (Loans > Secured loans; index.html:1588, `depth===0` children).
   Ours shows the primary groups only, which is what the engine's condensed report gives. Before
@@ -93,23 +97,29 @@ and `home.ai-off`. Not captured: `home.loading` and `home.nudge-open`.
   figures the screen would have to work out, which it never does.
 - **data: the capture company is small.** Fictional Traders has four primary groups, so the
   capture is shorter than the mock's Godavari Drip statement.
-- **bug: a provisional figure overlaps its row label.** `balance-sheet.provisional` (Fictional
-  Pumps, which sold pipe coils and pickaxes before buying them) draws each provisional cell as
-  "<amount> (provisional: <reason>)" right-aligned in the figure column. The reason names both
-  items, so the text runs across the row and over the label ("Total", "Closing stock", "Profit
-  and Loss A/c"). The mock marks the row with a Provisional chip, keeps the figure plain and
-  explains it once in a warning banner with an "Open stock items" button. The cell format is
-  pinned by `tests/w2_balance_look.rs` ("14,25,539.00 (provisional: negative stock)"), so the fix
-  is a chip and banner design change, not a text tweak.
+- **closed (S8): a provisional figure overlapped its row label.** The figure is drawn bare, the
+  line wears a "Provisional" badge and the reason is said once in a warning note at the top of the
+  card (`balance::provisional_reasons`, tested in `balance.rs`). Still different from the mock: the
+  banner has no icon, no bold lead-in and no "Open stock items" button, and its words are ours
+  ("Some figures are provisional and are marked. Why: ...") because the engine's reason is an
+  internal id, not the mock's "Steel pickaxe 2.5 kg shows -30 nos" (next entry). The engine's own
+  note under the statement repeats the reason.
 - **bug: the provisional reason is not readable.** The engine's reason reads "negative stock:
   item StockItemId(1) first went below zero on 2026-11-10" (`ledgerly-reports`
   `stock_summary/valuation.rs`): an internal id and an ISO date. The mock names the item and the
   quantity ("Steel pickaxe 2.5 kg shows -30 nos"). Needs the report to carry the item's name.
-- **gap: the voucher view is bare text.** `balance-sheet.voucher` (Enter on a ledger drill row)
-  shows the voucher as lines of text. The mock has a card with the header fields, the item and
-  ledger lines, tax, and an audit card. Not built.
-- **deferred: `balance-sheet.loading` is not captured.** As `home.loading`: the computing state
-  lasts a few frames on the capture company and the harness cannot hold the worker.
+- **gap: the voucher view has no item lines, tax, total or audit card.** `balance-sheet.voucher`
+  is now two cards: the header fields (Type, Number, Date, Status, Party) over the ledger lines in
+  Debit and Credit columns, and a "Read-only" card. The mock's item table and tax lines need the
+  stock lines and GST the screen does not show yet (it says so in the card). No Total row: the
+  screen never adds figures (rule C4). The mock's "Audit" bullets (created by, from an AI draft)
+  need audit data the voucher view does not read. The subtitle is "Read-only. Esc goes back up"
+  because "As at ..." means nothing for one voucher.
+- **deferred: `balance-sheet.loading` is not captured.** The card is built (a line saying it is
+  computing, then twelve placeholder bars; tested in `report_view::loading_card`) but the
+  computing state lasts a few frames on the capture company and the harness cannot hold the
+  worker. It has no clock icon (the icon set has none) and the key bar does not switch to
+  "Computing / Esc Cancel".
 
 ## Day book (round of 2026-11-23)
 
@@ -119,8 +129,10 @@ and `home.ai-off`. Not captured: `home.loading` and `home.nudge-open`.
   footnote says so; Ctrl+I is not offered.
 - **deferred: narration under the party** (index.html:1652, the `meta` line). The engine's day
   book has no narration field, so Particulars shows the party alone and every row is one line.
-- **deferred: the empty state's card and voucher buttons** (index.html:1647). Ours shows the
-  shared empty state with the keys in its sentence (captured as `day-book.empty`, F2 to 21 Nov).
+- **closed (S8): the empty state is a card** with the book icon, title, sentence and the four
+  voucher buttons (they open the voucher forms); the sentence leaves out the mock's "with who
+  entered it" because that is not recorded (E-4). The buttons sit centred; the mock's sit at the
+  left of the card.
 - **by design: the month view keeps the cursor on the voucher it was on.** `day-book.month`
   (Alt+F2, 1 Nov to 20 Nov) keeps the selected voucher selected when the period changes
   (`report_view::replace_report`), so the cursor is not on the first row as in the mock.
@@ -642,3 +654,9 @@ Full table in `design/REAL-PATH-AUDIT.md`. Open gaps, worst first: Import screen
 shortcut keys are silently ignored on a cold start; refusal messages are shown in the bottom key
 bar in red with developer wording; the tab strip is unstyled with duplicate "Company setup"
 titles; dark and high-contrast `setup.welcome` captures are not yet reshot cold.
+
+## Reports not in the mock (S8)
+
+The mock has no state for the profit and loss, trial balance, outstanding, stock summary or
+register reports, so they have no capture to compare. They draw as the generic table, which now
+shares the drill levels' fixes (bare Debit and Credit figures, footnote style).

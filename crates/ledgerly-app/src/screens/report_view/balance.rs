@@ -34,7 +34,8 @@ use super::text::amount_on_side;
 use super::{TableEvents, ViewCell, ViewReport};
 use crate::theme::{RADIUS_M, TEXT_BODY, TEXT_META, border_width, shadow_1};
 use crate::ui::a11y;
-use crate::ui::badge::{BadgeKind, badge};
+use crate::ui::badge::{BadgeKind, badge, paint_badge};
+use crate::ui::note::{NoteKind, note};
 use crate::ui::table::{
     self, CellPlace, RowState, T_HEAD_GAP, T_HEAD_HEIGHT, T_ROW_HEIGHT, T_TOTAL_HEIGHT,
 };
@@ -95,13 +96,21 @@ impl Section {
 /// the edges of the calendar, where there is no such year.
 #[must_use]
 pub fn subtitle(as_of: Date) -> String {
+    subtitle_with(as_of, "Enter opens a row, Esc goes back up")
+}
+
+/// The subtitle of a level below the balance sheet (index.html:1577: "Enter goes deeper, Esc
+/// goes back up").
+#[must_use]
+pub fn drill_subtitle(as_of: Date) -> String {
+    subtitle_with(as_of, "Enter goes deeper, Esc goes back up")
+}
+
+fn subtitle_with(as_of: Date, keys: &str) -> String {
     let date = crate::ui::format::date(as_of);
     match FinancialYear::containing(as_of) {
-        Ok(fy) => format!(
-            "As at {date} \u{00B7} FY {} \u{00B7} Enter opens a row, Esc goes back up",
-            fy.label()
-        ),
-        Err(_) => format!("As at {date} \u{00B7} Enter opens a row, Esc goes back up"),
+        Ok(fy) => format!("As at {date} \u{00B7} FY {} \u{00B7} {keys}", fy.label()),
+        Err(_) => format!("As at {date} \u{00B7} {keys}"),
     }
 }
 
@@ -111,6 +120,52 @@ pub fn subtitle(as_of: Date) -> String {
 #[must_use]
 pub fn amount_in(cell: &ViewCell, section: Section) -> String {
     amount_on_side(cell, section.usual_side())
+}
+
+/// The figure drawn in a line's amount column: [`amount_in`] without the reason a provisional
+/// figure carries (the reason is said once, in the banner over the statement, and the line wears
+/// a "Provisional" badge). The amount is the engine's.
+#[must_use]
+pub fn figure_in(cell: &ViewCell, section: Section) -> String {
+    match cell {
+        ViewCell::Provisional { amount, .. } => {
+            amount_on_side(&ViewCell::Amount(*amount), section.usual_side())
+        }
+        ViewCell::Amount(_)
+        | ViewCell::Signed(_)
+        | ViewCell::Qty(_)
+        | ViewCell::Text(_)
+        | ViewCell::Date(_)
+        | ViewCell::Empty
+        | ViewCell::Unsupported(_) => amount_in(cell, section),
+    }
+}
+
+/// Whether `cell` is a provisional figure.
+fn is_provisional(cell: &ViewCell) -> bool {
+    matches!(cell, ViewCell::Provisional { .. })
+}
+
+/// The reasons the statement's figures are provisional, each once, in the order the lines
+/// appear (rows, then totals).
+#[must_use]
+pub fn provisional_reasons(report: &ViewReport, balance: &VerticalBalance) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    let rows = balance
+        .liabilities
+        .iter()
+        .chain(&balance.assets)
+        .filter_map(|i| report.rows.get(*i))
+        .flat_map(|row| row.cells.iter());
+    let totals = [&balance.liabilities_total, &balance.assets_total];
+    for cell in rows.chain(totals) {
+        if let ViewCell::Provisional { reason, .. } = cell
+            && !out.contains(reason)
+        {
+            out.push(reason.clone());
+        }
+    }
+    out
 }
 
 /// The balance sheet placed for vertical drawing. Each entry is an index into the report's rows,
@@ -265,10 +320,24 @@ pub(super) fn draw(
         .stroke(Stroke::new(border_width(k), t.border))
         .corner_radius(RADIUS_M)
         .shadow(shadow_1(k));
-    let room = (ui.available_height() - foot_height - 2.0).max(T_ROW_HEIGHT * 3.0);
+    let reasons = provisional_reasons(report, balance);
     card.show(ui, |ui| {
         ui.set_min_width(ui.available_width());
         ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
+        if !reasons.is_empty() {
+            // index.html:1588: a warning note at the top of the card, margin 12px 16px 0.
+            Frame::NONE
+                .inner_margin(Margin {
+                    left: 16,
+                    right: 16,
+                    top: 12,
+                    bottom: 0,
+                })
+                .show(ui, |ui| {
+                    note(ui, NoteKind::Warn, &provisional_banner(&reasons));
+                });
+        }
+        let room = (ui.available_height() - foot_height - 2.0).max(T_ROW_HEIGHT * 3.0);
         events = draw_lines(ui, report, balance, selected, scroll_to_selected, room);
         foot = Frame::NONE
             .inner_margin(FOOT_PAD)
@@ -282,6 +351,14 @@ pub(super) fn draw(
     });
     ui.data_mut(|d| d.insert_temp(foot_id, foot.height()));
     (events, foot)
+}
+
+/// The banner over a statement with provisional figures: what the mark means, then each reason.
+fn provisional_banner(reasons: &[String]) -> String {
+    format!(
+        "Some figures are provisional and are marked. Why: {}.",
+        reasons.join("; ")
+    )
 }
 
 /// A count as points, saturating at `u16::MAX` (more notes than that is not a real case).
@@ -435,6 +512,7 @@ fn paint_line(
     } else {
         egui::FontId::proportional(TEXT_BODY)
     };
+    let indent = table::indent(row.depth);
     table::paint_cell_text(
         ui,
         label_rect(rect),
@@ -442,13 +520,31 @@ fn paint_line(
         &row.label,
         font.clone(),
         t.text,
-        CellPlace::Left(table::indent(row.depth)),
+        CellPlace::Left(indent),
     );
-    let amount = row
-        .cells
-        .get(section.column())
-        .map_or_default(|cell| amount_in(cell, section));
+    let cell = row.cells.get(section.column());
+    if cell.is_some_and(is_provisional) {
+        paint_provisional_mark(ui, rect, indent, &row.label, font.clone());
+    }
+    let amount = cell.map_or_default(|cell| figure_in(cell, section));
     table::paint_cell_text(ui, rect, 1.0, &amount, font, t.text, CellPlace::Right);
+}
+
+/// The "Provisional" badge after a label that starts `indent` points in (index.html:1583).
+fn paint_provisional_mark(ui: &Ui, rect: Rect, indent: f32, label: &str, font: egui::FontId) {
+    let t = tokens(ui);
+    let width = ui
+        .painter()
+        .layout_no_wrap(label.to_owned(), font, t.text)
+        .size()
+        .x;
+    paint_badge(
+        ui,
+        rect.left() + indent + width + 6.0,
+        rect.center().y,
+        BadgeKind::Warn,
+        "Provisional",
+    );
 }
 
 /// A section's total: semibold, with the rule above and the double rule below.
@@ -469,15 +565,127 @@ fn paint_total(ui: &Ui, rect: Rect, section: Section, balance: &VerticalBalance)
         t.text,
         CellPlace::Left(table::CELL_PAD_X),
     );
+    if is_provisional(total) {
+        paint_provisional_mark(ui, rect, table::CELL_PAD_X, "Total", font.clone());
+    }
     table::paint_cell_text(
         ui,
         rect,
         3.0,
-        &amount_in(total, section),
+        &figure_in(total, section),
         font,
         t.text,
         CellPlace::Right,
     );
+}
+
+#[cfg(test)]
+mod provisional_once {
+    //! The provisional reason is drawn once, in the banner, not in every line (the 2026-11-24
+    //! capture of `balance-sheet.provisional` drew it over the figures, four times).
+    //!
+    //! provenance: index.html:1583 and 1588: the mock marks each provisional line with a
+    //! "Provisional" badge beside its label, keeps the figure bare in the amount column, and says
+    //! why once, in a warning note at the top of the card.
+    #![allow(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        reason = "test code: the fixture is known to build"
+    )]
+
+    use super::*;
+    use crate::screens::report_view::{ReportToken, ViewDetail, ViewParams, ViewRow, ViewRowKind};
+    use egui::Shape;
+    use ledgerly_core::{Paise, Period, SignedAmount};
+    use time::macros::date;
+
+    const REASON: &str = "negative stock: item pickaxe first went below zero on 2026-11-10";
+
+    fn provisional(paise: i64) -> ViewCell {
+        ViewCell::Provisional {
+            amount: SignedAmount::dr(Paise::new(paise)),
+            reason: REASON.to_owned(),
+        }
+    }
+
+    fn statement() -> ViewReport {
+        let line = |label: &str, cells: Vec<ViewCell>| ViewRow {
+            key: None,
+            label: label.to_owned(),
+            depth: 0,
+            kind: ViewRowKind::Ledger,
+            cells,
+        };
+        ViewReport {
+            token: ReportToken("provisional".to_owned()),
+            title: "Balance Sheet".to_owned(),
+            params: ViewParams {
+                period: Period::new(date!(2026 - 04 - 01), date!(2026 - 11 - 30)).unwrap(),
+                detail: ViewDetail::Condensed,
+            },
+            columns: ["Liabilities", "Assets"].map(str::to_owned).to_vec(),
+            rows: vec![
+                line(
+                    "Capital Account",
+                    vec![
+                        ViewCell::Amount(SignedAmount::cr(Paise::new(500_000))),
+                        ViewCell::Empty,
+                    ],
+                ),
+                line("Closing stock", vec![ViewCell::Empty, provisional(120_000)]),
+            ],
+            totals: vec![
+                ViewCell::Amount(SignedAmount::cr(Paise::new(500_000))),
+                provisional(120_000),
+            ],
+            notes: Vec::new(),
+        }
+    }
+
+    fn texts(shape: &Shape, out: &mut Vec<String>) {
+        if let Shape::Text(t) = shape {
+            out.push(t.galley.text().to_owned());
+        } else if let Shape::Vec(inner) = shape {
+            for s in inner {
+                texts(s, out);
+            }
+        }
+    }
+
+    #[test]
+    fn a_provisional_figure_is_drawn_bare() {
+        // derived: 1,200.00 debit under assets is the usual side, so the bare figure is
+        // "1,200.00"; the reason is not part of the figure.
+        let cell = provisional(120_000);
+        assert_eq!(figure_in(&cell, Section::Assets), "1,200.00");
+    }
+
+    #[test]
+    fn each_reason_is_listed_once() {
+        // derived: the row and the total carry the same reason; the banner lists it once.
+        let report = statement();
+        let balance = vertical_balance(&report).unwrap();
+        assert_eq!(provisional_reasons(&report, &balance), [REASON]);
+    }
+
+    #[test]
+    fn the_reason_is_drawn_once() {
+        // derived: one banner holds the reason; the line and the total draw only the badge and
+        // the figure. Catches the reason painted in each line (over the figures).
+        let report = statement();
+        let balance = vertical_balance(&report).unwrap();
+        let ctx = egui::Context::default();
+        let out = ctx.run_ui(egui::RawInput::default(), |ui| {
+            draw(ui, &report, &balance, 0, false);
+        });
+        let mut drawn = Vec::new();
+        for clipped in &out.shapes {
+            texts(&clipped.shape, &mut drawn);
+        }
+        out.drop_without_applying_deltas();
+        let with_reason = drawn.iter().filter(|t| t.contains(REASON)).count();
+        assert_eq!(with_reason, 1, "texts drawn: {drawn:?}");
+    }
 }
 
 #[cfg(test)]

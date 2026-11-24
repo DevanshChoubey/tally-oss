@@ -67,6 +67,40 @@ pub fn badge(ui: &mut Ui, kind_of: BadgeKind, text: &str) -> Response {
         .response
 }
 
+/// Paints a badge of `kind_of` reading `text` with its left edge at `left` and centred on `y`,
+/// for lines a screen paints itself (a table row's label). Returns the badge's width so the
+/// caller can place what follows. It is the same badge as [`badge`], laid out by hand.
+pub fn paint_badge(ui: &Ui, left: f32, y: f32, kind_of: BadgeKind, text: &str) -> f32 {
+    let t = tokens(ui);
+    let (bg, fg) = colors(kind_of, &t);
+    let galley =
+        ui.painter()
+            .layout_no_wrap(text.to_owned(), crate::ui::bold_font(ui, TEXT_CAP), fg);
+    let pad = f32::from(PAD_X);
+    let width = pad + ICON + 4.0 + galley.size().x + pad;
+    let height = galley.size().y + 2.0 * f32::from(PAD_Y);
+    let rect =
+        egui::Rect::from_min_size(egui::pos2(left, y - height / 2.0), Vec2::new(width, height));
+    let painter = ui.painter();
+    painter.rect_filled(rect, RADIUS_XS, bg);
+    if kind(ui) == ThemeKind::HighContrast {
+        painter.rect_stroke(
+            rect,
+            RADIUS_XS,
+            Stroke::new(border_width(ThemeKind::HighContrast), fg),
+            egui::StrokeKind::Inside,
+        );
+    }
+    let icon_c = egui::pos2(rect.left() + pad + ICON / 2.0, y);
+    paint_icon(painter, icon_c, kind_of, fg);
+    painter.galley(
+        egui::pos2(rect.left() + pad + ICON + 4.0, y - galley.size().y / 2.0),
+        galley,
+        fg,
+    );
+    width
+}
+
 /// Paints the icon of `kind` centred on `c`, in `color`.
 fn paint_icon(painter: &Painter, c: Pos2, kind_of: BadgeKind, color: Color32) {
     let s = Stroke::new(1.5, color);
