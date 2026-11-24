@@ -1182,7 +1182,7 @@ impl Screen for ReportViewScreen {
             self.notice = Some(note);
         }
         self.run_export_request(ctx.api.as_ref());
-        if let Some(note) = self.print.tick() {
+        if let Some(note) = self.print.tick(&ctx.tr) {
             self.notice = Some(note);
         }
         self.run_print_request(ctx.api.as_ref());

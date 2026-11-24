@@ -820,3 +820,13 @@ name = "English"
 "format.weekday.friday" = "Friday"
 "format.weekday.saturday" = "Saturday"
 "format.weekday.sunday" = "Sunday"
+
+# Print messages (screens/print_job.rs). `{title}` is the report or voucher title.
+"print.ready" = "{title} is ready: {bytes} bytes of PDF."
+"print.unsupported" = "{title} was not printed. {reason}"
+"print.failed" = "{title} was not printed: {error}"
+"print.saved" = "Saved PDF to {path}."
+"print.lost" = "{title} was not printed: the engine stopped before the print finished"
+"print.file_thread_lost" = "the file thread stopped before the PDF was written; nothing was saved"
+"print.not_written" = "the PDF was not written: {error}"
+"print.save_dialog" = "Save as PDF"

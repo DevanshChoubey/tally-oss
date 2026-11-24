@@ -10,6 +10,7 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{Receiver, TryRecvError};
 
+use crate::i18n::Tr;
 use ledgerly_api::Api;
 use ledgerly_core::Outcome;
 
@@ -19,15 +20,17 @@ use crate::shell::spawn_file_job;
 use crate::worker::ApiWorker;
 
 /// Opens the save dialog for a PDF: given the suggested file name, the path chosen, or `None`.
-pub type SavePicker = Box<dyn FnMut(&str) -> Option<PathBuf>>;
+/// Opens the save dialog for a PDF: given the dialog's title and the suggested file name, the path
+/// chosen, or `None`.
+pub type SavePicker = Box<dyn FnMut(&str, &str) -> Option<PathBuf>>;
 
 /// What a print run brings back: the PDF bytes, or the engine's refusal, or an error text.
 type Rendered = Result<Outcome<Vec<u8>>, String>;
 
-/// The system save dialog, offering PDF.
-fn save_pdf_dialog(suggested: &str) -> Option<PathBuf> {
+/// The system save dialog, offering PDF, titled `title`.
+fn save_pdf_dialog(title: &str, suggested: &str) -> Option<PathBuf> {
     rfd::FileDialog::new()
-        .set_title("Save as PDF")
+        .set_title(title)
         .set_file_name(suggested)
         .add_filter("PDF", &["pdf"])
         .save_file()
@@ -42,19 +45,46 @@ pub fn pdf_file_name(title: &str) -> String {
     format!("{stem}.pdf")
 }
 
-/// What the user reads after a print that did not produce a file: the engine's answer, said in
-/// words. An unsupported print and an error are both errors on screen, with the reason.
+/// What the user reads after a print that did not produce a file, in the words of `tr`: the
+/// engine's answer, said in words. An unsupported print and an error are both errors on screen,
+/// with the reason.
+#[must_use]
+pub fn print_notice_in(title: &str, done: &Rendered, tr: &Tr) -> Notice {
+    match done {
+        Ok(Outcome::Value(bytes)) => Notice::Info(tr.tf(
+            "print.ready",
+            &[
+                ("title", title),
+                ("bytes", bytes.len().to_string().as_str()),
+            ],
+        )),
+        Ok(Outcome::Unsupported(u)) => Notice::Error(tr.tf(
+            "print.unsupported",
+            &[("title", title), ("reason", unsupported_text(u).as_str())],
+        )),
+        Err(e) => Notice::Error(tr.tf("print.failed", &[("title", title), ("error", e)])),
+    }
+}
+
+/// [`print_notice_in`] in English.
 #[must_use]
 pub fn print_notice(title: &str, done: &Rendered) -> Notice {
-    match done {
-        Ok(Outcome::Value(bytes)) => {
-            Notice::Info(format!("{title} is ready: {} bytes of PDF.", bytes.len()))
-        }
-        Ok(Outcome::Unsupported(u)) => {
-            Notice::Error(format!("{title} was not printed. {}", unsupported_text(u)))
-        }
-        Err(e) => Notice::Error(format!("{title} was not printed: {e}")),
-    }
+    print_notice_in(title, done, &Tr::default())
+}
+
+/// The notice after a PDF is saved to `path`, in the words of `tr`.
+#[must_use]
+pub fn saved_notice_in(path: &Path, tr: &Tr) -> Notice {
+    Notice::Info(tr.tf(
+        "print.saved",
+        &[("path", path.display().to_string().as_str())],
+    ))
+}
+
+/// The notice when the engine stopped before a print finished, in the words of `tr`.
+#[must_use]
+pub fn lost_notice_in(title: &str, tr: &Tr) -> Notice {
+    Notice::Error(tr.tf("print.lost", &[("title", title)]))
 }
 
 /// Writes `bytes` to `path` whole or not at all: a `.part` file, then a rename.
@@ -139,15 +169,15 @@ impl PrintJob {
 
     /// Moves the job on: when the PDF is ready, opens the save dialog and starts the write;
     /// when a write finishes, says where it went. Returns the notice to show, if any.
-    pub fn tick(&mut self) -> Option<Notice> {
+    pub fn tick(&mut self, tr: &Tr) -> Option<Notice> {
         if let Some(outcome) = self.writing.as_ref().map(Receiver::try_recv) {
             match outcome {
                 Err(TryRecvError::Empty) => {}
                 Ok(Ok(path)) => {
                     self.writing = None;
-                    let shown = path.display().to_string();
+                    let shown_path = path.clone();
                     self.saved = Some(path);
-                    return Some(Notice::Info(format!("Saved PDF to {shown}.")));
+                    return Some(saved_notice_in(&shown_path, tr));
                 }
                 Ok(Err(e)) => {
                     self.writing = None;
@@ -155,10 +185,7 @@ impl PrintJob {
                 }
                 Err(TryRecvError::Disconnected) => {
                     self.writing = None;
-                    return Some(Notice::Error(
-                        "the file thread stopped before the PDF was written; nothing was saved"
-                            .to_owned(),
-                    ));
+                    return Some(Notice::Error(tr.t("print.file_thread_lost")));
                 }
             }
             return None;
@@ -167,26 +194,25 @@ impl PrintJob {
             None => None,
             Some(Done::Ready(Ok(Outcome::Value(bytes)))) => {
                 let suggested = pdf_file_name(&self.title);
-                let path = (self.picker)(&suggested)?;
-                self.save(&path, bytes)
+                let path = (self.picker)(&tr.t("print.save_dialog"), &suggested)?;
+                self.save(&path, bytes, tr)
             }
-            Some(Done::Ready(other)) => Some(print_notice(&self.title, &other)),
-            Some(Done::Lost) => Some(Notice::Error(format!(
-                "{} was not printed: the engine stopped before the print finished",
-                self.title
-            ))),
+            Some(Done::Ready(other)) => Some(print_notice_in(&self.title, &other, tr)),
+            Some(Done::Lost) => Some(lost_notice_in(&self.title, tr)),
         }
     }
 
     /// Starts writing `bytes` to `path` on a file thread.
-    fn save(&mut self, path: &Path, bytes: Vec<u8>) -> Option<Notice> {
+    fn save(&mut self, path: &Path, bytes: Vec<u8>, tr: &Tr) -> Option<Notice> {
         let target = path.to_path_buf();
         match spawn_file_job(move || write_pdf(&target, &bytes).map(|()| target)) {
             Ok(rx) => {
                 self.writing = Some(rx);
                 None
             }
-            Err(e) => Some(Notice::Error(format!("the PDF was not written: {e}"))),
+            Err(e) => Some(Notice::Error(
+                tr.tf("print.not_written", &[("error", e.as_str())]),
+            )),
         }
     }
 }

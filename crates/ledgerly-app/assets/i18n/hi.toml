@@ -841,3 +841,13 @@ name = "हिन्दी"
 "format.weekday.friday" = "शुक्रवार"  # unsourced
 "format.weekday.saturday" = "शनिवार"  # unsourced
 "format.weekday.sunday" = "रविवार"  # unsourced
+
+# Print messages (screens/print_job.rs). Unsourced: no public print glossary was read.
+"print.ready" = "{title} तैयार है: {bytes} बाइट का PDF।"  # unsourced
+"print.unsupported" = "{title} प्रिंट नहीं हुआ। {reason}"  # unsourced
+"print.failed" = "{title} प्रिंट नहीं हुआ: {error}"  # unsourced
+"print.saved" = "PDF {path} पर सहेजा गया।"  # unsourced
+"print.lost" = "{title} प्रिंट नहीं हुआ: प्रिंट पूरा होने से पहले इंजन रुक गया"  # unsourced
+"print.file_thread_lost" = "PDF लिखे जाने से पहले फ़ाइल प्रक्रिया रुक गई; कुछ सहेजा नहीं गया"  # unsourced
+"print.not_written" = "PDF नहीं लिखा गया: {error}"  # unsourced
+"print.save_dialog" = "PDF के रूप में सहेजें"  # unsourced

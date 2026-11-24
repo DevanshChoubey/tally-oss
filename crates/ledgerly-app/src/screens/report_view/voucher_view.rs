@@ -242,7 +242,7 @@ impl Screen for VoucherViewScreen {
     }
 
     fn ui(&mut self, ui: &mut Ui, ctx: &mut AppCtx) -> ScreenAction {
-        if let Some(note) = self.print.tick() {
+        if let Some(note) = self.print.tick(&ctx.tr) {
             self.notice = Some(note);
         }
         // Ctrl+P prints the voucher (spec 11 M5). The PDF comes from the API worker.
