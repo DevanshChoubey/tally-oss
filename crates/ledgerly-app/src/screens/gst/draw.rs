@@ -21,7 +21,7 @@ use super::look::{self, Line3b};
 use super::worker::Figures;
 use super::{
     Bucket, ExceptionItem, Feed, GstCmd, GstScreen, GstTab, ImsAction, ReconRow, UiEvent,
-    amount_cell, difference_cell,
+    amount_cell, difference_cell, section_bucket,
 };
 use crate::ScreenAction;
 use crate::screens::home::draw::{split, title};
@@ -44,6 +44,12 @@ const VOUCHER_W: f32 = 120.0;
 const STATUS_W: f32 = 150.0;
 /// Width of each figure column of the GSTR-3B table.
 const FIGURE_W: f32 = 84.0;
+/// Width of the Records column of the GSTR-1 section table.
+const RECORDS_W: f32 = 64.0;
+/// Width of the Status column of the GSTR-1 section table (a badge and "Needs correction").
+const SECTION_STATUS_W: f32 = 136.0;
+/// Width of the Taxable and Tax columns of the GSTR-1 section table.
+const SECTION_AMOUNT_W: f32 = 96.0;
 /// Width of the amount column of the figures table.
 const AMOUNT_W: f32 = 130.0;
 /// Gap between a label and its source chip.
@@ -75,6 +81,7 @@ impl GstScreen {
             note(ui, NoteKind::Info, text);
             ui.add_space(SPACE_3);
         }
+        self.draw_period_picker(ui, &mut events);
         let want_scroll = self.scroll_pending;
         ScrollArea::vertical()
             .id_salt("gst-body")
@@ -91,8 +98,8 @@ impl GstScreen {
         action
     }
 
-    /// The page head and the tabs. The mock's period button (Alt+F2) is not drawn: the screen
-    /// cannot change its period yet (`design/PARITY-GAPS.md`).
+    /// The page head and the tabs. The period button names the period on show and opens the
+    /// period picker, as Alt+F2 does.
     fn draw_head(&self, ui: &mut Ui, events: &mut Vec<UiEvent>) {
         let subtitle = self.subtitle();
         let blocked = self.export_blocked_reason();
@@ -115,6 +122,16 @@ impl GstScreen {
             if response.clicked() {
                 events.push(UiEvent::ExportJson);
             }
+            let period = button_icon(
+                ui,
+                Some(Icon::Cal),
+                &self.period_label,
+                Some("Alt+F2"),
+                ButtonKind::Secondary,
+            );
+            if period.clicked() {
+                events.push(UiEvent::PeriodPicker);
+            }
         });
         let items: Vec<(&str, &str)> = GstTab::ALL
             .iter()
@@ -130,22 +147,61 @@ impl GstScreen {
         }
     }
 
+    /// The open period picker: the financial year's twelve months, the highlighted one filled.
+    /// Click or Enter chooses; Esc closes. The screen reloads for the chosen month.
+    fn draw_period_picker(&self, ui: &mut Ui, events: &mut Vec<UiEvent>) {
+        let Some(at) = self.picker else {
+            return;
+        };
+        crate::ui::card::card(ui, |ui| {
+            title(ui, "Return period");
+            ui.horizontal_wrapped(|ui| {
+                ui.spacing_mut().item_spacing = vec2(8.0, 8.0);
+                for (i, label) in self.picker_labels().iter().enumerate() {
+                    let kind = if i == at {
+                        ButtonKind::Primary
+                    } else {
+                        ButtonKind::Secondary
+                    };
+                    if button(ui, label, None, kind).clicked() {
+                        events.push(UiEvent::ChoosePeriod(i));
+                    }
+                }
+            });
+            ui.add_space(6.0);
+            para(
+                ui,
+                "J / K move, Enter chooses, Esc closes. The return is built again for the month you choose.",
+                TEXT_META,
+                tokens(ui).text_3,
+            );
+        });
+        ui.add_space(SPACE_3);
+    }
+
     // ---- GSTR-1 ------------------------------------------------------------------------------
 
     fn draw_gstr1(&self, ui: &mut Ui, want_scroll: bool, events: &mut Vec<UiEvent>) {
         self.draw_tiles(ui, events);
         ui.add_space(SPACE_3);
+        let mut side = Vec::new();
         split(
             ui,
             |ui| {
+                if self.sections_loaded {
+                    self.draw_sections(ui, events);
+                    ui.add_space(SPACE_3);
+                    title(ui, "Vouchers behind the sections");
+                }
                 self.draw_exceptions(ui, &self.gstr1, want_scroll, events);
                 if !self.figures1.rows.is_empty() || !self.figures1.notes.is_empty() {
                     ui.add_space(SPACE_3);
                     draw_figures(ui, &self.figures1);
                 }
             },
-            |ui| self.draw_next_steps(ui),
+            |ui| self.draw_side_card(ui, &mut side),
         );
+        events.extend(side);
     }
 
     /// The four status tiles (the mock's `.kpi` in a `g4` grid). Each counts the vouchers the
@@ -154,13 +210,136 @@ impl GstScreen {
     fn draw_tiles(&self, ui: &mut Ui, events: &mut Vec<UiEvent>) {
         ui.columns(Bucket::ALL.len(), |cols| {
             for (col, bucket) in cols.iter_mut().zip(Bucket::ALL) {
-                let value = match self.bucket_count(GstTab::Gstr1, bucket) {
+                // The mock's tiles count sections; with no section table, vouchers.
+                let (count, unit) = if self.sections_loaded {
+                    (self.section_count(bucket), "sections")
+                } else {
+                    (self.bucket_count(GstTab::Gstr1, bucket), "vouchers")
+                };
+                let value = match count {
                     Some(n) => n.to_string(),
                     None => "Not loaded".to_owned(),
                 };
                 let on = self.bucket_filter == Some(bucket);
-                if kpi(col, bucket.label(), &value, "vouchers", on).clicked() {
+                if kpi(col, bucket.label(), &value, unit, on).clicked() {
                     events.push(UiEvent::Filter(if on { None } else { Some(bucket) }));
+                }
+            }
+        });
+    }
+
+    /// The section table: one row per table of the return with its records, taxable value, tax
+    /// and the engine's status (the mock's `#g1`). The amounts are the engine's; `none` where a
+    /// table has no such figure.
+    fn draw_sections(&self, ui: &mut Ui, events: &mut Vec<UiEvent>) {
+        table_card(ui, |ui| {
+            let t = tokens(ui);
+            let width = ui.available_width();
+            let (head, _) = ui.allocate_exact_size(vec2(width, T_HEAD_HEIGHT), Sense::hover());
+            let cols = section_columns(head);
+            paint_heads(ui, head, &[(cols[0], "Section"), (cols[4], "Status")], &[]);
+            paint_heads(
+                ui,
+                head,
+                &[],
+                &[(cols[1], "Records"), (cols[2], "Taxable"), (cols[3], "Tax")],
+            );
+            let font = egui::FontId::proportional(TEXT_BODY);
+            let left = CellPlace::Left(table::CELL_PAD_X);
+            for (pos, section) in self.sections.iter().enumerate() {
+                let (rect, response) =
+                    ui.allocate_exact_size(vec2(width, T_ROW_HEIGHT), Sense::click());
+                if response.double_clicked() {
+                    events.push(UiEvent::OpenSection(pos));
+                } else if response.clicked() {
+                    events.push(UiEvent::Section(pos));
+                }
+                let state = RowState {
+                    selected: pos == self.section_focus,
+                    hovered: response.hovered(),
+                    sub: false,
+                };
+                table::paint_row(ui, rect, state);
+                let cols = section_columns(rect);
+                let label = if section.code == "held" {
+                    section.name.to_owned()
+                } else {
+                    format!("{} {}", section.code, section.name)
+                };
+                let records = section.records.to_string();
+                let taxable = amount_cell(section.taxable);
+                let tax = amount_cell(section.tax);
+                table::paint_cell_text(ui, cols[0], 1.0, &label, font.clone(), t.text, left);
+                let right = CellPlace::Right;
+                table::paint_cell_text(ui, cols[1], 1.0, &records, font.clone(), t.text, right);
+                table::paint_cell_text(ui, cols[2], 1.0, &taxable, font.clone(), t.text, right);
+                table::paint_cell_text(ui, cols[3], 1.0, &tax, font.clone(), t.text, right);
+                let bucket = section_bucket(section.status);
+                let cell = cols[4].shrink2(vec2(table::CELL_PAD_X, 0.0));
+                let mut child = ui.new_child(
+                    UiBuilder::new()
+                        .max_rect(cell)
+                        .layout(Layout::left_to_right(Align::Center)),
+                );
+                child.spacing_mut().item_spacing = vec2(4.0, 0.0);
+                badge(&mut child, bucket_badge(bucket), bucket.label());
+                crate::ui::a11y::name(
+                    ui,
+                    &response,
+                    egui::accesskit::Role::Row,
+                    &crate::ui::a11y::join(&[
+                        label.as_str(),
+                        records.as_str(),
+                        taxable.as_str(),
+                        tax.as_str(),
+                        bucket.label(),
+                    ]),
+                );
+            }
+            if let Some(line) = &self.agreement {
+                padded(ui, |ui| {
+                    para(ui, line, TEXT_META, t.text_3);
+                });
+            }
+        });
+    }
+
+    /// The card beside the section table. With a section that needs correction selected it names
+    /// what is wrong, in the engine's words, and offers the fix (the mock's `gstr1-correction`
+    /// card, index.html:1688); otherwise it is "What happens next".
+    fn draw_side_card(&self, ui: &mut Ui, events: &mut Vec<UiEvent>) {
+        let Some(section) = self.selected_needs_correction() else {
+            self.draw_next_steps(ui);
+            return;
+        };
+        let t = tokens(ui);
+        crate::ui::card::card(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 6.0;
+                icon::icon(ui, Icon::Alert, t.warn);
+                title(ui, &self.side_card_title());
+            });
+            if let Some(reason) = &section.note {
+                para(ui, reason, TEXT_BODY, t.text);
+                ui.add_space(6.0);
+            }
+            let text = format!(
+                "The {} table cannot be complete without it, so Export JSON is refused until it \
+                 is fixed. Nothing is guessed.",
+                section.name
+            );
+            para(ui, &text, TEXT_BODY, t.text_2);
+            if self.side_card_offers_the_item_master() {
+                ui.add_space(SPACE_3);
+                let fix = button_icon(
+                    ui,
+                    None,
+                    "Fix the item master",
+                    Some("Enter"),
+                    ButtonKind::Primary,
+                );
+                if fix.clicked() {
+                    events.push(UiEvent::OpenSection(self.section_focus));
                 }
             }
         });
@@ -549,6 +728,29 @@ fn paint_heads(ui: &Ui, head: Rect, left: &[(Rect, &str)], right: &[(Rect, &str)
     }
 }
 
+/// The Section, Records, Taxable, Tax and Status cells of a GSTR-1 section line.
+#[allow(clippy::float_arithmetic, reason = "sharing a line between columns")]
+fn section_columns(line: Rect) -> [Rect; 5] {
+    let status = Rect::from_min_max(
+        egui::pos2(line.right() - SECTION_STATUS_W, line.top()),
+        line.max,
+    );
+    let tax = Rect::from_min_max(
+        egui::pos2(status.left() - SECTION_AMOUNT_W, line.top()),
+        egui::pos2(status.left(), line.bottom()),
+    );
+    let taxable = Rect::from_min_max(
+        egui::pos2(tax.left() - SECTION_AMOUNT_W, line.top()),
+        egui::pos2(tax.left(), line.bottom()),
+    );
+    let records = Rect::from_min_max(
+        egui::pos2(taxable.left() - RECORDS_W, line.top()),
+        egui::pos2(taxable.left(), line.bottom()),
+    );
+    let label = Rect::from_min_max(line.min, egui::pos2(records.left(), line.bottom()));
+    [label, records, taxable, tax, status]
+}
+
 /// The Voucher, Detail and Status cells of a GSTR-1 line.
 #[allow(clippy::float_arithmetic, reason = "sharing a line between columns")]
 fn exception_columns(line: Rect) -> [Rect; 3] {
@@ -902,6 +1104,9 @@ fn read_keys(ui: &Ui) -> Vec<GstCmd> {
         }
         if i.consume_key(Modifiers::CTRL, Key::E) {
             out.push(GstCmd::ExportJson);
+        }
+        if i.consume_key(Modifiers::ALT, Key::F2) {
+            out.push(GstCmd::PickPeriod);
         }
     });
     out

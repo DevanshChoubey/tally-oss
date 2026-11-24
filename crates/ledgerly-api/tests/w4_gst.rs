@@ -626,20 +626,38 @@ fn gstr1_json_is_written_for_a_complete_return_in_the_documented_shape() {
     assert!(json.contains("\"val\":118000.00"));
 }
 
-/// Derivation: V5 is inter-state B2C, and the bundled pack has no `gstr1.b2cl_threshold` entry, so
-/// the engine cannot place it and buckets it `NeedsCorrection` (rule A1). The JSON is therefore
-/// refused, and the reason names the voucher. Nothing is written for a wrong return.
+/// Derivation: V5 is inter-state B2C. A pack with no `gstr1.b2cl_threshold` entry (the slab pack
+/// alone) cannot say whether it is above the threshold, so the engine cannot place it and buckets
+/// it `NeedsCorrection` (rule A1). The JSON is therefore refused, and the reason names the
+/// voucher. Nothing is written for a wrong return.
 #[test]
 fn gstr1_json_is_refused_while_a_voucher_needs_correction() {
     let (_dir, mut api) = company_file(Some(true));
     post(&mut api, v5_delta_b2c_nov());
+    let slabs_only = load_pack(BUNDLED_RATE_PACK).unwrap();
 
-    let ret = gstr1_return(&api, nov());
+    let ret = value(api.gstr1_with_pack(&gstin_of(COMPANY), nov(), &slabs_only));
     assert_eq!(bucket_of(&ret.buckets, 5), Bucket::NeedsCorrection);
     assert!(!ret.is_complete());
 
-    let u = unsupported(api.gstr1_json(&gstin_of(COMPANY), nov()));
+    let u = unsupported(api.gstr1_json_with_pack(&gstin_of(COMPANY), nov(), &slabs_only));
     assert!(u.reason.contains("voucher 5"), "reason was: {}", u.reason);
+}
+
+/// Derivation: with the bundled packs (slabs plus `gstr-rules.toml`) the threshold is read. V5 is
+/// an inter-state sale to an unregistered buyer, invoice value Rs 2,36,000 (23,600,000 paise),
+/// which is more than the Rs 1 lakh of Rule 59(4) as amended by notification 12/2024-Central Tax
+/// (read in `gstr-rules.toml`), so it is a B2CL invoice (Table 5) and the return is complete.
+#[test]
+fn an_inter_state_b2c_sale_above_one_lakh_is_ready_as_b2cl_on_the_bundled_packs() {
+    let (_dir, mut api) = company_file(Some(true));
+    post(&mut api, v5_delta_b2c_nov());
+
+    let ret = gstr1_return(&api, nov());
+    assert_eq!(bucket_of(&ret.buckets, 5), Bucket::Ready);
+    assert!(ret.is_complete());
+    assert_eq!(ret.gstr1.b2cl.len(), 1);
+    value(api.gstr1_json(&gstin_of(COMPANY), nov()));
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -687,16 +705,32 @@ fn gstr3b_october_working_matches_hand_derivation() {
     assert_eq!(w.reverse_charge_purchases, Vec::<VoucherId>::new());
 }
 
-/// Derivation: the bundled pack has no `itc.blocked.*` entries, so credit under CGST Act s.17(5)
-/// cannot be ruled out for a purchase dated in the period. The working is refused (rule A1), not
+/// Derivation: a pack with no `itc.blocked.*` entries (the slab pack alone) cannot rule out credit
+/// under CGST Act s.17(5) for a purchase dated in the period. The working is refused (rule A1), not
 /// shown with an unchecked credit.
 #[test]
-fn gstr3b_refuses_a_period_with_a_purchase_while_the_bundled_pack_has_no_blocked_rules() {
+fn gstr3b_refuses_a_period_with_a_purchase_when_the_pack_has_no_blocked_rules() {
+    let (_dir, mut api) = company_file(Some(true));
+    post(&mut api, v4_purchase());
+    let slabs_only = load_pack(BUNDLED_RATE_PACK).unwrap();
+
+    let u = unsupported(api.gstr3b_with_pack(&gstin_of(COMPANY), oct(), &slabs_only));
+    assert!(u.what.contains("GSTR-3B"), "what was: {}", u.what);
+}
+
+/// Derivation: with the bundled packs the s.17(5) headings are read (`gstr-rules.toml`), and V4, an
+/// ordinary intra-state purchase of goods with no HSN under any blocked heading, is eligible. Its
+/// credit is central 360,000 and state/UT 360,000 paise, as in the October working above (V4 is
+/// the only purchase here).
+#[test]
+fn gstr3b_gives_the_credit_of_an_ordinary_purchase_on_the_bundled_packs() {
     let (_dir, mut api) = company_file(Some(true));
     post(&mut api, v4_purchase());
 
-    let u = unsupported(api.gstr3b(&gstin_of(COMPANY), oct()));
-    assert!(u.what.contains("GSTR-3B"), "what was: {}", u.what);
+    let w = value(api.gstr3b(&gstin_of(COMPANY), oct()));
+    assert_eq!(w.itc_all_other.central, Paise::new(360_000));
+    assert_eq!(w.itc_all_other.state_ut, Paise::new(360_000));
+    assert_eq!(w.itc_all_other.integrated, Paise::ZERO);
 }
 
 /// Derivation: a November period with only V5 has no purchase, so the bundled pack gate passes.

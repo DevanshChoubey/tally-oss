@@ -21,7 +21,11 @@
 )]
 
 use std::path::PathBuf;
-use std::time::Duration;
+use std::time::{Duration, Instant};
+
+/// How long a test waits for the background company file; far above any loaded run's need, so
+/// only a create that never answers fails it.
+const CREATE_DEADLINE: Duration = Duration::from_secs(120);
 
 use egui::epaint::{ClippedShape, Shape};
 use egui::{Color32, Event, FontFamily, Key, Modifiers, Pos2, RawInput, Rect, vec2};
@@ -213,11 +217,14 @@ impl Wizard {
     }
 
     /// Frames until the background create has finished and Done (step 7 of 7) is on screen.
+    ///
+    /// The wait is bounded by wall-clock time, not by a count of frames: creating the company file
+    /// is real disk work (a sqlite file, with fsync) that takes 0.15 s alone but more than the old
+    /// 2000-frame budget (about 9 s) when the whole workspace's 3000 tests and other builds
+    /// share the disk and the cores. That run failed at 8.975 s with the wizard still on step 6.
     fn wait_for_done(&mut self) {
-        for _ in 0..2000 {
-            if self.bar_name() == "Setup, step 7 of 7" {
-                break;
-            }
+        let deadline = Instant::now() + CREATE_DEADLINE;
+        while self.bar_name() != "Setup, step 7 of 7" && Instant::now() < deadline {
             std::thread::sleep(Duration::from_millis(2));
             self.frame(vec![]);
         }

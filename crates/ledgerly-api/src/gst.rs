@@ -4,10 +4,11 @@
 //! # Rate pack
 //!
 //! The rate pack is `crates/ledgerly-gst/packs/rates-slabs.toml`, read at build time. It holds the
-//! GST 2.0 slabs, and the pre-September-2025 slabs are pending. No pack in the repository has the
-//! `itc.blocked.*` entries of CGST Act s.17(5) yet, so [`Api::gstr3b`] refuses any period with a
-//! purchase (see [`Api::gstr3b_with_pack`]). The bundled pack is therefore the only input this
-//! module reads; callers that hold another pack use the `_with_pack` methods.
+//! GST 2.0 slabs, and the pre-September-2025 slabs are pending. `gstr-rules.toml` is merged in: it
+//! holds the B2CL threshold and the `itc.blocked.*` headings of CGST Act s.17(5), so [`Api::gstr3b`]
+//! can tell a purchase under no blocked heading (Eligible) from one under a blocked heading
+//! (Unsupported until the user marks it). The bundled packs are the only input this module reads;
+//! callers that hold another pack use the `_with_pack` methods.
 //!
 //! # What is refused
 //!
@@ -35,6 +36,11 @@ pub use ledgerly_gst_formats::gstr1::Gstr1;
 /// The GST 2.0 slab pack bundled with the application.
 pub(crate) const BUNDLED_RATE_PACK: &str =
     include_str!("../../ledgerly-gst/packs/rates-slabs.toml");
+
+/// The GSTR-1 and input-credit rules bundled with the application (`gstr-rules.toml`): the B2CL
+/// threshold and the s.17(5) blocked-credit headings. Merged with the slab pack.
+pub(crate) const BUNDLED_RULES_PACK: &str =
+    include_str!("../../ledgerly-gst/packs/gstr-rules.toml");
 
 /// A GSTR-1 return with the bucket of every in-period voucher.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -66,7 +72,7 @@ fn is_settled(bucket: Bucket) -> bool {
 /// # Errors
 /// [`ApiError::Gst`] when the bundled pack does not load (a build defect).
 fn bundled_pack() -> Result<RulePack, ApiError> {
-    Ok(load_pack(BUNDLED_RATE_PACK)?)
+    Ok(load_pack(BUNDLED_RATE_PACK)?.merge(&load_pack(BUNDLED_RULES_PACK)?)?)
 }
 
 /// Why a return is not complete, as an `Unsupported` that names the vouchers left out.
@@ -168,7 +174,20 @@ impl Api {
     /// # Errors
     /// As [`Api::gstr1`], and [`ApiError::Format`] when the writer refuses a value.
     pub fn gstr1_json(&self, gstin: &Gstin, period: Period) -> Result<Outcome<String>, ApiError> {
-        match self.gstr1(gstin, period)? {
+        self.gstr1_json_with_pack(gstin, period, &bundled_pack()?)
+    }
+
+    /// [`Api::gstr1_json`] with a caller-supplied rule pack.
+    ///
+    /// # Errors
+    /// As [`Api::gstr1_json`].
+    pub fn gstr1_json_with_pack(
+        &self,
+        gstin: &Gstin,
+        period: Period,
+        pack: &RulePack,
+    ) -> Result<Outcome<String>, ApiError> {
+        match self.gstr1_with_pack(gstin, period, pack)? {
             Outcome::Unsupported(u) => Ok(Outcome::Unsupported(u)),
             Outcome::Value(ret) => match incomplete(&ret) {
                 Some(u) => Ok(Outcome::Unsupported(u)),

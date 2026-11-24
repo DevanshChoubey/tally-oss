@@ -7,7 +7,7 @@
 # Sections: [company] and [[unit]], [[ledger]], [[item]] are the masters; [[voucher]] entries with
 # section = "history" are INVENTED to reach the mock's balances on 1 Nov 2026 (design/mock-v2/index.html
 # lines 517-549, the `ob` column); section = "november" are the mock's own vouchers (lines 566-581).
-# Opening balances are those of 1 Apr 2026, derived by hand in design/PARITY-GAPS.md ("Sample company").
+# Opening balances are those of 1 Apr 2026: the mock's 1 Nov balance less what the history moves, derived by hand (design/PARITY-GAPS.md, "Sample company").
 # GSTINs use the fake PAN pattern ZZZZZ####Z with a computed check character; they differ from the
 # mock's on purpose (privacy). Bank accounts and IFSC codes are obviously fake.
 
@@ -49,13 +49,13 @@ uqc = "OTH"
 key = "ananya"
 name = "Ananya Kulkarni, capital"
 group = "CapitalAccount"
-opening_cr = "2146623.00"
+opening_cr = "2400000.00"
 
 [[ledger]]
 key = "rohan"
 name = "Rohan Deshpande, capital"
 group = "CapitalAccount"
-opening_cr = "715541.00"
+opening_cr = "1100000.00"
 
 [[ledger]]
 key = "mulaloan"
@@ -237,7 +237,7 @@ opening_dr = "48215.50"
 key = "saptagiri"
 name = "Saptagiri Commercial Bank A/c"
 group = "BankAccounts"
-opening_dr = "1115438.50"
+opening_dr = "841274.50"
 bank = { name = "Saptagiri Commercial Bank", account = "99990004471", ifsc = "ZZZZ0000471", branch = "Pune main" }
 
 [[ledger]]
@@ -270,6 +270,7 @@ key = "purch"
 name = "Purchases"
 group = "PurchaseAccounts"
 gst = { taxability = "Taxable", rate = "18" }
+eligible_itc = true
 
 [[ledger]]
 key = "freight"
@@ -320,6 +321,14 @@ group = "IndirectExpenses"
 key = "disc"
 name = "Discount received"
 group = "IndirectIncomes"
+
+# The mock's "Opening stock" ledger (index.html:549, 9,12,000 Dr, expense nature): the stock on
+# hand on 1 Apr, expensed against the closing stock the engine adds to the profit.
+[[ledger]]
+key = "ostock"
+name = "Opening stock"
+group = "DirectExpenses"
+opening_dr = "912000.00"
 
 [[item]]
 key = "lat16"
@@ -436,8 +445,8 @@ kind = "receipt"
 date = "2026-10-31"
 number = "RC/0214"
 narration = "Sales receipts for the month, summary (10/2026)"
-dr = [{ ledger = "saptagiri", amount = "1192615.50" }]
-cr = [{ ledger = "sales", amount = "1192615.50" }]
+dr = [{ ledger = "saptagiri", amount = "1466779.50" }]
+cr = [{ ledger = "sales", amount = "1466779.50" }]
 
 [[voucher]]
 section = "history"
@@ -578,11 +587,21 @@ dr = [{ ledger = "dep", amount = "107331.00" }]
 cr = [{ ledger = "plant", amount = "107331.00" }]
 
 [[voucher]]
+section = "history"
+kind = "journal"
+date = "2026-10-31"
+number = "JV/0030"
+narration = "IGST collected in October's receipts (summary), set off against the credit on RP/5398 (invented history)"
+dr = [{ ledger = "sales", amount = "274164.00" }, { ledger = "roundoff", amount = "0.36" }]
+cr = [{ ledger = "igst", amount = "274164.36" }]
+
+[[voucher]]
 section = "november"
 kind = "sales"
 mode = "items"
 date = "2026-11-02"
 number = "SI/0401"
+by = "ananya"
 party = "mai"
 account = "sales"
 narration = "Against PO MAI/77"
@@ -593,6 +612,8 @@ section = "november"
 kind = "payment"
 date = "2026-11-05"
 number = "PY/0315"
+by = "ananya"
+ai = true
 narration = "Office rent, November, Sharma Properties"
 dr = [{ ledger = "rent", amount = "25000.00" }]
 cr = [{ ledger = "saptagiri", amount = "25000.00" }]
@@ -603,6 +624,7 @@ kind = "sales"
 mode = "items"
 date = "2026-11-06"
 number = "SI/0405"
+by = "rohan"
 party = "lfs"
 account = "sales"
 narration = ""
@@ -614,6 +636,8 @@ kind = "purchase"
 mode = "taxed"
 date = "2026-11-08"
 number = "PB/0141"
+by = "ananya"
+ai = true
 reference = "KP/2231"
 party = "kaveri"
 narration = "Cartons, bill KP/2231"
@@ -625,6 +649,7 @@ section = "november"
 kind = "receipt"
 date = "2026-11-10"
 number = "RC/0215"
+by = "rohan"
 narration = "NEFT, part against SI/0372"
 dr = [{ ledger = "saptagiri", amount = "80000.00" }]
 cr = [{ ledger = "sgt", amount = "80000.00", against = "SI/0372" }]
@@ -634,6 +659,7 @@ section = "november"
 kind = "payment"
 date = "2026-11-12"
 number = "PY/0316"
+by = "rohan"
 narration = "City Power, October bill"
 dr = [{ ledger = "elec", amount = "14860.00" }]
 cr = [{ ledger = "saptagiri", amount = "14860.00" }]
@@ -644,6 +670,7 @@ kind = "sales"
 mode = "items"
 date = "2026-11-14"
 number = "SI/0412"
+by = "ananya"
 party = "sgt"
 account = "sales"
 narration = "Against PO SGT/PO/1123"
@@ -654,6 +681,7 @@ section = "november"
 kind = "contra"
 date = "2026-11-15"
 number = "CT/0021"
+by = "rohan"
 narration = "Cash withdrawn for petty expenses"
 dr = [{ ledger = "cash", amount = "20000.00" }]
 cr = [{ ledger = "saptagiri", amount = "20000.00" }]
@@ -664,6 +692,7 @@ kind = "sales"
 mode = "items"
 date = "2026-11-18"
 number = "SI/0415"
+by = "rohan"
 party = "cashsale"
 account = "sales"
 narration = "Counter sale"
@@ -676,6 +705,7 @@ kind = "sales"
 mode = "items"
 date = "2026-11-20"
 number = "SI/0417"
+by = "ananya"
 party = "phs"
 account = "sales"
 narration = ""
@@ -687,6 +717,7 @@ kind = "purchase"
 mode = "taxed"
 date = "2026-11-20"
 number = "PB/0144"
+by = "rohan"
 reference = "NST/1145"
 party = "nilgiri"
 narration = "MS angles, bill NST/1145"
@@ -698,6 +729,7 @@ section = "november"
 kind = "receipt"
 date = "2026-11-20"
 number = "RC/0219"
+by = "ananya"
 narration = "NEFT, full settlement"
 dr = [{ ledger = "saptagiri", amount = "147384.50" }]
 cr = [{ ledger = "ksk", amount = "147384.50", against = "SI/0390" }]
@@ -707,6 +739,7 @@ section = "november"
 kind = "payment"
 date = "2026-11-20"
 number = "PY/0318"
+by = "ananya"
 narration = "Cheque 004512, against KP/2198"
 dr = [{ ledger = "kaveri", amount = "50000.00", against = "KP/2198" }]
 cr = [{ ledger = "saptagiri", amount = "50000.00", chq = "004512" }]
@@ -716,6 +749,7 @@ section = "november"
 kind = "journal"
 date = "2026-11-20"
 number = "JV/0032"
+by = "ananya"
 narration = "Monthly depreciation, November"
 dr = [{ ledger = "dep", amount = "15333.00" }]
 cr = [{ ledger = "plant", amount = "15333.00" }]

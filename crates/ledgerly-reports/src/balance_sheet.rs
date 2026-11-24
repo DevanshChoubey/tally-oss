@@ -49,12 +49,26 @@
 //!   Stock-in-Hand group: the profit would be overstated, or the stock counted twice, with no
 //!   visible sign because the opening difference row absorbs the gap.
 //!
+//! # Layout (s9)
+//!
+//! Primary groups are listed in the chart's order, not id order: Capital Account, Loans
+//! (Liability), Current Liabilities, Fixed Assets, Investments, Current Assets, then the rest
+//! (`GROUP_ORDER`, which orders sub-groups too); groups that are not reserved keep their id order
+//! after those. The closing
+//! stock is the value of the Stock-in-Hand group: when the chart has that group, the report lists
+//! one `Closing stock` row where the group stands (a child of Current Assets in the reserved
+//! chart), the stock is part of its parent's total, and a provisional stock makes every group
+//! total above it provisional. A chart without a Stock-in-Hand group keeps a top-level
+//! `Closing stock` row.
+//!
 //! `Detail::Condensed` lists primary groups only; `Detail::Detailed` goes down to ledgers and
 //! leaves out ledgers and groups whose balance is zero.
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use ledgerly_core::{Date, GroupId, LedgerId, Outcome, Paise, SignedAmount, VoucherTypeId};
+use ledgerly_core::{
+    Date, GroupId, LedgerId, Outcome, Paise, SignedAmount, StockItemId, VoucherTypeId,
+};
 use ledgerly_model::{
     BaseVoucherKind, Books, Group, Ledger, Nature, Posting, ReservedGroup, Scenario, VoucherStatus,
     VoucherType,
@@ -74,6 +88,45 @@ const PROFIT_LABEL: &str = "Profit and Loss A/c";
 
 /// Label of the closing stock row.
 const STOCK_LABEL: &str = "Closing stock";
+
+/// The order groups are listed in, at every level: the design mock's (design/mock-v2/index.html,
+/// `balanceSheet`: Capital, Loans, Current liabilities with its Sundry creditors, Duties and
+/// taxes, Provisions; Fixed assets, Current assets with Closing stock, Sundry debtors,
+/// Cash-in-hand, Bank accounts, Loans and advances), with Investments between the two asset
+/// groups. TallyPrime's Balance Sheet help says the order of groups is a setting (an index per
+/// group; its example puts Investments above Fixed Assets, help.tallysolutions.com Balance Sheet
+/// page, read 2026-11-25); this fixed order is the default until groups carry an index.
+const GROUP_ORDER: [ReservedGroup; 17] = [
+    ReservedGroup::CapitalAccount,
+    ReservedGroup::ReservesAndSurplus,
+    ReservedGroup::Loans,
+    ReservedGroup::BankOd,
+    ReservedGroup::SecuredLoans,
+    ReservedGroup::UnsecuredLoans,
+    ReservedGroup::CurrentLiabilities,
+    ReservedGroup::SundryCreditors,
+    ReservedGroup::DutiesAndTaxes,
+    ReservedGroup::Provisions,
+    ReservedGroup::FixedAssets,
+    ReservedGroup::Investments,
+    ReservedGroup::CurrentAssets,
+    ReservedGroup::StockInHand,
+    ReservedGroup::SundryDebtors,
+    ReservedGroup::CashInHand,
+    ReservedGroup::BankAccounts,
+];
+
+/// Sort key of a group: its place in [`GROUP_ORDER`], the other reserved groups after it, then
+/// groups that are not reserved. Ties keep id order (the sort is stable).
+fn group_rank(group: &Group) -> usize {
+    match group.reserved {
+        Some(r) => GROUP_ORDER
+            .iter()
+            .position(|p| *p == r)
+            .unwrap_or(GROUP_ORDER.len()),
+        None => GROUP_ORDER.len().saturating_add(1),
+    }
+}
 
 /// Deepest group nesting the report follows. `ReportRow::depth` is a `u8`.
 const MAX_DEPTH: u8 = 200;
@@ -119,6 +172,7 @@ fn role_of(group: &Group) -> Role {
 }
 
 /// Total of the closing stock input.
+#[derive(Clone)]
 struct StockTotal {
     value: Paise,
     provisional: Option<String>,
@@ -151,7 +205,7 @@ pub fn balance_sheet(
             ),
         });
     }
-    let stock = supported!(stock_total(closing_stock, params.as_of)?);
+    let stock = supported!(stock_total(books, closing_stock, params.as_of)?);
     let movement = supported!(movement_by_ledger(books, params)?);
     let (balances, opening_net) = closing_balances(books, &movement)?;
     if let Some(unsupported) = unsupported_stock_books(books, &balances) {
@@ -276,7 +330,19 @@ fn unsupported_stock_books(
     None
 }
 
+/// The reason line for a stock item that went below zero: the item's name, or its number when
+/// the masters do not hold it (never the Rust debug text of its id).
+pub(crate) fn negative_stock_reason(books: &Books, item: StockItemId, date: Date) -> String {
+    let who = books
+        .masters
+        .stock_items
+        .get(&item)
+        .map_or_else(|| item.0.to_string(), |i| i.name.clone());
+    format!("negative stock: item {who} first went below zero on {date}")
+}
+
 fn stock_total(
+    books: &Books,
     input: &Outcome<Vec<StockValuation>>,
     expected: Date,
 ) -> Result<Outcome<StockTotal>, ReportError> {
@@ -312,9 +378,7 @@ fn stock_total(
         match &v.status {
             ValuationStatus::Final => {}
             ValuationStatus::Provisional(ProvisionalReason::NegativeStock { item, date }) => {
-                reasons.push(format!(
-                    "negative stock: item {item:?} first went below zero on {date}"
-                ));
+                reasons.push(negative_stock_reason(books, *item, *date));
             }
         }
     }
@@ -503,6 +567,9 @@ struct Walker<'a> {
     balances: &'a BTreeMap<LedgerId, Paise>,
     detailed: bool,
     placed: BTreeSet<LedgerId>,
+    stock: StockTotal,
+    /// Whether the closing stock row was put where the Stock-in-Hand group stands.
+    stock_placed: bool,
 }
 
 /// One group's roll-up.
@@ -510,13 +577,23 @@ struct GroupOut {
     net: Paise,
     rows: Vec<ReportRow>,
     shown: bool,
+    /// Whether the net includes a provisional stock value.
+    provisional: bool,
 }
 
 impl<'a> Walker<'a> {
-    fn new(books: &'a Books, balances: &'a BTreeMap<LedgerId, Paise>, detail: Detail) -> Self {
+    fn new(
+        books: &'a Books,
+        balances: &'a BTreeMap<LedgerId, Paise>,
+        detail: Detail,
+        stock: StockTotal,
+    ) -> Self {
         let mut children: BTreeMap<Option<GroupId>, Vec<&Group>> = BTreeMap::new();
         for g in books.masters.groups.values() {
             children.entry(g.parent).or_default().push(g);
+        }
+        for list in children.values_mut() {
+            list.sort_by_key(|g| group_rank(g));
         }
         let mut ledgers: BTreeMap<GroupId, Vec<&Ledger>> = BTreeMap::new();
         for l in books.masters.ledgers.values() {
@@ -532,7 +609,28 @@ impl<'a> Walker<'a> {
             balances,
             detailed,
             placed: BTreeSet::new(),
+            stock,
+            stock_placed: false,
         }
+    }
+
+    /// The Stock-in-Hand group is the closing stock: one row where the group stands.
+    fn stock_group(&mut self, net: Paise, depth: u8, side: Side) -> Result<GroupOut, ReportError> {
+        self.stock_placed = true;
+        let provisional = self.stock.provisional.as_deref();
+        let row = ReportRow {
+            key: None,
+            label: STOCK_LABEL.to_owned(),
+            depth,
+            kind: RowKind::Item,
+            cells: place(side, figure(self.stock.value, provisional)?),
+        };
+        Ok(GroupOut {
+            net: net.checked_add(self.stock.value)?,
+            rows: vec![row],
+            shown: true,
+            provisional: provisional.is_some(),
+        })
     }
 
     fn group(&mut self, group: &Group, depth: u8, side: Side) -> Result<GroupOut, ReportError> {
@@ -544,6 +642,7 @@ impl<'a> Walker<'a> {
         }
         let mut net = Paise::ZERO;
         let mut shown = false;
+        let mut provisional = false;
         let mut body = Vec::new();
 
         let own_ledgers = self.ledgers.get(&group.id).cloned().unwrap_or_default();
@@ -573,6 +672,7 @@ impl<'a> Walker<'a> {
         for sub in subgroups {
             let out = self.group(sub, depth.saturating_add(1), side)?;
             net = net.checked_add(out.net)?;
+            provisional |= out.provisional;
             if out.shown {
                 shown = true;
                 if self.detailed {
@@ -580,16 +680,32 @@ impl<'a> Walker<'a> {
                 }
             }
         }
+        if group.reserved == Some(ReservedGroup::StockInHand)
+            && !self.stock_placed
+            && (!self.stock.value.is_zero() || self.stock.provisional.is_some())
+        {
+            return self.stock_group(net, depth, side);
+        }
         let mut rows = Vec::with_capacity(body.len().saturating_add(1));
+        let reason = if provisional {
+            self.stock.provisional.as_deref()
+        } else {
+            None
+        };
         rows.push(ReportRow {
             key: Some(DrillKey::Group(group.id)),
             label: group.name.clone(),
             depth,
             kind: RowKind::Group,
-            cells: place(side, amount_cell(net)?),
+            cells: place(side, figure(net, reason)?),
         });
         rows.extend(body);
-        Ok(GroupOut { net, rows, shown })
+        Ok(GroupOut {
+            net,
+            rows,
+            shown,
+            provisional,
+        })
     }
 }
 
@@ -621,6 +737,8 @@ struct Statement {
     asset_net: Paise,
     /// Net of the income and expense ledgers (not part of either column).
     profit_net: Paise,
+    /// Whether the closing stock is already inside a group's row and total.
+    stock_placed: bool,
 }
 
 impl Statement {
@@ -663,9 +781,11 @@ fn walk_primaries(
     books: &Books,
     balances: &BTreeMap<LedgerId, Paise>,
     detail: Detail,
+    stock: &StockTotal,
 ) -> Result<Outcome<Statement>, ReportError> {
-    let mut walker = Walker::new(books, balances, detail);
-    let primaries = walker.children.get(&None).cloned().unwrap_or_default();
+    let mut walker = Walker::new(books, balances, detail, stock.clone());
+    let mut primaries = walker.children.get(&None).cloned().unwrap_or_default();
+    primaries.sort_by_key(|g| group_rank(g));
     let mut st = Statement::default();
     for primary in primaries {
         let role = role_of(primary);
@@ -704,6 +824,7 @@ fn walk_primaries(
         }
     }
     check_all_placed(books, &walker.placed)?;
+    st.stock_placed = walker.stock_placed;
     Ok(Outcome::Value(st))
 }
 
@@ -714,7 +835,7 @@ fn build_report(
     opening_net: Paise,
     stock: &StockTotal,
 ) -> Result<Outcome<Report>, ReportError> {
-    let mut st = supported!(walk_primaries(books, balances, params.detail)?);
+    let mut st = supported!(walk_primaries(books, balances, params.detail, stock)?);
     let provisional = stock.provisional.as_deref();
 
     // Cumulative profit as a debit-positive figure: income and expense net less closing stock.
@@ -723,7 +844,7 @@ fn build_report(
         let cell = figure(profit_dr, provisional)?;
         st.add_by_sign(PROFIT_LABEL, RowKind::Item, profit_dr, cell)?;
     }
-    if !stock.value.is_zero() || provisional.is_some() {
+    if !st.stock_placed && (!stock.value.is_zero() || provisional.is_some()) {
         st.asset_net = st.asset_net.checked_add(stock.value)?;
         st.asset_rows.push(ReportRow {
             key: None,

@@ -7,12 +7,14 @@
 mod ai;
 mod bank;
 mod command;
+mod day_book_meta;
 mod error;
 mod events;
 pub mod facade;
 mod gst;
 mod gst_filing;
 mod home;
+mod gstr1_sections;
 mod maintenance;
 mod nudges;
 mod print;
@@ -35,6 +37,7 @@ pub use gst::{
 pub use home::{
     CUSTOMER_LATE_DAYS, CashAndBank, HomeFigures, LateBills, MonthSales, SUPPLIER_LATE_DAYS,
 };
+pub use gstr1_sections::{Gstr1Section, TaxableAgreement};
 pub use ledgerly_gst::compute::GstBreakup;
 pub use ledgerly_model::{
     Address, Books, Company, EntityKind, Features, NegativeStockPolicy, Voucher,

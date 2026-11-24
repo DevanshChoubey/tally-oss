@@ -40,7 +40,7 @@
 
 use egui::{Key, Ui};
 use ledgerly_core::format::format_inr;
-use ledgerly_core::{Date, Gstin, Paise, StateCode, Unsupported, VoucherId};
+use ledgerly_core::{Date, Gstin, Paise, Period, StateCode, Unsupported, VoucherId};
 use thiserror::Error;
 
 use crate::{AppCtx, Screen, ScreenAction};
@@ -386,6 +386,8 @@ pub enum GstCmd {
     Close,
     /// Export the GSTR-1 JSON (Ctrl+E).
     ExportJson,
+    /// Open or close the return-period picker (Alt+F2).
+    PickPeriod,
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -440,10 +442,41 @@ pub struct GstScreen {
     run: worker::GstRun,
     /// Figures of the GSTR-1 tab, from the worker.
     figures1: Figures,
+    /// The GSTR-1 section table, from the worker.
+    sections: Vec<ledgerly_api::Gstr1Section>,
+    /// Whether `sections` was supplied; a screen with no sections counts nothing.
+    sections_loaded: bool,
+    /// The selected section of the GSTR-1 table (J / K), when the table is loaded.
+    section_focus: usize,
+    /// Set when the user asked to fix the item master from the side card, until taken.
+    fix_request: Option<FixRequest>,
+    /// The engine's comparison of GSTR-1 with GSTR-3B table 3.1(a), as the line under the table.
+    agreement: Option<String>,
+    /// The financial year whose twelve months the period picker lists.
+    year: Option<Period>,
+    /// The month highlighted in the open period picker, as an index into [`Self::months`].
+    picker: Option<usize>,
     /// Figures of the GSTR-3B tab, from the worker.
     figures3b: Figures,
     /// The GSTR-3B table, from the worker.
     lines3b: Vec<look::Line3b>,
+}
+
+/// A fix the user asked for from the side card, until the host takes it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FixRequest {
+    /// Open the item master, where an item's HSN is set.
+    ItemMaster,
+}
+
+/// The screen's bucket for the engine's.
+pub(super) fn section_bucket(b: ledgerly_api::Bucket) -> Bucket {
+    match b {
+        ledgerly_api::Bucket::Ready => Bucket::Ready,
+        ledgerly_api::Bucket::NotRelevant => Bucket::NotRelevant,
+        ledgerly_api::Bucket::Mismatch => Bucket::Mismatch,
+        ledgerly_api::Bucket::NeedsCorrection => Bucket::NeedsCorrection,
+    }
 }
 
 /// What a click in the table asks for, applied after the frame is drawn.
@@ -453,9 +486,13 @@ enum UiEvent {
     Filter(Option<Bucket>),
     OpenOnly(bool),
     Focus(usize),
+    Section(usize),
+    OpenSection(usize),
     Drill(usize),
     Decide(usize, ImsAction),
     ExportJson,
+    PeriodPicker,
+    ChoosePeriod(usize),
 }
 
 impl GstScreen {
@@ -484,6 +521,13 @@ impl GstScreen {
             revision: 0,
             run: worker::GstRun::default(),
             figures1: Figures::default(),
+            sections: Vec::new(),
+            sections_loaded: false,
+            section_focus: 0,
+            fix_request: None,
+            agreement: None,
+            year: None,
+            picker: None,
             figures3b: Figures::default(),
             lines3b: Vec::new(),
         }
@@ -493,6 +537,13 @@ impl GstScreen {
     #[must_use]
     pub fn with_state(mut self, state: StateCode) -> Self {
         self.state = Some(state);
+        self
+    }
+
+    /// The same screen with the financial year whose months the period picker (Alt+F2) lists.
+    #[must_use]
+    pub fn with_year(mut self, year: Period) -> Self {
+        self.year = Some(year);
         self
     }
 
@@ -538,6 +589,228 @@ impl GstScreen {
     pub fn set_gstr1(&mut self, feed: Feed<Vec<ExceptionItem>>) {
         self.gstr1 = feed;
         self.clamp_focus();
+    }
+
+    /// Supplies the GSTR-1 section table (one row per table of the return).
+    pub fn set_sections(&mut self, sections: Vec<ledgerly_api::Gstr1Section>) {
+        self.sections = sections;
+        self.sections_loaded = true;
+        self.section_focus = self
+            .section_focus
+            .min(self.sections.len().saturating_sub(1));
+    }
+
+    /// Forgets the GSTR-1 section table (the return could not be built).
+    pub fn clear_sections(&mut self) {
+        self.sections = Vec::new();
+        self.sections_loaded = false;
+        self.section_focus = 0;
+        self.agreement = None;
+    }
+
+    /// The line under the section table comparing GSTR-1 with GSTR-3B, when both were built.
+    #[must_use]
+    pub fn agreement_line(&self) -> Option<&str> {
+        self.agreement.as_deref()
+    }
+
+    /// Whether J / K / Enter act on the section table: the GSTR-1 tab with a table loaded.
+    fn sections_active(&self) -> bool {
+        self.tab == GstTab::Gstr1 && self.sections_loaded && !self.sections.is_empty()
+    }
+
+    /// The selected section of the GSTR-1 table.
+    #[must_use]
+    pub fn selected_section(&self) -> Option<&ledgerly_api::Gstr1Section> {
+        if !self.sections_loaded {
+            return None;
+        }
+        self.sections.get(self.section_focus)
+    }
+
+    /// Whether the selected section is one whose table is short of data the user can supply:
+    /// a section the engine marked `NeedsCorrection` that is a table of the form, not the row
+    /// of held-back vouchers.
+    fn selected_needs_correction(&self) -> Option<&ledgerly_api::Gstr1Section> {
+        self.selected_section()
+            .filter(|s| s.code != "held" && s.status == ledgerly_api::Bucket::NeedsCorrection)
+    }
+
+    /// The title of the card beside the section table: what is wrong with the selected section
+    /// ("HSN summary needs correction", as the mock's `gstr1-correction` state), the held-back
+    /// vouchers, or "What happens next".
+    #[must_use]
+    pub fn side_card_title(&self) -> String {
+        if let Some(section) = self.selected_needs_correction() {
+            return format!("{} needs correction", section.name);
+        }
+        match self.selected_section() {
+            Some(s) if s.code == "held" => "Vouchers held back".to_owned(),
+            Some(_) | None => "What happens next".to_owned(),
+        }
+    }
+
+    /// The engine's reason for the selected section's status, when it gave one.
+    #[must_use]
+    pub fn side_card_reason(&self) -> Option<&str> {
+        self.selected_needs_correction()?.note.as_deref()
+    }
+
+    /// Whether the side card offers "Fix the item master" (a table 12 short of an HSN).
+    #[must_use]
+    pub fn side_card_offers_the_item_master(&self) -> bool {
+        self.selected_needs_correction()
+            .is_some_and(|s| s.code == "12")
+    }
+
+    /// Whether the user asked to fix the item master, once.
+    pub fn take_fix_item_master_request(&mut self) -> bool {
+        self.fix_request.take().is_some()
+    }
+
+    // ---- the return period -------------------------------------------------------------------
+
+    /// The twelve calendar months of the financial year, in order. Empty with no year set.
+    fn months(&self) -> Vec<Period> {
+        let Some(year) = self.year else {
+            return Vec::new();
+        };
+        let (mut y, mut m) = (year.from().year(), year.from().month());
+        let mut out = Vec::with_capacity(12);
+        for _ in 0..12 {
+            let last = time::util::days_in_month(m, y);
+            let (Ok(from), Ok(to)) = (
+                Date::from_calendar_date(y, m, 1),
+                Date::from_calendar_date(y, m, last),
+            ) else {
+                break;
+            };
+            if let Ok(period) = Period::new(from, to) {
+                out.push(period);
+            }
+            if m == time::Month::December {
+                y = y.saturating_add(1);
+            }
+            m = m.next();
+        }
+        out
+    }
+
+    /// Whether the period picker is open.
+    #[must_use]
+    pub fn period_picker_open(&self) -> bool {
+        self.picker.is_some()
+    }
+
+    /// The months the open picker lists, as the period button reads them.
+    #[must_use]
+    pub fn picker_labels(&self) -> Vec<String> {
+        self.months()
+            .into_iter()
+            .map(crate::shell::navigate::return_label)
+            .collect()
+    }
+
+    /// The month highlighted in the open picker.
+    #[must_use]
+    pub fn picker_selected_label(&self) -> Option<String> {
+        let months = self.months();
+        let at = self.picker?;
+        months
+            .get(at)
+            .copied()
+            .map(crate::shell::navigate::return_label)
+    }
+
+    /// The return period last asked for from the worker.
+    #[must_use]
+    pub fn requested_period(&self) -> Option<Period> {
+        self.run.requested_period()
+    }
+
+    /// Opens the picker on the month on show, or says it cannot.
+    fn open_picker(&mut self) {
+        let months = self.months();
+        if months.is_empty() {
+            self.notice = Some(
+                "This screen does not know the financial year, so it cannot list its months."
+                    .to_owned(),
+            );
+            return;
+        }
+        let shown = self.requested_period();
+        let at = months
+            .iter()
+            .position(|m| Some(*m) == shown)
+            .or_else(|| {
+                months
+                    .iter()
+                    .position(|m| crate::shell::navigate::return_label(*m) == self.period_label)
+            })
+            .unwrap_or(0);
+        self.picker = Some(at);
+    }
+
+    /// Keys while the picker is open: J / K move, Enter chooses, Esc and Alt+F2 close.
+    fn picker_key(&mut self, cmd: GstCmd) {
+        let Some(at) = self.picker else {
+            return;
+        };
+        let last = self.months().len().saturating_sub(1);
+        match cmd {
+            GstCmd::Next => self.picker = Some(at.saturating_add(1).min(last)),
+            GstCmd::Prev => self.picker = Some(at.saturating_sub(1)),
+            GstCmd::Open => self.choose_period(at),
+            GstCmd::Close | GstCmd::PickPeriod => self.picker = None,
+            GstCmd::SwitchTab(_) | GstCmd::Decide(_) | GstCmd::ExportJson => {}
+        }
+    }
+
+    /// Shows `month` (an index into the picker's list) and reloads the return for it. Nothing of
+    /// the old month stays on screen while the new one loads.
+    fn choose_period(&mut self, month: usize) {
+        self.picker = None;
+        let Some(period) = self.months().get(month).copied() else {
+            return;
+        };
+        let Some(gstin) = self.own_gstin.clone() else {
+            self.notice = Some("No GSTIN is known, so no return can be loaded.".to_owned());
+            return;
+        };
+        self.period_label = crate::shell::navigate::return_label(period);
+        self.gstr1 = Feed::NotLoaded;
+        self.gstr3b = Feed::NotLoaded;
+        self.clear_sections();
+        self.figures1 = Figures::default();
+        self.figures3b = Figures::default();
+        self.lines3b = Vec::new();
+        self.focus = 0;
+        self.bucket_filter = None;
+        self.run.clear_answer();
+        self.request_load(gstin, period);
+    }
+
+    fn open_section(&mut self) {
+        if self.side_card_offers_the_item_master() {
+            self.fix_request = Some(FixRequest::ItemMaster);
+        } else if self.selected_section().is_some() {
+            self.notice = Some("Nothing to fix in this section.".to_owned());
+        }
+    }
+
+    /// Number of sections of the GSTR-1 table with this status, or `None` when no table is
+    /// loaded. The tiles of the GSTR-1 tab show these counts, as the mock's do.
+    #[must_use]
+    pub fn section_count(&self, bucket: Bucket) -> Option<usize> {
+        if !self.sections_loaded {
+            return None;
+        }
+        Some(
+            self.sections
+                .iter()
+                .filter(|s| section_bucket(s.status) == bucket)
+                .count(),
+        )
     }
 
     /// Supplies the GSTR-3B exceptions.
@@ -694,6 +967,11 @@ impl GstScreen {
 
     /// Selects the next row (J). Stops at the last row.
     pub fn focus_next(&mut self) {
+        if self.sections_active() {
+            let last = self.sections.len().saturating_sub(1);
+            self.section_focus = self.section_focus.saturating_add(1).min(last);
+            return;
+        }
         let last = self.visible_indices().len().saturating_sub(1);
         self.focus = self.focus.saturating_add(1).min(last);
         self.scroll_pending = true;
@@ -701,6 +979,10 @@ impl GstScreen {
 
     /// Selects the previous row (K). Stops at the first row.
     pub fn focus_prev(&mut self) {
+        if self.sections_active() {
+            self.section_focus = self.section_focus.saturating_sub(1);
+            return;
+        }
         self.focus = self.focus.saturating_sub(1);
         self.scroll_pending = true;
     }
@@ -883,6 +1165,10 @@ impl GstScreen {
     }
 
     fn open_focused(&mut self) {
+        if self.sections_active() {
+            self.open_section();
+            return;
+        }
         let Some(index) = self.focused_index() else {
             self.notice = Some("No row is selected.".to_owned());
             return;
@@ -901,7 +1187,12 @@ impl GstScreen {
     /// Runs one command and says what the stack should do.
     pub fn apply(&mut self, cmd: GstCmd) -> ScreenAction {
         self.notice = None;
+        if self.picker.is_some() {
+            self.picker_key(cmd);
+            return ScreenAction::Stay;
+        }
         match cmd {
+            GstCmd::PickPeriod => self.open_picker(),
             GstCmd::SwitchTab(tab) => self.switch_tab(tab),
             GstCmd::Next => self.focus_next(),
             GstCmd::Prev => self.focus_prev(),
@@ -919,12 +1210,25 @@ impl GstScreen {
             UiEvent::Filter(bucket) => self.set_bucket_filter(bucket),
             UiEvent::OpenOnly(on) => self.set_open_only(on),
             UiEvent::Focus(pos) => self.focus = pos,
+            UiEvent::Section(pos) => self.section_focus = pos,
+            UiEvent::OpenSection(pos) => {
+                self.section_focus = pos;
+                self.open_section();
+            }
             UiEvent::Drill(pos) => {
                 self.focus = pos;
                 self.open_focused();
             }
             UiEvent::Decide(row, action) => self.decide_with_notice(row, action),
             UiEvent::ExportJson => self.request_json_export(),
+            UiEvent::PeriodPicker => {
+                if self.picker.is_some() {
+                    self.picker = None;
+                } else {
+                    self.open_picker();
+                }
+            }
+            UiEvent::ChoosePeriod(month) => self.choose_period(month),
         }
         self.clamp_focus();
     }
@@ -1000,6 +1304,11 @@ impl Screen for GstScreen {
             (ScreenAction::Stay, Some(id)) => ScreenAction::Push(Box::new(
                 crate::screens::report_view::VoucherViewScreen::new(id),
             )),
+            (ScreenAction::Stay, None) if self.take_fix_item_master_request() => {
+                ScreenAction::Push(Box::new(crate::screens::masters::MastersScreen::with_kind(
+                    crate::screens::masters::MasterKind::StockItem,
+                )))
+            }
             (action, _) => action,
         }
     }

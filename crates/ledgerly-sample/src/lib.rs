@@ -16,6 +16,7 @@ use std::path::{Path, PathBuf};
 
 use ledgerly_api::Api;
 use ledgerly_core::{Clock, Date};
+use ledgerly_model::NegativeStockPolicy;
 use time::format_description::well_known::Iso8601;
 
 pub use error::SampleError;
@@ -76,7 +77,19 @@ pub fn path_under(base: &Path) -> PathBuf {
 /// [`SampleError`] when the seed is bad, or the API or the engine refuses a step.
 pub fn create(path: &Path, clock: Clock) -> Result<Api, SampleError> {
     let seed = parsed()?;
-    Ok(load::build(&seed, path, clock)?.api)
+    Ok(load::build(&seed, path, clock, NegativeStockPolicy::Block)?.api)
+}
+
+/// Builds the sample company as [`create`] does, but with the company's negative-stock policy set
+/// to Allow, so a screenshot harness can post a sale that takes an item below zero (the mock's
+/// provisional-stock state). The seed's own vouchers are the same; nothing in the normal sample
+/// changes.
+///
+/// # Errors
+/// As [`create`].
+pub fn create_allowing_negative_stock(path: &Path, clock: Clock) -> Result<Api, SampleError> {
+    let seed = parsed()?;
+    Ok(load::build(&seed, path, clock, NegativeStockPolicy::Allow)?.api)
 }
 
 /// Builds the sample company in a throwaway file under `base`, replacing one a last run left,

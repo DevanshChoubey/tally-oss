@@ -581,11 +581,11 @@ fn a_correct_purchase_posts_and_stores_the_block() {
 // GSTR-3B with a purchase
 // ---------------------------------------------------------------------------------------------
 
-/// Derivation: the packs now carry the three `itc.blocked.*` entries, all `pending` (CGST Act
-/// s.17(5) names no HSN code). GSTR-3B on a period with a purchase therefore says which entry is
-/// still pending, instead of showing a credit that s.17(5) may block.
+/// Derivation: a pack with no `itc.blocked.*` entry at all (the slab pack alone) cannot rule out
+/// credit under CGST Act s.17(5). GSTR-3B on a period with a purchase therefore names the entry it
+/// is missing, instead of showing a credit that s.17(5) may block.
 #[test]
-fn gstr3b_with_a_purchase_names_the_pending_itc_entry() {
+fn gstr3b_with_a_purchase_names_the_missing_itc_entry() {
     let (_dir, mut api) = company_file();
     let v = Voucher {
         inventory_lines: items(40, 4_000_000, PURCHASE),
@@ -605,16 +605,13 @@ fn gstr3b_with_a_purchase_names_the_pending_itc_entry() {
     };
     ok(api.execute(Command::PostVoucher(v)));
     let slabs = load_pack(include_str!("../../ledgerly-gst/packs/rates-slabs.toml")).unwrap();
-    let rules = load_pack(include_str!("../../ledgerly-gst/packs/gstr-rules.toml")).unwrap();
-    let pack = slabs.merge(&rules).unwrap();
     let period = Period::new(date!(2026 - 10 - 01), date!(2026 - 10 - 31)).unwrap();
     let out = api
-        .gstr3b_with_pack(&gstin_of(COMPANY), period, &pack)
+        .gstr3b_with_pack(&gstin_of(COMPANY), period, &slabs)
         .unwrap();
     match out {
         Outcome::Unsupported(u) => {
             assert!(u.reason.contains("itc.blocked.motor_vehicles"), "{u:?}");
-            assert!(u.reason.contains("pending"), "{u:?}");
         }
         other @ Outcome::Value(_) => panic!("expected Unsupported, got {other:?}"),
     }

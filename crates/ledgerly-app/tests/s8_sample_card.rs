@@ -13,7 +13,7 @@
 )]
 
 use std::path::PathBuf;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use egui::epaint::{ClippedShape, Shape};
 use egui::{Context, Event, Key, Modifiers, Pos2, RawInput, Rect, vec2};
@@ -116,10 +116,10 @@ fn choosing_the_sample_card_opens_godavari_from_a_throwaway_file() {
         "{painted:?}"
     );
     frame(&ctx, &mut shell, vec![key(Key::Enter)]);
-    for _ in 0..5000 {
-        if shell.app_ctx_mut().books.is_some() {
-            break;
-        }
+    // Wall-clock bound, not a frame count: seeding the sample is disk work that took longer than
+    // the old 5000-frame budget when the whole workspace's tests shared the disk and the cores.
+    let deadline = Instant::now() + Duration::from_secs(120);
+    while shell.app_ctx_mut().books.is_none() && Instant::now() < deadline {
         std::thread::sleep(Duration::from_millis(2));
         frame(&ctx, &mut shell, vec![]);
     }

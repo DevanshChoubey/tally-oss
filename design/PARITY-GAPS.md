@@ -93,15 +93,22 @@ comes from `Api::home_figures` and `Api::home_nudges`.
   ("Sundry Debtors"), the subtitle is "As at ... Enter goes deeper, Esc goes back up", Debit and
   Credit figures drop the Dr/Cr word, the repeated Particulars column is not drawn twice, and the
   footnote is small text under the card.
-- **needs a decision: sub-groups in the condensed view.** The mock's condensed statement shows
-  each top group's sub-groups (Loans > Secured loans; index.html:1588, `depth===0` children).
-  Ours shows the primary groups only, which is what the engine's condensed report gives. Before
-  changing it, check the TallyPrime help on what its condensed balance sheet lists (not checked
-  in this round); showing sub-groups needs the engine, or the detailed report cut by depth.
-- **needs a decision: indent past two levels.** The mock indents two steps (`ind1`, `ind2`) and
-  stops; ours keeps adding 16 points per level so deeper groups stay apart.
+- **closed (s9): sub-groups in the default view.** The default (Alt+F1 "condensed") view now
+  lists each top group, its sub-groups and the closing stock, with no ledgers, as the mock's
+  `balanceSheet()` does (index.html:1581-1589). The screen asks the engine for the detailed report
+  and drops ledger rows (`remote::groups_and_sub_groups`); the engine's own `Condensed` (primary
+  groups only) is unchanged and still what Export writes. Help page read 2026-11-25
+  (help.tallysolutions.com/docs/te9rel66/Reports/Display_Financial_Statements/display_balance_sheet.htm):
+  the standard view is condensed and Alt+F1 shows the detailed view; the page does not say which
+  group levels the condensed view lists, so the sub-group level follows the mock.
+  Tested in `tests/s9_reports.rs`.
+- **gap: Export of the balance sheet writes the engine's primary-groups-only condensed report**,
+  not the sub-group view on screen.
+- **closed (s9): indent past two levels.** The default view stops at depth 1; the detailed view
+  still indents each level by 16 points.
 - **by design: F2 says "Period".** The mock says "F2 Date"; ours opens a from-to period editor.
-- **by design: section and group names** follow decision 2 of the 2026-11-22 parity report:
+- **by design: section and group names** follow decision 2 of the 2026-11-22 parity report (a
+  recorded user decision, kept in s9 although the brief asked for the mock's heading):
   "Liabilities" (not "Equity and liabilities"), "Capital Account", "Profit and Loss A/c".
 - **by design: the as-at date** is the last voucher date (decision 1), so the capture says 20 Nov
   where the mock says 21 Nov.
@@ -117,10 +124,12 @@ comes from `Api::home_figures` and `Api::home_nudges`.
   ("Some figures are provisional and are marked. Why: ...") because the engine's reason is an
   internal id, not the mock's "Steel pickaxe 2.5 kg shows -30 nos" (next entry). The engine's own
   note under the statement repeats the reason.
-- **bug: the provisional reason is not readable.** The engine's reason reads "negative stock:
-  item StockItemId(1) first went below zero on 2026-11-10" (`ledgerly-reports`
-  `stock_summary/valuation.rs`): an internal id and an ISO date. The mock names the item and the
-  quantity ("Steel pickaxe 2.5 kg shows -30 nos"). Needs the report to carry the item's name.
+- **gap: the provisional reason is still plain.** The balance sheet's and the profit and loss's
+  reason now names the item ("negative stock: item Steel pickaxe first went below zero on
+  2026-11-10", closed in s9; an item missing from the masters shows its number). Still different
+  from the mock's "Steel pickaxe 2.5 kg shows -30 nos": the date is ISO and the quantity is not
+  in the reason. The stock summary's own reason (`stock_summary/valuation.rs`, pinned by
+  `rp9_stock_summary.rs` as "item 1") is unchanged.
 - **gap: the voucher view has no item lines, tax, total or audit card.** `balance-sheet.voucher`
   is now two cards: the header fields (Type, Number, Date, Status, Party) over the ledger lines in
   Debit and Credit columns, and a "Read-only" card. The mock's item table and tax lines need the
@@ -136,15 +145,23 @@ comes from `Api::home_figures` and `Api::home_nudges`.
 
 ## Day book (round of 2026-11-23)
 
-- **deferred: Entered by and Origin columns, and Ctrl+I Origin** (index.html:1650-1653, 1659).
-  The engine records neither who entered a voucher nor whether it came from an AI draft or a
-  bank rule (engine item E-4). The table keeps the engine's Status column in their place and the
-  footnote says so; Ctrl+I is not offered.
-- **deferred: narration under the party** (index.html:1652, the `meta` line). The engine's day
-  book has no narration field, so Particulars shows the party alone and every row is one line.
+- **closed (s9): Entered by, Origin and the narration line.** The facade adds `Narration`,
+  `Entered by` and `Origin` to the day book from each voucher's `VoucherPosted` record
+  (`ledgerly-api` `day_book_meta`); user names come from `SettingChanged user.<id>.name`
+  (`Api::set_user_name`). The sample company posts each November voucher as the mock's user, and
+  PY/0315 and PB/0141 as the assistant acting for Ananya K. Tested in
+  `ledgerly-api/tests/s9_day_book.rs`, `ledgerly-sample/tests/sample.rs`, `ledgerly-app/tests/s9_reports.rs`.
+- **gap: Origin shows Typed, AI draft, accepted or Imported only.** The mock also shows "Image
+  attached" (PB/0144) and "Bank rule" (PY/0316) and names the draft kind ("Plain-words draft",
+  "Bill photo draft"). The company file stores no attachment, no bank-rule posting and no draft
+  kind, so PB/0144 and PY/0316 read Typed and the two AI drafts read "AI draft, accepted".
+- **deferred: Ctrl+I Origin.** The original proposal is not opened from the day book, so the
+  footnote leaves out the mock's Ctrl+I sentence and the key bar does not offer it.
+- **by design: a non-regular status is a badge in the Origin cell.** The mock has no Status column;
+  a cancelled, optional or post-dated voucher still has to say so.
 - **closed (S8): the empty state is a card** with the book icon, title, sentence and the four
-  voucher buttons (they open the voucher forms); the sentence leaves out the mock's "with who
-  entered it" because that is not recorded (E-4). The buttons sit centred; the mock's sit at the
+  voucher buttons (they open the voucher forms); the sentence now includes the mock's "with who
+  entered it" (s9). The buttons sit centred; the mock's sit at the
   left of the card.
 - **by design: the month view keeps the cursor on the voucher it was on.** `day-book.month`
   (Alt+F2, 1 Nov to 20 Nov) keeps the selected voucher selected when the period changes
@@ -153,10 +170,7 @@ comes from `Api::home_figures` and `Api::home_nudges`.
   the day after the current date; ours fills in the day shown. Check the TallyPrime page (only
   the Tally.ERP 9 page was read) before changing it.
 - **data: voucher numbers and the sample day (resolved, S8).** Godavari carries the mock's own
-  numbers (SI/0417 ...) and its five vouchers on 20 Nov; "Entered by" and "Origin" are still not
-  recorded (see "Sample company").
-- **by design: Status column.** Kept from the engine (it shows a cancelled voucher as such) until
-  Entered by and Origin exist.
+  numbers (SI/0417 ...) and its five vouchers on 20 Nov, entered by the mock's two users (s9).
 
 ## GST returns (round of 2026-11-23)
 
@@ -165,24 +179,32 @@ Fictional Pumps, which sold pickaxes with no HSN). Not captured: `recon`, `recon
 `recon-error` and `recon-locked`: they need a 2B file, which the app cannot read (no 2B reader,
 engine item E-3); `recon-explain` is an AI state.
 
-- **gap: the correction state lists vouchers, the mock lists sections.** `gst.gstr1-correction`
-  shows the engine's per-voucher table ("Voucher 3: item 'Steel pickaxe 2.5 kg' has no HSN or
-  SAC code") and counts vouchers; the mock lists the return's sections with "12 HSN summary:
-  Needs correction" selected and a side card naming the item with a "Fix the item master"
-  button. The section table and the button are not built. The capture also holds the pipe
-  invoice back because unit `coil` has no unit quantity code: that is the engine's finding on
-  the capture data, not a screen difference.
+- **by design: the correction state is built from the sample (s9).** `gst.gstr1-correction` now
+  runs on Godavari: Table 12 shows 5 records, 3,49,385.00 and Needs correction, selected with J / K,
+  and the side card names the item with a "Fix the item master" button (Enter opens the item
+  master). Differences: the card shows the engine's reason without the voucher number and date,
+  and says "Export JSON is refused until it is fixed. Nothing is guessed." where the mock says
+  the voucher is held back. A missing HSN keeps the invoice in Tables 4, 5, 7, 8, 9B and 13 and
+  only Table 12 waits, since HSN is a field of Table 12 only (GSTN GSTR-1 user guide,
+  https://tutorial.gst.gov.in/userguide/returns/Creation_of_Outward_Supplies_Return_in_GSTR-1.htm,
+  read 2026-11-25). JSON export is still refused while any table needs correction.
 
-- **deferred: GSTR-1 by section** (index.html:1673-1676). The mock's table has one row per
-  return section (4A B2B, 5 B2C large, 7 B2C others, 9B notes, 12 HSN, 13 documents), with
-  records, taxable value, tax and a status for each. Its tiles count sections too. The engine
-  buckets vouchers, not sections, and `Gstr1` has no per-section totals. The UI may not add them
-  up (rule C4). Ours shows the vouchers with the engine's bucket, the tiles count vouchers
-  ("vouchers", not "sections"), and the return's own figures sit in a second card. Needs an
-  engine section summary with its own tests.
-- **deferred: the agreement line under the GSTR-1 table** ("Taxable value agrees with GSTR-3B
-  table 3.1(a): ..."). No engine check compares the two, so the line is not drawn.
-- **deferred: GSTR-3B rows from IMS and set-off** (index.html:1683-1686). These are "Accepted
+- **by design: GSTR-1 by section is built, with differences** (index.html:1673-1676, s9). The
+  engine now summarises the return per table (`Gstr1Return::sections`: 4A, 5, 7, 9B, 12, 13;
+  6A and 8 only when the return holds something there) and the screen shows it with Records,
+  Taxable, Tax and Status. The tiles count sections. The voucher table stays beneath as the
+  drill-down ("Vouchers behind the sections"), and clicking a tile still filters it.
+  Differences: (1) a held-back voucher row appears only for duplicates, which sit in no table.
+  (2) Sections are selectable (J / K, Enter) with a side card. Sources: the offline tool's
+  worksheets b2b, b2cl, b2cs, cdnr, hsn and docs, https://gstzen.in/a/gst-manuals-user-manuals-downloading-installing-and-uploading-invoices-in-gstr-1-taking-actions-in-gstr-2.html
+  and https://help.tallysolutions.com/file-gstr-1-using-offline-tool/ (both read 2026-11-25).
+- **by design: the agreement line under the GSTR-1 table is built.** The engine compares 4A
+  (regular), 5 and 7 with GSTR-3B 3.1(a) (`Gstr1Return::taxable_vs_gstr3b`) and the line gives
+  both figures when they differ. It is Unsupported (no line) when the return holds credit or
+  debit notes (s.34 pending) or SEZ or deemed supplies.
+- **deferred: GSTR-3B rows from IMS and set-off** (index.html:1683-1686). GSTR-3B now computes
+  on the sample (blocked credit under s.17(5) applied), but the cash payable of 39,498, which the
+  Home tile also shows, cannot be computed. These are "Accepted
   in IMS", "No action yet: deemed accepted", "6.1 Payment of tax", "Left after using accepted
   credit" and "Payable in cash". They need the 2B and IMS match (engine item E-3) and set-off
   (engine item E-1). Ours draws 3.1(a), "In your books" (4(A)(5)) and the blocked or ineligible
@@ -192,8 +214,8 @@ engine item E-3); `recon-explain` is an AI state.
 - **by design: our own words in "What happens next" and "Read this before filing".** The mock's
   bullets claim things the app does not do: "Mark the month filed here", "Credit counts only what
   you accepted in IMS" and the set-off order. Ours say what the engine does.
-- **deferred: the period button, "November 2026 Alt+F2"** (index.html:1671). The screen cannot
-  change its return period, so the button and the key are not shown.
+- **by design: the period button opens a month picker (Alt+F2).** It lists the 12 months of the
+  financial year; choosing one reloads the screen. The mock has no picker state, so its look is ours.
 - **deferred: importing a 2B file** (index.html:1692). The mock offers "Import 2B JSON Ctrl+O"
   and "drop it here". There is no 2B reader (engine item E-3), so the empty state says so and
   offers no import button and no key.
@@ -747,6 +769,9 @@ design (setup section).
 The mock has no state for the profit and loss, trial balance, outstanding, stock summary or
 register reports, so they have no capture to compare. They draw as the generic table, which now
 shares the drill levels' fixes (bare Debit and Credit figures, footnote style).
+s9: the profit and loss and trial balance run over the new sample seed through the same engine
+reports the balance sheet uses (Opening stock now sits under Direct Expenses, the provisional
+reason names the item); no state to compare with, so nothing further was changed.
 
 ## Masters, GST, keys (round of 2026-11-24, card S8)
 
@@ -756,8 +781,6 @@ shares the drill levels' fixes (bare Debit and Credit figures, footnote style).
   no such BadgeKind and adding one touches every exhaustive match.
 - **gap: create-ledger and ledger-detail field sets.** They follow the engine's fields, not the
   mock's; the sidebar hover highlight in captures is a capture artifact.
-- **deferred: GSTR-1 per-section table.** The mock sums per section; ours lists per-voucher rows
-  from the engine because the UI never sums. The period button (Alt+F2) is not built.
 - **by design: the keys note keeps the "Keys in use now" line**, which is true of the app.
 - **data: `bank.import-error` has no capture** (see the Bank section); `bank.default` shows the
   empty state because the fixture has no statement.
@@ -772,9 +795,9 @@ vouchers, no totals. `ledgerly_sample::create` posts it through `ledgerly-api` (
 `Command::*`, `import_bank_statement`, and `LockPeriod` last, 31 Oct 2026), so every figure on
 screen is the engine's. The capture harness opens it as `Fixture::Godavari`, with the clock fixed
 to the mock's 21 Nov 2026 (`navigate::set_clock_override`). Captures that need another company
-stay on Fictional Traders (`review.empty`, `bank.empty`, `home.empty`) or Fictional Pumps
-(`balance-sheet.provisional`, `gst.gstr1-correction`: stock sold before bought, and the engine
-refuses a balance sheet over opening stock).
+stay on Fictional Traders (`review.empty`, `bank.empty`, `home.empty`) or Godavari
+with extra vouchers (`balance-sheet.provisional`, a capture-only fixture: 174 pickaxes sold on
+19 Nov with 144 on hand, 100 bought on 20 Nov; its reason text names the item and date, not the mock's wording).
 
 How the figures agree with the mock (engine, light captures, 21 Nov 2026):
 - Match to the paisa: every party balance (Shree Ganesh 1,93,500.00; Mehta 1,05,020.00; Lakshmi
@@ -785,31 +808,28 @@ How the figures agree with the mock (engine, light captures, 21 Nov 2026):
   3,49,385.00 with the pickaxe missing its HSN, and the Review queue badge (6).
 
 Mismatches between the mock's totals and the engine's, and why:
-- **data: capital and profit differ, their sum does not.** The mock's Capital account is
-  20,00,000.00 and Profit and loss 16,96,569.70; the engine's are 13,62,164.00 and 26,08,570.06.
-  The mock holds no history before 1 Nov, so the seed invents it (monthly receipt summaries,
-  purchases, payments, a depreciation journal) to reach the mock's 31 Oct balances. Capital is the
-  balancing figure of the opening trial balance. The difference in profit, 9,12,000.36, is the
-  6,37,836.00 less capital plus the 2,74,164.36 of IGST below.
+- **closed (s9): capital, profit, IGST and Opening stock now match the mock.** Capital account
+  20,00,000.00, Profit and loss 16,96,569.70 and Current liabilities 10,72,967.30 come out of the
+  engine (tested in `ledgerly-sample/tests/sample.rs`). Three seed items had caused the old gap:
+  the mock's Opening stock ledger (9,12,000.00 Dr, an expense-nature ledger under Direct expenses,
+  now seeded as an opening balance), the October IGST input credit on the stock bill RP/5398
+  (2,74,164.36, now set off by a journal against IGST collected in October's receipts, so IGST is
+  nil on 1 Nov as in the mock and 9,150.00 Dr on 21 Nov) and that bill's round off (0.36, now
+  cleared in the same journal). Capital is no longer the balancing figure: the partners' opening
+  capital is 24,00,000 and 11,00,000 less drawings of 9,00,000 and 6,00,000. The stock items still
+  have no April quantity (the engine's balance sheet refuses valued opening stock), so the stock
+  register shows the quantities as bought in October.
 - **data: GST ledgers are one per head.** The mock keeps CGST/SGST/IGST output and input ledgers;
-  the engine's GST report needs one ledger per tax head, so the sample has CGST, SGST, IGST. The
-  October stock purchase from Rupa Polymers (Karnataka, inter-state) leaves IGST at 2,83,314.36
-  Dr (input 2,74,164.36 from that purchase plus November's 29,520.00, less 20,370.00 output). The
-  mock's Current liabilities (10,72,967.30) minus the engine's (7,98,802.94) is exactly 2,74,164.36.
-- **data: Opening stock ledger left out.** The mock's trial balance has an "Opening stock" ledger;
-  the engine takes opening stock from the stock ledger, and refuses the balance sheet with stock
-  before the books begin, so the stock is bought by a voucher in the books.
-- **data: Round off.** The engine has a Round off ledger carrying paise (0.36 on PB/0125); the mock
-  rounds in the invoice only.
+  the engine's GST report needs one ledger per tax head, so the sample has CGST, SGST, IGST.
 - **data: opening-bill invoices (SI/0372, 0350, 0381, 0390) have no tax split.** They are dated
   before 1 Nov and carry only the party, sales and bill lines the mock states.
 - **data: voucher numbering.** Numbers are typed on each voucher as the mock shows them; the mock's
   next number (SI/0418) is not reproduced: the engine numbers a new voucher from its own series.
-- **data: no 2B or IMS rows, no "Entered by", no AI origin.** The seed has no portal data, and
-  the engine records no actor or origin yet (E-4), so the mock's reconciliation states, "Entered
-  by" and "Image attached" columns and AI chips cannot show.
-- **gap: GST cash payable on Home.** The mock shows 39,498.00; the engine gives the GSTR-3B working
-  but no payable after set-off, so the tile says "Not supported yet" with its reason.
+- **data: no 2B or IMS rows.** The seed has no portal data, so the mock's reconciliation states
+  cannot show. (The day book's "Entered by" and AI origin are recorded since s9; "Image attached"
+  is not, see "Day book".)
+- **gap: GST cash payable on Home.** The mock shows 39,498.00; GSTR-3B computes but the payable after
+  set-off needs 2B/IMS and set-off, so it cannot be computed, so the tile says "Not supported yet" with its reason.
 - **gap: the invoice screen cannot save to a bill-wise party.** Every Godavari party is bill-wise
   (as the mock's), and the sales invoice screen does not enter bill references yet, so the
   invoice captures show the engine's "bill reference on a bill-wise party" note in place of the

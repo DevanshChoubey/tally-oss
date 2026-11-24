@@ -13,7 +13,7 @@
 use std::collections::BTreeMap;
 
 use ledgerly_api::{Api, Cell, ColumnSpec, Detail, Report, ReportFilter, ReportKind, ReportParams};
-use ledgerly_core::{Clock, Date, Outcome, Period, SignedAmount};
+use ledgerly_core::{Clock, Date, Outcome, Paise, Period, SignedAmount};
 use ledgerly_model::Scenario;
 use time::OffsetDateTime;
 use time::macros::date;
@@ -127,12 +127,14 @@ fn balances_on_31_oct_are_the_mocks_opening_table() {
     let (rows, _) = trial_balance(&api, date!(2026 - 10 - 31));
     // provenance: mock index.html:517-549, the `ob` column (balance on 1 Nov 2026, debit
     // positive, rupees). The vouchers dated before 1 Nov in the seed are invented to reach it.
-    // Left out on purpose, each listed in design/PARITY-GAPS.md ("Sample company"):
-    //   - the two partners' capital: the balancing figure of the opening trial balance;
-    //   - IGST: the stock bought in October carries IGST the mock leaves at 0;
-    //   - Round off: the same invoice's round-off of Rs 0.36;
-    //   - Opening stock: the engine takes opening stock from the stock ledger, not a ledger.
-    let mock: [(&str, &str); 36] = [
+    // Capital (index.html:518-519), IGST, Round off (index.html:529-530, 544: all nil on 1 Nov) and
+    // Opening stock (index.html:549, 9,12,000 Dr, an expense-nature ledger) are included.
+    let mock: [(&str, &str); 41] = [
+        ("Ananya Kulkarni, capital", "-1500000"),
+        ("Rohan Deshpande, capital", "-500000"),
+        ("IGST", "0"),
+        ("Round off", "0"),
+        ("Opening stock", "912000"),
         ("Mula Valley Co-op Bank, term loan", "-840000"),
         ("Kaveri Packaging Pvt Ltd", "-214300"),
         ("Nilgiri Steel Traders", "-200150"),
@@ -203,12 +205,12 @@ fn spot_values_follow_from_the_vouchers() {
     assert_eq!(get("CGST"), -paise("15323.65"));
     assert_eq!(get("SGST"), -paise("15323.65"));
 
-    // provenance: derived. IGST is one ledger for input and output here. Debits: the October
-    // stock purchase, 18% on 14,55,552 of lateral, nozzles, valves, HDPE and pumps (cost x qty
-    // from mock index.html:555-562) = 2,61,999.36 plus 5% on 2,43,300 of sprayers and pickaxes
-    // = 12,165, so 2,74,164.36; PB/0141 11,520; PB/0144 18,000. Credits: SI/0401 89,000 at 18%
-    // = 16,020; SI/0405 87,000 at 5% = 4,350. 2,74,164.36 + 29,520 - 20,370 = 2,83,314.36 debit.
-    assert_eq!(get("IGST"), paise("283314.36"));
+    // provenance: derived. IGST is one ledger for input and output here and is nil on 1 Nov
+    // (mock index.html:529-531). Debits: PB/0141 11,520 and PB/0144 18,000 (mock index.html:569,
+    // 575). Credits: SI/0401 89,000 at 18% = 16,020; SI/0405 87,000 at 5% = 4,350.
+    // 11,520 + 18,000 - 16,020 - 4,350 = 9,150 debit. (The mock's own igstin 29,520 less igstout
+    // 20,370 = 9,150, `node` over index.html's balances().)
+    assert_eq!(get("IGST"), paise("9150"));
 
     // provenance: derived. SI/0372 was 1,20,000 (mock index.html:583-585) and RC/0215 settled
     // 80,000 of it; SI/0412's total is 1,30,085 + 23,415.30 = 1,53,500.30 rounded to the rupee
@@ -247,4 +249,195 @@ fn stock_after_the_november_sales_is_the_bought_quantity_less_what_was_sold() {
     assert_eq!(closing("Steel pickaxe 2.5 kg"), "144");
     assert_eq!(closing("HDPE pipe coil 32 mm"), "58");
     assert_eq!(closing("Monoblock pump 1 HP"), "12");
+}
+
+#[test]
+fn the_balance_sheet_carries_the_mocks_capital_profit_and_current_liabilities() {
+    let (_dir, api) = sample();
+    let r = report(&api, ReportKind::BalanceSheet, date!(2026 - 11 - 21));
+    let net = |needle: &str| -> i64 {
+        let row = r
+            .rows
+            .iter()
+            .find(|row| row.depth == 0 && row.label.to_lowercase().contains(needle))
+            .unwrap_or_else(|| panic!("no top row for {needle}"));
+        row.cells.iter().map(signed_or_provisional).sum()
+    };
+    // provenance: mock index.html:664-681 (balanceSheet) over the mock's own books, run with
+    // node: Capital account 20,00,000.00 (15,00,000 + 5,00,000, index.html:518-519; the mock
+    // has no drawings).
+    assert_eq!(net("capital"), -paise("2000000"));
+    // provenance: derived. Profit = - (net debit of income and expense ledgers) + closing stock
+    // (mock index.html:667-668). The P&L ledgers on 1 Nov sum to 1,36,999 credit (mock
+    // index.html:540-549, with Opening stock 9,12,000 as an expense). November adds sales
+    // 89,000 + 87,000 + 1,30,085 + 9,640 + 37,500 = 3,53,225 credit and debits purchases
+    // 64,000 + 1,00,000, rent 25,000, electricity 14,860, depreciation 15,333 and round off 0.30
+    // (mock `balances()`), so the net credit is 1,36,999 + 3,53,225 - 2,19,193.30 = 2,71,030.70.
+    // Closing stock 14,25,539.00 (mock stockPosition). 2,71,030.70 + 14,25,539.00 = 16,96,569.70.
+    assert_eq!(net("profit"), -paise("1696569.70"));
+    // provenance: mock index.html:681 over the same books: Current liabilities 10,72,967.30 =
+    // creditors 7,07,970 + duties 33,997.30 + provisions 3,31,000.
+    assert_eq!(net("current liabilities"), -paise("1072967.30"));
+}
+
+/// Debit-positive paise of an amount or provisional amount, zero for an empty cell.
+fn signed_or_provisional(cell: &Cell) -> i64 {
+    match cell {
+        Cell::Provisional { amount, .. } => to_signed(*amount),
+        other @ (Cell::Amount(_) | Cell::Empty) => signed(other),
+        other @ (Cell::Signed(_)
+        | Cell::Qty(_)
+        | Cell::Text(_)
+        | Cell::Date(_)
+        | Cell::Unsupported(_)) => panic!("not an amount: {other:?}"),
+    }
+}
+
+#[test]
+fn the_day_book_says_who_entered_each_november_voucher_and_how() {
+    // provenance: the mock's VOUCHERS list (design/mock-v2/index.html:567-580): `by` is who
+    // entered it and `ai` marks an accepted draft. Bank rule (PY/0316) and Image attached
+    // (PB/0144) are not recorded in the company file, so they read as Typed here (see
+    // design/PARITY-GAPS.md). The rest of the 14 are Typed by the named user.
+    let (_dir, api) = sample();
+    let r = report(&api, ReportKind::DayBook, date!(2026 - 11 - 21));
+    let col = |name: &str| r.columns.iter().position(|c| c.label == name).unwrap();
+    let text = |row: &ledgerly_api::ReportRow, c: usize| match &row.cells[c] {
+        Cell::Text(t) => t.clone(),
+        other @ (Cell::Amount(_)
+        | Cell::Signed(_)
+        | Cell::Qty(_)
+        | Cell::Date(_)
+        | Cell::Empty
+        | Cell::Provisional { .. }
+        | Cell::Unsupported(_)) => panic!("{other:?}"),
+    };
+    let (no, by, origin, narr) = (
+        col("Voucher no."),
+        col("Entered by"),
+        col("Origin"),
+        col("Narration"),
+    );
+    let find = |number: &str| {
+        let row = r
+            .rows
+            .iter()
+            .find(|row| matches!(&row.cells[no], Cell::Text(t) if t == number))
+            .unwrap_or_else(|| panic!("no {number}"));
+        (text(row, by), text(row, origin), text(row, narr))
+    };
+    let t = |a: &str, b: &str, c: &str| (a.to_owned(), b.to_owned(), c.to_owned());
+    assert_eq!(
+        find("SI/0401"),
+        t("Ananya K.", "Typed", "Against PO MAI/77")
+    );
+    assert_eq!(
+        find("PY/0315"),
+        t(
+            "Ananya K.",
+            "AI draft",
+            "Office rent, November, Sharma Properties"
+        )
+    );
+    assert_eq!(find("SI/0405"), t("Rohan D.", "Typed", ""));
+    assert_eq!(
+        find("PB/0141"),
+        t("Ananya K.", "AI draft", "Cartons, bill KP/2231")
+    );
+    assert_eq!(
+        find("RC/0215"),
+        t("Rohan D.", "Typed", "NEFT, part against SI/0372")
+    );
+    assert_eq!(
+        find("JV/0032"),
+        t("Ananya K.", "Typed", "Monthly depreciation, November")
+    );
+}
+
+#[test]
+fn gstr1_sections_count_what_the_return_holds() {
+    // provenance: the mock's `gstr1()` run with node over its November sales
+    // (design/mock-v2/index.html:698-715): 4A B2B invoices 4 / 3,43,585.00 taxable / 50,535.30
+    // tax; 7 B2C others one state row, 9,640.00 taxable (SI/0415: 4 x 1,450.00 spare + 6 x 640.00
+    // pickaxe) at 5 percent = 482.00 tax; 12 HSN summary 3,49,385.00 = 3,43,585.00 + 5,800.00,
+    // the pickaxe line left out because the item has no HSN, so Table 12 is Needs correction; the
+    // spare's HSN 8424 at 5 percent is already a row, so 12 keeps 5 rows; 13 counts 5 invoices.
+    // HSN is a Table 12 field only (GSTN GSTR-1 user guide, read 2026-11-25), so SI/0415 stays in
+    // Table 7 and there is no held-back row.
+    let (_dir, api) = sample();
+    let books = api.books().unwrap().value().unwrap();
+    let gstin = books.company.registrations[0].gstin.clone();
+    let period = Period::new(date!(2026 - 11 - 01), date!(2026 - 11 - 30)).unwrap();
+    let ret = api.gstr1(&gstin, period).unwrap().value().unwrap();
+    let rows: Vec<String> = ret
+        .sections()
+        .unwrap()
+        .into_iter()
+        .map(|s| {
+            let (taxable, tax) = (s.taxable.map(Paise::get), s.tax.map(Paise::get));
+            format!(
+                "{} {} {taxable:?} {tax:?} {:?}",
+                s.code, s.records, s.status
+            )
+        })
+        .collect();
+    let want = vec![
+        "4A 4 Some(34358500) Some(5053530) Ready",
+        "5 0 Some(0) Some(0) NotRelevant",
+        "7 1 Some(964000) Some(48200) Ready",
+        "9B 0 Some(0) Some(0) NotRelevant",
+        "12 5 Some(34938500) None NeedsCorrection",
+        "13 5 None None Ready",
+    ];
+    assert_eq!(rows, want);
+    let sections = ret.sections().unwrap();
+    let hsn = sections.iter().find(|s| s.code == "12").unwrap();
+    assert!(hsn.note.as_deref().unwrap_or("").contains("Steel pickaxe"));
+}
+
+#[test]
+fn gstr3b_computes_on_the_sample_and_matches_the_mocks_tables() {
+    // provenance: design/mock-v2/index.html `gstr3b()` over the same books (run with node on
+    // 2026-11-25): table 3.1(a) taxable 3,53,225.00 with IGST 20,370.00, CGST 15,323.65 and SGST
+    // 15,323.65 (screenshot design/mock-v2/captures/states/light/gst.gstr3b.webp), and "In your
+    // books" ITC of IGST 29,520.00 with no CGST or SGST.
+    let (_dir, api) = sample();
+    let books = api.books().unwrap().value().unwrap();
+    let gstin = books.company.registrations[0].gstin.clone();
+    let period = Period::new(date!(2026 - 11 - 01), date!(2026 - 11 - 30)).unwrap();
+    let w = match api.gstr3b(&gstin, period).unwrap() {
+        Outcome::Value(w) => w,
+        Outcome::Unsupported(u) => panic!("{u:?}"),
+    };
+    assert_eq!(w.outward_taxable_value.get(), 35_322_500);
+    assert_eq!(w.outward_tax.integrated.get(), 2_037_000);
+    assert_eq!(w.outward_tax.central.get(), 1_532_365);
+    assert_eq!(w.outward_tax.state_ut.get(), 1_532_365);
+    assert_eq!(w.itc_all_other.integrated.get(), 2_952_000);
+    assert_eq!(w.itc_all_other.central.get(), 0);
+    assert_eq!(w.itc_all_other.state_ut.get(), 0);
+}
+
+#[test]
+fn gstr1_taxable_value_agrees_with_gstr3b_on_the_sample() {
+    // provenance: the mock's own sentence under the section table (index.html:1683): "Taxable
+    // value agrees with GSTR-3B table 3.1(a): " followed by 4A + 7 taxable, which the mock's
+    // gstr3b() gives as 3,53,225.00 too (343,585.00 + 9,640.00). Here the engine compares the two
+    // builds; 35,322,500 paise is that figure by hand.
+    let (_dir, api) = sample();
+    let books = api.books().unwrap().value().unwrap();
+    let gstin = books.company.registrations[0].gstin.clone();
+    let period = Period::new(date!(2026 - 11 - 01), date!(2026 - 11 - 30)).unwrap();
+    let ret = api.gstr1(&gstin, period).unwrap().value().unwrap();
+    let w = api.gstr3b(&gstin, period).unwrap().value().unwrap();
+    let a = ret.taxable_vs_gstr3b(&w).unwrap().value().unwrap();
+    assert_eq!(a.gstr1.get(), 35_322_500);
+    assert_eq!(a.gstr3b.get(), 35_322_500);
+    assert!(a.agrees());
+    // A 3B working that disagrees is reported as different, not smoothed over.
+    let mut off = w.clone();
+    off.outward_taxable_value = Paise::new(35_322_400);
+    let a = ret.taxable_vs_gstr3b(&off).unwrap().value().unwrap();
+    assert!(!a.agrees());
+    assert_eq!(a.gstr3b.get(), 35_322_400);
 }

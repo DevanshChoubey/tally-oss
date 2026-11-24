@@ -38,6 +38,7 @@ use ledgerly_core::{Date, GroupId, LedgerId, Outcome, Paise, SignedAmount};
 use ledgerly_model::{Books, Group, Ledger, Nature, Posting, Scenario, VoucherStatus};
 use ledgerly_stock::{ProvisionalReason, StockValuation, ValuationStatus};
 
+use crate::balance_sheet::negative_stock_reason;
 use crate::{
     Cell, ColumnHeader, ColumnSpec, Detail, DrillKey, Report, ReportError, ReportFilter,
     ReportKind, ReportParams, ReportRow, RowKind,
@@ -112,8 +113,14 @@ pub fn profit_loss(
         field: "period".into(),
         reason: format!("{from} has no previous day to value opening stock at"),
     })?;
-    let opening = supported!(stock_total(opening_stock, day_before, "opening stock")?);
+    let opening = supported!(stock_total(
+        books,
+        opening_stock,
+        day_before,
+        "opening stock"
+    )?);
     let closing = supported!(stock_total(
+        books,
         closing_stock,
         params.period.to(),
         "closing stock"
@@ -172,6 +179,7 @@ fn unsupported_params(params: &ReportParams) -> Option<Outcome<Report>> {
 }
 
 fn stock_total(
+    books: &Books,
     input: &Outcome<Vec<StockValuation>>,
     expected: Date,
     which: &str,
@@ -208,9 +216,7 @@ fn stock_total(
         match &v.status {
             ValuationStatus::Final => {}
             ValuationStatus::Provisional(ProvisionalReason::NegativeStock { item, date }) => {
-                reasons.push(format!(
-                    "negative stock: item {item:?} first went below zero on {date}"
-                ));
+                reasons.push(negative_stock_reason(books, *item, *date));
             }
         }
     }

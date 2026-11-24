@@ -82,13 +82,40 @@ pub(super) fn run_report(
     api: &Api,
     params: &ReportParams,
 ) -> Result<Outcome<ViewReport>, ViewError> {
-    match api.report(params) {
+    // The balance sheet's default view lists each group with its sub-groups (the mock's
+    // `balanceSheet()` view), which is neither of the engine's levels: the engine's `Condensed` is
+    // primary groups only. So the screen asks for `Detailed` and drops the ledger rows below.
+    let groups_only = params.kind == ReportKind::BalanceSheet && params.detail == Detail::Condensed;
+    let asked = if groups_only {
+        ReportParams {
+            detail: Detail::Detailed,
+            ..params.clone()
+        }
+    } else {
+        params.clone()
+    };
+    match api.report(&asked) {
         Err(e) => Err(ViewError::Source {
             message: e.to_string(),
         }),
         Ok(Outcome::Unsupported(u)) => Ok(Outcome::Unsupported(u)),
-        Ok(Outcome::Value(report)) => Ok(Outcome::Value(view_report(&report))),
+        Ok(Outcome::Value(report)) => {
+            let mut view = view_report(&report);
+            if groups_only {
+                view.rows = groups_and_sub_groups(view.rows);
+                view.params.detail = ViewDetail::Condensed;
+            }
+            Ok(Outcome::Value(view))
+        }
     }
+}
+
+/// The rows of a detailed balance sheet that a group-level view keeps: every row down to the
+/// first sub-group level, ledgers left out. The stock row stays (it is an item, not a ledger).
+fn groups_and_sub_groups(rows: Vec<ViewRow>) -> Vec<ViewRow> {
+    rows.into_iter()
+        .filter(|r| r.depth <= 1 && r.kind != ViewRowKind::Ledger)
+        .collect()
 }
 
 /// A report in the screen's model. The token is the title; the screen never reads it, it only

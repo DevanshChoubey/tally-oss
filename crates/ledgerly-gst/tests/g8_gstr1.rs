@@ -557,13 +557,19 @@ fn credit_note_to_registered_recipient_lands_in_9b() {
 #[test]
 fn credit_note_without_hsn_treatment_in_the_pack_needs_correction() {
     // provenance: derived. How a credit note enters Table 12 is a rule the pack must state; with
-    // no entry the note is listed for correction and left out of the return.
+    // no entry the note is listed for correction. The note itself is still a Table 9B entry,
+    // because HSN is a field of Table 12 only (GSTN GSTR-1 user guide, read 2026-11-25,
+    // https://tutorial.gst.gov.in/userguide/returns/Creation_of_Outward_Supplies_Return_in_GSTR-1.htm),
+    // so only Table 12 stays empty. Rs 5,000.00 at 18 percent inter-state: IGST 90,000 paise.
     let mut note = voucher(2, CREDIT_NOTE, "CN-1", REGISTERED, GUJARAT);
     note.inventory_lines = vec![inv_line(500_000)];
     let b = books(vec![note]);
     let (r, buckets) = build(&b, &pack(Some("100000"), None));
     assert_needs_correction(&buckets, 2, "unsupported");
-    assert_eq!(r.cdnr, [] as [ledgerly_gst_formats::gstr1::CdnrParty; 0]);
+    assert_eq!(r.cdnr.len(), 1);
+    assert_eq!(r.cdnr.first().unwrap().notes.first().unwrap().num, "CN-1");
+    assert_eq!(r.hsn.len(), 0, "no HSN row without a treatment");
+    assert!(bucket_of(&buckets, 2).in_tables);
 }
 
 #[test]
@@ -600,6 +606,33 @@ fn voucher_with_no_number_or_no_hsn_needs_correction() {
     b.masters.stock_items.get_mut(&ITEM).unwrap().hsn = None;
     let (_, buckets) = build(&b, &full_pack());
     assert_needs_correction(&buckets, 2, "HSN");
+}
+
+#[test]
+fn a_missing_hsn_keeps_the_invoice_in_its_tables_and_only_table_12_waits() {
+    // provenance: observed. GSTN's GSTR-1 user guide (read 2026-11-25,
+    // https://tutorial.gst.gov.in/userguide/returns/Creation_of_Outward_Supplies_Return_in_GSTR-1.htm)
+    // lists HSN as a field of Table 12 only; the invoice entries of Tables 4, 5 and 7 and the
+    // documents of Table 13 have no HSN field. So an item without an HSN must not drop the
+    // invoice from Table 4A; only Table 12 cannot be filled and the voucher stays flagged.
+    // Rs 10,000.00 at 18 percent to a registered buyer in another state: Table 4A, IGST 180,000
+    // paise, value 1,180,000 paise.
+    let mut b = books(vec![sale(2, "INV-2", REGISTERED, GUJARAT, &[1_000_000])]);
+    b.masters.stock_items.get_mut(&ITEM).unwrap().hsn = None;
+    let (r, buckets) = build(&b, &full_pack());
+    assert_needs_correction(&buckets, 2, "HSN");
+    assert_eq!(r.b2b.len(), 1, "the invoice is still reported in Table 4A");
+    let inv = r.b2b.first().unwrap().invoices.first().unwrap();
+    assert_eq!(inv.num, "INV-2");
+    assert_eq!(inv.value, paise(1_180_000));
+    assert!(r.hsn.is_empty(), "no HSN row can be made without an HSN");
+    assert_eq!(r.doc_issue.len(), 1, "Table 13 still counts the document");
+    assert!(bucket_of(&buckets, 2).in_tables);
+    // A voucher held back whole (no number) is in no table.
+    let mut unnumbered = sale(3, "x", REGISTERED, GUJARAT, &[1_000_000]);
+    unnumbered.number = None;
+    let (_, buckets) = build(&books(vec![unnumbered]), &full_pack());
+    assert!(!bucket_of(&buckets, 3).in_tables);
 }
 
 #[test]

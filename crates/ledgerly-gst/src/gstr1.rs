@@ -20,6 +20,8 @@
 //! # Buckets
 //!
 //! * [`Bucket::Ready`]: the voucher's figures are in the return.
+//! * [`Bucket::NeedsCorrection`] with `in_tables`: an item has no HSN/SAC or unit quantity code.
+//!   The invoice stays in Tables 4, 5, 7, 8, 9B and 13 and is left out of Table 12 only.
 //! * [`Bucket::NotRelevant`]: the voucher is not a GSTR-1 document: purchases and debit notes
 //!   (inward), payments, journals, orders and stock vouchers, receipts with no advance, optional
 //!   vouchers (memoranda) and cancelled vouchers (a cancelled sales voucher still counts as
@@ -125,6 +127,11 @@ pub struct BucketedVoucher {
     pub bucket: Bucket,
     /// Why, for every bucket except `Ready`.
     pub reason: Option<String>,
+    /// Whether the voucher's invoice is in Tables 4, 5, 7, 8, 9B and 13 although it is not
+    /// `Ready`. It is when only Table 12 is incomplete (a missing HSN or unit quantity code),
+    /// because GSTN's HSN field exists in Table 12 only (GSTR-1 user guide, read 2026-11-25,
+    /// <https://tutorial.gst.gov.in/userguide/returns/Creation_of_Outward_Supplies_Return_in_GSTR-1.htm>).
+    pub in_tables: bool,
 }
 
 /// Builds GSTR-1 for `gstin` and `period` from the books, with every in-period voucher bucketed.
@@ -193,6 +200,7 @@ pub fn build_gstr1(
             voucher: e.id,
             bucket: e.bucket,
             reason: e.reason.clone(),
+            in_tables: e.in_tables,
         })
         .collect();
     Ok(Outcome::Value((gstr1, buckets)))
@@ -412,12 +420,16 @@ struct Part {
     placement: Placement,
     nil: Vec<(NilKey, NilClass, Paise)>,
     hsn: Vec<(HsnKey, HsnAmounts)>,
+    /// Why Table 12 cannot take this voucher (a missing HSN or unit quantity code). The invoice
+    /// still belongs in its other tables: GSTN's HSN field exists in Table 12 only.
+    hsn_gap: Option<String>,
 }
 
 struct Eval {
     id: VoucherId,
     bucket: Bucket,
     reason: Option<String>,
+    in_tables: bool,
     doc: Option<Doc>,
     part: Option<Part>,
 }
@@ -554,8 +566,13 @@ fn evaluate(books: &Books, v: &Voucher, pack: &RulePack) -> Result<Eval, GstErro
     Ok(match judged {
         Ok(part) => Eval {
             id: v.id,
-            bucket: Bucket::Ready,
-            reason: None,
+            bucket: if part.hsn_gap.is_some() {
+                Bucket::NeedsCorrection
+            } else {
+                Bucket::Ready
+            },
+            reason: part.hsn_gap.clone(),
+            in_tables: true,
             doc,
             part: Some(part),
         },
@@ -563,6 +580,7 @@ fn evaluate(books: &Books, v: &Voucher, pack: &RulePack) -> Result<Eval, GstErro
             id: v.id,
             bucket: s.bucket,
             reason: Some(s.reason),
+            in_tables: false,
             doc,
             part: None,
         },
@@ -696,7 +714,7 @@ fn build_part(c: &Ctx<'_>, number: String, is_note: bool, recipient: &Recipient)
     if let Some(reason) = stored_gst_mismatch(c)? {
         return Ok(Err(stop(Bucket::Mismatch, reason)));
     }
-    let hsn = go!(hsn_parts(c, is_note)?);
+    let (hsn, hsn_gap) = hsn_parts(c, is_note)?;
     let nil = nil_parts(c, &classes, recipient);
     let Some(pos) = c.v.place_of_supply else {
         return Ok(Err(needs("the voucher has no place of supply")));
@@ -718,6 +736,7 @@ fn build_part(c: &Ctx<'_>, number: String, is_note: bool, recipient: &Recipient)
         placement,
         nil,
         hsn,
+        hsn_gap,
     }))
 }
 
@@ -1079,19 +1098,29 @@ fn credit_note_hsn(rules: &RuleSet) -> Step<HsnNotes> {
     }
 }
 
-fn hsn_parts(c: &Ctx<'_>, is_note: bool) -> Step<Vec<(HsnKey, HsnAmounts)>> {
+/// The Table 12 rows of the voucher's lines, and why some line has none. A line with no HSN or
+/// unit quantity code is left out of Table 12 only; the rest of its voucher is still reported.
+fn hsn_parts(c: &Ctx<'_>, is_note: bool) -> Result<HsnParts, GstError> {
     let negate = if is_note {
-        match go!(credit_note_hsn(c.rules)?) {
-            HsnNotes::Net => true,
-            HsnNotes::Exclude => return Ok(Ok(Vec::new())),
+        match credit_note_hsn(c.rules)? {
+            Ok(HsnNotes::Net) => true,
+            Ok(HsnNotes::Exclude) => return Ok((Vec::new(), None)),
+            Err(gap) => return Ok((Vec::new(), Some(gap.reason))),
         }
     } else {
         false
     };
     let signed = |d: Decimal| if negate { -d } else { d };
     let mut out = Vec::with_capacity(c.breakup.lines.len());
+    let mut gap = None;
     for line in &c.breakup.lines {
-        let (hsn, uqc, qty) = go!(hsn_facts(c, line)?);
+        let (hsn, uqc, qty) = match hsn_facts(c, line)? {
+            Ok(facts) => facts,
+            Err(missing) => {
+                gap.get_or_insert(missing.reason);
+                continue;
+            }
+        };
         out.push((
             HsnKey {
                 hsn,
@@ -1108,8 +1137,11 @@ fn hsn_parts(c: &Ctx<'_>, is_note: bool) -> Step<Vec<(HsnKey, HsnAmounts)>> {
             },
         ));
     }
-    Ok(Ok(out))
+    Ok((out, gap))
 }
+
+/// Table 12 rows of a voucher, and the reason a line has none.
+type HsnParts = (Vec<(HsnKey, HsnAmounts)>, Option<String>);
 
 /// The HSN or SAC, unit quantity code and quantity of a line.
 fn hsn_facts(c: &Ctx<'_>, line: &LineTax) -> Step<(Hsn, String, Decimal)> {
@@ -1190,6 +1222,7 @@ fn flag_duplicates(evals: &mut [Eval]) {
                 d.number
             ));
             e.bucket = Bucket::NeedsCorrection;
+            e.in_tables = false;
             e.part = None;
         }
     }
