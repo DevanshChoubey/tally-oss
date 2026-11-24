@@ -11,6 +11,7 @@ mod error;
 mod events;
 pub mod facade;
 mod gst;
+mod home;
 mod maintenance;
 mod print;
 mod report;
@@ -28,6 +29,7 @@ pub use facade::Api;
 pub use gst::{
     Bucket, BucketedVoucher, Gstr1, Gstr1Return, Gstr3bTaxAmounts, Gstr3bWorking, RulePack,
 };
+pub use home::{CashAndBank, HomeFigures, LateBills, MonthSales};
 pub use ledgerly_gst::compute::GstBreakup;
 pub use ledgerly_model::{
     Address, Books, Company, EntityKind, Features, NegativeStockPolicy, Voucher,
