@@ -110,10 +110,12 @@ and `home.ai-off`. Not captured: `home.loading` and `home.nudge-open`.
   ("Some figures are provisional and are marked. Why: ...") because the engine's reason is an
   internal id, not the mock's "Steel pickaxe 2.5 kg shows -30 nos" (next entry). The engine's own
   note under the statement repeats the reason.
-- **bug: the provisional reason is not readable.** The engine's reason reads "negative stock:
-  item StockItemId(1) first went below zero on 2026-11-10" (`ledgerly-reports`
-  `stock_summary/valuation.rs`): an internal id and an ISO date. The mock names the item and the
-  quantity ("Steel pickaxe 2.5 kg shows -30 nos"). Needs the report to carry the item's name.
+- **gap: the provisional reason is still plain.** The balance sheet's and the profit and loss's
+  reason now names the item ("negative stock: item Steel pickaxe first went below zero on
+  2026-11-10", closed in s9; an item missing from the masters shows its number). Still different
+  from the mock's "Steel pickaxe 2.5 kg shows -30 nos": the date is ISO and the quantity is not
+  in the reason. The stock summary's own reason (`stock_summary/valuation.rs`, pinned by
+  `rp9_stock_summary.rs` as "item 1") is unchanged.
 - **gap: the voucher view has no item lines, tax, total or audit card.** `balance-sheet.voucher`
   is now two cards: the header fields (Type, Number, Date, Status, Party) over the ledger lines in
   Debit and Credit columns, and a "Read-only" card. The mock's item table and tax lines need the
