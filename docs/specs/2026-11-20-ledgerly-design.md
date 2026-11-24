@@ -267,7 +267,9 @@ files, gateway links and Account Aggregator: v2.
 - Reports reshape in place; Enter drills, Esc returns with selection preserved; saved views; charts.
 - Indian digit grouping (12,34,567.00); light/dark/high-contrast themes; scalable fonts; screen
   reader labels (AccessKit); visible focus; no colour-only signals.
-- UI languages v1: English + Hindi; others via community translation files. Transliteration input v2.
+- UI languages v1: English. Hindi moved to v1.1 (decided 2026-11-24 to release v1 without it; branch
+  `s7/hindi` holds the translation layer and most screens); others via community translation
+  files. Transliteration input v2.
 - The mock (`design/mock/index.html`) is the visual reference; deviations need a reason.
 
 ## 8. Performance targets (benchmarked in CI)
@@ -315,7 +317,7 @@ files, gateway links and Account Aggregator: v2.
 5. **M4 Banking + inventory basic** — statements, matching, BRS, cheques, UPI QR; stock masters,
    item invoices, valuation.
 6. **M5 AI + polish** — assist proposer, validator integration, AI panel, MCP server, print
-   templates, Hindi UI, accessibility, packaging/installers, reproducible builds.
+   templates, accessibility, packaging/installers, reproducible builds. (Hindi UI moved to v1.1.)
 
 ## 12. Later (v1.1 / v2)
 

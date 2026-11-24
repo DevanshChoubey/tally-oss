@@ -6,7 +6,7 @@ exclude = ["fuzz"]
 [workspace.package]
 edition = "2024"
 rust-version = "1.100"
-repository = "https://github.com/OWNER/ledgerly"
+repository = "https://github.com/DevanshChoubey/opentally"
 
 [workspace.dependencies]
 # Internal crates

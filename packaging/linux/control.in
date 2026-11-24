@@ -6,7 +6,7 @@ Architecture: amd64
 Maintainer: Ledgerly contributors <ledgerly@example.invalid>
 Installed-Size: @SIZE_KB@
 Depends: libc6, libgcc-s1, libxkbcommon0, libwayland-client0, libx11-6, libgl1
-Homepage: https://github.com/OWNER/ledgerly
+Homepage: https://github.com/DevanshChoubey/opentally
 Description: Accounting for Indian businesses and their accountants
  Ledgerly is a local-first desktop accounting application. The ledgerly-app
  program is the desktop app; the ledgerly command line checks audit chains,
