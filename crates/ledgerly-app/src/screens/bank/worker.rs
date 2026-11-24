@@ -83,6 +83,18 @@ pub(super) struct Run {
     matched: BTreeSet<u32>,
 }
 
+impl Run {
+    /// The bank ledger this run reconciles.
+    pub(super) fn ledger_id(&self) -> LedgerId {
+        self.ledger
+    }
+
+    /// The date the reconciliation statement is as of.
+    pub(super) fn as_of_date(&self) -> Date {
+        self.as_of
+    }
+}
+
 impl BankScreen {
     /// A screen that gets its statement, suggestions and reconciliation statement from the API
     /// worker. The first frame asks for them; until they arrive the screen shows "Loading".
@@ -124,6 +136,9 @@ impl BankScreen {
             }),
             import_layout: import::DEFAULT_LAYOUT,
             import_notice: None,
+            account: None,
+            can_switch: false,
+            switch_requested: false,
         }
     }
 

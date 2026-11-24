@@ -281,7 +281,7 @@ fn ask_reports_open_real_screens() {
     );
     assert_eq!(AskReport::Ledgers.open(&app).unwrap().title(), "Masters");
     // provenance: derived. The test company has no GST registration and no bank ledger, so those
-    // two say why (navigate::gst_screen, navigate::sole_bank_screen).
+    // two say why (navigate::gst_screen, navigate::bank_entry_screen).
     match AskReport::Gstr3b.open(&app) {
         Err(NavError::Unsupported { reason, .. }) => {
             assert_eq!(reason, "the company has no GST registration");

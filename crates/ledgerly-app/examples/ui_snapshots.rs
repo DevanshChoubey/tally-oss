@@ -1016,12 +1016,17 @@ fn light_shots() -> Vec<Shot> {
             .type_text("250000")
             .press(&[(Key::Enter, NONE), (Key::Enter, NONE)])
             .type_text("RTGS to Nilgiri Steel Traders"),
-        shot("bank.default", &[palette])
+        // Godavari has two bank accounts, so Bank Reconciliation opens the chooser first; the
+        // mock's statement is Saptagiri's (the first row), so Enter on the chooser opens it.
+        shot("bank.chooser", &[palette])
             .query("Bank Reconciliation")
             .then(&[(Key::Enter, NONE)]),
+        shot("bank.default", &[palette])
+            .query("Bank Reconciliation")
+            .then(&[(Key::Enter, NONE), (Key::Enter, NONE)]),
         shot("bank.brs", &[palette])
             .query("Bank Reconciliation")
-            .then(&[(Key::Enter, NONE), (Key::B, NONE)]),
+            .then(&[(Key::Enter, NONE), (Key::Enter, NONE), (Key::B, NONE)]),
         // Company setup (mock SCREENS.setup). The palette opens the wizard at Start; Enter goes on.
         // The true first launch: the shell as `main` builds it (`Shell::cold_start`), no company.
         shot("setup.welcome", &[]).on(Fixture::Cold),
@@ -1031,12 +1036,16 @@ fn light_shots() -> Vec<Shot> {
         setup_shot("setup.ai", 3),
         setup_shot("setup.backup", 4),
         setup_shot("setup.done", 5),
-        // The capture company has no imported statement, so the bank screen shows its empty state
+        // The sample imports a statement for Saptagiri only, so the second row of the chooser (Mula
+        // Valley Co-op Bank) is an account with no statement: the empty state
         // (index.html:434 "No statement imported for this account").
         shot("bank.empty", &[palette])
             .query("Bank Reconciliation")
-            .then(&[(Key::Enter, NONE)])
-            .on(Fixture::Main),
+            .then(&[
+                (Key::Enter, NONE),
+                (Key::ArrowDown, NONE),
+                (Key::Enter, NONE),
+            ]),
         // F2 on the day book asks for one date; Ctrl+A selects the prefilled day so the typed one
         // replaces it. The capture company has no voucher on 21 Nov (index.html:1641 uses 21 Nov).
         shot("day-book.empty", &[(Key::D, NONE), (Key::F2, NONE)])

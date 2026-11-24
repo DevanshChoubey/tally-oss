@@ -9,7 +9,7 @@
 //! are wave 3 work and are not drawn here.
 
 use egui::{FontId, Frame, Rect, Sense, Stroke, Ui, pos2, vec2};
-use egui_extras::{Column, Size, StripBuilder};
+use egui_extras::Column;
 
 use super::import;
 use super::{
@@ -35,8 +35,15 @@ use ledgerly_model::MatchKind;
 /// The sentence under the empty state, from the mock's bank empty state.
 const NO_STATEMENT_SENTENCE: &str = "Download a statement from your bank's website as CSV, XLSX or MT940, then import it here. The file is read on this computer. Ledgerly never signs in to your bank.";
 
+/// The least width of the statement lines table.
+const MIN_LINES_WIDTH: f32 = 420.0;
+
 /// Width of the card beside the statement lines.
-const FOCUS_WIDTH: f32 = 340.0;
+const FOCUS_WIDTH: f32 = 300.0;
+
+/// Height of a statement line: two lines of the narration, which wraps in its column as the
+/// mock's does (index.html:1755).
+const LINE_HEIGHT: f32 = 46.0;
 
 /// One key or click the frame produced. Applied after the frame is drawn.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -59,6 +66,8 @@ enum UiEvent {
     Import,
     /// Choose the file layout the import reads.
     Layout(&'static str),
+    /// Go to the chooser of bank accounts.
+    ChangeAccount,
 }
 
 /// A key the screen handles.
@@ -73,6 +82,7 @@ enum KeyCmd {
     Toggle,
     CloseManual,
     Import,
+    ChangeAccount,
 }
 
 /// Reads this frame's keys. Esc is left to the shell unless the manual panel is open.
@@ -106,6 +116,9 @@ fn read_keys(ui: &Ui, manual_open: bool) -> Vec<KeyCmd> {
         }
         if i.consume_key(egui::Modifiers::COMMAND, egui::Key::O) {
             out.push(KeyCmd::Import);
+        }
+        if !manual_open && i.consume_key(none, egui::Key::C) {
+            out.push(KeyCmd::ChangeAccount);
         }
     });
     out
@@ -242,6 +255,7 @@ impl BankScreen {
             }
             KeyCmd::CloseManual => self.close_manual(),
             KeyCmd::Import => self.choose_statement_file(),
+            KeyCmd::ChangeAccount => self.switch_requested = true,
         }
     }
 
@@ -268,13 +282,14 @@ impl BankScreen {
             UiEvent::ToggleManual => self.toggle_manual(),
             UiEvent::Import => self.choose_statement_file(),
             UiEvent::Layout(id) => self.set_import_layout(id),
+            UiEvent::ChangeAccount => self.switch_requested = true,
         }
     }
 
     /// Page head: the title, the ledger under it, and the two actions. Right-to-left layout puts
     /// the first action at the far right, so the reconciliation statement is added first.
     fn draw_head(&self, ui: &mut Ui, events: &mut Vec<UiEvent>) {
-        let sub = self.ledger_name().to_owned();
+        let sub = self.subtitle_text();
         page_head(ui, PAGE_TITLE, Some(&sub), |ui| {
             if button(ui, "Reconciliation statement", None, ButtonKind::Secondary).clicked() {
                 events.push(UiEvent::Tab(Tab::Statement));
@@ -290,6 +305,11 @@ impl BankScreen {
                 .clicked()
             {
                 events.push(UiEvent::Import);
+            }
+            if self.can_switch
+                && button(ui, "Change account", Some("C"), ButtonKind::Secondary).clicked()
+            {
+                events.push(UiEvent::ChangeAccount);
             }
         });
     }
@@ -335,13 +355,29 @@ impl BankScreen {
             self.pending_count(),
             self.line_count()
         ));
-        StripBuilder::new(ui)
-            .size(Size::remainder().at_least(420.0))
-            .size(Size::exact(FOCUS_WIDTH))
-            .horizontal(|mut strip| {
-                strip.cell(|ui| self.draw_lines(ui, events));
-                strip.cell(|ui| self.draw_focus(ui, events));
-            });
+        // Two columns from the width the page has: the table takes what the card beside it leaves.
+        // (A strip let the table's own minimum push the card past the window's right edge.)
+        let gap = 12.0;
+        let left = (ui.available_width() - FOCUS_WIDTH - gap).max(MIN_LINES_WIDTH);
+        ui.horizontal_top(|ui| {
+            ui.spacing_mut().item_spacing.x = gap;
+            ui.allocate_ui_with_layout(
+                vec2(left, ui.available_height()),
+                egui::Layout::top_down(egui::Align::Min),
+                |ui| {
+                    ui.set_width(left);
+                    self.draw_lines(ui, events);
+                },
+            );
+            ui.allocate_ui_with_layout(
+                vec2(FOCUS_WIDTH, ui.available_height()),
+                egui::Layout::top_down(egui::Align::Min),
+                |ui| {
+                    ui.set_width(FOCUS_WIDTH);
+                    self.draw_focus(ui, events);
+                },
+            );
+        });
     }
 
     /// The empty state of worker mode: no statement is stored for this ledger. It offers the
@@ -379,14 +415,19 @@ impl BankScreen {
 
     /// The statement lines as a table, one row per line, the focused row selected.
     fn draw_lines(&self, ui: &mut Ui, events: &mut Vec<UiEvent>) {
+        // The narration takes the width the other five columns and the gaps between the columns
+        // leave. (A remainder column let the table run wider than the cell it is drawn in.)
+        let fixed = 84.0 + 88.0 + 88.0 + 112.0 + 128.0;
+        let gaps = 5.0 * ui.spacing().item_spacing.x;
+        let narration = (ui.available_width() - fixed - gaps).max(120.0);
         table::builder(ui)
             .sense(Sense::click())
-            .column(Column::exact(96.0))
-            .column(Column::remainder().at_least(150.0))
-            .column(Column::exact(104.0))
-            .column(Column::exact(104.0))
+            .column(Column::exact(84.0))
+            .column(Column::exact(narration))
+            .column(Column::exact(88.0))
+            .column(Column::exact(88.0))
+            .column(Column::exact(112.0))
             .column(Column::exact(128.0))
-            .column(Column::exact(150.0))
             .header(table::HEADER_HEIGHT, |mut row| {
                 table::header(&mut row, "Date", false);
                 table::header(&mut row, "Narration (as imported)", false);
@@ -396,7 +437,7 @@ impl BankScreen {
                 table::header(&mut row, "Action", false);
             })
             .body(|body| {
-                body.rows(table::ROW_HEIGHT, self.line_count(), |mut row| {
+                body.rows(LINE_HEIGHT, self.line_count(), |mut row| {
                     let i = row.index();
                     let Some(line) = self.line_at(i) else {
                         return;
@@ -412,7 +453,17 @@ impl BankScreen {
                     let date = format_line_date(line.view.date);
                     let action = action_text(line, suggestion);
                     row.col(|ui| table::text(ui, &date));
-                    row.col(|ui| table::text(ui, &line.view.description));
+                    row.col(|ui| {
+                        let t = tokens(ui);
+                        ui.add(
+                            egui::Label::new(
+                                egui::RichText::new(&line.view.description)
+                                    .size(TEXT_BODY)
+                                    .color(t.text),
+                            )
+                            .wrap(),
+                        );
+                    });
                     row.col(|ui| table::numeric(ui, withdrawal));
                     row.col(|ui| table::numeric(ui, deposit));
                     row.col(|ui| {
