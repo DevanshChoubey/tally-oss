@@ -635,10 +635,12 @@ mod provisional_once {
     }
 
     fn texts(shape: &Shape, out: &mut Vec<String>) {
-        match shape {
-            Shape::Text(t) => out.push(t.galley.text().to_owned()),
-            Shape::Vec(inner) => inner.iter().for_each(|s| texts(s, out)),
-            _ => {}
+        if let Shape::Text(t) = shape {
+            out.push(t.galley.text().to_owned());
+        } else if let Shape::Vec(inner) = shape {
+            for s in inner {
+                texts(s, out);
+            }
         }
     }
 
