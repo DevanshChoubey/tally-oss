@@ -42,6 +42,9 @@ cloud feature on.
   configuration, no UPI QR code on invoices yet; other reports do not print yet.
 - The Windows and macOS packages are built by CI and were not tried by hand before release; the
   Windows installer has no icon.
+- The packages are not signed with a developer certificate. On macOS the 1.0.0 app has no bundle
+  signature, so macOS calls it "damaged": run `xattr -dr com.apple.quarantine
+  /Applications/Ledgerly.app` once. Windows SmartScreen asks before the first run.
 - The theme choice and zoom level are not remembered between runs.
 - The divider line colour is below the 3:1 contrast guideline in light and dark.
 - Payment bill-wise allocation and the overdraft warning are not built; the 2B reconciliation
