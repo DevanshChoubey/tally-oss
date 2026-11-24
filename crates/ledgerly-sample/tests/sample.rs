@@ -50,7 +50,12 @@ fn signed(cell: &Cell) -> i64 {
     match cell {
         Cell::Amount(a) => to_signed(*a),
         Cell::Empty => 0,
-        other => panic!("not an amount: {other:?}"),
+        other @ (Cell::Signed(_)
+        | Cell::Qty(_)
+        | Cell::Text(_)
+        | Cell::Date(_)
+        | Cell::Provisional { .. }
+        | Cell::Unsupported(_)) => panic!("not an amount: {other:?}"),
     }
 }
 
@@ -223,7 +228,13 @@ fn stock_after_the_november_sales_is_the_bought_quantity_less_what_was_sold() {
         let row = r.rows.iter().find(|row| row.label == label).unwrap();
         match &row.cells[6] {
             Cell::Qty(q) => q.0.to_string(),
-            other => panic!("{other:?}"),
+            other @ (Cell::Amount(_)
+            | Cell::Signed(_)
+            | Cell::Text(_)
+            | Cell::Date(_)
+            | Cell::Empty
+            | Cell::Provisional { .. }
+            | Cell::Unsupported(_)) => panic!("{other:?}"),
         }
     };
     // provenance: derived. Bought: mock ITEMS qty (index.html:555-562). Sold in November, from the

@@ -134,7 +134,7 @@ fn run(api: &mut Api, what: &str, command: Command) -> Result<(), SampleError> {
         }),
         Err(source) => Err(SampleError::Api {
             what: what.to_owned(),
-            source,
+            source: Box::new(source),
         }),
     }
 }
@@ -177,7 +177,7 @@ pub(crate) fn build(seed: &Seed, path: &Path, clock: Clock) -> Result<Built, Sam
     let company = company(seed)?;
     let mut api = Api::create(path, &company, clock).map_err(|source| SampleError::Api {
         what: "creating the company file".to_owned(),
-        source,
+        source: Box::new(source),
     })?;
     let keys = masters(seed, &mut api)?;
     vouchers(seed, &mut api, &keys)?;
@@ -302,6 +302,7 @@ fn ledger(l: &LedgerSeed, id: LedgerId) -> Result<Ledger, SampleError> {
     })
 }
 
+#[expect(clippy::too_many_lines, reason = "one flat pass over each master kind")]
 fn masters(seed: &Seed, api: &mut Api) -> Result<Keys, SampleError> {
     let mut ledgers = BTreeMap::new();
     for (n, l) in (1_u64..).zip(&seed.ledger) {
@@ -579,7 +580,7 @@ fn taxed_lines(
         Err(source) => {
             return Err(SampleError::Api {
                 what: "the tax of an invoice".to_owned(),
-                source,
+                source: Box::new(source),
             });
         }
     };
@@ -658,6 +659,10 @@ fn party_bill(info: &LedgerInfo, name: &str) -> Option<BillAllocation> {
     })
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "one arm per voucher mode, each short"
+)]
 fn build_voucher(api: &Api, keys: &Keys, id: u64, v: &VoucherSeed) -> Result<Voucher, SampleError> {
     let field = format!("voucher {}", v.number);
     let date = parse_date(&field, &v.date)?;
@@ -703,12 +708,11 @@ fn build_voucher(api: &Api, keys: &Keys, id: u64, v: &VoucherSeed) -> Result<Vou
                 cost: Vec::new(),
                 bank: None,
             };
-            let (target, bill) = match &v.paid_to {
-                Some(cash) => (keys.ledger(&field, cash)?, None),
-                None => {
-                    let name = v.reference.as_deref().unwrap_or(&v.number);
-                    (party, party_bill(party, name))
-                }
+            let (target, bill) = if let Some(cash) = &v.paid_to {
+                (keys.ledger(&field, cash)?, None)
+            } else {
+                let name = v.reference.as_deref().unwrap_or(&v.number);
+                (party, party_bill(party, name))
             };
             let party_line = bill.map(|b| LedgerLine {
                 ineligible_itc: None,
@@ -819,7 +823,7 @@ fn statements(seed: &Seed, api: &mut Api, keys: &Keys) -> Result<(), SampleError
             Err(source) => {
                 return Err(SampleError::Api {
                     what: field,
-                    source,
+                    source: Box::new(source),
                 });
             }
         }

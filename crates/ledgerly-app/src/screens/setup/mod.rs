@@ -168,12 +168,13 @@ impl StartChoice {
     /// to Open with any arrow, as it always did; Open goes up to Create or right to the sample;
     /// the sample goes left to Open or up to Create.
     fn moved(self, key: Key) -> Self {
-        match (self, key) {
-            (StartChoice::Create, _) => StartChoice::Open,
-            (StartChoice::Open, Key::ArrowUp | Key::ArrowLeft) => StartChoice::Create,
-            (StartChoice::Open, _) => StartChoice::Sample,
-            (StartChoice::Sample, Key::ArrowUp) => StartChoice::Create,
-            (StartChoice::Sample, _) => StartChoice::Open,
+        let up = matches!(key, Key::ArrowUp);
+        let back = matches!(key, Key::ArrowUp | Key::ArrowLeft);
+        match self {
+            StartChoice::Sample if up => StartChoice::Create,
+            StartChoice::Create | StartChoice::Sample => StartChoice::Open,
+            StartChoice::Open if back => StartChoice::Create,
+            StartChoice::Open => StartChoice::Sample,
         }
     }
 }

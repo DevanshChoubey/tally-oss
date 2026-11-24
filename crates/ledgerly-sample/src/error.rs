@@ -32,7 +32,7 @@ pub enum SampleError {
         /// The step, for example `voucher SI/0412`.
         what: String,
         /// The API's error.
-        source: ApiError,
+        source: Box<ApiError>,
     },
     /// The engine reported a step as unsupported. The sample never posts around that.
     #[error("the engine does not support {what}: {reason}")]
