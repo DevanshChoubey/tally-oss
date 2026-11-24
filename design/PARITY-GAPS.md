@@ -492,20 +492,30 @@ financial year starts. The model supports that (`Company::books_begin`), so it i
 
 ## Accessibility (card S7, round of 2026-11-24)
 
-Contrast is checked by `crates/ledgerly-app/tests/s7_contrast.rs` (WCAG 2.1 formula, thresholds
-4.5:1 text in light and dark, 7:1 text in high contrast, 3:1 non-text). Text and accent pairs
-pass in all three themes; token values are unchanged.
+Tests: `s7_a11y_labels`, `s7_a11y_screens` (names, read from the AccessKit tree), `s7_contrast`
+(WCAG 2.1 ratios over theme pairs), `s7_focus` (Tab order), `s7_zoom` (Ctrl+= / Ctrl+- / Ctrl+0),
+`s7_colour` (status words). Token values are unchanged.
 
 - **gap: divider border fails 3:1 non-text in light and dark.** `border` (light `#E2DFD8`, dark
-  `#34322E`) measures 1.33:1 on the light surface and 1.35:1 on the dark surface. It is used for
-  hairline dividers. Pinned by `divider_border_is_a_known_gap_below_the_non_text_minimum`; if a
-  control outline is ever drawn with it, use `border_strong` (passes 3:1 in light and dark).
+  `#34322E`) measures 1.33:1 and 1.35:1 on the surface. It is used for hairline dividers.
+  Pinned by `divider_border_is_a_known_gap_below_the_non_text_minimum`. A control outline should
+  use `border_strong`, which passes 3:1 in light and dark.
 - **gap: some text inputs have no accessible name.** Masters, voucher entry, company setup and
-  the welcome screen still draw their `TextEdit`s without a name; the sales invoice fields are
-  named. Screen readers read these as unlabelled edit boxes.
-- **gap: masters, GST and bank table rows are not named.** Rows are painted as click areas with
-  no role or label. The generic report and the item invoice rows are named (line text as drawn).
-- **gap: balance sheet and day book rows are not covered by a test.** Their naming is in code,
-  but the test harness has no worker to draw them, so the generic report path is the one tested.
-- **gap: UI zoom and focus-order tests are not in this card.** Ctrl+= / Ctrl+- / Ctrl+0 zoom
-  is session-only (the theme is not persisted either); see the shell notes in `shell/mod.rs`.
+  the welcome screen still draw their text fields without a name. The sales invoice fields are named.
+- **gap: masters, GST and bank table rows are not named.** They are painted click areas with no
+  role or label. The generic report rows and the item invoice lines are named as drawn.
+- **gap: balance sheet and day book rows are not covered by a test.** The naming is in code, but
+  the test harness has no worker to draw them; the generic report path is the one tested.
+- **gap: Tab stops on the suggestion list of an open field.** While the party or ledger field has
+  focus, its suggestion buttons take Tab stops before the next field. The header's field order is
+  reading order (`s7_focus`, which skips the suggestion buttons). Arrow keys are not wired to the list.
+- **by design: zoom is egui's built-in, session-only.** Ctrl+= / Ctrl+- / Ctrl+0 step the scale
+  by 0.1 between 0.2 and 5.0 (egui 0.37 `gui_zoom.rs`). The scale lives in the egui context, so it
+  lasts the session and is not saved, the same as the theme. The mock (`design/mock-v2/index.html`)
+  has no zoom key, so there is no mock state to match.
+- **audit: colour-only signals.** Debit and credit read "Dr" and "Cr"; bank matches read "Matched",
+  "Not matched" or the suggestion kind; GST buckets and review states read their word; notes carry
+  their text beside the colour; the setup rail check has a check icon. No listed signal is colour only.
+  `s7_colour` pins the words of each badge and note kind.
+- **focus rings.** The focus stroke is thicker in high contrast (`u1_theme`). No per-screen pixel
+  check of the ring in all three themes was added in this card.
