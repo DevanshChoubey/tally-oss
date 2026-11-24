@@ -545,7 +545,7 @@ Left, in order of the brief:
 - **bank screen: done in the fourth round** (see that section).
 - **GST screen: done in the fourth round** (see that section).
 - **company setup: not started.** `screens/setup/` (mod.rs, form.rs).
-- **AI screens: not started.** `ai_gate.rs`, `ask.rs`, `assist.rs`, `ai_settings.rs`.
+- **AI screens: done in the fifth round** (see that section).
 - **print messages: not started.** `screens/print_job.rs`.
 - **report bodies: not started.** Balance sheet labels, day book and voucher view in
   `screens/report_view/`.
@@ -620,3 +620,33 @@ Left, in order: the AI screens (`ai_gate.rs` gate reasons and `gate_note`, `ask.
 `ai_settings.rs` with its static tables and log headers, `review.rs`). They still show English in
 Hindi. Each needs a `_in(tr)` version of its static text, with the English versions kept where a
 test reads them.
+
+## Hindi UI, fifth round (card s7, 2026-11-24)
+
+Done: the five AI screens, one commit each, tests in `tests/i18n_ai.rs` written first and seen
+failing against English stubs before the strings moved.
+
+- **gate (`ai_gate.rs`, 363a615).** Gate reasons and the gate note, the Settings button, and the
+  "lost" tier gate. `gate_note` and `reason` keep their English wrappers.
+- **ask (`ask.rs`, 363a615).** Title, subtitle, question hint, report names, and the key bar.
+- **assist (`assist.rs`, 5869c81).** Tier names, the off message, accept and check block reasons,
+  and the voucher block reason. Percent text stays Latin.
+- **AI settings (`ai_settings.rs`, bd9d1ef).** Option cards, the off and unset notes, the
+  never-list, feature rows, the log headings and key bar, and the save dialog.
+- **review (3649716).** Queue kinds (bank match, draft payment, draft receipt) and their
+  unlisted-line text, the source names, the empty state, and the title and key bar. `QueueRow`
+  keeps the English `kind` for tests and adds `kind_word` for display.
+
+Still English in Hindi, on purpose or pending:
+
+- **quick entry and purchase bill still use the English `gate_note` and `reason` wrappers.**
+  Their call sites need `_in(tr)` versions.
+- **home queue (`screens/home/draw.rs`, `review_row`) still shows the English `row.kind`.** It
+  compiles because `kind` is `&'static str`. It should use `kind_word`.
+- **shared confidence words (`ui::conf`) and the format kit stay English.**
+- **Given as data, not translated:** engine reasons, field labels from the assistant, ledger names,
+  query text, and Dr/Cr (Latin by design).
+- **Export file name and CSV filter** stay English.
+- **captures not retaken.** There are no Hindi captures for the AI screens.
+- **Hindi terms are unsourced.** Every AI-screen Hindi line is marked `# unsourced` in `hi.toml`
+  and needs a native-speaker check.
