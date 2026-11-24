@@ -81,6 +81,7 @@ impl GstScreen {
             note(ui, NoteKind::Info, text);
             ui.add_space(SPACE_3);
         }
+        self.draw_period_picker(ui, &mut events);
         let want_scroll = self.scroll_pending;
         ScrollArea::vertical()
             .id_salt("gst-body")
@@ -97,8 +98,8 @@ impl GstScreen {
         action
     }
 
-    /// The page head and the tabs. The period button names the period on show; the screen cannot
-    /// change it yet, so the button says so when pressed (`design/PARITY-GAPS.md`).
+    /// The page head and the tabs. The period button names the period on show and opens the
+    /// period picker, as Alt+F2 does.
     fn draw_head(&self, ui: &mut Ui, events: &mut Vec<UiEvent>) {
         let subtitle = self.subtitle();
         let blocked = self.export_blocked_reason();
@@ -146,16 +147,49 @@ impl GstScreen {
         }
     }
 
+    /// The open period picker: the financial year's twelve months, the highlighted one filled.
+    /// Click or Enter chooses; Esc closes. The screen reloads for the chosen month.
+    fn draw_period_picker(&self, ui: &mut Ui, events: &mut Vec<UiEvent>) {
+        let Some(at) = self.picker else {
+            return;
+        };
+        crate::ui::card::card(ui, |ui| {
+            title(ui, "Return period");
+            ui.horizontal_wrapped(|ui| {
+                ui.spacing_mut().item_spacing = vec2(8.0, 8.0);
+                for (i, label) in self.picker_labels().iter().enumerate() {
+                    let kind = if i == at {
+                        ButtonKind::Primary
+                    } else {
+                        ButtonKind::Secondary
+                    };
+                    if button(ui, label, None, kind).clicked() {
+                        events.push(UiEvent::ChoosePeriod(i));
+                    }
+                }
+            });
+            ui.add_space(6.0);
+            para(
+                ui,
+                "J / K move, Enter chooses, Esc closes. The return is built again for the month you choose.",
+                TEXT_META,
+                tokens(ui).text_3,
+            );
+        });
+        ui.add_space(SPACE_3);
+    }
+
     // ---- GSTR-1 ------------------------------------------------------------------------------
 
     fn draw_gstr1(&self, ui: &mut Ui, want_scroll: bool, events: &mut Vec<UiEvent>) {
         self.draw_tiles(ui, events);
         ui.add_space(SPACE_3);
+        let mut side = Vec::new();
         split(
             ui,
             |ui| {
                 if self.sections_loaded {
-                    self.draw_sections(ui);
+                    self.draw_sections(ui, events);
                     ui.add_space(SPACE_3);
                     title(ui, "Vouchers behind the sections");
                 }
@@ -165,8 +199,9 @@ impl GstScreen {
                     draw_figures(ui, &self.figures1);
                 }
             },
-            |ui| self.draw_next_steps(ui),
+            |ui| self.draw_side_card(ui, &mut side),
         );
+        events.extend(side);
     }
 
     /// The four status tiles (the mock's `.kpi` in a `g4` grid). Each counts the vouchers the
@@ -196,7 +231,7 @@ impl GstScreen {
     /// The section table: one row per table of the return with its records, taxable value, tax
     /// and the engine's status (the mock's `#g1`). The amounts are the engine's; `none` where a
     /// table has no such figure.
-    fn draw_sections(&self, ui: &mut Ui) {
+    fn draw_sections(&self, ui: &mut Ui, events: &mut Vec<UiEvent>) {
         table_card(ui, |ui| {
             let t = tokens(ui);
             let width = ui.available_width();
@@ -211,11 +246,16 @@ impl GstScreen {
             );
             let font = egui::FontId::proportional(TEXT_BODY);
             let left = CellPlace::Left(table::CELL_PAD_X);
-            for section in &self.sections {
+            for (pos, section) in self.sections.iter().enumerate() {
                 let (rect, response) =
-                    ui.allocate_exact_size(vec2(width, T_ROW_HEIGHT), Sense::hover());
+                    ui.allocate_exact_size(vec2(width, T_ROW_HEIGHT), Sense::click());
+                if response.double_clicked() {
+                    events.push(UiEvent::OpenSection(pos));
+                } else if response.clicked() {
+                    events.push(UiEvent::Section(pos));
+                }
                 let state = RowState {
-                    selected: false,
+                    selected: pos == self.section_focus,
                     hovered: response.hovered(),
                     sub: false,
                 };
@@ -255,6 +295,52 @@ impl GstScreen {
                         bucket.label(),
                     ]),
                 );
+            }
+            if let Some(line) = &self.agreement {
+                padded(ui, |ui| {
+                    para(ui, line, TEXT_META, t.text_3);
+                });
+            }
+        });
+    }
+
+    /// The card beside the section table. With a section that needs correction selected it names
+    /// what is wrong, in the engine's words, and offers the fix (the mock's `gstr1-correction`
+    /// card, index.html:1688); otherwise it is "What happens next".
+    fn draw_side_card(&self, ui: &mut Ui, events: &mut Vec<UiEvent>) {
+        let Some(section) = self.selected_needs_correction() else {
+            self.draw_next_steps(ui);
+            return;
+        };
+        let t = tokens(ui);
+        crate::ui::card::card(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 6.0;
+                icon::icon(ui, Icon::Alert, t.warn);
+                title(ui, &self.side_card_title());
+            });
+            if let Some(reason) = &section.note {
+                para(ui, reason, TEXT_BODY, t.text);
+                ui.add_space(6.0);
+            }
+            let text = format!(
+                "The {} table cannot be complete without it, so Export JSON is refused until it \
+                 is fixed. Nothing is guessed.",
+                section.name
+            );
+            para(ui, &text, TEXT_BODY, t.text_2);
+            if self.side_card_offers_the_item_master() {
+                ui.add_space(SPACE_3);
+                let fix = button_icon(
+                    ui,
+                    None,
+                    "Fix the item master",
+                    Some("Enter"),
+                    ButtonKind::Primary,
+                );
+                if fix.clicked() {
+                    events.push(UiEvent::OpenSection(self.section_focus));
+                }
             }
         });
     }
@@ -1020,6 +1106,9 @@ fn read_keys(ui: &Ui) -> Vec<GstCmd> {
         }
         if i.consume_key(Modifiers::CTRL, Key::E) {
             out.push(GstCmd::ExportJson);
+        }
+        if i.consume_key(Modifiers::ALT, Key::F2) {
+            out.push(GstCmd::PickPeriod);
         }
     });
     out

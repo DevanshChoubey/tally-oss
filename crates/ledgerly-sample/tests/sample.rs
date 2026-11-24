@@ -417,3 +417,27 @@ fn gstr3b_computes_on_the_sample_and_matches_the_mocks_tables() {
     assert_eq!(w.itc_all_other.central.get(), 0);
     assert_eq!(w.itc_all_other.state_ut.get(), 0);
 }
+
+#[test]
+fn gstr1_taxable_value_agrees_with_gstr3b_on_the_sample() {
+    // provenance: the mock's own sentence under the section table (index.html:1683): "Taxable
+    // value agrees with GSTR-3B table 3.1(a): " followed by 4A + 7 taxable, which the mock's
+    // gstr3b() gives as 3,53,225.00 too (343,585.00 + 9,640.00). Here the engine compares the two
+    // builds; 35,322,500 paise is that figure by hand.
+    let (_dir, api) = sample();
+    let books = api.books().unwrap().value().unwrap();
+    let gstin = books.company.registrations[0].gstin.clone();
+    let period = Period::new(date!(2026 - 11 - 01), date!(2026 - 11 - 30)).unwrap();
+    let ret = api.gstr1(&gstin, period).unwrap().value().unwrap();
+    let w = api.gstr3b(&gstin, period).unwrap().value().unwrap();
+    let a = ret.taxable_vs_gstr3b(&w).unwrap().value().unwrap();
+    assert_eq!(a.gstr1.get(), 35_322_500);
+    assert_eq!(a.gstr3b.get(), 35_322_500);
+    assert!(a.agrees());
+    // A 3B working that disagrees is reported as different, not smoothed over.
+    let mut off = w.clone();
+    off.outward_taxable_value = Paise::new(35_322_400);
+    let a = ret.taxable_vs_gstr3b(&off).unwrap().value().unwrap();
+    assert!(!a.agrees());
+    assert_eq!(a.gstr3b.get(), 35_322_400);
+}

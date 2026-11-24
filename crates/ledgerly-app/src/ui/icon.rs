@@ -85,6 +85,8 @@ pub enum Icon {
     Save,
     /// `x` (a field's error, a close).
     X,
+    /// `alert` (a section that needs correction).
+    Alert,
 }
 
 impl Icon {
@@ -123,6 +125,7 @@ impl Icon {
             }
             Icon::Cloud => "M7 18a4.5 4.5 0 0 1-.5-9A6 6 0 0 1 18 10a4 4 0 0 1-1 8z",
             Icon::Off => "M12 3a9 9 0 1 0 0 18a9 9 0 0 0 0-18z M6 6l12 12",
+            Icon::Alert => "M12 4l9 16H3z M12 10v4 M12 17h.01",
             Icon::Sun => {
                 "M12 8a4 4 0 1 0 0 8a4 4 0 0 0 0-8z M12 2v2 M12 20v2 M4.9 4.9l1.4 1.4 M17.7 17.7l1.4 1.4 M2 12h2 M20 12h2 M4.9 19.1l1.4-1.4 M17.7 6.3l1.4-1.4"
             }

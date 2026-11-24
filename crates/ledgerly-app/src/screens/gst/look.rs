@@ -6,7 +6,8 @@
 //! no figure for, such as the credit accepted in IMS or the cash payable after set-off, is not
 //! drawn; `design/PARITY-GAPS.md` lists them.
 
-use ledgerly_api::{Gstr3bTaxAmounts, Gstr3bWorking};
+use ledgerly_api::{Gstr3bTaxAmounts, Gstr3bWorking, TaxableAgreement};
+use ledgerly_core::format::format_inr;
 use ledgerly_core::Paise;
 
 /// The column headings of the GSTR-3B table. The mock has Table, Taxable, IGST, CGST and SGST;
@@ -79,4 +80,23 @@ pub fn recon_empty(period_label: &str) -> (String, String) {
          anywhere."
             .to_owned(),
     )
+}
+
+/// The line under the GSTR-1 section table (the mock's "Taxable value agrees with GSTR-3B table
+/// 3.1(a): ..."), from the engine's comparison. When the two figures differ it says both and never
+/// says they agree.
+#[must_use]
+pub fn agreement_text(a: &TaxableAgreement) -> String {
+    if a.agrees() {
+        format!(
+            "Taxable value agrees with GSTR-3B table 3.1(a): {}.",
+            format_inr(a.gstr1)
+        )
+    } else {
+        format!(
+            "Taxable value differs from GSTR-3B table 3.1(a): tables 4A, 5 and 7 hold {}, table 3.1(a) holds {}.",
+            format_inr(a.gstr1),
+            format_inr(a.gstr3b)
+        )
+    }
 }

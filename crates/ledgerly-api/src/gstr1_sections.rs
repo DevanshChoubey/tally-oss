@@ -22,7 +22,7 @@
 //! Table 12 only, GSTR-1 user guide read 2026-11-25). The other rows are `Ready` when they hold a
 //! record and `NotRelevant` when they hold none.
 
-use ledgerly_core::{MoneyError, Paise};
+use ledgerly_core::{MoneyError, Outcome, Paise};
 use ledgerly_gst::gstr1::Bucket;
 use ledgerly_gst_formats::gstr1::{B2bInvoice, B2clInvoice, CdnrNote, ItemTax, LineItem};
 
@@ -48,6 +48,23 @@ pub struct Gstr1Section {
     /// Why the status is not `Ready`, in the engine's words (the first voucher's reason), when a
     /// voucher in this table needs correction.
     pub note: Option<String>,
+}
+
+/// GSTR-1's taxable value against GSTR-3B table 3.1(a), from the same books.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TaxableAgreement {
+    /// Taxable value of the regular invoices in tables 4A, 5 and 7.
+    pub gstr1: Paise,
+    /// Taxable value of table 3.1(a) of the GSTR-3B working.
+    pub gstr3b: Paise,
+}
+
+impl TaxableAgreement {
+    /// Whether the two figures are equal.
+    #[must_use]
+    pub fn agrees(&self) -> bool {
+        self.gstr1 == self.gstr3b
+    }
 }
 
 fn count(n: usize) -> u64 {
@@ -217,6 +234,53 @@ fn docs_row(r: &Gstr1) -> Gstr1Section {
 }
 
 impl Gstr1Return {
+    /// Compares the taxable value of tables 4A, 5 and 7 with table 3.1(a) of `working`.
+    ///
+    /// Table 3.1(a) holds the outward taxable supplies other than zero rated, nil rated and
+    /// exempted ones, which GSTR-1 reports in 4A, 5 and 7 (regular invoices). The comparison is
+    /// refused (`Unsupported`) where the two forms do not line up by construction: credit and debit
+    /// notes (how 3.1(a) nets them is pending, CGST Act s.34), and SEZ or deemed export invoices
+    /// (zero rated, so 3.1(b) not 3.1(a)).
+    ///
+    /// # Errors
+    /// [`MoneyError`] when a sum overflows.
+    pub fn taxable_vs_gstr3b(
+        &self,
+        working: &ledgerly_gst::gstr3b::Gstr3bWorking,
+    ) -> Result<Outcome<TaxableAgreement>, MoneyError> {
+        let r = &self.gstr1;
+        if !r.cdnr.is_empty() || !r.cdnur.is_empty() {
+            return Ok(Outcome::unsupported(
+                "comparing GSTR-1 with GSTR-3B table 3.1(a) when the return has credit or debit notes",
+                "how table 3.1(a) nets a note is pending (CGST Act s.34 not yet checked)",
+            ));
+        }
+        let mut sum = Sum::default();
+        for party in &r.b2b {
+            for inv in &party.invoices {
+                if inv.inv_type != ledgerly_gst_formats::gstr1::B2bInvoiceType::Regular {
+                    return Ok(Outcome::unsupported(
+                        "comparing GSTR-1 with GSTR-3B table 3.1(a) when the return has SEZ or deemed export invoices",
+                        "those are zero rated, so they belong to table 3.1(b), not 3.1(a)",
+                    ));
+                }
+                sum.lines(&inv.items)?;
+            }
+        }
+        for group in &r.b2cl {
+            for inv in &group.invoices {
+                sum.lines(&inv.items)?;
+            }
+        }
+        for line in &r.b2cs {
+            sum.lines(std::slice::from_ref(&line.line))?;
+        }
+        Ok(Outcome::Value(TaxableAgreement {
+            gstr1: sum.taxable,
+            gstr3b: working.outward_taxable_value,
+        }))
+    }
+
     /// The section table of this return, in the form's order.
     ///
     /// # Errors

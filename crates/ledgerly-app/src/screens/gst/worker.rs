@@ -65,6 +65,19 @@ fn fetch(api: &Api, gstin: &Gstin, period: Period) -> GstAnswer {
     }
 }
 
+impl GstRun {
+    /// The period last asked for.
+    pub(super) fn requested_period(&self) -> Option<Period> {
+        self.scope.as_ref().map(|(_, period)| *period)
+    }
+
+    /// Forgets a load in flight and any error, so an answer for another period cannot land.
+    pub(super) fn clear_answer(&mut self) {
+        self.latest = Latest::default();
+        self.error = None;
+    }
+}
+
 impl GstScreen {
     /// Asks for GSTR-1 and GSTR-3B of `gstin` for `period`. The next [`GstScreen::tick`] sends
     /// the request to the API worker.
@@ -211,6 +224,18 @@ impl GstScreen {
 
     fn apply_answer(&mut self, answer: GstAnswer) {
         self.run.error = None;
+        self.agreement = match (&answer.gstr1, &answer.gstr3b) {
+            (Ok(Outcome::Value(ret)), Ok(Outcome::Value(working))) => {
+                Some(match ret.taxable_vs_gstr3b(working) {
+                    Ok(Outcome::Value(a)) => super::look::agreement_text(&a),
+                    Ok(Outcome::Unsupported(u)) => {
+                        format!("Not compared with GSTR-3B table 3.1(a): {}.", u.reason)
+                    }
+                    Err(e) => format!("Not compared with GSTR-3B table 3.1(a): {e}."),
+                })
+            }
+            _ => None,
+        };
         match answer.gstr1 {
             Ok(Outcome::Value(ret)) => {
                 let items = ret.buckets.iter().map(exception_item).collect();

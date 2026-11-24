@@ -624,7 +624,13 @@ pub fn gst_screen(books: &Books) -> Result<GstScreen, NavError> {
         }
     };
     let period = gst_return_period(books, today())?;
-    let mut screen = GstScreen::new(return_label(period), Some(gstin.clone())).with_state(state);
+    let year = FinancialYear {
+        start: books.company.fy_start,
+    }
+    .period()?;
+    let mut screen = GstScreen::new(return_label(period), Some(gstin.clone()))
+        .with_state(state)
+        .with_year(year);
     screen.switch_tab(GstTab::Gstr1);
     screen.request_load(gstin, period);
     Ok(screen)
