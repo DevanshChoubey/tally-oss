@@ -1,0 +1,54 @@
+name: Bug report
+description: A crash, a wrong figure, a screen that does not work, or a build or install failure.
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please remove anything private (party names, GSTINs, amounts) before you paste. Do not attach a real company file.
+        A wrong number is the most serious kind of bug here: say which report or voucher shows it and what you expected.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The screens and keys you used, from opening the company. For a wrong figure, the vouchers that lead to it.
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Error text or log
+      description: The message on screen, or for the command line its full output and exit code (`echo $?`).
+      render: text
+  - type: input
+    id: version
+    attributes:
+      label: Ledgerly version
+      description: The version in the release name, or the commit hash.
+    validations:
+      required: true
+  - type: input
+    id: platform
+    attributes:
+      label: Platform
+      placeholder: Ubuntu 24.04 x86_64 / macOS 15 arm64 / Windows 11
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: How you installed it
+      options:
+        - Prebuilt release (tar.gz, .deb, zip, installer or .dmg)
+        - Built from source
+        - Other (please describe above)
+    validations:
+      required: true

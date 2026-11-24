@@ -1,0 +1,3 @@
+# Keep LF line endings on every platform: fixtures and expected outputs (Tally XML, GST JSON,
+# bank statements) are compared byte-for-byte, and Windows CI checks out CRLF otherwise.
+* text=auto eol=lf

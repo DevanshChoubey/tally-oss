@@ -1,0 +1,34 @@
+Ledgerly (repository: opentally)
+A local-first desktop accounting app for Indian small businesses.
+
+This project is independent. It is not affiliated with, endorsed by, or supported by Tally
+Solutions Pvt. Ltd. "Tally" and "TallyPrime" are trademarks of their owner; they are used here
+only to name the file formats Ledgerly reads for compatibility.
+
+Ledgerly is a clean-room implementation: its behaviour is modelled on public documentation,
+cited in the code and tests. It contains no code, artwork or design taken from that product.
+
+-------------------------------------------------------------------------------
+Licences
+-------------------------------------------------------------------------------
+
+See LICENSING.md. In short: the app and most crates are AGPL-3.0-or-later (LICENSE-AGPL);
+ledgerly-core, ledgerly-tally-xml, ledgerly-gst-formats and ledgerly-bankfmt are
+MIT OR Apache-2.0 (LICENSE-MIT, LICENSE-APACHE).
+
+-------------------------------------------------------------------------------
+Bundled fonts
+-------------------------------------------------------------------------------
+
+crates/ledgerly-app/assets/fonts/
+
+    Inter 4.1 (Regular, SemiBold)
+    Copyright 2016 The Inter Project Authors
+    SIL Open Font License 1.1 (Inter-LICENSE.txt)
+
+    Noto Sans (Regular, Bold) and Noto Sans Devanagari (Regular, Bold)
+    Copyright 2015-2020 Google LLC
+    SIL Open Font License 1.1 (OFL.txt)
+
+Third-party Rust crates keep their own licences; `cargo deny check licenses` lists and checks
+them against deny.toml.
