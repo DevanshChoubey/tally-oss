@@ -257,7 +257,8 @@ impl Shell {
             .order(egui::Order::Middle)
             .fixed_pos(screen.min)
             .show(&ctx, |ui| {
-                let (rect, response) = ui.allocate_exact_size(screen.size(), egui::Sense::click());
+                // A click catcher, not a control: it is not focusable, so Tab never stops on it.
+                let (rect, response) = ui.allocate_exact_size(screen.size(), egui::Sense::CLICK);
                 ui.painter().rect_filled(rect, 0.0, theme::scrim(kind));
                 response.clicked()
             })

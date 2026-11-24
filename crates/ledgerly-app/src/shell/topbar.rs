@@ -257,10 +257,7 @@ fn right_items(
             .layout(Layout::right_to_left(Align::Center)),
         |ui| {
             ui.spacing_mut().item_spacing.x = GAP;
-            if chip::icon_button(ui, Icon::Kbd)
-                .on_hover_text("Keyboard map (?)")
-                .clicked()
-            {
+            if chip::icon_button(ui, Icon::Kbd, "Keyboard map (?)").clicked() {
                 cmds.push(ChromeCmd::OpenOnTop(PaletteTarget::Report(
                     KEYS_KEY.to_owned(),
                 )));
@@ -269,9 +266,12 @@ fn right_items(
                 ThemeKind::Light => Icon::Sun,
                 ThemeKind::Dark | ThemeKind::HighContrast => Icon::Contrast,
             };
-            if chip::icon_button(ui, theme_icon)
-                .on_hover_text(format!("Theme: {} (switch)", theme.label()))
-                .clicked()
+            if chip::icon_button(
+                ui,
+                theme_icon,
+                &format!("Theme: {} (switch)", theme.label()),
+            )
+            .clicked()
             {
                 cmds.push(ChromeCmd::CycleTheme);
             }

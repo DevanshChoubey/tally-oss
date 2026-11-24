@@ -14,6 +14,7 @@ use crate::screen::KeyHint;
 use crate::screens::voucher_entry::parse_entry_date;
 use crate::shell::submit::{self, CommandReply};
 use crate::theme::{SPACE_3, SPACE_4, TEXT_BODY, TEXT_H2, TEXT_META};
+use crate::ui::a11y;
 use crate::ui::badge::{BadgeKind, badge};
 use crate::ui::button::{ButtonKind, button};
 use crate::ui::card::card;
@@ -57,6 +58,8 @@ struct FieldSpec {
     id: Id,
     field: Field,
     width: f32,
+    /// The name a screen reader gives the field: its caption, or the column heading.
+    name: &'static str,
     hint: &'static str,
 }
 
@@ -157,6 +160,7 @@ fn line_row(
             id: base.with(("item", i)),
             field: Field::Item(i),
             width: ui.available_width(),
+            name: "Item",
             hint: "Item: type to search",
         };
         text_field(ui, &s, &mut cells.item_text, want, ev);
@@ -164,7 +168,16 @@ fn line_row(
     row.col(|ui| table::text(ui, &line.hsn));
     row.col(|ui| {
         let id = base.with(("qty", i));
-        numeric_field(ui, id, Field::Qty(i), "Qty", &mut cells.qty_text, want, ev);
+        numeric_field(
+            ui,
+            id,
+            Field::Qty(i),
+            "Qty",
+            "Qty",
+            &mut cells.qty_text,
+            want,
+            ev,
+        );
     });
     row.col(|ui| table::text(ui, &line.unit));
     row.col(|ui| {
@@ -173,6 +186,7 @@ fn line_row(
             ui,
             id,
             Field::Rate(i),
+            "Rate",
             "Rate",
             &mut cells.rate_text,
             want,
@@ -185,6 +199,7 @@ fn line_row(
             ui,
             id,
             Field::Discount(i),
+            "Discount",
             "%",
             &mut cells.discount_text,
             want,
@@ -197,6 +212,7 @@ fn line_row(
             ui,
             id,
             Field::Amount(i),
+            "Amount",
             "optional",
             &mut cells.amount_text,
             want,
@@ -230,6 +246,7 @@ fn particular_row(
             id: base.with(("ledger", i)),
             field: Field::Ledger(i),
             width: ui.available_width(),
+            name: "Ledger",
             hint: "Ledger: type to search",
         };
         text_field(ui, &s, &mut cells.ledger_text, want, ev);
@@ -241,6 +258,7 @@ fn particular_row(
             id,
             Field::LedgerAmount(i),
             "Amount",
+            "Amount",
             &mut cells.amount_text,
             want,
             ev,
@@ -250,10 +268,15 @@ fn particular_row(
 }
 
 /// A right-aligned text field for a number in a table cell, as wide as the cell.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "each argument is a distinct field of the cell"
+)]
 fn numeric_field(
     ui: &mut Ui,
     id: Id,
     field: Field,
+    name: &'static str,
     hint: &'static str,
     text: &mut String,
     want: Option<Field>,
@@ -264,6 +287,7 @@ fn numeric_field(
             id,
             field,
             width: ui.available_width(),
+            name,
             hint,
         };
         text_field(ui, &spec, text, want, events);
@@ -284,6 +308,7 @@ fn text_field(
             .desired_width(spec.width)
             .hint_text(spec.hint),
     );
+    a11y::name(ui, &response, egui::Role::TextInput, spec.name);
     if want == Some(spec.field) {
         response.request_focus();
     }
@@ -477,6 +502,10 @@ impl ItemInvoiceScreen {
         shown
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one block of header fields, each named by its caption"
+    )]
     fn draw_header(
         &mut self,
         ui: &mut Ui,
@@ -489,11 +518,14 @@ impl ItemInvoiceScreen {
         let (focus, pick, fy) = (self.focus, self.pick_index, self.fy);
         let kind = self.draft.kind;
         let t = tokens(ui);
-        let spec = |name: &str, field: Field, width: f32, hint: &'static str| FieldSpec {
-            id: base.with(name),
-            field,
-            width,
-            hint,
+        let spec = |id: &str, name: &'static str, field: Field, width: f32, hint: &'static str| {
+            FieldSpec {
+                id: base.with(id),
+                field,
+                width,
+                name,
+                hint,
+            }
         };
         egui::Grid::new(base.with("header"))
             .num_columns(3)
@@ -505,7 +537,7 @@ impl ItemInvoiceScreen {
                 ui.vertical(|ui| {
                     ui.set_min_width(DATE_WIDTH);
                     caption(ui, "Date");
-                    let s = spec("date", Field::Date, DATE_WIDTH, "dd-mm-yyyy");
+                    let s = spec("date", "Date", Field::Date, DATE_WIDTH, "dd-mm-yyyy");
                     text_field(ui, &s, &mut self.draft.date_text, want, ev);
                     if let Ok(date) = parse_entry_date(&self.draft.date_text, fy) {
                         ui.label(
@@ -518,7 +550,13 @@ impl ItemInvoiceScreen {
                 ui.vertical(|ui| {
                     ui.set_min_width(PARTY_WIDTH);
                     caption(ui, kind.party_label());
-                    let s = spec("party", Field::Party, PARTY_WIDTH, "type to search");
+                    let s = spec(
+                        "party",
+                        kind.party_label(),
+                        Field::Party,
+                        PARTY_WIDTH,
+                        "type to search",
+                    );
                     text_field(ui, &s, &mut self.draft.party_text, want, ev);
                     if focus == Field::Party {
                         self.shown.picker = draw_picker(ui, labels, pick, ev);
@@ -527,7 +565,13 @@ impl ItemInvoiceScreen {
                 ui.vertical(|ui| {
                     ui.set_min_width(PLACE_WIDTH);
                     caption(ui, "Place of supply");
-                    let s = spec("place", Field::Place, PLACE_WIDTH, "code or name");
+                    let s = spec(
+                        "place",
+                        "Place of supply",
+                        Field::Place,
+                        PLACE_WIDTH,
+                        "code or name",
+                    );
                     text_field(ui, &s, &mut self.draft.place_text, want, ev);
                 });
                 ui.end_row();
@@ -540,7 +584,13 @@ impl ItemInvoiceScreen {
                     InvoiceMode::Item => {
                         ui.vertical(|ui| {
                             caption(ui, kind.account_label());
-                            let s = spec("account", Field::Account, PARTY_WIDTH, "type to search");
+                            let s = spec(
+                                "account",
+                                kind.account_label(),
+                                Field::Account,
+                                PARTY_WIDTH,
+                                "type to search",
+                            );
                             text_field(ui, &s, &mut self.draft.account_text, want, ev);
                             if focus == Field::Account {
                                 self.shown.picker = draw_picker(ui, labels, pick, ev);
@@ -554,7 +604,13 @@ impl ItemInvoiceScreen {
                 }
                 ui.vertical(|ui| {
                     caption(ui, kind.reference_label());
-                    let s = spec("ref", Field::Reference, PLACE_WIDTH, "Optional");
+                    let s = spec(
+                        "ref",
+                        kind.reference_label(),
+                        Field::Reference,
+                        PLACE_WIDTH,
+                        "Optional",
+                    );
                     text_field(ui, &s, &mut self.draft.reference_text, want, ev);
                 });
                 ui.end_row();
@@ -562,7 +618,7 @@ impl ItemInvoiceScreen {
                 if self.draft.number_required {
                     ui.vertical(|ui| {
                         caption(ui, "Voucher no.");
-                        let s = spec("number", Field::Number, 160.0, "Required");
+                        let s = spec("number", "Voucher no.", Field::Number, 160.0, "Required");
                         text_field(ui, &s, &mut self.draft.number_text, want, ev);
                     });
                     ui.end_row();
@@ -754,6 +810,7 @@ impl ItemInvoiceScreen {
                         id: base.with("narration"),
                         field: Field::Narration,
                         width: ui.available_width(),
+                        name: "Narration",
                         hint: "Optional",
                     };
                     let field = ui.scope(|ui| text_field(ui, &s, &mut self.draft.narration, want, ev));

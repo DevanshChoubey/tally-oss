@@ -635,11 +635,11 @@ impl SetupScreen {
                     ui.add_space(FEATURE_PAD);
                     if let Some(flip) = row.switch {
                         let flag = flip(&mut self.features);
-                        if switch(ui, *flag, egui::Sense::click()).clicked() {
+                        if switch(ui, *flag, egui::Sense::click(), row.label).clicked() {
                             *flag = !*flag;
                         }
                     } else {
-                        switch(ui, false, egui::Sense::hover());
+                        switch(ui, false, egui::Sense::hover(), row.label);
                     }
                 });
                 ui.add_space(FEATURE_SWITCH_GAP);

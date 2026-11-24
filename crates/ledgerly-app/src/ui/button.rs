@@ -1,8 +1,11 @@
 //! Button with its key inside (`.btn` in the mock): the label, then the key as a keycap, such as
 //! "Save" followed by `Ctrl+A`. Every button can be used with the mouse, labelled in words.
 
-use egui::{Align2, Color32, FontId, Rect, Response, Sense, Stroke, StrokeKind, Ui, Vec2, pos2};
+use egui::{
+    Align2, Color32, FontId, Rect, Response, Role, Sense, Stroke, StrokeKind, Ui, Vec2, pos2,
+};
 
+use super::a11y;
 use super::icon::{self, ICON_SIZE, Icon};
 use super::{keycap, kind, tokens};
 use crate::theme::{RADIUS_S, TEXT_BODY, Tokens, border_width};
@@ -74,6 +77,7 @@ pub fn button_icon(
     let icon_w = which.map_or(0.0, |_| ICON_SIZE + GAP);
     let width = 2.0 * PAD_X + icon_w + text_w + key_w;
     let (rect, response) = ui.allocate_exact_size(Vec2::new(width, HEIGHT), Sense::click());
+    a11y::name(ui, &response, Role::Button, label);
     let (fill, edge, ink) = colors(kind_of, enabled, response.hovered(), &t);
     let painter = ui.painter();
     painter.rect_filled(rect, RADIUS_S, fill);
@@ -101,5 +105,6 @@ pub fn button_icon(
         );
         keycap::paint(painter, key_rect, k, fill, ink, ink);
     }
+    a11y::focus_ring(ui, &response, rect);
     response
 }

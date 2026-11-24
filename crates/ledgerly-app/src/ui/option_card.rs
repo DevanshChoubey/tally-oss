@@ -5,8 +5,9 @@
 //! The cards of a row are drawn side by side, in equal columns and at one height, as the mock's
 //! `.grid` stretches them ([`option_grid`]).
 
-use egui::{Frame, Id, Margin, Rect, Response, RichText, Sense, Stroke, Ui};
+use egui::{Frame, Id, Margin, Rect, Response, RichText, Role, Sense, Stroke, Ui};
 
+use super::a11y;
 use super::icon::{Icon, icon};
 use super::keycap::keycap;
 use super::{bold_font, kind, para, tokens};
@@ -160,6 +161,14 @@ pub fn option_card(
     };
     let rect = inner.response.rect;
     let response = ui.interact(rect, id, sense);
+    a11y::name_selected(
+        ui,
+        &response,
+        Role::RadioButton,
+        card.selected,
+        &a11y::join(&[card.title, card.body]),
+    );
+    a11y::focus_ring(ui, &response, rect);
     #[expect(
         clippy::float_arithmetic,
         reason = "the content's height plus the frame"

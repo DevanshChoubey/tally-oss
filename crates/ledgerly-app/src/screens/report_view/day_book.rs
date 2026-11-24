@@ -18,14 +18,14 @@
 //! A period that is neither selects no tab. Both are plain periods handed to the engine; no
 //! voucher is counted here.
 
-use egui::{Frame, Rect, ScrollArea, Sense, Stroke, Ui, pos2, vec2};
+use egui::{Frame, Rect, Role, ScrollArea, Sense, Stroke, Ui, pos2, vec2};
 use ledgerly_core::{Date, DrCr, Period};
 
 use super::text::{amount_on_side, cell_text};
 use super::{TableEvents, ViewCell, ViewReport};
 use crate::theme::{RADIUS_M, TEXT_BODY, TEXT_META, border_width, shadow_1};
-use crate::ui::format;
 use crate::ui::table::{self, CellPlace, RowState, T_HEAD_HEIGHT, T_ROW_HEIGHT, T_TOTAL_HEIGHT};
+use crate::ui::{a11y, format};
 use crate::ui::{bold_font, kind, tokens};
 
 /// The footnote that says what the day book does not yet show.
@@ -343,7 +343,9 @@ fn draw_rows(
                     hovered: response.hovered(),
                     sub: false,
                 };
-                paint_voucher(ui, rect, report, columns, index, state);
+                let name = paint_voucher(ui, rect, report, columns, index, state);
+                a11y::name(ui, &response, Role::Row, &name);
+                a11y::focus_ring(ui, &response, rect);
                 if state.selected && scroll_to_selected {
                     response.scroll_to_me(None);
                 }
@@ -364,6 +366,9 @@ fn draw_rows(
 
 /// One voucher: date, type, number, party, amount and status. Type and status are in the mock's
 /// secondary ink (`td.t2`).
+///
+/// Returns what a screen reader says for the row: the words and the figure as drawn, in column
+/// order.
 fn paint_voucher(
     ui: &Ui,
     rect: Rect,
@@ -371,9 +376,9 @@ fn paint_voucher(
     columns: DayColumns,
     index: usize,
     state: RowState,
-) {
+) -> String {
     let Some(row) = report.rows.get(index) else {
-        return;
+        return String::new();
     };
     let t = tokens(ui);
     table::paint_row(ui, rect, state);
@@ -396,11 +401,15 @@ fn paint_voucher(
             t.text_2,
         ),
     ];
+    let figure = cell(columns.amount).map_or_default(amount_text);
+    let mut spoken: Vec<&str> = texts.iter().map(|(_, text, _)| text.as_str()).collect();
+    spoken.push(figure.as_str());
+    let name = a11y::join(&spoken);
     for (r, text, ink) in texts {
         table::paint_cell_text(ui, r, 1.0, &text, font.clone(), ink, left);
     }
-    let figure = cell(columns.amount).map_or_default(amount_text);
     table::paint_cell_text(ui, amount, 1.0, &figure, font, t.text, CellPlace::Right);
+    name
 }
 
 /// The total: the number of vouchers and the engine's total, semibold between the total rules.

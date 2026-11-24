@@ -11,6 +11,7 @@
 //! The kit paints and lays out. It never computes or formats a figure beyond [`format`](mod@format), which
 //! only writes numbers the engine has already produced.
 
+pub mod a11y;
 pub mod badge;
 pub mod button;
 pub mod card;

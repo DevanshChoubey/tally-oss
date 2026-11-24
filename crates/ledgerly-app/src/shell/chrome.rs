@@ -10,7 +10,7 @@ use super::stack::Tabs;
 use crate::screen::KeyHint;
 use crate::theme::{TEXT_META, Tokens};
 use crate::ui::icon::{self, Icon};
-use crate::ui::{bold_font, keycap, tabs};
+use crate::ui::{a11y, bold_font, keycap, tabs};
 
 /// What the user asked for in the chrome this frame.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -50,23 +50,26 @@ pub(super) fn tab_strip(ui: &mut Ui, tabs_set: &Tabs) -> Vec<ChromeCmd> {
         if let Some(index) = response.clicked {
             cmds.push(ChromeCmd::SelectTab(index));
         }
-        if ui
-            .small_button("+")
-            .on_hover_text("New tab (Ctrl+T)")
-            .clicked()
-        {
+        let new_tab = ui.small_button("+").on_hover_text("New tab (Ctrl+T)");
+        // The bare "+" is what is drawn; a screen reader is told what it does.
+        a11y::name(ui, &new_tab, egui::Role::Button, "New tab (Ctrl+T)");
+        if new_tab.clicked() {
             cmds.push(ChromeCmd::NewTab);
         }
-        if tabs_set.len() > 1
-            && ui
-                .small_button("Close tab")
-                .on_hover_text("Close tab (Ctrl+W)")
-                .clicked()
-        {
+        if tabs_set.len() > 1 && close_tab_button(ui).clicked() {
             cmds.push(ChromeCmd::CloseActiveTab);
         }
     });
     cmds
+}
+
+/// The close-tab button: "Close tab", with its key as the hover text and the spoken name.
+fn close_tab_button(ui: &mut Ui) -> egui::Response {
+    let close = ui
+        .small_button("Close tab")
+        .on_hover_text("Close tab (Ctrl+W)");
+    a11y::name(ui, &close, egui::Role::Button, "Close tab (Ctrl+W)");
+    close
 }
 
 /// Breadcrumb trail for the active tab (`.crumbs`: meta size, `text-3`, earlier crumbs in
@@ -83,7 +86,9 @@ pub(super) fn breadcrumbs(ui: &mut Ui, trail: &[String], t: &Tokens) -> Vec<Chro
             } else {
                 let crumb = egui::Label::new(RichText::new(title).size(TEXT_META).color(t.text_2))
                     .sense(egui::Sense::click());
-                if ui.add(crumb).clicked() {
+                let crumb = ui.add(crumb);
+                a11y::name(ui, &crumb, egui::Role::Link, title);
+                if crumb.clicked() {
                     cmds.push(ChromeCmd::PopTo(i.saturating_add(1)));
                 }
                 icon::icon(ui, Icon::Chev, t.text_3);

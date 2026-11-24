@@ -27,12 +27,13 @@
 //! liabilities at the top and the assets at the bottom. It names its own headings, which this
 //! screen does not copy; the two section names above are the standard ones.
 
-use egui::{Frame, Margin, Rect, ScrollArea, Sense, Stroke, Ui, vec2};
+use egui::{Frame, Margin, Rect, Role, ScrollArea, Sense, Stroke, Ui, vec2};
 use ledgerly_core::{Date, DrCr, FinancialYear};
 
 use super::text::amount_on_side;
 use super::{TableEvents, ViewCell, ViewReport};
 use crate::theme::{RADIUS_M, TEXT_BODY, TEXT_META, border_width, shadow_1};
+use crate::ui::a11y;
 use crate::ui::badge::{BadgeKind, badge};
 use crate::ui::table::{
     self, CellPlace, RowState, T_HEAD_GAP, T_HEAD_HEIGHT, T_ROW_HEIGHT, T_TOTAL_HEIGHT,
@@ -342,6 +343,8 @@ fn draw_lines(
                             hovered: response.hovered(),
                             sub: report.rows.get(index).is_some_and(|r| r.depth == 0),
                         };
+                        a11y::name(ui, &response, Role::Row, &line_name(report, section, index));
+                        a11y::focus_ring(ui, &response, rect);
                         paint_line(ui, rect, report, section, index, state);
                         if state.selected && scroll_to_selected {
                             response.scroll_to_me(None);
@@ -357,6 +360,19 @@ fn draw_lines(
             }
         });
     events
+}
+
+/// What a screen reader says for a statement line: its label, then the amount drawn in its
+/// section, as the line shows it.
+fn line_name(report: &ViewReport, section: Section, index: usize) -> String {
+    let Some(row) = report.rows.get(index) else {
+        return String::new();
+    };
+    let amount = row
+        .cells
+        .get(section.column())
+        .map_or_default(|cell| amount_in(cell, section));
+    a11y::join(&[row.label.as_str(), amount.as_str()])
 }
 
 /// The label part of a line: everything left of the amount column.

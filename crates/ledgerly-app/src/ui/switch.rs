@@ -1,9 +1,9 @@
 //! Switch: an on/off pill with a round knob (`.switch` in the mock). The accent when on, the
 //! border colour when off.
 
-use egui::{Response, Sense, Ui, pos2, vec2};
+use egui::{Response, Role, Sense, Ui, pos2, vec2};
 
-use super::tokens;
+use super::{a11y, tokens};
 
 /// A switch's width, in points (`.switch` in the mock).
 pub const SWITCH_WIDTH: f32 = 34.0;
@@ -14,11 +14,13 @@ const KNOB_INSET: f32 = 9.0;
 /// The knob's radius, in points.
 const KNOB_RADIUS: f32 = 7.0;
 
-/// Draws a switch showing `on`. With `sense` of [`Sense::click`] the caller flips its value when
-/// the response is clicked; with [`Sense::hover`] the switch only shows a state.
-pub fn switch(ui: &mut Ui, on: bool, sense: Sense) -> Response {
+/// Draws a switch showing `on`, named `name` for screen readers (the row's label). With `sense` of
+/// [`Sense::click`] the caller flips its value when the response is clicked; with
+/// [`Sense::hover`] the switch only shows a state.
+pub fn switch(ui: &mut Ui, on: bool, sense: Sense, name: &str) -> Response {
     let t = tokens(ui);
     let (rect, response) = ui.allocate_exact_size(vec2(SWITCH_WIDTH, SWITCH_HEIGHT), sense);
+    a11y::name_selected(ui, &response, Role::Switch, on, name);
     let fill = if on { t.accent } else { t.border };
     #[expect(
         clippy::float_arithmetic,
@@ -37,5 +39,6 @@ pub fn switch(ui: &mut Ui, on: bool, sense: Sense) -> Response {
     };
     ui.painter()
         .circle_filled(pos2(knob_x, rect.center().y), KNOB_RADIUS, t.surface);
+    a11y::focus_ring(ui, &response, rect);
     response
 }
