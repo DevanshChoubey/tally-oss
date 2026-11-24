@@ -226,6 +226,12 @@ pub(super) fn list_card(
                         };
                         table::paint_row(ui, rect, state);
                         paint_cells(ui, cols, rect, row, &response);
+                        crate::ui::a11y::name(
+                            ui,
+                            &response,
+                            egui::accesskit::Role::Row,
+                            &row_name(row),
+                        );
                         if state.selected && scroll_to_selected {
                             response.scroll_to_me(None);
                         }
@@ -334,6 +340,22 @@ fn paint_total(ui: &Ui, cols: &[Col], rect: Rect, line: &TotalLine) {
 }
 
 /// The cells of one row; `response` is the row's, for an explained cell's hover.
+/// What a screen reader says for a row: each cell as the row draws it, in column order. A name
+/// with an alias reads "name, alias X".
+fn row_name(row: &[Cell]) -> String {
+    let parts: Vec<String> = row
+        .iter()
+        .map(|cell| match cell {
+            Cell::Text(text) | Cell::Quiet(text) | Cell::Explained { text, .. } => text.clone(),
+            Cell::Named { name, alias } if alias.is_empty() => name.clone(),
+            Cell::Named { name, alias } => format!("{name}, alias {alias}"),
+            Cell::Badge(_, text) => (*text).to_owned(),
+        })
+        .collect();
+    let refs: Vec<&str> = parts.iter().map(String::as_str).collect();
+    crate::ui::a11y::join(&refs)
+}
+
 fn paint_cells(ui: &mut Ui, cols: &[Col], rect: Rect, row: &[Cell], response: &egui::Response) {
     let t = tokens(ui);
     let font = FontId::proportional(TEXT_BODY);

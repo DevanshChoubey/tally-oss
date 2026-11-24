@@ -226,6 +226,12 @@ impl GstScreen {
                     sub: false,
                 };
                 paint_exception(ui, rect, item, state);
+                crate::ui::a11y::name(
+                    ui,
+                    &response,
+                    egui::accesskit::Role::Row,
+                    &exception_name(item),
+                );
                 if state.selected && want_scroll {
                     response.scroll_to_me(None);
                 }
@@ -558,6 +564,15 @@ fn bucket_badge(bucket: Bucket) -> BadgeKind {
     }
 }
 
+/// What a screen reader says for a GSTR-1 row: its title, its detail, then its bucket word.
+fn exception_name(item: &ExceptionItem) -> String {
+    crate::ui::a11y::join(&[
+        item.title.as_str(),
+        item.detail.as_str(),
+        item.bucket.label(),
+    ])
+}
+
 /// One GSTR-1 voucher: its title, the engine's detail and its bucket as a badge.
 fn paint_exception(ui: &mut Ui, rect: Rect, item: &ExceptionItem, state: RowState) {
     let t = tokens(ui);
@@ -885,4 +900,25 @@ fn read_keys(ui: &Ui) -> Vec<GstCmd> {
         }
     });
     out
+}
+
+#[cfg(test)]
+mod a11y_names {
+    use super::*;
+
+    #[test]
+    fn a_gstr1_row_reads_its_title_detail_and_bucket() {
+        // derived: paint_exception draws the title, the detail and the bucket word, in that
+        // column order (Bucket::label gives "Mismatch", gst.rs).
+        let item = ExceptionItem {
+            bucket: Bucket::Mismatch,
+            title: "INV-12".to_owned(),
+            detail: "Tax differs by 2.00".to_owned(),
+            voucher: None,
+        };
+        assert_eq!(
+            exception_name(&item),
+            "INV-12, Tax differs by 2.00, Mismatch"
+        );
+    }
 }
