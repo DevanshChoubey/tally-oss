@@ -645,7 +645,10 @@ fn paint_heads(ui: &Ui, head: Rect, left: &[(Rect, &str)], right: &[(Rect, &str)
 /// The Section, Records, Taxable, Tax and Status cells of a GSTR-1 section line.
 #[allow(clippy::float_arithmetic, reason = "sharing a line between columns")]
 fn section_columns(line: Rect) -> [Rect; 5] {
-    let status = Rect::from_min_max(egui::pos2(line.right() - SECTION_STATUS_W, line.top()), line.max);
+    let status = Rect::from_min_max(
+        egui::pos2(line.right() - SECTION_STATUS_W, line.top()),
+        line.max,
+    );
     let tax = Rect::from_min_max(
         egui::pos2(status.left() - SECTION_AMOUNT_W, line.top()),
         egui::pos2(status.left(), line.bottom()),
