@@ -411,7 +411,7 @@ fn godavari_short_stock_file(dir: &Path) -> Api {
                 // A bill-wise party opens the bill for the whole party line.
                 if let (Some(mut bills), Some(first)) = (party_bills, v.ledger_lines.first_mut()) {
                     for b in &mut bills {
-                        b.name = number.to_owned();
+                        number.clone_into(&mut b.name);
                         b.amount = first.amount;
                     }
                     first.bills = bills;
