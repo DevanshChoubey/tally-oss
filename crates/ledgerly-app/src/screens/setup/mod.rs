@@ -140,6 +140,8 @@ pub struct SetupScreen {
     created_name: Option<String>,
     /// The card chosen on the Start step.
     start: StartChoice,
+    /// The folder the sample company's throwaway file is made under.
+    sample_base: PathBuf,
     /// The file dialog of "Open a Ledgerly file": the chosen path, or `None` when cancelled.
     picker: fn() -> Option<PathBuf>,
     /// The company file being opened, if any.
@@ -149,23 +151,46 @@ pub struct SetupScreen {
 }
 
 /// What the Start step's Continue button does: the cards that can be chosen (index.html:1863).
-/// "Import" and "Try the sample" cannot be chosen yet (see `design/PARITY-GAPS.md`).
+/// "Import" cannot be chosen yet (see `design/PARITY-GAPS.md`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum StartChoice {
     /// Create a company: the wizard goes on to the Company step.
     Create,
     /// Open a Ledgerly file: the system file dialog, then the company opens.
     Open,
+    /// Try the sample company: a throwaway company file is built and opened.
+    Sample,
 }
 
 impl StartChoice {
-    /// The other choice. Two cards can be chosen, so every arrow key moves to the other one.
-    fn other(self) -> Self {
+    /// Where an arrow key moves the choice. The cards sit in two columns: Create and Import on
+    /// the first row, Open and the sample on the second. Import cannot be chosen, so Create goes
+    /// to Open with any arrow, as it always did; Open goes up to Create or right to the sample;
+    /// the sample goes left to Open or up to Create.
+    fn moved(self, key: Key) -> Self {
+        let up = matches!(key, Key::ArrowUp);
+        let back = matches!(key, Key::ArrowUp | Key::ArrowLeft);
         match self {
-            StartChoice::Create => StartChoice::Open,
-            StartChoice::Open => StartChoice::Create,
+            StartChoice::Sample if up => StartChoice::Create,
+            StartChoice::Create | StartChoice::Sample => StartChoice::Open,
+            StartChoice::Open if back => StartChoice::Create,
+            StartChoice::Open => StartChoice::Sample,
         }
     }
+}
+
+/// The folder the sample company's file is made under: the user's cache folder, else the
+/// system temp folder. Never the user's documents.
+fn default_sample_base() -> PathBuf {
+    let cache = std::env::var_os("XDG_CACHE_HOME")
+        .map(PathBuf::from)
+        .filter(|p| p.is_absolute())
+        .or_else(|| {
+            std::env::var_os("HOME")
+                .map(|h| PathBuf::from(h).join(".cache"))
+                .filter(|p| p.is_absolute())
+        });
+    cache.unwrap_or_else(std::env::temp_dir)
 }
 
 /// The system file dialog for a company file. `None` when the user cancels.
@@ -218,10 +243,18 @@ impl SetupScreen {
             created_name: None,
             focus_name: false,
             start: StartChoice::Create,
+            sample_base: default_sample_base(),
             picker: pick_company_file,
             open_job: None,
             opened: false,
         }
+    }
+
+    /// The same wizard making the sample company's throwaway file under `base`.
+    #[must_use]
+    pub fn with_sample_base(mut self, base: PathBuf) -> Self {
+        self.sample_base = base;
+        self
     }
 
     /// The same wizard with `picker` as the file dialog of "Open a Ledgerly file".
@@ -286,6 +319,7 @@ impl SetupScreen {
                     self.focus_name = true;
                 }
                 StartChoice::Open => self.open_file(),
+                StartChoice::Sample => self.open_sample(),
             },
             Step::Company => {
                 if let Some(reason) = self.company_block() {
@@ -318,6 +352,29 @@ impl SetupScreen {
             Ok(rx) => {
                 self.open_job = Some(rx);
                 self.notice = Some("Opening the company file...".to_owned());
+            }
+            Err(reason) => self.notice = Some(reason),
+        }
+    }
+
+    /// Builds the sample company in a throwaway file under the sample folder and opens it in the
+    /// background. Home replaces the wizard when it is open.
+    fn open_sample(&mut self) {
+        if self.open_job.is_some() {
+            return;
+        }
+        let (base, clock) = (self.sample_base.clone(), self.clock);
+        match spawn_file_job(move || {
+            ledgerly_sample::create_under(&base, clock)
+                .map(|(api, _path)| api)
+                .map_err(|e| format!("The sample company could not be made: {e}"))
+        }) {
+            Ok(rx) => {
+                self.open_job = Some(rx);
+                self.notice = Some(
+                    "Opening the sample company. Its data is fictional and nothing you do there is kept."
+                        .to_owned(),
+                );
             }
             Err(reason) => self.notice = Some(reason),
         }
@@ -490,6 +547,7 @@ impl SetupScreen {
             Step::Welcome => match self.start {
                 StartChoice::Create => ("Create a company", true),
                 StartChoice::Open => ("Open a Ledgerly file", self.open_job.is_none()),
+                StartChoice::Sample => ("Try the sample company", self.open_job.is_none()),
             },
             Step::Company => ("Continue", self.company_block().is_none()),
             Step::Features | Step::Keyboard | Step::Ai => ("Continue", true),
@@ -509,8 +567,8 @@ impl SetupScreen {
             Key::ArrowLeft,
             Key::ArrowRight,
         ];
-        if arrows.iter().any(|k| pressed_key(ui, *k)) {
-            self.start = self.start.other();
+        if let Some(arrow) = arrows.iter().copied().find(|k| pressed_key(ui, *k)) {
+            self.start = self.start.moved(arrow);
             ui.input_mut(|i| {
                 i.events
                     .retain(|e| !arrows.iter().any(|k| is_key_event(e, *k)));
@@ -587,14 +645,18 @@ impl SetupScreen {
                 "Try the sample company",
                 "Godavari Drip & Pump Works, fictional data. Nothing you do there is kept.",
             )
-            .unavailable("No sample data ships yet."),
+            .selected(self.start == StartChoice::Sample),
         ];
         let drawn = option_grid(ui, egui::Id::unique("setup-welcome"), 2, &cards);
         for (n, card) in drawn.iter().enumerate() {
             record_probe(ui, &format!("setup.option.{n}"), card.card);
         }
-        // Cards 0 and 2 can be chosen; 1 (import) and 3 (sample) only say why they cannot.
-        for (n, choice) in [(0, StartChoice::Create), (2, StartChoice::Open)] {
+        // Cards 0, 2 and 3 can be chosen; 1 (import) only says why it cannot.
+        for (n, choice) in [
+            (0, StartChoice::Create),
+            (2, StartChoice::Open),
+            (3, StartChoice::Sample),
+        ] {
             if drawn.get(n).is_some_and(|card| card.response.clicked()) {
                 self.start = choice;
             }

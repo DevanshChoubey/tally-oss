@@ -495,9 +495,22 @@ pub fn sidebar() -> Vec<SidebarGroup> {
     ]
 }
 
+/// The moment [`today`] and [`hour_now`] report instead of the real clock, when set.
+static CLOCK_OVERRIDE: std::sync::OnceLock<(Date, u8)> = std::sync::OnceLock::new();
+
+/// Makes [`today`] and [`hour_now`] report `date` and `hour` for the rest of the process. For the
+/// capture harness, so a screenshot of the sample company shows its own "today" (21 Nov 2026).
+/// Only the first call has an effect; the app itself never calls this.
+pub fn set_clock_override(date: Date, hour: u8) {
+    let _first = CLOCK_OVERRIDE.set((date, hour));
+}
+
 /// Today's date in India (UTC+05:30), which the import screen and new vouchers start from.
 #[must_use]
 pub fn today() -> Date {
+    if let Some((date, _)) = CLOCK_OVERRIDE.get() {
+        return *date;
+    }
     let now = time::OffsetDateTime::now_utc();
     match time::UtcOffset::from_hms(5, 30, 0) {
         Ok(india) => now.to_offset(india).date(),
@@ -509,6 +522,9 @@ pub fn today() -> Date {
 /// The hour of the day now, 0 to 23, on India Standard Time (UTC+05:30), as [`today`] dates it.
 #[must_use]
 pub fn hour_now() -> u8 {
+    if let Some((_, hour)) = CLOCK_OVERRIDE.get() {
+        return *hour;
+    }
     let now = time::OffsetDateTime::now_utc();
     match time::UtcOffset::from_hms(5, 30, 0) {
         Ok(india) => now.to_offset(india).hour(),

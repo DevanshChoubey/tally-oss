@@ -44,9 +44,8 @@ and `home.ai-off`. Not captured: `home.loading` and `home.nudge-open`.
   shortcuts through.
 - **deferred: Ask rows.** The no-match "Ask: q" row and the "Or" Ask/Draft rows (index.html:1129,
   1127) are left out while AI is off, as the mock's own `tierOff` does. Return with the assistant.
-- **data: `#0412` finds no voucher.** The capture company has no voucher numbered 0412, so the
-  voucher state shows "No match for "#0412"". Needs a voucher with that number in the capture
-  company, or the capture typing a number that exists.
+- **data: `#0412` (resolved by the sample company, S8).** Godavari has SI/0412, so a search for it
+  now finds the voucher (see "Sample company").
 - **by design: Search vouchers detail.** Ours says "Number, party, amount or date" (what our search
   matches, `MatchedOn`); the mock says "Narrations and party names".
 
@@ -139,8 +138,9 @@ and `home.ai-off`. Not captured: `home.loading` and `home.nudge-open`.
 - **needs a decision: F2 offers the shown day.** TallyHelp says F2 in the Day Book first offers
   the day after the current date; ours fills in the day shown. Check the TallyPrime page (only
   the Tally.ERP 9 page was read) before changing it.
-- **data: voucher numbers and the sample day.** The capture company numbers vouchers 1, 2, ...
-  per type and its last voucher is 20 Nov; the mock shows "SI/0417" and five vouchers on 20 Nov.
+- **data: voucher numbers and the sample day (resolved, S8).** Godavari carries the mock's own
+  numbers (SI/0417 ...) and its five vouchers on 20 Nov; "Entered by" and "Origin" are still not
+  recorded (see "Sample company").
 - **by design: Status column.** Kept from the engine (it shows a cancelled voucher as such) until
   Entered by and Origin exist.
 
@@ -590,19 +590,25 @@ financial year starts. The model supports that (`Company::books_begin`), so it i
   against a GSTIN starting 27, by clicks on the State list) shows the mock's words and disables
   Continue, as the mock does, but the GSTIN and State fields are not outlined in red and the
   message has no cross icon. The rule is tested in `tests/w4_setup.rs`.
-- **gap: import and sample cards on Start are shown, not working.** Import needs the import
-  wizard (not routed from here); no sample data ships. "Open a Ledgerly file" works (round of
-  2026-11-24, card S8): the system file dialog, then the company opens and Home replaces the
-  wizard. Arrow keys move the choice between Create and Open; Enter acts on it.
+- **gap: the import card on Start is shown, not working.** Import needs the import wizard (not
+  routed from here). "Open a Ledgerly file" works (round of 2026-11-24, card S8): the system file
+  dialog, then the company opens and Home replaces the wizard. "Try the sample company" works
+  (S8, sample company): it builds Godavari Drip & Pump Works from `ledgerly-sample` into a
+  throwaway file under the user's cache folder (`$XDG_CACHE_HOME` or `~/.cache`, else the system
+  temp folder; never Documents), replacing the last one, and opens it. The arrow keys move the
+  choice over Create, Open and the sample (Create goes to Open; Open goes up to Create or right
+  to the sample); Enter acts on it. The wizard says "Opening the sample company. Its data is
+  fictional and nothing you do there is kept." while it builds. Once open there is no banner on
+  Home saying the books are sample data, and edits are written to that cache file (it is thrown
+  away the next time the card is used, not on exit).
 - **gap: Done's "Make your first invoice" is disabled.** No route to a sales invoice from the
   wizard yet, so its card is drawn with a muted label, takes no click and F8 does nothing there;
   the other two launches open their screens, by click or by their keys M and B.
 - **gap: a breadcrumb sits above the setup card when it is opened over Home.** The mock draws the
   card with no crumbs. The first launch (`Shell::cold_start`, no company) has none, as the mock;
   opened from the palette or sidebar over an open company, the shell draws "Home > Company setup".
-- **gap: the unavailable cards on Start carry a muted line saying why.** The mock draws the
-  import and sample cards as plain choices; ours cannot be chosen (see above), so each says so
-  under its text.
+- **gap: the import card on Start carries a muted line saying why.** The mock draws it as a plain
+  choice; ours cannot be chosen (see above), so it says so under its text.
 - **gap: first-launch chrome.** With no company the top bar shows the mock's one "New company"
   chip, but the AI chip says "AI: not set up" where the mock says "AI on this computer" (nothing
   is stored to name), and the sidebar footer shows the app version where the mock shows "Engine
@@ -717,3 +723,60 @@ shares the drill levels' fixes (bare Debit and Credit figures, footnote style).
   empty state because the fixture has no statement.
 - **gap: GST KPI tiles** are unboxed as in the mock but the light capture is pixel-identical to
   before; remaining GST difference is data (the fixture's rows).
+
+## Sample company (card S8, 2026-11-24)
+
+The sample is the crate `crates/ledgerly-sample`: a versioned, human-readable seed
+(`assets/godavari.toml`, plus the bank statement `assets/saptagiri-nov-2026.csv`) of masters and
+vouchers, no totals. `ledgerly_sample::create` posts it through `ledgerly-api` (`Api::create`,
+`Command::*`, `import_bank_statement`, and `LockPeriod` last, 31 Oct 2026), so every figure on
+screen is the engine's. The capture harness opens it as `Fixture::Godavari`, with the clock fixed
+to the mock's 21 Nov 2026 (`navigate::set_clock_override`). Captures that need another company
+stay on Fictional Traders (`review.empty`, `bank.empty`, `home.empty`) or Fictional Pumps
+(`balance-sheet.provisional`, `gst.gstr1-correction`: stock sold before bought, and the engine
+refuses a balance sheet over opening stock).
+
+How the figures agree with the mock (engine, light captures, 21 Nov 2026):
+- Match to the paisa: every party balance (Shree Ganesh 1,93,500.00; Mehta 1,05,020.00; Lakshmi
+  1,87,600.00; Patil 1,32,670.00; Kisan 0.00), receivables 6,18,790.00, payables 7,07,970.00, cash
+  78,337.50, Saptagiri 7,27,524.50, closing stock 14,25,539.00, fixed assets 23,62,846.00, the
+  balance sheet total 56,09,537.00, the Day book of 20 Nov (five vouchers, 3,74,967.50), GSTR-1
+  4A (4 invoices, 3,43,585.00 taxable, 50,535.30 tax), 7 B2C others (9,640.00, 482.00), HSN summary
+  3,49,385.00 with the pickaxe missing its HSN, and the Review queue badge (6).
+
+Mismatches between the mock's totals and the engine's, and why:
+- **data: capital and profit differ, their sum does not.** The mock's Capital account is
+  20,00,000.00 and Profit and loss 16,96,569.70; the engine's are 13,62,164.00 and 26,08,570.06.
+  The mock holds no history before 1 Nov, so the seed invents it (monthly receipt summaries,
+  purchases, payments, a depreciation journal) to reach the mock's 31 Oct balances. Capital is the
+  balancing figure of the opening trial balance. The difference in profit, 9,12,000.36, is the
+  6,37,836.00 less capital plus the 2,74,164.36 of IGST below.
+- **data: GST ledgers are one per head.** The mock keeps CGST/SGST/IGST output and input ledgers;
+  the engine's GST report needs one ledger per tax head, so the sample has CGST, SGST, IGST. The
+  October stock purchase from Rupa Polymers (Karnataka, inter-state) leaves IGST at 2,83,314.36
+  Dr (input 2,74,164.36 from that purchase plus November's 29,520.00, less 20,370.00 output). The
+  mock's Current liabilities (10,72,967.30) minus the engine's (7,98,802.94) is exactly 2,74,164.36.
+- **data: Opening stock ledger left out.** The mock's trial balance has an "Opening stock" ledger;
+  the engine takes opening stock from the stock ledger, and refuses the balance sheet with stock
+  before the books begin, so the stock is bought by a voucher in the books.
+- **data: Round off.** The engine has a Round off ledger carrying paise (0.36 on PB/0125); the mock
+  rounds in the invoice only.
+- **data: opening-bill invoices (SI/0372, 0350, 0381, 0390) have no tax split.** They are dated
+  before 1 Nov and carry only the party, sales and bill lines the mock states.
+- **data: voucher numbering.** Numbers are typed on each voucher as the mock shows them; the mock's
+  next number (SI/0418) is not reproduced: the engine numbers a new voucher from its own series.
+- **data: no 2B or IMS rows, no "Entered by", no AI origin.** The seed has no portal data, and
+  the engine records no actor or origin yet (E-4), so the mock's reconciliation states, "Entered
+  by" and "Image attached" columns and AI chips cannot show.
+- **gap: GST cash payable on Home.** The mock shows 39,498.00; the engine gives the GSTR-3B working
+  but no payable after set-off, so the tile says "Not supported yet" with its reason.
+- **gap: the invoice screen cannot save to a bill-wise party.** Every Godavari party is bill-wise
+  (as the mock's), and the sales invoice screen does not enter bill references yet, so the
+  invoice captures show the engine's "bill reference on a bill-wise party" note in place of the
+  tax panel. The seed's own invoices are posted with their bill references through the API.
+- **by design: identifiers differ from the mock.** GSTINs use the fake PAN pattern `ZZZZZ####Z`
+  with a valid check character (company 27ZZZZZ0000Z1ZQ); bank accounts, IFSC codes and phone
+  numbers are obviously fake. The mock's GSTIN (27AAGFG4417K1ZA) and the like are not used.
+- **by design: UQC codes.** Units map to the GST portal's UQC codes from the portal's published
+  list as the author remembers it (roll ROL, set SET, nos NOS), and the coil unit maps to OTH;
+  the list was not re-read for this card.

@@ -1,0 +1,726 @@
+# Godavari Drip & Pump Works: the sample company's seed (version 1).
+#
+# Everything here is fictional. The masters, the history and the vouchers are posted through
+# the same API the app uses (crates/ledgerly-sample/src/load.rs); no total is stored here, every
+# figure on screen comes from the engine. Money is rupees as text; dates are YYYY-MM-DD.
+#
+# Sections: [company] and [[unit]], [[ledger]], [[item]] are the masters; [[voucher]] entries with
+# section = "history" are INVENTED to reach the mock's balances on 1 Nov 2026 (design/mock-v2/index.html
+# lines 517-549, the `ob` column); section = "november" are the mock's own vouchers (lines 566-581).
+# Opening balances are those of 1 Apr 2026, derived by hand in design/PARITY-GAPS.md ("Sample company").
+# GSTINs use the fake PAN pattern ZZZZZ####Z with a computed check character; they differ from the
+# mock's on purpose (privacy). Bank accounts and IFSC codes are obviously fake.
+
+version = 1
+lock_until = "2026-10-31"
+
+[company]
+name = "Godavari Drip & Pump Works"
+gstin = "27ZZZZZ0000Z1ZQ"
+state = 27
+address = ["Plot 14, Sample Industrial Estate", "Pune"]
+entity = "Partnership"
+fy_start = "2026-04-01"
+books_begin = "2026-04-01"
+today = "2026-11-21"
+round_off_ledger = "roundoff"
+
+[[unit]]
+symbol = "roll"
+name = "Rolls"
+uqc = "ROL"
+
+[[unit]]
+symbol = "set"
+name = "Sets"
+uqc = "SET"
+
+[[unit]]
+symbol = "nos"
+name = "Numbers"
+uqc = "NOS"
+
+[[unit]]
+symbol = "coil"
+name = "Coils"
+uqc = "OTH"
+
+[[ledger]]
+key = "ananya"
+name = "Ananya Kulkarni, capital"
+group = "CapitalAccount"
+opening_cr = "2146623.00"
+
+[[ledger]]
+key = "rohan"
+name = "Rohan Deshpande, capital"
+group = "CapitalAccount"
+opening_cr = "715541.00"
+
+[[ledger]]
+key = "mulaloan"
+name = "Mula Valley Co-op Bank, term loan"
+group = "SecuredLoans"
+opening_cr = "840000.00"
+
+[[ledger]]
+key = "kaveri"
+name = "Kaveri Packaging Pvt Ltd"
+group = "SundryCreditors"
+state = 29
+city = "Mysuru"
+registration = "Regular"
+gstin = "29ZZZZZ0001Z1ZL"
+bill_wise = true
+credit_days = 30
+
+[[ledger]]
+key = "nilgiri"
+name = "Nilgiri Steel Traders"
+group = "SundryCreditors"
+state = 29
+city = "Bengaluru"
+registration = "Regular"
+gstin = "29ZZZZZ0002Z1ZK"
+bill_wise = true
+credit_days = 30
+
+[[ledger]]
+key = "vardhaman"
+name = "Vardhaman Logistics"
+group = "SundryCreditors"
+state = 27
+city = "Pune"
+registration = "Regular"
+gstin = "27ZZZZZ0003Z1ZN"
+bill_wise = true
+credit_days = 15
+
+[[ledger]]
+key = "rupa"
+name = "Rupa Polymers"
+group = "SundryCreditors"
+state = 24
+city = "Ahmedabad"
+registration = "Regular"
+gstin = "24ZZZZZ0004Z1ZS"
+bill_wise = true
+credit_days = 30
+
+[[ledger]]
+key = "cgst"
+name = "CGST"
+group = "DutiesAndTaxes"
+tax = "Cgst"
+
+[[ledger]]
+key = "sgst"
+name = "SGST"
+group = "DutiesAndTaxes"
+tax = "Sgst"
+
+[[ledger]]
+key = "igst"
+name = "IGST"
+group = "DutiesAndTaxes"
+tax = "Igst"
+
+[[ledger]]
+key = "tdspay"
+name = "TDS payable"
+group = "DutiesAndTaxes"
+opening_cr = "12500.00"
+tax = "Tds"
+
+[[ledger]]
+key = "audit"
+name = "Audit fee payable"
+group = "Provisions"
+opening_cr = "45000.00"
+
+[[ledger]]
+key = "salpay"
+name = "Salary payable"
+group = "Provisions"
+opening_cr = "286000.00"
+
+[[ledger]]
+key = "plant"
+name = "Plant and machinery"
+group = "FixedAssets"
+opening_dr = "1947331.00"
+
+[[ledger]]
+key = "furn"
+name = "Furniture and fixtures"
+group = "FixedAssets"
+opening_dr = "235000.00"
+
+[[ledger]]
+key = "comp"
+name = "Computers"
+group = "FixedAssets"
+opening_dr = "303179.00"
+
+[[ledger]]
+key = "sgt"
+name = "Shree Ganesh Traders"
+group = "SundryDebtors"
+aliases = ["SGT"]
+state = 27
+city = "Nashik"
+registration = "Regular"
+gstin = "27ZZZZZ0005Z1ZL"
+bill_wise = true
+credit_days = 30
+
+[[ledger]]
+key = "mai"
+name = "Mehta Agro Industries"
+group = "SundryDebtors"
+state = 24
+city = "Rajkot"
+registration = "Regular"
+gstin = "24ZZZZZ0006Z1ZQ"
+bill_wise = true
+credit_days = 30
+
+[[ledger]]
+key = "lfs"
+name = "Lakshmi Farm Supplies"
+group = "SundryDebtors"
+state = 33
+city = "Coimbatore"
+registration = "Regular"
+gstin = "33ZZZZZ0007Z1ZQ"
+bill_wise = true
+credit_days = 30
+
+[[ledger]]
+key = "phs"
+name = "Patil Hardware Stores"
+group = "SundryDebtors"
+state = 27
+city = "Satara"
+registration = "Regular"
+gstin = "27ZZZZZ0008Z1ZI"
+bill_wise = true
+credit_days = 30
+
+[[ledger]]
+key = "ksk"
+name = "Kisan Seva Kendra"
+group = "SundryDebtors"
+aliases = ["KSK"]
+state = 23
+city = "Indore"
+registration = "Regular"
+gstin = "23ZZZZZ0009Z1ZP"
+bill_wise = true
+credit_days = 30
+
+[[ledger]]
+key = "cashsale"
+name = "Cash sale (unregistered)"
+group = "SundryDebtors"
+state = 27
+city = "Pune"
+registration = "Unregistered"
+
+[[ledger]]
+key = "cash"
+name = "Cash"
+group = "CashInHand"
+opening_dr = "48215.50"
+
+[[ledger]]
+key = "saptagiri"
+name = "Saptagiri Commercial Bank A/c"
+group = "BankAccounts"
+opening_dr = "1115438.50"
+bank = { name = "Saptagiri Commercial Bank", account = "99990004471", ifsc = "ZZZZ0000471", branch = "Pune main" }
+
+[[ledger]]
+key = "mulacur"
+name = "Mula Valley Co-op Bank, current A/c"
+group = "BankAccounts"
+opening_dr = "214000.00"
+bank = { name = "Mula Valley Co-op Bank", account = "99990000932", ifsc = "ZZZZ0000932", branch = "Pune camp" }
+
+[[ledger]]
+key = "rentdep"
+name = "Rent deposit, Sharma Properties"
+group = "LoansAndAdvancesAsset"
+opening_dr = "150000.00"
+
+[[ledger]]
+key = "tdsrec"
+name = "TDS receivable"
+group = "LoansAndAdvancesAsset"
+opening_dr = "32500.00"
+
+[[ledger]]
+key = "sales"
+name = "Sales"
+group = "SalesAccounts"
+gst = { taxability = "Taxable", rate = "18" }
+
+[[ledger]]
+key = "purch"
+name = "Purchases"
+group = "PurchaseAccounts"
+gst = { taxability = "Taxable", rate = "18" }
+
+[[ledger]]
+key = "freight"
+name = "Freight inward"
+group = "DirectExpenses"
+
+[[ledger]]
+key = "salaries"
+name = "Salaries"
+group = "IndirectExpenses"
+
+[[ledger]]
+key = "rent"
+name = "Rent"
+group = "IndirectExpenses"
+
+[[ledger]]
+key = "elec"
+name = "Electricity"
+group = "IndirectExpenses"
+
+[[ledger]]
+key = "bankch"
+name = "Bank charges"
+group = "IndirectExpenses"
+
+[[ledger]]
+key = "dep"
+name = "Depreciation"
+group = "IndirectExpenses"
+
+[[ledger]]
+key = "welfare"
+name = "Staff welfare"
+group = "IndirectExpenses"
+
+[[ledger]]
+key = "interest"
+name = "Interest on term loan"
+group = "IndirectExpenses"
+
+[[ledger]]
+key = "roundoff"
+name = "Round off"
+group = "IndirectExpenses"
+
+[[ledger]]
+key = "disc"
+name = "Discount received"
+group = "IndirectIncomes"
+
+[[item]]
+key = "lat16"
+name = "Drip lateral 16 mm, 400 m roll"
+hsn = "3917"
+gst_rate = "18"
+unit = "roll"
+rate = "3850"
+
+[[item]]
+key = "noz6"
+name = "Brass nozzle set (6 pc)"
+hsn = "7419"
+gst_rate = "18"
+unit = "set"
+rate = "505"
+
+[[item]]
+key = "spr16"
+name = "Hand sprayer 16 L"
+hsn = "8424"
+gst_rate = "5"
+unit = "nos"
+rate = "1450"
+
+[[item]]
+key = "bv50"
+name = "PVC ball valve 50 mm"
+hsn = "8481"
+gst_rate = "18"
+unit = "nos"
+rate = "312.5"
+
+[[item]]
+key = "pick"
+name = "Steel pickaxe 2.5 kg"
+gst_rate = "5"
+unit = "nos"
+rate = "640"
+
+[[item]]
+key = "hdpe32"
+name = "HDPE pipe coil 32 mm"
+hsn = "3917"
+gst_rate = "18"
+unit = "coil"
+rate = "2500"
+
+[[item]]
+key = "pump1"
+name = "Monoblock pump 1 HP"
+hsn = "8413"
+gst_rate = "18"
+unit = "nos"
+rate = "8900"
+
+[[voucher]]
+section = "history"
+kind = "receipt"
+date = "2026-04-30"
+number = "RC/0208"
+narration = "Sales receipts for the month, summary (04/2026)"
+dr = [{ ledger = "saptagiri", amount = "1020000.00" }]
+cr = [{ ledger = "sales", amount = "1020000.00" }]
+
+[[voucher]]
+section = "history"
+kind = "receipt"
+date = "2026-05-31"
+number = "RC/0209"
+narration = "Sales receipts for the month, summary (05/2026)"
+dr = [{ ledger = "saptagiri", amount = "1145000.00" }]
+cr = [{ ledger = "sales", amount = "1145000.00" }]
+
+[[voucher]]
+section = "history"
+kind = "receipt"
+date = "2026-06-30"
+number = "RC/0210"
+narration = "Sales receipts for the month, summary (06/2026)"
+dr = [{ ledger = "saptagiri", amount = "980000.00" }]
+cr = [{ ledger = "sales", amount = "980000.00" }]
+
+[[voucher]]
+section = "history"
+kind = "receipt"
+date = "2026-07-31"
+number = "RC/0211"
+narration = "Sales receipts for the month, summary (07/2026)"
+dr = [{ ledger = "saptagiri", amount = "1210000.00" }]
+cr = [{ ledger = "sales", amount = "1210000.00" }]
+
+[[voucher]]
+section = "history"
+kind = "receipt"
+date = "2026-08-31"
+number = "RC/0212"
+narration = "Sales receipts for the month, summary (08/2026)"
+dr = [{ ledger = "saptagiri", amount = "1216580.00" }]
+cr = [{ ledger = "sales", amount = "1216580.00" }]
+
+[[voucher]]
+section = "history"
+kind = "receipt"
+date = "2026-09-30"
+number = "RC/0213"
+narration = "Sales receipts for the month, summary (09/2026)"
+dr = [{ ledger = "saptagiri", amount = "1023750.00" }]
+cr = [{ ledger = "sales", amount = "1023750.00" }]
+
+[[voucher]]
+section = "history"
+kind = "receipt"
+date = "2026-10-31"
+number = "RC/0214"
+narration = "Sales receipts for the month, summary (10/2026)"
+dr = [{ ledger = "saptagiri", amount = "1192615.50" }]
+cr = [{ ledger = "sales", amount = "1192615.50" }]
+
+[[voucher]]
+section = "history"
+kind = "sales"
+mode = "invoice"
+date = "2026-09-15"
+number = "SI/0372"
+party = "sgt"
+narration = "Opening bill, invoice carried from before November"
+dr = [{ ledger = "sgt", amount = "120000.00", new_bill = "SI/0372" }]
+cr = [{ ledger = "sales", amount = "120000.00" }]
+
+[[voucher]]
+section = "history"
+kind = "sales"
+mode = "invoice"
+date = "2026-09-20"
+number = "SI/0381"
+party = "lfs"
+narration = "Opening bill, invoice carried from before November"
+dr = [{ ledger = "lfs", amount = "96250.00", new_bill = "SI/0381" }]
+cr = [{ ledger = "sales", amount = "96250.00" }]
+
+[[voucher]]
+section = "history"
+kind = "sales"
+mode = "invoice"
+date = "2026-08-28"
+number = "SI/0350"
+party = "phs"
+narration = "Opening bill, invoice carried from before November"
+dr = [{ ledger = "phs", amount = "88420.00", new_bill = "SI/0350" }]
+cr = [{ ledger = "sales", amount = "88420.00" }]
+
+[[voucher]]
+section = "history"
+kind = "sales"
+mode = "invoice"
+date = "2026-10-01"
+number = "SI/0390"
+party = "ksk"
+narration = "Opening bill, invoice carried from before November"
+dr = [{ ledger = "ksk", amount = "147384.50", new_bill = "SI/0390" }]
+cr = [{ ledger = "sales", amount = "147384.50" }]
+
+[[voucher]]
+section = "history"
+kind = "purchase"
+mode = "invoice"
+date = "2026-09-28"
+number = "PB/0118"
+reference = "KP/2198"
+party = "kaveri"
+narration = "Opening bill, supplier bill carried from before November"
+dr = [{ ledger = "purch", amount = "214300.00" }]
+cr = [{ ledger = "kaveri", amount = "214300.00", new_bill = "KP/2198" }]
+
+[[voucher]]
+section = "history"
+kind = "purchase"
+mode = "invoice"
+date = "2026-10-10"
+number = "PB/0119"
+reference = "NST/1102"
+party = "nilgiri"
+narration = "Opening bill, supplier bill carried from before November"
+dr = [{ ledger = "purch", amount = "200150.00" }]
+cr = [{ ledger = "nilgiri", amount = "200150.00", new_bill = "NST/1102" }]
+
+[[voucher]]
+section = "history"
+kind = "purchase"
+mode = "invoice"
+date = "2026-10-05"
+number = "PB/0120"
+reference = "VL/861"
+party = "vardhaman"
+narration = "Opening bill, supplier bill carried from before November"
+dr = [{ ledger = "freight", amount = "150000.00" }]
+cr = [{ ledger = "vardhaman", amount = "150000.00", new_bill = "VL/861" }]
+
+[[voucher]]
+section = "history"
+kind = "purchase"
+mode = "items"
+date = "2026-10-15"
+number = "PB/0125"
+reference = "RP/5398"
+party = "rupa"
+account = "purch"
+place = 27
+narration = "Stock on hand at 1 Nov, bought in one invoice (invented history)"
+items = [{ item = "lat16", qty = "212", rate = "3120" }, { item = "noz6", qty = "640", rate = "395" }, { item = "spr16", qty = "160", rate = "1080" }, { item = "bv50", qty = "1180", rate = "228.4" }, { item = "pick", qty = "150", rate = "470" }, { item = "hdpe32", qty = "58", rate = "2050" }, { item = "pump1", qty = "22", rate = "6950" }]
+
+[[voucher]]
+section = "history"
+kind = "payment"
+date = "2026-10-20"
+number = "PY/0301"
+narration = "Rupa Polymers, bill RP/5398 paid in full"
+dr = [{ ledger = "rupa", amount = "1973016.00", against = "RP/5398" }]
+cr = [{ ledger = "saptagiri", amount = "1973016.00" }]
+
+[[voucher]]
+section = "history"
+kind = "payment"
+date = "2026-10-28"
+number = "PY/0304"
+narration = "City Power, September bill"
+dr = [{ ledger = "elec", amount = "14860.00" }]
+cr = [{ ledger = "saptagiri", amount = "14860.00" }]
+
+[[voucher]]
+section = "history"
+kind = "payment"
+date = "2026-10-31"
+number = "PY/0305"
+narration = "April to October running costs, summary (invented history)"
+dr = [{ ledger = "purch", amount = "3016698.00" }, { ledger = "freight", amount = "34000.00" }, { ledger = "salaries", amount = "1410000.00" }, { ledger = "rent", amount = "175000.00" }, { ledger = "elec", amount = "81540.00" }, { ledger = "bankch", amount = "6820.00" }, { ledger = "welfare", amount = "38600.00" }, { ledger = "interest", amount = "61250.00" }]
+cr = [{ ledger = "saptagiri", amount = "4805508.00" }, { ledger = "disc", amount = "18400.00" }]
+
+[[voucher]]
+section = "history"
+kind = "payment"
+date = "2026-10-31"
+number = "PY/0306"
+narration = "Partners' drawings, April to October, summary (invented history)"
+dr = [{ ledger = "ananya", amount = "900000.00" }, { ledger = "rohan", amount = "600000.00" }]
+cr = [{ ledger = "saptagiri", amount = "1500000.00" }]
+
+[[voucher]]
+section = "history"
+kind = "journal"
+date = "2026-10-31"
+number = "JV/0031"
+narration = "Depreciation, April to October"
+dr = [{ ledger = "dep", amount = "107331.00" }]
+cr = [{ ledger = "plant", amount = "107331.00" }]
+
+[[voucher]]
+section = "november"
+kind = "sales"
+mode = "items"
+date = "2026-11-02"
+number = "SI/0401"
+party = "mai"
+account = "sales"
+narration = "Against PO MAI/77"
+items = [{ item = "pump1", qty = "10", rate = "8900" }]
+
+[[voucher]]
+section = "november"
+kind = "payment"
+date = "2026-11-05"
+number = "PY/0315"
+narration = "Office rent, November, Sharma Properties"
+dr = [{ ledger = "rent", amount = "25000.00" }]
+cr = [{ ledger = "saptagiri", amount = "25000.00" }]
+
+[[voucher]]
+section = "november"
+kind = "sales"
+mode = "items"
+date = "2026-11-06"
+number = "SI/0405"
+party = "lfs"
+account = "sales"
+narration = ""
+items = [{ item = "spr16", qty = "60", rate = "1450" }]
+
+[[voucher]]
+section = "november"
+kind = "purchase"
+mode = "taxed"
+date = "2026-11-08"
+number = "PB/0141"
+reference = "KP/2231"
+party = "kaveri"
+narration = "Cartons, bill KP/2231"
+dr = [{ ledger = "purch", amount = "64000.00" }]
+cr = []
+
+[[voucher]]
+section = "november"
+kind = "receipt"
+date = "2026-11-10"
+number = "RC/0215"
+narration = "NEFT, part against SI/0372"
+dr = [{ ledger = "saptagiri", amount = "80000.00" }]
+cr = [{ ledger = "sgt", amount = "80000.00", against = "SI/0372" }]
+
+[[voucher]]
+section = "november"
+kind = "payment"
+date = "2026-11-12"
+number = "PY/0316"
+narration = "City Power, October bill"
+dr = [{ ledger = "elec", amount = "14860.00" }]
+cr = [{ ledger = "saptagiri", amount = "14860.00" }]
+
+[[voucher]]
+section = "november"
+kind = "sales"
+mode = "items"
+date = "2026-11-14"
+number = "SI/0412"
+party = "sgt"
+account = "sales"
+narration = "Against PO SGT/PO/1123"
+items = [{ item = "lat16", qty = "25", rate = "3850" }, { item = "noz6", qty = "67", rate = "505" }]
+
+[[voucher]]
+section = "november"
+kind = "contra"
+date = "2026-11-15"
+number = "CT/0021"
+narration = "Cash withdrawn for petty expenses"
+dr = [{ ledger = "cash", amount = "20000.00" }]
+cr = [{ ledger = "saptagiri", amount = "20000.00" }]
+
+[[voucher]]
+section = "november"
+kind = "sales"
+mode = "items"
+date = "2026-11-18"
+number = "SI/0415"
+party = "cashsale"
+account = "sales"
+narration = "Counter sale"
+paid_to = "cash"
+items = [{ item = "spr16", qty = "4", rate = "1450" }, { item = "pick", qty = "6", rate = "640" }]
+
+[[voucher]]
+section = "november"
+kind = "sales"
+mode = "items"
+date = "2026-11-20"
+number = "SI/0417"
+party = "phs"
+account = "sales"
+narration = ""
+items = [{ item = "bv50", qty = "120", rate = "312.5" }]
+
+[[voucher]]
+section = "november"
+kind = "purchase"
+mode = "taxed"
+date = "2026-11-20"
+number = "PB/0144"
+reference = "NST/1145"
+party = "nilgiri"
+narration = "MS angles, bill NST/1145"
+dr = [{ ledger = "purch", amount = "100000.00" }]
+cr = []
+
+[[voucher]]
+section = "november"
+kind = "receipt"
+date = "2026-11-20"
+number = "RC/0219"
+narration = "NEFT, full settlement"
+dr = [{ ledger = "saptagiri", amount = "147384.50" }]
+cr = [{ ledger = "ksk", amount = "147384.50", against = "SI/0390" }]
+
+[[voucher]]
+section = "november"
+kind = "payment"
+date = "2026-11-20"
+number = "PY/0318"
+narration = "Cheque 004512, against KP/2198"
+dr = [{ ledger = "kaveri", amount = "50000.00", against = "KP/2198" }]
+cr = [{ ledger = "saptagiri", amount = "50000.00", chq = "004512" }]
+
+[[voucher]]
+section = "november"
+kind = "journal"
+date = "2026-11-20"
+number = "JV/0032"
+narration = "Monthly depreciation, November"
+dr = [{ ledger = "dep", amount = "15333.00" }]
+cr = [{ ledger = "plant", amount = "15333.00" }]
+
+[[statement]]
+ledger = "saptagiri"
+file = "saptagiri-nov-2026.csv"
+format = "generic-csv-split"
