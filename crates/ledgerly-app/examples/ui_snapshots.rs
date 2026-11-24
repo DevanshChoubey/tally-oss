@@ -352,9 +352,12 @@ fn godavari_company_file(dir: &Path) -> Api {
     api
 }
 
-/// The sample company plus a counter sale of enough pickaxes to leave 30 nos short: SI/0415's
-/// voucher copied, its pickaxe line raised so that the stock on hand after it is -30. The books
-/// hold 150 bought on 1 Nov and 6 sold on 18 Nov, so 144 are on hand and 174 are sold.
+/// The sample company plus two vouchers that leave the pickaxe's stock negative for a day: a
+/// counter sale on 19 Nov (SI/0415's voucher copied) of 174 nos where 144 are on hand, so 30 nos
+/// short, and a purchase on 20 Nov (the 15 Oct stock purchase copied) of 100 nos, so the item
+/// closes positive. The stock engine cannot value the period at average cost, so closing stock is
+/// provisional, as in the mock's `balance-sheet.provisional` (index.html:1582, `pick: -30`).
+/// The books hold 150 bought and 6 sold before, so 144 are on hand.
 fn godavari_short_stock_file(dir: &Path) -> Api {
     let path = ledgerly_sample::path_under(dir);
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -371,35 +374,71 @@ fn godavari_short_stock_file(dir: &Path) -> Api {
         .find(|i| i.name.starts_with("Steel pickaxe"))
         .map(|i| i.id)
         .unwrap();
-    let mut v = books
-        .vouchers
-        .values()
-        .find(|v| v.number.as_deref() == Some("SI/0415"))
-        .cloned()
-        .unwrap();
-    v.id = VoucherId(books.vouchers.keys().map(|k| k.0).max().unwrap() + 1);
-    v.number = Some("SI/0416".to_owned());
-    v.date = date!(2026 - 11 - 19);
-    v.supply_date = None;
-    v.inventory_lines.retain(|l| l.item == pick);
-    for line in &mut v.inventory_lines {
-        let qty = Decimal::from(174);
-        let amount = Paise::new(174 * 640 * 100);
-        line.qty = Qty(qty);
-        line.amount = amount;
-        for g in &mut line.godowns {
-            g.qty = Qty(qty);
-            g.amount = amount;
+    let next_id = books.vouchers.keys().map(|k| k.0).max().unwrap() + 1;
+    let copy = |number: &str, copied: &str, id: u64, on: Date, qty: i64, rate: i64| {
+        let mut v = books
+            .vouchers
+            .values()
+            .find(|v| v.number.as_deref() == Some(copied))
+            .cloned()
+            .unwrap();
+        v.id = VoucherId(id);
+        v.number = Some(number.to_owned());
+        v.date = on;
+        v.supply_date = None;
+        let party_bills = v
+            .ledger_lines
+            .iter()
+            .find(|l| !l.bills.is_empty())
+            .map(|l| l.bills.clone());
+        v.ledger_lines.clear();
+        v.gst = None;
+        v.inventory_lines.retain(|l| l.item == pick);
+        for line in &mut v.inventory_lines {
+            let (q, amount) = (Decimal::from(qty), Paise::new(qty * rate * 100));
+            line.qty = Qty(q);
+            line.rate = Rate(Decimal::from(rate));
+            line.amount = amount;
+            for g in &mut line.godowns {
+                g.qty = Qty(q);
+                g.amount = amount;
+            }
         }
-    }
-    match api.invoice_gst(&v) {
-        Ok(ledgerly_core::Outcome::Value(built)) => {
-            v.ledger_lines = built.ledger_lines;
-            v.gst = Some(built.stored);
+        match api.invoice_gst(&v) {
+            Ok(ledgerly_core::Outcome::Value(built)) => {
+                v.ledger_lines = built.ledger_lines;
+                v.gst = Some(built.stored);
+                // A bill-wise party opens the bill for the whole party line.
+                if let (Some(mut bills), Some(first)) = (party_bills, v.ledger_lines.first_mut()) {
+                    for b in &mut bills {
+                        b.name = number.to_owned();
+                        b.amount = first.amount;
+                    }
+                    first.bills = bills;
+                }
+            }
+            other => panic!("the engine did not build the invoice: {other:?}"),
         }
-        other => panic!("the engine did not build the invoice: {other:?}"),
-    }
-    run(&mut api, Command::PostVoucher(v));
+        v
+    };
+    let sale = copy(
+        "SI/0416",
+        "SI/0415",
+        next_id,
+        date!(2026 - 11 - 19),
+        174,
+        640,
+    );
+    let purchase = copy(
+        "PB/0146",
+        "PB/0125",
+        next_id + 1,
+        date!(2026 - 11 - 20),
+        100,
+        470,
+    );
+    run(&mut api, Command::PostVoucher(sale));
+    run(&mut api, Command::PostVoucher(purchase));
     api
 }
 

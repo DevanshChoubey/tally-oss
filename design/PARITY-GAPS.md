@@ -165,47 +165,43 @@ Fictional Pumps, which sold pickaxes with no HSN). Not captured: `recon`, `recon
 `recon-error` and `recon-locked`: they need a 2B file, which the app cannot read (no 2B reader,
 engine item E-3); `recon-explain` is an AI state.
 
-- **gap: the correction state lists vouchers, the mock lists sections.** `gst.gstr1-correction`
-  shows the engine's per-voucher table ("Voucher 3: item 'Steel pickaxe 2.5 kg' has no HSN or
-  SAC code") and counts vouchers; the mock lists the return's sections with "12 HSN summary:
-  Needs correction" selected and a side card naming the item with a "Fix the item master"
-  button. The section table and the button are not built. The capture also holds the pipe
-  invoice back because unit `coil` has no unit quantity code: that is the engine's finding on
-  the capture data, not a screen difference.
+- **by design: the correction state is built from the sample (s9).** `gst.gstr1-correction` now
+  runs on Godavari: Table 12 shows 5 records, 3,49,385.00 and Needs correction, selected with J / K,
+  and the side card names the item with a "Fix the item master" button (Enter opens the item
+  master). Differences: the card shows the engine's reason without the voucher number and date,
+  and says "Export JSON is refused until it is fixed. Nothing is guessed." where the mock says
+  the voucher is held back. A missing HSN keeps the invoice in Tables 4, 5, 7, 8, 9B and 13 and
+  only Table 12 waits, since HSN is a field of Table 12 only (GSTN GSTR-1 user guide,
+  https://tutorial.gst.gov.in/userguide/returns/Creation_of_Outward_Supplies_Return_in_GSTR-1.htm,
+  read 2026-11-25). JSON export is still refused while any table needs correction.
 
 - **by design: GSTR-1 by section is built, with differences** (index.html:1673-1676, s9). The
   engine now summarises the return per table (`Gstr1Return::sections`: 4A, 5, 7, 9B, 12, 13;
   6A and 8 only when the return holds something there) and the screen shows it with Records,
   Taxable, Tax and Status. The tiles count sections. The voucher table stays beneath as the
   drill-down ("Vouchers behind the sections"), and clicking a tile still filters it.
-  Differences: (1) the engine holds back a whole voucher with a missing HSN, so that voucher is
-  in no table: Tables 7 and 12 differ from the mock's, which holds back only table 12; the
-  section list ends with a "Vouchers held back" row so the table is never read as the whole
-  return. (2) No section is selectable and there is no correction side card (the side card is
-  still "What happens next"). Sources: the offline tool's worksheets b2b, b2cl, b2cs, cdnr, hsn
-  and docs, https://gstzen.in/a/gst-manuals-user-manuals-downloading-installing-and-uploading-invoices-in-gstr-1-taking-actions-in-gstr-2.html
+  Differences: (1) a held-back voucher row appears only for duplicates, which sit in no table.
+  (2) Sections are selectable (J / K, Enter) with a side card. Sources: the offline tool's
+  worksheets b2b, b2cl, b2cs, cdnr, hsn and docs, https://gstzen.in/a/gst-manuals-user-manuals-downloading-installing-and-uploading-invoices-in-gstr-1-taking-actions-in-gstr-2.html
   and https://help.tallysolutions.com/file-gstr-1-using-offline-tool/ (both read 2026-11-25).
-- **deferred: the agreement line under the GSTR-1 table** ("Taxable value agrees with GSTR-3B
-  table 3.1(a): ..."). No engine check compares the two, so the line is not drawn.
-- **deferred: GSTR-3B rows from IMS and set-off** (index.html:1683-1686). These are "Accepted
+- **by design: the agreement line under the GSTR-1 table is built.** The engine compares 4A
+  (regular), 5 and 7 with GSTR-3B 3.1(a) (`Gstr1Return::taxable_vs_gstr3b`) and the line gives
+  both figures when they differ. It is Unsupported (no line) when the return holds credit or
+  debit notes (s.34 pending) or SEZ or deemed supplies.
+- **deferred: GSTR-3B rows from IMS and set-off** (index.html:1683-1686). GSTR-3B now computes
+  on the sample (blocked credit under s.17(5) applied), but the cash payable of 39,498, which the
+  Home tile also shows, cannot be computed. These are "Accepted
   in IMS", "No action yet: deemed accepted", "6.1 Payment of tax", "Left after using accepted
   credit" and "Payable in cash". They need the 2B and IMS match (engine item E-3) and set-off
   (engine item E-1). Ours draws 3.1(a), "In your books" (4(A)(5)) and the blocked or ineligible
   credit, all from the engine's working.
 - **by design: a Cess column on GSTR-3B.** The mock has no cess column, but the engine works out
   cess, and a figure is never dropped.
-- **gap (found in s9, not caused by it): GSTR-3B is Unsupported on the sample company.** A
-  purchase dated 2026-11-08 needs the rule pack entry `itc.blocked.motor_vehicles`, which pack
-  2026.1-slabs lacks, so the engine refuses the working (`gst.gstr3b` capture shows the reason and
-  no figure) where the mock shows 3.1(a), ITC and set-off. Right behaviour; the fix is a rule pack
-  entry with its own provenance, or a seed purchase that needs none. The GSTIN in the subtitle is
-  the sample's own, not the mock's.
 - **by design: our own words in "What happens next" and "Read this before filing".** The mock's
   bullets claim things the app does not do: "Mark the month filed here", "Credit counts only what
   you accepted in IMS" and the set-off order. Ours say what the engine does.
-- **by design: the period button is drawn but cannot change the period** (index.html:1671).
-  It reads "November 2026 Alt+F2", as the mock's does; pressing it says the period is the month
-  the company is open on. The Alt+F2 key is not bound on this screen.
+- **by design: the period button opens a month picker (Alt+F2).** It lists the 12 months of the
+  financial year; choosing one reloads the screen. The mock has no picker state, so its look is ours.
 - **deferred: importing a 2B file** (index.html:1692). The mock offers "Import 2B JSON Ctrl+O"
   and "drop it here". There is no 2B reader (engine item E-3), so the empty state says so and
   offers no import button and no key.
@@ -745,8 +741,6 @@ reason names the item); no state to compare with, so nothing further was changed
   no such BadgeKind and adding one touches every exhaustive match.
 - **gap: create-ledger and ledger-detail field sets.** They follow the engine's fields, not the
   mock's; the sidebar hover highlight in captures is a capture artifact.
-- **deferred: GSTR-1 per-section table.** The mock sums per section; ours lists per-voucher rows
-  from the engine because the UI never sums. The period button (Alt+F2) is not built.
 - **by design: the keys note keeps the "Keys in use now" line**, which is true of the app.
 - **data: `bank.import-error` has no capture** (see the Bank section); `bank.default` shows the
   empty state because the fixture has no statement.
@@ -761,9 +755,9 @@ vouchers, no totals. `ledgerly_sample::create` posts it through `ledgerly-api` (
 `Command::*`, `import_bank_statement`, and `LockPeriod` last, 31 Oct 2026), so every figure on
 screen is the engine's. The capture harness opens it as `Fixture::Godavari`, with the clock fixed
 to the mock's 21 Nov 2026 (`navigate::set_clock_override`). Captures that need another company
-stay on Fictional Traders (`review.empty`, `bank.empty`, `home.empty`) or Fictional Pumps
-(`balance-sheet.provisional`, `gst.gstr1-correction`: stock sold before bought, and the engine
-refuses a balance sheet over opening stock).
+stay on Fictional Traders (`review.empty`, `bank.empty`, `home.empty`) or Godavari
+with extra vouchers (`balance-sheet.provisional`, a capture-only fixture: 174 pickaxes sold on
+19 Nov with 144 on hand, 100 bought on 20 Nov; its reason text names the item and date, not the mock's wording).
 
 How the figures agree with the mock (engine, light captures, 21 Nov 2026):
 - Match to the paisa: every party balance (Shree Ganesh 1,93,500.00; Mehta 1,05,020.00; Lakshmi
@@ -794,8 +788,8 @@ Mismatches between the mock's totals and the engine's, and why:
 - **data: no 2B or IMS rows.** The seed has no portal data, so the mock's reconciliation states
   cannot show. (The day book's "Entered by" and AI origin are recorded since s9; "Image attached"
   is not, see "Day book".)
-- **gap: GST cash payable on Home.** The mock shows 39,498.00; the engine gives the GSTR-3B working
-  but no payable after set-off, so the tile says "Not supported yet" with its reason.
+- **gap: GST cash payable on Home.** The mock shows 39,498.00; GSTR-3B computes but the payable after
+  set-off needs 2B/IMS and set-off, so it cannot be computed, so the tile says "Not supported yet" with its reason.
 - **gap: the invoice screen cannot save to a bill-wise party.** Every Godavari party is bill-wise
   (as the mock's), and the sales invoice screen does not enter bill references yet, so the
   invoice captures show the engine's "bill reference on a bill-wise party" note in place of the

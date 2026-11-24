@@ -104,16 +104,6 @@ impl GstScreen {
         let subtitle = self.subtitle();
         let blocked = self.export_blocked_reason();
         crate::ui::page_head::page_head(ui, "GST returns", Some(subtitle.as_str()), |ui| {
-            let period = button_icon(
-                ui,
-                Some(Icon::Cal),
-                &self.period_label,
-                Some("Alt+F2"),
-                ButtonKind::Secondary,
-            );
-            if period.clicked() {
-                events.push(UiEvent::PeriodPicker);
-            }
             let response = ui
                 .add_enabled_ui(blocked.is_none(), |ui| {
                     button_icon(
@@ -131,6 +121,16 @@ impl GstScreen {
             };
             if response.clicked() {
                 events.push(UiEvent::ExportJson);
+            }
+            let period = button_icon(
+                ui,
+                Some(Icon::Cal),
+                &self.period_label,
+                Some("Alt+F2"),
+                ButtonKind::Secondary,
+            );
+            if period.clicked() {
+                events.push(UiEvent::PeriodPicker);
             }
         });
         let items: Vec<(&str, &str)> = GstTab::ALL
