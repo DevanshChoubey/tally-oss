@@ -336,14 +336,14 @@ pub fn greeting(hour: u8, tr: &Tr) -> String {
 /// 2026`).
 #[must_use]
 pub fn date_line(today: Date, fy: Option<&str>, lock: Option<Date>, tr: &Tr) -> String {
-    let mut parts = vec![crate::ui::format::long_date(today)];
+    let mut parts = vec![crate::ui::format::long_date_in(today, tr)];
     if let Some(fy) = fy {
         parts.push(fy.to_owned());
     }
     if let Some(lock) = lock {
         parts.push(tr.tf(
             "home.locked_to",
-            &[("date", &crate::ui::format::date(lock))],
+            &[("date", &crate::ui::format::date_in(lock, tr))],
         ));
     }
     parts.join(" \u{b7} ")

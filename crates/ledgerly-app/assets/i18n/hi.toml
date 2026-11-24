@@ -819,3 +819,25 @@ name = "हिन्दी"
 "conf.medium" = "मध्यम"  # unsourced
 "conf.low" = "कम"  # unsourced
 "conf.rule" = "नियम पर आधारित, निश्चित"  # unsourced
+
+# Dates (ui/format.rs). Full Gregorian month names, since a short Hindi form is not fixed.
+# The weekday words are the everyday Hindi names. All unsourced: no public source read.
+"format.month.jan" = "जनवरी"  # unsourced
+"format.month.feb" = "फ़रवरी"  # unsourced
+"format.month.mar" = "मार्च"  # unsourced
+"format.month.apr" = "अप्रैल"  # unsourced
+"format.month.may" = "मई"  # unsourced
+"format.month.jun" = "जून"  # unsourced
+"format.month.jul" = "जुलाई"  # unsourced
+"format.month.aug" = "अगस्त"  # unsourced
+"format.month.sep" = "सितंबर"  # unsourced
+"format.month.oct" = "अक्टूबर"  # unsourced
+"format.month.nov" = "नवंबर"  # unsourced
+"format.month.dec" = "दिसंबर"  # unsourced
+"format.weekday.monday" = "सोमवार"  # unsourced
+"format.weekday.tuesday" = "मंगलवार"  # unsourced
+"format.weekday.wednesday" = "बुधवार"  # unsourced
+"format.weekday.thursday" = "गुरुवार"  # unsourced
+"format.weekday.friday" = "शुक्रवार"  # unsourced
+"format.weekday.saturday" = "शनिवार"  # unsourced
+"format.weekday.sunday" = "रविवार"  # unsourced

@@ -150,7 +150,7 @@ pub fn row_of_in(item: &ReviewItem, tr: &Tr) -> QueueRow {
         .map(u32::to_string)
         .collect::<Vec<_>>()
         .join(", ");
-    let date = format::date(candidate.proposed_bank_date);
+    let date = format::date_in(candidate.proposed_bank_date, tr);
     QueueRow {
         kind,
         kind_word: tr.t(key),

@@ -105,7 +105,7 @@ fn weekday_abbrev(day: Weekday, tr: &Tr) -> String {
 /// chip is then not drawn).
 #[must_use]
 pub fn lock_chip(lock: Option<Date>, tr: &Tr) -> Option<String> {
-    lock.map(|date| tr.tf("topbar.locked_to", &[("date", &format::date(date))]))
+    lock.map(|date| tr.tf("topbar.locked_to", &[("date", &format::date_in(date, tr))]))
 }
 
 /// The AI chip's words: the stored tier, or "AI: not set up" while none is stored.

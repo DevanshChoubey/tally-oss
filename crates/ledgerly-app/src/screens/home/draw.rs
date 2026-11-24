@@ -145,7 +145,10 @@ pub(super) fn no_figures(ui: &mut Ui, tr: &Tr) {
 /// welcome card with the two actions, then the note that totals stay hidden.
 pub(super) fn welcome(ui: &mut Ui, tr: &Tr, begins: Date, chosen: &mut Option<HomeTarget>) {
     let t = tokens(ui);
-    let sentence = tr.tf("home.books_start", &[("date", &format::date(begins))]);
+    let sentence = tr.tf(
+        "home.books_start",
+        &[("date", &format::date_in(begins, tr))],
+    );
     card(ui, |ui| {
         ui.vertical_centered(|ui| {
             ui.add_space(SPACE_6);

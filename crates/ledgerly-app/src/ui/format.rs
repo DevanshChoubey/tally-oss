@@ -11,6 +11,8 @@
 use ledgerly_core::{Date, Month, Paise};
 use time::Weekday;
 
+use crate::i18n::Tr;
+
 /// An amount in paise as rupees and paise with Indian grouping: `1,00,000.00`, `12,34,567.89`,
 /// `-50.25`, `0.00`. The sign is a leading `-` for negative amounts.
 #[must_use]
@@ -53,6 +55,50 @@ pub fn long_date(d: Date) -> String {
         Weekday::Sunday => "Sunday",
     };
     format!("{day} {}", date(d))
+}
+
+/// `d` in the words of `tr`: the day, the month's word from the translation file, the year.
+/// The digits stay Latin.
+#[must_use]
+pub fn date_in(d: Date, tr: &Tr) -> String {
+    format!("{} {} {}", d.day(), tr.t(month_key(d.month())), d.year())
+}
+
+/// `d` with its weekday in the words of `tr`, as [`long_date`] writes it in English.
+#[must_use]
+pub fn long_date_in(d: Date, tr: &Tr) -> String {
+    format!("{} {}", tr.t(weekday_key(d.weekday())), date_in(d, tr))
+}
+
+/// The translation key of the weekday `w`.
+fn weekday_key(w: Weekday) -> &'static str {
+    match w {
+        Weekday::Monday => "format.weekday.monday",
+        Weekday::Tuesday => "format.weekday.tuesday",
+        Weekday::Wednesday => "format.weekday.wednesday",
+        Weekday::Thursday => "format.weekday.thursday",
+        Weekday::Friday => "format.weekday.friday",
+        Weekday::Saturday => "format.weekday.saturday",
+        Weekday::Sunday => "format.weekday.sunday",
+    }
+}
+
+/// The translation key of the month `m`.
+fn month_key(m: Month) -> &'static str {
+    match m {
+        Month::January => "format.month.jan",
+        Month::February => "format.month.feb",
+        Month::March => "format.month.mar",
+        Month::April => "format.month.apr",
+        Month::May => "format.month.may",
+        Month::June => "format.month.jun",
+        Month::July => "format.month.jul",
+        Month::August => "format.month.aug",
+        Month::September => "format.month.sep",
+        Month::October => "format.month.oct",
+        Month::November => "format.month.nov",
+        Month::December => "format.month.dec",
+    }
 }
 
 /// The three-letter English abbreviation of `m`.
