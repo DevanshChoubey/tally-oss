@@ -30,19 +30,13 @@ use crate::ui::{bold_font, card::card, para};
 use crate::worker::ApiWorker;
 use crate::{AppCtx, Screen};
 
-/// Subtitle of the page head (the mock's `review` head line).
-const SUBTITLE: &str = "Every open AI proposal and rule check in one place. Decide here or in context; it is the same proposal.";
-/// The mock's empty-state heading and sentence, shown only when every source is connected and
-/// none has a proposal.
-const EMPTY_TITLE: &str = "Nothing to review";
-/// See [`EMPTY_TITLE`].
-const EMPTY_SENTENCE: &str = "New bill photos, bank suggestions and 2B explanations will appear here. Ledgerly never acts on them without you.";
-
 /// One row of the queue as the screen shows it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct QueueRow {
-    /// The kind of proposal: "Bank match", "Draft payment" or "Draft receipt".
+    /// The kind of proposal in English: "Bank match", "Draft payment" or "Draft receipt".
     pub kind: &'static str,
+    /// The kind in the words of the language the screen is drawn in.
+    pub kind_word: String,
     /// What the proposal is about: the statement line text and where it goes.
     pub what: String,
     /// Where it came from: the statement lines and the bank statement date.
@@ -66,6 +60,20 @@ pub struct QueuePanel {
     pub count: Option<usize>,
 }
 
+/// The name of a source, in the words of `tr`. TODO stub: English until the Hindi keys exist.
+/// The name of a source, in the words of `tr`.
+#[must_use]
+pub fn source_label_in(source: ReviewSource, tr: &Tr) -> String {
+    tr.t(match source {
+        ReviewSource::BillDraft => "review.source.bill_draft",
+        ReviewSource::PlainWordsDraft => "review.source.plain_words",
+        ReviewSource::BankSuggestion => "review.source.bank",
+        ReviewSource::NewLedgerSuggestion => "review.source.new_ledger",
+        ReviewSource::DuplicateCheck => "review.source.duplicate",
+        ReviewSource::Gstr2bExplanation => "review.source.gstr2b",
+    })
+}
+
 /// The name of a source, in the words the screen shows.
 #[must_use]
 pub fn source_label(source: ReviewSource) -> &'static str {
@@ -80,30 +88,51 @@ pub fn source_label(source: ReviewSource) -> &'static str {
 }
 
 /// The row for one queue item.
+/// The row for one queue item, in English: [`row_of_in`] with the English file.
 #[must_use]
 pub fn row_of(item: &ReviewItem) -> QueueRow {
+    row_of_in(item, &Tr::default())
+}
+
+/// The row for one queue item, in the words of `tr`.
+#[must_use]
+pub fn row_of_in(item: &ReviewItem, tr: &Tr) -> QueueRow {
     let candidate = &item.candidate;
     // The matcher produces only exact and rule suggestions (`ledgerly_bank::matcher`). The other
     // kinds have no matcher output, so they are shown as rule drafts rather than dropped.
-    let (kind, level) = match candidate.kind {
-        ledgerly_model::MatchKind::Exact if candidate.ambiguous => ("Bank match", Confidence::Low),
-        ledgerly_model::MatchKind::Exact => ("Bank match", Confidence::High),
+    let (kind, key, level) = match candidate.kind {
+        ledgerly_model::MatchKind::Exact if candidate.ambiguous => {
+            ("Bank match", "review.kind.bank_match", Confidence::Low)
+        }
+        ledgerly_model::MatchKind::Exact => {
+            ("Bank match", "review.kind.bank_match", Confidence::High)
+        }
         ledgerly_model::MatchKind::Rule
         | ledgerly_model::MatchKind::AiSuggested
         | ledgerly_model::MatchKind::Manual => {
-            let kind = if item.money_in {
-                "Draft receipt"
+            if item.money_in {
+                (
+                    "Draft receipt",
+                    "review.kind.draft_receipt",
+                    Confidence::Rule,
+                )
             } else {
-                "Draft payment"
-            };
-            (kind, Confidence::Rule)
+                (
+                    "Draft payment",
+                    "review.kind.draft_payment",
+                    Confidence::Rule,
+                )
+            }
         }
     };
     let target = match (candidate.vouchers.as_slice(), candidate.suggested_ledger) {
-        ([], Some(ledger)) => format!("to ledger {}", ledger.0),
+        ([], Some(ledger)) => tr.tf(
+            "review.to_ledger",
+            &[("ledger", ledger.0.to_string().as_str())],
+        ),
         (vouchers, _) => vouchers
             .iter()
-            .map(|v| format!("voucher {}", v.0))
+            .map(|v| tr.tf("review.voucher", &[("number", v.0.to_string().as_str())]))
             .collect::<Vec<_>>()
             .join(", "),
     };
@@ -113,12 +142,14 @@ pub fn row_of(item: &ReviewItem) -> QueueRow {
         .map(u32::to_string)
         .collect::<Vec<_>>()
         .join(", ");
+    let date = format::date(candidate.proposed_bank_date);
     QueueRow {
         kind,
+        kind_word: tr.t(key),
         what: format!("{} {}", item.description, target).trim().to_owned(),
-        source: format!(
-            "Bank statement line {lines} \u{b7} {}",
-            format::date(candidate.proposed_bank_date)
+        source: tr.tf(
+            "review.source_line",
+            &[("lines", lines.as_str()), ("date", date.as_str())],
         ),
         confidence: level,
         amount: item.amount,
@@ -127,18 +158,39 @@ pub fn row_of(item: &ReviewItem) -> QueueRow {
 }
 
 /// The rows of the queue, in order.
+/// The rows of the queue, in order, in English.
 #[must_use]
 pub fn rows(queue: &ReviewQueue) -> Vec<QueueRow> {
-    queue.items.iter().map(row_of).collect()
+    rows_in(queue, &Tr::default())
+}
+
+/// The rows of the queue, in order, in the words of `tr`.
+#[must_use]
+pub fn rows_in(queue: &ReviewQueue, tr: &Tr) -> Vec<QueueRow> {
+    queue.items.iter().map(|item| row_of_in(item, tr)).collect()
 }
 
 /// One line per source that is not connected: its name, then the engine's reason.
+/// One line per source that is not connected, in English: its name, then the engine's reason.
 #[must_use]
 pub fn not_connected(queue: &ReviewQueue) -> Vec<String> {
+    not_connected_in(queue, &Tr::default())
+}
+
+/// One line per source that is not connected, in the words of `tr`: its name, then the engine's
+/// reason as given.
+#[must_use]
+pub fn not_connected_in(queue: &ReviewQueue, tr: &Tr) -> Vec<String> {
     queue
         .unlisted
         .iter()
-        .map(|u| format!("{}: {}", source_label(u.source), u.reason))
+        .map(|u| {
+            let label = source_label_in(u.source, tr);
+            tr.tf(
+                "review.unlisted",
+                &[("label", label.as_str()), ("reason", u.reason.as_str())],
+            )
+        })
         .collect()
 }
 
@@ -150,11 +202,18 @@ pub fn badge(queue: &ReviewQueue) -> Option<usize> {
 }
 
 /// The whole panel for a queue answer.
+/// The whole panel for a queue answer, in English.
 #[must_use]
 pub fn panel(queue: &ReviewQueue) -> QueuePanel {
+    panel_in(queue, &Tr::default())
+}
+
+/// The whole panel for a queue answer, in the words of `tr`.
+#[must_use]
+pub fn panel_in(queue: &ReviewQueue, tr: &Tr) -> QueuePanel {
     QueuePanel {
-        rows: rows(queue),
-        not_connected: not_connected(queue),
+        rows: rows_in(queue, tr),
+        not_connected: not_connected_in(queue, tr),
         count: badge(queue),
     }
 }
@@ -168,15 +227,24 @@ pub enum EmptyView {
     NotConnected(Vec<String>),
 }
 
-/// The empty state for a queue with no rows. The mock's wording is used only when no source is
-/// left unlisted, since a missing list is not the same as an empty one.
+/// The empty state for a queue with no rows, in the words of `tr`. The mock's wording is used only
+/// when no source is left unlisted, since a missing list is not the same as an empty one.
 #[must_use]
-pub fn empty_view(queue: &ReviewQueue) -> EmptyView {
+pub fn empty_view_in(queue: &ReviewQueue, tr: &Tr) -> EmptyView {
     if queue.unlisted.is_empty() {
         EmptyView::Nothing
     } else {
-        EmptyView::NotConnected(not_connected(queue))
+        EmptyView::NotConnected(not_connected_in(queue, tr))
     }
+}
+
+/// The empty state for a queue with no rows. The mock's wording is used only when no source is
+/// left unlisted, since a missing list is not the same as an empty one.
+/// The empty state for a queue with no rows, in English. The mock's wording is used only when no
+/// source is left unlisted, since a missing list is not the same as an empty one.
+#[must_use]
+pub fn empty_view(queue: &ReviewQueue) -> EmptyView {
+    empty_view_in(queue, &Tr::default())
 }
 
 /// The Review queue screen.
@@ -239,14 +307,20 @@ impl ReviewScreen {
             .map(|r| r.ledger)
     }
 
-    /// Advances the load by one step: shows a finished answer, then sends a waiting request.
+    /// Advances the load by one step, in English: [`ReviewScreen::tick_in`] with the English file.
     pub fn tick(&mut self, worker: Option<&ApiWorker>) {
+        self.tick_in(worker, &Tr::default());
+    }
+
+    /// Advances the load by one step: shows a finished answer, then sends a waiting request. The
+    /// lines the screen itself says are in the words of `tr`.
+    pub fn tick_in(&mut self, worker: Option<&ApiWorker>, tr: &Tr) {
         match self.latest.poll() {
             Some(Done::Ready(Ok(queue))) => {
                 self.error = None;
-                self.panel = Some(panel(&queue));
+                self.panel = Some(panel_in(&queue, tr));
                 self.empty = if queue.items.is_empty() {
-                    Some(empty_view(&queue))
+                    Some(empty_view_in(&queue, tr))
                 } else {
                     None
                 };
@@ -254,9 +328,7 @@ impl ReviewScreen {
             }
             Some(Done::Ready(Err(e))) => self.error = Some(e),
             Some(Done::Lost) => {
-                self.error = Some(
-                    "The background worker stopped, so the queue could not be read.".to_owned(),
-                );
+                self.error = Some(tr.t("review.worker_stopped"));
             }
             None => {}
         }
@@ -265,7 +337,7 @@ impl ReviewScreen {
         }
         self.want = false;
         let Some(handle) = worker else {
-            self.error = Some("No company is open, so there is no queue to show.".to_owned());
+            self.error = Some(tr.t("review.no_company"));
             return;
         };
         self.latest
@@ -278,7 +350,7 @@ impl ReviewScreen {
             return ScreenAction::Stay;
         };
         let Some(books) = ctx.books.as_ref() else {
-            self.error = Some("No company is open, so the bank ledger cannot open.".to_owned());
+            self.error = Some(ctx.tr.t("review.no_company_bank"));
             return ScreenAction::Stay;
         };
         match crate::shell::navigate::bank_screen(books, ledger) {
@@ -293,17 +365,17 @@ impl ReviewScreen {
 
 impl ReviewScreen {
     /// Draws the rows (or the empty state) and the not-connected sources.
-    fn draw_panel(&mut self, ui: &mut Ui, panel: &QueuePanel) {
+    fn draw_panel(&mut self, ui: &mut Ui, panel: &QueuePanel, tr: &Tr) {
         card(ui, |ui| {
             if panel.rows.is_empty() {
                 let lines = match self.empty.clone() {
                     Some(EmptyView::NotConnected(lines)) => {
-                        draw_empty_heading(ui, "Nothing waiting from the connected sources");
+                        draw_empty_heading(ui, &tr.t("review.waiting_connected"));
                         lines
                     }
                     Some(EmptyView::Nothing) | None => {
-                        draw_empty_heading(ui, EMPTY_TITLE);
-                        vec![EMPTY_SENTENCE.to_owned()]
+                        draw_empty_heading(ui, &tr.t("review.empty_title"));
+                        vec![tr.t("review.empty_sentence")]
                     }
                 };
                 for line in lines {
@@ -319,7 +391,10 @@ impl ReviewScreen {
             for (index, row) in panel.rows.iter().enumerate() {
                 let selected = index == self.selected;
                 ui.horizontal(|ui| {
-                    if ui.selectable_label(selected, row.kind).clicked() {
+                    if ui
+                        .selectable_label(selected, row.kind_word.as_str())
+                        .clicked()
+                    {
                         self.selected = index;
                     }
                     ui.label(&row.what);
@@ -335,10 +410,10 @@ impl ReviewScreen {
         if !panel.rows.is_empty() && !panel.not_connected.is_empty() {
             ui.add_space(crate::theme::SPACE_3);
             card(ui, |ui| {
-                draw_empty_heading(ui, "Not connected yet");
+                draw_empty_heading(ui, &tr.t("review.not_connected_title"));
                 para(
                     ui,
-                    "These proposals are not listed. Nothing is shown for them here, and nothing is posted.",
+                    &tr.t("review.not_connected_note"),
                     crate::theme::TEXT_BODY,
                     crate::ui::tokens(ui).text_2,
                 );
@@ -361,31 +436,29 @@ fn draw_empty_heading(ui: &mut Ui, text: &str) {
 }
 
 impl Screen for ReviewScreen {
-    fn title(&self, _tr: &Tr) -> String {
-        "Review queue".to_owned()
+    fn title(&self, tr: &Tr) -> String {
+        tr.t("review.title")
     }
 
     fn subtitle(&self, _tr: &Tr) -> Option<String> {
         None
     }
 
-    fn keys(&self, _tr: &Tr) -> Vec<KeyHint> {
-        [
-            ("", "Review queue"),
-            ("J / K", "Move"),
-            ("Enter", "Open to edit"),
-            ("Esc", "Back"),
+    fn keys(&self, tr: &Tr) -> Vec<KeyHint> {
+        vec![
+            KeyHint::new("", tr.t("review.title")),
+            KeyHint::new("J / K", tr.t("review.key.move")),
+            KeyHint::new("Enter", tr.t("review.key.open")),
+            KeyHint::new("Esc", tr.t("review.key.back")),
         ]
-        .iter()
-        .map(|(keys, label)| KeyHint::new(*keys, *label))
-        .collect()
     }
 
     fn ui(&mut self, ui: &mut Ui, ctx: &mut AppCtx) -> ScreenAction {
+        let tr = ctx.tr.clone();
         if self.panel.is_none() && self.error.is_none() && !self.latest.is_pending() {
             self.want = true;
         }
-        self.tick(ctx.api.as_ref());
+        self.tick_in(ctx.api.as_ref(), &tr);
         if self.latest.is_pending() {
             ui.ctx().request_repaint();
         }
@@ -407,15 +480,20 @@ impl Screen for ReviewScreen {
         } else {
             ScreenAction::Stay
         };
-        page_head(ui, "Review queue", Some(SUBTITLE), |_| {});
+        page_head(
+            ui,
+            &tr.t("review.title"),
+            Some(&tr.t("review.subtitle")),
+            |_| {},
+        );
         if let Some(error) = self.error.clone() {
             note(ui, NoteKind::Bad, &error);
         }
         match self.panel.clone() {
             None => {
-                note(ui, NoteKind::Info, "Loading the queue from the engine.");
+                note(ui, NoteKind::Info, &tr.t("review.loading"));
             }
-            Some(panel) => self.draw_panel(ui, &panel),
+            Some(panel) => self.draw_panel(ui, &panel, &tr),
         }
         action
     }

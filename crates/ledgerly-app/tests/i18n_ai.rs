@@ -219,3 +219,70 @@ mod ai_settings_screen {
         );
     }
 }
+
+mod review_screen {
+    use ledgerly_api::{ReviewQueue, ReviewSource, UnlistedSource};
+    use ledgerly_app::Screen;
+    use ledgerly_app::i18n::Catalog;
+    use ledgerly_app::screens::review::{
+        EmptyView, ReviewScreen, empty_view_in, not_connected_in, source_label, source_label_in,
+    };
+
+    const SOURCES: [ReviewSource; 6] = [
+        ReviewSource::BillDraft,
+        ReviewSource::PlainWordsDraft,
+        ReviewSource::BankSuggestion,
+        ReviewSource::NewLedgerSuggestion,
+        ReviewSource::DuplicateCheck,
+        ReviewSource::Gstr2bExplanation,
+    ];
+
+    #[test]
+    fn review_source_names_come_from_the_hindi_file() {
+        let hi = Catalog::builtin().unwrap().tr("hi");
+        let en = Catalog::builtin().unwrap().tr("en");
+        for source in SOURCES {
+            // provenance: the English names are the screen's own (review.rs `source_label`).
+            assert_eq!(source_label_in(source, &en), source_label(source));
+            assert_ne!(
+                source_label_in(source, &hi),
+                source_label(source),
+                "{source:?}"
+            );
+            assert!(!source_label_in(source, &hi).contains('\u{27E6}'));
+        }
+    }
+
+    #[test]
+    fn review_title_key_bar_and_unlisted_lines_come_from_the_hindi_file() {
+        let hi = Catalog::builtin().unwrap().tr("hi");
+        let screen = ReviewScreen::default();
+        assert_eq!(screen.title(&hi), hi.t("review.title"));
+        assert_ne!(screen.title(&hi), "Review queue");
+        let labels: Vec<String> = screen.keys(&hi).iter().map(|k| k.label.clone()).collect();
+        assert!(labels.contains(&hi.t("review.key.back")), "{labels:?}");
+        assert!(!labels.contains(&"Back".to_owned()), "{labels:?}");
+
+        let queue = ReviewQueue {
+            items: Vec::new(),
+            unlisted: vec![UnlistedSource {
+                source: ReviewSource::BillDraft,
+                reason: "the engine's own reason".to_owned(),
+            }],
+        };
+        let lines = not_connected_in(&queue, &hi);
+        let label = hi.t("review.source.bill_draft");
+        assert_eq!(
+            lines,
+            vec![hi.tf(
+                "review.unlisted",
+                &[
+                    ("label", label.as_str()),
+                    ("reason", "the engine's own reason")
+                ]
+            )]
+        );
+        assert!(!lines[0].starts_with("Bill photos"), "{lines:?}");
+        assert_eq!(empty_view_in(&queue, &hi), EmptyView::NotConnected(lines));
+    }
+}
