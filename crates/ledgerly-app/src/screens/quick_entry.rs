@@ -111,13 +111,20 @@ enum Ask {
     Settings,
 }
 
+/// The gate note's words for `gate` in the language of `tr`: the shared wording of
+/// [`ai_gate::reason_in`] for this screen's feature.
+#[must_use]
+pub fn gate_line_in(gate: &Gate, tr: &Tr) -> Option<String> {
+    ai_gate::reason_in(Feature::PlainWords, gate, tr)
+}
+
 /// The left card: the note with its AI and privacy button, then the voucher forms.
-fn draw_left(ui: &mut Ui, gate: &Gate, notice: Option<&str>) -> Ask {
+fn draw_left(ui: &mut Ui, gate: &Gate, notice: Option<&str>, tr: &Tr) -> Ask {
     let t = tokens(ui);
     let mut asked = Ask::Nothing;
     card(ui, |ui| {
         ui.set_width(ui.available_width());
-        if ai_gate::gate_note(ui, Feature::PlainWords, gate) {
+        if ai_gate::gate_note_in(ui, Feature::PlainWords, gate, tr) {
             asked = Ask::Settings;
         }
         if let Some(line) = notice {
@@ -203,7 +210,7 @@ impl Screen for QuickEntryScreen {
             .size(Size::relative(LEFT_SHARE))
             .size(Size::remainder())
             .horizontal(|mut strip| {
-                strip.cell(|ui| asked = draw_left(ui, &gate, notice.as_deref()));
+                strip.cell(|ui| asked = draw_left(ui, &gate, notice.as_deref(), &ctx.tr));
                 strip.cell(draw_rules);
             });
         match asked {

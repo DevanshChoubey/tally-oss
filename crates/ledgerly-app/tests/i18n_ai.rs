@@ -286,3 +286,47 @@ mod review_screen {
         assert_eq!(empty_view_in(&queue, &hi), EmptyView::NotConnected(lines));
     }
 }
+
+mod entry_screens_gate_notes {
+    use ledgerly_app::i18n::Catalog;
+    use ledgerly_app::screens::ai_gate::{self, Feature, Gate};
+    use ledgerly_app::screens::{purchase_bill, quick_entry};
+
+    fn gates() -> Vec<Gate> {
+        vec![
+            Gate::NoCompany,
+            Gate::Failed("the file is locked".to_owned()),
+            Gate::Unset,
+            Gate::Off,
+            Gate::Local,
+            Gate::Cloud,
+        ]
+    }
+
+    #[test]
+    fn quick_entry_gate_notes_come_from_the_hindi_file() {
+        let hi = Catalog::builtin().unwrap().tr("hi");
+        let en = Catalog::builtin().unwrap().tr("en");
+        for gate in gates() {
+            let english = ai_gate::reason(Feature::PlainWords, &gate);
+            // The English file gives the same words as the module's English wrapper.
+            assert_eq!(quick_entry::gate_line_in(&gate, &en), english);
+            let text = quick_entry::gate_line_in(&gate, &hi);
+            assert_ne!(text, english, "{gate:?} is still English");
+            assert!(!text.unwrap().contains('\u{27E6}'), "missing key");
+        }
+    }
+
+    #[test]
+    fn purchase_bill_gate_notes_come_from_the_hindi_file() {
+        let hi = Catalog::builtin().unwrap().tr("hi");
+        let en = Catalog::builtin().unwrap().tr("en");
+        for gate in gates() {
+            let english = ai_gate::reason(Feature::BillReading, &gate);
+            assert_eq!(purchase_bill::gate_line_in(&gate, &en), english);
+            let text = purchase_bill::gate_line_in(&gate, &hi);
+            assert_ne!(text, english, "{gate:?} is still English");
+            assert!(!text.unwrap().contains('\u{27E6}'), "missing key");
+        }
+    }
+}

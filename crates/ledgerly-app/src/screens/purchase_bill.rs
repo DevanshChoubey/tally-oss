@@ -133,10 +133,17 @@ fn draw_image(ui: &mut Ui) {
         });
 }
 
+/// The gate note's words for `gate` in the language of `tr`: the shared wording of
+/// [`ai_gate::reason_in`] for this screen's feature.
+#[must_use]
+pub fn gate_line_in(gate: &Gate, tr: &Tr) -> Option<String> {
+    ai_gate::reason_in(Feature::BillReading, gate, tr)
+}
+
 /// The right column: the note with its AI and privacy button, then the purchase form.
-fn draw_right(ui: &mut Ui, gate: &Gate, notice: Option<&str>) -> Ask {
+fn draw_right(ui: &mut Ui, gate: &Gate, notice: Option<&str>, tr: &Tr) -> Ask {
     let mut asked = Ask::Nothing;
-    if ai_gate::gate_note(ui, Feature::BillReading, gate) {
+    if ai_gate::gate_note_in(ui, Feature::BillReading, gate, tr) {
         asked = Ask::Settings;
     }
     if let Some(line) = notice {
@@ -192,7 +199,7 @@ impl Screen for PurchaseBillScreen {
         ui.horizontal_top(|ui| {
             ui.spacing_mut().item_spacing.x = COLUMN_GAP;
             draw_image(ui);
-            ui.vertical(|ui| asked = draw_right(ui, &gate, notice.as_deref()));
+            ui.vertical(|ui| asked = draw_right(ui, &gate, notice.as_deref(), &ctx.tr));
         });
         match asked {
             Ask::Nothing => ScreenAction::Stay,
