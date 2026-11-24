@@ -85,6 +85,10 @@ pub enum NavError {
     /// No company's books are loaded, so a report period cannot be chosen.
     #[error("no company is open, or its books are not loaded yet, so the report cannot open")]
     NoCompany,
+    /// The screen shows the open company's data and no company is open. Opening it would leave a
+    /// page that waits for books that never come.
+    #[error("no company is open: create one or open a file in Company setup first ({0})")]
+    NoCompanyOpen(&'static str),
     /// The palette key is not one this module wrote.
     #[error("\"{0}\" is not something the palette can open")]
     BadKey(String),
@@ -662,12 +666,15 @@ pub fn sole_bank_screen(books: &Books) -> Result<BankScreen, NavError> {
 /// The screen a non-report key names, or `None` when `key` is not one of them.
 pub fn screen_for_key(key: &str, ctx: &AppCtx) -> Option<Result<Box<dyn Screen>, NavError>> {
     let built: Result<Box<dyn Screen>, NavError> = match key {
-        HOME_KEY => Ok(Box::new(super::gateway::GatewayScreen::new())),
+        HOME_KEY => company_open(ctx, "Home")
+            .map(|()| Box::new(super::gateway::GatewayScreen::new()) as Box<dyn Screen>),
         GST_KEY => books_of(ctx).and_then(|b| Ok(Box::new(gst_screen(b)?) as Box<dyn Screen>)),
         IMPORT_KEY => ImportScreen::new(today())
             .map(|s| Box::new(s) as Box<dyn Screen>)
             .map_err(NavError::from),
-        MASTERS_KEY => Ok(Box::new(MastersScreen::new())),
+        MASTERS_KEY => {
+            company_open(ctx, "Masters").map(|()| Box::new(MastersScreen::new()) as Box<dyn Screen>)
+        }
         BANK_RECON_KEY => {
             books_of(ctx).and_then(|b| Ok(Box::new(sole_bank_screen(b)?) as Box<dyn Screen>))
         }
@@ -761,6 +768,16 @@ pub fn default_params(kind: ReportKind, books: &Books) -> Result<ReportParams, N
 pub fn report_screen(kind: ReportKind, books: &Books) -> Result<ReportViewScreen, NavError> {
     let params = default_params(kind, books)?;
     ReportViewScreen::worker(ReportSource::worker(params)).ok_or(NavError::Setup)
+}
+
+/// Whether a company is open (its worker runs or its books are loaded); the books may still be on
+/// the way.
+fn company_open(ctx: &AppCtx, screen: &'static str) -> Result<(), NavError> {
+    if ctx.api.is_some() || ctx.books.is_some() {
+        Ok(())
+    } else {
+        Err(NavError::NoCompanyOpen(screen))
+    }
 }
 
 /// The books of the open company.

@@ -3,6 +3,8 @@
 #
 #   design/app-captures/capture.sh                 every entry in the registry
 #   design/app-captures/capture.sh --only home     entries whose <theme>/<state-id> contains "home"
+#   design/app-captures/capture.sh --audit         the audit set (design/REAL-PATH-AUDIT.md) into audit/
+#   design/app-captures/capture.sh --audit --only cold.rail
 #
 # 1. Runs crates/ledgerly-app/examples/ui_snapshots.rs, which writes <theme>/<state-id>.ppm files.
 # 2. Converts each one to design/app-captures/<theme>/<state-id>.webp (lossless).
@@ -20,11 +22,13 @@ export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-target}"
 export TMPDIR="${TMPDIR:-/tmp}"
 
 usage() {
-  echo "usage: capture.sh [--only <substring>]" >&2
+  echo "usage: capture.sh [--audit] [--only <substring>]" >&2
   exit 2
 }
 
 only=()
+audit=()
+if [[ "${1:-}" == "--audit" ]]; then audit=(--audit); shift; fi
 case "${1:-}" in
   "") ;;
   --only) [[ $# -eq 2 ]] || usage; only=(--only "$2") ;;
@@ -40,7 +44,7 @@ if [[ -z "${CAPTURE_RAW:-}" ]]; then
   mkdir -p "$RAW"
   cd "$ROOT" || exit 1
   # The filter drops the xkbcommon warnings that the headless window prints on every run.
-  cargo run -p ledgerly-app --example ui_snapshots -- "$RAW" "${only[@]}" 2>&1 | grep -v xkbcommon
+  cargo run -p ledgerly-app --example ui_snapshots -- "$RAW" "${only[@]}" "${audit[@]}" 2>&1 | grep -v xkbcommon
   status=${PIPESTATUS[0]}
   if [[ $status -ne 0 ]]; then
     echo "ui_snapshots failed with status $status" >&2
@@ -56,7 +60,7 @@ fi
 # The flat captures from before the <theme>/<state-id> layout.
 find "$OUT" -maxdepth 1 -name '*.webp' -delete
 # A full run replaces every capture, so a renamed or removed registry entry leaves nothing behind.
-if (( ${#only[@]} == 0 )); then
+if (( ${#only[@]} == 0 && ${#audit[@]} == 0 )); then
   rm -rf "$OUT/light" "$OUT/dark" "$OUT/hc"
 fi
 

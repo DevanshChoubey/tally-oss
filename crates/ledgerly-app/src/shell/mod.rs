@@ -60,6 +60,7 @@ use crate::keymap::{self, Action, Keymap};
 use crate::palette::{
     Palette, PaletteChoice, PaletteEntry, PaletteMode, PaletteSearch, PaletteTarget,
 };
+use crate::screens::setup::{SETUP_TITLE, SetupScreen};
 use crate::theme::{self, ThemeKind, Tokens};
 use crate::worker::{Poll, Ticket};
 use crate::{AppCtx, Screen, ScreenAction};
@@ -476,6 +477,12 @@ impl Shell {
         Self::new(Box::new(WelcomeScreen::default()))
     }
 
+    /// The shell the app starts with: one tab, no company open.
+    #[must_use]
+    pub fn cold_start() -> Self {
+        Self::new(Box::new(SetupScreen::default()))
+    }
+
     /// Chooses the theme; it is applied on the next frame.
     pub fn set_theme(&mut self, theme: ThemeKind) {
         self.theme = theme;
@@ -568,6 +575,13 @@ impl Shell {
         };
         let rail = self.rail;
         let selected = self.selected_sidebar();
+        // The mock's top bar on setup shows one "New company" chip (index.html:893-896). With a
+        // company open the chips name that company, as they do everywhere else.
+        let setting_up = self.app_ctx.api.is_none()
+            && self
+                .tabs
+                .active_stack()
+                .is_some_and(|stack| stack.top_title() == SETUP_TITLE);
 
         let mut cmds = Vec::new();
         egui::Panel::top("topbar")
@@ -579,6 +593,7 @@ impl Shell {
                     &self.app_ctx,
                     navigate::today(),
                     self.theme,
+                    setting_up,
                     &t,
                 ));
             });
@@ -653,7 +668,7 @@ impl Shell {
                 if self.app_ctx.api.is_some() {
                     self.tabs.open(Box::new(GatewayScreen::new()));
                 } else {
-                    self.tabs.open(Box::new(WelcomeScreen::default()));
+                    self.tabs.open(Box::new(SetupScreen::default()));
                 }
             }
             ChromeCmd::PopTo(depth) => {
@@ -702,6 +717,6 @@ pub fn run() -> eframe::Result<()> {
     eframe::run_native(
         "Ledgerly",
         options,
-        Box::new(|_cc| Ok(Box::new(Shell::with_welcome()))),
+        Box::new(|_cc| Ok(Box::new(Shell::cold_start()))),
     )
 }

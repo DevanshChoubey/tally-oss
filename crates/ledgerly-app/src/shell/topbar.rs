@@ -148,6 +148,7 @@ pub(super) fn top_bar(
     ctx: &AppCtx,
     today: Date,
     theme: ThemeKind,
+    setting_up: bool,
     t: &Tokens,
 ) -> Vec<ChromeCmd> {
     let mut cmds = Vec::new();
@@ -161,7 +162,7 @@ pub(super) fn top_bar(
                 .color(t.text),
         );
         ui.add_space(6.0);
-        cmds.extend(left_chips(ui, ctx, today));
+        cmds.extend(left_chips(ui, ctx, today, setting_up));
         let left_end = ui.cursor().min.x;
         // The right side first, from the right edge, so the search chip can take what is left.
         let right = right_items(ui, ctx, theme, t, &mut cmds, full);
@@ -186,8 +187,20 @@ pub(super) fn top_bar(
 }
 
 /// The company, date and lock chips.
-fn left_chips(ui: &mut Ui, ctx: &AppCtx, today: Date) -> Vec<ChromeCmd> {
+fn left_chips(ui: &mut Ui, ctx: &AppCtx, today: Date, setting_up: bool) -> Vec<ChromeCmd> {
     let mut cmds = Vec::new();
+    if setting_up {
+        // The first run (`index.html:896`): one chip, with no key, no date and no lock.
+        chip::chip_parts(
+            ui,
+            Chip {
+                icon: Some(Icon::Building),
+                bold: Some("New company"),
+                ..Chip::default()
+            },
+        );
+        return cmds;
+    }
     let parts = company_parts(ctx);
     let company = match &parts {
         Some((name, fy)) => Chip {

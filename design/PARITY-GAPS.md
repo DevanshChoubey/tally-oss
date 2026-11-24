@@ -537,16 +537,24 @@ financial year starts. The model supports that (`Company::books_begin`), so it i
   against a GSTIN starting 27, by clicks on the State list) shows the mock's words and disables
   Continue, as the mock does, but the GSTIN and State fields are not outlined in red and the
   message has no cross icon. The rule is tested in `tests/w4_setup.rs`.
-- **gap: import, open-file and sample cards on Start are shown, not working.** Import needs the
-  import wizard (not routed from here); open-file is on the welcome screen; no sample data ships.
+- **gap: import and sample cards on Start are shown, not working.** Import needs the import
+  wizard (not routed from here); no sample data ships. "Open a Ledgerly file" works (round of
+  2026-11-24, card S8): the system file dialog, then the company opens and Home replaces the
+  wizard. Arrow keys move the choice between Create and Open; Enter acts on it.
 - **gap: Done's "Make your first invoice" is disabled.** No route to a sales invoice from the
   wizard yet, so its card is drawn with a muted label, takes no click and F8 does nothing there;
   the other two launches open their screens, by click or by their keys M and B.
-- **gap: a breadcrumb sits above the setup card.** The mock draws the card with no crumbs; the
-  shell draws "Home > Company setup" for every screen opened over Home.
+- **gap: a breadcrumb sits above the setup card when it is opened over Home.** The mock draws the
+  card with no crumbs. The first launch (`Shell::cold_start`, no company) has none, as the mock;
+  opened from the palette or sidebar over an open company, the shell draws "Home > Company setup".
 - **gap: the unavailable cards on Start carry a muted line saying why.** The mock draws the
-  import, open-file and sample cards as plain choices; ours cannot be chosen (see above), so each
-  says so under its text.
+  import and sample cards as plain choices; ours cannot be chosen (see above), so each says so
+  under its text.
+- **gap: first-launch chrome.** With no company the top bar shows the mock's one "New company"
+  chip, but the AI chip says "AI: not set up" where the mock says "AI on this computer" (nothing
+  is stored to name), and the sidebar footer shows the app version where the mock shows "Engine
+  0.1 mock - rule pack ...". The sidebar lists every screen with no company open, as the mock
+  does; what each does with no company is in `design/REAL-PATH-AUDIT.md`.
 - **gap: no F11 on the Features step.** The mock's line ends "F11 changes this later"; no F11
   feature screen exists, so the sentence is left out. Rows the model has no switch for show an
   off switch that does not move and say why.
@@ -627,3 +635,10 @@ quick-entry offline-AI state has no dark or hc mock capture). Theme differences 
 - **gap: the hc focus ring is 3 px.** theme.rs `focus_width` widens it on purpose; the mock keeps
   2 px. The masters filter box draws a literal 2 px outline (masters/look.rs), which matches the
   mock but not the app's own hc focus width.
+
+## Real-path audit findings (2026-11-24)
+
+Full table in `design/REAL-PATH-AUDIT.md`. Open gaps, worst first: Import screen is raw egui;
+shortcut keys are silently ignored on a cold start; refusal messages are shown in the bottom key
+bar in red with developer wording; the tab strip is unstyled with duplicate "Company setup"
+titles; dark and high-contrast `setup.welcome` captures are not yet reshot cold.
