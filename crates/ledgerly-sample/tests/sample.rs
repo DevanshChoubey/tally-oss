@@ -358,12 +358,12 @@ fn the_day_book_says_who_entered_each_november_voucher_and_how() {
 fn gstr1_sections_count_what_the_return_holds() {
     // provenance: the mock's `gstr1()` run with node over its November sales
     // (design/mock-v2/index.html:698-715): 4A B2B invoices 4 / 3,43,585.00 taxable / 50,535.30
-    // tax. The mock also lists 7 B2C others (9,640.00, 482.00) and 12 HSN summary (3,49,385.00)
-    // from the counter sale SI/0415 whose item "Steel pickaxe" has no HSN; the engine holds that
-    // whole voucher back (rule A1: a voucher missing data is not half-reported), so 7 has no
-    // record and 12 is 3,49,385.00 - 5,800.00 (SI/0415's 4 x 1,450 spare line) = 3,43,585.00.
-    // Both differences are recorded in design/PARITY-GAPS.md. The held-back voucher is its own
-    // row, Needs correction, 1 record.
+    // tax; 7 B2C others one state row, 9,640.00 taxable (SI/0415: 4 x 1,450.00 spare + 6 x 640.00
+    // pickaxe) at 5 percent = 482.00 tax; 12 HSN summary 3,49,385.00 = 3,43,585.00 + 5,800.00,
+    // the pickaxe line left out because the item has no HSN, so Table 12 is Needs correction; the
+    // spare's HSN 8424 at 5 percent is already a row, so 12 keeps 5 rows; 13 counts 5 invoices.
+    // HSN is a Table 12 field only (GSTN GSTR-1 user guide, read 2026-11-25), so SI/0415 stays in
+    // Table 7 and there is no held-back row.
     let (_dir, api) = sample();
     let books = api.books().unwrap().value().unwrap();
     let gstin = books.company.registrations[0].gstin.clone();
@@ -384,13 +384,15 @@ fn gstr1_sections_count_what_the_return_holds() {
     let want = vec![
         "4A 4 Some(34358500) Some(5053530) Ready",
         "5 0 Some(0) Some(0) NotRelevant",
-        "7 0 Some(0) Some(0) NotRelevant",
+        "7 1 Some(964000) Some(48200) Ready",
         "9B 0 Some(0) Some(0) NotRelevant",
-        "12 5 Some(34358500) None Ready",
+        "12 5 Some(34938500) None NeedsCorrection",
         "13 5 None None Ready",
-        "held 1 None None NeedsCorrection",
     ];
     assert_eq!(rows, want);
+    let sections = ret.sections().unwrap();
+    let hsn = sections.iter().find(|s| s.code == "12").unwrap();
+    assert!(hsn.note.as_deref().unwrap_or("").contains("Steel pickaxe"));
 }
 
 #[test]

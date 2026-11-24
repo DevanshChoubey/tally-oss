@@ -14,9 +14,12 @@
 //! print, so the numbers are the mock's. Table 13's mandatory status is noted in
 //! <https://help.tallysolutions.com/file-gstr-1-using-offline-tool/> (read 2026-11-25).
 //!
-//! A voucher held back (`NeedsCorrection` or `Mismatch`) is in no table. It is listed as its own
-//! last row, `held`, with the number of vouchers and the status the worst of them has, so the
-//! other rows are never read as the whole return. The other rows are `Ready` when they hold a
+//! A voucher held back whole (`NeedsCorrection` or `Mismatch`, not `in_tables`) is in no table. It
+//! is listed as its own last row, `held`, with the number of vouchers and the status the worst of
+//! them has, so the other rows are never read as the whole return. A voucher that is
+//! `NeedsCorrection` only because an item has no HSN is in its tables and only Table 12 is short:
+//! that row is `NeedsCorrection` with the engine's reason as its note (GSTN has the HSN field in
+//! Table 12 only, GSTR-1 user guide read 2026-11-25). The other rows are `Ready` when they hold a
 //! record and `NotRelevant` when they hold none.
 
 use ledgerly_core::{MoneyError, Paise};
@@ -42,6 +45,9 @@ pub struct Gstr1Section {
     pub tax: Option<Paise>,
     /// `Ready`, `NotRelevant` (the table is empty), or the worst bucket of the held vouchers.
     pub status: Bucket,
+    /// Why the status is not `Ready`, in the engine's words (the first voucher's reason), when a
+    /// voucher in this table needs correction.
+    pub note: Option<String>,
 }
 
 fn count(n: usize) -> u64 {
@@ -90,6 +96,7 @@ fn row(
         } else {
             Bucket::Ready
         },
+        note: None,
     }
 }
 
@@ -176,18 +183,27 @@ fn nil_row(r: &Gstr1) -> Rows {
     Ok(row("8", name, count(r.nil.len()), Some(sum), false))
 }
 
-fn hsn_row(r: &Gstr1) -> Rows {
+fn hsn_row(ret: &Gstr1Return) -> Rows {
     let mut sum = Sum::default();
-    for line in &r.hsn {
+    for line in &ret.gstr1.hsn {
         sum.taxable = sum.taxable.checked_add(line.taxable)?;
     }
-    Ok(row(
+    let mut section = row(
         "12",
         "HSN summary",
-        count(r.hsn.len()),
+        count(ret.gstr1.hsn.len()),
         Some(sum),
         false,
-    ))
+    );
+    let short = ret
+        .buckets
+        .iter()
+        .find(|b| b.in_tables && b.bucket == Bucket::NeedsCorrection);
+    if let Some(b) = short {
+        section.status = Bucket::NeedsCorrection;
+        section.note.clone_from(&b.reason);
+    }
+    Ok(section)
 }
 
 fn docs_row(r: &Gstr1) -> Gstr1Section {
@@ -214,7 +230,7 @@ impl Gstr1Return {
         if !r.nil.is_empty() {
             out.push(nil_row(r)?);
         }
-        out.push(hsn_row(r)?);
+        out.push(hsn_row(self)?);
         out.push(docs_row(r));
         out.extend(self.held_row());
         Ok(out)
@@ -225,6 +241,7 @@ impl Gstr1Return {
         let held: Vec<Bucket> = self
             .buckets
             .iter()
+            .filter(|b| !b.in_tables)
             .map(|b| b.bucket)
             .filter(|b| matches!(b, Bucket::NeedsCorrection | Bucket::Mismatch))
             .collect();
@@ -243,6 +260,7 @@ impl Gstr1Return {
             taxable: None,
             tax: None,
             status,
+            note: None,
         })
     }
 }
