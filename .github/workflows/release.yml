@@ -1,0 +1,118 @@
+name: release
+
+# Builds the release artifacts when a version tag is pushed (v0.1.0 and so on). Each platform job
+# builds from the tag with the same flags as scripts/repro-check.sh (remapped paths, the commit
+# time as SOURCE_DATE_EPOCH), packages its files, and uploads them. The publish job writes
+# SHA256SUMS.txt over every artifact and attaches everything to the GitHub release.
+#
+# Actions used: actions/checkout, dtolnay/rust-toolchain, Swatinem/rust-cache (as in ci.yml),
+# actions/upload-artifact and actions/download-artifact (GitHub's own). Everything else is a
+# shell command on the runner.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.100
+      - uses: Swatinem/rust-cache@v2
+      - name: Set reproducible build flags
+        run: |
+          echo "SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)" >> "$GITHUB_ENV"
+          echo "RUSTFLAGS=--remap-path-prefix=$GITHUB_WORKSPACE=/ledgerly --remap-path-prefix=$HOME/.cargo=/cargo --remap-path-prefix=$GITHUB_WORKSPACE/target=/target" >> "$GITHUB_ENV"
+      - name: Build release binaries
+        run: cargo build --release --locked -p ledgerly-app -p ledgerly-cli
+      - name: Package tar.gz and deb
+        run: bash packaging/linux/package.sh "${GITHUB_REF_NAME}" target/release dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: dist/*
+          if-no-files-found: error
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.100
+      - uses: Swatinem/rust-cache@v2
+      - name: Set reproducible build flags
+        shell: pwsh
+        run: |
+          $epoch = git log -1 --format=%ct
+          Add-Content -Path $env:GITHUB_ENV -Value "SOURCE_DATE_EPOCH=$epoch"
+          $ws = $env:GITHUB_WORKSPACE -replace '\\', '/'
+          $cargo = "$HOME/.cargo" -replace '\\', '/'
+          Add-Content -Path $env:GITHUB_ENV -Value "RUSTFLAGS=--remap-path-prefix=$ws=/ledgerly --remap-path-prefix=$cargo=/cargo -C link-arg=/Brepro"
+      - name: Build release binaries
+        run: cargo build --release --locked -p ledgerly-app -p ledgerly-cli
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+      - name: Package zip and installer
+        shell: pwsh
+        run: |
+          $iscc = Join-Path ${env:ProgramFiles(x86)} 'Inno Setup 6'
+          $env:PATH = "$iscc;$env:PATH"
+          ./packaging/windows/package.ps1 -Version $env:GITHUB_REF_NAME -ReleaseDir target\release -OutDir dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: dist/*.zip
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: dist/*-setup.exe
+          if-no-files-found: error
+
+  macos:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.100
+      - uses: Swatinem/rust-cache@v2
+      - name: Set reproducible build flags
+        run: |
+          echo "SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)" >> "$GITHUB_ENV"
+          echo "RUSTFLAGS=--remap-path-prefix=$GITHUB_WORKSPACE=/ledgerly --remap-path-prefix=$HOME/.cargo=/cargo --remap-path-prefix=$GITHUB_WORKSPACE/target=/target" >> "$GITHUB_ENV"
+      - name: Build release binaries
+        run: cargo build --release --locked -p ledgerly-app -p ledgerly-cli
+      - name: Install librsvg for the icon
+        run: brew install librsvg
+      - name: Package .app in a .dmg
+        run: bash packaging/macos/package.sh "${GITHUB_REF_NAME}" target/release dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: dist/*.dmg
+          if-no-files-found: error
+
+  publish:
+    needs: [linux, windows, macos]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Write SHA256SUMS.txt
+        working-directory: artifacts
+        run: |
+          sha256sum * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create "$GITHUB_REF_NAME" artifacts/* --title "Ledgerly $GITHUB_REF_NAME" --verify-tag

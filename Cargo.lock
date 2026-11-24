@@ -2307,6 +2307,8 @@ dependencies = [
  "ledgerly-api",
  "ledgerly-conformance",
  "ledgerly-core",
+ "ledgerly-mcp",
+ "serde_json",
  "tempfile",
  "time",
  "tracing",
