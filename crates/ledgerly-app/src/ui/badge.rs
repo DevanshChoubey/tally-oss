@@ -61,7 +61,11 @@ pub fn badge(ui: &mut Ui, kind_of: BadgeKind, text: &str) -> Response {
             ui.horizontal(|ui| {
                 let (rect, _) = ui.allocate_exact_size(Vec2::splat(ICON), Sense::hover());
                 paint_icon(ui.painter(), rect.center(), kind_of, fg);
-                ui.label(RichText::new(text).size(TEXT_CAP).strong().color(fg));
+                ui.label(
+                    RichText::new(text)
+                        .font(super::bold_font(ui, TEXT_CAP))
+                        .color(fg),
+                );
             });
         })
         .response

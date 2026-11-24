@@ -75,6 +75,29 @@ pub fn tab_strip(ui: &mut Ui, labels: &[&str], selected: Option<usize>) -> TabsR
     strip(ui, &items, selected, &t).0
 }
 
+/// Draws tabs like [`tab_strip`], each label followed by its key as a keycap (the keyboard map's
+/// head, index.html:1845: `Classic accountant keys ${kb('1')}`).
+pub fn tab_strip_with_keys(
+    ui: &mut Ui,
+    items: &[(&str, &str)],
+    selected: Option<usize>,
+) -> TabsResponse {
+    let t = tokens(ui);
+    let items: Vec<(&str, Option<&str>)> = items.iter().map(|(l, k)| (*l, Some(*k))).collect();
+    strip(ui, &items, selected, &t).0
+}
+
+/// The width [`tab_strip_with_keys`] takes for `items`, measured with the semibold face.
+#[must_use]
+pub fn tab_strip_with_keys_width(ui: &Ui, items: &[(&str, &str)]) -> f32 {
+    let labels: Vec<&str> = items.iter().map(|(l, _)| *l).collect();
+    let keys: f32 = items
+        .iter()
+        .map(|(_, k)| KEY_GAP + keycap::width(ui, k))
+        .sum();
+    tab_strip_width(ui, &labels) + keys
+}
+
 /// The width [`tab_strip`] takes for `labels`, measured with the selected (semibold) face so the
 /// strip never comes out wider than this.
 #[must_use]

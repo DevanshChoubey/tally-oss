@@ -205,3 +205,52 @@ fn with_no_statement_loaded_the_empty_state_offers_the_import() {
         "the import action is missing: {text}"
     );
 }
+
+/// The width of the first text galley of the frame that starts with `prefix`.
+fn text_width(shapes: &[ClippedShape], prefix: &str) -> Option<f32> {
+    #[allow(
+        clippy::wildcard_enum_match_arm,
+        reason = "test helper over egui's non-exhaustive Shape: only text and groups matter"
+    )]
+    fn walk(shape: &Shape, prefix: &str) -> Option<f32> {
+        match shape {
+            Shape::Vec(children) => children.iter().find_map(|c| walk(c, prefix)),
+            Shape::Text(text) if text.galley.text().starts_with(prefix) => {
+                Some(text.galley.size().x)
+            }
+            _ => None,
+        }
+    }
+    shapes.iter().find_map(|c| walk(&c.shape, prefix))
+}
+
+/// Parity round s8: the empty state as the mock draws it. The mock has no tab strip over it
+/// (index.html:1737: the head, then one card) and sets its sentence in a column 420 wide
+/// (`.empty p{max-width:420px}`, index.html:171).
+/// Provenance: `mock`, index.html:1737 and 171.
+#[test]
+fn the_empty_state_has_no_tabs_and_a_narrow_sentence() {
+    let worker = ApiWorker::spawn(setup_without_statement("s8_empty_look.ledgerly")).unwrap();
+    let mut app = AppCtx {
+        api: Some(worker),
+        ..AppCtx::default()
+    };
+    let mut screen = BankScreen::worker("Bank Current Account", BANK, date!(2026 - 04 - 30));
+    let ctx = egui::Context::default();
+    settle(&ctx, &mut screen, &mut app);
+    let out = ctx.run_ui(RawInput::default(), |ui| {
+        let _action = screen.ui(ui, &mut app);
+    });
+    let text = drawn_text(&out.shapes);
+    let width = text_width(&out.shapes, "Download a statement");
+    out.drop_without_applying_deltas();
+    assert!(
+        !text.lines().any(|l| l == "All lines"),
+        "the empty state still has the tab strip: {text}"
+    );
+    let width = width.expect("the sentence is drawn");
+    assert!(
+        width <= 421.0,
+        "the sentence runs {width} wide, the mock's column is 420"
+    );
+}

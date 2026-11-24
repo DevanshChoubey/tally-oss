@@ -19,10 +19,11 @@ use super::{
 use crate::screens::wire::unsupported_text;
 use crate::theme::{RADIUS_M, TEXT_BODY, border_width, shadow_1};
 use crate::ui::badge::{BadgeKind, badge};
-use crate::ui::button::{ButtonKind, button};
+use crate::ui::button::{ButtonKind, button, button_icon, style_combo};
 use crate::ui::card::card;
-use crate::ui::empty::empty_state;
+use crate::ui::empty::empty_state_with_icon;
 use crate::ui::format;
+use crate::ui::icon::Icon;
 use crate::ui::note::{NoteKind, note};
 use crate::ui::page_head::page_head;
 use crate::ui::table::{self, CellPlace, RowState};
@@ -159,7 +160,10 @@ impl BankScreen {
         }
         let mut events = Vec::new();
         self.draw_head(ui, &mut events);
-        self.draw_tabs(ui, &mut events);
+        // index.html:1737: with no statement the mock shows the head and one card, no tab strip.
+        if !self.shows_empty_state() {
+            self.draw_tabs(ui, &mut events);
+        }
         if let Some(text) = self.import_notice() {
             note(
                 ui,
@@ -276,8 +280,9 @@ impl BankScreen {
                 events.push(UiEvent::Tab(Tab::Statement));
             }
             if self.is_worker()
-                && button(
+                && button_icon(
                     ui,
+                    Some(Icon::Upload),
                     "Import statement",
                     Some("Ctrl+O"),
                     ButtonKind::Secondary,
@@ -287,6 +292,16 @@ impl BankScreen {
                 events.push(UiEvent::Import);
             }
         });
+    }
+
+    /// Whether the screen is on its empty state: worker mode, the lines tab, nothing loaded and
+    /// nothing loading. The reconciliation statement tab always keeps its strip, so the user can
+    /// get back from it.
+    fn shows_empty_state(&self) -> bool {
+        self.is_worker()
+            && self.tab() == Tab::Matching
+            && self.line_count() == 0
+            && !self.is_loading()
     }
 
     /// The two tabs. The first is the statement lines, the second the reconciliation statement.
@@ -336,17 +351,19 @@ impl BankScreen {
             return;
         }
         card(ui, |ui| {
-            if empty_state(
+            if empty_state_with_icon(
                 ui,
+                Some(Icon::Bank),
                 "No statement for this account yet",
                 NO_STATEMENT_SENTENCE,
-                Some(("Import statement", "Ctrl+O")),
+                Some((Some(Icon::Upload), "Import statement", "Ctrl+O")),
             ) {
                 events.push(UiEvent::Import);
             }
             let current = self.import_layout();
             ui.horizontal(|ui| {
                 ui.weak("File layout");
+                style_combo(ui);
                 egui::ComboBox::from_id_salt("bank-import-layout")
                     .selected_text(import::layout_label(current))
                     .show_ui(ui, |ui| {

@@ -21,6 +21,7 @@ pub mod empty;
 pub mod format;
 pub mod icon;
 pub mod keycap;
+pub mod mock_table;
 pub mod note;
 pub mod option_card;
 pub mod page_head;

@@ -439,3 +439,11 @@ pub fn icon(ui: &mut Ui, icon: Icon, color: Color32) -> Response {
     paint(ui.painter(), rect, icon, color);
     response
 }
+
+/// Allocates a square of `size` points and strokes `icon` in it (for the empty state's 36 point
+/// icon, index.html:169).
+pub fn icon_sized(ui: &mut Ui, icon: Icon, color: Color32, size: f32) -> Response {
+    let (rect, response) = ui.allocate_exact_size(Vec2::splat(size), Sense::hover());
+    paint(ui.painter(), rect, icon, color);
+    response
+}

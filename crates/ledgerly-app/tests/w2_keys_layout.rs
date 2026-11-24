@@ -83,3 +83,81 @@ fn standard_cards_do_not_overlap_at_1280() {
 fn standard_cards_do_not_overlap_at_1024() {
     assert_cards_apart(768.0, Key::Num2);
 }
+
+/// Where the frame put the text `label`, as a point (the galley's top left).
+fn text_at(content_width: f32, view: Key, label: &str) -> Option<Pos2> {
+    let ctx = egui::Context::default();
+    let mut screen = KeymapScreen::default();
+    let mut app = AppCtx::default();
+    let mut found = None;
+    for frame in 0..3 {
+        let events = if frame == 0 {
+            vec![Event::Key {
+                key: view,
+                physical_key: None,
+                pressed: true,
+                repeat: false,
+                modifiers: Modifiers::NONE,
+            }]
+        } else {
+            Vec::new()
+        };
+        let input = RawInput {
+            screen_rect: Some(Rect::from_min_size(
+                Pos2::ZERO,
+                Vec2::new(content_width, WINDOW_HEIGHT),
+            )),
+            events,
+            ..RawInput::default()
+        };
+        let out = ctx.run_ui(input, |ui| {
+            ui.set_max_width(content_width);
+            let _action = screen.ui(ui, &mut app);
+        });
+        found = None;
+        for clipped in &out.shapes {
+            find_text(&clipped.shape, label, &mut found);
+        }
+        out.drop_without_applying_deltas();
+    }
+    found
+}
+
+#[allow(
+    clippy::wildcard_enum_match_arm,
+    reason = "test helper over egui's non-exhaustive Shape: only text and groups matter"
+)]
+fn find_text(shape: &egui::epaint::Shape, label: &str, found: &mut Option<Pos2>) {
+    match shape {
+        egui::epaint::Shape::Text(text) if text.galley.text().starts_with(label) => {
+            *found = Some(text.pos);
+        }
+        egui::epaint::Shape::Vec(shapes) => {
+            for shape in shapes {
+                find_text(shape, label, found);
+            }
+        }
+        _ => {}
+    }
+}
+
+#[test]
+fn the_two_presets_are_tabs_in_the_page_head_at_the_right() {
+    // provenance: index.html:1845 puts the two `.tabs` buttons in `phead`'s right slot, beside the
+    // title, with no rule; the note comes below (index.html:1846). Derived from the mock markup.
+    let title = text_at(1024.0, Key::Num2, "Keyboard map").expect("the title is drawn");
+    let tab = text_at(1024.0, Key::Num2, "Classic accountant keys").expect("the tab is drawn");
+    let note = text_at(1024.0, Key::Num2, "Standard uses common").expect("the note is drawn");
+    assert!(
+        tab.y < note.y - 10.0,
+        "the tabs ({tab:?}) are not above the note ({note:?})"
+    );
+    assert!(
+        tab.y - title.y < 40.0,
+        "the tabs are not level with the head"
+    );
+    assert!(
+        tab.x > 1024.0 / 2.0,
+        "the tabs are not at the right: {tab:?}"
+    );
+}

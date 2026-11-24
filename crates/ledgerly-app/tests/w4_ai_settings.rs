@@ -710,3 +710,135 @@ fn the_feature_text_clears_the_on_column_with_room_to_spare() {
         );
     }
 }
+
+// ---- parity round s8 (2026-11-24): the cloud state is presented as the mock presents it ----------
+
+/// The cloud choice, laid out: the key 3 is pressed and the engine's refusal has arrived.
+fn cloud_layout(name: &str) -> (egui::Context, Painted, AiSettingsScreen) {
+    let path = new_file(name);
+    let mut app = open(&path);
+    let mut screen = AiSettingsScreen::default();
+    let ctx = egui::Context::default();
+    ledgerly_app::theme::apply(&ctx, ledgerly_app::theme::ThemeKind::Light);
+    paint_until(&ctx, &mut screen, &mut app, &[], AiSettingsScreen::loaded);
+    paint_until(&ctx, &mut screen, &mut app, &[(Key::Num1, NONE)], |s| {
+        s.stored() == Some(AiTier::Off)
+    });
+    let painted = paint_until(&ctx, &mut screen, &mut app, &[(Key::Num3, NONE)], |s| {
+        s.notice().is_some()
+    });
+    (ctx, painted, screen)
+}
+
+#[test]
+fn a_refused_cloud_choice_is_a_provider_card_pair_and_no_banner() {
+    // index.html:1912: the cloud state is two cards side by side, Provider and Removed before
+    // sending. The refusal stays readable through `notice()` and in the Provider card.
+    let (ctx, painted, screen) = cloud_layout("s8_cloud_pair.ledgerly");
+    assert!(screen.notice().is_some(), "the refusal is kept");
+    assert_eq!(screen.banner(), None, "the refusal is not a banner");
+    assert!(
+        read_probe::<Rect>(&ctx, "ai-settings.banner").is_none(),
+        "a banner was drawn over the page"
+    );
+    let provider: Rect = probe(&ctx, "ai-settings.provider");
+    let removed: Rect = probe(&ctx, "ai-settings.removed");
+    assert!((provider.min.y - removed.min.y).abs() < 1.0, "not level");
+    assert!(
+        (provider.width() - removed.width()).abs() < 2.0,
+        "not equal columns: {provider:?} {removed:?}"
+    );
+    assert!(provider.max.x < removed.min.x, "the cards overlap");
+    assert!(painted.text.contains("Removed before sending"));
+    assert!(painted.text.contains(CLOUD_STATUS), "the status is shown");
+    assert!(painted.text.contains("keychain"), "the reason is shown");
+}
+
+#[test]
+fn a_notice_that_is_not_the_cloud_refusal_is_still_a_banner() {
+    // A failed read or export must never be hidden by the cloud card.
+    let mut screen = AiSettingsScreen::default();
+    screen.show_cloud_refusal("the provider key must be saved in the OS keychain");
+    assert_eq!(screen.banner(), None);
+    screen.show_notice("The company file stopped responding; reopen the company file.");
+    assert_eq!(
+        screen.banner(),
+        Some("The company file stopped responding; reopen the company file.")
+    );
+}
+
+#[test]
+fn the_shown_tier_card_is_selected_and_the_stored_one_says_current() {
+    // index.html:1907: Cloud is the checked card in the cloud state. Our stored tier stays Off, so
+    // the Off card keeps a "Current" badge: the highlight follows the view, the badge the file.
+    let (ctx, painted, screen) = cloud_layout("s8_cloud_selected.ledgerly");
+    assert_eq!(screen.stored(), Some(AiTier::Off));
+    let accent: Color32 = probe(&ctx, "ai-settings.accent");
+    let card = |n: usize| -> Rect { probe(&ctx, &format!("ai-settings.card.{n}")) };
+    let stroked = |rect: Rect| {
+        painted
+            .strokes
+            .iter()
+            .any(|(r, c)| *c == accent && (r.center() - rect.center()).length() < 1.0)
+    };
+    assert!(stroked(card(2)), "the Cloud card is not selected");
+    assert!(!stroked(card(0)), "the Off card is still selected");
+    assert!(painted.text.lines().any(|l| l == "Current"));
+}
+
+#[test]
+fn card_headings_are_bold() {
+    // `h2{font-weight:600}` (index.html:69): panel titles are set in the bold family.
+    let (_, local) = local_layout("s8_headings.ledgerly");
+    for title in [
+        "Local model",
+        "What AI may never do here",
+        "AI activity log",
+    ] {
+        assert!(
+            local.bold.iter().any(|t| t == title),
+            "{title} is not bold; bold text: {:?}",
+            local.bold
+        );
+    }
+}
+
+#[test]
+fn the_option_cards_start_sixteen_below_the_page_head() {
+    // `.phead{margin-bottom:16px}` (index.html:121). The screen used to add the gap a second
+    // time, so the cards sat 32 below the head.
+    let (ctx, _) = local_layout("s8_head_gap.ledgerly");
+    let head: Rect = probe(&ctx, "ai-settings.head");
+    let first: Rect = probe(&ctx, "ai-settings.card.0");
+    let gap = first.min.y - head.max.y;
+    assert!((14.0..=18.0).contains(&gap), "the gap is {gap}");
+}
+
+#[test]
+fn the_feature_table_runs_edge_to_edge_in_its_card() {
+    // `.card` holds the table with no padding (index.html:1908): the row rules reach both edges.
+    let (ctx, painted) = local_layout("s8_flush.ledgerly");
+    let table: Rect = probe(&ctx, "ai-settings.features");
+    let full = painted
+        .lines
+        .iter()
+        .filter(|l| table.contains_rect(l.expand(1.0)) && l.height() < 1.0)
+        .filter(|l| l.width() >= table.width() - 3.0)
+        .count();
+    assert!(full >= 5, "only {full} rules reach both card edges");
+}
+
+#[test]
+fn the_main_row_splits_one_point_five_five_to_one() {
+    // `.g-main{grid-template-columns:minmax(0,1.55fr) minmax(320px,1fr)}` (index.html:138) with a
+    // 12 point gap: the table card is 1.55 / 2.55 of the row less the gap.
+    let (ctx, _) = local_layout("s8_ratio.ledgerly");
+    let table: Rect = probe(&ctx, "ai-settings.features");
+    let never: Rect = probe(&ctx, "ai-settings.never");
+    let ratio = table.width() / never.width();
+    assert!((1.50..=1.60).contains(&ratio), "the ratio is {ratio}");
+    assert!(
+        (never.min.x - table.max.x - 12.0).abs() < 1.0,
+        "the gap is not 12"
+    );
+}

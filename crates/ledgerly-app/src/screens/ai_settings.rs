@@ -15,23 +15,23 @@
 
 use std::path::PathBuf;
 
-use egui::{Align, Key, Layout, Modifiers, RichText, Sense, Ui};
-use egui_extras::{Column, Size, StripBuilder};
+use egui::{Align, Key, Layout, Modifiers, RichText, Ui};
+use egui_extras::{Size, StripBuilder};
 use ledgerly_api::{AiLogEntry, AiTier, Api};
 use ledgerly_core::Outcome;
 
 use crate::screen::KeyHint;
 use crate::screens::wire::{Done, Latest, unsupported_text};
 use crate::shell::submit;
-use crate::theme::{TEXT_BODY, TEXT_META};
-use crate::ui::card::card;
-use crate::ui::icon::{Icon, icon};
+use crate::theme::{TEXT_BODY, TEXT_H2, TEXT_META};
+use crate::ui::badge::{BadgeKind, badge};
+use crate::ui::card::{card, card_flush};
+use crate::ui::icon::Icon;
+use crate::ui::mock_table::{self, Cell, Width, panel_title};
 use crate::ui::note::{NoteKind, note};
 use crate::ui::option_card::{OptionCard, option_grid};
-use crate::ui::page_head::{HEAD_GAP, page_head};
-use crate::ui::switch::switch;
-use crate::ui::table::{self, ROW_HEIGHT};
-use crate::ui::{bold_font, para_text, tokens};
+use crate::ui::page_head::page_head;
+use crate::ui::{bold_font, para, para_text, tokens};
 use crate::worker::ApiWorker;
 use crate::{AppCtx, Screen, ScreenAction};
 
@@ -100,12 +100,23 @@ pub const NEVER: [&str; 5] = [
     "Send anything to the cloud without your confirmation.",
 ];
 
-/// The label column of the local and provider panels, in points.
-const LABEL_COLUMN: f32 = 120.0;
-/// The feature column of the features table, in points.
-const FEATURE_COLUMN: f32 = 180.0;
+/// The label column of the local model panel, in points. The mock's table sizes it to its
+/// content (index.html:1914), which comes to 226 in the capture.
+const LOCAL_LABEL_COLUMN: f32 = 226.0;
+/// The label column of the provider panel, in points (173 in the mock's capture, index.html:1912).
+const PROVIDER_LABEL_COLUMN: f32 = 173.0;
+/// The feature column of the features table, in points (197 in the mock's capture).
+const FEATURE_COLUMN: f32 = 197.0;
 /// The On column of the features table, in points (`th` width 60px in index.html:1908).
-const ON_COLUMN: f32 = 64.0;
+const ON_COLUMN: f32 = 60.0;
+/// The gap between the two columns of a `.grid` (index.html:136).
+const GRID_GAP: f32 = 12.0;
+/// The narrowest the never card gets (`minmax(320px,1fr)`, index.html:138).
+const NEVER_MIN: f32 = 320.0;
+/// The share of the main row the left column takes before the gap: 1.55 of 2.55 parts.
+const MAIN_LEFT_PARTS: f32 = 1.55;
+/// The parts of the main row in all (index.html:138).
+const MAIN_PARTS: f32 = 2.55;
 
 /// The log card's title (index.html:1915).
 pub const LOG_TITLE: &str = "AI activity log";
@@ -190,6 +201,9 @@ pub struct AiSettingsScreen {
     cloud_reason: Option<String>,
     /// A line for the user about the last choice, export or failed read.
     notice: Option<String>,
+    /// The notice is the engine's refusal of the cloud tier, which the Provider card shows, so it
+    /// is not drawn as a banner too.
+    notice_is_cloud_refusal: bool,
     /// The one call in flight.
     latest: Latest<Reply>,
 }
@@ -231,6 +245,29 @@ impl AiSettingsScreen {
     #[must_use]
     pub fn notice(&self) -> Option<&str> {
         self.notice.as_deref()
+    }
+
+    /// The notice to draw as a banner over the page. The cloud refusal is drawn in the Provider
+    /// card instead (`notice()` still holds it), so it is not a banner.
+    #[must_use]
+    pub fn banner(&self) -> Option<&str> {
+        if self.notice_is_cloud_refusal {
+            None
+        } else {
+            self.notice()
+        }
+    }
+
+    /// Records the engine's refusal of the cloud tier: kept as the notice, shown in the card.
+    pub fn show_cloud_refusal(&mut self, line: &str) {
+        self.notice = Some(line.to_owned());
+        self.notice_is_cloud_refusal = true;
+    }
+
+    /// Records any other line for the user; it is drawn as a banner.
+    pub fn show_notice(&mut self, line: &str) {
+        self.notice = Some(line.to_owned());
+        self.notice_is_cloud_refusal = false;
     }
 
     /// Starts reading the stored tier and the log.
@@ -302,9 +339,7 @@ impl AiSettingsScreen {
         let reply = match self.latest.poll() {
             None => return false,
             Some(Done::Lost) => {
-                self.notice = Some(
-                    "The company file stopped responding; reopen the company file.".to_owned(),
-                );
+                self.show_notice("The company file stopped responding; reopen the company file.");
                 return true;
             }
             Some(Done::Ready(reply)) => reply,
@@ -318,7 +353,7 @@ impl AiSettingsScreen {
             }
             Reply::Loaded(Err(reason)) => {
                 self.loaded = true;
-                self.notice = Some(format!("The AI settings could not be read: {reason}"));
+                self.show_notice(&format!("The AI settings could not be read: {reason}"));
             }
             Reply::Chosen { tier, result } => match result {
                 Ok(Outcome::Value(())) => {
@@ -326,24 +361,31 @@ impl AiSettingsScreen {
                     self.cloud_asked = false;
                     self.cloud_reason = None;
                     self.notice = None;
+                    self.notice_is_cloud_refusal = false;
                     ctx.ai_tier = Some(tier);
                     // The top bar's chip and the books are read again by the shell.
                     submit::note_changed();
                 }
                 Ok(Outcome::Unsupported(u)) => {
-                    self.cloud_reason = Some(u.reason.clone());
-                    self.notice = Some(unsupported_text(&u));
+                    let line = unsupported_text(&u);
+                    if tier == AiTier::Cloud {
+                        self.cloud_reason = Some(u.reason.clone());
+                        self.show_cloud_refusal(&line);
+                    } else {
+                        self.show_notice(&line);
+                    }
                 }
-                Err(reason) => self.notice = Some(reason),
+                Err(reason) => self.show_notice(&reason),
             },
             Reply::Exported { path, result } => {
-                self.notice = Some(match result {
+                let line = match result {
                     Ok(Outcome::Value(())) => {
                         format!("Exported the AI activity log to {}.", path.display())
                     }
                     Ok(Outcome::Unsupported(u)) => unsupported_text(&u),
                     Err(reason) => reason,
-                });
+                };
+                self.show_notice(&line);
             }
         }
         true
@@ -378,8 +420,9 @@ impl Screen for AiSettingsScreen {
             .as_ref()
             .map_or_else(|| "this company".to_owned(), |b| b.company.name.clone());
         let subtitle = format!("For {company}{SUBTITLE_TAIL}");
-        page_head(ui, TITLE, Some(&subtitle), |_| {});
-        ui.add_space(HEAD_GAP);
+        // `page_head` ends with the head's own 16 point margin (index.html:121).
+        let head = page_head(ui, TITLE, Some(&subtitle), |_| {});
+        record_probe(ui, "ai-settings.head", head);
 
         if ctx.api.is_none() {
             note(
@@ -389,37 +432,35 @@ impl Screen for AiSettingsScreen {
             );
             return ScreenAction::Stay;
         }
-        if let Some(line) = &self.notice {
-            note(ui, NoteKind::Warn, line);
-            ui.add_space(12.0);
+        if let Some(line) = self.banner() {
+            let drawn = note(ui, NoteKind::Warn, line);
+            record_probe(ui, "ai-settings.banner", drawn.rect);
+            gap(ui, 12.0);
         }
 
         let panel = self.panel();
-        if let Some(tier) = draw_options(ui, self.stored) {
+        if let Some(tier) = draw_options(ui, panel, self.stored) {
             self.pick(ctx.api.as_ref(), tier);
         }
-        ui.add_space(14.0);
+        gap(ui, 14.0);
 
         draw_panel(ui, panel, self.cloud_reason.as_deref());
-        ui.add_space(14.0);
 
-        StripBuilder::new(ui)
-            .size(Size::relative(TABLE_SHARE))
-            .size(Size::remainder())
-            .horizontal(|mut strip| {
-                strip.cell(|left| {
-                    draw_features(left, panel);
-                    left.add_space(14.0);
-                    draw_log(left, &self.log, !self.loaded);
-                });
-                strip.cell(draw_never);
-            });
+        draw_main_row(ui, panel, &self.log, !self.loaded);
         ScreenAction::Stay
     }
 }
 
-/// The share of the row the features table and the log take; the never card takes the rest.
-const TABLE_SHARE: f32 = 0.66;
+/// `margin-bottom` between blocks: `points` from the block above to the one below, whatever
+/// spacing the layout adds between items.
+fn gap(ui: &mut Ui, points: f32) {
+    #[expect(
+        clippy::float_arithmetic,
+        reason = "a margin less the layout's own spacing"
+    )]
+    let extra = (points - ui.spacing().item_spacing.y).max(0.0);
+    ui.add_space(extra);
+}
 
 /// The system save dialog for the log export, CSV only.
 fn save_dialog() -> Option<PathBuf> {
@@ -437,19 +478,38 @@ fn draw_panel(ui: &mut Ui, panel: Panel, cloud_reason: Option<&str>) {
     match panel {
         Panel::Unset => {
             note(ui, NoteKind::Info, UNSET_NOTE);
+            gap(ui, 14.0);
         }
         Panel::Off => {
             note(ui, NoteKind::Info, OFF_NOTE);
+            gap(ui, 14.0);
         }
-        Panel::Local => draw_local(ui),
-        Panel::Cloud => draw_cloud(ui, cloud_reason),
+        Panel::Local => {
+            draw_local(ui);
+            gap(ui, 14.0);
+        }
+        Panel::Cloud => {
+            draw_cloud(ui, cloud_reason);
+            gap(ui, 14.0);
+        }
+    }
+}
+
+/// The tier a panel shows, as the option card it checks.
+fn shown_tier(panel: Panel) -> Option<AiTier> {
+    match panel {
+        Panel::Unset => None,
+        Panel::Off => Some(AiTier::Off),
+        Panel::Local => Some(AiTier::Local),
+        Panel::Cloud => Some(AiTier::Cloud),
     }
 }
 
 /// Draws the three option cards in a row and returns the tier clicked this frame, if any.
-/// The "Current" badge marks the tier stored in the company file, not the panel shown: a refused
-/// cloud choice leaves the stored tier unchanged.
-fn draw_options(ui: &mut Ui, stored: Option<AiTier>) -> Option<AiTier> {
+/// The checked card is the one whose panel is shown (`aria-checked`, index.html:1905-1907). The
+/// "Current" badge marks the tier stored in the company file when that is not the card checked:
+/// a refused cloud choice leaves the stored tier unchanged.
+fn draw_options(ui: &mut Ui, panel: Panel, stored: Option<AiTier>) -> Option<AiTier> {
     let t = tokens(ui);
     record_probe(ui, "ai-settings.accent", t.accent);
     record_probe(ui, "ai-settings.accent_soft", t.accent_soft);
@@ -458,13 +518,12 @@ fn draw_options(ui: &mut Ui, stored: Option<AiTier>) -> Option<AiTier> {
         (AiTier::Local, Icon::Cpu, OPTION_LOCAL),
         (AiTier::Cloud, Icon::Cloud, OPTION_CLOUD),
     ];
-    // The shown tier has the accent border and fill (`aria-checked` in index.html:1905-1907) and
-    // a "Current" badge.
+    let shown = shown_tier(panel);
     let cards = options.map(|(tier, glyph, (title, body))| {
-        let current = stored == Some(tier);
+        let current_elsewhere = stored == Some(tier) && shown != Some(tier);
         OptionCard::new(glyph, title, body)
-            .selected(current)
-            .badge(current.then_some("Current"))
+            .selected(shown == Some(tier))
+            .badge(current_elsewhere.then_some("Current"))
     });
     let drawn = option_grid(ui, egui::Id::unique("ai-option"), 3, &cards);
     let mut clicked = None;
@@ -484,82 +543,134 @@ fn draw_options(ui: &mut Ui, stored: Option<AiTier>) -> Option<AiTier> {
 fn draw_local(ui: &mut Ui) {
     let local = card(ui, |ui| {
         ui.set_min_width(ui.available_width());
-        panel_heading(ui, Icon::Cpu, "Local model");
-        rule_rows(
+        panel_title(ui, Some(Icon::Cpu), "Local model");
+        let rows = [
+            (
+                "Reader",
+                "Not installed. This build has no local bill reader.",
+            ),
+            ("Language", "Not installed. This build has no local model."),
+            ("Network", "Nothing is sent: no AI feature is built yet."),
+        ]
+        .map(|(label, value)| vec![mock_table::muted(label), mock_table::text(value)]);
+        mock_table::table(
             ui,
-            &[
-                (
-                    "Reader",
-                    "Not installed. This build has no local bill reader.",
-                ),
-                ("Language", "Not installed. This build has no local model."),
-                ("Network", "Nothing is sent: no AI feature is built yet."),
-            ],
+            &[Width::Fixed(LOCAL_LABEL_COLUMN), Width::Rest],
+            None,
+            rows.into(),
         );
     });
     record_probe(ui, "ai-settings.local", local.response.rect);
 }
 
-/// The cloud panel: the provider is not available, with the engine's reason.
+/// The cloud panel (index.html:1912): the Provider card and the Removed before sending card, side
+/// by side. The provider is not available in this build, and the Provider card says why in the
+/// mock's place for the key status.
 fn draw_cloud(ui: &mut Ui, reason: Option<&str>) {
-    card(ui, |ui| {
-        ui.set_min_width(ui.available_width());
-        panel_heading(ui, Icon::Cloud, "Provider");
-        rule_rows(
-            ui,
-            &[
-                ("Status", CLOUD_STATUS),
-                ("Why", reason.unwrap_or(CLOUD_REASON_DEFAULT)),
-                (
-                    "Key",
-                    "Never written to the company file. It belongs in the OS keychain.",
-                ),
-            ],
-        );
-    });
-}
-
-/// A panel heading: its icon, then the title in the bold family.
-fn panel_heading(ui: &mut Ui, glyph: Icon, title: &str) {
-    let t = tokens(ui);
-    ui.horizontal(|ui| {
-        icon(ui, glyph, t.text_2);
-        ui.add_space(6.0);
-        ui.label(
-            RichText::new(title)
-                .font(bold_font(ui, TEXT_BODY))
-                .color(t.text),
-        );
-    });
-    ui.add_space(6.0);
-}
-
-/// Label and text rows across the card, a rule under each row. The label column is fixed; the
-/// value takes the rest. Each cell draws its own part of the rule, so the rules join up.
-fn rule_rows(ui: &mut Ui, items: &[(&str, &str)]) {
-    let t = tokens(ui);
-    table::builder(ui)
-        .column(Column::exact(LABEL_COLUMN))
-        .column(Column::remainder())
-        .body(|mut body| {
-            for (label, value) in items {
-                body.row(ROW_HEIGHT, |mut row| {
-                    row.col(|ui| {
-                        ui.label(RichText::new(*label).size(TEXT_META).color(t.text_2));
-                        cell_rule(ui);
-                    });
-                    row.col(|ui| {
-                        table::text(ui, value);
-                        cell_rule(ui);
-                    });
+    let id = egui::Id::unique("ai-cloud-height");
+    let wanted = ui.ctx().data(|d| d.get_temp::<f32>(id)).unwrap_or(0.0);
+    let mut tallest = 0.0_f32;
+    ui.scope(|ui| {
+        ui.spacing_mut().item_spacing.x = GRID_GAP;
+        ui.columns(2, |cols| {
+            let [left, right] = cols else { return };
+            let provider = card(left, |ui| {
+                ui.set_min_width(ui.available_width());
+                ui.set_min_height(wanted);
+                panel_title(ui, Some(Icon::Cloud), "Provider");
+                let status: Cell<'_> = Box::new(|ui| {
+                    badge(ui, BadgeKind::Warn, CLOUD_STATUS);
                 });
-            }
+                let rows = vec![
+                    vec![mock_table::muted("Status"), status],
+                    vec![
+                        mock_table::muted("Why"),
+                        mock_table::text(reason.unwrap_or(CLOUD_REASON_DEFAULT)),
+                    ],
+                    vec![
+                        mock_table::muted("Key"),
+                        mock_table::text(
+                            "Never written to the company file. It belongs in the OS keychain.",
+                        ),
+                    ],
+                    vec![
+                        mock_table::muted("Region and retention"),
+                        mock_table::muted("Set by your provider's terms. Check them."),
+                    ],
+                ];
+                mock_table::table(
+                    ui,
+                    &[Width::Fixed(PROVIDER_LABEL_COLUMN), Width::Rest],
+                    None,
+                    rows,
+                );
+                tallest = tallest.max(ui.min_rect().height());
+            });
+            record_probe(left, "ai-settings.provider", provider.response.rect);
+            let removed = card(right, |ui| {
+                ui.set_min_width(ui.available_width());
+                ui.set_min_height(wanted);
+                panel_title(ui, Some(Icon::Shield), "Removed before sending");
+                let rows = REMOVED
+                    .iter()
+                    .map(|line| vec![mock_table::text(line), mock_table::switch_cell(true, line)])
+                    .collect();
+                mock_table::table(ui, &[Width::Rest, Width::Fixed(ON_COLUMN)], None, rows);
+                let t = tokens(ui);
+                ui.add_space(6.0);
+                ui.label(
+                    RichText::new("Not built yet")
+                        .size(TEXT_META)
+                        .color(t.text_3),
+                );
+                tallest = tallest.max(ui.min_rect().height());
+            });
+            record_probe(right, "ai-settings.removed", removed.response.rect);
         });
+    });
+    #[expect(clippy::float_arithmetic, reason = "how far the height moved")]
+    if (tallest - wanted).abs() > 0.5 {
+        ui.ctx().data_mut(|d| d.insert_temp(id, tallest));
+        ui.ctx().request_repaint();
+    }
 }
 
-/// Draws the rule along the bottom of a table cell (`table.t` lines in index.html).
-fn cell_rule(ui: &Ui) {
-    table::paint_cell_rule(ui, ui.max_rect());
+/// What redaction takes out before anything is sent (index.html:1912). The mock also lists email
+/// addresses; the redaction module recognises PAN, GSTIN, Aadhaar, bank account numbers, IFSC
+/// codes and phone numbers, not email addresses, so the card names exactly those.
+const REMOVED: [&str; 4] = [
+    "Bank account numbers and IFSC codes",
+    "PAN, GSTIN and Aadhaar numbers",
+    "Phone numbers",
+    "Ledger balances and report figures (never sent)",
+];
+
+/// The main row (`.g-main`, index.html:1918): the features table over the log on the left, the
+/// never card on the right.
+fn draw_main_row(ui: &mut Ui, panel: Panel, log: &[AiLogEntry], reading: bool) {
+    #[expect(clippy::float_arithmetic, reason = "the grid's fractions of the row")]
+    let (left, right) = {
+        let room = (ui.available_width() - GRID_GAP).max(0.0);
+        let right = (room * (MAIN_PARTS - MAIN_LEFT_PARTS) / MAIN_PARTS).max(NEVER_MIN.min(room));
+        (room - right, right)
+    };
+    // The strip's own cell spacing is the grid gap, not the layout's item spacing.
+    ui.scope(|ui| {
+        ui.spacing_mut().item_spacing.x = 0.0;
+        StripBuilder::new(ui)
+            .size(Size::exact(left))
+            .size(Size::exact(GRID_GAP))
+            .size(Size::exact(right))
+            .horizontal(|mut strip| {
+                strip.cell(|col| {
+                    draw_features(col, panel);
+                    gap(col, 12.0);
+                    draw_log(col, log, reading);
+                });
+                strip.empty();
+                strip.cell(draw_never);
+            });
+    });
 }
 
 /// The features table: what each feature sees, and whether it runs (index.html:1908). The On
@@ -568,55 +679,57 @@ fn draw_features(ui: &mut Ui, panel: Panel) {
     let off = matches!(panel, Panel::Off | Panel::Unset);
     let cloud = panel == Panel::Cloud;
     let t = tokens(ui);
-    let features = card(ui, |ui| {
-        table::builder(ui)
-            .column(Column::initial(FEATURE_COLUMN).at_least(160.0).clip(true))
-            .column(Column::remainder().at_least(160.0).clip(true))
-            .column(Column::exact(ON_COLUMN))
-            .header(ROW_HEIGHT, |mut row| {
-                table::header(&mut row, "Feature", false);
-                let second = if cloud {
-                    "What is sent to your provider"
+    let features = card_flush(ui, |ui| {
+        let second = if cloud {
+            "What is sent to your provider"
+        } else {
+            "What the model sees"
+        };
+        let texts: Vec<String> = FEATURES
+            .iter()
+            .map(|(_, sees, sent)| {
+                if off {
+                    "Nothing: off".to_owned()
+                } else if cloud {
+                    (*sent).to_owned()
                 } else {
-                    "What the model sees"
-                };
-                table::header(&mut row, second, false);
-                table::header(&mut row, "On", false);
-            })
-            .body(|mut body| {
-                for (feature, sees, sent) in FEATURES {
-                    body.row(ROW_HEIGHT, |mut row| {
-                        row.col(|ui| {
-                            ui.label(RichText::new(feature).size(TEXT_BODY).color(t.text));
-                            cell_rule(ui);
-                        });
-                        row.col(|ui| {
-                            let text = if off {
-                                "Nothing: off".to_owned()
-                            } else if cloud {
-                                sent.to_owned()
-                            } else {
-                                format!("{sees}, on this computer")
-                            };
-                            table::text(ui, &text);
-                            cell_rule(ui);
-                        });
-                        row.col(|ui| {
-                            switch(ui, !off, Sense::hover(), feature);
-                            cell_rule(ui);
-                        });
-                    });
+                    format!("{sees}, on this computer")
                 }
-            });
+            })
+            .collect();
+        let rows = FEATURES
+            .iter()
+            .zip(&texts)
+            .map(|((feature, _, _), text)| {
+                vec![
+                    mock_table::text(feature),
+                    mock_table::muted(text),
+                    mock_table::switch_cell(!off, feature),
+                ]
+            })
+            .collect();
+        mock_table::table(
+            ui,
+            &[
+                Width::Fixed(FEATURE_COLUMN),
+                Width::Rest,
+                Width::Fixed(ON_COLUMN),
+            ],
+            Some(&["Feature", second, "On"]),
+            rows,
+        );
         if !off {
             // Nothing runs in this build; the switch says the feature is on, this line says why
             // nothing happens (PARITY-GAPS).
+            ui.horizontal(|ui| {
+                ui.add_space(crate::ui::table::CELL_PAD_X);
+                ui.label(
+                    RichText::new("Not built yet")
+                        .size(TEXT_META)
+                        .color(t.text_3),
+                );
+            });
             ui.add_space(6.0);
-            ui.label(
-                RichText::new("Not built yet")
-                    .size(TEXT_META)
-                    .color(t.text_3),
-            );
         }
     });
     record_probe(ui, "ai-settings.features", features.response.rect);
@@ -624,11 +737,19 @@ fn draw_features(ui: &mut Ui, panel: Panel) {
 
 /// The AI activity log: the file's real rows, or a line saying there are none.
 fn draw_log(ui: &mut Ui, log: &[AiLogEntry], reading: bool) {
-    card(ui, |ui| {
+    card_flush(ui, |ui| {
         let t = tokens(ui);
+        // `.spread` with `padding:12px 16px 0` (index.html:1915).
+        ui.add_space(12.0);
         ui.horizontal(|ui| {
-            ui.label(RichText::new(LOG_TITLE).strong());
+            ui.add_space(16.0);
+            ui.label(
+                RichText::new(LOG_TITLE)
+                    .font(bold_font(ui, TEXT_H2))
+                    .color(t.text),
+            );
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                ui.add_space(16.0);
                 let meta = if log.is_empty() {
                     LOG_META_EMPTY
                 } else {
@@ -637,41 +758,61 @@ fn draw_log(ui: &mut Ui, log: &[AiLogEntry], reading: bool) {
                 ui.label(RichText::new(meta).size(TEXT_META).color(t.text_3));
             });
         });
-        if reading {
-            ui.label(para_text("Reading the log...", TEXT_BODY, t.text_2));
-            return;
-        }
-        if log.is_empty() {
-            ui.label(para_text(LOG_EMPTY, TEXT_BODY, t.text_2));
-            return;
-        }
-        table::builder(ui)
-            .column(Column::auto().at_least(120.0))
-            .column(Column::auto().at_least(100.0))
-            .column(Column::auto().at_least(110.0))
-            .column(Column::remainder())
-            .column(Column::auto().at_least(110.0))
-            .header(ROW_HEIGHT, |mut row| {
-                for label in LOG_HEADERS {
-                    table::header(&mut row, label, false);
-                }
-            })
-            .body(|mut body| {
-                for entry in log {
-                    body.row(ROW_HEIGHT, |mut row| {
-                        row.col(|ui| table::text(ui, &when_text(entry)));
-                        row.col(|ui| table::text(ui, &entry.model));
-                        row.col(|ui| table::text(ui, &short_hash(&entry.input_hash)));
-                        row.col(|ui| table::text(ui, &entry.output_json));
-                        let decision = if entry.accepted {
-                            "Accepted"
-                        } else {
-                            "Not accepted"
-                        };
-                        row.col(|ui| table::text(ui, decision));
-                    });
-                }
+        ui.add_space(6.0);
+        if reading || log.is_empty() {
+            let line = if reading {
+                "Reading the log..."
+            } else {
+                LOG_EMPTY
+            };
+            ui.horizontal(|ui| {
+                ui.add_space(16.0);
+                ui.label(para_text(line, TEXT_BODY, t.text_2));
             });
+            ui.add_space(12.0);
+            return;
+        }
+        let texts: Vec<[String; 5]> = log
+            .iter()
+            .map(|entry| {
+                [
+                    when_text(entry),
+                    entry.model.clone(),
+                    short_hash(&entry.input_hash),
+                    entry.output_json.clone(),
+                    if entry.accepted {
+                        "Accepted"
+                    } else {
+                        "Not accepted"
+                    }
+                    .to_owned(),
+                ]
+            })
+            .collect();
+        let rows = texts
+            .iter()
+            .map(|cells| {
+                vec![
+                    mock_table::text(&cells[0]),
+                    mock_table::text(&cells[1]),
+                    mock_table::muted(&cells[2]),
+                    mock_table::text(&cells[3]),
+                    mock_table::text(&cells[4]),
+                ]
+            })
+            .collect();
+        mock_table::table(
+            ui,
+            &[
+                Width::Fixed(140.0),
+                Width::Fixed(110.0),
+                Width::Fixed(130.0),
+                Width::Rest,
+                Width::Fixed(110.0),
+            ],
+            Some(&LOG_HEADERS),
+            rows,
+        );
     });
 }
 
@@ -691,16 +832,26 @@ fn short_hash(hash: &str) -> String {
     format!("{head}…")
 }
 
-/// The "What AI may never do here" card (index.html:1916).
+/// The "What AI may never do here" card (index.html:1916): a bold title over a bulleted list,
+/// 18 points in, 6 apart.
 fn draw_never(ui: &mut Ui) {
     let never = card(ui, |ui| {
+        ui.set_min_width(ui.available_width());
         let t = tokens(ui);
-        ui.label(RichText::new("What AI may never do here").strong());
+        ui.label(
+            RichText::new("What AI may never do here")
+                .font(bold_font(ui, TEXT_H2))
+                .color(t.text),
+        );
         ui.add_space(6.0);
+        ui.spacing_mut().item_spacing.y = 6.0;
         for line in NEVER {
-            ui.horizontal_wrapped(|ui| {
-                ui.label(RichText::new("•").color(t.text_2));
-                ui.label(para_text(line, TEXT_BODY, t.text_2));
+            ui.horizontal_top(|ui| {
+                ui.add_space(6.0);
+                ui.label(RichText::new("•").size(TEXT_BODY).color(t.text_2));
+                ui.vertical(|ui| {
+                    para(ui, line, TEXT_BODY, t.text_2);
+                });
             });
         }
     });
