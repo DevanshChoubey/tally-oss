@@ -49,6 +49,17 @@
 //!   Stock-in-Hand group: the profit would be overstated, or the stock counted twice, with no
 //!   visible sign because the opening difference row absorbs the gap.
 //!
+//! # Layout (s9)
+//!
+//! Primary groups are listed in the chart's order, not id order: Capital Account, Loans
+//! (Liability), Current Liabilities, Fixed Assets, Investments, Current Assets, then the rest
+//! (`PRIMARY_ORDER`); groups that are not reserved keep their id order after those. The closing
+//! stock is the value of the Stock-in-Hand group: when the chart has that group, the report lists
+//! one `Closing stock` row where the group stands (a child of Current Assets in the reserved
+//! chart), the stock is part of its parent's total, and a provisional stock makes every group
+//! total above it provisional. A chart without a Stock-in-Hand group keeps a top-level
+//! `Closing stock` row.
+//!
 //! `Detail::Condensed` lists primary groups only; `Detail::Detailed` goes down to ledgers and
 //! leaves out ledgers and groups whose balance is zero.
 
@@ -74,6 +85,33 @@ const PROFIT_LABEL: &str = "Profit and Loss A/c";
 
 /// Label of the closing stock row.
 const STOCK_LABEL: &str = "Closing stock";
+
+/// The order primary groups are listed in: the design mock's (design/mock-v2/index.html,
+/// `balanceSheet`: Capital, Loans, Current liabilities; Fixed assets, Current assets), with
+/// Investments between the two asset groups. TallyPrime's Balance Sheet help says the order of
+/// groups is a setting (an index per group; its example puts Investments above Fixed Assets,
+/// help.tallysolutions.com Balance Sheet page, read 2026-11-25); this fixed order is the default
+/// until groups carry an index.
+const PRIMARY_ORDER: [ReservedGroup; 6] = [
+    ReservedGroup::CapitalAccount,
+    ReservedGroup::Loans,
+    ReservedGroup::CurrentLiabilities,
+    ReservedGroup::FixedAssets,
+    ReservedGroup::Investments,
+    ReservedGroup::CurrentAssets,
+];
+
+/// Sort key of a primary group: its place in [`PRIMARY_ORDER`], the other reserved groups after
+/// it, then groups that are not reserved. Ties keep id order (the sort is stable).
+fn primary_rank(group: &Group) -> usize {
+    match group.reserved {
+        Some(r) => PRIMARY_ORDER
+            .iter()
+            .position(|p| *p == r)
+            .unwrap_or(PRIMARY_ORDER.len()),
+        None => PRIMARY_ORDER.len().saturating_add(1),
+    }
+}
 
 /// Deepest group nesting the report follows. `ReportRow::depth` is a `u8`.
 const MAX_DEPTH: u8 = 200;
@@ -119,6 +157,7 @@ fn role_of(group: &Group) -> Role {
 }
 
 /// Total of the closing stock input.
+#[derive(Clone)]
 struct StockTotal {
     value: Paise,
     provisional: Option<String>,
@@ -503,6 +542,9 @@ struct Walker<'a> {
     balances: &'a BTreeMap<LedgerId, Paise>,
     detailed: bool,
     placed: BTreeSet<LedgerId>,
+    stock: StockTotal,
+    /// Whether the closing stock row was put where the Stock-in-Hand group stands.
+    stock_placed: bool,
 }
 
 /// One group's roll-up.
@@ -510,10 +552,17 @@ struct GroupOut {
     net: Paise,
     rows: Vec<ReportRow>,
     shown: bool,
+    /// Whether the net includes a provisional stock value.
+    provisional: bool,
 }
 
 impl<'a> Walker<'a> {
-    fn new(books: &'a Books, balances: &'a BTreeMap<LedgerId, Paise>, detail: Detail) -> Self {
+    fn new(
+        books: &'a Books,
+        balances: &'a BTreeMap<LedgerId, Paise>,
+        detail: Detail,
+        stock: StockTotal,
+    ) -> Self {
         let mut children: BTreeMap<Option<GroupId>, Vec<&Group>> = BTreeMap::new();
         for g in books.masters.groups.values() {
             children.entry(g.parent).or_default().push(g);
@@ -532,6 +581,8 @@ impl<'a> Walker<'a> {
             balances,
             detailed,
             placed: BTreeSet::new(),
+            stock,
+            stock_placed: false,
         }
     }
 
@@ -544,6 +595,7 @@ impl<'a> Walker<'a> {
         }
         let mut net = Paise::ZERO;
         let mut shown = false;
+        let mut provisional = false;
         let mut body = Vec::new();
 
         let own_ledgers = self.ledgers.get(&group.id).cloned().unwrap_or_default();
@@ -573,6 +625,7 @@ impl<'a> Walker<'a> {
         for sub in subgroups {
             let out = self.group(sub, depth.saturating_add(1), side)?;
             net = net.checked_add(out.net)?;
+            provisional |= out.provisional;
             if out.shown {
                 shown = true;
                 if self.detailed {
@@ -580,16 +633,47 @@ impl<'a> Walker<'a> {
                 }
             }
         }
+        if group.reserved == Some(ReservedGroup::StockInHand)
+            && !self.stock_placed
+            && (!self.stock.value.is_zero() || self.stock.provisional.is_some())
+        {
+            // The Stock-in-Hand group is the closing stock: one row where the group stands.
+            self.stock_placed = true;
+            let provisional = self.stock.provisional.as_deref();
+            let row = ReportRow {
+                key: None,
+                label: STOCK_LABEL.to_owned(),
+                depth,
+                kind: RowKind::Item,
+                cells: place(side, figure(self.stock.value, provisional)?),
+            };
+            return Ok(GroupOut {
+                net: net.checked_add(self.stock.value)?,
+                rows: vec![row],
+                shown: true,
+                provisional: provisional.is_some(),
+            });
+        }
         let mut rows = Vec::with_capacity(body.len().saturating_add(1));
+        let reason = if provisional {
+            self.stock.provisional.as_deref()
+        } else {
+            None
+        };
         rows.push(ReportRow {
             key: Some(DrillKey::Group(group.id)),
             label: group.name.clone(),
             depth,
             kind: RowKind::Group,
-            cells: place(side, amount_cell(net)?),
+            cells: place(side, figure(net, reason)?),
         });
         rows.extend(body);
-        Ok(GroupOut { net, rows, shown })
+        Ok(GroupOut {
+            net,
+            rows,
+            shown,
+            provisional,
+        })
     }
 }
 
@@ -621,6 +705,8 @@ struct Statement {
     asset_net: Paise,
     /// Net of the income and expense ledgers (not part of either column).
     profit_net: Paise,
+    /// Whether the closing stock is already inside a group's row and total.
+    stock_placed: bool,
 }
 
 impl Statement {
@@ -663,9 +749,11 @@ fn walk_primaries(
     books: &Books,
     balances: &BTreeMap<LedgerId, Paise>,
     detail: Detail,
+    stock: &StockTotal,
 ) -> Result<Outcome<Statement>, ReportError> {
-    let mut walker = Walker::new(books, balances, detail);
-    let primaries = walker.children.get(&None).cloned().unwrap_or_default();
+    let mut walker = Walker::new(books, balances, detail, stock.clone());
+    let mut primaries = walker.children.get(&None).cloned().unwrap_or_default();
+    primaries.sort_by_key(|g| primary_rank(g));
     let mut st = Statement::default();
     for primary in primaries {
         let role = role_of(primary);
@@ -704,6 +792,7 @@ fn walk_primaries(
         }
     }
     check_all_placed(books, &walker.placed)?;
+    st.stock_placed = walker.stock_placed;
     Ok(Outcome::Value(st))
 }
 
@@ -714,7 +803,7 @@ fn build_report(
     opening_net: Paise,
     stock: &StockTotal,
 ) -> Result<Outcome<Report>, ReportError> {
-    let mut st = supported!(walk_primaries(books, balances, params.detail)?);
+    let mut st = supported!(walk_primaries(books, balances, params.detail, stock)?);
     let provisional = stock.provisional.as_deref();
 
     // Cumulative profit as a debit-positive figure: income and expense net less closing stock.
@@ -723,7 +812,7 @@ fn build_report(
         let cell = figure(profit_dr, provisional)?;
         st.add_by_sign(PROFIT_LABEL, RowKind::Item, profit_dr, cell)?;
     }
-    if !stock.value.is_zero() || provisional.is_some() {
+    if !st.stock_placed && (!stock.value.is_zero() || provisional.is_some()) {
         st.asset_net = st.asset_net.checked_add(stock.value)?;
         st.asset_rows.push(ReportRow {
             key: None,
