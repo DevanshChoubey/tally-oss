@@ -70,6 +70,12 @@ pub fn fetch_ai_tier(worker: &ApiWorker) -> Ticket<AiTierReply> {
     worker.run(|api| api.ai_tier().map_err(|e| e.to_string()))
 }
 
+/// Reads the lock date in force for the open company on the worker, so the top bar's lock chip
+/// and the invoice's period-lock note follow the company file.
+pub fn fetch_lock_date(worker: &ApiWorker) -> Ticket<Option<ledgerly_core::Date>> {
+    worker.run(|api| api.lock_date())
+}
+
 /// Checks a books ticket without blocking. `None` while the worker is still reading.
 pub fn settle_books(ticket: &mut Ticket<BooksReply>) -> Option<BooksReply> {
     match ticket.poll() {

@@ -91,10 +91,9 @@ pub struct AppCtx {
     /// The worker that runs every `ledgerly-api` call off the UI thread, when a company file is
     /// open. Wave 2 wiring (W6, W7) moves screens from `books` to this.
     pub api: Option<crate::worker::ApiWorker>,
-    /// The period lock date. `None` until `ledgerly-api` exposes it: `Books` carries no lock date
-    /// (`ledgerly-engine/src/locks.rs` says it is derived from the `PeriodLocked` events and passed
-    /// in), and `Api` has no call that returns it. The lock chip is hidden while this is `None`.
-    /// Needs an E-item.
+    /// The period lock date of the open company (`Api::lock_date`, the last `PeriodLocked`
+    /// event), which the shell reads with each books fetch. `None` when the books were never
+    /// locked or no company is open; the lock chip is hidden then.
     pub lock_date: Option<Date>,
     /// The AI tier stored for the open company. `None` until a tier store exists, so the AI chip
     /// reads "AI: not set up" and never claims a tier nothing enforces.

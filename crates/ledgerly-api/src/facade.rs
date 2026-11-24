@@ -138,6 +138,14 @@ impl Api {
         Ok(api)
     }
 
+    /// The lock date in force: the date of the last `PeriodLocked` event in the audit log
+    /// (spec section 5, invariant 8), or `None` when the books were never locked. Vouchers dated
+    /// on or before it are refused.
+    #[must_use]
+    pub fn lock_date(&self) -> Option<Date> {
+        self.lock
+    }
+
     /// Sets the actor recorded on later changes (the signed-in user).
     pub fn set_actor(&mut self, actor: Actor) {
         self.actor = actor;
