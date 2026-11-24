@@ -39,15 +39,14 @@ use ledgerly_core::{
     Clock, CompanyId, Date, Decimal, GroupId, Gstin, Hsn, LedgerId, Paise, Qty, Rate, SignedAmount,
     StateCode, StockItemId, UnitId, VoucherId, gstin_check_character,
 };
-use ledgerly_model::seed_godowns::MAIN_LOCATION;
 use ledgerly_model::seed_groups::reserved_groups;
 use ledgerly_model::seed_voucher_types::default_voucher_types;
 use ledgerly_model::{
     Address, BankDetails, BaseVoucherKind, BillAllocation, BillRefKind, BillWiseConfig, Company,
-    EntityKind, Features, GodownAllocation, GstClassification, GstRegistration, InventoryLine,
-    Ledger, LedgerLine, NegativeStockPolicy, PartyDetails, RegistrationType, ReservedGroup,
-    StockItem, TaxDetails, TaxLedgerKind, Taxability, Unit, UnitKind, ValuationMethod, Voucher,
-    VoucherMode, VoucherStatus,
+    EntityKind, Features, GstClassification, GstRegistration, Ledger, LedgerLine,
+    NegativeStockPolicy, PartyDetails, RegistrationType, ReservedGroup, StockItem, TaxDetails,
+    TaxLedgerKind, Taxability, Unit, UnitKind, ValuationMethod, Voucher, VoucherMode,
+    VoucherStatus,
 };
 use time::OffsetDateTime;
 use time::macros::date;
@@ -303,14 +302,16 @@ enum Fixture {
     /// Godavari Drip & Pump Works, the sample company (`ledgerly-sample`): the company the mock
     /// shows on nearly every screen, so every shot that names no other company.
     Godavari,
+    /// The sample company with one more sale on 19 Nov that takes the pickaxe 30 nos below zero,
+    /// the situation of the mock's `balance-sheet.provisional` (index.html:1582, `pick: -30`).
+    /// Capture-only: the sample's own books are untouched, and its company is made with the
+    /// negative-stock policy Allow so the sale can post.
+    GodavariShortStock,
     /// Fictional Traders ([`company_file`]): the shots whose key paths or typed names need its
     /// data, or that show a state the sample does not have.
     Main,
     /// Fictional Traders' masters with no voucher yet ([`new_company_file`]).
     New,
-    /// Fictional Pumps ([`stocked_company_file`]): stock sold before any was bought, an item with
-    /// no HSN sold, a stored bank statement and the books locked to 31 Oct 2026.
-    Stocked,
     /// No company at all: the shell exactly as the app's `main` builds it
     /// (`Shell::cold_start`), with nothing opened. This is what a user sees on first launch.
     Cold,
@@ -322,9 +323,9 @@ impl Fixture {
     fn open(self, dir: &Path) -> Option<Api> {
         match self {
             Fixture::Godavari => Some(godavari_company_file(dir)),
+            Fixture::GodavariShortStock => Some(godavari_short_stock_file(dir)),
             Fixture::Main => Some(company_file(dir)),
             Fixture::New => Some(new_company_file(dir)),
-            Fixture::Stocked => Some(stocked_company_file(dir)),
             Fixture::Cold => None,
         }
     }
@@ -344,66 +345,53 @@ impl Fixture {
     }
 }
 
-/// A Maharashtra buyer of Fictional Pumps that is not bill-wise (the item invoice does not take
-/// bill-wise parties yet).
-const PUMP_BUYER: LedgerId = LedgerId(11);
-/// A Gujarat buyer of Fictional Pumps, so an invoice to it is inter-state.
-const GUJARAT_BUYER: LedgerId = LedgerId(12);
-/// The Maharashtra supplier Fictional Pumps buys its stock from.
-const SUPPLIER: LedgerId = LedgerId(13);
-/// Fictional Pumps' purchase ledger.
-const PURCHASES: LedgerId = LedgerId(14);
-
-/// A statement for Example Bank in the generic split-column CSV layout: the capital paid in on
-/// 15 Oct and the rent paid on 20 Nov (both in the books, so the matcher suggests them) and a bank
-/// charge on 21 Nov that is not. Each running balance is the one before plus or minus the line.
-const STOCKED_STATEMENT: &str = "Date,Value Date,Narration,Ref,Withdrawal,Deposit,Balance\n\
-15/10/2026,15/10/2026,CAPITAL INTRODUCED,R1,,500000.00,500000.00\n\
-20/11/2026,20/11/2026,NEFT RENT NOVEMBER,R2,25000.00,,475000.00\n\
-21/11/2026,21/11/2026,BANK CHARGES,R3,118.00,,474882.00\n";
-
-/// An item invoice line of `qty` units of `item` at `rate` rupees each, in Main Location, posted
-/// to `account` (the sales or purchase ledger).
-fn item_line(
-    item: StockItemId,
-    unit: UnitId,
-    qty: i64,
-    rate: i64,
-    account: LedgerId,
-) -> InventoryLine {
-    let amount = Paise::new(qty * rate * 100);
-    InventoryLine {
-        item,
-        qty: Qty(Decimal::from(qty)),
-        unit,
-        rate: Rate(Decimal::from(rate)),
-        discount_percent: None,
-        amount,
-        ledger: Some(account),
-        godowns: vec![GodownAllocation {
-            godown: MAIN_LOCATION,
-            batch: None,
-            qty: Qty(Decimal::from(qty)),
-            amount,
-        }],
-    }
+/// The sample company, posted from its seed through the API in `dir`. Its clock is the sample's
+/// own "today" (21 Nov 2026, noon IST), so audit stamps and dates agree with the mock.
+fn godavari_company_file(dir: &Path) -> Api {
+    let (api, _path) = ledgerly_sample::create_under(dir, sample_clock()).unwrap();
+    api
 }
 
-/// An item invoice of `kind` (sales or purchase) with `party`, with the ledger lines and tax the
-/// engine works out for it.
-fn item_invoice(
-    api: &Api,
-    id: u64,
-    kind: BaseVoucherKind,
-    on: Date,
-    (party, place): (LedgerId, u8),
-    lines: Vec<InventoryLine>,
-) -> Voucher {
-    let mut v = voucher(id, kind, on, Vec::new());
-    v.mode = VoucherMode::ItemInvoice;
-    v.party = Some(party);
-    v.place_of_supply = Some(state(place));
-    v.inventory_lines = lines;
+/// The sample company plus a counter sale of enough pickaxes to leave 30 nos short: SI/0415's
+/// voucher copied, its pickaxe line raised so that the stock on hand after it is -30. The books
+/// hold 150 bought on 1 Nov and 6 sold on 18 Nov, so 144 are on hand and 174 are sold.
+fn godavari_short_stock_file(dir: &Path) -> Api {
+    let path = ledgerly_sample::path_under(dir);
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let _removed = std::fs::remove_file(&path);
+    let mut api = ledgerly_sample::create_allowing_negative_stock(&path, sample_clock()).unwrap();
+    let books = match api.books() {
+        Ok(ledgerly_core::Outcome::Value(b)) => b,
+        other => panic!("no books: {other:?}"),
+    };
+    let pick = books
+        .masters
+        .stock_items
+        .values()
+        .find(|i| i.name.starts_with("Steel pickaxe"))
+        .map(|i| i.id)
+        .unwrap();
+    let mut v = books
+        .vouchers
+        .values()
+        .find(|v| v.number.as_deref() == Some("SI/0415"))
+        .cloned()
+        .unwrap();
+    v.id = VoucherId(books.vouchers.keys().map(|k| k.0).max().unwrap() + 1);
+    v.number = Some("SI/0416".to_owned());
+    v.date = date!(2026 - 11 - 19);
+    v.supply_date = None;
+    v.inventory_lines.retain(|l| l.item == pick);
+    for line in &mut v.inventory_lines {
+        let qty = Decimal::from(174);
+        let amount = Paise::new(174 * 640 * 100);
+        line.qty = Qty(qty);
+        line.amount = amount;
+        for g in &mut line.godowns {
+            g.qty = Qty(qty);
+            g.amount = amount;
+        }
+    }
     match api.invoice_gst(&v) {
         Ok(ledgerly_core::Outcome::Value(built)) => {
             v.ledger_lines = built.ledger_lines;
@@ -411,19 +399,7 @@ fn item_invoice(
         }
         other => panic!("the engine did not build the invoice: {other:?}"),
     }
-    v
-}
-
-/// A fictional Maharashtra pump dealer with inventory: the masters of [`create_masters`], two
-/// buyers that are not bill-wise, a supplier, capital paid in on 15 Oct, pipe coils sold on
-/// 10 Nov and pickaxes sold to Gujarat on 12 Nov before any were bought, both bought on 16 Nov
-/// (stock went negative during the period and closes positive, so closing stock is provisional;
-/// the pickaxe has no HSN, so GSTR-1 holds its sale for correction), rent paid on 20 Nov, a
-/// stored bank statement, and the books locked to 31 Oct 2026 last.
-/// The sample company, posted from its seed through the API in `dir`. Its clock is the sample's
-/// own "today" (21 Nov 2026, noon IST), so audit stamps and dates agree with the mock.
-fn godavari_company_file(dir: &Path) -> Api {
-    let (api, _path) = ledgerly_sample::create_under(dir, sample_clock()).unwrap();
+    run(&mut api, Command::PostVoucher(v));
     api
 }
 
@@ -432,93 +408,6 @@ fn sample_clock() -> Clock {
     let today = ledgerly_sample::today().unwrap();
     let at = today.with_hms(4, 30, 0).unwrap().assume_utc();
     Clock::Fixed(at)
-}
-
-fn stocked_company_file(dir: &Path) -> Api {
-    let features = Features {
-        gst: true,
-        inventory: true,
-        ..Features::default()
-    };
-    let company = maharashtra_company("Fictional Pumps", features, NegativeStockPolicy::Allow);
-    let mut api = create_file(dir, "snapshot-stocked.ledgerly", &company);
-    create_masters(&mut api);
-    for l in [
-        buyer(PUMP_BUYER, "Patil Agro Stores", "27PQRST6789U1Z", 27),
-        buyer(GUJARAT_BUYER, "Narmada Farm Supplies", "24KLMNO2345P1Z", 24),
-        {
-            let mut supplier = buyer(SUPPLIER, "Deccan Polymers", "27DEFGH4321J1Z", 27);
-            supplier.group = group(ReservedGroup::SundryCreditors);
-            supplier
-        },
-        ledger(PURCHASES, "Purchases", ReservedGroup::PurchaseAccounts),
-    ] {
-        run(&mut api, Command::CreateLedger(l));
-    }
-    run(
-        &mut api,
-        Command::PostVoucher(voucher(
-            1,
-            BaseVoucherKind::Journal,
-            date!(2026 - 10 - 15),
-            vec![dr(BANK, 500_000), cr(CAPITAL, 500_000)],
-        )),
-    );
-    let (pipe, pickaxe) = (StockItemId(1), StockItemId(2));
-    let sales = BaseVoucherKind::Sales;
-    for v in [
-        (
-            2,
-            date!(2026 - 11 - 10),
-            (PUMP_BUYER, 27),
-            pipe,
-            COIL,
-            10,
-            1_500,
-        ),
-        (
-            3,
-            date!(2026 - 11 - 12),
-            (GUJARAT_BUYER, 24),
-            pickaxe,
-            NOS,
-            4,
-            800,
-        ),
-    ]
-    .map(|(id, on, party, item, unit, qty, rate)| {
-        let line = item_line(item, unit, qty, rate, SALES);
-        item_invoice(&api, id, sales, on, party, vec![line])
-    }) {
-        run(&mut api, Command::PostVoucher(v));
-    }
-    let bought = item_invoice(
-        &api,
-        4,
-        BaseVoucherKind::Purchase,
-        date!(2026 - 11 - 16),
-        (SUPPLIER, 27),
-        vec![
-            item_line(pipe, COIL, 15, 1_000, PURCHASES),
-            item_line(pickaxe, NOS, 10, 500, PURCHASES),
-        ],
-    );
-    run(&mut api, Command::PostVoucher(bought));
-    run(
-        &mut api,
-        Command::PostVoucher(voucher(
-            5,
-            BaseVoucherKind::Payment,
-            date!(2026 - 11 - 20),
-            vec![dr(RENT, 25_000), cr(BANK, 25_000)],
-        )),
-    );
-    match api.import_bank_statement(STOCKED_STATEMENT.as_bytes(), "generic-csv-split", BANK) {
-        Ok(ledgerly_core::Outcome::Value(_)) => {}
-        other => panic!("the statement was not imported: {other:?}"),
-    }
-    run(&mut api, Command::LockPeriod(date!(2026 - 10 - 31)));
-    api
 }
 
 /// The ledgers (ids 1 to 10), units and stock items every capture company starts with.
@@ -1095,10 +984,22 @@ fn light_shots() -> Vec<Shot> {
             .click(930.0, 337.0),
         // A company with masters and no voucher: Home as it opens (index.html home.empty).
         shot("home.empty", &[]).on(Fixture::New),
-        // Fictional Pumps sold pipe coils it never bought, so closing stock is provisional.
-        shot("balance-sheet.provisional", &[(Key::B, NONE)]).on(Fixture::Stocked),
-        // Fictional Pumps sold pickaxes, which have no HSN, so GSTR-1 holds them for correction.
-        shot("gst.gstr1-correction", &[(Key::G, NONE), (Key::Num1, NONE)]).on(Fixture::Stocked),
+        // Godavari with a late sale that takes the pickaxe 30 nos below zero, so closing stock is
+        // provisional (the mock's `pick: -30`).
+        shot("balance-sheet.provisional", &[(Key::B, NONE)]).on(Fixture::GodavariShortStock),
+        // Godavari as it is: the pickaxe has no HSN, so Table 12 needs correction. Four J
+        // presses select it, as the mock's `gstr1-correction` state does.
+        shot(
+            "gst.gstr1-correction",
+            &[
+                (Key::G, NONE),
+                (Key::Num1, NONE),
+                (Key::J, NONE),
+                (Key::J, NONE),
+                (Key::J, NONE),
+                (Key::J, NONE),
+            ],
+        ),
         // Fictional Pumps has a stored statement whose lines match two vouchers.
         shot("review.default", &[palette])
             .query("Review queue")

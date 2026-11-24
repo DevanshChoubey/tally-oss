@@ -568,7 +568,7 @@ fn credit_note_without_hsn_treatment_in_the_pack_needs_correction() {
     assert_needs_correction(&buckets, 2, "unsupported");
     assert_eq!(r.cdnr.len(), 1);
     assert_eq!(r.cdnr.first().unwrap().notes.first().unwrap().num, "CN-1");
-    assert!(r.hsn.is_empty());
+    assert_eq!(r.hsn.len(), 0, "no HSN row without a treatment");
     assert!(bucket_of(&buckets, 2).in_tables);
 }
 

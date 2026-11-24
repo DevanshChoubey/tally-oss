@@ -7,8 +7,8 @@
 //! drawn; `design/PARITY-GAPS.md` lists them.
 
 use ledgerly_api::{Gstr3bTaxAmounts, Gstr3bWorking, TaxableAgreement};
-use ledgerly_core::format::format_inr;
 use ledgerly_core::Paise;
+use ledgerly_core::format::format_inr;
 
 /// The column headings of the GSTR-3B table. The mock has Table, Taxable, IGST, CGST and SGST;
 /// Cess is added because the engine works it out and a figure is never dropped.

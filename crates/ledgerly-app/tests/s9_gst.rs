@@ -252,5 +252,8 @@ fn the_line_under_the_table_says_whether_gstr1_agrees_with_gstr3b() {
     };
     let text = agreement_text(&off);
     assert!(text.contains("differs"), "{text}");
-    assert!(text.contains("3,53,225.00") && text.contains("3,53,224.00"), "{text}");
+    assert!(
+        text.contains("3,53,225.00") && text.contains("3,53,224.00"),
+        "{text}"
+    );
 }

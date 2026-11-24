@@ -175,8 +175,14 @@ pub(crate) struct Built {
 }
 
 /// Builds the sample company in a new file at `path`.
-pub(crate) fn build(seed: &Seed, path: &Path, clock: Clock) -> Result<Built, SampleError> {
-    let company = company(seed)?;
+pub(crate) fn build(
+    seed: &Seed,
+    path: &Path,
+    clock: Clock,
+    negative_stock: NegativeStockPolicy,
+) -> Result<Built, SampleError> {
+    let mut company = company(seed)?;
+    company.negative_stock = negative_stock;
     let mut api = Api::create(path, &company, clock).map_err(|source| SampleError::Api {
         what: "creating the company file".to_owned(),
         source: Box::new(source),

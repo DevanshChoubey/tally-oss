@@ -449,7 +449,7 @@ pub struct GstScreen {
     /// The selected section of the GSTR-1 table (J / K), when the table is loaded.
     section_focus: usize,
     /// Set when the user asked to fix the item master from the side card, until taken.
-    fix_item_master: bool,
+    fix_request: Option<FixRequest>,
     /// The engine's comparison of GSTR-1 with GSTR-3B table 3.1(a), as the line under the table.
     agreement: Option<String>,
     /// The financial year whose twelve months the period picker lists.
@@ -460,6 +460,13 @@ pub struct GstScreen {
     figures3b: Figures,
     /// The GSTR-3B table, from the worker.
     lines3b: Vec<look::Line3b>,
+}
+
+/// A fix the user asked for from the side card, until the host takes it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FixRequest {
+    /// Open the item master, where an item's HSN is set.
+    ItemMaster,
 }
 
 /// The screen's bucket for the engine's.
@@ -517,7 +524,7 @@ impl GstScreen {
             sections: Vec::new(),
             sections_loaded: false,
             section_focus: 0,
-            fix_item_master: false,
+            fix_request: None,
             agreement: None,
             year: None,
             picker: None,
@@ -588,7 +595,9 @@ impl GstScreen {
     pub fn set_sections(&mut self, sections: Vec<ledgerly_api::Gstr1Section>) {
         self.sections = sections;
         self.sections_loaded = true;
-        self.section_focus = self.section_focus.min(self.sections.len().saturating_sub(1));
+        self.section_focus = self
+            .section_focus
+            .min(self.sections.len().saturating_sub(1));
     }
 
     /// Forgets the GSTR-1 section table (the return could not be built).
@@ -623,9 +632,8 @@ impl GstScreen {
     /// a section the engine marked `NeedsCorrection` that is a table of the form, not the row
     /// of held-back vouchers.
     fn selected_needs_correction(&self) -> Option<&ledgerly_api::Gstr1Section> {
-        self.selected_section().filter(|s| {
-            s.code != "held" && s.status == ledgerly_api::Bucket::NeedsCorrection
-        })
+        self.selected_section()
+            .filter(|s| s.code != "held" && s.status == ledgerly_api::Bucket::NeedsCorrection)
     }
 
     /// The title of the card beside the section table: what is wrong with the selected section
@@ -651,12 +659,13 @@ impl GstScreen {
     /// Whether the side card offers "Fix the item master" (a table 12 short of an HSN).
     #[must_use]
     pub fn side_card_offers_the_item_master(&self) -> bool {
-        self.selected_needs_correction().is_some_and(|s| s.code == "12")
+        self.selected_needs_correction()
+            .is_some_and(|s| s.code == "12")
     }
 
     /// Whether the user asked to fix the item master, once.
     pub fn take_fix_item_master_request(&mut self) -> bool {
-        std::mem::take(&mut self.fix_item_master)
+        self.fix_request.take().is_some()
     }
 
     // ---- the return period -------------------------------------------------------------------
@@ -707,7 +716,10 @@ impl GstScreen {
     pub fn picker_selected_label(&self) -> Option<String> {
         let months = self.months();
         let at = self.picker?;
-        months.get(at).copied().map(crate::shell::navigate::return_label)
+        months
+            .get(at)
+            .copied()
+            .map(crate::shell::navigate::return_label)
     }
 
     /// The return period last asked for from the worker.
@@ -780,7 +792,7 @@ impl GstScreen {
 
     fn open_section(&mut self) {
         if self.side_card_offers_the_item_master() {
-            self.fix_item_master = true;
+            self.fix_request = Some(FixRequest::ItemMaster);
         } else if self.selected_section().is_some() {
             self.notice = Some("Nothing to fix in this section.".to_owned());
         }
