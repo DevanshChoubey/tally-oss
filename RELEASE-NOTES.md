@@ -1,4 +1,14 @@
-# Ledgerly 1.0.0
+# Ledgerly 1.0.1
+
+## Changes in 1.0.1
+
+- **macOS:** the app is now signed ad hoc, so macOS no longer calls it "damaged". It is still not
+  signed with an Apple Developer ID: on first launch, allow it in System Settings > Privacy &
+  Security > Open Anyway.
+
+Everything else is as in 1.0.0, described below.
+
+## Ledgerly 1.0.0
 
 First release. A local-first desktop accounting app for Indian small businesses, written in Rust.
 Your books stay in one company file on your computer; nothing is sent anywhere unless you turn a
@@ -42,9 +52,10 @@ cloud feature on.
   configuration, no UPI QR code on invoices yet; other reports do not print yet.
 - The Windows and macOS packages are built by CI and were not tried by hand before release; the
   Windows installer has no icon.
-- The packages are not signed with a developer certificate. On macOS the 1.0.0 app has no bundle
-  signature, so macOS calls it "damaged": run `xattr -dr com.apple.quarantine
-  /Applications/Ledgerly.app` once. Windows SmartScreen asks before the first run.
+- The packages are not signed with a developer certificate. macOS asks you to allow the app in
+  Privacy & Security > Open Anyway (the 1.0.0 app, which had no signature at all, needs
+  `xattr -dr com.apple.quarantine /Applications/Ledgerly.app` instead); Windows SmartScreen asks
+  before the first run.
 - The theme choice and zoom level are not remembered between runs.
 - The divider line colour is below the 3:1 contrast guideline in light and dark.
 - Payment bill-wise allocation and the overdraft warning are not built; the 2B reconciliation

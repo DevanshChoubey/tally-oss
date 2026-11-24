@@ -1,7 +1,7 @@
 [package]
 name = "ledgerly-assist"
 description = "AI proposer: typed proposals, OCR and model clients, and the validator that recomputes through the engine."
-version = "1.0.0"
+version = "1.0.1"
 edition.workspace = true
 rust-version.workspace = true
 license = "AGPL-3.0-or-later"

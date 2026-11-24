@@ -1,7 +1,7 @@
 [package]
 name = "ledgerly-gst-formats"
 description = "GST return data shapes and their official JSON/Excel formats (GSTR-1/1A/3B/2B, IMS, e-invoice, e-way bill)."
-version = "1.0.0"
+version = "1.0.1"
 edition.workspace = true
 rust-version.workspace = true
 license = "MIT OR Apache-2.0"

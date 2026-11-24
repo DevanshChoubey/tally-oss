@@ -176,7 +176,7 @@ The engineering rules that enforce this are in [docs/engineering-rules.md](docs/
 
 ## Project status and known gaps
 
-Ledgerly 1.0.0 was released on 2026-11-24. The full list of what is in the release and what is not
+The latest release is Ledgerly 1.0.1 (2026-11-24; 1.0.0 the same day). The full list of what is in the release and what is not
 is in [RELEASE-NOTES.md](RELEASE-NOTES.md). The changes are in [CHANGELOG.md](CHANGELOG.md).
 
 The main gaps in 1.0.0:
