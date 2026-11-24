@@ -173,13 +173,18 @@ engine item E-3); `recon-explain` is an AI state.
   invoice back because unit `coil` has no unit quantity code: that is the engine's finding on
   the capture data, not a screen difference.
 
-- **deferred: GSTR-1 by section** (index.html:1673-1676). The mock's table has one row per
-  return section (4A B2B, 5 B2C large, 7 B2C others, 9B notes, 12 HSN, 13 documents), with
-  records, taxable value, tax and a status for each. Its tiles count sections too. The engine
-  buckets vouchers, not sections, and `Gstr1` has no per-section totals. The UI may not add them
-  up (rule C4). Ours shows the vouchers with the engine's bucket, the tiles count vouchers
-  ("vouchers", not "sections"), and the return's own figures sit in a second card. Needs an
-  engine section summary with its own tests.
+- **by design: GSTR-1 by section is built, with differences** (index.html:1673-1676, s9). The
+  engine now summarises the return per table (`Gstr1Return::sections`: 4A, 5, 7, 9B, 12, 13;
+  6A and 8 only when the return holds something there) and the screen shows it with Records,
+  Taxable, Tax and Status. The tiles count sections. The voucher table stays beneath as the
+  drill-down ("Vouchers behind the sections"), and clicking a tile still filters it.
+  Differences: (1) the engine holds back a whole voucher with a missing HSN, so that voucher is
+  in no table: Tables 7 and 12 differ from the mock's, which holds back only table 12; the
+  section list ends with a "Vouchers held back" row so the table is never read as the whole
+  return. (2) No section is selectable and there is no correction side card (the side card is
+  still "What happens next"). Sources: the offline tool's worksheets b2b, b2cl, b2cs, cdnr, hsn
+  and docs, https://gstzen.in/a/gst-manuals-user-manuals-downloading-installing-and-uploading-invoices-in-gstr-1-taking-actions-in-gstr-2.html
+  and https://help.tallysolutions.com/file-gstr-1-using-offline-tool/ (both read 2026-11-25).
 - **deferred: the agreement line under the GSTR-1 table** ("Taxable value agrees with GSTR-3B
   table 3.1(a): ..."). No engine check compares the two, so the line is not drawn.
 - **deferred: GSTR-3B rows from IMS and set-off** (index.html:1683-1686). These are "Accepted
@@ -192,8 +197,9 @@ engine item E-3); `recon-explain` is an AI state.
 - **by design: our own words in "What happens next" and "Read this before filing".** The mock's
   bullets claim things the app does not do: "Mark the month filed here", "Credit counts only what
   you accepted in IMS" and the set-off order. Ours say what the engine does.
-- **deferred: the period button, "November 2026 Alt+F2"** (index.html:1671). The screen cannot
-  change its return period, so the button and the key are not shown.
+- **by design: the period button is drawn but cannot change the period** (index.html:1671).
+  It reads "November 2026 Alt+F2", as the mock's does; pressing it says the period is the month
+  the company is open on. The Alt+F2 key is not bound on this screen.
 - **deferred: importing a 2B file** (index.html:1692). The mock offers "Import 2B JSON Ctrl+O"
   and "drop it here". There is no 2B reader (engine item E-3), so the empty state says so and
   offers no import button and no key.

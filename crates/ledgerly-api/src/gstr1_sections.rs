@@ -7,6 +7,13 @@
 //! exempt and non-GST supplies) get a row only when the return holds something in them, so a
 //! figure the return carries is never left out of the list because the mock had no row for it.
 //!
+//! Source for the table list: the offline tool's worksheets b2b (4A), b2cl (5), b2cs (7), cdnr (9B),
+//! hsn (12) and docs (13), per the GSTN offline tool user manual as mirrored at
+//! <https://gstzen.in/a/gst-manuals-user-manuals-downloading-installing-and-uploading-invoices-in-gstr-1-taking-actions-in-gstr-2.html>
+//! (read 2026-11-25); the worksheet-to-table numbering is the form's, which that page does not
+//! print, so the numbers are the mock's. Table 13's mandatory status is noted in
+//! <https://help.tallysolutions.com/file-gstr-1-using-offline-tool/> (read 2026-11-25).
+//!
 //! A voucher held back (`NeedsCorrection` or `Mismatch`) is in no table. It is listed as its own
 //! last row, `held`, with the number of vouchers and the status the worst of them has, so the
 //! other rows are never read as the whole return. The other rows are `Ready` when they hold a
