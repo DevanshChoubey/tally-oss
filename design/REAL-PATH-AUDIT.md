@@ -4,7 +4,7 @@ Every screen and state reachable from the real cold start (`Shell::cold_start()`
 open), captured in a real window through the same construction path as `main`. Captures live in
 `design/app-captures/audit/cold.<id>.webp` (made with `capture.sh --audit`; `compare.mjs` skips
 this folder because these shots have no mock state). Only `setup.welcome` has a mock pair; its
-SSIMs are light 0.8415, dark 0.8481, hc 0.8151 (see `design/COMPARE.md`). All 24 images were looked at.
+SSIMs are light 0.8417, dark 0.8473, hc 0.8147 (see `design/COMPARE.md`). All 24 images were looked at.
 
 ## Still open
 
@@ -12,8 +12,12 @@ SSIMs are light 0.8415, dark 0.8481, hc 0.8151 (see `design/COMPARE.md`). All 24
    its two start buttons are disabled with the reason; only the one-step import works, and only
    with a company open (with none, the screen says so and offers "Back to setup").
 2. **First-launch chrome words differ from the mock by design**: AI chip ("AI: not set up", neutral
-   style, because nothing says the AI runs), sidebar footer (app version, not "Engine 0.1 mock"),
-   no "Hold Alt or Ctrl for more" hint (holding the keys does nothing here). See PARITY-GAPS, setup.
+   style, because nothing says the AI runs), sidebar footer (app version, not "Engine 0.1 mock"). See PARITY-GAPS, setup.
+
+Fixed in S9, third pass: the "Hold Alt or Ctrl for more" hint is drawn and holding the keys shows
+the bound chords; Books begin from reads "1 Apr 2026"; the Financial year line has its "April to
+March" badge; the "fills the state" hint is on one line; captures park the pointer so no hover
+state leaks.
 
 ## Table
 
@@ -22,7 +26,7 @@ Verdicts: matches = in line with the design; unstyled = raw widgets; broken = wr
 
 | Screen / state | Capture | Mock pair (SSIM) | Verdict |
 |---|---|---|---|
-| Setup welcome (cold start) | `light/setup.welcome.webp` | setup.welcome (0.8415) | matches (chrome gaps in PARITY-GAPS) |
+| Setup welcome (cold start) | `light/setup.welcome.webp` | setup.welcome (0.8417) | matches (chrome gaps in PARITY-GAPS) |
 | Welcome, Open card chosen | `audit/cold.start-open-selected.webp` | setup.welcome variant, none | matches; button reads "Open a Ledgerly file" |
 | Collapsed sidebar rail | `audit/cold.rail.webp` | none | matches |
 | Command palette over welcome | `audit/cold.palette.webp` | none | matches |

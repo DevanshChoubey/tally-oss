@@ -119,7 +119,7 @@ pub struct SetupScreen {
     state: Option<StateCode>,
     /// Where the company file is saved; blank means the default under Documents.
     file: String,
-    /// The books begin date text, `YYYY-MM-DD`.
+    /// The books begin date text, `1 Apr 2026` or `YYYY-MM-DD`.
     books_begin: String,
     /// The features switched on.
     features: Features,
@@ -299,7 +299,7 @@ impl SetupScreen {
             gstin_seen: String::new(),
             state: None,
             file: String::new(),
-            books_begin: fy_start.to_string(),
+            books_begin: long_date(fy_start),
             features: default_features(),
             keyboard_classic: true,
             ai: AiTier::Local,
@@ -820,11 +820,14 @@ impl SetupScreen {
             field(ui, span(col, 2), "Financial year", |ui, _| {
                 let fy_end = financial_year_end(self.fy_start)
                     .map_or_else(|_| "the end of March".to_owned(), long_date);
-                read_only(ui, &format!("{} to {fy_end}", long_date(self.fy_start)));
+                ui.horizontal(|ui| {
+                    read_only(ui, &format!("{} to {fy_end}", long_date(self.fy_start)));
+                    rule_pill(ui, "April to March");
+                });
             });
             field(ui, span(col, 2), "Books begin from", |ui, w| {
                 crate::ui::a11y::text_edit(ui, "Books begin from", input(&mut self.books_begin)
-                        .hint_text("YYYY-MM-DD")
+                        .hint_text("1 Apr 2026")
                         .desired_width(w),
                 );
                 hint(
@@ -858,12 +861,18 @@ impl SetupScreen {
                 );
             }
             Some(GstinCheck::Valid(gstin)) => {
-                ui.horizontal_wrapped(|ui| {
+                ui.horizontal(|ui| {
                     badge(ui, BadgeKind::Ok, "Check character OK");
-                    ui.label(
-                        egui::RichText::new(format!("PAN {} · fills the state", gstin.pan_str()))
+                    ui.add(
+                        egui::Label::new(
+                            egui::RichText::new(format!(
+                                "PAN {} · fills the state",
+                                gstin.pan_str()
+                            ))
                             .size(TEXT_META)
                             .color(t.text_3),
+                        )
+                        .wrap_mode(egui::TextWrapMode::Extend),
                     );
                 });
             }
@@ -1365,6 +1374,23 @@ fn input(text: &mut String) -> egui::TextEdit<'_> {
     egui::TextEdit::singleline(text)
         .margin(egui::Margin::symmetric(10, 7))
         .font(FontId::proportional(TEXT_INPUT))
+}
+
+/// A small label that says where a value comes from (`.prov.rule`, a deterministic rule): the
+/// sunken fill, the muted ink, 10.5 points, bold.
+fn rule_pill(ui: &mut egui::Ui, text: &str) {
+    let t = tokens(ui);
+    egui::Frame::new()
+        .fill(t.sunken)
+        .corner_radius(3.0)
+        .inner_margin(egui::Margin::symmetric(5, 0))
+        .show(ui, |ui| {
+            ui.label(
+                egui::RichText::new(text)
+                    .font(bold_font(ui, 10.5))
+                    .color(t.text_2),
+            );
+        });
 }
 
 /// A value the user cannot change, in the field's place (`.ro`).

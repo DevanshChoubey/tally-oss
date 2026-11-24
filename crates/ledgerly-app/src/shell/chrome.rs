@@ -181,6 +181,80 @@ pub fn palette_key_bar(palette: &[KeyHint]) -> (String, Vec<(String, String)>) {
     (context, hints)
 }
 
+/// A modifier key held down: the key bar then lists the keys that use it (mock `renderKeys`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Held {
+    /// Alt is held.
+    Alt,
+    /// Ctrl is held.
+    Ctrl,
+}
+
+impl Held {
+    /// The held modifier in `modifiers`, Alt first, or `None`.
+    #[must_use]
+    pub fn of(modifiers: egui::Modifiers) -> Option<Held> {
+        if modifiers.alt {
+            Some(Held::Alt)
+        } else if modifiers.command || modifiers.ctrl {
+            Some(Held::Ctrl)
+        } else {
+            None
+        }
+    }
+
+    /// The word the bar shows after "Holding".
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            Held::Alt => "Alt",
+            Held::Ctrl => "Ctrl",
+        }
+    }
+}
+
+/// The keys the bar lists while a modifier is held, in the mock's order and words
+/// (`ALT_KEYS`, `CTRL_KEYS`, index.html:916-917). Each is listed only when `keymap` binds the
+/// action to a chord with that modifier, and shows that chord, so the bar never names a key that
+/// does nothing.
+#[must_use]
+pub fn held_hints(keymap: &crate::keymap::Keymap, held: Held) -> Vec<(String, String)> {
+    use crate::keymap::Action;
+    let wanted: &[(Action, &str)] = match held {
+        Held::Alt => &[
+            (Action::CreateMaster, "Create master here"),
+            (Action::DeleteVoucher, "Delete / reject draft"),
+            (Action::CancelVoucher, "Cancel voucher"),
+            (Action::DuplicateVoucher, "Duplicate"),
+            (Action::InsertVoucher, "Insert voucher"),
+            (Action::ToggleDetail, "Detailed / condensed"),
+        ],
+        Held::Ctrl => &[
+            (Action::Save, "Accept / save"),
+            (Action::OpenPalette, "Palette"),
+            (Action::SwitchPalette, "Switch to (replace)"),
+            (Action::MoreDetails, "More details / source"),
+            (Action::AlterMaster, "Alter master"),
+            (Action::Print, "Print"),
+            (Action::Export, "Export"),
+            (Action::Undo, "Undo field"),
+        ],
+    };
+    wanted
+        .iter()
+        .filter_map(|(action, words)| {
+            let chord = keymap.chords(*action).iter().find(|chord| match held {
+                Held::Alt => chord.alt && !chord.command,
+                Held::Ctrl => chord.command && !chord.alt,
+            })?;
+            Some((chord.to_string(), (*words).to_owned()))
+        })
+        .collect()
+}
+
+/// The words before Ctrl+K at the right of the bar while no modifier is held.
+pub const KEY_BAR_HOLD_HINT: &str = "Hold Alt or Ctrl for more \u{00B7}";
+
 /// The right end of the key bar: each keycap and the words after it (`.keys .right`).
 pub const KEY_BAR_RIGHT: [(&str, &str); 2] = [("Ctrl+K", "anything \u{00B7}"), ("?", "all keys")];
 
@@ -191,11 +265,24 @@ const KEY_GAP: f32 = 5.0;
 
 /// Draws the key bar: the screen's name in bold (`.keys .ctx`), its entries from [`key_hints`]
 /// (a keycap, then its words), and [`KEY_BAR_RIGHT`] at the right in `text-3`.
-pub(super) fn key_bar(ui: &mut Ui, context: &str, hints: &[(String, String)], t: &Tokens) {
+pub(super) fn key_bar(
+    ui: &mut Ui,
+    context: &str,
+    hints: &[(String, String)],
+    held: Option<Held>,
+    t: &Tokens,
+) {
     ui.spacing_mut().item_spacing.x = KEY_GAP;
     ui.horizontal_centered(|ui| {
         ui.spacing_mut().item_spacing.x = KEY_GAP;
-        if !context.is_empty() {
+        if let Some(held) = held {
+            ui.label(
+                RichText::new(format!("Holding {}", held.name()))
+                    .font(bold_font(ui, TEXT_META))
+                    .color(t.accent_ink),
+            );
+            ui.add_space(ENTRY_GAP - KEY_GAP);
+        } else if !context.is_empty() {
             ui.label(
                 RichText::new(context)
                     .font(bold_font(ui, TEXT_META))
@@ -204,6 +291,10 @@ pub(super) fn key_bar(ui: &mut Ui, context: &str, hints: &[(String, String)], t:
             ui.add_space(ENTRY_GAP - KEY_GAP);
         }
         for (keys, label) in hints {
+            // The right end needs room; entries that do not fit are left out.
+            if ui.available_width() < RIGHT_END_WIDTH {
+                break;
+            }
             keycap::keycap(ui, keys);
             ui.label(
                 RichText::new(label.as_str())
@@ -218,6 +309,16 @@ pub(super) fn key_bar(ui: &mut Ui, context: &str, hints: &[(String, String)], t:
                 ui.label(RichText::new(*label).size(TEXT_META).color(t.text_3));
                 keycap::keycap(ui, keys);
             }
+            if held.is_none() {
+                ui.label(
+                    RichText::new(KEY_BAR_HOLD_HINT)
+                        .size(TEXT_META)
+                        .color(t.text_3),
+                );
+            }
         });
     });
 }
+
+/// Room kept free at the right of the key bar for [`KEY_BAR_RIGHT`] and the hold hint, in points.
+const RIGHT_END_WIDTH: f32 = 330.0;

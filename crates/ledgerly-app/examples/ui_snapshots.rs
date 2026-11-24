@@ -1271,6 +1271,8 @@ impl Snapshots {
 
 impl eframe::App for Snapshots {
     fn raw_input_hook(&mut self, _ctx: &egui::Context, raw_input: &mut egui::RawInput) {
+        // No hover from the real pointer or an earlier click may reach a capture.
+        ledgerly_app::ui::capture::park_pointer(raw_input);
         if self.gap > 0 {
             self.gap -= 1;
             return;

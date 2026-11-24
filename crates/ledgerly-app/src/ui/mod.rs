@@ -14,6 +14,7 @@
 pub mod a11y;
 pub mod badge;
 pub mod button;
+pub mod capture;
 pub mod card;
 pub mod chip;
 pub mod conf;

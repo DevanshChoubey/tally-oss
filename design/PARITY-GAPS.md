@@ -629,9 +629,13 @@ financial year starts. The model supports that (`Company::books_begin`), so it i
   this computer" in the green style: nothing is stored to say the AI runs, and the app never claims
   it. The sidebar footer keeps the mock's two lines and check icon but names the app version
   ("Ledgerly 1.0.1") where the mock says "Engine 0.1 mock - rule pack ..." (a mock label; no rule
-  pack version is shown anywhere in the app). The key bar does not draw "Hold Alt or Ctrl for
-  more": holding Alt or Ctrl does not change our bar, so the hint would promise a feature that does
-  not exist. The sidebar lists every screen with no company open, as the mock does; what each does
+  pack version is shown anywhere in the app). **fixed (S9): "Hold Alt or Ctrl for more"** is drawn
+  at the right of the key bar, and holding Alt or Ctrl really swaps the bar to "Holding Alt" or
+  "Holding Ctrl" with the chords the keymap binds with that key (none is listed that is unbound).
+  **fixed (S9): setup dates and badge.** Books begin from shows "1 Apr 2026" (typed "1 Apr 2026"
+  or 2026-04-01 are both read), the Financial year line has the "April to March" badge, and the
+  "fills the state" hint stays on one line. The capture harness parks the pointer off-window, so no
+  hover highlight leaks into a shot. The sidebar lists every screen with no company open, as the mock does; what each does
   with no company is in `design/REAL-PATH-AUDIT.md`.
 - **gap: no F11 on the Features step.** The mock's line ends "F11 changes this later"; no F11
   feature screen exists, so the sentence is left out. Rows the model has no switch for show an
@@ -720,9 +724,9 @@ quick-entry offline-AI state has no dark or hc mock capture). Theme differences 
 Full table in `design/REAL-PATH-AUDIT.md`. Fixed in S9: the import screen is in the app's kit and
 the welcome's Import card opens it; shortcuts and refusals give a toast with a "Create a company"
 action; the tab strip is styled with distinct titles. Still open: the import screen's step-by-step
-path is not connected. `setup.welcome` SSIM is light 0.8415, dark 0.8481, hc 0.8151; the words of
-the AI chip, the sidebar footer and the missing "Hold Alt or Ctrl for more" hint are by design
-(setup section).
+path is not connected. `setup.welcome` SSIM is light 0.8417, dark 0.8473, hc 0.8147 and `setup.company` is
+light 0.7966, dark 0.7952, hc 0.7930; the words of the AI chip and the sidebar footer are by
+design (setup section).
 
 ## Reports not in the mock (S8)
 

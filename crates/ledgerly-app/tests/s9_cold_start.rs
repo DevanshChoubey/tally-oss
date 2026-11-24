@@ -480,3 +480,123 @@ fn only_one_module_may_raise_a_native_file_dialog_and_it_is_off_in_tests() {
         None
     );
 }
+
+fn frame_mod(ctx: &Context, shell: &mut Shell, modifiers: Modifiers) -> Vec<(String, Pos2)> {
+    let input = RawInput {
+        events: vec![Event::ModifiersChanged(modifiers)],
+        screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1280.0, 800.0))),
+        ..RawInput::default()
+    };
+    let out = ctx.run_ui(input, |ui| shell.show(ui));
+    let painted = texts(&out.shapes);
+    out.drop_without_applying_deltas();
+    painted
+}
+
+#[test]
+fn the_key_bar_says_holding_alt_or_ctrl_shows_more_and_then_does() {
+    // provenance: mock renderKeys (index.html:910-915): without a modifier the right side reads
+    // "Hold Alt or Ctrl for more . Ctrl+K anything . ? all keys"; holding Alt swaps the left side
+    // for the Alt keys under "Holding Alt" and the hint goes away. The Alt keys are the ones the
+    // classic keymap binds (assets/keymap-classic.toml: create-master = Alt+C, delete-voucher =
+    // Alt+D, cancel-voucher = Alt+X, duplicate-voucher = Alt+2).
+    let (ctx, mut shell) = cold();
+    let plain = frame_mod(&ctx, &mut shell, Modifiers::NONE);
+    assert!(
+        plain
+            .iter()
+            .any(|(t, _)| t.starts_with("Hold Alt or Ctrl for more")),
+        "{plain:?}"
+    );
+    let alt = frame_mod(&ctx, &mut shell, Modifiers::ALT);
+    assert!(alt.iter().any(|(t, _)| t == "Holding Alt"), "{alt:?}");
+    for key in ["Alt+C", "Alt+D", "Alt+X", "Alt+2"] {
+        assert!(alt.iter().any(|(t, _)| t == key), "{key} in {alt:?}");
+    }
+    assert!(
+        !alt.iter()
+            .any(|(t, _)| t.starts_with("Hold Alt or Ctrl for more")),
+        "{alt:?}"
+    );
+    let ctrl = frame_mod(&ctx, &mut shell, Modifiers::CTRL);
+    assert!(ctrl.iter().any(|(t, _)| t == "Holding Ctrl"), "{ctrl:?}");
+    assert!(ctrl.iter().any(|(t, _)| t == "Ctrl+P"), "{ctrl:?}");
+}
+
+#[test]
+fn the_company_step_shows_dates_as_the_mock_does_and_still_reads_typed_ones() {
+    use ledgerly_app::screens::setup::form::parse_books_begin;
+    use time::macros::date;
+    // provenance: mock index.html:1870 shows "1 Apr 2026" in Books begin from and an
+    // "April to March" badge on the Financial year line. Both spellings of the date are read.
+    let (ctx, mut shell) = cold();
+    press(&ctx, &mut shell, Key::Enter);
+    let painted = frame(&ctx, &mut shell, vec![]);
+    let count = |s: &str| painted.iter().filter(|(t, _)| t == s).count();
+    assert!(count("April to March") >= 1, "{painted:?}");
+    assert!(
+        painted
+            .iter()
+            .any(|(t, _)| t == "1 Apr 2026" || t.starts_with("1 Apr 2026 to")),
+        "{painted:?}"
+    );
+    assert!(count("1 Apr 2026") >= 1, "books begin box: {painted:?}");
+    let (start, end) = (date!(2026 - 04 - 01), date!(2027 - 03 - 31));
+    assert_eq!(
+        parse_books_begin("1 Apr 2026", start, end),
+        Ok(date!(2026 - 04 - 01))
+    );
+    assert_eq!(
+        parse_books_begin("15 Jun 2026", start, end),
+        Ok(date!(2026 - 06 - 15))
+    );
+    assert_eq!(
+        parse_books_begin("2026-04-01", start, end),
+        Ok(date!(2026 - 04 - 01))
+    );
+    assert!(parse_books_begin("31 Mar 2026", start, end).is_err());
+    assert!(parse_books_begin("yesterday", start, end).is_err());
+}
+
+#[test]
+fn the_fills_the_state_hint_stays_on_one_line() {
+    // provenance: mock index.html:1868 draws the badge and "PAN AAGFG4417K . fills the state" on
+    // one line (the PAN is the GSTIN's characters 3 to 12, "AAGFG4417K" of 27AAGFG4417K1ZA).
+    let (ctx, mut shell) = cold();
+    press(&ctx, &mut shell, Key::Enter);
+    frame(
+        &ctx,
+        &mut shell,
+        vec![Event::Text("Godavari Drip & Pump Works".to_owned())],
+    );
+    for _ in 0..3 {
+        press(&ctx, &mut shell, Key::Tab);
+    }
+    frame(
+        &ctx,
+        &mut shell,
+        vec![Event::Text("27AAGFG4417K1ZA".to_owned())],
+    );
+    let painted = frame(&ctx, &mut shell, vec![]);
+    assert!(
+        painted
+            .iter()
+            .any(|(t, _)| t == "PAN AAGFG4417K \u{b7} fills the state"),
+        "{painted:?}"
+    );
+}
+
+#[test]
+fn the_capture_harness_parks_the_pointer_before_each_frame() {
+    // provenance: coordinator's order (round s9, item 1): a hover left by the pointer must not
+    // reach a capture. egui forgets the pointer on `PointerGone`.
+    let mut raw = RawInput::default();
+    raw.events.push(Event::PointerMoved(Pos2::new(40.0, 260.0)));
+    ledgerly_app::ui::capture::park_pointer(&mut raw);
+    assert_eq!(
+        raw.events.first(),
+        Some(&Event::PointerGone),
+        "{:?}",
+        raw.events
+    );
+}

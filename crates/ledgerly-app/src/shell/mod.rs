@@ -622,7 +622,10 @@ impl Shell {
             .active_stack_mut()
             .and_then(ScreenStack::top_mut)
             .map_or_default(|screen| screen.keys());
-        let (context, hints) = if self.palette.is_open() {
+        let held = chrome::Held::of(ui.input(|i| i.modifiers));
+        let (context, hints) = if let (Some(held), false) = (held, self.palette.is_open()) {
+            (String::new(), chrome::held_hints(&self.keymap, held))
+        } else if self.palette.is_open() {
             chrome::palette_key_bar(&self.palette.key_hints())
         } else {
             let name = self
@@ -660,7 +663,7 @@ impl Shell {
             .frame(panel_frame(&t, egui::Margin::symmetric(12, 0)))
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
-                    chrome::key_bar(ui, &context, &hints, &t);
+                    chrome::key_bar(ui, &context, &hints, held, &t);
                 });
             });
         let width = if rail {

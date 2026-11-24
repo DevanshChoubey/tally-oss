@@ -4,184 +4,184 @@
 
 | Theme | State | SSIM |
 | --- | --- | --- |
-| hc | home.default | 0.4589 |
-| hc | palette.entry | 0.4881 |
-| hc | day-book.month | 0.4900 |
-| hc | bank.default | 0.4908 |
-| hc | palette.ask | 0.4911 |
-| hc | sales-invoice.validation-error | 0.4965 |
-| hc | masters.ledgers | 0.4995 |
-| hc | palette.voucher | 0.4998 |
-| hc | sales-invoice.period-locked | 0.5115 |
-| hc | palette.no-results | 0.5127 |
-| hc | sales-invoice.save-confirm | 0.5175 |
-| hc | ai-settings.cloud | 0.5263 |
-| hc | balance-sheet.provisional | 0.5345 |
-| hc | sales-invoice.item-list | 0.5350 |
-| hc | palette.search | 0.5454 |
-| hc | home.ai-off | 0.5481 |
-| hc | ai-settings.local | 0.5538 |
-| dark | home.default | 0.5554 |
-| hc | sales-invoice.default | 0.5633 |
-| hc | sales-invoice.gst-inter-state | 0.5642 |
-| light | home.default | 0.5695 |
-| hc | gst.gstr1 | 0.5725 |
-| hc | bank.brs | 0.5766 |
-| hc | balance-sheet.detailed | 0.5787 |
-| light | day-book.month | 0.5852 |
-| dark | bank.default | 0.5872 |
+| hc | home.default | 0.4577 |
+| hc | day-book.month | 0.4795 |
+| hc | palette.entry | 0.4877 |
+| hc | bank.default | 0.4904 |
+| hc | palette.ask | 0.4908 |
+| hc | sales-invoice.validation-error | 0.4961 |
+| hc | masters.ledgers | 0.4990 |
+| hc | palette.voucher | 0.4995 |
+| hc | sales-invoice.period-locked | 0.5111 |
+| hc | palette.no-results | 0.5123 |
+| hc | sales-invoice.save-confirm | 0.5170 |
+| hc | ai-settings.cloud | 0.5259 |
+| hc | balance-sheet.provisional | 0.5340 |
+| hc | sales-invoice.item-list | 0.5345 |
+| hc | palette.search | 0.5451 |
+| hc | home.ai-off | 0.5476 |
+| hc | ai-settings.local | 0.5533 |
+| dark | home.default | 0.5566 |
+| hc | sales-invoice.default | 0.5628 |
+| hc | sales-invoice.gst-inter-state | 0.5638 |
+| light | home.default | 0.5697 |
+| hc | gst.gstr1 | 0.5801 |
+| light | day-book.month | 0.5854 |
+| dark | bank.default | 0.5863 |
+| hc | bank.brs | 0.5920 |
 | hc | palette.default | 0.5959 |
-| hc | sales-invoice.b2c | 0.5995 |
-| hc | keys.classic | 0.6000 |
-| hc | keys.standard | 0.6004 |
-| light | masters.ledgers | 0.6010 |
-| dark | day-book.month | 0.6024 |
-| light | bank.default | 0.6031 |
-| hc | purchase-bill.offline-ai | 0.6040 |
-| hc | palette.commands | 0.6053 |
-| hc | masters.items | 0.6059 |
-| light | ai-settings.cloud | 0.6103 |
-| hc | review.default | 0.6123 |
-| hc | balance-sheet.default | 0.6125 |
-| hc | sales-invoice.saved | 0.6153 |
-| dark | sales-invoice.item-list | 0.6161 |
-| dark | sales-invoice.period-locked | 0.6166 |
-| light | palette.entry | 0.6182 |
-| light | sales-invoice.item-list | 0.6186 |
-| light | sales-invoice.period-locked | 0.6188 |
-| light | palette.ask | 0.6210 |
-| dark | ai-settings.cloud | 0.6221 |
-| hc | gst.gstr1-correction | 0.6236 |
-| dark | sales-invoice.validation-error | 0.6246 |
-| light | palette.no-results | 0.6247 |
-| dark | masters.ledgers | 0.6267 |
-| light | sales-invoice.validation-error | 0.6276 |
-| light | sales-invoice.default | 0.6283 |
-| light | sales-invoice.save-confirm | 0.6296 |
-| dark | sales-invoice.default | 0.6300 |
-| light | palette.voucher | 0.6301 |
-| dark | palette.entry | 0.6309 |
-| dark | gst.gstr1 | 0.6321 |
-| dark | palette.no-results | 0.6335 |
-| dark | palette.ask | 0.6337 |
-| dark | sales-invoice.save-confirm | 0.6342 |
-| light | sales-invoice.gst-inter-state | 0.6366 |
-| light | gst.gstr1 | 0.6367 |
-| dark | home.ai-off | 0.6369 |
-| hc | ai-settings.off | 0.6371 |
-| dark | sales-invoice.gst-inter-state | 0.6399 |
-| light | palette.search | 0.6412 |
-| dark | palette.voucher | 0.6428 |
-| hc | balance-sheet.ledger | 0.6496 |
-| light | home.ai-off | 0.6512 |
-| dark | palette.search | 0.6516 |
-| light | keys.standard | 0.6533 |
-| light | balance-sheet.detailed | 0.6535 |
-| dark | keys.standard | 0.6537 |
-| dark | purchase-bill.offline-ai | 0.6551 |
-| dark | keys.classic | 0.6568 |
-| light | ai-settings.local | 0.6610 |
-| light | palette.default | 0.6625 |
-| light | balance-sheet.provisional | 0.6627 |
-| light | keys.classic | 0.6635 |
-| dark | review.default | 0.6648 |
-| light | sales-invoice.b2c | 0.6655 |
-| light | sales-invoice.saved | 0.6664 |
-| light | bank.brs | 0.6675 |
-| dark | ai-settings.local | 0.6676 |
-| hc | gst.gstr3b | 0.6688 |
-| light | balance-sheet.default | 0.6688 |
-| dark | bank.brs | 0.6690 |
-| light | review.default | 0.6695 |
-| dark | balance-sheet.provisional | 0.6704 |
-| dark | sales-invoice.b2c | 0.6752 |
-| dark | sales-invoice.saved | 0.6784 |
-| light | palette.commands | 0.6810 |
-| hc | receipt.default | 0.6837 |
-| dark | palette.default | 0.6866 |
-| light | ai-settings.off | 0.6870 |
-| dark | balance-sheet.detailed | 0.6886 |
-| dark | gst.gstr1-correction | 0.6892 |
-| dark | balance-sheet.default | 0.6892 |
-| light | gst.gstr1-correction | 0.6908 |
-| dark | palette.commands | 0.6911 |
-| dark | ai-settings.off | 0.6925 |
-| hc | day-book.default | 0.6962 |
-| hc | payment.default | 0.6975 |
-| light | gst.gstr3b | 0.7033 |
-| hc | balance-sheet.voucher | 0.7046 |
-| dark | gst.gstr3b | 0.7050 |
-| hc | setup.features | 0.7092 |
-| hc | masters.gstin-error | 0.7096 |
-| dark | masters.items | 0.7169 |
-| light | masters.items | 0.7182 |
-| hc | masters.ledger-detail | 0.7214 |
-| dark | balance-sheet.ledger | 0.7325 |
-| light | balance-sheet.ledger | 0.7361 |
-| light | receipt.default | 0.7387 |
-| light | day-book.default | 0.7393 |
-| dark | masters.gstin-error | 0.7395 |
-| dark | receipt.default | 0.7433 |
-| light | purchase-bill.offline-ai | 0.7443 |
-| hc | balance-sheet.group | 0.7443 |
-| light | balance-sheet.group | 0.7450 |
-| light | masters.gstin-error | 0.7485 |
-| dark | day-book.default | 0.7485 |
-| dark | masters.ledger-detail | 0.7514 |
-| hc | setup.done | 0.7537 |
-| dark | balance-sheet.group | 0.7544 |
-| hc | masters.create-ledger | 0.7545 |
-| light | payment.default | 0.7561 |
-| light | balance-sheet.voucher | 0.7577 |
-| dark | payment.default | 0.7582 |
-| light | setup.features | 0.7590 |
-| dark | balance-sheet.voucher | 0.7603 |
-| light | masters.ledger-detail | 0.7604 |
-| hc | ask.offline-ai | 0.7645 |
-| hc | home.empty | 0.7685 |
-| dark | setup.features | 0.7690 |
-| hc | setup.company | 0.7881 |
-| hc | bank.empty | 0.7902 |
-| light | masters.create-ledger | 0.7920 |
-| dark | masters.create-ledger | 0.7923 |
-| hc | setup.gstin-error | 0.7968 |
-| hc | setup.backup | 0.7972 |
-| hc | setup.ai | 0.7980 |
-| dark | setup.done | 0.8015 |
-| dark | setup.company | 0.8019 |
-| light | setup.company | 0.8026 |
-| dark | home.empty | 0.8048 |
-| light | ask.offline-ai | 0.8075 |
-| hc | day-book.empty | 0.8077 |
-| hc | gst.recon-empty | 0.8091 |
-| light | home.empty | 0.8113 |
-| hc | review.empty | 0.8129 |
-| hc | setup.keyboard | 0.8131 |
-| dark | setup.gstin-error | 0.8133 |
-| dark | ask.offline-ai | 0.8141 |
-| light | setup.gstin-error | 0.8143 |
-| hc | setup.welcome | 0.8151 |
-| light | bank.empty | 0.8173 |
-| dark | bank.empty | 0.8183 |
-| dark | review.empty | 0.8255 |
-| light | review.empty | 0.8291 |
-| dark | gst.recon-empty | 0.8296 |
-| light | gst.recon-empty | 0.8327 |
-| light | setup.backup | 0.8348 |
-| light | day-book.empty | 0.8365 |
-| dark | setup.backup | 0.8365 |
-| dark | day-book.empty | 0.8383 |
-| light | setup.welcome | 0.8415 |
-| dark | setup.keyboard | 0.8437 |
-| light | setup.keyboard | 0.8438 |
-| light | setup.ai | 0.8481 |
-| dark | setup.welcome | 0.8481 |
-| dark | setup.ai | 0.8506 |
-| light | setup.done | 0.8924 |
+| hc | keys.classic | 0.5986 |
+| hc | balance-sheet.detailed | 0.5989 |
+| hc | keys.standard | 0.5990 |
+| hc | sales-invoice.b2c | 0.5991 |
+| dark | day-book.month | 0.5992 |
+| light | masters.ledgers | 0.6013 |
+| light | bank.default | 0.6033 |
+| hc | purchase-bill.offline-ai | 0.6035 |
+| hc | palette.commands | 0.6052 |
+| hc | masters.items | 0.6055 |
+| light | ai-settings.cloud | 0.6105 |
+| hc | review.default | 0.6118 |
+| hc | sales-invoice.saved | 0.6149 |
+| dark | sales-invoice.item-list | 0.6153 |
+| dark | sales-invoice.period-locked | 0.6158 |
+| light | palette.entry | 0.6175 |
+| light | sales-invoice.item-list | 0.6178 |
+| light | sales-invoice.period-locked | 0.6181 |
+| light | palette.ask | 0.6203 |
+| dark | ai-settings.cloud | 0.6213 |
+| hc | gst.gstr1-correction | 0.6232 |
+| dark | sales-invoice.validation-error | 0.6238 |
+| light | palette.no-results | 0.6240 |
+| dark | masters.ledgers | 0.6259 |
+| light | sales-invoice.validation-error | 0.6268 |
+| light | sales-invoice.default | 0.6285 |
+| light | sales-invoice.save-confirm | 0.6289 |
+| dark | sales-invoice.default | 0.6292 |
+| light | palette.voucher | 0.6294 |
+| dark | palette.entry | 0.6295 |
+| hc | balance-sheet.default | 0.6323 |
+| dark | palette.no-results | 0.6328 |
+| dark | palette.ask | 0.6329 |
+| dark | sales-invoice.save-confirm | 0.6334 |
+| light | sales-invoice.gst-inter-state | 0.6358 |
+| dark | home.ai-off | 0.6360 |
+| hc | ai-settings.off | 0.6367 |
+| light | gst.gstr1 | 0.6369 |
+| dark | gst.gstr1 | 0.6377 |
+| dark | sales-invoice.gst-inter-state | 0.6391 |
+| light | palette.search | 0.6404 |
+| dark | palette.voucher | 0.6420 |
+| hc | balance-sheet.ledger | 0.6491 |
+| dark | palette.search | 0.6508 |
+| light | home.ai-off | 0.6514 |
+| light | keys.standard | 0.6536 |
+| light | balance-sheet.detailed | 0.6537 |
+| dark | purchase-bill.offline-ai | 0.6543 |
+| dark | keys.standard | 0.6546 |
+| dark | keys.classic | 0.6577 |
+| light | ai-settings.local | 0.6612 |
+| light | palette.default | 0.6617 |
+| light | balance-sheet.provisional | 0.6619 |
+| light | keys.classic | 0.6637 |
+| dark | review.default | 0.6640 |
+| light | sales-invoice.b2c | 0.6647 |
+| light | sales-invoice.saved | 0.6656 |
+| dark | ai-settings.local | 0.6668 |
+| light | bank.brs | 0.6677 |
+| hc | gst.gstr3b | 0.6684 |
+| light | review.default | 0.6688 |
+| light | balance-sheet.default | 0.6690 |
+| dark | balance-sheet.provisional | 0.6696 |
+| dark | bank.brs | 0.6742 |
+| dark | sales-invoice.b2c | 0.6744 |
+| dark | sales-invoice.saved | 0.6776 |
+| light | palette.commands | 0.6803 |
+| hc | receipt.default | 0.6833 |
+| dark | palette.default | 0.6838 |
+| light | ai-settings.off | 0.6872 |
+| dark | gst.gstr1-correction | 0.6884 |
+| dark | palette.commands | 0.6887 |
+| light | gst.gstr1-correction | 0.6900 |
+| dark | ai-settings.off | 0.6917 |
+| dark | balance-sheet.default | 0.6924 |
+| dark | balance-sheet.detailed | 0.6929 |
+| hc | day-book.default | 0.6958 |
+| hc | payment.default | 0.6971 |
+| light | gst.gstr3b | 0.7035 |
+| hc | balance-sheet.voucher | 0.7041 |
+| dark | gst.gstr3b | 0.7042 |
+| hc | setup.features | 0.7087 |
+| hc | masters.gstin-error | 0.7091 |
+| dark | masters.items | 0.7161 |
+| light | masters.items | 0.7184 |
+| hc | masters.ledger-detail | 0.7223 |
+| dark | balance-sheet.ledger | 0.7317 |
+| light | balance-sheet.ledger | 0.7363 |
+| dark | masters.gstin-error | 0.7388 |
+| light | receipt.default | 0.7390 |
+| light | day-book.default | 0.7396 |
+| dark | receipt.default | 0.7425 |
+| hc | balance-sheet.group | 0.7439 |
+| light | purchase-bill.offline-ai | 0.7444 |
+| light | balance-sheet.group | 0.7452 |
+| dark | day-book.default | 0.7477 |
+| light | masters.gstin-error | 0.7479 |
+| dark | masters.ledger-detail | 0.7535 |
+| dark | balance-sheet.group | 0.7535 |
+| hc | masters.create-ledger | 0.7540 |
+| light | payment.default | 0.7549 |
+| dark | payment.default | 0.7574 |
+| light | balance-sheet.voucher | 0.7579 |
+| light | setup.features | 0.7592 |
+| dark | balance-sheet.voucher | 0.7594 |
+| light | masters.ledger-detail | 0.7606 |
+| hc | setup.done | 0.7616 |
+| hc | ask.offline-ai | 0.7641 |
+| hc | home.empty | 0.7680 |
+| dark | setup.features | 0.7682 |
+| hc | bank.empty | 0.7898 |
+| dark | masters.create-ledger | 0.7915 |
+| light | masters.create-ledger | 0.7922 |
+| hc | setup.company | 0.7930 |
+| hc | setup.gstin-error | 0.7934 |
+| dark | setup.company | 0.7952 |
+| light | setup.company | 0.7966 |
+| dark | setup.done | 0.8024 |
+| dark | home.empty | 0.8040 |
+| hc | setup.backup | 0.8052 |
+| hc | setup.ai | 0.8052 |
+| hc | day-book.empty | 0.8073 |
+| light | ask.offline-ai | 0.8077 |
+| hc | gst.recon-empty | 0.8086 |
+| light | home.empty | 0.8106 |
+| hc | review.empty | 0.8125 |
+| dark | ask.offline-ai | 0.8133 |
+| dark | setup.gstin-error | 0.8144 |
+| hc | setup.welcome | 0.8147 |
+| light | setup.gstin-error | 0.8151 |
+| dark | bank.empty | 0.8174 |
+| light | bank.empty | 0.8175 |
+| hc | setup.keyboard | 0.8206 |
+| dark | review.empty | 0.8247 |
+| dark | gst.recon-empty | 0.8288 |
+| light | review.empty | 0.8293 |
+| light | gst.recon-empty | 0.8329 |
+| light | setup.backup | 0.8350 |
+| light | day-book.empty | 0.8367 |
+| dark | day-book.empty | 0.8374 |
+| dark | setup.backup | 0.8374 |
+| light | setup.welcome | 0.8417 |
+| light | setup.keyboard | 0.8440 |
+| dark | setup.keyboard | 0.8444 |
+| dark | setup.welcome | 0.8473 |
+| light | setup.ai | 0.8483 |
+| dark | setup.ai | 0.8513 |
+| light | setup.done | 0.8926 |
 
 ## hc / home.default
 
-SSIM 0.4589
+SSIM 0.4577
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -191,21 +191,9 @@ SSIM 0.4589
 </tr>
 </table>
 
-## hc / palette.entry
-
-SSIM 0.4881
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/hc/palette.entry.webp" width="480" alt="mock hc palette.entry"></td>
-<td><img src="app-captures/hc/palette.entry.webp" width="480" alt="app hc palette.entry"></td>
-</tr>
-</table>
-
 ## hc / day-book.month
 
-SSIM 0.4900
+SSIM 0.4795
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -215,9 +203,21 @@ SSIM 0.4900
 </tr>
 </table>
 
+## hc / palette.entry
+
+SSIM 0.4877
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/hc/palette.entry.webp" width="480" alt="mock hc palette.entry"></td>
+<td><img src="app-captures/hc/palette.entry.webp" width="480" alt="app hc palette.entry"></td>
+</tr>
+</table>
+
 ## hc / bank.default
 
-SSIM 0.4908
+SSIM 0.4904
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -229,7 +229,7 @@ SSIM 0.4908
 
 ## hc / palette.ask
 
-SSIM 0.4911
+SSIM 0.4908
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -241,7 +241,7 @@ SSIM 0.4911
 
 ## hc / sales-invoice.validation-error
 
-SSIM 0.4965
+SSIM 0.4961
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -253,7 +253,7 @@ SSIM 0.4965
 
 ## hc / masters.ledgers
 
-SSIM 0.4995
+SSIM 0.4990
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -265,7 +265,7 @@ SSIM 0.4995
 
 ## hc / palette.voucher
 
-SSIM 0.4998
+SSIM 0.4995
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -277,7 +277,7 @@ SSIM 0.4998
 
 ## hc / sales-invoice.period-locked
 
-SSIM 0.5115
+SSIM 0.5111
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -289,7 +289,7 @@ SSIM 0.5115
 
 ## hc / palette.no-results
 
-SSIM 0.5127
+SSIM 0.5123
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -301,7 +301,7 @@ SSIM 0.5127
 
 ## hc / sales-invoice.save-confirm
 
-SSIM 0.5175
+SSIM 0.5170
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -313,7 +313,7 @@ SSIM 0.5175
 
 ## hc / ai-settings.cloud
 
-SSIM 0.5263
+SSIM 0.5259
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -325,7 +325,7 @@ SSIM 0.5263
 
 ## hc / balance-sheet.provisional
 
-SSIM 0.5345
+SSIM 0.5340
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -337,7 +337,7 @@ SSIM 0.5345
 
 ## hc / sales-invoice.item-list
 
-SSIM 0.5350
+SSIM 0.5345
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -349,7 +349,7 @@ SSIM 0.5350
 
 ## hc / palette.search
 
-SSIM 0.5454
+SSIM 0.5451
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -361,7 +361,7 @@ SSIM 0.5454
 
 ## hc / home.ai-off
 
-SSIM 0.5481
+SSIM 0.5476
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -373,7 +373,7 @@ SSIM 0.5481
 
 ## hc / ai-settings.local
 
-SSIM 0.5538
+SSIM 0.5533
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -385,7 +385,7 @@ SSIM 0.5538
 
 ## dark / home.default
 
-SSIM 0.5554
+SSIM 0.5566
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -397,7 +397,7 @@ SSIM 0.5554
 
 ## hc / sales-invoice.default
 
-SSIM 0.5633
+SSIM 0.5628
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -409,7 +409,7 @@ SSIM 0.5633
 
 ## hc / sales-invoice.gst-inter-state
 
-SSIM 0.5642
+SSIM 0.5638
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -421,7 +421,7 @@ SSIM 0.5642
 
 ## light / home.default
 
-SSIM 0.5695
+SSIM 0.5697
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -433,7 +433,7 @@ SSIM 0.5695
 
 ## hc / gst.gstr1
 
-SSIM 0.5725
+SSIM 0.5801
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -443,33 +443,9 @@ SSIM 0.5725
 </tr>
 </table>
 
-## hc / bank.brs
-
-SSIM 0.5766
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/hc/bank.brs.webp" width="480" alt="mock hc bank.brs"></td>
-<td><img src="app-captures/hc/bank.brs.webp" width="480" alt="app hc bank.brs"></td>
-</tr>
-</table>
-
-## hc / balance-sheet.detailed
-
-SSIM 0.5787
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/hc/balance-sheet.detailed.webp" width="480" alt="mock hc balance-sheet.detailed"></td>
-<td><img src="app-captures/hc/balance-sheet.detailed.webp" width="480" alt="app hc balance-sheet.detailed"></td>
-</tr>
-</table>
-
 ## light / day-book.month
 
-SSIM 0.5852
+SSIM 0.5854
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -481,13 +457,25 @@ SSIM 0.5852
 
 ## dark / bank.default
 
-SSIM 0.5872
+SSIM 0.5863
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
 <tr>
 <td><img src="mock-v2/captures/states/dark/bank.default.webp" width="480" alt="mock dark bank.default"></td>
 <td><img src="app-captures/dark/bank.default.webp" width="480" alt="app dark bank.default"></td>
+</tr>
+</table>
+
+## hc / bank.brs
+
+SSIM 0.5920
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/hc/bank.brs.webp" width="480" alt="mock hc bank.brs"></td>
+<td><img src="app-captures/hc/bank.brs.webp" width="480" alt="app hc bank.brs"></td>
 </tr>
 </table>
 
@@ -503,21 +491,9 @@ SSIM 0.5959
 </tr>
 </table>
 
-## hc / sales-invoice.b2c
-
-SSIM 0.5995
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/hc/sales-invoice.b2c.webp" width="480" alt="mock hc sales-invoice.b2c"></td>
-<td><img src="app-captures/hc/sales-invoice.b2c.webp" width="480" alt="app hc sales-invoice.b2c"></td>
-</tr>
-</table>
-
 ## hc / keys.classic
 
-SSIM 0.6000
+SSIM 0.5986
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -527,9 +503,21 @@ SSIM 0.6000
 </tr>
 </table>
 
+## hc / balance-sheet.detailed
+
+SSIM 0.5989
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/hc/balance-sheet.detailed.webp" width="480" alt="mock hc balance-sheet.detailed"></td>
+<td><img src="app-captures/hc/balance-sheet.detailed.webp" width="480" alt="app hc balance-sheet.detailed"></td>
+</tr>
+</table>
+
 ## hc / keys.standard
 
-SSIM 0.6004
+SSIM 0.5990
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -539,21 +527,21 @@ SSIM 0.6004
 </tr>
 </table>
 
-## light / masters.ledgers
+## hc / sales-invoice.b2c
 
-SSIM 0.6010
+SSIM 0.5991
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
 <tr>
-<td><img src="mock-v2/captures/states/light/masters.ledgers.webp" width="480" alt="mock light masters.ledgers"></td>
-<td><img src="app-captures/light/masters.ledgers.webp" width="480" alt="app light masters.ledgers"></td>
+<td><img src="mock-v2/captures/states/hc/sales-invoice.b2c.webp" width="480" alt="mock hc sales-invoice.b2c"></td>
+<td><img src="app-captures/hc/sales-invoice.b2c.webp" width="480" alt="app hc sales-invoice.b2c"></td>
 </tr>
 </table>
 
 ## dark / day-book.month
 
-SSIM 0.6024
+SSIM 0.5992
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -563,9 +551,21 @@ SSIM 0.6024
 </tr>
 </table>
 
+## light / masters.ledgers
+
+SSIM 0.6013
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/masters.ledgers.webp" width="480" alt="mock light masters.ledgers"></td>
+<td><img src="app-captures/light/masters.ledgers.webp" width="480" alt="app light masters.ledgers"></td>
+</tr>
+</table>
+
 ## light / bank.default
 
-SSIM 0.6031
+SSIM 0.6033
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -577,7 +577,7 @@ SSIM 0.6031
 
 ## hc / purchase-bill.offline-ai
 
-SSIM 0.6040
+SSIM 0.6035
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -589,7 +589,7 @@ SSIM 0.6040
 
 ## hc / palette.commands
 
-SSIM 0.6053
+SSIM 0.6052
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -601,7 +601,7 @@ SSIM 0.6053
 
 ## hc / masters.items
 
-SSIM 0.6059
+SSIM 0.6055
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -613,7 +613,7 @@ SSIM 0.6059
 
 ## light / ai-settings.cloud
 
-SSIM 0.6103
+SSIM 0.6105
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -625,7 +625,7 @@ SSIM 0.6103
 
 ## hc / review.default
 
-SSIM 0.6123
+SSIM 0.6118
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -635,21 +635,9 @@ SSIM 0.6123
 </tr>
 </table>
 
-## hc / balance-sheet.default
-
-SSIM 0.6125
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/hc/balance-sheet.default.webp" width="480" alt="mock hc balance-sheet.default"></td>
-<td><img src="app-captures/hc/balance-sheet.default.webp" width="480" alt="app hc balance-sheet.default"></td>
-</tr>
-</table>
-
 ## hc / sales-invoice.saved
 
-SSIM 0.6153
+SSIM 0.6149
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -661,7 +649,7 @@ SSIM 0.6153
 
 ## dark / sales-invoice.item-list
 
-SSIM 0.6161
+SSIM 0.6153
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -673,7 +661,7 @@ SSIM 0.6161
 
 ## dark / sales-invoice.period-locked
 
-SSIM 0.6166
+SSIM 0.6158
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -685,7 +673,7 @@ SSIM 0.6166
 
 ## light / palette.entry
 
-SSIM 0.6182
+SSIM 0.6175
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -697,7 +685,7 @@ SSIM 0.6182
 
 ## light / sales-invoice.item-list
 
-SSIM 0.6186
+SSIM 0.6178
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -709,7 +697,7 @@ SSIM 0.6186
 
 ## light / sales-invoice.period-locked
 
-SSIM 0.6188
+SSIM 0.6181
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -721,7 +709,7 @@ SSIM 0.6188
 
 ## light / palette.ask
 
-SSIM 0.6210
+SSIM 0.6203
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -733,7 +721,7 @@ SSIM 0.6210
 
 ## dark / ai-settings.cloud
 
-SSIM 0.6221
+SSIM 0.6213
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -745,7 +733,7 @@ SSIM 0.6221
 
 ## hc / gst.gstr1-correction
 
-SSIM 0.6236
+SSIM 0.6232
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -757,7 +745,7 @@ SSIM 0.6236
 
 ## dark / sales-invoice.validation-error
 
-SSIM 0.6246
+SSIM 0.6238
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -769,7 +757,7 @@ SSIM 0.6246
 
 ## light / palette.no-results
 
-SSIM 0.6247
+SSIM 0.6240
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -781,7 +769,7 @@ SSIM 0.6247
 
 ## dark / masters.ledgers
 
-SSIM 0.6267
+SSIM 0.6259
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -793,7 +781,7 @@ SSIM 0.6267
 
 ## light / sales-invoice.validation-error
 
-SSIM 0.6276
+SSIM 0.6268
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -805,7 +793,7 @@ SSIM 0.6276
 
 ## light / sales-invoice.default
 
-SSIM 0.6283
+SSIM 0.6285
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -817,7 +805,7 @@ SSIM 0.6283
 
 ## light / sales-invoice.save-confirm
 
-SSIM 0.6296
+SSIM 0.6289
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -829,7 +817,7 @@ SSIM 0.6296
 
 ## dark / sales-invoice.default
 
-SSIM 0.6300
+SSIM 0.6292
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -841,7 +829,7 @@ SSIM 0.6300
 
 ## light / palette.voucher
 
-SSIM 0.6301
+SSIM 0.6294
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -853,7 +841,7 @@ SSIM 0.6301
 
 ## dark / palette.entry
 
-SSIM 0.6309
+SSIM 0.6295
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -863,21 +851,21 @@ SSIM 0.6309
 </tr>
 </table>
 
-## dark / gst.gstr1
+## hc / balance-sheet.default
 
-SSIM 0.6321
+SSIM 0.6323
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
 <tr>
-<td><img src="mock-v2/captures/states/dark/gst.gstr1.webp" width="480" alt="mock dark gst.gstr1"></td>
-<td><img src="app-captures/dark/gst.gstr1.webp" width="480" alt="app dark gst.gstr1"></td>
+<td><img src="mock-v2/captures/states/hc/balance-sheet.default.webp" width="480" alt="mock hc balance-sheet.default"></td>
+<td><img src="app-captures/hc/balance-sheet.default.webp" width="480" alt="app hc balance-sheet.default"></td>
 </tr>
 </table>
 
 ## dark / palette.no-results
 
-SSIM 0.6335
+SSIM 0.6328
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -889,7 +877,7 @@ SSIM 0.6335
 
 ## dark / palette.ask
 
-SSIM 0.6337
+SSIM 0.6329
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -901,7 +889,7 @@ SSIM 0.6337
 
 ## dark / sales-invoice.save-confirm
 
-SSIM 0.6342
+SSIM 0.6334
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -913,7 +901,7 @@ SSIM 0.6342
 
 ## light / sales-invoice.gst-inter-state
 
-SSIM 0.6366
+SSIM 0.6358
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -923,21 +911,9 @@ SSIM 0.6366
 </tr>
 </table>
 
-## light / gst.gstr1
-
-SSIM 0.6367
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/light/gst.gstr1.webp" width="480" alt="mock light gst.gstr1"></td>
-<td><img src="app-captures/light/gst.gstr1.webp" width="480" alt="app light gst.gstr1"></td>
-</tr>
-</table>
-
 ## dark / home.ai-off
 
-SSIM 0.6369
+SSIM 0.6360
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -949,7 +925,7 @@ SSIM 0.6369
 
 ## hc / ai-settings.off
 
-SSIM 0.6371
+SSIM 0.6367
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -959,9 +935,33 @@ SSIM 0.6371
 </tr>
 </table>
 
+## light / gst.gstr1
+
+SSIM 0.6369
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/gst.gstr1.webp" width="480" alt="mock light gst.gstr1"></td>
+<td><img src="app-captures/light/gst.gstr1.webp" width="480" alt="app light gst.gstr1"></td>
+</tr>
+</table>
+
+## dark / gst.gstr1
+
+SSIM 0.6377
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/dark/gst.gstr1.webp" width="480" alt="mock dark gst.gstr1"></td>
+<td><img src="app-captures/dark/gst.gstr1.webp" width="480" alt="app dark gst.gstr1"></td>
+</tr>
+</table>
+
 ## dark / sales-invoice.gst-inter-state
 
-SSIM 0.6399
+SSIM 0.6391
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -973,7 +973,7 @@ SSIM 0.6399
 
 ## light / palette.search
 
-SSIM 0.6412
+SSIM 0.6404
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -985,7 +985,7 @@ SSIM 0.6412
 
 ## dark / palette.voucher
 
-SSIM 0.6428
+SSIM 0.6420
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -997,7 +997,7 @@ SSIM 0.6428
 
 ## hc / balance-sheet.ledger
 
-SSIM 0.6496
+SSIM 0.6491
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1007,21 +1007,9 @@ SSIM 0.6496
 </tr>
 </table>
 
-## light / home.ai-off
-
-SSIM 0.6512
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/light/home.ai-off.webp" width="480" alt="mock light home.ai-off"></td>
-<td><img src="app-captures/light/home.ai-off.webp" width="480" alt="app light home.ai-off"></td>
-</tr>
-</table>
-
 ## dark / palette.search
 
-SSIM 0.6516
+SSIM 0.6508
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1031,9 +1019,21 @@ SSIM 0.6516
 </tr>
 </table>
 
+## light / home.ai-off
+
+SSIM 0.6514
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/home.ai-off.webp" width="480" alt="mock light home.ai-off"></td>
+<td><img src="app-captures/light/home.ai-off.webp" width="480" alt="app light home.ai-off"></td>
+</tr>
+</table>
+
 ## light / keys.standard
 
-SSIM 0.6533
+SSIM 0.6536
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1045,7 +1045,7 @@ SSIM 0.6533
 
 ## light / balance-sheet.detailed
 
-SSIM 0.6535
+SSIM 0.6537
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1055,21 +1055,9 @@ SSIM 0.6535
 </tr>
 </table>
 
-## dark / keys.standard
-
-SSIM 0.6537
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/dark/keys.standard.webp" width="480" alt="mock dark keys.standard"></td>
-<td><img src="app-captures/dark/keys.standard.webp" width="480" alt="app dark keys.standard"></td>
-</tr>
-</table>
-
 ## dark / purchase-bill.offline-ai
 
-SSIM 0.6551
+SSIM 0.6543
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1079,9 +1067,21 @@ SSIM 0.6551
 </tr>
 </table>
 
+## dark / keys.standard
+
+SSIM 0.6546
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/dark/keys.standard.webp" width="480" alt="mock dark keys.standard"></td>
+<td><img src="app-captures/dark/keys.standard.webp" width="480" alt="app dark keys.standard"></td>
+</tr>
+</table>
+
 ## dark / keys.classic
 
-SSIM 0.6568
+SSIM 0.6577
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1093,7 +1093,7 @@ SSIM 0.6568
 
 ## light / ai-settings.local
 
-SSIM 0.6610
+SSIM 0.6612
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1105,7 +1105,7 @@ SSIM 0.6610
 
 ## light / palette.default
 
-SSIM 0.6625
+SSIM 0.6617
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1117,7 +1117,7 @@ SSIM 0.6625
 
 ## light / balance-sheet.provisional
 
-SSIM 0.6627
+SSIM 0.6619
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1129,7 +1129,7 @@ SSIM 0.6627
 
 ## light / keys.classic
 
-SSIM 0.6635
+SSIM 0.6637
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1141,7 +1141,7 @@ SSIM 0.6635
 
 ## dark / review.default
 
-SSIM 0.6648
+SSIM 0.6640
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1153,7 +1153,7 @@ SSIM 0.6648
 
 ## light / sales-invoice.b2c
 
-SSIM 0.6655
+SSIM 0.6647
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1165,7 +1165,7 @@ SSIM 0.6655
 
 ## light / sales-invoice.saved
 
-SSIM 0.6664
+SSIM 0.6656
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1175,21 +1175,9 @@ SSIM 0.6664
 </tr>
 </table>
 
-## light / bank.brs
-
-SSIM 0.6675
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/light/bank.brs.webp" width="480" alt="mock light bank.brs"></td>
-<td><img src="app-captures/light/bank.brs.webp" width="480" alt="app light bank.brs"></td>
-</tr>
-</table>
-
 ## dark / ai-settings.local
 
-SSIM 0.6676
+SSIM 0.6668
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1199,9 +1187,21 @@ SSIM 0.6676
 </tr>
 </table>
 
+## light / bank.brs
+
+SSIM 0.6677
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/bank.brs.webp" width="480" alt="mock light bank.brs"></td>
+<td><img src="app-captures/light/bank.brs.webp" width="480" alt="app light bank.brs"></td>
+</tr>
+</table>
+
 ## hc / gst.gstr3b
 
-SSIM 0.6688
+SSIM 0.6684
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1211,33 +1211,9 @@ SSIM 0.6688
 </tr>
 </table>
 
-## light / balance-sheet.default
-
-SSIM 0.6688
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/light/balance-sheet.default.webp" width="480" alt="mock light balance-sheet.default"></td>
-<td><img src="app-captures/light/balance-sheet.default.webp" width="480" alt="app light balance-sheet.default"></td>
-</tr>
-</table>
-
-## dark / bank.brs
-
-SSIM 0.6690
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/dark/bank.brs.webp" width="480" alt="mock dark bank.brs"></td>
-<td><img src="app-captures/dark/bank.brs.webp" width="480" alt="app dark bank.brs"></td>
-</tr>
-</table>
-
 ## light / review.default
 
-SSIM 0.6695
+SSIM 0.6688
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1247,9 +1223,21 @@ SSIM 0.6695
 </tr>
 </table>
 
+## light / balance-sheet.default
+
+SSIM 0.6690
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/balance-sheet.default.webp" width="480" alt="mock light balance-sheet.default"></td>
+<td><img src="app-captures/light/balance-sheet.default.webp" width="480" alt="app light balance-sheet.default"></td>
+</tr>
+</table>
+
 ## dark / balance-sheet.provisional
 
-SSIM 0.6704
+SSIM 0.6696
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1259,9 +1247,21 @@ SSIM 0.6704
 </tr>
 </table>
 
+## dark / bank.brs
+
+SSIM 0.6742
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/dark/bank.brs.webp" width="480" alt="mock dark bank.brs"></td>
+<td><img src="app-captures/dark/bank.brs.webp" width="480" alt="app dark bank.brs"></td>
+</tr>
+</table>
+
 ## dark / sales-invoice.b2c
 
-SSIM 0.6752
+SSIM 0.6744
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1273,7 +1273,7 @@ SSIM 0.6752
 
 ## dark / sales-invoice.saved
 
-SSIM 0.6784
+SSIM 0.6776
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1285,7 +1285,7 @@ SSIM 0.6784
 
 ## light / palette.commands
 
-SSIM 0.6810
+SSIM 0.6803
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1297,7 +1297,7 @@ SSIM 0.6810
 
 ## hc / receipt.default
 
-SSIM 0.6837
+SSIM 0.6833
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1309,7 +1309,7 @@ SSIM 0.6837
 
 ## dark / palette.default
 
-SSIM 0.6866
+SSIM 0.6838
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1321,7 +1321,7 @@ SSIM 0.6866
 
 ## light / ai-settings.off
 
-SSIM 0.6870
+SSIM 0.6872
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1331,21 +1331,9 @@ SSIM 0.6870
 </tr>
 </table>
 
-## dark / balance-sheet.detailed
-
-SSIM 0.6886
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/dark/balance-sheet.detailed.webp" width="480" alt="mock dark balance-sheet.detailed"></td>
-<td><img src="app-captures/dark/balance-sheet.detailed.webp" width="480" alt="app dark balance-sheet.detailed"></td>
-</tr>
-</table>
-
 ## dark / gst.gstr1-correction
 
-SSIM 0.6892
+SSIM 0.6884
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1355,33 +1343,9 @@ SSIM 0.6892
 </tr>
 </table>
 
-## dark / balance-sheet.default
-
-SSIM 0.6892
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/dark/balance-sheet.default.webp" width="480" alt="mock dark balance-sheet.default"></td>
-<td><img src="app-captures/dark/balance-sheet.default.webp" width="480" alt="app dark balance-sheet.default"></td>
-</tr>
-</table>
-
-## light / gst.gstr1-correction
-
-SSIM 0.6908
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/light/gst.gstr1-correction.webp" width="480" alt="mock light gst.gstr1-correction"></td>
-<td><img src="app-captures/light/gst.gstr1-correction.webp" width="480" alt="app light gst.gstr1-correction"></td>
-</tr>
-</table>
-
 ## dark / palette.commands
 
-SSIM 0.6911
+SSIM 0.6887
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1391,9 +1355,21 @@ SSIM 0.6911
 </tr>
 </table>
 
+## light / gst.gstr1-correction
+
+SSIM 0.6900
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/gst.gstr1-correction.webp" width="480" alt="mock light gst.gstr1-correction"></td>
+<td><img src="app-captures/light/gst.gstr1-correction.webp" width="480" alt="app light gst.gstr1-correction"></td>
+</tr>
+</table>
+
 ## dark / ai-settings.off
 
-SSIM 0.6925
+SSIM 0.6917
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1403,9 +1379,33 @@ SSIM 0.6925
 </tr>
 </table>
 
+## dark / balance-sheet.default
+
+SSIM 0.6924
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/dark/balance-sheet.default.webp" width="480" alt="mock dark balance-sheet.default"></td>
+<td><img src="app-captures/dark/balance-sheet.default.webp" width="480" alt="app dark balance-sheet.default"></td>
+</tr>
+</table>
+
+## dark / balance-sheet.detailed
+
+SSIM 0.6929
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/dark/balance-sheet.detailed.webp" width="480" alt="mock dark balance-sheet.detailed"></td>
+<td><img src="app-captures/dark/balance-sheet.detailed.webp" width="480" alt="app dark balance-sheet.detailed"></td>
+</tr>
+</table>
+
 ## hc / day-book.default
 
-SSIM 0.6962
+SSIM 0.6958
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1417,7 +1417,7 @@ SSIM 0.6962
 
 ## hc / payment.default
 
-SSIM 0.6975
+SSIM 0.6971
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1429,7 +1429,7 @@ SSIM 0.6975
 
 ## light / gst.gstr3b
 
-SSIM 0.7033
+SSIM 0.7035
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1441,7 +1441,7 @@ SSIM 0.7033
 
 ## hc / balance-sheet.voucher
 
-SSIM 0.7046
+SSIM 0.7041
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1453,7 +1453,7 @@ SSIM 0.7046
 
 ## dark / gst.gstr3b
 
-SSIM 0.7050
+SSIM 0.7042
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1465,7 +1465,7 @@ SSIM 0.7050
 
 ## hc / setup.features
 
-SSIM 0.7092
+SSIM 0.7087
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1477,7 +1477,7 @@ SSIM 0.7092
 
 ## hc / masters.gstin-error
 
-SSIM 0.7096
+SSIM 0.7091
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1489,7 +1489,7 @@ SSIM 0.7096
 
 ## dark / masters.items
 
-SSIM 0.7169
+SSIM 0.7161
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1501,7 +1501,7 @@ SSIM 0.7169
 
 ## light / masters.items
 
-SSIM 0.7182
+SSIM 0.7184
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1513,7 +1513,7 @@ SSIM 0.7182
 
 ## hc / masters.ledger-detail
 
-SSIM 0.7214
+SSIM 0.7223
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1525,7 +1525,7 @@ SSIM 0.7214
 
 ## dark / balance-sheet.ledger
 
-SSIM 0.7325
+SSIM 0.7317
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1537,7 +1537,7 @@ SSIM 0.7325
 
 ## light / balance-sheet.ledger
 
-SSIM 0.7361
+SSIM 0.7363
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1547,9 +1547,21 @@ SSIM 0.7361
 </tr>
 </table>
 
+## dark / masters.gstin-error
+
+SSIM 0.7388
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/dark/masters.gstin-error.webp" width="480" alt="mock dark masters.gstin-error"></td>
+<td><img src="app-captures/dark/masters.gstin-error.webp" width="480" alt="app dark masters.gstin-error"></td>
+</tr>
+</table>
+
 ## light / receipt.default
 
-SSIM 0.7387
+SSIM 0.7390
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1561,7 +1573,7 @@ SSIM 0.7387
 
 ## light / day-book.default
 
-SSIM 0.7393
+SSIM 0.7396
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1571,21 +1583,9 @@ SSIM 0.7393
 </tr>
 </table>
 
-## dark / masters.gstin-error
-
-SSIM 0.7395
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/dark/masters.gstin-error.webp" width="480" alt="mock dark masters.gstin-error"></td>
-<td><img src="app-captures/dark/masters.gstin-error.webp" width="480" alt="app dark masters.gstin-error"></td>
-</tr>
-</table>
-
 ## dark / receipt.default
 
-SSIM 0.7433
+SSIM 0.7425
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1595,21 +1595,9 @@ SSIM 0.7433
 </tr>
 </table>
 
-## light / purchase-bill.offline-ai
-
-SSIM 0.7443
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/light/purchase-bill.offline-ai.webp" width="480" alt="mock light purchase-bill.offline-ai"></td>
-<td><img src="app-captures/light/purchase-bill.offline-ai.webp" width="480" alt="app light purchase-bill.offline-ai"></td>
-</tr>
-</table>
-
 ## hc / balance-sheet.group
 
-SSIM 0.7443
+SSIM 0.7439
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1619,9 +1607,21 @@ SSIM 0.7443
 </tr>
 </table>
 
+## light / purchase-bill.offline-ai
+
+SSIM 0.7444
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/purchase-bill.offline-ai.webp" width="480" alt="mock light purchase-bill.offline-ai"></td>
+<td><img src="app-captures/light/purchase-bill.offline-ai.webp" width="480" alt="app light purchase-bill.offline-ai"></td>
+</tr>
+</table>
+
 ## light / balance-sheet.group
 
-SSIM 0.7450
+SSIM 0.7452
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1631,21 +1631,9 @@ SSIM 0.7450
 </tr>
 </table>
 
-## light / masters.gstin-error
-
-SSIM 0.7485
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/light/masters.gstin-error.webp" width="480" alt="mock light masters.gstin-error"></td>
-<td><img src="app-captures/light/masters.gstin-error.webp" width="480" alt="app light masters.gstin-error"></td>
-</tr>
-</table>
-
 ## dark / day-book.default
 
-SSIM 0.7485
+SSIM 0.7477
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1655,9 +1643,21 @@ SSIM 0.7485
 </tr>
 </table>
 
+## light / masters.gstin-error
+
+SSIM 0.7479
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/masters.gstin-error.webp" width="480" alt="mock light masters.gstin-error"></td>
+<td><img src="app-captures/light/masters.gstin-error.webp" width="480" alt="app light masters.gstin-error"></td>
+</tr>
+</table>
+
 ## dark / masters.ledger-detail
 
-SSIM 0.7514
+SSIM 0.7535
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1667,21 +1667,9 @@ SSIM 0.7514
 </tr>
 </table>
 
-## hc / setup.done
-
-SSIM 0.7537
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/hc/setup.done.webp" width="480" alt="mock hc setup.done"></td>
-<td><img src="app-captures/hc/setup.done.webp" width="480" alt="app hc setup.done"></td>
-</tr>
-</table>
-
 ## dark / balance-sheet.group
 
-SSIM 0.7544
+SSIM 0.7535
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1693,7 +1681,7 @@ SSIM 0.7544
 
 ## hc / masters.create-ledger
 
-SSIM 0.7545
+SSIM 0.7540
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1705,7 +1693,7 @@ SSIM 0.7545
 
 ## light / payment.default
 
-SSIM 0.7561
+SSIM 0.7549
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1715,21 +1703,9 @@ SSIM 0.7561
 </tr>
 </table>
 
-## light / balance-sheet.voucher
-
-SSIM 0.7577
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/light/balance-sheet.voucher.webp" width="480" alt="mock light balance-sheet.voucher"></td>
-<td><img src="app-captures/light/balance-sheet.voucher.webp" width="480" alt="app light balance-sheet.voucher"></td>
-</tr>
-</table>
-
 ## dark / payment.default
 
-SSIM 0.7582
+SSIM 0.7574
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1739,9 +1715,21 @@ SSIM 0.7582
 </tr>
 </table>
 
+## light / balance-sheet.voucher
+
+SSIM 0.7579
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/balance-sheet.voucher.webp" width="480" alt="mock light balance-sheet.voucher"></td>
+<td><img src="app-captures/light/balance-sheet.voucher.webp" width="480" alt="app light balance-sheet.voucher"></td>
+</tr>
+</table>
+
 ## light / setup.features
 
-SSIM 0.7590
+SSIM 0.7592
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1753,7 +1741,7 @@ SSIM 0.7590
 
 ## dark / balance-sheet.voucher
 
-SSIM 0.7603
+SSIM 0.7594
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1765,7 +1753,7 @@ SSIM 0.7603
 
 ## light / masters.ledger-detail
 
-SSIM 0.7604
+SSIM 0.7606
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1775,9 +1763,21 @@ SSIM 0.7604
 </tr>
 </table>
 
+## hc / setup.done
+
+SSIM 0.7616
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/hc/setup.done.webp" width="480" alt="mock hc setup.done"></td>
+<td><img src="app-captures/hc/setup.done.webp" width="480" alt="app hc setup.done"></td>
+</tr>
+</table>
+
 ## hc / ask.offline-ai
 
-SSIM 0.7645
+SSIM 0.7641
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1789,7 +1789,7 @@ SSIM 0.7645
 
 ## hc / home.empty
 
-SSIM 0.7685
+SSIM 0.7680
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1801,7 +1801,7 @@ SSIM 0.7685
 
 ## dark / setup.features
 
-SSIM 0.7690
+SSIM 0.7682
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1811,21 +1811,9 @@ SSIM 0.7690
 </tr>
 </table>
 
-## hc / setup.company
-
-SSIM 0.7881
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/hc/setup.company.webp" width="480" alt="mock hc setup.company"></td>
-<td><img src="app-captures/hc/setup.company.webp" width="480" alt="app hc setup.company"></td>
-</tr>
-</table>
-
 ## hc / bank.empty
 
-SSIM 0.7902
+SSIM 0.7898
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1835,21 +1823,9 @@ SSIM 0.7902
 </tr>
 </table>
 
-## light / masters.create-ledger
-
-SSIM 0.7920
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/light/masters.create-ledger.webp" width="480" alt="mock light masters.create-ledger"></td>
-<td><img src="app-captures/light/masters.create-ledger.webp" width="480" alt="app light masters.create-ledger"></td>
-</tr>
-</table>
-
 ## dark / masters.create-ledger
 
-SSIM 0.7923
+SSIM 0.7915
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1859,9 +1835,33 @@ SSIM 0.7923
 </tr>
 </table>
 
+## light / masters.create-ledger
+
+SSIM 0.7922
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/masters.create-ledger.webp" width="480" alt="mock light masters.create-ledger"></td>
+<td><img src="app-captures/light/masters.create-ledger.webp" width="480" alt="app light masters.create-ledger"></td>
+</tr>
+</table>
+
+## hc / setup.company
+
+SSIM 0.7930
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/hc/setup.company.webp" width="480" alt="mock hc setup.company"></td>
+<td><img src="app-captures/hc/setup.company.webp" width="480" alt="app hc setup.company"></td>
+</tr>
+</table>
+
 ## hc / setup.gstin-error
 
-SSIM 0.7968
+SSIM 0.7934
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1871,45 +1871,9 @@ SSIM 0.7968
 </tr>
 </table>
 
-## hc / setup.backup
-
-SSIM 0.7972
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/hc/setup.backup.webp" width="480" alt="mock hc setup.backup"></td>
-<td><img src="app-captures/hc/setup.backup.webp" width="480" alt="app hc setup.backup"></td>
-</tr>
-</table>
-
-## hc / setup.ai
-
-SSIM 0.7980
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/hc/setup.ai.webp" width="480" alt="mock hc setup.ai"></td>
-<td><img src="app-captures/hc/setup.ai.webp" width="480" alt="app hc setup.ai"></td>
-</tr>
-</table>
-
-## dark / setup.done
-
-SSIM 0.8015
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/dark/setup.done.webp" width="480" alt="mock dark setup.done"></td>
-<td><img src="app-captures/dark/setup.done.webp" width="480" alt="app dark setup.done"></td>
-</tr>
-</table>
-
 ## dark / setup.company
 
-SSIM 0.8019
+SSIM 0.7952
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1921,7 +1885,7 @@ SSIM 0.8019
 
 ## light / setup.company
 
-SSIM 0.8026
+SSIM 0.7966
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1931,9 +1895,21 @@ SSIM 0.8026
 </tr>
 </table>
 
+## dark / setup.done
+
+SSIM 0.8024
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/dark/setup.done.webp" width="480" alt="mock dark setup.done"></td>
+<td><img src="app-captures/dark/setup.done.webp" width="480" alt="app dark setup.done"></td>
+</tr>
+</table>
+
 ## dark / home.empty
 
-SSIM 0.8048
+SSIM 0.8040
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1943,21 +1919,33 @@ SSIM 0.8048
 </tr>
 </table>
 
-## light / ask.offline-ai
+## hc / setup.backup
 
-SSIM 0.8075
+SSIM 0.8052
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
 <tr>
-<td><img src="mock-v2/captures/states/light/ask.offline-ai.webp" width="480" alt="mock light ask.offline-ai"></td>
-<td><img src="app-captures/light/ask.offline-ai.webp" width="480" alt="app light ask.offline-ai"></td>
+<td><img src="mock-v2/captures/states/hc/setup.backup.webp" width="480" alt="mock hc setup.backup"></td>
+<td><img src="app-captures/hc/setup.backup.webp" width="480" alt="app hc setup.backup"></td>
+</tr>
+</table>
+
+## hc / setup.ai
+
+SSIM 0.8052
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/hc/setup.ai.webp" width="480" alt="mock hc setup.ai"></td>
+<td><img src="app-captures/hc/setup.ai.webp" width="480" alt="app hc setup.ai"></td>
 </tr>
 </table>
 
 ## hc / day-book.empty
 
-SSIM 0.8077
+SSIM 0.8073
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1967,9 +1955,21 @@ SSIM 0.8077
 </tr>
 </table>
 
+## light / ask.offline-ai
+
+SSIM 0.8077
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/ask.offline-ai.webp" width="480" alt="mock light ask.offline-ai"></td>
+<td><img src="app-captures/light/ask.offline-ai.webp" width="480" alt="app light ask.offline-ai"></td>
+</tr>
+</table>
+
 ## hc / gst.recon-empty
 
-SSIM 0.8091
+SSIM 0.8086
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1981,7 +1981,7 @@ SSIM 0.8091
 
 ## light / home.empty
 
-SSIM 0.8113
+SSIM 0.8106
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1993,7 +1993,7 @@ SSIM 0.8113
 
 ## hc / review.empty
 
-SSIM 0.8129
+SSIM 0.8125
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -2003,33 +2003,9 @@ SSIM 0.8129
 </tr>
 </table>
 
-## hc / setup.keyboard
-
-SSIM 0.8131
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/hc/setup.keyboard.webp" width="480" alt="mock hc setup.keyboard"></td>
-<td><img src="app-captures/hc/setup.keyboard.webp" width="480" alt="app hc setup.keyboard"></td>
-</tr>
-</table>
-
-## dark / setup.gstin-error
-
-SSIM 0.8133
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/dark/setup.gstin-error.webp" width="480" alt="mock dark setup.gstin-error"></td>
-<td><img src="app-captures/dark/setup.gstin-error.webp" width="480" alt="app dark setup.gstin-error"></td>
-</tr>
-</table>
-
 ## dark / ask.offline-ai
 
-SSIM 0.8141
+SSIM 0.8133
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -2039,21 +2015,21 @@ SSIM 0.8141
 </tr>
 </table>
 
-## light / setup.gstin-error
+## dark / setup.gstin-error
 
-SSIM 0.8143
+SSIM 0.8144
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
 <tr>
-<td><img src="mock-v2/captures/states/light/setup.gstin-error.webp" width="480" alt="mock light setup.gstin-error"></td>
-<td><img src="app-captures/light/setup.gstin-error.webp" width="480" alt="app light setup.gstin-error"></td>
+<td><img src="mock-v2/captures/states/dark/setup.gstin-error.webp" width="480" alt="mock dark setup.gstin-error"></td>
+<td><img src="app-captures/dark/setup.gstin-error.webp" width="480" alt="app dark setup.gstin-error"></td>
 </tr>
 </table>
 
 ## hc / setup.welcome
 
-SSIM 0.8151
+SSIM 0.8147
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -2063,21 +2039,21 @@ SSIM 0.8151
 </tr>
 </table>
 
-## light / bank.empty
+## light / setup.gstin-error
 
-SSIM 0.8173
+SSIM 0.8151
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
 <tr>
-<td><img src="mock-v2/captures/states/light/bank.empty.webp" width="480" alt="mock light bank.empty"></td>
-<td><img src="app-captures/light/bank.empty.webp" width="480" alt="app light bank.empty"></td>
+<td><img src="mock-v2/captures/states/light/setup.gstin-error.webp" width="480" alt="mock light setup.gstin-error"></td>
+<td><img src="app-captures/light/setup.gstin-error.webp" width="480" alt="app light setup.gstin-error"></td>
 </tr>
 </table>
 
 ## dark / bank.empty
 
-SSIM 0.8183
+SSIM 0.8174
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -2087,9 +2063,33 @@ SSIM 0.8183
 </tr>
 </table>
 
+## light / bank.empty
+
+SSIM 0.8175
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/bank.empty.webp" width="480" alt="mock light bank.empty"></td>
+<td><img src="app-captures/light/bank.empty.webp" width="480" alt="app light bank.empty"></td>
+</tr>
+</table>
+
+## hc / setup.keyboard
+
+SSIM 0.8206
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/hc/setup.keyboard.webp" width="480" alt="mock hc setup.keyboard"></td>
+<td><img src="app-captures/hc/setup.keyboard.webp" width="480" alt="app hc setup.keyboard"></td>
+</tr>
+</table>
+
 ## dark / review.empty
 
-SSIM 0.8255
+SSIM 0.8247
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -2099,21 +2099,9 @@ SSIM 0.8255
 </tr>
 </table>
 
-## light / review.empty
-
-SSIM 0.8291
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/light/review.empty.webp" width="480" alt="mock light review.empty"></td>
-<td><img src="app-captures/light/review.empty.webp" width="480" alt="app light review.empty"></td>
-</tr>
-</table>
-
 ## dark / gst.recon-empty
 
-SSIM 0.8296
+SSIM 0.8288
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -2123,9 +2111,21 @@ SSIM 0.8296
 </tr>
 </table>
 
+## light / review.empty
+
+SSIM 0.8293
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/review.empty.webp" width="480" alt="mock light review.empty"></td>
+<td><img src="app-captures/light/review.empty.webp" width="480" alt="app light review.empty"></td>
+</tr>
+</table>
+
 ## light / gst.recon-empty
 
-SSIM 0.8327
+SSIM 0.8329
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -2137,7 +2137,7 @@ SSIM 0.8327
 
 ## light / setup.backup
 
-SSIM 0.8348
+SSIM 0.8350
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -2149,7 +2149,7 @@ SSIM 0.8348
 
 ## light / day-book.empty
 
-SSIM 0.8365
+SSIM 0.8367
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -2159,21 +2159,9 @@ SSIM 0.8365
 </tr>
 </table>
 
-## dark / setup.backup
-
-SSIM 0.8365
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/dark/setup.backup.webp" width="480" alt="mock dark setup.backup"></td>
-<td><img src="app-captures/dark/setup.backup.webp" width="480" alt="app dark setup.backup"></td>
-</tr>
-</table>
-
 ## dark / day-book.empty
 
-SSIM 0.8383
+SSIM 0.8374
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -2183,9 +2171,21 @@ SSIM 0.8383
 </tr>
 </table>
 
+## dark / setup.backup
+
+SSIM 0.8374
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/dark/setup.backup.webp" width="480" alt="mock dark setup.backup"></td>
+<td><img src="app-captures/dark/setup.backup.webp" width="480" alt="app dark setup.backup"></td>
+</tr>
+</table>
+
 ## light / setup.welcome
 
-SSIM 0.8415
+SSIM 0.8417
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -2195,21 +2195,9 @@ SSIM 0.8415
 </tr>
 </table>
 
-## dark / setup.keyboard
-
-SSIM 0.8437
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/dark/setup.keyboard.webp" width="480" alt="mock dark setup.keyboard"></td>
-<td><img src="app-captures/dark/setup.keyboard.webp" width="480" alt="app dark setup.keyboard"></td>
-</tr>
-</table>
-
 ## light / setup.keyboard
 
-SSIM 0.8438
+SSIM 0.8440
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -2219,21 +2207,21 @@ SSIM 0.8438
 </tr>
 </table>
 
-## light / setup.ai
+## dark / setup.keyboard
 
-SSIM 0.8481
+SSIM 0.8444
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
 <tr>
-<td><img src="mock-v2/captures/states/light/setup.ai.webp" width="480" alt="mock light setup.ai"></td>
-<td><img src="app-captures/light/setup.ai.webp" width="480" alt="app light setup.ai"></td>
+<td><img src="mock-v2/captures/states/dark/setup.keyboard.webp" width="480" alt="mock dark setup.keyboard"></td>
+<td><img src="app-captures/dark/setup.keyboard.webp" width="480" alt="app dark setup.keyboard"></td>
 </tr>
 </table>
 
 ## dark / setup.welcome
 
-SSIM 0.8481
+SSIM 0.8473
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -2243,9 +2231,21 @@ SSIM 0.8481
 </tr>
 </table>
 
+## light / setup.ai
+
+SSIM 0.8483
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/setup.ai.webp" width="480" alt="mock light setup.ai"></td>
+<td><img src="app-captures/light/setup.ai.webp" width="480" alt="app light setup.ai"></td>
+</tr>
+</table>
+
 ## dark / setup.ai
 
-SSIM 0.8506
+SSIM 0.8513
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -2257,7 +2257,7 @@ SSIM 0.8506
 
 ## light / setup.done
 
-SSIM 0.8924
+SSIM 0.8926
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
