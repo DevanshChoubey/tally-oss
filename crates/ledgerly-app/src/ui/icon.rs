@@ -85,6 +85,14 @@ pub enum Icon {
     Save,
     /// `x` (a field's error, a close).
     X,
+    /// `alert` (a warning triangle, a possible double payment).
+    Alert,
+    /// `info` (an information note).
+    Info,
+    /// `clock` (something overdue).
+    Clock,
+    /// `camera` (a bill photo).
+    Camera,
 }
 
 impl Icon {
@@ -147,6 +155,10 @@ impl Icon {
             Icon::Upload => "M12 16V4 M7 9l5-5 5 5 M4 20h16",
             Icon::Save => "M5 4h11l3 3v13H5z M8 4v5h7V4 M8 20v-6h8v6",
             Icon::X => "M6 6l12 12 M18 6L6 18",
+            Icon::Alert => "M12 4l9 16H3z M12 10v4 M12 17h.01",
+            Icon::Info => "M12 3a9 9 0 1 0 0 18a9 9 0 0 0 0-18z M12 11v5 M12 8h.01",
+            Icon::Clock => "M12 3a9 9 0 1 0 0 18a9 9 0 0 0 0-18z M12 7v5l3 2",
+            Icon::Camera => "M4 8h3l2-3h6l2 3h3v11H4z M12 10a3.5 3.5 0 1 0 0 7a3.5 3.5 0 0 0 0-7z",
         }
     }
 }

@@ -56,7 +56,8 @@ pub fn long_date(d: Date) -> String {
 }
 
 /// The three-letter English abbreviation of `m`.
-fn month_abbrev(m: Month) -> &'static str {
+#[must_use]
+pub fn month_abbrev(m: Month) -> &'static str {
     match m {
         Month::January => "Jan",
         Month::February => "Feb",
@@ -70,5 +71,24 @@ fn month_abbrev(m: Month) -> &'static str {
         Month::October => "Oct",
         Month::November => "Nov",
         Month::December => "Dec",
+    }
+}
+
+/// The English name of `m` in full: `November`.
+#[must_use]
+pub fn month_name(m: Month) -> &'static str {
+    match m {
+        Month::January => "January",
+        Month::February => "February",
+        Month::March => "March",
+        Month::April => "April",
+        Month::May => "May",
+        Month::June => "June",
+        Month::July => "July",
+        Month::August => "August",
+        Month::September => "September",
+        Month::October => "October",
+        Month::November => "November",
+        Month::December => "December",
     }
 }

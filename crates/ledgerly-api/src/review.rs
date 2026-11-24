@@ -105,7 +105,7 @@ fn not_connected(source: ReviewSource) -> &'static str {
             "the engine does not suggest new ledgers for unexplained bank lines yet"
         }
         ReviewSource::DuplicateCheck => {
-            "the duplicate rule D-02 is not built, so no possible duplicate is listed"
+            "rule D-02 flags possible duplicate payments as nudges on Home; the queue does not list them as rows yet"
         }
         ReviewSource::Gstr2bExplanation => {
             "there is no GSTR-2B reader or IMS reconciliation yet (engine item E-3)"

@@ -8,40 +8,54 @@ Kinds: **bug** (the app is wrong or missing something it should do), **deferred*
 feature that is not built), **data** (the capture company lacks what the mock's sample shows),
 **by design** (we differ on purpose; kept here so nobody "fixes" it back).
 
-## Home (light states round of 2026-11-24)
+## Home (round S9, 2026-11-25)
 
-Captured: `home.empty` (Fictional Traders' masters with no voucher, a second capture company)
-and `home.ai-off`. Not captured: `home.loading` and `home.nudge-open`.
+Captured: `home.default`, `home.empty`, `home.ai-off`, `home.nudge-open` (light, dark, hc). Not
+captured: `home.loading`. The four tiles, the November bars, the review rows, the nudges and the
+new-company card (book icon, three buttons with icons, info note) follow the mock; every figure
+comes from `Api::home_figures` and `Api::home_nudges`.
 
-- **gap: the new-company card has no icon and no "Import from another app" button.** The mock's
-  card (index.html, `SCREENS.home`, `empty`) has a book icon over the heading, icons on its
-  buttons and a middle button that opens setup's import. The import wizard is not routed from
-  Home, so the button is left out; the icons are not drawn. The note under the card has no info
-  icon and is not full width. The line under the title now names the financial year with its
-  days, as the mock's does (`home::new_company_line`, tested in `tests/s6_home_empty.rs`).
-- **gap: the AI-off note.** The mock's note (`home.ai-off`) starts with a bold clause, has an
-  icon and an "AI and privacy" button; ours is the plain note. The KPI tiles' layout differs, and
-  the mock shows the chart and the nudges, which are not built (see "Review queue").
+- **gap: GST cash payable is unsupported.** The mock shows 39,498.00 "after accepted ITC". The
+  engine has no GSTR-2B reader, so accepted credit is unknown; the tile keeps its slot and size
+  and says "Not supported yet" and "Needs GSTR-2B: not readable yet".
+- **gap: no IMS nudge.** "3 2B records have no IMS action" needs the 2B reader above.
+- **gap: GSTR-1 due date is the monthly one.** The 11th of the next month (CBIC Notification
+  83/2020-Central Tax). Quarterly (QRMP) filers' 13th and holiday shifts are not modelled; no
+  filing record is kept, so the nudge shows until the month passes. The count is of vouchers
+  needing correction, not "items"; "Open GSTR-1" opens the GST returns screen.
+- **gap: the compare dialog differs from the mock's.** It has a "Bank date" row (the date a
+  user-confirmed bank match cleared each payment, or "Not matched to a statement") and the
+  matching status line, in place of the mock's bank-line text ("L03, 12 Nov 2026"), which needs
+  statement line numbers per payment. It has no "Adjust rule" or "Not a duplicate" buttons: the
+  engine cannot record that a pair is not a duplicate. Esc closes it; Investigate (Ctrl+A) opens
+  the day book. The nudge names the party both vouchers share, else the debit ledger (Electricity
+  on Godavari, whose payments have no party). D-02 is our own rule (documented on
+  `Api::home_nudges`); the seed's PY/0304 narration was set to "City Power, October bill" so that
+  it can fire on Godavari.
+- **gap: review rows.** No age ("2 min ago"): the engine's `ReviewItem` carries no created time.
+  Every row shows the bank icon because every listed proposal is a bank match (the camera and
+  other kinds come from sources that are not listed yet, and are named in the footer note). The
+  review queue does not list duplicates. J/K/Enter on Home open the generic queue, not the row.
+- **gap: the entry bar.** It says "not connected in this build" where the mock says "runs on this
+  computer"; the greeting has no name and the "Start" card is dropped, by design.
+- **gap: new `Icon` variants** (Alert, Info, Clock, Camera) are drawn from the mock's paths.
 - **deferred: `home.loading` is not captured.** The skeleton shows only while a refresh waits on
-  the worker, which takes a few frames on the capture company; the harness cannot hold it there.
-  Capturing it needs a way to hold the worker (a job that blocks until released).
-- **deferred: `home.nudge-open` is not reachable.** It expands a possible-duplicate nudge; the
-  nudge rules (D-02) are not built, so Home has no nudge to open.
+  the worker; the harness cannot hold it there.
 
 ## Palette (round of 2026-11-23, commit d4f0bcb)
 
-- **deferred: the mock's other commands.** After the four voucher commands the mock's `>` list
-  has Read a bill photo, Import bank statement, Import 2B / IMS JSON, Export GSTR-1 JSON, Switch
-  theme, Collapse side bar and Back up now (index.html:1110). Ours follows with the keymap's
-  other commands; the mock's are not built as commands.
+- **gap: three of the mock's other commands are not built.** Read a bill photo, Import bank
+  statement, Switch theme and Collapse side bar now follow the four voucher commands
+  (`RunCommand`; the first two open the purchase-bill and bank screens, the others run in the
+  shell). Left out: Import 2B / IMS JSON (no 2B reader), Export GSTR-1 JSON (it needs the GST
+  screen's file flow, so it is not a one-step command) and Back up now (no backup folder setting
+  to run it against). Their shortcuts (Alt+O, Ctrl+Shift+L, Ctrl+E) are not bound, so no key is
+  shown, except Ctrl+\ for the side bar.
 - **gap: a recent GSTR-1 row has no live detail.** The mock's Recent rows say "As at 21 Nov
   2026", "3 sections ready, 1 needs correction" and "Ledger · Sundry debtors · 1,93,500.00 Dr"
   (index.html:1115). A recent balance sheet and a recent ledger now show the date it opens at and
   the engine's balance, fetched on every opening (`palette/recent.rs`). The GST return is a
   screen, not a palette target, so it is never a recent row; its section count is not built.
-- **deferred: Alt+C keycap on 'Create ledger "q"'** (index.html:1129). Not drawn because the
-  palette takes the keyboard, so Alt+C would not work there. Needs the palette to pass row
-  shortcuts through.
 - **deferred: Ask rows.** The no-match "Ask: q" row and the "Or" Ask/Draft rows (index.html:1129,
   1127) are left out while AI is off, as the mock's own `tierOff` does. Return with the assistant.
 - **data: `#0412` (resolved by the sample company, S8).** Godavari has SI/0412, so a search for it

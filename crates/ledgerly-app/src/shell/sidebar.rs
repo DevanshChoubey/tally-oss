@@ -18,7 +18,7 @@ use ledgerly_model::{BaseVoucherKind, Books};
 use super::chrome::ChromeCmd;
 use super::navigate::{self, NavError, SidebarEntry, SidebarGroup};
 use crate::keymap::Action;
-use crate::palette::PaletteTarget;
+use crate::palette::{PaletteTarget, RunCommand};
 use crate::screens::voucher_entry::VoucherEntryScreen;
 use crate::theme::{RADIUS_S, TEXT_BODY, TEXT_CAP, Tokens};
 use crate::ui::icon::{self, ICON_SIZE, Icon};
@@ -98,7 +98,8 @@ pub fn command_route(action: Action) -> CommandRoute {
 pub fn target_is_shown(target: &PaletteTarget) -> bool {
     match target {
         PaletteTarget::Command(action) => command_route(*action) != CommandRoute::Hidden,
-        PaletteTarget::Report(_)
+        PaletteTarget::Run(_)
+        | PaletteTarget::Report(_)
         | PaletteTarget::Master(_)
         | PaletteTarget::Voucher(_)
         | PaletteTarget::Setting(_)
@@ -131,6 +132,7 @@ pub fn visible_groups() -> Vec<SidebarGroup> {
 pub fn screen_for(target: &PaletteTarget, ctx: &AppCtx) -> Result<Box<dyn Screen>, NavError> {
     match target {
         PaletteTarget::Command(action) => command_screen(*action, ctx),
+        PaletteTarget::Run(command) => run_screen(*command, ctx),
         PaletteTarget::Report(_)
         | PaletteTarget::Master(_)
         | PaletteTarget::Voucher(_)
@@ -138,6 +140,19 @@ pub fn screen_for(target: &PaletteTarget, ctx: &AppCtx) -> Result<Box<dyn Screen
         | PaletteTarget::AiIntent(_)
         | PaletteTarget::Fill(_) => navigate::open_target(target, ctx),
     }
+}
+
+/// The screen a [`RunCommand`] opens; [`NavError::NotNavigation`] for the shell's own commands
+/// (the theme and the side bar), which the shell runs itself.
+fn run_screen(command: RunCommand, ctx: &AppCtx) -> Result<Box<dyn Screen>, NavError> {
+    let key = match command {
+        RunCommand::ReadBillPhoto => navigate::PURCHASE_BILL_KEY,
+        RunCommand::ImportBankStatement => navigate::BANK_RECON_KEY,
+        RunCommand::SwitchTheme | RunCommand::CollapseSideBar => {
+            return Err(NavError::NotNavigation);
+        }
+    };
+    navigate::open_target(&PaletteTarget::Report(key.to_owned()), ctx)
 }
 
 /// The screen a command opens; [`NavError::NotNavigation`] for a command with no screen.

@@ -8,21 +8,22 @@
 use egui::FontId;
 use egui::text::{LayoutJob, TextFormat};
 use egui::{
-    Align, Color32, Frame, Layout, Margin, Rect, RichText, Sense, Stroke, Ui, UiBuilder, vec2,
+    Align, Frame, Layout, Margin, Rect, RichText, Sense, Stroke, Ui, UiBuilder, pos2, vec2,
 };
 use ledgerly_core::Date;
 
+use super::chart::Chart;
+use super::nudge::{Nudge, NudgeAction};
 use super::{
-    AiPanel, AttentionItem, AttentionKind, HomeBody, HomeTarget, KpiView, ReviewCard, figure_parts,
-    main_columns, tile_columns,
+    AiPanel, AttentionItem, HomeBody, HomeTarget, KpiView, ReviewCard, chart_draw, figure_parts,
+    main_columns, nudge_draw, review_draw, tile_columns,
 };
 use crate::theme::{
     RADIUS_M, SPACE_2, SPACE_3, SPACE_4, SPACE_6, TEXT_BODY, TEXT_FIG, TEXT_H2, TEXT_META,
     border_width,
 };
-use crate::ui::button::{ButtonKind, button, button_icon};
+use crate::ui::button::{ButtonKind, button_icon};
 use crate::ui::card::card;
-use crate::ui::conf::conf;
 use crate::ui::icon::{self, Icon};
 use crate::ui::note::{NoteKind, note};
 use crate::ui::page_head::page_head;
@@ -33,14 +34,12 @@ use crate::ui::{bold_font, format, kind, para, tokens};
 const LOADING_LINE: &str =
     "Loading balances and projections. Figures appear only when the engine returns them.";
 /// The AI-off note (the mock's `home.ai-off`, `index.html` line 1054).
-const AI_OFF_TEXT: &str = "AI is off for this company. Plain-words entry, bill reading and suggestions are hidden. Rule checks, matching rules and every report work as usual.";
+const AI_OFF_REST: &str = "Plain-words entry, bill reading and suggestions are hidden. Rule checks, matching rules and every report work as usual.";
 /// Placeholder for the plain-words line, which needs the assistant and runs nothing.
-const ENTRY_PLACEHOLDER: &str = "Plain-words entry is not built yet. This line runs nothing.";
-/// The chart's state until the engine has a monthly sales series.
-const CHART_UNSUPPORTED: &str =
-    "Not supported yet. The engine gives no monthly sales figures, so no bars are drawn.";
-/// Placeholder for the nudges until their rules exist.
-const NUDGES_PLACEHOLDER: &str = "Nudges are not built yet. Due dates and possible duplicate entries will be listed here, each with the rule that raised it.";
+const ENTRY_PLACEHOLDER: &str = "Type an entry in plain words";
+/// What the entry line says at its right, in place of the mock's "runs on this computer": no
+/// assistant is connected, so nothing runs it.
+const ENTRY_META: &str = "not connected in this build";
 /// The page title of a company with no vouchers (`home.empty`).
 const NEW_COMPANY_TITLE: &str = "Welcome to your new company";
 /// Shown when no company is open.
@@ -118,19 +117,42 @@ pub(super) fn notice(ui: &mut Ui, text: Option<&str>) {
     }
 }
 
+/// What the lower half of the figures body shows.
+pub(super) struct Lower<'a> {
+    /// The AI area.
+    pub(super) ai: AiPanel,
+    /// The sales chart, once the first refresh has arrived.
+    pub(super) chart: Option<&'a Chart>,
+    /// The engine's nudges.
+    pub(super) nudges: &'a [Nudge],
+    /// The host's own attention items.
+    pub(super) attention: &'a [AttentionItem],
+    /// The review list.
+    pub(super) review: ReviewCard<'a>,
+    /// The review row that is highlighted.
+    pub(super) selected: usize,
+}
+
+/// What the user chose in the figures body this frame.
+#[derive(Debug, Default)]
+pub(super) struct Chosen {
+    /// A screen to open.
+    pub(super) target: Option<HomeTarget>,
+    /// A nudge button.
+    pub(super) nudge: Option<NudgeAction>,
+}
+
 /// Draws the figures body: the AI line, the KPI tiles, then the two panels. Returns where each
 /// tile was drawn, in order.
 pub(super) fn figures(
     ui: &mut Ui,
     tiles: &[(KpiView, HomeTarget)],
-    ai: AiPanel,
-    attention: &[AttentionItem],
-    review: ReviewCard<'_>,
-    chosen: &mut Option<HomeTarget>,
+    lower: &Lower<'_>,
+    chosen: &mut Chosen,
 ) -> Vec<Rect> {
-    entry_bar(ui, ai);
+    entry_bar(ui, lower.ai, &mut chosen.target);
     // `.qe{margin-bottom:14px}`; the AI-off note has 12.
-    ui.add_space(match ai {
+    ui.add_space(match lower.ai {
         AiPanel::Off => SPACE_3,
         AiPanel::Placeholder => ENTRY_GAP,
     });
@@ -145,12 +167,12 @@ pub(super) fn figures(
             let response = tile(col, index, view);
             rects.push(response.rect);
             if response.clicked() {
-                *chosen = Some(target.clone());
+                chosen.target = Some(target.clone());
             }
         },
     );
     ui.add_space(SPACE_3);
-    panels(ui, ai, attention, review, chosen);
+    panels(ui, lower, chosen);
     rects
 }
 
@@ -159,17 +181,61 @@ pub(super) fn no_figures(ui: &mut Ui) {
     note(ui, NoteKind::Info, NO_FIGURES_TEXT);
 }
 
+/// A note with an icon, an optional bold lead and, when `link` is given, a link at its end
+/// (the mock's `.note` with `ic(..)`, `<b>` and a `.btn.ghost`). Returns `true` when the link was
+/// clicked.
+fn icon_note(
+    ui: &mut Ui,
+    kind_of: NoteKind,
+    glyph: Icon,
+    lead: Option<&str>,
+    text: &str,
+    link: Option<&str>,
+) -> bool {
+    let t = tokens(ui);
+    let k = kind(ui);
+    let (bg, fg, edge) = crate::ui::note::colors(kind_of, &t);
+    let outline = if k == crate::theme::ThemeKind::HighContrast {
+        Stroke::new(border_width(k), fg)
+    } else {
+        Stroke::new(border_width(k), edge)
+    };
+    let mut clicked = false;
+    Frame::new()
+        .fill(bg)
+        .stroke(outline)
+        .corner_radius(crate::theme::RADIUS_S)
+        .inner_margin(Margin::symmetric(12, 10))
+        .show(ui, |ui| {
+            ui.set_min_width(ui.available_width());
+            ui.horizontal_wrapped(|ui| {
+                ui.spacing_mut().item_spacing.x = SPACE_2;
+                icon::icon(ui, glyph, fg);
+                if let Some(lead) = lead {
+                    ui.label(RichText::new(lead).font(bold_font(ui, TEXT_BODY)).color(fg));
+                }
+                ui.label(RichText::new(text).size(TEXT_BODY).color(fg));
+                if let Some(link) = link {
+                    clicked = ghost(ui, link, false).clicked();
+                }
+            });
+        });
+    clicked
+}
+
 /// Draws the first-steps body for a company with no vouchers (the mock's `home.empty`): the
-/// welcome card with the two actions, then the note that totals stay hidden.
+/// welcome card with its book icon and three actions, then the note that totals stay hidden.
 pub(super) fn welcome(ui: &mut Ui, begins: Date, chosen: &mut Option<HomeTarget>) {
     let t = tokens(ui);
     let sentence = format!(
-        "Your books start on {}. Enter opening balances, or start with today's first voucher.",
+        "Your books start on {}. Enter opening balances, bring data from another app, or start with today's first voucher.",
         format::date(begins)
     );
     card(ui, |ui| {
         ui.vertical_centered(|ui| {
             ui.add_space(SPACE_6);
+            icon::icon_sized(ui, Icon::Book, t.text_3, 32.0);
+            ui.add_space(SPACE_2);
             title(ui, "No vouchers yet");
             ui.add_space(SPACE_2);
             ui.label(
@@ -179,10 +245,41 @@ pub(super) fn welcome(ui: &mut Ui, begins: Date, chosen: &mut Option<HomeTarget>
             );
             ui.add_space(SPACE_4);
             ui.horizontal(|ui| {
-                if button(ui, "Opening balances", None, ButtonKind::Primary).clicked() {
+                // The three buttons are centred as a row.
+                let widths = [160.0_f32, 200.0, 190.0];
+                let total: f32 = widths.iter().sum::<f32>() + 2.0 * SPACE_2;
+                ui.add_space(((ui.available_width() - total) / 2.0).max(0.0));
+                if button_icon(
+                    ui,
+                    Some(Icon::Users),
+                    "Opening balances",
+                    None,
+                    ButtonKind::Primary,
+                )
+                .clicked()
+                {
                     *chosen = Some(HomeTarget::Masters);
                 }
-                if button(ui, "First sales invoice", Some("F8"), ButtonKind::Secondary).clicked() {
+                if button_icon(
+                    ui,
+                    Some(Icon::Upload),
+                    "Import from another app",
+                    None,
+                    ButtonKind::Secondary,
+                )
+                .clicked()
+                {
+                    *chosen = Some(HomeTarget::ImportFromAnotherApp);
+                }
+                if button_icon(
+                    ui,
+                    Some(Icon::Sale),
+                    "First sales invoice",
+                    Some("F8"),
+                    ButtonKind::Secondary,
+                )
+                .clicked()
+                {
                     *chosen = Some(HomeTarget::SalesInvoice);
                 }
             });
@@ -190,7 +287,7 @@ pub(super) fn welcome(ui: &mut Ui, begins: Date, chosen: &mut Option<HomeTarget>
         });
     });
     ui.add_space(SPACE_3);
-    note(ui, NoteKind::Info, WELCOME_NOTE);
+    icon_note(ui, NoteKind::Info, Icon::Info, None, WELCOME_NOTE, None);
 }
 
 /// Draws the loading body (the mock's `home.loading`): four skeleton KPI cards and two skeleton
@@ -222,11 +319,20 @@ pub(super) fn skeleton(ui: &mut Ui) {
 
 /// The one line above the tiles: the AI-off note, or the plain-words entry line. The entry is
 /// drawn in the mock's `.qe` box (strong border, radius 10, the spark icon) but says in words
-/// that it is not built; it takes no typing and runs nothing.
-fn entry_bar(ui: &mut Ui, ai: AiPanel) {
+/// that nothing runs it in this build; it takes no typing.
+fn entry_bar(ui: &mut Ui, ai: AiPanel, chosen: &mut Option<HomeTarget>) {
     match ai {
         AiPanel::Off => {
-            note(ui, NoteKind::Info, AI_OFF_TEXT);
+            if icon_note(
+                ui,
+                NoteKind::Info,
+                Icon::Off,
+                Some("AI is off for this company."),
+                AI_OFF_REST,
+                Some("AI and privacy"),
+            ) {
+                *chosen = Some(HomeTarget::AiSettings);
+            }
         }
         AiPanel::Placeholder => {
             let t = tokens(ui);
@@ -252,6 +358,10 @@ fn entry_bar(ui: &mut Ui, ai: AiPanel) {
                                 .size(TEXT_BODY)
                                 .color(t.text_3),
                         );
+                        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                            ui.label(RichText::new(ENTRY_META).size(TEXT_META).color(t.text_3));
+                            icon::icon_sized(ui, Icon::Off, t.text_3, 14.0);
+                        });
                     });
                 });
         }
@@ -265,150 +375,87 @@ const ENTRY_GAP: f32 = 14.0;
 
 /// Draws the two lower panels: the review list and the chart on the left, the nudges on the
 /// right. Side by side when the width allows, one after the other otherwise.
-fn panels(
-    ui: &mut Ui,
-    ai: AiPanel,
-    attention: &[AttentionItem],
-    review: ReviewCard<'_>,
-    chosen: &mut Option<HomeTarget>,
-) {
-    // The review list and the nudges may each ask for a screen; both write to `chosen` after the
-    // split, so the two closures never borrow it at the same time.
+fn panels(ui: &mut Ui, lower: &Lower<'_>, chosen: &mut Chosen) {
+    // The two columns each write to their own slot after the split, so the closures never
+    // borrow `chosen` at the same time.
     let mut from_review = None;
+    let mut from_nudges = Chosen::default();
     split(
         ui,
-        |left| left_column(left, ai, review, &mut from_review),
-        |right| right_column(right, attention, chosen),
-    );
-    if from_review.is_some() {
-        *chosen = from_review;
-    }
-}
-
-/// The rows the Home card lists before "All N" (the mock shows four).
-const REVIEW_ROWS: usize = 4;
-
-/// The left panel: the review list (not with AI off), and the sales chart state.
-fn left_column(ui: &mut Ui, ai: AiPanel, review: ReviewCard<'_>, chosen: &mut Option<HomeTarget>) {
-    if ai == AiPanel::Placeholder {
-        card(ui, |ui| {
-            title(ui, "Waiting for your review");
-            review_list(ui, review, chosen);
-        });
-        ui.add_space(SPACE_3);
-    }
-    card(ui, |ui| {
-        title(ui, "Sales by month, before GST");
-        note(ui, NoteKind::Info, CHART_UNSUPPORTED);
-    });
-}
-
-/// The Home card's list: the same rows as the Review queue, the first few, with a button to the
-/// queue. The button says "All N" only when the queue's count is known (every source listed).
-fn review_list(ui: &mut Ui, review: ReviewCard<'_>, chosen: &mut Option<HomeTarget>) {
-    let Some(panel) = review.panel else {
-        match review.error {
-            Some(error) => note(ui, NoteKind::Bad, error),
-            None => note(ui, NoteKind::Info, "Loading the proposals from the engine."),
-        };
-        return;
-    };
-    let label = match panel.count {
-        Some(count) => format!("All {count}"),
-        None => "Review queue".to_owned(),
-    };
-    if button(ui, &label, None, ButtonKind::Secondary).clicked() {
-        *chosen = Some(HomeTarget::ReviewQueue);
-    }
-    if panel.rows.is_empty() {
-        note(
-            ui,
-            NoteKind::Info,
-            "No proposal is waiting from the connected sources.",
-        );
-    }
-    for row in panel.rows.iter().take(REVIEW_ROWS) {
-        review_row(ui, row);
-    }
-    let t = tokens(ui);
-    if !panel.not_connected.is_empty() {
-        note(
-            ui,
-            NoteKind::Info,
-            &format!(
-                "{} sources are not connected yet, so their proposals are not listed. The Review queue says which.",
-                panel.not_connected.len()
-            ),
-        );
-    }
-    ui.label(
-        RichText::new("Every row is a proposal. Nothing posts until you accept it.")
-            .size(TEXT_META)
-            .color(t.text_3),
-    );
-}
-
-/// One proposal line on the Home card: its kind, what it is about, its confidence and amount.
-fn review_row(ui: &mut Ui, row: &crate::screens::review::QueueRow) {
-    let t = tokens(ui);
-    ui.separator();
-    ui.horizontal(|ui| {
-        ui.label(RichText::new(row.kind).strong());
-        ui.label(row.what.as_str());
-        conf(ui, row.confidence);
-        if let Some(amount) = row.amount {
-            ui.label(format::amount(amount));
-        }
-    });
-    ui.label(
-        RichText::new(row.source.as_str())
-            .size(TEXT_META)
-            .color(t.text_3),
-    );
-}
-
-/// The right panel: the nudges. Each host item is a line with its word; with none, the card says
-/// the rules are not built.
-fn right_column(ui: &mut Ui, attention: &[AttentionItem], chosen: &mut Option<HomeTarget>) {
-    card(ui, |ui| {
-        title(ui, "Nudges");
-        if attention.is_empty() {
-            note(ui, NoteKind::Info, NUDGES_PLACEHOLDER);
-        }
-        for item in attention {
-            attention_row(ui, item, chosen);
-        }
-    });
-}
-
-/// One nudge line: its word, the headline (a button when it has a target) and the detail.
-fn attention_row(ui: &mut Ui, item: &AttentionItem, chosen: &mut Option<HomeTarget>) {
-    let t = tokens(ui);
-    let color = attention_color(ui, item.kind);
-    ui.separator();
-    ui.horizontal(|ui| {
-        ui.label(RichText::new(item.kind.word()).color(color).strong());
-        match &item.target {
-            Some(target) => {
-                if ui
-                    .add(egui::Button::new(item.headline.as_str()).frame(false))
-                    .clicked()
-                {
-                    *chosen = Some(target.clone());
-                }
+        |left| {
+            if lower.ai == AiPanel::Placeholder {
+                review_draw::show(left, lower.review, lower.selected, &mut from_review);
+                left.add_space(SPACE_3);
             }
-            None => {
-                ui.label(RichText::new(item.headline.as_str()).strong());
-            }
+            chart_draw::show(left, lower.chart);
+        },
+        |right| {
+            card(right, |ui| {
+                title(ui, "Nudges");
+                nudge_draw::list(
+                    ui,
+                    lower.nudges,
+                    lower.attention,
+                    &mut from_nudges.target,
+                    &mut from_nudges.nudge,
+                );
+            });
+        },
+    );
+    chosen.target = from_review.or(from_nudges.target).or(chosen.target.take());
+    chosen.nudge = from_nudges.nudge;
+}
+
+/// A card heading with a caption at its right (`.spread` with `h2` and `.meta`).
+pub(super) fn title_row(ui: &mut Ui, text: &str, caption: Option<&str>) {
+    title_row_with(ui, text, |ui| {
+        if let Some(caption) = caption {
+            let t = tokens(ui);
+            ui.label(RichText::new(caption).size(TEXT_META).color(t.text_3));
         }
     });
-    if !item.detail.is_empty() {
-        ui.label(
-            RichText::new(item.detail.as_str())
-                .size(TEXT_META)
-                .color(t.text_3),
-        );
+}
+
+/// A card heading with whatever `right` draws at its right end.
+pub(super) fn title_row_with(ui: &mut Ui, text: &str, right: impl FnOnce(&mut Ui)) {
+    ui.set_min_width(ui.available_width());
+    let t = tokens(ui);
+    let font = bold_font(ui, TEXT_H2);
+    ui.horizontal(|ui| {
+        ui.label(RichText::new(text).font(font).color(t.text));
+        ui.with_layout(Layout::right_to_left(Align::Center), right);
+    });
+    // `.card h2{margin-bottom:10px}`.
+    ui.add_space(10.0);
+}
+
+/// A link without a frame: the label and, when `chevron` is set, a small arrow after it
+/// (the mock's `.btn.ghost`). Returns the click response.
+pub(super) fn ghost(ui: &mut Ui, label: &str, chevron: bool) -> egui::Response {
+    let t = tokens(ui);
+    let font = bold_font(ui, TEXT_BODY);
+    let galley = ui.painter().layout_no_wrap(label.to_owned(), font, t.text);
+    let extra = if chevron { 22.0 } else { 0.0 };
+    let (rect, response) =
+        ui.allocate_exact_size(vec2(galley.size().x + 16.0 + extra, 32.0), Sense::click());
+    if response.hovered() {
+        ui.painter().rect_filled(rect, 6.0, t.hover);
     }
+    let ink = t.text;
+    ui.painter().galley(
+        pos2(rect.left() + 8.0, rect.center().y - galley.size().y / 2.0),
+        galley,
+        ink,
+    );
+    if chevron {
+        let icon_rect = Rect::from_min_size(
+            pos2(rect.right() - 8.0 - 16.0, rect.center().y - 8.0),
+            vec2(16.0, 16.0),
+        );
+        icon::paint(ui.painter(), icon_rect, Icon::Chev, ink);
+    }
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, label));
+    response
 }
 
 /// The skeleton of one lower panel, with `rows` bars.
@@ -547,14 +594,4 @@ pub(crate) fn title(ui: &mut Ui, text: &str) {
     ui.label(RichText::new(text).font(font).color(t.text));
     // `.card h2{margin-bottom:10px}`.
     ui.add_space(10.0);
-}
-
-/// Colour of the word before a nudge. Taken from the active visuals, so the three themes stay
-/// consistent; the word carries the meaning.
-fn attention_color(ui: &Ui, kind: AttentionKind) -> Color32 {
-    match kind {
-        AttentionKind::Pending => ui.visuals().warn_fg_color,
-        AttentionKind::Due => ui.visuals().error_fg_color,
-        AttentionKind::Done => ui.visuals().text_color(),
-    }
 }

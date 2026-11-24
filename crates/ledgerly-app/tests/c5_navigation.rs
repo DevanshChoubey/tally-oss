@@ -853,6 +853,13 @@ fn every_sidebar_target_resolves_to_a_screen_or_a_keymap_command() {
             PaletteTarget::Fill(text) => {
                 panic!("sidebar row \"{}\" only fills \"{text}\"", entry.label)
             }
+            // The palette's own commands (theme, side bar, ...) are not sidebar rows.
+            PaletteTarget::Run(command) => {
+                panic!(
+                    "sidebar row \"{}\" is the palette command {command:?}",
+                    entry.label
+                )
+            }
         }
     }
 }

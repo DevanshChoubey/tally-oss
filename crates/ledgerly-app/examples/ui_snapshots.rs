@@ -944,6 +944,8 @@ fn light_shots() -> Vec<Shot> {
     let palette = (Key::K, Modifiers::COMMAND);
     vec![
         shot("home.default", &[]),
+        // The possible-double-payment nudge's Compare button (rule D-02) opens the comparison.
+        shot("home.nudge-open", &[]).click(1176.0, 570.0),
         // Recent needs a choice first: open the balance sheet from the palette, go back, and
         // reopen the palette on the empty query (index.html:1115 lists recents there).
         shot("palette.default", &[palette])
@@ -1464,7 +1466,8 @@ fn main() -> eframe::Result<()> {
         ledgerly_app::screens::setup::set_home_override(home);
     }
     // Every screen reads "today" from the sample's own date, as the mock does (CO.today).
-    ledgerly_app::shell::navigate::set_clock_override(ledgerly_sample::today().unwrap(), 10);
+    // 15:00, so Home greets in the afternoon as the mock does (the mock's clock is a Saturday afternoon).
+    ledgerly_app::shell::navigate::set_clock_override(ledgerly_sample::today().unwrap(), 15);
     let _ = std::fs::remove_file(SETUP_FILE);
     let (out, only, audit) = parse_args();
     let entries: Vec<Shot> = if audit { audit_shots() } else { shots() }

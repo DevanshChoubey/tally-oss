@@ -35,23 +35,29 @@
 //! or F5. The key map of card U2 is not wired in yet (Wave 2), so the keys are read directly, as the
 //! shell does for Ctrl+T.
 
+pub mod chart;
+mod chart_draw;
 pub(crate) mod draw;
+pub mod kpi;
+mod load;
+pub mod nudge;
+mod nudge_draw;
+mod review_draw;
+
+pub use kpi::home_kpis;
 
 use egui::{Event, InputState, Key, Modifiers, Rect, Ui};
-use ledgerly_api::{
-    Api, Cell, ColumnSpec, Detail, Report, ReportFilter, ReportKind, ReportParams, ReviewQueue,
-    RowKind,
-};
+use ledgerly_api::{DuplicatePayment, ReviewQueue};
 use ledgerly_core::format::format_inr;
-use ledgerly_core::{Date, DrCr, Outcome, Paise, Period, SignedAmount, Unsupported};
-use ledgerly_model::seed_groups::reserved_groups;
-use ledgerly_model::{ReservedGroup, Scenario};
+use ledgerly_core::{Date, Outcome, Paise};
 
+use self::chart::Chart;
+use self::load::{HomeLoad, home_load};
+use self::nudge::{Nudge, NudgeAction};
 use crate::screen::{AiTier, KeyHint};
 use crate::screens::review::{self, QueuePanel};
 use crate::screens::wire::{Done, Latest};
 use crate::theme::SPACE_3;
-use crate::ui::format;
 use crate::worker::ApiWorker;
 use crate::{AppCtx, Screen, ScreenAction};
 
@@ -62,12 +68,10 @@ pub const TILE_MIN_WIDTH: f32 = 200.0;
 /// Width from which the lower row shows its two panels side by side, in points (the mock's
 /// two-column main grid, which needs about 720 points).
 pub const WIDE_MIN_WIDTH: f32 = 720.0;
+/// The rows the Home card lists before "All N" (the mock shows four).
+pub const REVIEW_ROWS: usize = 4;
 /// Text shown in place of a figure the engine cannot compute yet.
 const UNSUPPORTED_WORDS: &str = "Not supported yet";
-/// Reason the cash-and-bank tile is not a figure: the engine has the two groups, not their total.
-/// Reason the GST tile is not a figure: the engine has no payable after set-off.
-const GST_REASON: &str = "the engine gives the GSTR-3B working (tax and credit separately) but no payable after set-off, and this screen does not subtract";
-
 /// Where a click or a key on the home screen asks to go. The host maps each to a screen.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum HomeTarget {
@@ -103,6 +107,12 @@ pub enum HomeTarget {
     UnmatchedBankLines,
     /// The Review queue (the card's button).
     ReviewQueue,
+    /// AI and privacy (the AI-off note's button).
+    AiSettings,
+    /// The import screen ("Import from another app").
+    ImportFromAnotherApp,
+    /// Bills outstanding from customers (the late-bills nudge's "Show list").
+    OutstandingReceivables,
 }
 
 /// The Home card's review list: the panel the Review queue draws, or why it has none yet. Both
@@ -376,169 +386,6 @@ pub fn sub_line(company: &str, subtitle: &str) -> String {
     }
 }
 
-/// One balance tile: which reserved group it reads and on which side that group's balance
-/// normally stands.
-struct Tile {
-    label: &'static str,
-    group: ReservedGroup,
-    normal: DrCr,
-    node: &'static str,
-}
-
-/// The tiles that read a group balance. Tally's dashboard help page
-/// (<https://help.tallysolutions.com/tally-prime/reports-in-tallyprime/dashboard/>, read
-/// 2026-11-21) lists Cash/Bank Accounts and Receivables/Payables among its default tiles; it does
-/// not define the figures, so each tile is the closing balance of one reserved group, taken from
-/// the group summary.
-const TILES: [Tile; 4] = [
-    Tile {
-        label: "Cash in hand",
-        group: ReservedGroup::CashInHand,
-        normal: DrCr::Dr,
-        node: "Cash-in-hand",
-    },
-    Tile {
-        label: "Bank accounts",
-        group: ReservedGroup::BankAccounts,
-        normal: DrCr::Dr,
-        node: "Bank accounts",
-    },
-    Tile {
-        label: "Receivables",
-        group: ReservedGroup::SundryDebtors,
-        normal: DrCr::Dr,
-        node: "Sundry debtors",
-    },
-    Tile {
-        label: "Payables",
-        group: ReservedGroup::SundryCreditors,
-        normal: DrCr::Cr,
-        node: "Sundry creditors",
-    },
-];
-
-/// The home KPI tiles as of `as_of`: cash in hand, bank accounts, receivables, payables, GST.
-/// Runs on the API worker. A tile whose report fails or is unsupported carries `Unsupported`
-/// with the reason; no tile ever carries a guessed figure.
-///
-/// The mock merges cash and bank into one "Cash and bank" tile. The engine gives them as two
-/// groups and this screen does not add (rule C4), so both group figures are shown until the
-/// engine gives a combined total.
-#[must_use]
-pub fn home_kpis(api: &Api, as_of: Date) -> Vec<Kpi> {
-    let mut kpis: Vec<Kpi> = TILES
-        .iter()
-        .map(|tile| tile_kpi(api, tile, as_of))
-        .collect();
-    kpis.push(gst_kpi());
-    kpis
-}
-
-/// The GST tile. It stays unsupported until the engine gives the net payable after set-off.
-fn gst_kpi() -> Kpi {
-    Kpi {
-        label: "GST cash payable".to_owned(),
-        value: Outcome::unsupported("GST cash payable", GST_REASON),
-        footnote: "after accepted ITC".to_owned(),
-        target: HomeTarget::GstReturns {
-            tab: "gstr3b".to_owned(),
-        },
-    }
-}
-
-fn tile_kpi(api: &Api, tile: &Tile, as_of: Date) -> Kpi {
-    let value = tile_value(api, tile, as_of);
-    Kpi {
-        label: tile.label.to_owned(),
-        value,
-        footnote: format!("Closing balance as of {}", format::date(as_of)),
-        target: HomeTarget::BalanceSheet {
-            node: tile.node.to_owned(),
-        },
-    }
-}
-
-fn tile_value(api: &Api, tile: &Tile, as_of: Date) -> Outcome<Paise> {
-    let what = tile.label;
-    let Some(group) = reserved_groups()
-        .into_iter()
-        .find(|g| g.reserved == Some(tile.group))
-    else {
-        return Outcome::unsupported(what, "the reserved group is not in the seed list");
-    };
-    let period = match Period::new(as_of, as_of) {
-        Ok(period) => period,
-        Err(e) => return Outcome::unsupported(what, format!("the date is not usable: {e}")),
-    };
-    let params = ReportParams {
-        kind: ReportKind::GroupSummary(group.id),
-        period,
-        as_of,
-        scenario: Scenario::Actual,
-        detail: Detail::Condensed,
-        columns: ColumnSpec::Single,
-        filter: ReportFilter::default(),
-        exceptions_only: false,
-    };
-    match api.report(&params) {
-        Ok(Outcome::Value(report)) => net_balance(&report, tile.normal, what),
-        Ok(Outcome::Unsupported(u)) => Outcome::Unsupported(u),
-        Err(e) => Outcome::unsupported(what, format!("the report failed: {e}")),
-    }
-}
-
-/// One cell of the net balance row: `None` when empty, the amount when there is one.
-fn cell_amount(cell: &Cell, what: &str) -> Result<Option<SignedAmount>, Unsupported> {
-    match cell {
-        Cell::Empty => Ok(None),
-        Cell::Amount(amount) => Ok(Some(*amount)),
-        Cell::Unsupported(u) => Err(u.clone()),
-        Cell::Signed(_)
-        | Cell::Qty(_)
-        | Cell::Text(_)
-        | Cell::Date(_)
-        | Cell::Provisional { .. } => Err(Unsupported {
-            what: what.to_owned(),
-            reason: "the net balance row holds a cell that is not a final amount".to_owned(),
-        }),
-    }
-}
-
-/// The group's net balance, read from the report's net balance row (never summed here). A
-/// balance on the side opposite to `normal` is not shown as a plain figure, because the tile
-/// has no side marker.
-fn net_balance(report: &Report, normal: DrCr, what: &str) -> Outcome<Paise> {
-    let refuse = |reason: &str| Outcome::unsupported(what, reason);
-    let Some(row) = report
-        .rows
-        .iter()
-        .rev()
-        .find(|r| r.kind == RowKind::Subtotal)
-    else {
-        return refuse("the group summary has no net balance row");
-    };
-    let (Some(dr_cell), Some(cr_cell)) = (row.cells.first(), row.cells.get(1)) else {
-        return refuse("the net balance row does not have a debit and a credit cell");
-    };
-    let (dr, cr) = match (cell_amount(dr_cell, what), cell_amount(cr_cell, what)) {
-        (Ok(dr), Ok(cr)) => (dr, cr),
-        (Err(u), Ok(_) | Err(_)) | (Ok(_), Err(u)) => return Outcome::Unsupported(u),
-    };
-    let amount = match (dr, cr) {
-        (None, None) => return Outcome::Value(Paise::ZERO),
-        (Some(a), None) | (None, Some(a)) => a,
-        (Some(_), Some(_)) => return refuse("the net balance row has both a debit and a credit"),
-    };
-    if amount.side == normal {
-        Outcome::Value(amount.amount)
-    } else {
-        refuse(&format!(
-            "the balance is {} on the side opposite to the usual one; open the balance sheet to see it with its side",
-            format_inr(amount.amount)
-        ))
-    }
-}
-
 /// One home-screen shortcut: key, modifiers, whether it is a plain letter, and its target.
 type Shortcut = (Key, Modifiers, bool, fn() -> HomeTarget);
 
@@ -615,7 +462,18 @@ pub struct HomeScreen {
     /// The date the next KPI refresh is for, when one is wanted and not yet sent to the worker.
     want: Option<Date>,
     /// The KPI refresh running on the API worker.
-    latest: Latest<Vec<Kpi>>,
+    latest: Latest<HomeLoad>,
+    /// The sales bars from the last refresh, once it has arrived.
+    chart: Option<Chart>,
+    /// The nudge cards from the last refresh.
+    nudges: Vec<Nudge>,
+    /// The possible duplicate payments from the last refresh.
+    duplicates: Vec<DuplicatePayment>,
+    /// The highlighted row of the review card (the mock's `.sel` row, moved with J and K).
+    selected: usize,
+    /// The possible duplicate whose comparison is open (`home.nudge-open`), as an index into
+    /// `duplicates`.
+    compare: Option<usize>,
     /// The review queue read running on the API worker, with the KPI refresh.
     review_latest: Latest<Result<ReviewQueue, String>>,
     /// The review queue's panel from the last read, shared with the Review screen's rows.
@@ -639,6 +497,11 @@ impl HomeScreen {
             request: None,
             want: None,
             latest: Latest::default(),
+            chart: None,
+            nudges: Vec::new(),
+            duplicates: Vec::new(),
+            compare: None,
+            selected: 0,
             review_latest: Latest::default(),
             review: None,
             review_error: None,
@@ -690,8 +553,14 @@ impl HomeScreen {
             None => {}
         }
         match self.latest.poll() {
-            Some(Done::Ready(kpis)) => {
-                self.data.kpis = kpis;
+            Some(Done::Ready(load)) => {
+                self.data.kpis = load.kpis;
+                self.chart = Some(load.chart);
+                self.nudges = load.nudges;
+                self.duplicates = load.duplicates;
+                if self.compare.is_some_and(|i| i >= self.duplicates.len()) {
+                    self.compare = None;
+                }
                 self.notice = None;
             }
             Some(Done::Lost) => {
@@ -709,7 +578,9 @@ impl HomeScreen {
             self.notice = Some("No company is open, so there are no figures to show.".to_owned());
             return;
         };
-        self.latest.start(handle, move |api| home_kpis(api, as_of));
+        let today = crate::shell::navigate::today();
+        self.latest
+            .start(handle, move |api| home_load(api, as_of, today));
         self.review_latest
             .start(handle, |api| api.review_queue().map_err(|e| e.to_string()));
     }
@@ -749,19 +620,74 @@ impl HomeScreen {
         self.request.take()
     }
 
-    /// Reads the home keys for this frame.
+    /// Reads the home keys for this frame. While the comparison is open it takes Ctrl+A (open the
+    /// day book) and Esc (close) and nothing else.
     fn handle_keys(&mut self, ui: &Ui) {
+        if self.compare.is_some() {
+            let (investigate, close) = ui.ctx().input_mut(|i| {
+                (
+                    consume_exact(i, Key::A, Modifiers::CTRL),
+                    consume_exact(i, Key::Escape, Modifiers::NONE),
+                )
+            });
+            if investigate {
+                self.compare = None;
+                self.request_open(HomeTarget::DayBook);
+            } else if close {
+                self.compare = None;
+            }
+            return;
+        }
         let typing = ui.ctx().egui_wants_keyboard_input();
-        let hit = ui.ctx().input_mut(|i| {
-            SHORTCUTS
+        let rows = self
+            .review
+            .as_ref()
+            .map_or(0, |p| p.rows.len().min(REVIEW_ROWS));
+        let (hit, down, up, open) = ui.ctx().input_mut(|i| {
+            let hit = SHORTCUTS
                 .iter()
                 .filter(|(_, _, plain_letter, _)| !(*plain_letter && typing))
                 .find(|(key, modifiers, _, _)| consume_exact(i, *key, *modifiers))
-                .map(|(_, _, _, target)| target())
+                .map(|(_, _, _, target)| target());
+            let list = !typing && rows > 0;
+            (
+                hit,
+                list && consume_exact(i, Key::J, Modifiers::NONE),
+                list && consume_exact(i, Key::K, Modifiers::NONE),
+                list && consume_exact(i, Key::Enter, Modifiers::NONE),
+            )
         });
+        if down {
+            self.selected = (self.selected + 1).min(rows.saturating_sub(1));
+        }
+        if up {
+            self.selected = self.selected.saturating_sub(1);
+        }
+        if open {
+            self.request_open(HomeTarget::ReviewQueue);
+        }
         if let Some(target) = hit {
             self.request_open(target);
         }
+    }
+
+    /// The possible duplicate whose comparison is open, as an index into the nudges' list.
+    #[must_use]
+    pub fn compare_open(&self) -> Option<usize> {
+        self.compare
+    }
+
+    /// Opens the comparison of the possible duplicate at `index`, if there is one.
+    pub fn open_compare(&mut self, index: usize) {
+        if index < self.duplicates.len() {
+            self.compare = Some(index);
+        }
+    }
+
+    /// The nudge cards from the last refresh.
+    #[must_use]
+    pub fn nudges(&self) -> &[Nudge] {
+        &self.nudges
     }
 
     /// The tiles as the drawing takes them: the view and the click target of each.
@@ -787,7 +713,11 @@ impl Screen for HomeScreen {
     }
 
     fn key_bar_name(&self) -> String {
-        PAGE_TITLE.to_owned()
+        if self.compare.is_some() {
+            "Compare vouchers".to_owned()
+        } else {
+            PAGE_TITLE.to_owned()
+        }
     }
 
     fn subtitle(&self) -> Option<String> {
@@ -799,12 +729,24 @@ impl Screen for HomeScreen {
     }
 
     fn keys(&self) -> Vec<KeyHint> {
-        HOME_KEYS
+        if self.compare.is_some() {
+            return vec![
+                KeyHint::new("Ctrl+A", "Open both in day book"),
+                KeyHint::new("Esc", "Close"),
+            ];
+        }
+        let mut keys: Vec<KeyHint> = HOME_KEYS
             .iter()
             .map(|(keys, label)| KeyHint::new(*keys, *label))
-            .collect()
+            .collect();
+        if self.review.as_ref().is_some_and(|p| !p.rows.is_empty()) {
+            keys.push(KeyHint::new("J / K", "Review list"));
+            keys.push(KeyHint::new("Enter", "Open"));
+        }
+        keys
     }
 
+    #[allow(clippy::too_many_lines, reason = "the screen's one drawing pass")]
     fn ui(&mut self, ui: &mut Ui, ctx: &mut AppCtx) -> ScreenAction {
         self.tick(ctx.api.as_ref());
         if self.is_loading() {
@@ -847,7 +789,7 @@ impl Screen for HomeScreen {
         );
         let ai = ai_panel(ctx.ai_tier);
         let tiles = self.tile_items();
-        let mut chosen = None;
+        let mut chosen = draw::Chosen::default();
         let mut rects = Vec::new();
         egui::ScrollArea::vertical().show(ui, |ui| {
             draw::header(
@@ -857,26 +799,48 @@ impl Screen for HomeScreen {
                 &new_line,
                 &title,
                 &line,
-                &mut chosen,
+                &mut chosen.target,
             );
             draw::notice(ui, self.notice.as_deref());
             match shown {
-                HomeBody::NewCompany { begins } => draw::welcome(ui, begins, &mut chosen),
+                HomeBody::NewCompany { begins } => draw::welcome(ui, begins, &mut chosen.target),
                 HomeBody::Loading => draw::skeleton(ui),
                 HomeBody::Figures => {
                     let review = ReviewCard {
                         panel: self.review.as_ref(),
                         error: self.review_error.as_deref(),
                     };
-                    rects =
-                        draw::figures(ui, &tiles, ai, &self.data.attention, review, &mut chosen);
+                    let lower = draw::Lower {
+                        ai,
+                        chart: self.chart.as_ref(),
+                        nudges: &self.nudges,
+                        attention: &self.data.attention,
+                        review,
+                        selected: self.selected,
+                    };
+                    rects = draw::figures(ui, &tiles, &lower, &mut chosen);
                 }
                 HomeBody::NoFigures => draw::no_figures(ui),
             }
         });
         self.tile_rects = rects;
-        if let Some(target) = chosen {
+        match chosen.nudge {
+            Some(NudgeAction::Compare(index)) => self.open_compare(index),
+            Some(NudgeAction::Open(target)) => self.request_open(target),
+            None => {}
+        }
+        if let Some(target) = chosen.target {
             self.request_open(target);
+        }
+        if let Some(pair) = self.compare.and_then(|i| self.duplicates.get(i)) {
+            match nudge_draw::dialog(ui, pair) {
+                nudge_draw::DialogChoice::None => {}
+                nudge_draw::DialogChoice::Investigate => {
+                    self.compare = None;
+                    self.request_open(HomeTarget::DayBook);
+                }
+                nudge_draw::DialogChoice::Close => self.compare = None,
+            }
         }
         ScreenAction::Stay
     }

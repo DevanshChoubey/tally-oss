@@ -546,7 +546,7 @@ section = "history"
 kind = "payment"
 date = "2026-10-28"
 number = "PY/0304"
-narration = "City Power, September bill"
+narration = "City Power, October bill"
 dr = [{ ledger = "elec", amount = "14860.00" }]
 cr = [{ ledger = "saptagiri", amount = "14860.00" }]
 

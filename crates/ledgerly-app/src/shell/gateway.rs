@@ -121,6 +121,13 @@ impl GatewayScreen {
             HomeTarget::DescribeTransaction => Err(not_yet("describing a transaction")),
             HomeTarget::PendingIms => Err(not_yet("the invoice management system list")),
             HomeTarget::ReviewQueue => Ok(Box::new(ReviewScreen::default()) as Box<dyn Screen>),
+            HomeTarget::AiSettings => navigate::screen_for_key(navigate::AI_SETTINGS_KEY, ctx)
+                .unwrap_or_else(|| Err(not_yet("AI and privacy"))),
+            HomeTarget::ImportFromAnotherApp => navigate::screen_for_key(navigate::IMPORT_KEY, ctx)
+                .unwrap_or_else(|| Err(not_yet("import from another app"))),
+            HomeTarget::OutstandingReceivables => {
+                navigate::open_report(ReportKind::Outstanding { receivable: true }, ctx)
+            }
         };
         match opened {
             Ok(screen) => {

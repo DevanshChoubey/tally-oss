@@ -271,3 +271,14 @@ choice is not saved (`screens::setup::form::unsaved_notice`), and the gaps stay 
 
 Each needs a store field (and a schema migration if the company file changes) and a facade method
 to read and set it. Request: a settings event on the company file that carries these two values.
+
+## S9 (Home): duplicate decisions, bank matching and the GSTR-2B reader (2026-11-25)
+
+Home now raises the GSTR-1 due-date nudge and the possible-double-payment nudge (rule D-02). Three
+things are missing from the engine and are left as gaps in `design/PARITY-GAPS.md` ("Home"):
+
+- A record that a pair of payments is "not a duplicate", so the nudge can stop showing and the
+  dialog can offer the mock's "Not a duplicate" button.
+- Bank-line matching for payments (which statement line cleared each), for the dialog's bank-line
+  row and check.
+- A GSTR-2B reader, for the "GST cash payable" tile (accepted input credit) and the IMS nudge.

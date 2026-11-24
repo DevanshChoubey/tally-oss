@@ -66,6 +66,7 @@ fn live_detail(api: &Api, books: &Books, target: &PaletteTarget) -> Option<Strin
             | ReportKind::Audit(_) => None,
         },
         PaletteTarget::Command(_)
+        | PaletteTarget::Run(_)
         | PaletteTarget::Voucher(_)
         | PaletteTarget::Setting(_)
         | PaletteTarget::AiIntent(_)

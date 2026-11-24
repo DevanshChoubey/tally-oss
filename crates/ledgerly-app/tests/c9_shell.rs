@@ -351,7 +351,9 @@ fn the_cash_tile_follows_a_posting() {
         let views: Vec<KpiView> = home.borrow().home().kpi_views();
         views
             .into_iter()
-            .find(|v| v.label == "Cash in hand")
+            // Card s9: the cash tile is the mock's one "Cash and bank" tile. This company has no bank
+            // ledger, so its figure is the cash balance derived below.
+            .find(|v| v.label == "Cash and bank")
             .map(|v| v.value_text)
     };
 
