@@ -22,12 +22,14 @@
 //! voucher it cannot show yet (stock lines, stored GST) are named in words, never dropped
 //! silently.
 
-use egui::{RichText, Ui};
+use egui::{Key, Modifiers, RichText, Ui};
 use ledgerly_core::{Date, SignedAmount, VoucherId};
 use ledgerly_model::{Books, VoucherStatus};
 use thiserror::Error;
 
+use super::Notice;
 use super::text::{amount_text, date_text};
+use crate::screens::print_job::PrintJob;
 use crate::{AppCtx, Screen, ScreenAction};
 
 /// Why a voucher could not be shown.
@@ -158,19 +160,27 @@ pub fn voucher_view(books: &Books, id: VoucherId) -> Result<VoucherView, Voucher
 }
 
 /// The read-only voucher screen.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug)]
 pub struct VoucherViewScreen {
     id: VoucherId,
     /// The sidebar title of the report the voucher was opened from (see
     /// [`Screen::sidebar_title`]).
     origin: Option<String>,
+    /// The print in flight (Ctrl+P), and the last notice about a print.
+    print: PrintJob,
+    notice: Option<Notice>,
 }
 
 impl VoucherViewScreen {
     /// A screen for voucher `id`. It reads the voucher from the shared books each frame.
     #[must_use]
     pub fn new(id: VoucherId) -> Self {
-        Self { id, origin: None }
+        Self {
+            id,
+            origin: None,
+            print: PrintJob::default(),
+            notice: None,
+        }
     }
 
     /// The same screen, opened from a drill that started at the screen titled `origin`.
@@ -230,6 +240,31 @@ impl Screen for VoucherViewScreen {
     }
 
     fn ui(&mut self, ui: &mut Ui, ctx: &mut AppCtx) -> ScreenAction {
+        if let Some(note) = self.print.tick() {
+            self.notice = Some(note);
+        }
+        // Ctrl+P prints the voucher (spec 11 M5). The PDF comes from the API worker.
+        if ui
+            .ctx()
+            .input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::P))
+        {
+            match ctx.api.as_ref() {
+                None => {
+                    self.notice = Some(Notice::Error(
+                        "No company is open, so the voucher cannot be printed.".to_owned(),
+                    ));
+                }
+                Some(handle) => {
+                    let id = self.id;
+                    let title = format!("Voucher {}", id.0);
+                    self.print
+                        .start(handle, &title, move |api| api.print_voucher(id));
+                }
+            }
+        }
+        if let Some(note) = &self.notice {
+            ui.label(note.text());
+        }
         match ctx.books.as_ref() {
             None => {
                 ui.label("The company's books are not loaded, so the voucher cannot be shown.");

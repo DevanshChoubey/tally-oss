@@ -12,6 +12,7 @@ pub mod import;
 pub mod item_invoice;
 pub mod keymap_map;
 pub mod masters;
+pub mod print_job;
 pub mod purchase_bill;
 pub mod quick_entry;
 pub mod report_view;

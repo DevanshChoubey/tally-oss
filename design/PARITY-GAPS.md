@@ -33,7 +33,8 @@ feature that is not built), **data** (the capture company lacks what the mock's 
 ## Balance sheet (round of 2026-11-23)
 
 - **gap: Export has no PDF.** The mock's Export offers "PDF, XLSX or CSV" (index.html:1624).
-  Ours writes CSV and XLSX; PDF comes with printing (M5). The palette's Export command still
+  Ours writes CSV and XLSX; PDF comes with printing (M5; the Print section below says what
+  prints). The palette's Export command still
   says it is not available there: Ctrl+E and the button on the report screen export.
   TallyPrime's "How to Export Data" page (help.tallysolutions.com/export-data-in-tally/, read
   2026-11-23) has Ctrl+E (Current) export any open report and lists ASCII, Excel, HTML, JPEG,
@@ -460,3 +461,26 @@ financial year starts. The model supports that (`Company::books_begin`), so it i
   (GST filing, Keep, When) are text with a "Not saved yet" hint instead of inputs.
 - **data: the mock's sample is prefilled; the wizard starts blank.** The capture types the mock's
   company (name, GSTIN, file). The mock's City "Pune" is not typed.
+
+## Print (card P1, round of 2026-11-24)
+
+- **gap: no print preview or configuration.** TallyPrime's flow is Ctrl+P (Current), then C
+  (configure), I (preview), P (print), as read on "How to Print Invoices/Reports in TallyPrime"
+  (help.tallysolutions.com/print-invoices-reports/, read 2026-11-24, last updated 2026-11-20).
+  The mock has no print state. Ours goes straight from Ctrl+P to a save dialog for a PDF file.
+- **gap: no printing to a device.** Ours writes PDF files only. The Alt+P > Configuration
+  printer and paper setup is not built.
+- **gap: reports cannot be printed.** Ctrl+P on a report says "not supported" with the reason
+  (`Api::print_report`). The print crate draws invoices only; CSV and XLSX export remain.
+- **gap: only sales invoices, credit notes and debit notes print.** Any other voucher, and a
+  voucher with no GST block, says "not supported" with the reason. Reasons come from the print
+  crate (`PrintError::Unsupported`), never a blank page.
+- **gap: no UPI QR on printed invoices.** The books hold no UPI address to pay to, so the built-in
+  template (`ledgerly-print/templates/tax-invoice-a4.toml`) has no `upi_qr` block.
+  `render_invoice_with_upi` draws one when a payee is given; the company needs a UPI address
+  field before it can.
+- **by design: printed text is plain ASCII.** The print crate refuses other characters (built-in
+  Helvetica); the refusal is shown as "not supported", not replaced.
+- **by design: Ctrl+P is not in the voucher screen's key bar.** The mock has no voucher print
+  state. The Reports cheat sheet lists Ctrl+P (index.html:1839); the balance sheet key bar
+  (index.html:1634) does not, so the report screen's key bar does not list it either.

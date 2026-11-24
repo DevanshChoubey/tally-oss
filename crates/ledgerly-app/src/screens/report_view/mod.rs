@@ -52,6 +52,7 @@ use ledgerly_api::{ExportFormat, ReportKind, ReportParams};
 use ledgerly_core::{Outcome, Period};
 
 use crate::screen::KeyHint;
+use crate::screens::print_job::PrintJob;
 use crate::screens::wire::{Done, Latest, unsupported_text};
 use crate::ui::button::{ButtonKind, button, button_icon};
 use crate::ui::icon::Icon;
@@ -132,6 +133,7 @@ enum KeyCmd {
     ApplyPeriod,
     CancelPeriod,
     Export,
+    Print,
 }
 
 #[derive(Default)]
@@ -251,6 +253,10 @@ pub struct ReportViewScreen {
     origin: Option<String>,
     /// The export in flight.
     export: Latest<Exported>,
+    /// Ctrl+P was pressed; the print starts after the frame is drawn.
+    print_wanted: bool,
+    /// The print in flight, and its save dialog (see [`PrintJob`]).
+    print: PrintJob,
 }
 
 impl ReportViewScreen {
@@ -274,6 +280,8 @@ impl ReportViewScreen {
             export_picker: Box::new(save_dialog),
             origin: None,
             export: Latest::default(),
+            print_wanted: false,
+            print: PrintJob::default(),
         })
     }
 
@@ -322,6 +330,8 @@ impl ReportViewScreen {
             export_picker: Box::new(save_dialog),
             origin: None,
             export: Latest::default(),
+            print_wanted: false,
+            print: PrintJob::default(),
         })
     }
 
@@ -380,6 +390,26 @@ impl ReportViewScreen {
     /// Replaces the save dialog Export opens.
     pub fn set_export_picker(&mut self, picker: ExportPicker) {
         self.export_picker = picker;
+    }
+
+    /// Starts a print of the report on the worker when Ctrl+P was pressed. Reports have no print
+    /// layout yet, so the engine answers `Unsupported` and its reason is shown as the notice.
+    fn run_print_request(&mut self, worker: Option<&ApiWorker>) {
+        if !std::mem::take(&mut self.print_wanted) {
+            return;
+        }
+        let Some(handle) = worker else {
+            self.fail("No company is open, so the report cannot be printed.");
+            return;
+        };
+        let Some(run) = self.worker.as_ref() else {
+            self.fail("This report was not run by the engine, so it cannot be printed.");
+            return;
+        };
+        let params = run.engine.clone();
+        let title = self.report.title.clone();
+        self.print
+            .start(handle, &title, move |api| api.print_report(&params));
     }
 
     /// `true` while an export is being written.
@@ -731,6 +761,7 @@ impl ReportViewScreen {
             KeyCmd::ApplyPeriod => self.apply_period_edit(),
             KeyCmd::CancelPeriod => self.cancel_period_edit(),
             KeyCmd::Export => self.export_wanted = true,
+            KeyCmd::Print => self.print_wanted = true,
         }
         ScreenAction::Stay
     }
@@ -1052,6 +1083,8 @@ fn read_keys(ctx: &Context, editing: bool, look: Look) -> Vec<KeyCmd> {
             (Modifiers::NONE, Key::End, KeyCmd::Last),
             // index.html:1624 and 1634: Ctrl+E exports.
             (Modifiers::COMMAND, Key::E, KeyCmd::Export),
+            // Ctrl+P prints the open report (index.html:1839); see design/PARITY-GAPS.md.
+            (Modifiers::COMMAND, Key::P, KeyCmd::Print),
         ];
         for (modifiers, key, cmd) in table {
             if i.consume_key(modifiers, key) {
@@ -1135,7 +1168,11 @@ impl Screen for ReportViewScreen {
         self.poll_export();
         let action = self.draw(ui);
         self.run_export_request(ctx.api.as_ref());
-        if self.is_exporting() {
+        if let Some(note) = self.print.tick() {
+            self.notice = Some(note);
+        }
+        self.run_print_request(ctx.api.as_ref());
+        if self.is_exporting() || self.print.is_busy() {
             ui.ctx().request_repaint();
         }
         action
