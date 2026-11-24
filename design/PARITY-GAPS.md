@@ -194,6 +194,12 @@ engine item E-3); `recon-explain` is an AI state.
   credit, all from the engine's working.
 - **by design: a Cess column on GSTR-3B.** The mock has no cess column, but the engine works out
   cess, and a figure is never dropped.
+- **gap (found in s9, not caused by it): GSTR-3B is Unsupported on the sample company.** A
+  purchase dated 2026-11-08 needs the rule pack entry `itc.blocked.motor_vehicles`, which pack
+  2026.1-slabs lacks, so the engine refuses the working (`gst.gstr3b` capture shows the reason and
+  no figure) where the mock shows 3.1(a), ITC and set-off. Right behaviour; the fix is a rule pack
+  entry with its own provenance, or a seed purchase that needs none. The GSTIN in the subtitle is
+  the sample's own, not the mock's.
 - **by design: our own words in "What happens next" and "Read this before filing".** The mock's
   bullets claim things the app does not do: "Mark the month filed here", "Credit counts only what
   you accepted in IMS" and the set-off order. Ours say what the engine does.
