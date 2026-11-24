@@ -23,8 +23,8 @@ First release. The full list of what is in it, and its known gaps, is in
 - Import from Tally XML, with a reconciliation report.
 - Bank statement import (CSV, XLSX, MT940), matching and reconciliation; basic inventory.
 - PDF printing of invoices, credit and debit notes and five reports (Ctrl+P).
-- Optional AI assistant that drafts vouchers for review, and an MCP server with read and
-  propose-only tools (`ledgerly mcp`).
+- An MCP server with read and propose-only tools (`ledgerly mcp`). The in-app AI assistant
+  screens are present but do not run yet.
 - Light, dark and high-contrast themes; screen-reader names, Tab order and zoom.
 - Release packages for Linux, Windows and macOS; reproducible Linux builds.
 

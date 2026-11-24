@@ -45,7 +45,8 @@ in Rust with [egui](https://github.com/emilk/egui).
   print action (Ctrl+P), then open in your PDF viewer.
 - **Keyboard first.** Function keys and a command palette (Ctrl+K). Two keymaps are included:
   `keymap-standard.toml` and `keymap-classic.toml`.
-- **Themes.** Light, dark and high-contrast.
+- **Themes and access.** Light, dark and high-contrast themes; screen-reader names and Tab order;
+  Ctrl+= / Ctrl+- / Ctrl+0 zoom.
 
 ## Install
 

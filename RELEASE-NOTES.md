@@ -20,10 +20,11 @@ cloud feature on.
 - **Printing:** sales invoices, credit and debit notes and five reports (balance sheet, profit and
   loss, trial balance, day book, ledger vouchers) save as PDF with Ctrl+P, then open in your PDF
   viewer.
-- **AI assistant (optional, off by default):** plain-words entry and bill photos become voucher
-  drafts that you review before anything is posted; "ask your books" answers with the engine's
-  own reports. An MCP server (`ledgerly mcp --company <file>`) gives AI clients read tools and
-  draft proposals only. The assistant never writes a number you see: the engine computes them.
+- **AI assistant:** an MCP server (`ledgerly mcp --company <file>`) gives AI clients read tools
+  and draft proposals only; it cannot post. The in-app assistant screens (plain-words entry, bill
+  photos, "ask your books") are present but do not run yet: no local model or OCR engine ships,
+  and the cloud tier is refused because no keychain store is wired in. The assistant never writes
+  a number you see: the engine computes them.
 - **Look and access:** light, dark and high-contrast themes; screen-reader names and roles on
   every control; Tab order in reading order; Ctrl+= / Ctrl+- / Ctrl+0 zoom; no signal carried by
   colour alone.
@@ -33,6 +34,9 @@ cloud feature on.
 ## Known gaps
 
 - English only. Hindi is planned for 1.1.
+- The in-app AI assistant does not run yet (see above); the MCP server does.
+- GSTR-3B working refuses any period with a purchase in it: the bundled rule pack does not yet
+  list the blocked-credit items of CGST Act s.17(5).
 - No export to Tally XML from the app yet, and no Excel import of masters or vouchers.
 - No print preview inside the app, no printer output (save as PDF, then print), no print
   configuration, no UPI QR code on invoices yet; other reports do not print yet.
