@@ -1112,10 +1112,10 @@ impl Screen for ReportViewScreen {
         }
     }
 
-    fn page_title(&self, _tr: &Tr) -> String {
+    fn page_title(&self, tr: &Tr) -> String {
         match self.look() {
-            Look::BalanceSheet => "Balance sheet".to_owned(),
-            Look::DayBook => "Day book".to_owned(),
+            Look::BalanceSheet => tr.t("report.balance_sheet"),
+            Look::DayBook => tr.t("report.day_book"),
             Look::Generic => self.report.title.clone(),
         }
     }
@@ -1143,15 +1143,15 @@ impl Screen for ReportViewScreen {
         self.origin.clone().unwrap_or_else(|| self.title(tr))
     }
 
-    fn keys(&self, _tr: &Tr) -> Vec<KeyHint> {
+    fn keys(&self, tr: &Tr) -> Vec<KeyHint> {
         match self.look() {
             Look::BalanceSheet => vec![
-                KeyHint::new("J / K", "Move"),
-                KeyHint::new("Enter", "Drill in"),
-                KeyHint::new("Esc", "Back up"),
+                KeyHint::new("J / K", tr.t("keys.move")),
+                KeyHint::new("Enter", tr.t("keys.drill_in")),
+                KeyHint::new("Esc", tr.t("keys.back_up")),
                 KeyHint::new("Alt+F1", self.detail_switch()),
-                KeyHint::new("Ctrl+E", "Export"),
-                KeyHint::new("F2", "Period"),
+                KeyHint::new("Ctrl+E", tr.t("keys.export")),
+                KeyHint::new("F2", tr.t("keys.period")),
             ],
             Look::DayBook => vec![
                 KeyHint::new("J / K", "Move"),

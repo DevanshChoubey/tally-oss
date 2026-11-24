@@ -789,5 +789,7 @@ SSIM 0.8323
 
 ## App captures with no mock capture
 
+- `light/hi.balance-sheet.default`
+- `light/hi.home.default`
 - `light/quick-entry.offline-ai`
 

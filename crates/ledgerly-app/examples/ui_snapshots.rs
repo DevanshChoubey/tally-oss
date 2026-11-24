@@ -390,6 +390,8 @@ struct Shot {
     /// The mock state id (`design/mock-v2/states.json`), which also names the image.
     state: &'static str,
     theme: Theme,
+    /// The language code the shell is set to for this entry (`en` unless [`Shot::lang`]).
+    lang: &'static str,
     keys: Vec<(Key, Modifiers)>,
     query: Option<&'static str>,
     after: Vec<Inject>,
@@ -418,6 +420,13 @@ impl Shot {
     /// The same shot in another theme.
     fn themed(mut self, theme: Theme) -> Self {
         self.theme = theme;
+        self
+    }
+
+    /// The same shot in another language, set before its keys (the shell's language, as the
+    /// palette sets it).
+    fn lang(mut self, code: &'static str) -> Self {
+        self.lang = code;
         self
     }
 
@@ -451,6 +460,7 @@ fn shot(state: &'static str, keys: &[(Key, Modifiers)]) -> Shot {
     Shot {
         state,
         theme: Theme::Light,
+        lang: "en",
         keys: keys.to_vec(),
         query: None,
         after: Vec::new(),
@@ -525,6 +535,10 @@ fn shots() -> Vec<Shot> {
         shot("home.default", &[]),
         shot("home.default", &[]).themed(Theme::Dark),
         shot("home.default", &[]).themed(Theme::Hc),
+        // Hindi (`hi`): the home screen and one report, both with Devanagari text and Latin digits
+        // in Indian grouping. The state ids carry `hi.` so each file is its own capture.
+        shot("hi.home.default", &[]).lang("hi"),
+        shot("hi.balance-sheet.default", &[(Key::B, NONE)]).lang("hi"),
         // Recent needs a choice first: open the balance sheet from the palette, go back, and
         // reopen the palette on the empty query (index.html:1115 lists recents there).
         shot("palette.default", &[palette])
@@ -771,6 +785,7 @@ impl eframe::App for Snapshots {
             Stage::Keys => {
                 let current = &self.shots[self.index];
                 self.shell.set_theme(current.theme.kind());
+                self.shell.set_language(current.lang);
                 self.inject = current
                     .keys
                     .iter()
@@ -817,6 +832,7 @@ impl eframe::App for Snapshots {
                     self.write_shot(&image);
                     // Restore the default theme; the next entry sets its own.
                     self.shell.set_theme(ThemeKind::Light);
+                    self.shell.set_language("en");
                     self.index += 1;
                     if self.index == self.shots.len() {
                         self.next_stage(Stage::Done);

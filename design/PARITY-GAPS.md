@@ -489,3 +489,27 @@ financial year starts. The model supports that (`Company::books_begin`), so it i
   and the voucher screen have no Print key, so neither shows Ctrl+P. The key map lists
   "Print" under Reports (index.html:1839; `keymap_map::layout`), and Ctrl+P prints the open
   report or voucher.
+
+## Hindi UI (card s7, round of 2026-11-24)
+
+Hindi (`hi`) is set per user from the palette's Language row. Translated so far: the shell
+(topbar, sidebar, key bar, tab strip), the home screen (greeting, tiles, nudges, empty and
+loading texts) and the balance sheet and day book page titles and key words. Everything else
+still shows English. Every Hindi term is marked `# unsourced` in `assets/i18n/hi.toml`: no
+Tally or CBIC Hindi term was readable (see that file's header).
+
+- **deferred: vouchers, masters, bank, GST, setup and palette strings are English in Hindi.**
+  The keys for them are not yet in the files. Each screen moves its literals to `en.toml` and
+  `hi.toml` the same way the home screen did, with a test per screen. The palette's own words
+  ("Go to", "No match for", section headings, key words) are included.
+- **gap: report bodies stay English.** The balance sheet's section labels ("Liabilities",
+  "Assets", "Total"), the scenario and the "Both sides agree" note are in English in Hindi
+  (`hi.balance-sheet.default` capture). Needs the same key move in `report_view`.
+- **gap: engine reasons and "what" labels stay English.** The unsupported reason on a home tile
+  (for example "GST cash payable: the engine gives ...") comes from the engine's text, not from the
+  files. Needs the engine to give a key, or a translation table for each reason.
+- **gap: theme name and detail switch stay English.** `ThemeKind::label` and the "Detailed" /
+  "Condensed" switch on reports are not in the files.
+- **gap: footer "Saved on this computer" and the version line stay English** on the sidebar.
+- **by design: "Ledgerly" and "Tally"-style product names are not translated.** The brand is kept
+  as it is in every language.

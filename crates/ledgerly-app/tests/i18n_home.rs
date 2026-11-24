@@ -78,3 +78,25 @@ fn hindi_attention_word_comes_from_the_hindi_file() {
     // The English wrapper keeps the English word for callers without a language.
     assert_eq!(AttentionKind::Due.word(), "Due");
 }
+
+#[test]
+fn hindi_report_titles_and_keys_come_from_the_hindi_file() {
+    // The balance sheet's page title and key bar words are read from the files, so a Hindi
+    // report shows Hindi words; the English identity stays the file's English entry.
+    let catalog = Catalog::builtin().unwrap();
+    let hi = catalog.tr("hi");
+    let en = catalog.tr("en");
+    for key in [
+        "report.balance_sheet",
+        "report.day_book",
+        "keys.move",
+        "keys.drill_in",
+        "keys.back_up",
+        "keys.export",
+        "keys.period",
+    ] {
+        assert_ne!(hi.t(key), en.t(key), "{key} is not translated");
+        assert!(!hi.t(key).starts_with('\u{27E6}'), "{key} is missing");
+    }
+    assert_eq!(en.t("report.balance_sheet"), "Balance sheet");
+}
