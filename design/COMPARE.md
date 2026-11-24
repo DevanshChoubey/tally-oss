@@ -1,6 +1,6 @@
 # App against mock
 
-137 app captures are paired with a mock capture of the same theme and state id. SSIM is 1 for identical images; lower is a bigger difference, and the list runs worst first.
+139 app captures are paired with a mock capture of the same theme and state id. SSIM is 1 for identical images; lower is a bigger difference, and the list runs worst first.
 
 | Theme | State | SSIM |
 | --- | --- | --- |
@@ -11,6 +11,7 @@
 | hc | palette.ask | 0.5010 |
 | hc | ai-settings.local | 0.5220 |
 | hc | palette.no-results | 0.5228 |
+| hc | balance-sheet.provisional | 0.5322 |
 | hc | palette.search | 0.5552 |
 | dark | home.default | 0.5630 |
 | hc | ai-settings.off | 0.5651 |
@@ -28,7 +29,6 @@
 | light | ai-settings.local | 0.6054 |
 | hc | palette.commands | 0.6092 |
 | dark | ai-settings.local | 0.6141 |
-| light | balance-sheet.provisional | 0.6164 |
 | light | sales-invoice.period-locked | 0.6182 |
 | light | masters.ledgers | 0.6230 |
 | hc | balance-sheet.detailed | 0.6254 |
@@ -68,7 +68,9 @@
 | light | palette.search | 0.6589 |
 | hc | gst.gstr3b | 0.6593 |
 | hc | bank.brs | 0.6599 |
+| light | balance-sheet.provisional | 0.6603 |
 | hc | payment.default | 0.6663 |
+| dark | balance-sheet.provisional | 0.6674 |
 | dark | bank.default | 0.6701 |
 | dark | palette.search | 0.6706 |
 | light | balance-sheet.default | 0.6731 |
@@ -223,6 +225,18 @@ SSIM 0.5228
 <tr>
 <td><img src="mock-v2/captures/states/hc/palette.no-results.webp" width="480" alt="mock hc palette.no-results"></td>
 <td><img src="app-captures/hc/palette.no-results.webp" width="480" alt="app hc palette.no-results"></td>
+</tr>
+</table>
+
+## hc / balance-sheet.provisional
+
+SSIM 0.5322
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/hc/balance-sheet.provisional.webp" width="480" alt="mock hc balance-sheet.provisional"></td>
+<td><img src="app-captures/hc/balance-sheet.provisional.webp" width="480" alt="app hc balance-sheet.provisional"></td>
 </tr>
 </table>
 
@@ -427,18 +441,6 @@ SSIM 0.6141
 <tr>
 <td><img src="mock-v2/captures/states/dark/ai-settings.local.webp" width="480" alt="mock dark ai-settings.local"></td>
 <td><img src="app-captures/dark/ai-settings.local.webp" width="480" alt="app dark ai-settings.local"></td>
-</tr>
-</table>
-
-## light / balance-sheet.provisional
-
-SSIM 0.6164
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/light/balance-sheet.provisional.webp" width="480" alt="mock light balance-sheet.provisional"></td>
-<td><img src="app-captures/light/balance-sheet.provisional.webp" width="480" alt="app light balance-sheet.provisional"></td>
 </tr>
 </table>
 
@@ -910,6 +912,18 @@ SSIM 0.6599
 </tr>
 </table>
 
+## light / balance-sheet.provisional
+
+SSIM 0.6603
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/balance-sheet.provisional.webp" width="480" alt="mock light balance-sheet.provisional"></td>
+<td><img src="app-captures/light/balance-sheet.provisional.webp" width="480" alt="app light balance-sheet.provisional"></td>
+</tr>
+</table>
+
 ## hc / payment.default
 
 SSIM 0.6663
@@ -919,6 +933,18 @@ SSIM 0.6663
 <tr>
 <td><img src="mock-v2/captures/states/hc/payment.default.webp" width="480" alt="mock hc payment.default"></td>
 <td><img src="app-captures/hc/payment.default.webp" width="480" alt="app hc payment.default"></td>
+</tr>
+</table>
+
+## dark / balance-sheet.provisional
+
+SSIM 0.6674
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/dark/balance-sheet.provisional.webp" width="480" alt="mock dark balance-sheet.provisional"></td>
+<td><img src="app-captures/dark/balance-sheet.provisional.webp" width="480" alt="app dark balance-sheet.provisional"></td>
 </tr>
 </table>
 
@@ -1823,7 +1849,7 @@ SSIM 0.8378
 - `bank.offline-ai`
 - `masters.suggested-ledger`
 
-### dark (49)
+### dark (48)
 
 - `home.loading`
 - `home.empty`
@@ -1857,7 +1883,6 @@ SSIM 0.8378
 - `payment.overdraft`
 - `balance-sheet.voucher`
 - `balance-sheet.loading`
-- `balance-sheet.provisional`
 - `day-book.month`
 - `day-book.empty`
 - `gst.gstr1-correction`
@@ -1875,7 +1900,7 @@ SSIM 0.8378
 - `review.default`
 - `setup.gstin-error`
 
-### hc (49)
+### hc (48)
 
 - `home.loading`
 - `home.empty`
@@ -1909,7 +1934,6 @@ SSIM 0.8378
 - `payment.overdraft`
 - `balance-sheet.voucher`
 - `balance-sheet.loading`
-- `balance-sheet.provisional`
 - `day-book.month`
 - `day-book.empty`
 - `gst.gstr1-correction`
