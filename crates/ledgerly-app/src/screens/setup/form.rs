@@ -2,8 +2,8 @@
 //! 1855-1895), with no drawing in them, so the tests can check them.
 //!
 //! What the wizard may save is decided here: a feature switch is offered only where the model has
-//! one ([`feature_rows`]); a GSTIN must agree with the state ([`check_gstin`]); books may begin
-//! on any day of the financial year ([`parse_books_begin`]).
+//! one ([`feature_rows`]); a GSTIN must agree with the state ([`check_gstin_in`]); books may begin
+//! on any day of the financial year ([`parse_books_begin_in`]).
 
 use std::path::Path;
 
@@ -13,6 +13,8 @@ use ledgerly_model::{
     Address, Company, EntityKind, Features, GstRegistration, NegativeStockPolicy,
 };
 use time::Month;
+
+use crate::i18n::Tr;
 
 /// One step of the wizard, in the order the mock's step rail draws them (index.html:1855).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -73,18 +75,10 @@ impl Step {
         }
     }
 
-    /// The label the step rail shows (index.html:1855).
+    /// The step's name in English, as the rail shows it.
     #[must_use]
-    pub fn label(self) -> &'static str {
-        match self {
-            Step::Welcome => "Start",
-            Step::Company => "Company",
-            Step::Features => "Features",
-            Step::Keyboard => "Keyboard",
-            Step::Ai => "AI and privacy",
-            Step::Backup => "Backup",
-            Step::Done => "Done",
-        }
+    pub fn label(self) -> String {
+        step_label_in(self, &Tr::default())
     }
 
     /// The step after this one, or `None` on the last.
@@ -100,6 +94,12 @@ impl Step {
             .checked_sub(1)
             .and_then(|i| Self::ALL.get(i).copied())
     }
+}
+
+/// The step's name in the words of `tr`, as the step rail shows it (index.html:1855).
+#[must_use]
+pub fn step_label_in(step: Step, tr: &Tr) -> String {
+    tr.t(&format!("setup.step.{}", step.key()))
 }
 
 /// A key the wizard looks at (index.html:1887-1888).
@@ -138,6 +138,19 @@ pub fn unsaved_notice(step: Step) -> Option<&'static str> {
     }
 }
 
+/// What a step says when its choice cannot be stored yet, or `None` when the step saves what it
+/// asks, in the words of `tr`. The keyboard preset and backup folder have no store
+/// (design/PARITY-GAPS.md); the AI tier is stored, and [`ai_notice_in`] covers the one AI choice
+/// the engine refuses.
+#[must_use]
+pub fn unsaved_notice_in(step: Step, tr: &Tr) -> Option<String> {
+    match step {
+        Step::Keyboard => Some(tr.t("setup.notice.keyboard_unsaved")),
+        Step::Backup => Some(tr.t("setup.notice.backup_unsaved")),
+        Step::Welcome | Step::Company | Step::Ai | Step::Features | Step::Done => None,
+    }
+}
+
 /// What the AI step says under the cards for `choice`, or `None` when the choice is stored with
 /// the company. Off and On this computer are stored ([`create_company`]); the cloud tier is
 /// refused by the engine until a keychain store exists (design/PARITY-GAPS.md).
@@ -151,27 +164,53 @@ pub fn ai_notice(choice: AiTier) -> Option<&'static str> {
     }
 }
 
-/// Creates the company file at `path` and stores the AI tier chosen in the wizard. Returns the
-/// open company and, when the tier could not be stored, what the engine said, for the Done step.
-/// The company is kept either way: a refused tier leaves AI not set up.
+/// What the AI step says under the cards for `choice`, in the words of `tr`, or `None` when the
+/// choice is stored with the company. Off and On this computer are stored ([`create_company_in`]);
+/// the cloud tier is refused by the engine until a keychain store exists (design/PARITY-GAPS.md).
+#[must_use]
+pub fn ai_notice_in(choice: AiTier, tr: &Tr) -> Option<String> {
+    match choice {
+        AiTier::Off | AiTier::Local => None,
+        AiTier::Cloud => Some(tr.t("setup.notice.cloud_unsaved")),
+    }
+}
+
+/// Creates the company file, with English notes.
 ///
 /// # Errors
-/// The reason the company file could not be created.
+/// The reason, in the words of the translation file, the value cannot be made.
 pub fn create_company(
     path: &Path,
     company: &Company,
     clock: Clock,
     ai: AiTier,
 ) -> Result<(Api, Option<String>), String> {
+    create_company_in(path, company, clock, ai, &Tr::default())
+}
+
+/// Creates the company file at `path` and stores the AI tier chosen in the wizard. Returns the
+/// open company and, when the tier could not be stored, what the engine said, for the Done step.
+/// The company is kept either way: a refused tier leaves AI not set up.
+///
+/// # Errors
+/// The reason the company file could not be created.
+pub fn create_company_in(
+    path: &Path,
+    company: &Company,
+    clock: Clock,
+    ai: AiTier,
+    tr: &Tr,
+) -> Result<(Api, Option<String>), String> {
     let mut api = Api::create(path, company, clock).map_err(|e| e.to_string())?;
     let note = match api.set_ai_tier(ai) {
         Ok(Outcome::Value(())) => None,
-        Ok(Outcome::Unsupported(refused)) => Some(format!(
-            "The AI choice was not saved: {}. AI is not set up for this company.",
-            refused.reason
+        Ok(Outcome::Unsupported(refused)) => Some(tr.tf(
+            "setup.notice.ai_not_saved",
+            &[("reason", refused.reason.as_str())],
         )),
-        Err(e) => Some(format!(
-            "The AI choice was not saved: {e}. AI is not set up for this company."
+        Err(e) => Some(tr.tf(
+            "setup.notice.ai_not_saved",
+            &[("reason", e.to_string().as_str())],
         )),
     };
     Ok((api, note))
@@ -218,10 +257,16 @@ pub enum GstinCheck {
     Valid(Gstin),
 }
 
+/// Checks the GSTIN text against the state, with English reasons.
+#[must_use]
+pub fn check_gstin(text: &str, chosen: StateCode) -> GstinCheck {
+    check_gstin_in(text, chosen, &Tr::default())
+}
+
 /// Checks the GSTIN text against the state the form has. A valid GSTIN names its state through
 /// its first two digits ([`Gstin::state`]); the caller fills the state from it.
 #[must_use]
-pub fn check_gstin(text: &str, chosen: StateCode) -> GstinCheck {
+pub fn check_gstin_in(text: &str, chosen: StateCode, tr: &Tr) -> GstinCheck {
     if text.trim().is_empty() {
         return GstinCheck::Blank;
     }
@@ -230,18 +275,21 @@ pub fn check_gstin(text: &str, chosen: StateCode) -> GstinCheck {
         Err(e) => return GstinCheck::Invalid(gstin_reason(&e)),
     };
     let Some(found) = gstin.state() else {
-        return GstinCheck::Invalid("the first two digits are not a GST state code".to_owned());
+        return GstinCheck::Invalid(tr.t("setup.notice.gstin_state_code"));
     };
     if found == chosen {
         return GstinCheck::Valid(gstin);
     }
-    let message = format!(
-        "This GSTIN starts with {:02} ({}), but the state is set to {:02} {}. Change the state to {}, or check the first two digits.",
-        found.get(),
-        found.name(),
-        chosen.get(),
-        chosen.name(),
-        found.name()
+    let found_code = format!("{:02}", found.get());
+    let chosen_code = format!("{:02}", chosen.get());
+    let message = tr.tf(
+        "setup.notice.gstin_mismatch",
+        &[
+            ("prefix", found_code.as_str()),
+            ("prefix_name", found.name()),
+            ("state", chosen_code.as_str()),
+            ("state_name", chosen.name()),
+        ],
     );
     GstinCheck::Mismatch {
         found,
@@ -270,28 +318,51 @@ pub fn gstin_allows_continue(check: &GstinCheck) -> bool {
     }
 }
 
+/// The financial year start, with English reasons.
+///
+/// # Errors
+/// The reason, in the words of the translation file, the value cannot be made.
+pub fn financial_year_start(today: Date) -> Result<Date, String> {
+    financial_year_start_in(today, &Tr::default())
+}
+
 /// The financial year's first day for `today`: 1 April of the year that contains `today`
 /// (Indian financial year, index.html:1870 "1 Apr 2026 to 31 Mar 2027").
 ///
 /// # Errors
 /// A message when the date is outside the calendar range.
-pub fn financial_year_start(today: Date) -> Result<Date, String> {
+pub fn financial_year_start_in(today: Date, tr: &Tr) -> Result<Date, String> {
     let year = if u8::from(today.month()) >= 4 {
         today.year()
     } else {
         today.year() - 1
     };
-    Date::from_calendar_date(year, Month::April, 1)
-        .map_err(|_| "That date is outside the supported range.".to_owned())
+    Date::from_calendar_date(year, Month::April, 1).map_err(|_| tr.t("setup.notice.date_range"))
+}
+
+/// The financial year end, with English reasons.
+///
+/// # Errors
+/// The reason, in the words of the translation file, the value cannot be made.
+pub fn financial_year_end(fy_start: Date) -> Result<Date, String> {
+    financial_year_end_in(fy_start, &Tr::default())
 }
 
 /// The last day of the financial year that starts on `fy_start` (31 March of the next year).
 ///
 /// # Errors
 /// A message when the date is outside the calendar range.
-pub fn financial_year_end(fy_start: Date) -> Result<Date, String> {
+pub fn financial_year_end_in(fy_start: Date, tr: &Tr) -> Result<Date, String> {
     Date::from_calendar_date(fy_start.year() + 1, Month::March, 31)
-        .map_err(|_| "That date is outside the supported range.".to_owned())
+        .map_err(|_| tr.t("setup.notice.date_range"))
+}
+
+/// Reads the books begin date, with English reasons.
+///
+/// # Errors
+/// The reason, in the words of the translation file, the value cannot be made.
+pub fn parse_books_begin(text: &str, fy_start: Date, fy_end: Date) -> Result<Date, String> {
+    parse_books_begin_in(text, fy_start, fy_end, &Tr::default())
 }
 
 /// Reads the "Books begin from" text, `YYYY-MM-DD`. Books may begin on any day of the financial
@@ -299,20 +370,29 @@ pub fn financial_year_end(fy_start: Date) -> Result<Date, String> {
 ///
 /// # Errors
 /// A message when the text is not a date, or the date is outside `fy_start` to `fy_end`.
-pub fn parse_books_begin(text: &str, fy_start: Date, fy_end: Date) -> Result<Date, String> {
+pub fn parse_books_begin_in(
+    text: &str,
+    fy_start: Date,
+    fy_end: Date,
+    tr: &Tr,
+) -> Result<Date, String> {
     let parts: Vec<&str> = text.trim().split('-').collect();
     let [year, month, day] = parts.as_slice() else {
-        return Err("Type the date as YYYY-MM-DD, for example 2026-04-01.".to_owned());
+        return Err(tr.t("setup.notice.date_format"));
     };
-    let not_a_date = || "Type the date as YYYY-MM-DD, for example 2026-04-01.".to_owned();
+    let not_a_date = || tr.t("setup.notice.date_format");
     let year: i32 = year.parse().map_err(|_| not_a_date())?;
     let month: u8 = month.parse().map_err(|_| not_a_date())?;
     let day: u8 = day.parse().map_err(|_| not_a_date())?;
     let month = Month::try_from(month).map_err(|_| not_a_date())?;
     let date = Date::from_calendar_date(year, month, day).map_err(|_| not_a_date())?;
     if date < fy_start || date > fy_end {
-        return Err(format!(
-            "Books begin between {fy_start} and {fy_end}, inside the financial year."
+        return Err(tr.tf(
+            "setup.notice.books_between",
+            &[
+                ("from", fy_start.to_string().as_str()),
+                ("to", fy_end.to_string().as_str()),
+            ],
         ));
     }
     Ok(date)
@@ -321,7 +401,10 @@ pub fn parse_books_begin(text: &str, fy_start: Date, fy_end: Date) -> Result<Dat
 /// One feature row of the wizard (index.html:1872-1880).
 #[derive(Clone, Copy)]
 pub struct FeatureRow {
-    /// The row's title.
+    /// The key the translated words are looked up by: `setup.feature.<key>.label`, `.hint` and
+    /// `.reason`.
+    pub key: &'static str,
+    /// The row's title in English (the screen draws the words of the files).
     pub label: &'static str,
     /// The one-line explanation the mock gives.
     pub hint: &'static str,
@@ -339,6 +422,7 @@ pub struct FeatureRow {
 pub fn feature_rows() -> Vec<FeatureRow> {
     vec![
         FeatureRow {
+            key: "inventory",
             label: "Inventory",
             hint: "Stock items, quantities and stock value in the balance sheet.",
             default_on: true,
@@ -346,6 +430,7 @@ pub fn feature_rows() -> Vec<FeatureRow> {
             unavailable: None,
         },
         FeatureRow {
+            key: "gst",
             label: "GST",
             hint: "Tax on invoices, GSTR-1 and GSTR-3B data, 2B matching.",
             default_on: true,
@@ -353,6 +438,7 @@ pub fn feature_rows() -> Vec<FeatureRow> {
             unavailable: None,
         },
         FeatureRow {
+            key: "bank",
             label: "Bank reconciliation",
             hint: "Import statements and match lines to vouchers.",
             default_on: true,
@@ -360,6 +446,7 @@ pub fn feature_rows() -> Vec<FeatureRow> {
             unavailable: None,
         },
         FeatureRow {
+            key: "bill_wise",
             label: "Bill-wise tracking",
             hint: "Track each invoice until it is paid; ageing and reminders.",
             default_on: true,
@@ -367,6 +454,7 @@ pub fn feature_rows() -> Vec<FeatureRow> {
             unavailable: None,
         },
         FeatureRow {
+            key: "e_invoice",
             label: "e-Invoice JSON",
             hint: "Export invoices in the government schema. You upload them yourself.",
             default_on: true,
@@ -376,6 +464,7 @@ pub fn feature_rows() -> Vec<FeatureRow> {
             ),
         },
         FeatureRow {
+            key: "currencies",
             label: "Multiple currencies",
             hint: "For export and import. Off for most businesses.",
             default_on: false,
@@ -385,6 +474,7 @@ pub fn feature_rows() -> Vec<FeatureRow> {
             ),
         },
         FeatureRow {
+            key: "cost_centres",
             label: "Cost centres",
             hint: "Split expenses by branch or project.",
             default_on: false,
@@ -425,17 +515,29 @@ pub struct CompanyForm {
     pub books_begin: Date,
 }
 
+/// Builds the company the form describes, with English reasons.
+///
+/// # Errors
+/// The reason, in the words of the translation file, the value cannot be made.
+pub fn build_company(form: &CompanyForm, features: Features) -> Result<Company, String> {
+    build_company_in(form, features, &Tr::default())
+}
+
 /// Builds the company the form describes, with the features chosen. A GSTIN that does not agree
 /// with the state is refused, as the form refuses it.
 ///
 /// # Errors
 /// A message naming the field that is not acceptable.
-pub fn build_company(form: &CompanyForm, features: Features) -> Result<Company, String> {
+pub fn build_company_in(
+    form: &CompanyForm,
+    features: Features,
+    tr: &Tr,
+) -> Result<Company, String> {
     let name = form.name.trim();
     if name.is_empty() {
-        return Err("Type a name for the company.".to_owned());
+        return Err(tr.t("setup.notice.type_name"));
     }
-    let (registrations, pan) = match check_gstin(&form.gstin, form.state) {
+    let (registrations, pan) = match check_gstin_in(&form.gstin, form.state, tr) {
         GstinCheck::Blank => (Vec::new(), None),
         GstinCheck::Valid(gstin) => {
             let pan = Pan::parse(gstin.pan_str()).map_err(|e| e.to_string())?;

@@ -20,9 +20,9 @@ use ledgerly_core::{Clock, Date, StateCode};
 use ledgerly_model::{EntityKind, Features};
 
 use self::form::{
-    CompanyForm, GstinCheck, KeyInput, KeyOutcome, Step, ai_notice, build_company, check_gstin,
-    default_features, feature_rows, financial_year_end, financial_year_start, parse_books_begin,
-    state_from_gstin, step_outcome, unsaved_notice,
+    CompanyForm, GstinCheck, KeyInput, KeyOutcome, Step, ai_notice_in, build_company_in,
+    check_gstin_in, default_features, feature_rows, financial_year_end_in, financial_year_start_in,
+    parse_books_begin_in, state_from_gstin, step_label_in, step_outcome, unsaved_notice_in,
 };
 use crate::shell::navigate::{self, MASTERS_KEY};
 use crate::shell::{GatewayScreen, hand_over, spawn_file_job};
@@ -124,7 +124,7 @@ pub struct SetupScreen {
     features: Features,
     /// The keyboard preset the user picked. Not stored yet.
     keyboard_classic: bool,
-    /// The AI tier the user picked, stored with the new company ([`form::create_company`]).
+    /// The AI tier the user picked, stored with the new company ([`form::create_company_in`]).
     ai: AiTier,
     /// The backup folder typed. Not stored yet.
     backup_folder: String,
@@ -136,6 +136,8 @@ pub struct SetupScreen {
     job: Option<Receiver<Created>>,
     /// The name of the company that was created, for the Done step.
     created_name: Option<String>,
+    /// The strings of the language the user chose, set each frame from the app context.
+    tr: Tr,
 }
 
 impl Default for SetupScreen {
@@ -158,7 +160,7 @@ impl SetupScreen {
     #[must_use]
     pub fn with_clock(clock: Clock) -> Self {
         let today = clock.now().date();
-        let fy_start = financial_year_start(today).unwrap_or(today);
+        let fy_start = financial_year_start_in(today, &Tr::default()).unwrap_or(today);
         Self {
             clock,
             step: Step::Welcome,
@@ -179,17 +181,18 @@ impl SetupScreen {
             job: None,
             created_name: None,
             focus_name: false,
+            tr: Tr::default(),
         }
     }
 
-    /// The company form as the user has typed it. A GSTIN decides nothing here; [`check_gstin`]
+    /// The company form as the user has typed it. A GSTIN decides nothing here; [`check_gstin_in`]
     /// decides whether the step may go on.
     fn company_form(&self) -> Result<CompanyForm, String> {
         let state = self
             .state
-            .ok_or_else(|| "Choose the state the company is in.".to_owned())?;
-        let fy_end = financial_year_end(self.fy_start)?;
-        let books_begin = parse_books_begin(&self.books_begin, self.fy_start, fy_end)?;
+            .ok_or_else(|| self.tr.t("setup.notice.choose_state"))?;
+        let fy_end = financial_year_end_in(self.fy_start, &self.tr)?;
+        let books_begin = parse_books_begin_in(&self.books_begin, self.fy_start, fy_end, &self.tr)?;
         Ok(CompanyForm {
             name: self.name.clone(),
             kind: self.kind,
@@ -215,12 +218,12 @@ impl SetupScreen {
     /// Why the company step cannot go on, or `None` when it can.
     fn company_block(&self) -> Option<String> {
         if self.name.trim().is_empty() {
-            return Some("Type a name for the company.".to_owned());
+            return Some(self.tr.t("setup.notice.type_name"));
         }
         let Some(state) = self.state else {
-            return Some("Choose the state the company is in.".to_owned());
+            return Some(self.tr.t("setup.notice.choose_state"));
         };
-        match check_gstin(&self.gstin, state) {
+        match check_gstin_in(&self.gstin, state, &self.tr) {
             GstinCheck::Blank | GstinCheck::Valid(_) => {}
             GstinCheck::Invalid(reason) => return Some(reason),
             GstinCheck::Mismatch { message, .. } => return Some(message),
@@ -259,7 +262,7 @@ impl SetupScreen {
         }
         let company = match self
             .company_form()
-            .and_then(|form| build_company(&form, self.features))
+            .and_then(|form| build_company_in(&form, self.features, &self.tr))
         {
             Ok(company) => company,
             Err(reason) => {
@@ -275,10 +278,11 @@ impl SetupScreen {
             }
         };
         let (clock, ai) = (self.clock, self.ai);
-        match spawn_file_job(move || form::create_company(&path, &company, clock, ai)) {
+        let tr = self.tr.clone();
+        match spawn_file_job(move || form::create_company_in(&path, &company, clock, ai, &tr)) {
             Ok(rx) => {
                 self.job = Some(rx);
-                self.notice = Some("Working on the company file...".to_owned());
+                self.notice = Some(self.tr.t("setup.notice.working"));
             }
             Err(reason) => self.notice = Some(reason),
         }
@@ -291,9 +295,7 @@ impl SetupScreen {
         }
         let home = std::env::var_os("HOME")
             .or_else(|| std::env::var_os("USERPROFILE"))
-            .ok_or_else(|| {
-                "Type where the company file goes; no home folder is known.".to_owned()
-            })?;
+            .ok_or_else(|| self.tr.t("setup.notice.no_home"))?;
         let slug: String = self
             .name
             .trim()
@@ -320,9 +322,7 @@ impl SetupScreen {
         let answer = match rx.try_recv() {
             Ok(answer) => answer,
             Err(TryRecvError::Empty) => return,
-            Err(TryRecvError::Disconnected) => Err(
-                "the company file could not be created; try again or check the folder".to_owned(),
-            ),
+            Err(TryRecvError::Disconnected) => Err(self.tr.t("setup.notice.create_failed")),
         };
         self.job = None;
         match answer {
@@ -350,10 +350,11 @@ impl SetupScreen {
     /// a second.
     fn rail(&mut self, ui: &mut egui::Ui) {
         ui.spacing_mut().item_spacing.y = 0.0;
+        let tr = self.tr.clone();
         for step in Step::ALL {
             let marker = rail_marker(step, self.step);
             let clickable = marker == Marker::Passed && self.step != Step::Done;
-            if rail_row(ui, step, marker, clickable).clicked() {
+            if rail_row(ui, step, marker, clickable, &tr).clicked() {
                 self.step = step;
                 self.notice = None;
             }
@@ -366,7 +367,12 @@ impl SetupScreen {
         nav_gap(ui);
         ui.horizontal(|ui| {
             if let Some(back) = self.step.back() {
-                let pressed = button(ui, "Back", Some("Esc"), ButtonKind::Secondary);
+                let pressed = button(
+                    ui,
+                    &self.tr.t("setup.nav.back"),
+                    Some("Esc"),
+                    ButtonKind::Secondary,
+                );
                 record_probe(ui, "setup.back", pressed.rect);
                 if pressed.clicked() {
                     self.step = back;
@@ -377,7 +383,7 @@ impl SetupScreen {
                 let (label, enabled) = self.continue_label_and_gate();
                 let pressed = ui
                     .add_enabled_ui(enabled, |ui| {
-                        button(ui, label, Some("Enter"), ButtonKind::Primary)
+                        button(ui, &label, Some("Enter"), ButtonKind::Primary)
                     })
                     .inner;
                 record_probe(ui, "setup.continue", pressed.rect);
@@ -390,13 +396,14 @@ impl SetupScreen {
 
     /// The Continue button's label and whether it is enabled on this step. On Company, a GSTIN
     /// that disagrees with the state disables it (index.html:1861).
-    fn continue_label_and_gate(&self) -> (&'static str, bool) {
+    fn continue_label_and_gate(&self) -> (String, bool) {
+        let tr = &self.tr;
         match self.step {
-            Step::Welcome => ("Create a company", true),
-            Step::Company => ("Continue", self.company_block().is_none()),
-            Step::Features | Step::Keyboard | Step::Ai => ("Continue", true),
-            Step::Backup => ("Finish", self.job.is_none()),
-            Step::Done => ("Go to Home", true),
+            Step::Welcome => (tr.t("setup.welcome.create"), true),
+            Step::Company => (tr.t("setup.nav.continue"), self.company_block().is_none()),
+            Step::Features | Step::Keyboard | Step::Ai => (tr.t("setup.nav.continue"), true),
+            Step::Backup => (tr.t("setup.nav.finish"), self.job.is_none()),
+            Step::Done => (tr.t("setup.nav.go_home"), true),
         }
     }
 
@@ -439,37 +446,29 @@ impl SetupScreen {
 
     /// The Welcome step (index.html:1863). Create is the one choice that works; the others say
     /// why they wait.
-    fn draw_welcome(ui: &mut egui::Ui) {
-        pane_head(
-            ui,
-            "Welcome to Ledgerly",
-            "Accounting, GST and bank reconciliation on your own computer. Your books are a file you own.",
-        );
+    fn draw_welcome(ui: &mut egui::Ui, tr: &Tr) {
+        let s_welcome_title = tr.t("setup.welcome.title");
+        let s_welcome_lead = tr.t("setup.welcome.lead");
+        let s_welcome_create = tr.t("setup.welcome.create");
+        let s_welcome_create_hint = tr.t("setup.welcome.create_hint");
+        let s_welcome_import = tr.t("setup.welcome.import");
+        let s_welcome_import_hint = tr.t("setup.welcome.import_hint");
+        let s_welcome_unavailable = tr.t("setup.welcome.unavailable");
+        let s_welcome_open = tr.t("setup.welcome.open");
+        let s_welcome_open_hint = tr.t("setup.welcome.open_hint");
+        let s_welcome_sample = tr.t("setup.welcome.sample");
+        let s_welcome_sample_hint = tr.t("setup.welcome.sample_hint");
+        let s_welcome_sample_unavailable = tr.t("setup.welcome.sample_unavailable");
+
+        pane_head(ui, &s_welcome_title, &s_welcome_lead);
         let cards = [
-            OptionCard::new(
-                Icon::Plus,
-                "Create a company",
-                "About 3 minutes. Name, GSTIN, financial year.",
-            )
-            .selected(true),
-            OptionCard::new(
-                Icon::Upload,
-                "Import from another accounting app",
-                "Masters and vouchers from an XML or spreadsheet export. A report shows what moved.",
-            )
-            .unavailable("Not available in this wizard yet."),
-            OptionCard::new(
-                Icon::File,
-                "Open a Ledgerly file",
-                "From a backup or another computer.",
-            )
-            .unavailable("Not available in this wizard yet."),
-            OptionCard::new(
-                Icon::Eye,
-                "Try the sample company",
-                "Godavari Drip & Pump Works, fictional data. Nothing you do there is kept.",
-            )
-            .unavailable("No sample data ships yet."),
+            OptionCard::new(Icon::Plus, &s_welcome_create, &s_welcome_create_hint).selected(true),
+            OptionCard::new(Icon::Upload, &s_welcome_import, &s_welcome_import_hint)
+                .unavailable(&s_welcome_unavailable),
+            OptionCard::new(Icon::File, &s_welcome_open, &s_welcome_open_hint)
+                .unavailable(&s_welcome_unavailable),
+            OptionCard::new(Icon::Eye, &s_welcome_sample, &s_welcome_sample_hint)
+                .unavailable(&s_welcome_sample_unavailable),
         ];
         let drawn = option_grid(ui, egui::Id::unique("setup-welcome"), 2, &cards);
         for (n, card) in drawn.iter().enumerate() {
@@ -481,15 +480,12 @@ impl SetupScreen {
     /// above its field. The widgets are made in the order name, type, city, GSTIN, state, books
     /// date, file, so Tab walks them in that order.
     fn draw_company(&mut self, ui: &mut egui::Ui) {
-        pane_head(
-            ui,
-            "Your company",
-            "You can change all of this later except the financial year start.",
-        );
+        let tr = self.tr.clone();
+        pane_head(ui, tr.t("setup.company.title"), tr.t("setup.company.lead"));
         let col = field_column(ui);
         ui.horizontal_top(|ui| {
             ui.spacing_mut().item_spacing.x = FIELD_GAP_X;
-            field(ui, span(col, 2), "Company name", |ui, w| {
+            field(ui, span(col, 2), tr.t("setup.field.name"), |ui, w| {
                 let name = ui.add(
                     egui::TextEdit::singleline(&mut self.name)
                         .id_salt("setup-name")
@@ -499,10 +495,10 @@ impl SetupScreen {
                     name.request_focus();
                 }
             });
-            field(ui, col, "Type", |ui, w| {
+            field(ui, col, tr.t("setup.field.type"), |ui, w| {
                 egui::ComboBox::from_id_salt("setup-kind")
                     .width(w)
-                    .selected_text(kind_label(self.kind))
+                    .selected_text(kind_label_in(self.kind, &tr))
                     .show_ui(ui, |ui| {
                         for kind in [
                             EntityKind::Company,
@@ -511,11 +507,11 @@ impl SetupScreen {
                             EntityKind::Proprietorship,
                             EntityKind::Other,
                         ] {
-                            ui.selectable_value(&mut self.kind, kind, kind_label(kind));
+                            ui.selectable_value(&mut self.kind, kind, kind_label_in(kind, &tr));
                         }
                     });
             });
-            field(ui, col, "City", |ui, w| {
+            field(ui, col, tr.t("setup.field.city"), |ui, w| {
                 ui.add(egui::TextEdit::singleline(&mut self.city).desired_width(w));
             });
         });
@@ -525,15 +521,15 @@ impl SetupScreen {
             field(ui, span(col, 2), "GSTIN", |ui, w| {
                 ui.add(
                     egui::TextEdit::singleline(&mut self.gstin)
-                        .hint_text("15 characters, or blank")
+                        .hint_text(tr.t("setup.field.gstin_hint"))
                         .desired_width(w),
                 );
                 self.fill_state_from_gstin();
                 self.gstin_hint(ui);
             });
-            field(ui, col, "State", |ui, w| {
+            field(ui, col, tr.t("setup.field.state"), |ui, w| {
                 let selected = self.state.map_or_else(
-                    || "Choose a state".to_owned(),
+                    || tr.t("setup.field.state_pick"),
                     |s| format!("{:02} {}", s.get(), s.name()),
                 );
                 egui::ComboBox::from_id_salt("setup-state")
@@ -546,9 +542,9 @@ impl SetupScreen {
                         }
                     });
             });
-            field(ui, col, "GST filing", |ui, _| {
-                read_only(ui, "Monthly");
-                hint(ui, "Not saved yet: no filing frequency is kept.");
+            field(ui, col, tr.t("setup.field.gst_filing"), |ui, _| {
+                read_only(ui, tr.t("setup.value.monthly"));
+                hint(ui, tr.t("setup.hint.filing_unsaved"));
             });
         });
         self.draw_company_dates(ui, col);
@@ -556,31 +552,34 @@ impl SetupScreen {
 
     /// The financial year, books date and file rows of the company step.
     fn draw_company_dates(&mut self, ui: &mut egui::Ui, col: f32) {
+        let tr = self.tr.clone();
         ui.add_space(FIELD_GAP_Y);
         ui.horizontal_top(|ui| {
             ui.spacing_mut().item_spacing.x = FIELD_GAP_X;
-            field(ui, span(col, 2), "Financial year", |ui, _| {
-                let fy_end = financial_year_end(self.fy_start)
-                    .map_or_else(|_| "the end of March".to_owned(), long_date);
-                read_only(ui, &format!("{} to {fy_end}", long_date(self.fy_start)));
+            field(ui, span(col, 2), tr.t("setup.field.fy"), |ui, _| {
+                let fy_end = financial_year_end_in(self.fy_start, &tr)
+                    .map_or_else(|_| tr.t("setup.value.fy_end"), long_date);
+                read_only(ui, format!("{} to {fy_end}", long_date(self.fy_start)));
             });
-            field(ui, span(col, 2), "Books begin from", |ui, w| {
-                ui.add(
-                    egui::TextEdit::singleline(&mut self.books_begin)
-                        .hint_text("YYYY-MM-DD")
-                        .desired_width(w),
-                );
-                hint(
-                    ui,
-                    "Use a later date if you are moving in mid-year; opening balances go on this date.",
-                );
-            });
+            field(
+                ui,
+                span(col, 2),
+                tr.t("setup.field.books_begin"),
+                |ui, w| {
+                    ui.add(
+                        egui::TextEdit::singleline(&mut self.books_begin)
+                            .hint_text("YYYY-MM-DD")
+                            .desired_width(w),
+                    );
+                    hint(ui, tr.t("setup.hint.books_begin"));
+                },
+            );
         });
         ui.add_space(FIELD_GAP_Y);
-        field(ui, span(col, 4), "Company file", |ui, w| {
+        field(ui, span(col, 4), tr.t("setup.field.file"), |ui, w| {
             ui.add(
                 egui::TextEdit::singleline(&mut self.file)
-                    .hint_text("blank: Documents/Ledgerly/<company>.ledgerly")
+                    .hint_text(tr.t("setup.field.file_hint"))
                     .desired_width(w),
             );
         });
@@ -589,22 +588,25 @@ impl SetupScreen {
     /// The line under the GSTIN: the check result, or why the GSTIN cannot be used
     /// (index.html:1868).
     fn gstin_hint(&self, ui: &mut egui::Ui) {
+        let tr = self.tr.clone();
         let t = tokens(ui);
-        match self.state.map(|state| check_gstin(&self.gstin, state)) {
-            None => hint(ui, "Choose the state."),
+        match self
+            .state
+            .map(|state| check_gstin_in(&self.gstin, state, &tr))
+        {
+            None => hint(ui, tr.t("setup.hint.choose_state")),
             Some(GstinCheck::Blank) => {
-                hint(
-                    ui,
-                    "Leave blank if the business is not registered for GST yet.",
-                );
+                hint(ui, tr.t("setup.hint.gstin_blank"));
             }
             Some(GstinCheck::Valid(gstin)) => {
                 ui.horizontal_wrapped(|ui| {
-                    badge(ui, BadgeKind::Ok, "Check character OK");
+                    badge(ui, BadgeKind::Ok, &tr.t("setup.badge.check_ok"));
                     ui.label(
-                        egui::RichText::new(format!("PAN {} · fills the state", gstin.pan_str()))
-                            .size(TEXT_META)
-                            .color(t.text_3),
+                        egui::RichText::new(
+                            self.tr.tf("setup.hint.pan", &[("pan", gstin.pan_str())]),
+                        )
+                        .size(TEXT_META)
+                        .color(t.text_3),
                     );
                 });
             }
@@ -622,10 +624,11 @@ impl SetupScreen {
     /// The Features step (index.html:1871-1878): a row per feature with its switch, bold title
     /// and muted line. Only the switches the model has work; the others say why.
     fn draw_features(&mut self, ui: &mut egui::Ui) {
+        let tr = self.tr.clone();
         pane_head(
             ui,
-            "What do you need?",
-            "Turn on only what you use. Each one adds fields and screens.",
+            tr.t("setup.features.title"),
+            tr.t("setup.features.lead"),
         );
         let t = tokens(ui);
         let rule = egui::Stroke::new(border_width(kind(ui)), t.border);
@@ -648,17 +651,24 @@ impl SetupScreen {
                     ui.add_space(FEATURE_PAD);
                     ui.spacing_mut().item_spacing.y = 2.0;
                     ui.label(
-                        egui::RichText::new(row.label)
+                        egui::RichText::new(tr.t(&format!("setup.feature.{}.label", row.key)))
                             .font(bold_font(ui, TEXT_BODY))
                             .color(t.text),
                     );
+                    let hint = tr.t(&format!("setup.feature.{}.hint", row.key));
                     let line = match (row.switch, row.unavailable) {
-                        (Some(_), _) => row.hint.to_owned(),
-                        (None, reason) => format!(
-                            "{} Not available: {}",
-                            row.hint,
-                            reason.unwrap_or("not built yet")
-                        ),
+                        (Some(_), _) => hint,
+                        (None, unavailable) => {
+                            let reason = if unavailable.is_some() {
+                                tr.t(&format!("setup.feature.{}.reason", row.key))
+                            } else {
+                                tr.t("setup.features.not_built")
+                            };
+                            tr.tf(
+                                "setup.features.unavailable",
+                                &[("hint", hint.as_str()), ("reason", reason.as_str())],
+                            )
+                        }
                     };
                     para(ui, &line, TEXT_BODY, t.text_2);
                     ui.add_space(FEATURE_PAD);
@@ -672,26 +682,20 @@ impl SetupScreen {
 
     /// The Keyboard step (index.html:1883-1886). The preset is not stored yet.
     fn draw_keyboard(&mut self, ui: &mut egui::Ui) {
-        pane_head(
-            ui,
-            "Which keys do you know?",
-            "Both presets have every action on a key. Mouse works everywhere too.",
-        );
+        let tr = self.tr.clone();
+        let s_keyboard_title = tr.t("setup.keyboard.title");
+        let s_keyboard_classic = tr.t("setup.keyboard.classic");
+        let s_keyboard_classic_hint = tr.t("setup.keyboard.classic_hint");
+        let s_keyboard_standard = tr.t("setup.keyboard.standard");
+        let s_keyboard_standard_hint = tr.t("setup.keyboard.standard_hint");
+        pane_head(ui, &s_keyboard_title, tr.t("setup.keyboard.note"));
         let cards = [
-            OptionCard::new(
-                Icon::Kbd,
-                "Classic accountant keys (recommended)",
-                "F8 sales, F9 purchase, F5 payment, F6 receipt, Ctrl+A save, Enter to move on, Esc to go back.",
-            )
-            .selected(self.keyboard_classic)
-            .keys(&["F8", "F5", "Ctrl+A", "Enter", "Esc"]),
-            OptionCard::new(
-                Icon::Kbd,
-                "Standard desktop keys",
-                "Ctrl+S save, Ctrl+N new, Tab to move on. Function keys still work as aliases.",
-            )
-            .selected(!self.keyboard_classic)
-            .keys(&["Ctrl+S", "Ctrl+N", "Tab"]),
+            OptionCard::new(Icon::Kbd, &s_keyboard_classic, &s_keyboard_classic_hint)
+                .selected(self.keyboard_classic)
+                .keys(&["F8", "F5", "Ctrl+A", "Enter", "Esc"]),
+            OptionCard::new(Icon::Kbd, &s_keyboard_standard, &s_keyboard_standard_hint)
+                .selected(!self.keyboard_classic)
+                .keys(&["Ctrl+S", "Ctrl+N", "Tab"]),
         ];
         let drawn = option_grid(ui, egui::Id::unique("setup-keyboard"), 2, &cards);
         for (n, card) in drawn.iter().enumerate() {
@@ -700,36 +704,30 @@ impl SetupScreen {
                 self.keyboard_classic = n == 0;
             }
         }
-        if let Some(notice) = unsaved_notice(Step::Keyboard) {
+        if let Some(notice) = unsaved_notice_in(Step::Keyboard, &tr) {
             step_text(ui, notice);
         }
     }
 
     /// The AI step (index.html:1879-1884). The tier is stored when the company is created; the
-    /// cloud tier is refused by the engine, and [`ai_notice`] says so.
+    /// cloud tier is refused by the engine, and [`ai_notice_in`] says so.
     fn draw_ai(&mut self, ui: &mut egui::Ui) {
-        pane_head(
-            ui,
-            "AI and privacy",
-            "AI only drafts. You accept every draft, and the engine computes every amount. Pick per company; change any time.",
-        );
+        let tr = self.tr.clone();
+        let s_step_ai = tr.t("setup.step.ai");
+        let s_ai_lead = tr.t("setup.ai.lead");
+        let s_ai_off = tr.t("setup.ai.off");
+        let s_ai_off_hint = tr.t("setup.ai.off_hint");
+        let s_ai_local = tr.t("setup.ai.local");
+        let s_ai_local_hint = tr.t("setup.ai.local_hint");
+        let s_ai_cloud = tr.t("setup.ai.cloud");
+        let s_ai_cloud_hint = tr.t("setup.ai.cloud_hint");
+        let s_ai_later = tr.t("setup.ai.later");
+        pane_head(ui, &s_step_ai, &s_ai_lead);
         let tiers = [AiTier::Off, AiTier::Local, AiTier::Cloud];
         let cards = [
-            OptionCard::new(
-                Icon::Off,
-                "Off",
-                "No AI anywhere. Exact and rule matching still work.",
-            ),
-            OptionCard::new(
-                Icon::Cpu,
-                "On this computer",
-                "A small local model. Nothing leaves this computer. Slower on old machines.",
-            ),
-            OptionCard::new(
-                Icon::Cloud,
-                "Cloud, with your own key",
-                "Better reading of poor photos. You confirm each document before it is sent; bank numbers, PAN and phone numbers are removed first.",
-            ),
+            OptionCard::new(Icon::Off, &s_ai_off, &s_ai_off_hint),
+            OptionCard::new(Icon::Cpu, &s_ai_local, &s_ai_local_hint),
+            OptionCard::new(Icon::Cloud, &s_ai_cloud, &s_ai_cloud_hint),
         ];
         let cards = cards
             .into_iter()
@@ -743,55 +741,50 @@ impl SetupScreen {
                 self.ai = tier;
             }
         }
-        step_text(
-            ui,
-            "You can see every AI event later in AI and privacy: what was read, by which model, and what you decided.",
-        );
-        if let Some(notice) = ai_notice(self.ai) {
+        step_text(ui, &s_ai_later);
+        if let Some(notice) = ai_notice_in(self.ai, &tr) {
             step_text(ui, notice);
         }
     }
 
     /// The Backup step (index.html:1885). The folder is not stored and no backup runs on a schedule.
     fn draw_backup(&mut self, ui: &mut egui::Ui) {
-        pane_head(
-            ui,
-            "Backups",
-            "Ledgerly saves as you type. A backup is a separate copy, made every day you work.",
-        );
+        let tr = self.tr.clone();
+        pane_head(ui, tr.t("setup.backup.title"), tr.t("setup.backup.lead"));
         let col = field_column(ui);
         ui.horizontal_top(|ui| {
             ui.spacing_mut().item_spacing.x = FIELD_GAP_X;
-            field(ui, span(col, 2), "Backup folder", |ui, w| {
-                ui.add(
-                    egui::TextEdit::singleline(&mut self.backup_folder)
-                        .hint_text("Documents/Ledgerly backups")
-                        .desired_width(w),
-                );
+            field(
+                ui,
+                span(col, 2),
+                tr.t("setup.field.backup_folder"),
+                |ui, w| {
+                    ui.add(
+                        egui::TextEdit::singleline(&mut self.backup_folder)
+                            .hint_text(tr.t("setup.field.backup_hint"))
+                            .desired_width(w),
+                    );
+                },
+            );
+            field(ui, col, tr.t("setup.field.keep"), |ui, _| {
+                read_only(ui, tr.t("setup.value.keep"));
+                hint(ui, tr.t("setup.hint.not_saved"));
             });
-            field(ui, col, "Keep", |ui, _| {
-                read_only(ui, "Last 30 days");
-                hint(ui, "Not saved yet.");
-            });
-            field(ui, col, "When", |ui, _| {
-                read_only(ui, "On close, daily");
-                hint(ui, "Not saved yet.");
+            field(ui, col, tr.t("setup.field.when"), |ui, _| {
+                read_only(ui, tr.t("setup.value.when"));
+                hint(ui, tr.t("setup.hint.not_saved"));
             });
         });
         ui.add_space(14.0);
-        note(
-            ui,
-            NoteKind::Info,
-            "Companies that keep books electronically must keep a daily backup on a server located in India. This firm is a partnership, but the habit is good. Ledgerly makes the file; where you copy it is your choice.",
-        );
-        if let Some(notice) = unsaved_notice(Step::Backup) {
+        note(ui, NoteKind::Info, &tr.t("setup.backup.law"));
+        if let Some(notice) = unsaved_notice_in(Step::Backup, &tr) {
             step_text(ui, notice);
         }
     }
 
     /// The Done step (index.html:1889-1894): three launch cards, each with its icon, bold label
     /// and key, and the primary "Go to Home". Returns the launch or Home chosen, if any.
-    fn draw_done(ui: &mut egui::Ui, name: &str) -> Option<DoneChoice> {
+    fn draw_done(ui: &mut egui::Ui, name: &str, tr: &Tr) -> Option<DoneChoice> {
         let t = tokens(ui);
         ui.horizontal(|ui| {
             icon(ui, Icon::Check, t.text);
@@ -802,31 +795,26 @@ impl SetupScreen {
             );
         });
         ui.add_space(6.0);
-        para(
-            ui,
-            "Three good first steps. Each has a key.",
-            TEXT_BODY,
-            t.text_2,
-        );
+        para(ui, &tr.t("setup.done.lead"), TEXT_BODY, t.text_2);
         ui.add_space(18.0);
         let launches = [
             Launch {
                 glyph: Icon::Users,
-                label: "Enter opening balances",
-                place: Some("Masters"),
+                label: tr.t("setup.done.masters"),
+                place: Some(tr.t("setup.done.masters_place")),
                 key: "M",
                 choice: Some(DoneChoice::Open(MASTERS_KEY)),
             },
             Launch {
                 glyph: Icon::Sale,
-                label: "Make your first invoice",
+                label: tr.t("setup.done.invoice"),
                 place: None,
                 key: "F8",
                 choice: None,
             },
             Launch {
                 glyph: Icon::Bank,
-                label: "Import a bank statement",
+                label: tr.t("setup.done.bank"),
                 place: None,
                 key: "B",
                 choice: Some(DoneChoice::Open(navigate::BANK_RECON_KEY)),
@@ -837,7 +825,7 @@ impl SetupScreen {
             ui.spacing_mut().item_spacing.x = LAUNCH_GAP;
             ui.columns(launches.len(), |cols| {
                 for (n, (launch, col)) in launches.iter().zip(cols.iter_mut()).enumerate() {
-                    let response = launch_card(col, launch);
+                    let response = launch_card(col, launch, tr);
                     record_probe(col, &format!("setup.launch.{n}"), response.rect);
                     if response.clicked() {
                         chosen = launch.choice;
@@ -849,7 +837,12 @@ impl SetupScreen {
         // Inside a row, so the right-to-left layout is one button high, not the pane's height.
         ui.horizontal(|ui| {
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                let home = button(ui, "Go to Home", Some("Enter"), ButtonKind::Primary);
+                let home = button(
+                    ui,
+                    &tr.t("setup.nav.go_home"),
+                    Some("Enter"),
+                    ButtonKind::Primary,
+                );
                 record_probe(ui, "setup.home", home.rect);
                 if home.clicked() {
                     chosen = Some(DoneChoice::Home);
@@ -874,9 +867,9 @@ struct Launch {
     /// The icon at the card's left.
     glyph: Icon,
     /// The bold label.
-    label: &'static str,
+    label: String,
     /// The place named before the key, such as "Masters".
-    place: Option<&'static str>,
+    place: Option<String>,
     /// The key that opens it.
     key: &'static str,
     /// Where it leads; `None` while there is no route from the wizard (PARITY-GAPS).
@@ -886,7 +879,7 @@ struct Launch {
 /// Draws a launch card (`.launch button`, index.html:193-197): a bordered row with the icon, the
 /// bold label and, at the right, the place and the key. A card with no route senses hover only
 /// and draws its label muted.
-fn launch_card(ui: &mut egui::Ui, launch: &Launch) -> egui::Response {
+fn launch_card(ui: &mut egui::Ui, launch: &Launch, tr: &Tr) -> egui::Response {
     let t = tokens(ui);
     let bw = border_width(kind(ui));
     let sense = if launch.choice.is_some() {
@@ -919,7 +912,7 @@ fn launch_card(ui: &mut egui::Ui, launch: &Launch) -> egui::Response {
     icon::paint(painter, icon_rect, launch.glyph, t.text_2);
     // The key at the right edge, the place above it when there is one, as the mock's span wraps.
     let key_w = keycap::width(ui, launch.key);
-    let place_galley = launch.place.map(|place| {
+    let place_galley = launch.place.as_deref().map(|place| {
         painter.layout_no_wrap(place.to_owned(), FontId::proportional(TEXT_BODY), t.text)
     });
     let right_w = place_galley
@@ -953,16 +946,11 @@ fn launch_card(ui: &mut egui::Ui, launch: &Launch) -> egui::Response {
     } else {
         t.text_3
     };
-    let galley = painter.layout(
-        launch.label.to_owned(),
-        bold_font(ui, TEXT_BODY),
-        ink,
-        label_w,
-    );
+    let galley = painter.layout(launch.label.clone(), bold_font(ui, TEXT_BODY), ink, label_w);
     let top = inner.center().y - galley.size().y / 2.0;
     painter.galley(egui::pos2(label_left, top), galley, ink);
     if launch.choice.is_none() {
-        return response.on_hover_text("No route to a sales invoice from the wizard yet.");
+        return response.on_hover_text(tr.t("setup.tip.no_route"));
     }
     response
 }
@@ -990,7 +978,13 @@ fn rail_marker(step: Step, on: Step) -> Marker {
 /// Draws one rail row (`.steps button`, index.html:313-317): the round marker, then the step's
 /// name. The current row is accent-soft with the accent-ink name in bold.
 #[expect(clippy::float_arithmetic, reason = "laying out the marker in its row")]
-fn rail_row(ui: &mut egui::Ui, step: Step, marker: Marker, clickable: bool) -> egui::Response {
+fn rail_row(
+    ui: &mut egui::Ui,
+    step: Step,
+    marker: Marker,
+    clickable: bool,
+    tr: &Tr,
+) -> egui::Response {
     let t = tokens(ui);
     let bw = border_width(kind(ui));
     let sense = if clickable {
@@ -1058,7 +1052,7 @@ fn rail_row(ui: &mut egui::Ui, step: Step, marker: Marker, clickable: bool) -> e
     painter.text(
         egui::pos2(dot.right() + RAIL_LABEL_GAP, rect.center().y),
         egui::Align2::LEFT_CENTER,
-        step.label(),
+        step_label_in(step, tr),
         font,
         ink,
     );
@@ -1075,7 +1069,8 @@ fn nav_gap(ui: &mut egui::Ui) {
 
 /// The pane's heading and the line under it (`<h1>` and `<p class="t2" style="margin:6px 0
 /// 18px">`, index.html:1863).
-fn pane_head(ui: &mut egui::Ui, title: &str, sub: &str) {
+fn pane_head(ui: &mut egui::Ui, title: impl AsRef<str>, sub: impl AsRef<str>) {
+    let (title, sub) = (title.as_ref(), sub.as_ref());
     let t = tokens(ui);
     ui.label(
         egui::RichText::new(title)
@@ -1089,7 +1084,8 @@ fn pane_head(ui: &mut egui::Ui, title: &str, sub: &str) {
 
 /// A muted line under a step's cards (`<p class="meta" style="margin-top:12px">`,
 /// index.html:1882).
-fn step_text(ui: &mut egui::Ui, text: &str) {
+fn step_text(ui: &mut egui::Ui, text: impl AsRef<str>) {
+    let text = text.as_ref();
     let t = tokens(ui);
     ui.add_space(12.0);
     para(ui, text, TEXT_META, t.text_3);
@@ -1115,7 +1111,13 @@ fn span(col: f32, columns: usize) -> f32 {
 
 /// One field of the grid (`.fld`, index.html:235-237): the label above, then what `add` draws
 /// in the field's width.
-fn field(ui: &mut egui::Ui, width: f32, label: &str, add: impl FnOnce(&mut egui::Ui, f32)) {
+fn field(
+    ui: &mut egui::Ui,
+    width: f32,
+    label: impl AsRef<str>,
+    add: impl FnOnce(&mut egui::Ui, f32),
+) {
+    let label = label.as_ref();
     let t = tokens(ui);
     ui.vertical(|ui| {
         ui.set_width(width);
@@ -1126,13 +1128,15 @@ fn field(ui: &mut egui::Ui, width: f32, label: &str, add: impl FnOnce(&mut egui:
 }
 
 /// A value the user cannot change, in the field's place (`.ro`).
-fn read_only(ui: &mut egui::Ui, text: &str) {
+fn read_only(ui: &mut egui::Ui, text: impl AsRef<str>) {
+    let text = text.as_ref();
     let t = tokens(ui);
     ui.label(egui::RichText::new(text).size(TEXT_INPUT).color(t.text));
 }
 
 /// A field's muted hint (`.fld .hint`).
-fn hint(ui: &mut egui::Ui, text: &str) {
+fn hint(ui: &mut egui::Ui, text: impl AsRef<str>) {
+    let text = text.as_ref();
     let t = tokens(ui);
     para(ui, text, TEXT_META, t.text_3);
 }
@@ -1143,42 +1147,54 @@ fn long_date(date: Date) -> String {
     format!("{} {month} {}", date.day(), date.year())
 }
 
-/// The name of a company type, as the mock's "Type" field shows it.
-fn kind_label(kind: EntityKind) -> &'static str {
+/// The name of a company type in the words of `tr`, as the mock's "Type" field shows it.
+#[must_use]
+pub fn kind_label_in(kind: EntityKind, tr: &Tr) -> String {
     match kind {
-        EntityKind::Company => "Company",
-        EntityKind::Llp => "Limited liability partnership",
-        EntityKind::Partnership => "Partnership firm",
-        EntityKind::Proprietorship => "Sole proprietorship",
-        EntityKind::Other => "Trust, society or other",
+        EntityKind::Company => tr.t("setup.kind.company"),
+        EntityKind::Llp => tr.t("setup.kind.llp"),
+        EntityKind::Partnership => tr.t("setup.kind.partnership"),
+        EntityKind::Proprietorship => tr.t("setup.kind.proprietorship"),
+        EntityKind::Other => tr.t("setup.kind.other"),
     }
 }
 
+/// The key bar's hints after the screen's name, in the words of `tr`: Enter, Esc and Tab
+/// (index.html:1891).
+#[must_use]
+pub fn key_hints_in(tr: &Tr) -> Vec<crate::shell::KeyHint> {
+    vec![
+        crate::shell::KeyHint::new("Enter", tr.t("setup.key.continue")),
+        crate::shell::KeyHint::new("Esc", tr.t("setup.key.back")),
+        crate::shell::KeyHint::new("Tab", tr.t("setup.key.next_field")),
+    ]
+}
+
 impl Screen for SetupScreen {
-    fn title(&self, _tr: &Tr) -> String {
-        "Company setup".to_owned()
+    fn title(&self, tr: &Tr) -> String {
+        tr.t("setup.title")
     }
 
     /// The key bar's name (index.html:1891): the step's place among the seven.
-    fn key_bar_name(&self, _tr: &Tr) -> String {
-        format!(
-            "Setup, step {} of {}",
-            self.step.index() + 1,
-            Step::ALL.len()
+    fn key_bar_name(&self, tr: &Tr) -> String {
+        tr.tf(
+            "setup.key_bar",
+            &[
+                ("n", (self.step.index() + 1).to_string().as_str()),
+                ("total", Step::ALL.len().to_string().as_str()),
+            ],
         )
     }
 
     /// The key bar (index.html:1891): the step's place, then Enter, Esc and Tab.
     fn keys(&self, tr: &Tr) -> Vec<crate::shell::KeyHint> {
-        vec![
-            crate::shell::KeyHint::new("", self.key_bar_name(tr)),
-            crate::shell::KeyHint::new("Enter", "Continue"),
-            crate::shell::KeyHint::new("Esc", "Back"),
-            crate::shell::KeyHint::new("Tab", "Next field"),
-        ]
+        let mut hints = vec![crate::shell::KeyHint::new("", self.key_bar_name(tr))];
+        hints.extend(key_hints_in(tr));
+        hints
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, ctx: &mut AppCtx) -> ScreenAction {
+        self.tr = ctx.tr.clone();
         self.collect(ctx);
         if self.job.is_some() {
             ui.ctx().request_repaint();
@@ -1212,7 +1228,7 @@ impl Screen for SetupScreen {
                     ScreenAction::Stay
                 }
                 None => {
-                    self.notice = Some("that screen is not available yet".to_owned());
+                    self.notice = Some(self.tr.t("setup.notice.screen_unavailable"));
                     ScreenAction::Stay
                 }
             },
@@ -1286,7 +1302,7 @@ impl SetupScreen {
     fn draw_pane(&mut self, ui: &mut egui::Ui) -> Option<DoneChoice> {
         let mut chosen = None;
         match self.step {
-            Step::Welcome => Self::draw_welcome(ui),
+            Step::Welcome => Self::draw_welcome(ui, &self.tr),
             Step::Company => self.draw_company(ui),
             Step::Features => self.draw_features(ui),
             Step::Keyboard => self.draw_keyboard(ui),
@@ -1294,7 +1310,7 @@ impl SetupScreen {
             Step::Backup => self.draw_backup(ui),
             Step::Done => {
                 let name = self.created_name.clone().unwrap_or_default();
-                chosen = Self::draw_done(ui, &name);
+                chosen = Self::draw_done(ui, &name, &self.tr);
             }
         }
         if let Some(notice) = &self.notice {
