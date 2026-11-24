@@ -265,7 +265,7 @@ fn an_off_switch_is_the_strong_border_colour() {
         let t = theme::tokens(kind);
         for (on, expected) in [(false, t.border_strong), (true, t.accent)] {
             let painted = paint(kind, |ui| {
-                switch::switch(ui, on, egui::Sense::hover());
+                switch::switch(ui, on, egui::Sense::hover(), "Theme switch");
             });
             let track = painted
                 .rects
