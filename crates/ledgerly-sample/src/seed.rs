@@ -206,6 +206,8 @@ pub(crate) struct LineSeed {
     pub(crate) against: Option<String>,
     /// A cheque number on a bank line.
     pub(crate) chq: Option<String>,
+    /// The bank cleared the line this many days after the voucher date (the line's bank date).
+    pub(crate) cleared_days: Option<u16>,
 }
 
 /// One item line of an item invoice.

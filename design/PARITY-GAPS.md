@@ -398,11 +398,22 @@ captured: `suggested-ledger` (needs bank matching to propose a ledger, which is 
   line. The lines are the same eleven with the same amounts and dates. The narration wraps to two
   lines in its column (row height 46) where the mock wraps to up to three. This round fixed the
   focus card running off the right edge of the window (the table's remainder column pushed it).
-- **data: the reconciliation statement on Godavari is the engine's honest answer, not the mock's.**
-  `bank.brs` lists the books balance, the deposits and payments the books have with no bank date
-  (82,89,494.00 and 84,03,244.00: the invented April to October history has no bank dates) and no
-  "Balance as per imported statement", because the engine returns `Unsupported` for a statement
-  that does not state its end date (see the note on the card). The mock lists each line.
+- **closed (s9): the reconciliation statement on Godavari is no longer a wall of uncleared items.**
+  The sample seed gives each April to October line on Saptagiri a bank date (`cleared_days`, 2 or
+  3 days after the voucher date; all before the statement starts on 5 Nov), and the November
+  statement is an MT940 file (same eleven lines and balances as before) whose `:62F:` states its
+  end date, 20 Nov. `bank.brs` now shows: books 7,27,524.50; not reflected in bank: deposits
+  2,27,384.50 and payments 1,09,860.00 (the six November vouchers, none confirmed against the
+  statement yet); balance as per bank 6,10,000.00 (the mock's statement opening); balance as per
+  imported statement 8,23,305.50 (the mock's closing); difference 2,13,305.50. All engine values.
+- **gap: the reconciliation statement lists totals, not the mock's lines.** The mock's
+  statement has the same closing balance but is a different computation: it lists "In the bank,
+  not yet in the books" (the five unmatched lines) and treats Exact, Rule and AI-matched vouchers
+  as matched, with a difference of 95,781.00. Ours treats a voucher as cleared only once a user
+  confirms a match (spec 6.5), so the six November vouchers are uncleared and the difference is
+  2,13,305.50 (95,781.00 of lines not in the books plus 1,17,524.50 net of matched-but-unconfirmed
+  vouchers). Left: confirm the Exact matches in the sample (it would need audit events) or list
+  the lines.
 - **gap: the empty state's look.** `bank.empty` has the 36 px icon, the 420 px sentence and an
   Upload-icon button, and hides the tabs; the subtitle now carries the account number and month.
   Left: a File layout row under the card (functional) and the account name in the breadcrumb.
@@ -846,7 +857,7 @@ reason names the item); no state to compare with, so nothing further was changed
 ## Sample company (card S8, 2026-11-24)
 
 The sample is the crate `crates/ledgerly-sample`: a versioned, human-readable seed
-(`assets/godavari.toml`, plus the bank statement `assets/saptagiri-nov-2026.csv`) of masters and
+(`assets/godavari.toml`, plus the bank statement `assets/saptagiri-nov-2026.mt940`) of masters and
 vouchers, no totals. `ledgerly_sample::create` posts it through `ledgerly-api` (`Api::create`,
 `Command::*`, `import_bank_statement`, and `LockPeriod` last, 31 Oct 2026), so every figure on
 screen is the engine's. The capture harness opens it as `Fixture::Godavari`, with the clock fixed

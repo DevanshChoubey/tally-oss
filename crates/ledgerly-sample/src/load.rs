@@ -34,8 +34,8 @@ use crate::seed::{
 
 /// The statement files the seed can name, embedded so the loader needs no folder.
 const STATEMENTS: [(&str, &str); 1] = [(
-    "saptagiri-nov-2026.csv",
-    include_str!("../assets/saptagiri-nov-2026.csv"),
+    "saptagiri-nov-2026.mt940",
+    include_str!("../assets/saptagiri-nov-2026.mt940"),
 )];
 
 fn value_error(field: impl Into<String>, reason: impl Into<String>) -> SampleError {
@@ -528,13 +528,31 @@ fn typed_line(
             amount,
         });
     }
-    let bank = l.chq.as_ref().map(|number| BankAllocation {
-        instrument: InstrumentKind::Cheque,
-        instrument_number: Some(number.clone()),
-        instrument_date: Some(date),
-        bank_date: None,
-        favouring: None,
-    });
+    let cleared = match l.cleared_days {
+        Some(days) => Some(
+            date.checked_add(time::Duration::days(i64::from(days)))
+                .ok_or_else(|| value_error(field, "the bank date is out of range"))?,
+        ),
+        None => None,
+    };
+    let bank = match (&l.chq, cleared) {
+        (Some(number), bank_date) => Some(BankAllocation {
+            instrument: InstrumentKind::Cheque,
+            instrument_number: Some(number.clone()),
+            instrument_date: Some(date),
+            bank_date,
+            favouring: None,
+        }),
+        // A line the bank cleared with no cheque: the instrument is not recorded.
+        (None, Some(bank_date)) => Some(BankAllocation {
+            instrument: InstrumentKind::Other,
+            instrument_number: None,
+            instrument_date: None,
+            bank_date: Some(bank_date),
+            favouring: None,
+        }),
+        (None, None) => None,
+    };
     Ok(LedgerLine {
         ineligible_itc: None,
         ledger: info.id,

@@ -79,7 +79,6 @@
 | dark | balance-sheet.provisional | 0.6499 |
 | light | keys.standard | 0.6536 |
 | light | palette.commands | 0.6540 |
-| hc | bank.brs | 0.6542 |
 | dark | purchase-bill.offline-ai | 0.6543 |
 | dark | gst.gstr1 | 0.6544 |
 | dark | keys.standard | 0.6546 |
@@ -88,6 +87,7 @@
 | light | gst.gstr1 | 0.6570 |
 | dark | keys.classic | 0.6577 |
 | hc | gst.gstr3b | 0.6581 |
+| hc | bank.brs | 0.6585 |
 | hc | sales-invoice.saved | 0.6607 |
 | dark | review.default | 0.6607 |
 | light | ai-settings.local | 0.6612 |
@@ -114,12 +114,12 @@
 | light | gst.gstr3b | 0.7003 |
 | dark | balance-sheet.default | 0.7009 |
 | dark | gst.gstr3b | 0.7072 |
-| dark | bank.brs | 0.7083 |
 | hc | setup.features | 0.7087 |
 | hc | masters.gstin-error | 0.7091 |
-| light | bank.brs | 0.7098 |
 | dark | masters.items | 0.7161 |
+| light | bank.brs | 0.7175 |
 | light | masters.items | 0.7184 |
+| dark | bank.brs | 0.7190 |
 | light | payment.overdraft | 0.7305 |
 | dark | balance-sheet.voucher | 0.7309 |
 | dark | payment.overdraft | 0.7315 |
@@ -1088,18 +1088,6 @@ SSIM 0.6540
 </tr>
 </table>
 
-## hc / bank.brs
-
-SSIM 0.6542
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/hc/bank.brs.webp" width="480" alt="mock hc bank.brs"></td>
-<td><img src="app-captures/hc/bank.brs.webp" width="480" alt="app hc bank.brs"></td>
-</tr>
-</table>
-
 ## dark / purchase-bill.offline-ai
 
 SSIM 0.6543
@@ -1193,6 +1181,18 @@ SSIM 0.6581
 <tr>
 <td><img src="mock-v2/captures/states/hc/gst.gstr3b.webp" width="480" alt="mock hc gst.gstr3b"></td>
 <td><img src="app-captures/hc/gst.gstr3b.webp" width="480" alt="app hc gst.gstr3b"></td>
+</tr>
+</table>
+
+## hc / bank.brs
+
+SSIM 0.6585
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/hc/bank.brs.webp" width="480" alt="mock hc bank.brs"></td>
+<td><img src="app-captures/hc/bank.brs.webp" width="480" alt="app hc bank.brs"></td>
 </tr>
 </table>
 
@@ -1508,18 +1508,6 @@ SSIM 0.7072
 </tr>
 </table>
 
-## dark / bank.brs
-
-SSIM 0.7083
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/dark/bank.brs.webp" width="480" alt="mock dark bank.brs"></td>
-<td><img src="app-captures/dark/bank.brs.webp" width="480" alt="app dark bank.brs"></td>
-</tr>
-</table>
-
 ## hc / setup.features
 
 SSIM 0.7087
@@ -1544,18 +1532,6 @@ SSIM 0.7091
 </tr>
 </table>
 
-## light / bank.brs
-
-SSIM 0.7098
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/light/bank.brs.webp" width="480" alt="mock light bank.brs"></td>
-<td><img src="app-captures/light/bank.brs.webp" width="480" alt="app light bank.brs"></td>
-</tr>
-</table>
-
 ## dark / masters.items
 
 SSIM 0.7161
@@ -1568,6 +1544,18 @@ SSIM 0.7161
 </tr>
 </table>
 
+## light / bank.brs
+
+SSIM 0.7175
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/bank.brs.webp" width="480" alt="mock light bank.brs"></td>
+<td><img src="app-captures/light/bank.brs.webp" width="480" alt="app light bank.brs"></td>
+</tr>
+</table>
+
 ## light / masters.items
 
 SSIM 0.7184
@@ -1577,6 +1565,18 @@ SSIM 0.7184
 <tr>
 <td><img src="mock-v2/captures/states/light/masters.items.webp" width="480" alt="mock light masters.items"></td>
 <td><img src="app-captures/light/masters.items.webp" width="480" alt="app light masters.items"></td>
+</tr>
+</table>
+
+## dark / bank.brs
+
+SSIM 0.7190
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/dark/bank.brs.webp" width="480" alt="mock dark bank.brs"></td>
+<td><img src="app-captures/dark/bank.brs.webp" width="480" alt="app dark bank.brs"></td>
 </tr>
 </table>
 
