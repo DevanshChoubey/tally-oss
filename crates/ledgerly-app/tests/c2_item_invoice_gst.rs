@@ -359,3 +359,81 @@ fn an_invoice_with_a_round_off_shows_unsupported_and_does_not_save() {
     screen.save(&masters);
     assert!(screen.error_text().unwrap().contains("round-off"));
 }
+
+/// Every piece of text a frame painted, in drawing order.
+fn painted_text(out: &egui::FullOutput) -> String {
+    fn walk(shape: &egui::Shape, into: &mut String) {
+        if let egui::Shape::Text(t) = shape {
+            into.push_str(t.galley.text());
+            into.push('\n');
+        } else if let egui::Shape::Vec(shapes) = shape {
+            for inner in shapes {
+                walk(inner, into);
+            }
+        }
+    }
+    let mut text = String::new();
+    for clipped in &out.shapes {
+        walk(&clipped.shape, &mut text);
+    }
+    text
+}
+
+#[test]
+fn the_form_stays_on_screen_while_the_post_is_pending() {
+    // provenance: the sales-invoice mock keeps the sheet on screen and tells the save in a toast
+    // (index.html:1328 mount, `toast(...)`); it never replaces the sheet with a bare label. A
+    // post that queues behind a slow job must therefore leave the form drawn, with the notice
+    // "Saving..." in it.
+    let (worker, books) = setup("pending_post");
+    let fy = FinancialYear::april(2026).unwrap();
+    let Outcome::Value(mut screen) = ItemInvoiceScreen::open(
+        &books,
+        default_voucher_types()
+            .into_iter()
+            .find(|t| t.base == BaseVoucherKind::Sales)
+            .unwrap()
+            .id,
+        fy,
+        date!(2026 - 10 - 05),
+    )
+    .unwrap() else {
+        panic!("the sales type is entered on this screen");
+    };
+    fill(&mut screen, &books.masters);
+    let masters = books.masters.clone();
+    let mut app = AppCtx {
+        books: Some(books),
+        api: Some(worker),
+        lock_date: None,
+        ai_tier: None,
+    };
+    until(&mut screen, &mut app, "tax block", |s, m| {
+        matches!(s.gst_status(m), GstStatus::Computed(_))
+    });
+    // A job the worker is busy with for a moment: the post queues behind it.
+    let busy = app
+        .api
+        .as_ref()
+        .unwrap()
+        .run(|_api| std::thread::sleep(Duration::from_millis(400)));
+    screen.save(&masters);
+    let ctx = egui::Context::default();
+    // The first frame sends the post; the next ones find it pending.
+    for _ in 0..3 {
+        let out = ctx.run_ui(egui::RawInput::default(), |ui| {
+            let _stay = screen.ui(ui, &mut app);
+        });
+        let text = painted_text(&out);
+        out.drop_without_applying_deltas();
+        assert!(
+            text.contains("Narration"),
+            "the form was not drawn:\n{text}"
+        );
+    }
+    assert_eq!(screen.info_text(), Some("Saving..."));
+    drop(busy);
+    until(&mut screen, &mut app, "saved", |s, _| {
+        s.info_text() == Some("Saved.")
+    });
+}

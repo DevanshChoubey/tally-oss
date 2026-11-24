@@ -651,6 +651,10 @@ const SCROLL_SETTLE_FRAMES: u32 = 90;
 /// finish.
 const SETUP_SETTLE_FRAMES: u32 = 900;
 
+/// Frames the `sales-invoice.saved` shot waits after Ctrl+A: the post goes through the worker and
+/// the screen says "Saved." only when it answers (60 frames showed "Saving...").
+const SAVE_SETTLE_FRAMES: u32 = 900;
+
 /// One thing the harness sends after a shot's setup: a key press or typed text (the company setup
 /// wizard's name and GSTIN fields need text).
 #[derive(Clone, Copy)]
@@ -986,7 +990,14 @@ fn light_shots() -> Vec<Shot> {
         shot("keys.standard", &[palette])
             .query("Keyboard map")
             .then(&[(Key::Enter, NONE), (Key::Num2, NONE)]),
-        shot("sales-invoice.default", &[(Key::F8, NONE)]),
+        // A filled invoice to a Maharashtra buyer, as the mock's default shows.
+        pumps_invoice_line(
+            "sales-invoice.default",
+            ("Patil", "27"),
+            "HDPE",
+            "10",
+            "1500",
+        ),
         shot("receipt.default", &[(Key::F6, NONE)]),
         shot("payment.default", &[(Key::F5, NONE)]),
         shot("bank.default", &[palette])
@@ -1099,7 +1110,7 @@ fn light_shots() -> Vec<Shot> {
         // (index.html sales-invoice.period-locked). Enter then goes on to the customer.
         shot("sales-invoice.period-locked", &[(Key::F8, NONE)])
             .on(Fixture::Stocked)
-            .click(308.0, 202.0)
+            .click(360.0, 215.0)
             .press(&[(Key::End, NONE)])
             .press(&[(Key::Backspace, NONE); 12])
             .type_text("31-10-2026")
@@ -1125,8 +1136,16 @@ fn light_shots() -> Vec<Shot> {
             "1500",
         )
         .press(&[(Key::Enter, NONE), (Key::Enter, NONE)]),
-        // sales-invoice.saved is not captured: answering the question draws an empty content
-        // area in the harness (PARITY-GAPS, Sales invoice).
+        // Yes on the save question: the invoice is posted and a fresh one opens (index.html
+        // sales-invoice.saved).
+        pumps_invoice_line(
+            "sales-invoice.saved",
+            ("Narmada", "24"),
+            "HDPE",
+            "10",
+            "1500",
+        )
+        .press(&[(Key::Enter, NONE), (Key::Enter, NONE), (Key::Enter, NONE)]),
     ]
 }
 
@@ -1345,6 +1364,8 @@ impl eframe::App for Snapshots {
                 // setup steps draw at once and settle like any shot.
                 let settle = if self.shots[self.index].state == "setup.done" {
                     SETUP_SETTLE_FRAMES
+                } else if self.shots[self.index].state == "sales-invoice.saved" {
+                    SAVE_SETTLE_FRAMES
                 } else {
                     60
                 };
@@ -1399,6 +1420,9 @@ fn parse_args() -> (PathBuf, Option<String>, bool) {
 }
 
 fn main() -> eframe::Result<()> {
+    // Names this build in the binary, so a script can tell a copy of it from another branch's
+    // build of the same example in a shared target directory.
+    std::hint::black_box("ledgerly-sheet-marker");
     // The setup captures create a company file; the wizard never overwrites one, so clear the last.
     let _ = std::fs::create_dir_all("target/setup-capture");
     let _ = std::fs::remove_file(SETUP_FILE);

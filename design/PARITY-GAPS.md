@@ -367,11 +367,10 @@ captured: `suggested-ledger` (needs bank matching to propose a ledger, which is 
   will not appear", help.tallysolutions.com/tally-prime/sales-process/faq-sales/), both read
   2026-11-23. Choosing the mode from Maintain Inventory is our choice: the pages read are silent
   on what that setting does to the mode.
-- **data: the capture is an accounting invoice; the mock's is an item invoice.** Fictional
-  Traders keeps no inventory, so `sales-invoice.default` shows an empty accounting invoice where
-  the mock (index.html, `sales-invoice`) shows Godavari Drip's three-item invoice with its tax.
-  The pair cannot match until the capture company keeps inventory or the mock has an accounting
-  invoice state.
+- **data: the capture is not Godavari Drip's three-item invoice.** `sales-invoice.default` is
+  captured on Fictional Pumps (inventory on) as an item invoice with one HDPE line to Patil Agro
+  Stores; the mock (index.html, `sales-invoice`) shows Godavari Drip's three items, its narration
+  and e-Invoice status. Fictional Traders (no inventory) still opens an accounting invoice.
 - **deferred: As Voucher mode.** TallyPrime's Ctrl+H offers Item Invoice, Accounting Invoice
   and As Voucher (help.tallysolutions.com/sales-of-goods-services/). Ctrl+H here switches
   between the first two only, as the mock's toast says; As Voucher is not built (the GST engine
@@ -391,22 +390,56 @@ captured: `suggested-ledger` (needs bank matching to propose a ledger, which is 
 The item-invoice states are captured on a second company file with inventory on, so the
 Fictional Traders figures are unchanged.
 
-- **deferred: the item list is a bare list.** `sales-invoice.item-list` lists matching items
-  only; the mock adds a header row, each item's stock and rate, and a Create row.
+- **deferred: the item list shows the name and unit only.** `sales-invoice.item-list` floats under
+  the item field as the mock's (`.ta`, index.html:263), with a caption, the picked row on the
+  accent tint and a Create row; the mock's rows also carry HSN, rate and stock, and the caption
+  its "7 of 7" count. Our entries carry the masters' fields the screen reads, no more.
 - **needs a decision: the place of supply is not filled from the party.** The capture types it.
   No help.tallysolutions.com page was read on whether the party's state fills it; it stays as is
   until one is.
 - **deferred: inter-state and B2C details.** `sales-invoice.gst-inter-state` and `.b2c` show the
   IGST or CGST/SGST block, but not the mock's place-of-supply note or per-rate breakdown.
-- **deferred: validation look.** `sales-invoice.validation-error` lists one reason as a note, with
-  no red outline on the field; the mock lists every problem and outlines the fields.
-- **deferred: period-locked look.** `sales-invoice.period-locked` shows the lock note (the lock
-  date now comes from the company file, `Api::lock_date`), but not the mock's banner layout.
-- **deferred: save confirmation.** `sales-invoice.save-confirm` is a compact prompt; the mock
-  shows a summary card with the total.
-- **bug: the saved state draws nothing in the harness.** Answering the save question in the
-  capture harness leaves the content area empty (breadcrumb only), so `sales-invoice.saved` is
-  not captured. Not yet traced to the screen or the harness; it needs a failing test first.
+- **deferred: validation lists one reason.** `sales-invoice.validation-error` outlines the item
+  and quantity inputs in red as the mock does, and lists the line problems in the foot; the mock
+  also headlines "N things to fix before saving" with every message in one note.
+- **by design: the period-locked banner reads "lock date".** The bar is the mock's (inside the
+  card, above the head, lock icon, bold lead). Ours says "Choose a later date to save" where the
+  mock says "Press F2 to change the date": the date is a plain field here, F2 is not bound.
+- **deferred: save confirmation.** `sales-invoice.save-confirm` draws the mock's green bar inside
+  the card with Yes and No; the bar's lead says "Save this invoice?" because the voucher number
+  is not shown (see above). The mock scrolls the page to the bar, ours does not.
+- **fixed: the saved state.** `sales-invoice.saved` drew nothing because the screen replaced
+  itself with a bare "Saving..." label while the worker posted, and the capture waited 60 frames.
+  The form now stays up, disabled, with "Saving..." in the foot (test
+  `the_form_stays_on_screen_while_the_post_is_pending`), and the harness waits
+  `SAVE_SETTLE_FRAMES`. The capture shows the fresh invoice with "Saved." and no toast: the mock's
+  "Saved SI/0418 ... Undo" toast is not built.
+
+### Voucher sheet (round S8, 2026-11-24)
+
+The sales, purchase, payment and receipt screens draw to one shared sheet
+(`screens/voucher_sheet.rs`): four-column head, line table with bare cell inputs, foot with the
+340 point tax box, floating type-ahead. Left on purpose or not built:
+
+- **deferred: e-Invoice field, "More details" button, voucher number in the title, Alt+R narration
+  recall, the place-of-supply note and the party balance line** (index.html, `sales-invoice`).
+  The engine exposes none of them yet.
+- **by design: the date is an input.** The mock's date is read-only with F2; ours takes typing
+  (dd-mm-yyyy) and its long form is not shown under it, so the head rows keep the mock's height.
+- **by design: two extra columns, Disc % and Typed amount.** The mock's item table has neither;
+  both are live inputs of the screen (the typed amount overrides rate times quantity).
+- **by design: the Sales ledger is an input.** The mock shows a fixed "Sales"; ours lets the user
+  choose any sales ledger and lists them under the field.
+- **deferred: payment and receipt "Mode", "Paid out", "Balance after".** The mock's Mode field and
+  the box that totals the voucher need engine figures that do not exist (the UI may not add the
+  lines up, rule C4). The account's balance is shown under the account as in the mock.
+- **data: the voucher states are captured on Fictional Traders** (no lines entered, list open on
+  the account) where the mock shows a Freight payment with a balance; the empty-state pair cannot
+  match until the harness enters a voucher.
+- **by design: no Discard button.** The mock has Save only; Esc leaves the screen, with the
+  discard question when the voucher has been touched.
+- **gap: the focus ring is 2 points outside the field in the accent**, the mock's outline
+  (index.html:65); the hc theme widens it as everywhere else.
 
 ## Review queue (card W4, round of 2026-11-23)
 

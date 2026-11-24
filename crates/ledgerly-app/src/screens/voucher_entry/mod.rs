@@ -112,10 +112,9 @@ impl Screen for VoucherEntryScreen {
 
     fn ui(&mut self, ui: &mut Ui, ctx: &mut AppCtx) -> ScreenAction {
         self.poll_ledger_create(ui);
-        if self.posting.is_some() {
-            self.wait_for_post(ui);
-            return ScreenAction::Stay;
-        }
+        // A save that is out is polled first; the sheet is drawn either way, taking no input
+        // while it waits.
+        self.wait_for_post(ui);
         let action = if let Some(books) = ctx.books.as_ref() {
             self.draw(ui, &books.masters)
         } else {

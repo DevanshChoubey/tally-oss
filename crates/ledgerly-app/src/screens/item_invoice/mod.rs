@@ -454,7 +454,6 @@ enum UiEvent {
     Typed(Field),
     Submit { field: Field, back: bool },
     Pick(usize),
-    Leave,
 }
 
 #[derive(Clone, Copy)]

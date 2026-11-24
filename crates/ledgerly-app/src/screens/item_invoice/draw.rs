@@ -1,30 +1,30 @@
 //! Drawing the screen with egui. Draws and reports events; it computes nothing.
 //!
 //! The layout follows the mock (`design/mock-v2/index.html`, `sales-invoice`): a page head with
-//! the save action, a header card (date, party, place of supply, party GSTIN, sales ledger,
-//! reference), the line table, and a footer card with the narration on the left and the engine's
-//! tax box on the right. Every amount shown is one the engine returned (rule C4). The quantity,
-//! rate, discount and typed amount are the user's own input, shown as typed.
+//! the save action, then one voucher sheet (see [`crate::screens::voucher_sheet`]) holding the lock
+//! bar when the date is locked, the head (date, party, place of supply, party GSTIN, sales ledger,
+//! reference), the line table, and the foot with the narration on the left and the engine's tax
+//! box on the right. The type-ahead list floats under its field. Every amount shown is one the
+//! engine returned (rule C4). The quantity, rate, discount and typed amount are the user's own
+//! input, shown as typed.
 
 use super::compute;
-use super::draft::{InvoiceRow, ParticularRow, line_amount};
+use super::draft::line_amount;
 use super::keys::{Prompt, read_keys};
 use super::{Field, GstBlock, GstStatus, InvoiceMode, ItemInvoiceScreen, Notice, UiEvent};
 use crate::screen::KeyHint;
-use crate::screens::voucher_entry::parse_entry_date;
+use crate::screens::voucher_sheet::{self as sheet, Col, InputSpec, Look, Total};
 use crate::shell::submit::{self, CommandReply};
-use crate::theme::{SPACE_3, SPACE_4, TEXT_BODY, TEXT_H2, TEXT_META};
+use crate::theme::TEXT_BODY;
 use crate::ui::a11y;
 use crate::ui::badge::{BadgeKind, badge};
 use crate::ui::button::{ButtonKind, button};
-use crate::ui::card::card;
 use crate::ui::note::{NoteKind, note};
 use crate::ui::page_head::page_head;
-use crate::ui::prov::{ProvKind, prov};
-use crate::ui::{bold_font, format, table, tokens};
+use crate::ui::prov::ProvKind;
+use crate::ui::{format, para_text, tokens};
 use crate::{AppCtx, Screen, ScreenAction};
-use egui::{Align, Id, Layout, Rect, RichText, Ui};
-use egui_extras::{Column, TableRow};
+use egui::{Frame, Id, Margin, Rect, Response, RichText, Ui};
 use ledgerly_api::Command;
 use ledgerly_core::LedgerId;
 use ledgerly_core::format::amount_in_words;
@@ -38,44 +38,76 @@ const SUBTITLE: &str =
 /// The one-line purpose under the page title of an accounting invoice.
 const ACCOUNTING_SUBTITLE: &str = "Accounting invoice · ledgers under Particulars; tax is worked out by the GST engine when the invoice changes";
 
-/// Width of the header's date field, and so of its first column.
-const DATE_WIDTH: f32 = 120.0;
-/// Width of the party and ledger fields, and so of the header's second column.
-const PARTY_WIDTH: f32 = 300.0;
-/// Width of the place and reference fields, and so of the header's third column.
-const PLACE_WIDTH: f32 = 200.0;
-
-/// The particulars table's column headings, and whether each column holds numbers.
-const PARTICULAR_HEADS: [(&str, bool); 4] = [
-    ("#", false),
-    ("Particulars", false),
-    ("Amount", true),
-    ("GST", true),
+/// The item table: heading, width and whether the column holds figures. The mock's columns run
+/// # Item HSN Qty Unit Rate GST Amount (index.html:1283); ours adds Disc % and Typed amount, live
+/// inputs the mock has no column for, between Rate and GST.
+const LINE_COLS: [Col; 10] = [
+    Col::text("#", 36.0),
+    Col::rest("Item"),
+    Col::text("HSN", 70.0),
+    Col::num("Qty", 90.0),
+    Col::text("Unit", 60.0),
+    Col::num("Rate", 120.0),
+    Col::num("Disc %", 64.0),
+    Col::num("Typed amount", 108.0),
+    Col::num("GST", 60.0),
+    Col::num("Amount", 140.0),
 ];
 
-/// Where a text field sits in the focus order, how wide it is and what it says when empty.
+/// The particulars table of an accounting invoice.
+const PARTICULAR_COLS: [Col; 4] = [
+    Col::text("#", 36.0),
+    Col::rest("Particulars"),
+    Col::num("Amount", 140.0),
+    Col::num("GST", 60.0),
+];
+
+/// Where a text field sits in the focus order and what it says when empty.
 struct FieldSpec {
     id: Id,
     field: Field,
-    width: f32,
     /// The name a screen reader gives the field: its caption, or the column heading.
     name: &'static str,
     hint: &'static str,
 }
 
-/// The line table's column headings, and whether each column holds numbers.
-const LINE_HEADS: [(&str, bool); 10] = [
-    ("#", false),
-    ("Item", false),
-    ("HSN", false),
-    ("Qty", true),
-    ("Unit", false),
-    ("Rate", true),
-    ("Disc %", true),
-    ("Typed amount", true),
-    ("GST", true),
-    ("Amount", true),
-];
+/// How a field looks: the sheet's input look, whether it holds figures, whether it is flagged.
+#[derive(Clone, Copy)]
+struct Style {
+    look: Look,
+    numeric: bool,
+    invalid: bool,
+}
+
+/// A box in the head.
+const BOXED: Style = Style {
+    look: Look::Boxed,
+    numeric: false,
+    invalid: false,
+};
+
+/// A text cell of the line table.
+const CELL: Style = Style {
+    look: Look::Cell,
+    numeric: false,
+    invalid: false,
+};
+
+/// A cell of the line table that holds figures.
+const CELL_NUM: Style = Style {
+    look: Look::Cell,
+    numeric: true,
+    invalid: false,
+};
+
+/// What every field of a frame reports to: the field the keyboard is wanted on, the field it is on,
+/// the events, and where the type-ahead list for the focused field hangs.
+struct Cx<'a> {
+    want: Option<Field>,
+    focus: Field,
+    events: &'a mut Vec<UiEvent>,
+    anchor: &'a mut Option<Rect>,
+}
 
 /// The button pressed this frame, reported after the widgets are drawn.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -84,8 +116,6 @@ enum Click {
     Save,
     /// No on the save question.
     Cancel,
-    /// Discard the invoice.
-    Discard,
     /// Change the mode (Ctrl+H).
     ChangeMode,
 }
@@ -142,236 +172,55 @@ pub fn tax_rows(block: &GstBlock) -> Vec<(String, String)> {
     rows.push(("Round off".to_owned(), format::amount(block.round_off)));
     rows
 }
-
-/// One line of the item table: its number, the item and number fields, and the engine's figures.
-fn line_row(
-    row: &mut TableRow<'_, '_>,
-    line: &LineShown,
-    cells: &mut InvoiceRow,
-    base: Id,
-    i: usize,
-    want: Option<Field>,
-    ev: &mut Vec<UiEvent>,
-) {
-    row.set_selected(line.focused);
-    row.col(|ui| table::text(ui, &line.number.to_string()));
-    row.col(|ui| {
-        let s = FieldSpec {
-            id: base.with(("item", i)),
-            field: Field::Item(i),
-            width: ui.available_width(),
-            name: "Item",
-            hint: "Item: type to search",
-        };
-        text_field(ui, &s, &mut cells.item_text, want, ev);
-    });
-    row.col(|ui| table::text(ui, &line.hsn));
-    row.col(|ui| {
-        let id = base.with(("qty", i));
-        numeric_field(
-            ui,
-            id,
-            Field::Qty(i),
-            "Qty",
-            "Qty",
-            &mut cells.qty_text,
-            want,
-            ev,
-        );
-    });
-    row.col(|ui| table::text(ui, &line.unit));
-    row.col(|ui| {
-        let id = base.with(("rate", i));
-        numeric_field(
-            ui,
-            id,
-            Field::Rate(i),
-            "Rate",
-            "Rate",
-            &mut cells.rate_text,
-            want,
-            ev,
-        );
-    });
-    row.col(|ui| {
-        let id = base.with(("disc", i));
-        numeric_field(
-            ui,
-            id,
-            Field::Discount(i),
-            "Discount",
-            "%",
-            &mut cells.discount_text,
-            want,
-            ev,
-        );
-    });
-    row.col(|ui| {
-        let id = base.with(("amt", i));
-        numeric_field(
-            ui,
-            id,
-            Field::Amount(i),
-            "Amount",
-            "optional",
-            &mut cells.amount_text,
-            want,
-            ev,
-        );
-    });
-    row.col(|ui| table::numeric(ui, &line.gst));
-    row.col(|ui| table::numeric(ui, &line.amount));
-}
-
-/// One particular of an accounting invoice: its number, the ledger and amount fields, and the
-/// GST rate the engine applied (`gst`, empty until the engine has answered).
-#[allow(
-    clippy::too_many_arguments,
-    reason = "one table row's widgets and where it reports to"
-)]
-fn particular_row(
-    row: &mut TableRow<'_, '_>,
-    cells: &mut ParticularRow,
-    gst: &str,
-    base: Id,
-    i: usize,
-    focused: bool,
-    want: Option<Field>,
-    ev: &mut Vec<UiEvent>,
-) {
-    row.set_selected(focused);
-    row.col(|ui| table::text(ui, &i.saturating_add(1).to_string()));
-    row.col(|ui| {
-        let s = FieldSpec {
-            id: base.with(("ledger", i)),
-            field: Field::Ledger(i),
-            width: ui.available_width(),
-            name: "Ledger",
-            hint: "Ledger: type to search",
-        };
-        text_field(ui, &s, &mut cells.ledger_text, want, ev);
-    });
-    row.col(|ui| {
-        let id = base.with(("ledger-amt", i));
-        numeric_field(
-            ui,
-            id,
-            Field::LedgerAmount(i),
-            "Amount",
-            "Amount",
-            &mut cells.amount_text,
-            want,
-            ev,
-        );
-    });
-    row.col(|ui| table::numeric(ui, gst));
-}
-
-/// A right-aligned text field for a number in a table cell, as wide as the cell.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "each argument is a distinct field of the cell"
-)]
-fn numeric_field(
-    ui: &mut Ui,
-    id: Id,
-    field: Field,
-    name: &'static str,
-    hint: &'static str,
-    text: &mut String,
-    want: Option<Field>,
-    events: &mut Vec<UiEvent>,
-) {
-    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-        let spec = FieldSpec {
-            id,
-            field,
-            width: ui.available_width(),
-            name,
-            hint,
-        };
-        text_field(ui, &spec, text, want, events);
-    });
-}
-
-/// A text field: reports focus, typing and Enter as events.
+/// A text field: reports focus, typing and Enter as events, and notes where it sits so the list
+/// can hang under it.
 fn text_field(
     ui: &mut Ui,
+    cx: &mut Cx<'_>,
     spec: &FieldSpec,
     text: &mut String,
-    want: Option<Field>,
-    events: &mut Vec<UiEvent>,
-) {
-    let response = ui.add(
-        egui::TextEdit::singleline(text)
-            .id(spec.id)
-            .desired_width(spec.width)
-            .hint_text(spec.hint),
+    style: Style,
+) -> Response {
+    let response = sheet::input(
+        ui,
+        text,
+        &InputSpec {
+            id: spec.id,
+            hint: spec.hint,
+            look: style.look,
+            numeric: style.numeric,
+            invalid: style.invalid,
+            width: None,
+        },
     );
     a11y::name(ui, &response, egui::Role::TextInput, spec.name);
-    if want == Some(spec.field) {
+    if cx.want == Some(spec.field) {
         response.request_focus();
     }
     if response.has_focus() {
-        events.push(UiEvent::Focus(spec.field));
+        cx.events.push(UiEvent::Focus(spec.field));
+    }
+    if cx.focus == spec.field {
+        *cx.anchor = Some(response.rect);
     }
     if response.changed() {
-        events.push(UiEvent::Typed(spec.field));
+        cx.events.push(UiEvent::Typed(spec.field));
     }
     if response.lost_focus() && ui.ctx().input(|i| i.key_pressed(egui::Key::Enter)) {
         let back = ui.ctx().input(|i| i.modifiers.shift);
-        events.push(UiEvent::Submit {
+        cx.events.push(UiEvent::Submit {
             field: spec.field,
             back,
         });
     }
+    response
 }
 
-/// A small caption above a field, in the secondary text colour.
-fn caption(ui: &mut Ui, label: &str) {
+/// A cell of plain text in the line table, in the secondary ink unless `strong`.
+fn cell_text(ui: &mut Ui, text: &str, strong: bool) {
     let t = tokens(ui);
-    ui.label(RichText::new(label).size(TEXT_META).color(t.text_2));
-}
-
-/// How tall the type-ahead list grows before it scrolls, so a long list (every ledger, on an
-/// empty query) never pushes the rest of the invoice off the screen.
-const PICKER_MAX_HEIGHT: f32 = 220.0;
-
-/// The type-ahead list under a field: one selectable row per entry; a click picks it. Returns
-/// where the list was drawn, or `None` when there is nothing to list.
-fn draw_picker(
-    ui: &mut Ui,
-    labels: &[String],
-    pick: usize,
-    events: &mut Vec<UiEvent>,
-) -> Option<Rect> {
-    if labels.is_empty() {
-        return None;
-    }
-    let shown = ui.group(|ui| {
-        // A grid cell offers little height, and a scroll area then shrinks to its default
-        // minimum (about three rows); a long list keeps its full height instead.
-        egui::ScrollArea::vertical()
-            .max_height(PICKER_MAX_HEIGHT)
-            .min_scrolled_height(PICKER_MAX_HEIGHT)
-            .show(ui, |ui| {
-                for (j, label) in labels.iter().enumerate() {
-                    // Click-only: a list entry is not a Tab stop, so Tab leaves the field for the
-                    // next one. Up, Down and Enter move and pick the highlighted entry instead.
-                    let row = ui.add(
-                        egui::Button::selectable(j == pick, label.as_str())
-                            .sense(egui::Sense::CLICK),
-                    );
-                    if j == pick {
-                        row.scroll_to_me(None);
-                    }
-                    if row.clicked() {
-                        events.push(UiEvent::Pick(j));
-                    }
-                }
-            });
-    });
-    Some(shown.response.rect)
+    let ink = if strong { t.text } else { t.text_2 };
+    ui.label(para_text(text, TEXT_BODY, ink));
 }
 
 /// The party's GSTIN with its check badge, or the B2C words for an unregistered party.
@@ -407,47 +256,95 @@ fn gstin_line(ui: &mut Ui, masters: &Masters, party: Option<LedgerId>) {
         }
     }
 }
-
-/// One tax-box line: the label on the left, the amount right-aligned.
-fn tax_line(ui: &mut Ui, label: &str, value: &str) {
-    let t = tokens(ui);
-    ui.horizontal(|ui| {
-        ui.label(RichText::new(label).size(TEXT_BODY).color(t.text_2));
-        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            table::numeric(ui, value);
-        });
-    });
+/// The tax box for an answer the engine computed: its rows, then the invoice total with its
+/// engine tag, and the total in words.
+fn tax_box(ui: &mut Ui, block: &GstBlock) {
+    let rows = tax_rows(block);
+    let total = format::amount(block.invoice_total);
+    sheet::taxbox(
+        ui,
+        &rows,
+        Some(&Total {
+            label: "Invoice total",
+            value: &total,
+            tag: Some(ProvKind::Engine),
+        }),
+    );
+    sheet::words(ui, &amount_in_words(block.invoice_total));
 }
 
-/// The tax box for an answer the engine computed: its rows, then the invoice total with its
-/// engine tag and the total in words.
-fn tax_box(ui: &mut Ui, block: &GstBlock) {
-    let t = tokens(ui);
-    for (label, value) in tax_rows(block) {
-        tax_line(ui, &label, &value);
+/// The title of the type-ahead list for the open picker.
+fn list_caption(focus: Field) -> &'static str {
+    match focus {
+        Field::Party => "Parties",
+        Field::Item(_) => "Stock items",
+        Field::Account | Field::Ledger(_) => "Ledgers",
+        Field::Date
+        | Field::Number
+        | Field::Place
+        | Field::Reference
+        | Field::Qty(_)
+        | Field::Rate(_)
+        | Field::Discount(_)
+        | Field::Amount(_)
+        | Field::LedgerAmount(_)
+        | Field::Narration => "Choices",
     }
-    ui.separator();
-    ui.horizontal(|ui| {
-        let h2 = bold_font(ui, TEXT_H2);
-        ui.label(
-            RichText::new("Invoice total")
-                .font(h2.clone())
-                .color(t.text),
-        );
-        prov(ui, ProvKind::Engine);
-        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            ui.label(
-                RichText::new(format::amount(block.invoice_total))
-                    .font(h2)
-                    .color(t.text),
-            );
+}
+
+/// The save question at the foot of the sheet (index.html `savebar`): a green bar with the
+/// question in bold, then Yes and No.
+fn save_bar(ui: &mut Ui, clicks: &mut Option<Click>) {
+    let t = tokens(ui);
+    let width = ui.available_width() - 32.0;
+    Frame::new()
+        .outer_margin(Margin {
+            left: 16,
+            right: 16,
+            top: 0,
+            bottom: 16,
+        })
+        .fill(t.ok_soft)
+        .corner_radius(crate::theme::RADIUS_S)
+        .inner_margin(Margin::symmetric(12, 10))
+        .show(ui, |ui| {
+            ui.set_width(width - 24.0);
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 10.0;
+                crate::ui::icon::icon(ui, crate::ui::icon::Icon::Save, t.ok);
+                let mut job = egui::text::LayoutJob::default();
+                let line = crate::ui::line_height(crate::theme::TEXT_META);
+                job.append(
+                    "Save this invoice?",
+                    0.0,
+                    egui::TextFormat {
+                        font_id: crate::ui::bold_font(ui, crate::theme::TEXT_META),
+                        color: t.ok,
+                        line_height: Some(line),
+                        ..egui::TextFormat::default()
+                    },
+                );
+                job.append(
+                    " The engine checks it again before it is posted.",
+                    0.0,
+                    egui::TextFormat {
+                        font_id: egui::FontId::proportional(crate::theme::TEXT_META),
+                        color: t.ok,
+                        line_height: Some(line),
+                        ..egui::TextFormat::default()
+                    },
+                );
+                ui.label(job);
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if button(ui, "No", Some("Esc"), ButtonKind::Secondary).clicked() {
+                        *clicks = Some(Click::Cancel);
+                    }
+                    if button(ui, "Yes", Some("Enter"), ButtonKind::Primary).clicked() {
+                        *clicks = Some(Click::Save);
+                    }
+                });
+            });
         });
-    });
-    ui.label(
-        RichText::new(amount_in_words(block.invoice_total))
-            .size(TEXT_META)
-            .color(t.text_2),
-    );
 }
 
 impl ItemInvoiceScreen {
@@ -507,128 +404,120 @@ impl ItemInvoiceScreen {
         shown
     }
 
+    /// The head: the fields in four equal columns, the party across two (`.vhead`).
     #[expect(
         clippy::too_many_lines,
         reason = "one block of header fields, each named by its caption"
     )]
-    fn draw_header(
-        &mut self,
-        ui: &mut Ui,
-        base: Id,
-        masters: &Masters,
-        labels: &[String],
-        ev: &mut Vec<UiEvent>,
-    ) {
-        let want = self.focus_pending.then_some(self.focus);
-        let (focus, pick, fy) = (self.focus, self.pick_index, self.fy);
+    fn draw_head(&mut self, ui: &mut Ui, base: Id, masters: &Masters, cx: &mut Cx<'_>) {
         let kind = self.draft.kind;
-        let t = tokens(ui);
-        let spec = |id: &str, name: &'static str, field: Field, width: f32, hint: &'static str| {
-            FieldSpec {
-                id: base.with(id),
-                field,
-                width,
-                name,
-                hint,
-            }
+        let mode = self.draft.mode;
+        let required = self.draft.number_required;
+        let party = self.draft.party;
+        let spec = |id: &str, name: &'static str, field: Field, hint: &'static str| FieldSpec {
+            id: base.with(id),
+            field,
+            name,
+            hint,
         };
-        egui::Grid::new(base.with("header"))
-            .num_columns(3)
-            .spacing([SPACE_4, SPACE_3])
-            .show(ui, |ui| {
-                // A grid column has no width until a frame has measured it, and egui then lays it
-                // out at its minimum, which wraps every label in it. The first row's cells say
-                // how wide their columns are.
-                ui.vertical(|ui| {
-                    ui.set_min_width(DATE_WIDTH);
-                    caption(ui, "Date");
-                    let s = spec("date", "Date", Field::Date, DATE_WIDTH, "dd-mm-yyyy");
-                    text_field(ui, &s, &mut self.draft.date_text, want, ev);
-                    if let Ok(date) = parse_entry_date(&self.draft.date_text, fy) {
-                        ui.label(
-                            RichText::new(format::date(date))
-                                .size(TEXT_META)
-                                .color(t.text_3),
-                        );
-                    }
-                });
-                ui.vertical(|ui| {
-                    ui.set_min_width(PARTY_WIDTH);
-                    caption(ui, kind.party_label());
-                    let s = spec(
-                        "party",
-                        kind.party_label(),
-                        Field::Party,
-                        PARTY_WIDTH,
-                        "type to search",
-                    );
-                    text_field(ui, &s, &mut self.draft.party_text, want, ev);
-                    if focus == Field::Party {
-                        self.shown.picker = draw_picker(ui, labels, pick, ev);
-                    }
-                });
-                ui.vertical(|ui| {
-                    ui.set_min_width(PLACE_WIDTH);
-                    caption(ui, "Place of supply");
-                    let s = spec(
-                        "place",
-                        "Place of supply",
-                        Field::Place,
-                        PLACE_WIDTH,
-                        "code or name",
-                    );
-                    text_field(ui, &s, &mut self.draft.place_text, want, ev);
-                });
-                ui.end_row();
-
-                ui.vertical(|ui| {
-                    caption(ui, "Party GSTIN");
-                    gstin_line(ui, masters, self.draft.party);
-                });
-                match self.draft.mode {
+        let mut fields: Vec<(&'static str, Rect)> = Vec::new();
+        let mut note_field = |name: &'static str, rect: Rect| fields.push((name, rect));
+        sheet::head(ui, |ui, total| {
+            sheet::head_row(ui, |ui| {
+                let shown = sheet::fld(
+                    ui,
+                    total,
+                    1,
+                    |ui| sheet::caption(ui, "Date", None),
+                    |ui| {
+                        let s = spec("date", "Date", Field::Date, "dd-mm-yyyy");
+                        text_field(ui, cx, &s, &mut self.draft.date_text, BOXED);
+                    },
+                );
+                note_field("Date", shown.response.rect);
+                let label = kind.party_label();
+                let shown = sheet::fld(
+                    ui,
+                    total,
+                    2,
+                    |ui| sheet::caption(ui, label, None),
+                    |ui| {
+                        let s = spec("party", label, Field::Party, "type to search");
+                        text_field(ui, cx, &s, &mut self.draft.party_text, BOXED);
+                    },
+                );
+                note_field(label, shown.response.rect);
+                let shown = sheet::fld(
+                    ui,
+                    total,
+                    1,
+                    |ui| sheet::caption(ui, "Place of supply", None),
+                    |ui| {
+                        let s = spec("place", "Place of supply", Field::Place, "code or name");
+                        text_field(ui, cx, &s, &mut self.draft.place_text, BOXED);
+                    },
+                );
+                note_field("Place of supply", shown.response.rect);
+            });
+            sheet::head_row(ui, |ui| {
+                let shown = sheet::fld(
+                    ui,
+                    total,
+                    1,
+                    |ui| sheet::caption(ui, "Party GSTIN", None),
+                    |ui| sheet::read_only(ui, |ui| gstin_line(ui, masters, party)),
+                );
+                note_field("Party GSTIN", shown.response.rect);
+                match mode {
                     InvoiceMode::Item => {
-                        ui.vertical(|ui| {
-                            caption(ui, kind.account_label());
-                            let s = spec(
-                                "account",
-                                kind.account_label(),
-                                Field::Account,
-                                PARTY_WIDTH,
-                                "type to search",
-                            );
-                            text_field(ui, &s, &mut self.draft.account_text, want, ev);
-                            if focus == Field::Account {
-                                self.shown.picker = draw_picker(ui, labels, pick, ev);
-                            }
-                        });
+                        let label = kind.account_label();
+                        let shown = sheet::fld(
+                            ui,
+                            total,
+                            1,
+                            |ui| sheet::caption(ui, label, None),
+                            |ui| {
+                                let s = spec("account", label, Field::Account, "type to search");
+                                text_field(ui, cx, &s, &mut self.draft.account_text, BOXED);
+                            },
+                        );
+                        note_field(label, shown.response.rect);
                     }
                     // The sales FAQ: no Sales ledger field in accounting invoice mode.
                     InvoiceMode::Accounting => {
-                        ui.label("");
+                        ui.allocate_space(egui::vec2(sheet::span_width(total, 1), 0.0));
                     }
                 }
-                ui.vertical(|ui| {
-                    caption(ui, kind.reference_label());
-                    let s = spec(
-                        "ref",
-                        kind.reference_label(),
-                        Field::Reference,
-                        PLACE_WIDTH,
-                        "Optional",
-                    );
-                    text_field(ui, &s, &mut self.draft.reference_text, want, ev);
-                });
-                ui.end_row();
-
-                if self.draft.number_required {
-                    ui.vertical(|ui| {
-                        caption(ui, "Voucher no.");
-                        let s = spec("number", "Voucher no.", Field::Number, 160.0, "Required");
-                        text_field(ui, &s, &mut self.draft.number_text, want, ev);
-                    });
-                    ui.end_row();
-                }
+                let label = kind.reference_label();
+                let shown = sheet::fld(
+                    ui,
+                    total,
+                    1,
+                    |ui| sheet::caption(ui, label, None),
+                    |ui| {
+                        let s = spec("ref", label, Field::Reference, "Optional");
+                        text_field(ui, cx, &s, &mut self.draft.reference_text, BOXED);
+                    },
+                );
+                note_field(label, shown.response.rect);
             });
+            if required {
+                sheet::head_row(ui, |ui| {
+                    let shown = sheet::fld(
+                        ui,
+                        total,
+                        1,
+                        |ui| sheet::caption(ui, "Voucher no.", None),
+                        |ui| {
+                            let s = spec("number", "Voucher no.", Field::Number, "Required");
+                            text_field(ui, cx, &s, &mut self.draft.number_text, BOXED);
+                        },
+                    );
+                    note_field("Voucher no.", shown.response.rect);
+                });
+            }
+        });
+        self.shown.fields = fields;
     }
 
     /// The GST rate the engine applied to each particular, as shown (`18%`), or empty for a
@@ -659,18 +548,76 @@ impl ItemInvoiceScreen {
         rates
     }
 
-    fn draw_particulars(
-        &mut self,
-        ui: &mut Ui,
-        base: Id,
-        masters: &Masters,
-        labels: &[String],
-        ev: &mut Vec<UiEvent>,
-    ) {
-        let want = self.focus_pending.then_some(self.focus);
-        let (focus, pick) = (self.focus, self.pick_index);
+    /// The item table, or the particulars table of an accounting invoice.
+    fn draw_lines(&mut self, ui: &mut Ui, base: Id, masters: &Masters, cx: &mut Cx<'_>) {
+        if self.draft.mode == InvoiceMode::Accounting {
+            return self.draw_particulars(ui, base, masters, cx);
+        }
+        let shown = self.lines_shown(masters);
+        let rows = &mut self.draft.rows;
+        let rects = sheet::lines(
+            ui,
+            &LINE_COLS,
+            shown.len(),
+            |r| shown.get(r).is_some_and(|l| l.focused),
+            |ui, r, c| {
+                let (Some(line), Some(cells)) = (shown.get(r), rows.get_mut(r)) else {
+                    return;
+                };
+                let item_flag =
+                    !line.focused && cells.item.is_none() && !cells.item_text.trim().is_empty();
+                let qty_flag = cells.item.is_some() && cells.qty_text.trim().is_empty();
+                let spec =
+                    |id: &str, name: &'static str, field: Field, hint: &'static str| FieldSpec {
+                        id: base.with((id, r)),
+                        field,
+                        name,
+                        hint,
+                    };
+                match c {
+                    0 => cell_text(ui, &line.number.to_string(), false),
+                    1 => {
+                        let s = spec("item", "Item", Field::Item(r), "Item: type to search");
+                        let style = Style {
+                            invalid: item_flag,
+                            ..CELL
+                        };
+                        text_field(ui, cx, &s, &mut cells.item_text, style);
+                    }
+                    2 => cell_text(ui, &line.hsn, false),
+                    3 => {
+                        let s = spec("qty", "Qty", Field::Qty(r), "Qty");
+                        let style = Style {
+                            invalid: qty_flag,
+                            ..CELL_NUM
+                        };
+                        text_field(ui, cx, &s, &mut cells.qty_text, style);
+                    }
+                    4 => cell_text(ui, &line.unit, false),
+                    5 => {
+                        let s = spec("rate", "Rate", Field::Rate(r), "Rate");
+                        text_field(ui, cx, &s, &mut cells.rate_text, CELL_NUM);
+                    }
+                    6 => {
+                        let s = spec("disc", "Discount", Field::Discount(r), "%");
+                        text_field(ui, cx, &s, &mut cells.discount_text, CELL_NUM);
+                    }
+                    7 => {
+                        let s = spec("amt", "Amount", Field::Amount(r), "optional");
+                        text_field(ui, cx, &s, &mut cells.amount_text, CELL_NUM);
+                    }
+                    8 => cell_text(ui, &line.gst, false),
+                    9 => cell_text(ui, &line.amount, true),
+                    _ => {}
+                }
+            },
+        );
+        self.shown.heads = LINE_COLS.iter().map(|c| c.label).zip(rects).collect();
+    }
+
+    fn draw_particulars(&mut self, ui: &mut Ui, base: Id, masters: &Masters, cx: &mut Cx<'_>) {
         let rates = self.particular_rates(masters);
-        let focused_row = match focus {
+        let focused_row = match self.focus {
             Field::Ledger(i) | Field::LedgerAmount(i) => Some(i),
             Field::Date
             | Field::Number
@@ -685,89 +632,45 @@ impl ItemInvoiceScreen {
             | Field::Amount(_)
             | Field::Narration => None,
         };
-        let count = self.draft.particulars.len();
-        table::builder(ui)
-            .id_salt(base.with("particulars"))
-            .vscroll(false)
-            .column(Column::exact(28.0))
-            .column(Column::remainder().at_least(240.0))
-            .column(Column::exact(140.0))
-            .column(Column::exact(64.0))
-            .header(table::HEADER_HEIGHT, |mut row| {
-                for (label, numeric) in PARTICULAR_HEADS {
-                    table::header(&mut row, label, numeric);
+        let parts = &mut self.draft.particulars;
+        let rects = sheet::lines(
+            ui,
+            &PARTICULAR_COLS,
+            rates.len(),
+            |r| focused_row == Some(r),
+            |ui, r, c| {
+                let (Some(gst), Some(cells)) = (rates.get(r), parts.get_mut(r)) else {
+                    return;
+                };
+                match c {
+                    0 => cell_text(ui, &r.saturating_add(1).to_string(), false),
+                    1 => {
+                        let s = FieldSpec {
+                            id: base.with(("ledger", r)),
+                            field: Field::Ledger(r),
+                            name: "Ledger",
+                            hint: "Ledger: type to search",
+                        };
+                        text_field(ui, cx, &s, &mut cells.ledger_text, CELL);
+                    }
+                    2 => {
+                        let s = FieldSpec {
+                            id: base.with(("ledger-amt", r)),
+                            field: Field::LedgerAmount(r),
+                            name: "Amount",
+                            hint: "Amount",
+                        };
+                        text_field(ui, cx, &s, &mut cells.amount_text, CELL_NUM);
+                    }
+                    3 => cell_text(ui, gst, false),
+                    _ => {}
                 }
-            })
-            .body(|body| {
-                body.rows(table::ROW_HEIGHT, count, |mut row| {
-                    let i = row.index();
-                    let (Some(gst), Some(cells)) =
-                        (rates.get(i), self.draft.particulars.get_mut(i))
-                    else {
-                        return;
-                    };
-                    let focused = focused_row == Some(i);
-                    particular_row(&mut row, cells, gst, base, i, focused, want, ev);
-                });
-            });
-        if matches!(focus, Field::Ledger(_)) {
-            self.shown.picker = draw_picker(ui, labels, pick, ev);
-        }
+            },
+        );
+        self.shown.heads = PARTICULAR_COLS.iter().map(|c| c.label).zip(rects).collect();
     }
 
-    fn draw_lines(
-        &mut self,
-        ui: &mut Ui,
-        base: Id,
-        masters: &Masters,
-        labels: &[String],
-        ev: &mut Vec<UiEvent>,
-    ) {
-        if self.draft.mode == InvoiceMode::Accounting {
-            return self.draw_particulars(ui, base, masters, labels, ev);
-        }
-        let want = self.focus_pending.then_some(self.focus);
-        let (focus, pick) = (self.focus, self.pick_index);
-        let shown = self.lines_shown(masters);
-        let count = shown.len();
-        table::builder(ui)
-            .id_salt(base.with("lines"))
-            .vscroll(false)
-            .column(Column::exact(28.0))
-            .column(Column::remainder().at_least(180.0))
-            .column(Column::exact(84.0))
-            .column(Column::exact(72.0))
-            .column(Column::exact(56.0))
-            .column(Column::exact(100.0))
-            .column(Column::exact(64.0))
-            .column(Column::exact(108.0))
-            .column(Column::exact(56.0))
-            .column(Column::exact(112.0))
-            .header(table::HEADER_HEIGHT, |mut row| {
-                for (label, numeric) in LINE_HEADS {
-                    table::header(&mut row, label, numeric);
-                }
-            })
-            .body(|body| {
-                body.rows(table::ROW_HEIGHT, count, |mut row| {
-                    let i = row.index();
-                    let (Some(line), Some(cells)) = (shown.get(i), self.draft.rows.get_mut(i))
-                    else {
-                        return;
-                    };
-                    line_row(&mut row, line, cells, base, i, want, ev);
-                });
-            });
-        if matches!(focus, Field::Item(_)) {
-            self.shown.picker = draw_picker(ui, labels, pick, ev);
-        }
-        for line in shown.iter().filter(|line| !line.focused) {
-            if let Some(problem) = &line.problem {
-                note(ui, NoteKind::Warn, problem);
-            }
-        }
-    }
-
+    /// The tax box, or the note that says why there is none yet.
     fn draw_tax(&self, ui: &mut Ui, masters: &Masters) {
         match self.gst_status(masters) {
             GstStatus::Incomplete(why) => {
@@ -798,64 +701,56 @@ impl ItemInvoiceScreen {
         }
     }
 
-    fn draw_footer(
+    /// The foot: narration, the notices and line problems on the left; the tax box on the right.
+    fn draw_foot(
         &mut self,
         ui: &mut Ui,
         base: Id,
         masters: &Masters,
-        ev: &mut Vec<UiEvent>,
+        cx: &mut Cx<'_>,
         clicks: &mut Option<Click>,
     ) {
-        let want = self.focus_pending.then_some(self.focus);
-        ui.columns(2, |cols| {
-            if let [left, right] = cols {
-                left.vertical(|ui| {
-                    caption(ui, "Narration");
+        let lines = self.lines_shown(masters);
+        let accounting = self.draft.mode == InvoiceMode::Accounting;
+        let mut narration = None;
+        sheet::foot(ui, |left, right| {
+            sheet::fld(
+                left,
+                left.available_width(),
+                4,
+                |ui| sheet::caption(ui, "Narration", None),
+                |ui| {
                     let s = FieldSpec {
                         id: base.with("narration"),
                         field: Field::Narration,
-                        width: ui.available_width(),
                         name: "Narration",
                         hint: "Optional",
                     };
-                    let field = ui.scope(|ui| text_field(ui, &s, &mut self.draft.narration, want, ev));
-                    self.shown.narration = Some(field.response.rect);
-                    match &self.notice {
-                        Some(Notice::Error(s)) => {
-                            note(ui, NoteKind::Bad, s);
-                        }
-                        Some(Notice::Info(s)) => {
-                            note(ui, NoteKind::Info, s);
-                        }
-                        None => {}
-                    }
-                    if self.confirming_save {
-                        ui.horizontal(|ui| {
-                            note(
-                                ui,
-                                NoteKind::Ok,
-                                "Save this invoice? The engine checks it again before it is posted.",
-                            );
-                            if button(ui, "Yes", Some("Enter"), ButtonKind::Primary).clicked() {
-                                *clicks = Some(Click::Save);
-                            }
-                            if button(ui, "No", Some("Esc"), ButtonKind::Secondary).clicked() {
-                                *clicks = Some(Click::Cancel);
-                            }
-                        });
-                    } else {
-                        ui.horizontal(|ui| {
-                            if button(ui, "Discard", Some("Esc"), ButtonKind::Danger).clicked() {
-                                *clicks = Some(Click::Discard);
-                            }
-                        });
-                    }
-                });
-                right.vertical(|ui| {
-                    card(ui, |ui| self.draw_tax(ui, masters));
-                });
+                    narration = Some(text_field(ui, cx, &s, &mut self.draft.narration, BOXED).rect);
+                },
+            );
+            match &self.notice {
+                Some(Notice::Error(s)) => {
+                    note(left, NoteKind::Bad, s);
+                }
+                Some(Notice::Info(s)) => {
+                    note(left, NoteKind::Info, s);
+                }
+                None => {}
             }
+            if !accounting {
+                for line in lines.iter().filter(|line| !line.focused) {
+                    if let Some(problem) = &line.problem {
+                        note(left, NoteKind::Warn, problem);
+                    }
+                }
+            }
+            self.draw_tax(right, masters);
         });
+        self.shown.narration = narration;
+        if self.confirming_save {
+            save_bar(ui, clicks);
+        }
     }
 
     /// Reads this frame's keys and runs them. Returns whether any key came in, and whether one
@@ -883,7 +778,7 @@ impl ItemInvoiceScreen {
         (!keys.is_empty(), pop)
     }
 
-    /// The discard question and the period-lock note above the invoice.
+    /// The discard question above the invoice. The period lock is the sheet's own bar.
     fn draw_notes(&self, ui: &mut Ui) {
         if self.confirm_discard {
             note(
@@ -892,25 +787,24 @@ impl ItemInvoiceScreen {
                 "Discard this invoice? Press Y to discard it, or N to keep it.",
             );
         }
-        if let Some((date, lock)) = self.locked_on() {
-            note(
-                ui,
-                NoteKind::Bad,
-                &format!(
-                    "Period locked. {} is on or before the lock date {}. You can look, but saving is blocked. Choose a later date to save.",
-                    format::date(date),
-                    format::date(lock)
-                ),
-            );
-        }
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one sheet drawn top to bottom; splitting would only pass the same borrows around"
+    )]
     fn draw(&mut self, ui: &mut Ui, masters: &Masters) -> ScreenAction {
         self.shown = Shown::default();
         let base = ui.scope_id().with("item-invoice");
+        // While a save is out the form stays on screen but takes no keys.
+        let busy = self.posting.is_some();
         let mut labels = self.pick_labels(masters);
-        let (any_key, pop) = self.run_keys(ui, masters, &labels);
-        let mut action = if pop {
+        let (any_key, pop) = if busy {
+            (false, false)
+        } else {
+            self.run_keys(ui, masters, &labels)
+        };
+        let action = if pop {
             ScreenAction::Pop
         } else {
             ScreenAction::Stay
@@ -920,7 +814,7 @@ impl ItemInvoiceScreen {
         }
 
         let mut clicks: Option<Click> = None;
-        let locked = self.locked_on().is_some();
+        let locked = self.locked_on();
         let subtitle = self.subtitle().unwrap_or_default();
         let mode_label = match self.draft.mode {
             InvoiceMode::Item => "Item invoice",
@@ -928,7 +822,7 @@ impl ItemInvoiceScreen {
         };
         page_head(ui, &self.page_title(), Some(subtitle.as_str()), |ui| {
             let saved = ui
-                .add_enabled_ui(!locked, |ui| {
+                .add_enabled_ui(locked.is_none() && !busy, |ui| {
                     button(ui, "Save", Some("Ctrl+A"), ButtonKind::Primary).clicked()
                 })
                 .inner;
@@ -945,29 +839,65 @@ impl ItemInvoiceScreen {
         self.draw_create_form(ui, masters);
 
         let mut events = Vec::new();
-        let enabled = !self.confirm_discard && self.create.is_none();
+        let mut anchor = None;
+        let enabled = !self.confirm_discard && self.create.is_none() && !busy;
+        let (focus, pick) = (self.focus, self.pick_index);
+        let want = self.focus_pending.then_some(self.focus);
         ui.add_enabled_ui(enabled, |ui| {
-            card(ui, |ui| {
-                self.draw_header(ui, base, masters, &labels, &mut events);
-                ui.add_space(SPACE_3);
-                self.draw_lines(ui, base, masters, &labels, &mut events);
+            let mut cx = Cx {
+                want,
+                focus,
+                events: &mut events,
+                anchor: &mut anchor,
+            };
+            let drawn = sheet::sheet(ui, |ui| {
+                if let Some((date, lock)) = locked {
+                    let (left, top, width) = (ui.cursor().min.x, ui.cursor().min.y, ui.available_width());
+                    sheet::lock_bar(
+                        ui,
+                        "Period locked.",
+                        &format!(
+                            "{} is on or before the lock date {}. You can look, but saving is blocked. Choose a later date to save.",
+                            format::date(date),
+                            format::date(lock)
+                        ),
+                    );
+                    let bottom = ui.cursor().min.y;
+                    self.shown.lock_bar = Some(Rect::from_min_max(
+                        egui::pos2(left, top),
+                        egui::pos2(left + width, bottom),
+                    ));
+                }
+                self.draw_head(ui, base, masters, &mut cx);
+                self.draw_lines(ui, base, masters, &mut cx);
+                self.draw_foot(ui, base, masters, &mut cx, &mut clicks);
             });
-            ui.add_space(SPACE_3);
-            self.draw_footer(ui, base, masters, &mut events, &mut clicks);
+            self.shown.sheet = Some(drawn.response.rect);
         });
+        if let Some(anchor) = anchor
+            && !labels.is_empty()
+        {
+            let (rect, clicked) = sheet::type_ahead(
+                ui,
+                base.with("list"),
+                anchor,
+                list_caption(focus),
+                &labels,
+                pick,
+            );
+            self.shown.picker = Some(rect);
+            if let Some(j) = clicked {
+                events.push(UiEvent::Pick(j));
+            }
+        }
         self.focus_pending = false;
 
-        if clicks == Some(Click::Discard) {
-            events.push(UiEvent::Leave);
-        }
-        if matches!(self.apply_events(masters, events), ScreenAction::Pop) {
-            action = ScreenAction::Pop;
-        }
+        self.apply_events(masters, events);
         match clicks {
             Some(Click::Cancel) => self.confirming_save = false,
             Some(Click::Save) => self.save(masters),
             Some(Click::ChangeMode) => self.change_mode(),
-            Some(Click::Discard) | None => {}
+            None => {}
         }
         if any_key || self.focus_pending {
             ui.ctx().request_repaint();
@@ -977,12 +907,20 @@ impl ItemInvoiceScreen {
 }
 
 /// Where parts of the screen were drawn in the last frame, for layout tests.
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Default)]
 pub(super) struct Shown {
     /// The narration field.
     pub(super) narration: Option<Rect>,
     /// The open type-ahead list.
     pub(super) picker: Option<Rect>,
+    /// The header fields by caption.
+    pub(super) fields: Vec<(&'static str, Rect)>,
+    /// The line table's headings in drawing order.
+    pub(super) heads: Vec<(&'static str, Rect)>,
+    /// The period-lock bar at the top of the sheet.
+    pub(super) lock_bar: Option<Rect>,
+    /// The voucher sheet card.
+    pub(super) sheet: Option<Rect>,
 }
 
 impl ItemInvoiceScreen {
@@ -996,6 +934,34 @@ impl ItemInvoiceScreen {
     #[must_use]
     pub fn picker_rect(&self) -> Option<Rect> {
         self.shown.picker
+    }
+
+    /// Where the header field captioned `name` was drawn in the last frame.
+    #[must_use]
+    pub fn field_rect(&self, name: &str) -> Option<Rect> {
+        self.shown
+            .fields
+            .iter()
+            .find(|(n, _)| *n == name)
+            .map(|(_, r)| *r)
+    }
+
+    /// The line table's headings and where each was drawn in the last frame, left to right.
+    #[must_use]
+    pub fn heading_rects(&self) -> Vec<(&'static str, Rect)> {
+        self.shown.heads.clone()
+    }
+
+    /// Where the period-lock bar was drawn in the last frame; `None` when the date is not locked.
+    #[must_use]
+    pub fn lock_bar_rect(&self) -> Option<Rect> {
+        self.shown.lock_bar
+    }
+
+    /// Where the voucher sheet card was drawn in the last frame.
+    #[must_use]
+    pub fn sheet_rect(&self) -> Option<Rect> {
+        self.shown.sheet
     }
 }
 
@@ -1034,10 +1000,9 @@ impl Screen for ItemInvoiceScreen {
     }
 
     fn ui(&mut self, ui: &mut Ui, ctx: &mut AppCtx) -> ScreenAction {
-        if self.posting.is_some() {
-            self.wait_for_post(ui);
-            return ScreenAction::Stay;
-        }
+        // A save that is out is polled first; the form is drawn either way, taking no input while
+        // it waits.
+        self.wait_for_post(ui);
         self.lock_date = ctx.lock_date;
         self.drive_compute(ui, ctx);
         let action = if let Some(books) = ctx.books.as_ref() {
@@ -1102,8 +1067,8 @@ impl ItemInvoiceScreen {
         }
     }
 
-    /// Polls the post in progress and shows "Saving..." until the worker answers.
-    fn wait_for_post(&mut self, ui: &mut Ui) {
+    /// Polls the post in progress; the notice "Saving..." stays up until the worker answers.
+    fn wait_for_post(&mut self, ui: &Ui) {
         let Some(ticket) = self.posting.as_mut() else {
             return;
         };
@@ -1111,7 +1076,6 @@ impl ItemInvoiceScreen {
             self.posting = None;
             self.finish_post(reply);
         } else {
-            ui.label("Saving...");
             ui.ctx().request_repaint();
         }
     }

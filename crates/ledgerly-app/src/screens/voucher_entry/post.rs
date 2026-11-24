@@ -23,8 +23,8 @@ impl VoucherEntryScreen {
         }
     }
 
-    /// Polls the post in progress and shows "Saving..." until the worker answers.
-    pub(super) fn wait_for_post(&mut self, ui: &mut Ui) {
+    /// Polls the post in progress; the notice "Saving..." stays up until the worker answers.
+    pub(super) fn wait_for_post(&mut self, ui: &Ui) {
         let Some(ticket) = self.posting.as_mut() else {
             return;
         };
@@ -32,7 +32,6 @@ impl VoucherEntryScreen {
             self.posting = None;
             self.finish_post(reply);
         } else {
-            ui.label("Saving...");
             ui.ctx().request_repaint();
         }
     }
