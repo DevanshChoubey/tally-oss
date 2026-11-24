@@ -125,7 +125,7 @@ fn same(a: f32, b: f32) -> bool {
 
 #[test]
 fn keycap_border_is_the_theme_border_width() {
-    // derived: index.html:75 `kbd{border:var(--bw) solid var(--border)}`; --bw is 1 px in light
+    // provenance: derived from index.html:75 `kbd{border:var(--bw) solid var(--border)}`; --bw is 1 px in light
     // and dark (index.html:25) and 2 px in high contrast (index.html:56).
     for (kind, bw) in [
         (ThemeKind::Light, 1.0),
@@ -162,7 +162,7 @@ fn table_lines(kind: ThemeKind, draw: fn(&Ui, Rect)) -> Vec<Line> {
 
 #[test]
 fn table_rules_are_the_theme_border_width() {
-    // derived: index.html:149 `table.t th{border-bottom:var(--bw) solid var(--border)}`,
+    // provenance: derived from index.html:149 `table.t th{border-bottom:var(--bw) solid var(--border)}`,
     // index.html:150 `table.t td{border-bottom:var(--bw) solid var(--border)}` and index.html:156
     // `tr.total td{border-top:var(--bw) solid var(--text-2)}`; --bw is 1 px, 2 px in high contrast
     // (index.html:25, 56).
@@ -231,7 +231,7 @@ fn unselected_row() -> RowState {
 
 #[test]
 fn a_disabled_button_is_drawn_in_its_tokens_at_full_opacity() {
-    // derived: index.html:131 `.btn[disabled]{opacity:1;background:var(--sunken);
+    // provenance: derived from index.html:131 `.btn[disabled]{opacity:1;background:var(--sunken);
     // border-color:var(--border);color:var(--text-3)}`: the disabled look is the tokens, not a
     // fade. egui fades a disabled Ui to `disabled_alpha` (one half), which in high contrast turns
     // the label from #E6E6E6 into a mid grey.
@@ -258,7 +258,7 @@ fn a_disabled_button_is_drawn_in_its_tokens_at_full_opacity() {
 
 #[test]
 fn an_off_switch_is_the_strong_border_colour() {
-    // derived: index.html:324 `.switch{background:var(--border-strong)}` and index.html:326
+    // provenance: derived from index.html:324 `.switch{background:var(--border-strong)}` and index.html:326
     // `.switch[aria-checked="true"]{background:var(--accent)}`. In dark the plain border token
     // (#34322E) on the surface (#1C1B19) all but hides an off switch.
     for kind in ThemeKind::ALL {
@@ -279,7 +279,7 @@ fn an_off_switch_is_the_strong_border_colour() {
 
 #[test]
 fn the_selected_tab_underline_lies_over_the_rule() {
-    // derived: index.html:139 `.tabs{border-bottom:var(--bw) solid var(--border)}`, index.html:140
+    // provenance: derived from index.html:139 `.tabs{border-bottom:var(--bw) solid var(--border)}`, index.html:140
     // `.tabs button{border-bottom:2px solid transparent;margin-bottom:-1px}` and index.html:141
     // `.tabs button[aria-selected="true"]{border-bottom-color:var(--accent)}`. The button reaches
     // 1 px into the rule, and as the later box it is painted over it: the accent's lower point
@@ -321,7 +321,7 @@ fn the_selected_tab_underline_lies_over_the_rule() {
 
 #[test]
 fn a_chosen_option_card_edge_is_the_border_width_and_the_inset() {
-    // derived: index.html:319 `.opt-card{border:var(--bw) solid var(--border)}` and index.html:321
+    // provenance: derived from index.html:319 `.opt-card{border:var(--bw) solid var(--border)}` and index.html:321
     // `[aria-checked="true"]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}`:
     // the accent edge is --bw plus 1 px, so 2 px, or 3 px in high contrast (--bw 2 px,
     // index.html:56).
