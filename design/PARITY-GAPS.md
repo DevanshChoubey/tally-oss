@@ -8,6 +8,26 @@ Kinds: **bug** (the app is wrong or missing something it should do), **deferred*
 feature that is not built), **data** (the capture company lacks what the mock's sample shows),
 **by design** (we differ on purpose; kept here so nobody "fixes" it back).
 
+## Home (light states round of 2026-11-24)
+
+Captured: `home.empty` (Fictional Traders' masters with no voucher, a second capture company)
+and `home.ai-off`. Not captured: `home.loading` and `home.nudge-open`.
+
+- **gap: the new-company card has no icon and no "Import from another app" button.** The mock's
+  card (index.html, `SCREENS.home`, `empty`) has a book icon over the heading, icons on its
+  buttons and a middle button that opens setup's import. The import wizard is not routed from
+  Home, so the button is left out; the icons are not drawn. The note under the card has no info
+  icon and is not full width. The line under the title now names the financial year with its
+  days, as the mock's does (`home::new_company_line`, tested in `tests/s6_home_empty.rs`).
+- **gap: the AI-off note.** The mock's note (`home.ai-off`) starts with a bold clause, has an
+  icon and an "AI and privacy" button; ours is the plain note. The KPI tiles' layout differs, and
+  the mock shows the chart and the nudges, which are not built (see "Review queue").
+- **deferred: `home.loading` is not captured.** The skeleton shows only while a refresh waits on
+  the worker, which takes a few frames on the capture company; the harness cannot hold it there.
+  Capturing it needs a way to hold the worker (a job that blocks until released).
+- **deferred: `home.nudge-open` is not reachable.** It expands a possible-duplicate nudge; the
+  nudge rules (D-02) are not built, so Home has no nudge to open.
+
 ## Palette (round of 2026-11-23, commit d4f0bcb)
 
 - **deferred: the mock's other commands.** After the four voucher commands the mock's `>` list
@@ -72,6 +92,23 @@ feature that is not built), **data** (the capture company lacks what the mock's 
   figures the screen would have to work out, which it never does.
 - **data: the capture company is small.** Fictional Traders has four primary groups, so the
   capture is shorter than the mock's Godavari Drip statement.
+- **bug: a provisional figure overlaps its row label.** `balance-sheet.provisional` (Fictional
+  Pumps, which sold pipe coils and pickaxes before buying them) draws each provisional cell as
+  "<amount> (provisional: <reason>)" right-aligned in the figure column. The reason names both
+  items, so the text runs across the row and over the label ("Total", "Closing stock", "Profit
+  and Loss A/c"). The mock marks the row with a Provisional chip, keeps the figure plain and
+  explains it once in a warning banner with an "Open stock items" button. The cell format is
+  pinned by `tests/w2_balance_look.rs` ("14,25,539.00 (provisional: negative stock)"), so the fix
+  is a chip and banner design change, not a text tweak.
+- **bug: the provisional reason is not readable.** The engine's reason reads "negative stock:
+  item StockItemId(1) first went below zero on 2026-11-10" (`ledgerly-reports`
+  `stock_summary/valuation.rs`): an internal id and an ISO date. The mock names the item and the
+  quantity ("Steel pickaxe 2.5 kg shows -30 nos"). Needs the report to carry the item's name.
+- **gap: the voucher view is bare text.** `balance-sheet.voucher` (Enter on a ledger drill row)
+  shows the voucher as lines of text. The mock has a card with the header fields, the item and
+  ledger lines, tax, and an audit card. Not built.
+- **deferred: `balance-sheet.loading` is not captured.** As `home.loading`: the computing state
+  lasts a few frames on the capture company and the harness cannot hold the worker.
 
 ## Day book (round of 2026-11-23)
 
@@ -82,7 +119,10 @@ feature that is not built), **data** (the capture company lacks what the mock's 
 - **deferred: narration under the party** (index.html:1652, the `meta` line). The engine's day
   book has no narration field, so Particulars shows the party alone and every row is one line.
 - **deferred: the empty state's card and voucher buttons** (index.html:1647). Ours shows the
-  shared empty state with the keys in its sentence; not captured yet (`day-book.empty`).
+  shared empty state with the keys in its sentence (captured as `day-book.empty`, F2 to 21 Nov).
+- **by design: the month view keeps the cursor on the voucher it was on.** `day-book.month`
+  (Alt+F2, 1 Nov to 20 Nov) keeps the selected voucher selected when the period changes
+  (`report_view::replace_report`), so the cursor is not on the first row as in the mock.
 - **needs a decision: F2 offers the shown day.** TallyHelp says F2 in the Day Book first offers
   the day after the current date; ours fills in the day shown. Check the TallyPrime page (only
   the Tally.ERP 9 page was read) before changing it.
@@ -93,10 +133,18 @@ feature that is not built), **data** (the capture company lacks what the mock's 
 
 ## GST returns (round of 2026-11-23)
 
-Captured states: `gst.gstr1`, `gst.gstr3b`, `gst.recon-empty`. Not captured yet:
-`gstr1-correction`, `recon`, `recon-explain`, `recon-error` and `recon-locked`. The capture
-company has no voucher that needs correction, so `gstr1-correction` has nothing to show; the
-four `recon` states need a 2B file, which the app cannot read.
+Captured states: `gst.gstr1`, `gst.gstr3b`, `gst.recon-empty`, `gst.gstr1-correction` (on
+Fictional Pumps, which sold pickaxes with no HSN). Not captured: `recon`, `recon-explain`,
+`recon-error` and `recon-locked`: they need a 2B file, which the app cannot read (no 2B reader,
+engine item E-3); `recon-explain` is an AI state.
+
+- **gap: the correction state lists vouchers, the mock lists sections.** `gst.gstr1-correction`
+  shows the engine's per-voucher table ("Voucher 3: item 'Steel pickaxe 2.5 kg' has no HSN or
+  SAC code") and counts vouchers; the mock lists the return's sections with "12 HSN summary:
+  Needs correction" selected and a side card naming the item with a "Fix the item master"
+  button. The section table and the button are not built. The capture also holds the pipe
+  invoice back because unit `coil` has no unit quantity code: that is the engine's finding on
+  the capture data, not a screen difference.
 
 - **deferred: GSTR-1 by section** (index.html:1673-1676). The mock's table has one row per
   return section (4A B2B, 5 B2C large, 7 B2C others, 9B notes, 12 HSN, 13 documents), with
@@ -145,9 +193,17 @@ four `recon` states need a 2B file, which the app cannot read.
 ## Masters (round of 2026-11-23)
 
 Captured states: `masters.ledgers`, `masters.ledger-detail`, `masters.items`,
-`masters.create-ledger`. Not captured: `gstin-error` (the capture types no keys into a field, so
-it cannot enter a bad GSTIN; needs typed text in the capture) and `suggested-ledger` (needs bank
-matching to propose a ledger, which is not built).
+`masters.create-ledger`, `masters.gstin-error` (the form filled by clicks and typed text). Not
+captured: `suggested-ledger` (needs bank matching to propose a ledger, which is not built).
+
+- **needs a decision: the GSTIN error's words.** Ours says "check character is 7, expected Z; the
+  GSTIN has a typing error" (the engine's `GstinError`); the mock says "Check character should be
+  Z, not 7. One of the first 14 characters is probably mistyped." `tests/w2_masters.rs` pins
+  "expected <character>" in the reason, so taking the mock's words means changing that test's expectation
+  on purpose, with a decision, not in a capture round.
+- **bug: Save stays enabled with a bad GSTIN, and the field has no red border.** The mock
+  disables Save while the GSTIN is wrong and outlines the field in red (`masters.gstin-error`).
+  Ours shows the reason under the field and refuses on save.
 
 - **by design: a nil balance is blank, not "0.00 Dr".** The Balance column is the engine's
   trial balance, joined by ledger id (`screens/masters/balances.rs`). The trial balance leaves
@@ -270,7 +326,22 @@ matching to propose a ledger, which is not built).
   card. The tabs (All lines, Reconciliation statement) are also ours only.
 - **data: the lines table is not captured.** The capture company has no imported statement, so
   `bank.default` shows the empty state and the lines table (still `TableBuilder`, with the
-  mock's rows wrapping to several lines) has no capture to compare with.
+  mock's rows wrapping to several lines) has no capture to compare with. Fictional Pumps (the
+  third capture company) has a stored statement and could serve it in a later round.
+- **gap: the empty state's look.** `bank.empty`: the mock's card has an icon, a narrower wrapped
+  sentence and the account number and month in the subtitle; ours has the tabs, a File layout
+  row under the card and the account name in the breadcrumb.
+- **deferred: `bank.import-error` is not captured.** The engine refuses a statement whose running
+  balances do not add up, but Import opens the system file dialog, which the capture harness
+  cannot drive. Needs a way to hand the screen a file without the dialog.
+
+## Payment (light states round of 2026-11-24)
+
+- **deferred: `payment.bill-wise` is not reachable.** Payment to a bill-wise party needs the bill
+  allocation sub-form; voucher entry refuses bill-wise ledgers on a payment
+  (`voucher_entry::draft::entry_support`). Not built.
+- **deferred: `payment.overdraft` is not reachable.** No warning is given when a payment takes a
+  bank or cash ledger below zero; there is no such check in voucher entry or the engine.
 
 ## Sales invoice (round of 2026-11-23)
 
@@ -302,6 +373,28 @@ matching to propose a ledger, which is not built).
   both read 2026-11-23. Neither says which ledgers the list shows or leaves out. Limiting it to
   cash, bank and party groups needs a page that documents the list before it is changed.
 
+### Light states round of 2026-11-24 (Fictional Pumps, `snapshot-stocked.ledgerly`)
+
+The item-invoice states are captured on a second company file with inventory on, so the
+Fictional Traders figures are unchanged.
+
+- **deferred: the item list is a bare list.** `sales-invoice.item-list` lists matching items
+  only; the mock adds a header row, each item's stock and rate, and a Create row.
+- **needs a decision: the place of supply is not filled from the party.** The capture types it.
+  No help.tallysolutions.com page was read on whether the party's state fills it; it stays as is
+  until one is.
+- **deferred: inter-state and B2C details.** `sales-invoice.gst-inter-state` and `.b2c` show the
+  IGST or CGST/SGST block, but not the mock's place-of-supply note or per-rate breakdown.
+- **deferred: validation look.** `sales-invoice.validation-error` lists one reason as a note, with
+  no red outline on the field; the mock lists every problem and outlines the fields.
+- **deferred: period-locked look.** `sales-invoice.period-locked` shows the lock note (the lock
+  date now comes from the company file, `Api::lock_date`), but not the mock's banner layout.
+- **deferred: save confirmation.** `sales-invoice.save-confirm` is a compact prompt; the mock
+  shows a summary card with the total.
+- **bug: the saved state draws nothing in the harness.** Answering the save question in the
+  capture harness leaves the content area empty (breadcrumb only), so `sales-invoice.saved` is
+  not captured. Not yet traced to the screen or the harness; it needs a failing test first.
+
 ## Review queue (card W4, round of 2026-11-23)
 
 - **deferred: the queue lists bank matches only.** The mock lists six kinds (index.html:1023 and
@@ -328,10 +421,12 @@ matching to propose a ledger, which is not built).
   under Exception Reports (help.tallysolutions.com/docs/te9rel66/Reports/MIS_Reports/Display_Optional_Vouchers.htm,
   read 2026-11-23). It lists vouchers marked Optional, which are not posted. It is not a queue of
   proposals awaiting a decision, so the queue is not built from it.
-- **data: review.default has no capture.** The capture company has no bank statement, so the
-  queue has no rows and review.default would look the same as review.empty. review.empty is
-  captured (`design/app-captures/light/review.empty.webp`) and shows the connected-sources
-  wording above, not the mock's "Nothing to review" heading.
+- **bug: the queue is not a table.** `review.default` (Fictional Pumps, a stored statement with
+  two suggested matches) draws each proposal as a wrapped line of text in a card, with the
+  second row out of line with the first. The mock has a table (Proposal, Source, Confidence,
+  Amount) with an icon per row, the selected row's bar, and a "How decisions work" card beside
+  it. review.empty is captured too and shows the connected-sources wording above, not the
+  mock's "Nothing to review" heading.
 
 ## AI and privacy (round of 2026-11-23, card W4)
 
@@ -437,10 +532,10 @@ financial year starts. The model supports that (`Company::books_begin`), so it i
 - **gap: the "Company file" field is ours.** The mock has no file location; the wizard asks for
   it, defaulting to `Documents/Ledgerly/<company>.ledgerly` when blank.
 - **gap: City is kept as the first address line.** The model's `Address` has no city field.
-- **gap: no state-mismatch capture.** The mock's `setup.gstin-error` state needs the State combo
-  changed to a state other than the GSTIN's; the capture harness types text and presses keys but
-  cannot operate the combo, so that state has no app capture. The rule is tested in
-  `tests/w4_setup.rs`.
+- **gap: the state mismatch has no red outline or icon.** `setup.gstin-error` (24 Gujarat chosen
+  against a GSTIN starting 27, by clicks on the State list) shows the mock's words and disables
+  Continue, as the mock does, but the GSTIN and State fields are not outlined in red and the
+  message has no cross icon. The rule is tested in `tests/w4_setup.rs`.
 - **gap: import, open-file and sample cards on Start are shown, not working.** Import needs the
   import wizard (not routed from here); open-file is on the welcome screen; no sample data ships.
 - **gap: Done's "Make your first invoice" is disabled.** No route to a sales invoice from the

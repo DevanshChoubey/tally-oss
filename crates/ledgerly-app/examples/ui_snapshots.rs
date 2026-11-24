@@ -36,17 +36,18 @@ use ledgerly_app::shell::{GatewayScreen, ScreenStack, Shell, submit};
 use ledgerly_app::theme::ThemeKind;
 use ledgerly_app::worker::ApiWorker;
 use ledgerly_core::{
-    Clock, CompanyId, Date, Decimal, GroupId, Gstin, Hsn, LedgerId, Paise, Rate, SignedAmount,
+    Clock, CompanyId, Date, Decimal, GroupId, Gstin, Hsn, LedgerId, Paise, Qty, Rate, SignedAmount,
     StateCode, StockItemId, UnitId, VoucherId, gstin_check_character,
 };
+use ledgerly_model::seed_godowns::MAIN_LOCATION;
 use ledgerly_model::seed_groups::reserved_groups;
 use ledgerly_model::seed_voucher_types::default_voucher_types;
 use ledgerly_model::{
     Address, BankDetails, BaseVoucherKind, BillAllocation, BillRefKind, BillWiseConfig, Company,
-    EntityKind, Features, GstClassification, GstRegistration, Ledger, LedgerLine,
-    NegativeStockPolicy, PartyDetails, RegistrationType, ReservedGroup, StockItem, TaxDetails,
-    TaxLedgerKind, Taxability, Unit, UnitKind, ValuationMethod, Voucher, VoucherMode,
-    VoucherStatus,
+    EntityKind, Features, GodownAllocation, GstClassification, GstRegistration, InventoryLine,
+    Ledger, LedgerLine, NegativeStockPolicy, PartyDetails, RegistrationType, ReservedGroup,
+    StockItem, TaxDetails, TaxLedgerKind, Taxability, Unit, UnitKind, ValuationMethod, Voucher,
+    VoucherMode, VoucherStatus,
 };
 use time::OffsetDateTime;
 use time::macros::date;
@@ -237,14 +238,16 @@ fn stock_item(id: u64, name: &str, unit: UnitId, rate: i64) -> StockItem {
     }
 }
 
-/// A fictional Maharashtra trader with a bank, two GST buyers and a few November vouchers.
-fn company_file(dir: &Path) -> Api {
-    let path = dir.join("snapshot-company.ledgerly");
-    let _removed = std::fs::remove_file(&path);
-    let company = Company {
+/// A fictional Maharashtra company registered for GST, named `name`.
+fn maharashtra_company(
+    name: &str,
+    features: Features,
+    negative_stock: NegativeStockPolicy,
+) -> Company {
+    Company {
         ineligible_itc_default: None,
         id: CompanyId(1),
-        name: "Fictional Traders".to_owned(),
+        name: name.to_owned(),
         mailing_name: None,
         address: Address::default(),
         state: state(27),
@@ -258,13 +261,230 @@ fn company_file(dir: &Path) -> Api {
         fy_start: date!(2026 - 04 - 01),
         books_begin: date!(2026 - 04 - 01),
         entity_kind: EntityKind::Company,
-        features: Features {
-            gst: true,
-            ..Features::default()
-        },
-        negative_stock: NegativeStockPolicy::Block,
+        features,
+        negative_stock,
+    }
+}
+
+/// Creates `company` in `dir/file`, removing the file a last run left.
+fn create_file(dir: &Path, file: &str, company: &Company) -> Api {
+    let path = dir.join(file);
+    let _removed = std::fs::remove_file(&path);
+    Api::create(&path, company, Clock::Fixed(OffsetDateTime::UNIX_EPOCH)).unwrap()
+}
+
+/// The GST-only company of [`company_file`] and [`new_company_file`].
+fn traders() -> Company {
+    let features = Features {
+        gst: true,
+        ..Features::default()
     };
-    let mut api = Api::create(&path, &company, Clock::Fixed(OffsetDateTime::UNIX_EPOCH)).unwrap();
+    maharashtra_company("Fictional Traders", features, NegativeStockPolicy::Block)
+}
+
+/// A fictional Maharashtra trader with a bank, two GST buyers and a few November vouchers.
+fn company_file(dir: &Path) -> Api {
+    let mut api = create_file(dir, "snapshot-company.ledgerly", &traders());
+    create_masters(&mut api);
+    post_november(&mut api);
+    api
+}
+
+/// Fictional Traders' masters with no voucher: a company just set up (mock `home.empty`).
+fn new_company_file(dir: &Path) -> Api {
+    let mut api = create_file(dir, "snapshot-new.ledgerly", &traders());
+    create_masters(&mut api);
+    api
+}
+
+/// Which company file a shot opens.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Fixture {
+    /// Fictional Traders ([`company_file`]): every shot that names no other company.
+    Main,
+    /// Fictional Traders' masters with no voucher yet ([`new_company_file`]).
+    New,
+    /// Fictional Pumps ([`stocked_company_file`]): stock sold before any was bought, an item with
+    /// no HSN sold, a stored bank statement and the books locked to 31 Oct 2026.
+    Stocked,
+}
+
+impl Fixture {
+    /// Creates the company file in `dir` and opens it. Each call starts the file again.
+    fn open(self, dir: &Path) -> Api {
+        match self {
+            Fixture::Main => company_file(dir),
+            Fixture::New => new_company_file(dir),
+            Fixture::Stocked => stocked_company_file(dir),
+        }
+    }
+}
+
+/// A Maharashtra buyer of Fictional Pumps that is not bill-wise (the item invoice does not take
+/// bill-wise parties yet).
+const PUMP_BUYER: LedgerId = LedgerId(11);
+/// A Gujarat buyer of Fictional Pumps, so an invoice to it is inter-state.
+const GUJARAT_BUYER: LedgerId = LedgerId(12);
+/// The Maharashtra supplier Fictional Pumps buys its stock from.
+const SUPPLIER: LedgerId = LedgerId(13);
+/// Fictional Pumps' purchase ledger.
+const PURCHASES: LedgerId = LedgerId(14);
+
+/// A statement for Example Bank in the generic split-column CSV layout: the capital paid in on
+/// 15 Oct and the rent paid on 20 Nov (both in the books, so the matcher suggests them) and a bank
+/// charge on 21 Nov that is not. Each running balance is the one before plus or minus the line.
+const STOCKED_STATEMENT: &str = "Date,Value Date,Narration,Ref,Withdrawal,Deposit,Balance\n\
+15/10/2026,15/10/2026,CAPITAL INTRODUCED,R1,,500000.00,500000.00\n\
+20/11/2026,20/11/2026,NEFT RENT NOVEMBER,R2,25000.00,,475000.00\n\
+21/11/2026,21/11/2026,BANK CHARGES,R3,118.00,,474882.00\n";
+
+/// An item invoice line of `qty` units of `item` at `rate` rupees each, in Main Location, posted
+/// to `account` (the sales or purchase ledger).
+fn item_line(
+    item: StockItemId,
+    unit: UnitId,
+    qty: i64,
+    rate: i64,
+    account: LedgerId,
+) -> InventoryLine {
+    let amount = Paise::new(qty * rate * 100);
+    InventoryLine {
+        item,
+        qty: Qty(Decimal::from(qty)),
+        unit,
+        rate: Rate(Decimal::from(rate)),
+        discount_percent: None,
+        amount,
+        ledger: Some(account),
+        godowns: vec![GodownAllocation {
+            godown: MAIN_LOCATION,
+            batch: None,
+            qty: Qty(Decimal::from(qty)),
+            amount,
+        }],
+    }
+}
+
+/// An item invoice of `kind` (sales or purchase) with `party`, with the ledger lines and tax the
+/// engine works out for it.
+fn item_invoice(
+    api: &Api,
+    id: u64,
+    kind: BaseVoucherKind,
+    on: Date,
+    (party, place): (LedgerId, u8),
+    lines: Vec<InventoryLine>,
+) -> Voucher {
+    let mut v = voucher(id, kind, on, Vec::new());
+    v.mode = VoucherMode::ItemInvoice;
+    v.party = Some(party);
+    v.place_of_supply = Some(state(place));
+    v.inventory_lines = lines;
+    match api.invoice_gst(&v) {
+        Ok(ledgerly_core::Outcome::Value(built)) => {
+            v.ledger_lines = built.ledger_lines;
+            v.gst = Some(built.stored);
+        }
+        other => panic!("the engine did not build the invoice: {other:?}"),
+    }
+    v
+}
+
+/// A fictional Maharashtra pump dealer with inventory: the masters of [`create_masters`], two
+/// buyers that are not bill-wise, a supplier, capital paid in on 15 Oct, pipe coils sold on
+/// 10 Nov and pickaxes sold to Gujarat on 12 Nov before any were bought, both bought on 16 Nov
+/// (stock went negative during the period and closes positive, so closing stock is provisional;
+/// the pickaxe has no HSN, so GSTR-1 holds its sale for correction), rent paid on 20 Nov, a
+/// stored bank statement, and the books locked to 31 Oct 2026 last.
+fn stocked_company_file(dir: &Path) -> Api {
+    let features = Features {
+        gst: true,
+        inventory: true,
+        ..Features::default()
+    };
+    let company = maharashtra_company("Fictional Pumps", features, NegativeStockPolicy::Allow);
+    let mut api = create_file(dir, "snapshot-stocked.ledgerly", &company);
+    create_masters(&mut api);
+    for l in [
+        buyer(PUMP_BUYER, "Patil Agro Stores", "27PQRST6789U1Z", 27),
+        buyer(GUJARAT_BUYER, "Narmada Farm Supplies", "24KLMNO2345P1Z", 24),
+        {
+            let mut supplier = buyer(SUPPLIER, "Deccan Polymers", "27DEFGH4321J1Z", 27);
+            supplier.group = group(ReservedGroup::SundryCreditors);
+            supplier
+        },
+        ledger(PURCHASES, "Purchases", ReservedGroup::PurchaseAccounts),
+    ] {
+        run(&mut api, Command::CreateLedger(l));
+    }
+    run(
+        &mut api,
+        Command::PostVoucher(voucher(
+            1,
+            BaseVoucherKind::Journal,
+            date!(2026 - 10 - 15),
+            vec![dr(BANK, 500_000), cr(CAPITAL, 500_000)],
+        )),
+    );
+    let (pipe, pickaxe) = (StockItemId(1), StockItemId(2));
+    let sales = BaseVoucherKind::Sales;
+    for v in [
+        (
+            2,
+            date!(2026 - 11 - 10),
+            (PUMP_BUYER, 27),
+            pipe,
+            COIL,
+            10,
+            1_500,
+        ),
+        (
+            3,
+            date!(2026 - 11 - 12),
+            (GUJARAT_BUYER, 24),
+            pickaxe,
+            NOS,
+            4,
+            800,
+        ),
+    ]
+    .map(|(id, on, party, item, unit, qty, rate)| {
+        let line = item_line(item, unit, qty, rate, SALES);
+        item_invoice(&api, id, sales, on, party, vec![line])
+    }) {
+        run(&mut api, Command::PostVoucher(v));
+    }
+    let bought = item_invoice(
+        &api,
+        4,
+        BaseVoucherKind::Purchase,
+        date!(2026 - 11 - 16),
+        (SUPPLIER, 27),
+        vec![
+            item_line(pipe, COIL, 15, 1_000, PURCHASES),
+            item_line(pickaxe, NOS, 10, 500, PURCHASES),
+        ],
+    );
+    run(&mut api, Command::PostVoucher(bought));
+    run(
+        &mut api,
+        Command::PostVoucher(voucher(
+            5,
+            BaseVoucherKind::Payment,
+            date!(2026 - 11 - 20),
+            vec![dr(RENT, 25_000), cr(BANK, 25_000)],
+        )),
+    );
+    match api.import_bank_statement(STOCKED_STATEMENT.as_bytes(), "generic-csv-split", BANK) {
+        Ok(ledgerly_core::Outcome::Value(_)) => {}
+        other => panic!("the statement was not imported: {other:?}"),
+    }
+    run(&mut api, Command::LockPeriod(date!(2026 - 10 - 31)));
+    api
+}
+
+/// The ledgers (ids 1 to 10), units and stock items every capture company starts with.
+fn create_masters(api: &mut Api) {
     let mut bank = ledger(
         BANK,
         "Example Bank Current A/c",
@@ -299,18 +519,22 @@ fn company_file(dir: &Path) -> Api {
         tax(IGST, "Output IGST", TaxLedgerKind::Igst),
         ledger(RENT, "Rent", ReservedGroup::IndirectExpenses),
     ] {
-        run(&mut api, Command::CreateLedger(l));
+        run(api, Command::CreateLedger(l));
     }
     // Two stock items with no opening stock and no movement, so no other screen's figures move:
     // the items list shows the engine's 0 quantities and 0.00 values, one item without an HSN.
     for u in [unit(COIL, "coil", "Coils"), unit(NOS, "nos", "Numbers")] {
-        run(&mut api, Command::CreateUnit(u));
+        run(api, Command::CreateUnit(u));
     }
     let mut pipe = stock_item(1, "HDPE pipe coil 32 mm", COIL, 18);
     pipe.hsn = Some(Hsn::parse("3917").unwrap());
     for it in [pipe, stock_item(2, "Steel pickaxe 2.5 kg", NOS, 5)] {
-        run(&mut api, Command::CreateStockItem(it));
+        run(api, Command::CreateStockItem(it));
     }
+}
+
+/// Fictional Traders' November vouchers.
+fn post_november(api: &mut Api) {
     let journal = BaseVoucherKind::Journal;
     for v in [
         voucher(
@@ -351,9 +575,8 @@ fn company_file(dir: &Path) -> Api {
             vec![dr(RENT, 25_000), cr(BANK, 25_000)],
         ),
     ] {
-        run(&mut api, Command::PostVoucher(v));
+        run(api, Command::PostVoucher(v));
     }
-    api
 }
 
 /// A colour theme a shot is taken in.
@@ -393,7 +616,12 @@ struct Shot {
     keys: Vec<(Key, Modifiers)>,
     query: Option<&'static str>,
     after: Vec<Inject>,
+    /// The company file the shot is taken on.
+    company: Fixture,
 }
+
+/// Frames the harness waits after a wheel scroll before its next input.
+const SCROLL_SETTLE_FRAMES: u32 = 90;
 
 /// Frames the `setup.done` shot waits after its keys, so the background company file job can
 /// finish.
@@ -407,6 +635,12 @@ enum Inject {
     Key(Key, Modifiers),
     /// Text typed into the focused field.
     Text(&'static str),
+    /// A primary click at a point of the 1280 x 800 window, for a widget no key reaches (a combo
+    /// box's list, a checkbox the form gives no key to).
+    Click(f32, f32),
+    /// The mouse wheel turned at a point by the given egui wheel delta in points: negative scrolls
+    /// the list under it down, positive up.
+    Scroll(f32, f32, f32),
 }
 
 impl Shot {
@@ -439,6 +673,24 @@ impl Shot {
         self
     }
 
+    /// The same shot with a click at (`x`, `y`) after what came before it.
+    fn click(mut self, x: f32, y: f32) -> Self {
+        self.after.push(Inject::Click(x, y));
+        self
+    }
+
+    /// The same shot with the wheel turned at (`x`, `y`) by `wheel` points (negative scrolls down).
+    fn scroll(mut self, x: f32, y: f32, wheel: f32) -> Self {
+        self.after.push(Inject::Scroll(x, y, wheel));
+        self
+    }
+
+    /// The same shot taken on another company file.
+    fn on(mut self, company: Fixture) -> Self {
+        self.company = company;
+        self
+    }
+
     /// The same shot with `keys` pressed after what came before them.
     fn press(mut self, keys: &[(Key, Modifiers)]) -> Self {
         self.after
@@ -454,6 +706,7 @@ fn shot(state: &'static str, keys: &[(Key, Modifiers)]) -> Shot {
         keys: keys.to_vec(),
         query: None,
         after: Vec::new(),
+        company: Fixture::Main,
     }
 }
 
@@ -516,6 +769,41 @@ fn ai_off_shot(state: &'static str, screen: &'static str) -> Shot {
         .then(&[(Key::Enter, NONE), (Key::Num1, NONE), ESC, palette])
         .type_text(screen)
         .press(&[(Key::Enter, NONE)])
+}
+
+/// An item invoice on Fictional Pumps (F8 opens one, since the company keeps inventory) with
+/// `party` picked, the place of supply typed as a state code (the field is not filled from the
+/// party), Sales as the sales ledger and the reference left empty, so the keyboard is on the
+/// first item.
+fn pumps_invoice(state: &'static str, party: &'static str, place: &'static str) -> Shot {
+    let enter = (Key::Enter, NONE);
+    shot(state, &[(Key::F8, NONE)])
+        .on(Fixture::Stocked)
+        .type_text(party)
+        .press(&[enter])
+        .type_text(place)
+        .press(&[enter])
+        .type_text("Sales")
+        .press(&[enter, enter])
+}
+
+/// [`pumps_invoice`] with one line of `item`, `qty` and `rate` entered and the discount left
+/// empty, so the keyboard is on the item of a second line.
+fn pumps_invoice_line(
+    state: &'static str,
+    (party, place): (&'static str, &'static str),
+    item: &'static str,
+    qty: &'static str,
+    rate: &'static str,
+) -> Shot {
+    let enter = (Key::Enter, NONE);
+    pumps_invoice(state, party, place)
+        .type_text(item)
+        .press(&[enter])
+        .type_text(qty)
+        .press(&[enter])
+        .type_text(rate)
+        .press(&[enter, enter])
 }
 
 /// The registry: one entry per image, named by the mock state id it should match.
@@ -634,8 +922,134 @@ fn shots() -> Vec<Shot> {
         setup_shot("setup.ai", 3),
         setup_shot("setup.backup", 4),
         setup_shot("setup.done", 5),
+        // The capture company has no imported statement, so the bank screen shows its empty state
+        // (index.html:434 "No statement imported for this account").
+        shot("bank.empty", &[palette])
+            .query("Bank Reconciliation")
+            .then(&[(Key::Enter, NONE)]),
+        // F2 on the day book asks for one date; Ctrl+A selects the prefilled day so the typed one
+        // replaces it. The capture company has no voucher on 21 Nov (index.html:1641 uses 21 Nov).
+        shot("day-book.empty", &[(Key::D, NONE), (Key::F2, NONE)])
+            .then(&[SELECT_ALL])
+            .type_text("21-11-2026")
+            .press(&[(Key::Enter, NONE)]),
+        // The month tab has no key; Alt+F2 asks for a period, and 1 Nov to the shown day is the
+        // month tab's period (`day_book::tab_of`).
+        shot(
+            "day-book.month",
+            &[(Key::D, NONE), (Key::F2, Modifiers::ALT)],
+        )
+        .then(&[SELECT_ALL])
+        .type_text("01-11-2026")
+        .press(&[(Key::Tab, NONE), SELECT_ALL])
+        .type_text("20-11-2026")
+        .press(&[(Key::Enter, NONE)]),
+        // From the ledger drill (balance-sheet.ledger), Enter opens the voucher on the cursor row.
+        shot("balance-sheet.voucher", &to_debtors()).then(&[
+            (Key::Enter, NONE),
+            (Key::J, NONE),
+            (Key::Enter, NONE),
+        ]),
+        // AI and privacy stores Off (key 1, as ai-settings.off) and Esc goes back to Home.
+        shot("home.ai-off", &[palette])
+            .query("AI and privacy")
+            .then(&[(Key::Enter, NONE), (Key::Num1, NONE), ESC]),
+        // The create-ledger form (masters.create-ledger) filled by clicks, since no key opens the
+        // Under list or ticks its boxes: the mock's name, Under = Sundry Debtors (the list scrolled
+        // to its end, where the scroll stops, so the row is always at the same place), Party details
+        // on, the mock's GSTIN with a wrong check character (index.html:1790: the check character of
+        // 27AAJFJ5521N1Z is Z, so the mock's bad GSTIN ends in 7), Bill-wise on and 30 credit days.
+        shot(
+            "masters.gstin-error",
+            &[(Key::M, NONE), (Key::C, Modifiers::ALT)],
+        )
+        .click(456.0, 263.0)
+        .type_text("Jadhav Irrigation Services")
+        .click(995.0, 256.0)
+        .scroll(995.0, 400.0, -400.0)
+        .click(958.0, 492.0)
+        .click(472.0, 389.0)
+        .click(456.0, 326.0)
+        .type_text("27AAJFJ5521N1Z7")
+        .click(903.0, 326.0)
+        .click(348.0, 413.0)
+        .type_text("30")
+        .click(456.0, 326.0),
+        // The company step as setup.company, then the State list opened by a click (no key opens
+        // it) and the mock's 24 Gujarat chosen against the GSTIN's 27. The list is scrolled to its
+        // end (where the scroll stops) and back up, so 24 is always at the same row.
+        setup_shot("setup.gstin-error", 0)
+            .click(950.0, 286.0)
+            .scroll(950.0, 400.0, -400.0)
+            .scroll(950.0, 400.0, -400.0)
+            .scroll(950.0, 400.0, 207.0)
+            .click(930.0, 337.0),
+        // A company with masters and no voucher: Home as it opens (index.html home.empty).
+        shot("home.empty", &[]).on(Fixture::New),
+        // Fictional Pumps sold pipe coils it never bought, so closing stock is provisional.
+        shot("balance-sheet.provisional", &[(Key::B, NONE)]).on(Fixture::Stocked),
+        // Fictional Pumps sold pickaxes, which have no HSN, so GSTR-1 holds them for correction.
+        shot("gst.gstr1-correction", &[(Key::G, NONE), (Key::Num1, NONE)]).on(Fixture::Stocked),
+        // Fictional Pumps has a stored statement whose lines match two vouchers.
+        shot("review.default", &[palette])
+            .on(Fixture::Stocked)
+            .query("Review queue")
+            .then(&[(Key::Enter, NONE)]),
+        // The item list open on the first line, filtered by what is typed (index.html: type-ahead
+        // over item masters).
+        pumps_invoice("sales-invoice.item-list", "Narmada", "24").type_text("p"),
+        // A Gujarat party: the place of supply is 24, so the engine charges IGST.
+        pumps_invoice_line(
+            "sales-invoice.gst-inter-state",
+            ("Narmada", "24"),
+            "HDPE",
+            "10",
+            "1500",
+        ),
+        // A cash sale: Cash has no GSTIN, so the sale is B2C.
+        pumps_invoice_line("sales-invoice.b2c", ("Cash", "27"), "HDPE", "2", "1500"),
+        // An item picked with no quantity, then Ctrl+A: the save is refused with the reason.
+        pumps_invoice("sales-invoice.validation-error", "Narmada", "24")
+            .type_text("HDPE")
+            .press(&[(Key::Enter, NONE), (Key::A, Modifiers::COMMAND)]),
+        // A click puts the keyboard in the date (Ctrl+A is Save on this screen, so the date is
+        // cleared with End and Backspace), and 31 Oct is the lock date of Fictional Pumps
+        // (index.html sales-invoice.period-locked). Enter then goes on to the customer.
+        shot("sales-invoice.period-locked", &[(Key::F8, NONE)])
+            .on(Fixture::Stocked)
+            .click(308.0, 202.0)
+            .press(&[(Key::End, NONE)])
+            .press(&[(Key::Backspace, NONE); 12])
+            .type_text("31-10-2026")
+            .press(&[(Key::Enter, NONE)])
+            .type_text("Narmada")
+            .press(&[(Key::Enter, NONE)])
+            .type_text("24")
+            .press(&[(Key::Enter, NONE)])
+            .type_text("Sales")
+            .press(&[(Key::Enter, NONE), (Key::Enter, NONE)])
+            .type_text("HDPE")
+            .press(&[(Key::Enter, NONE)])
+            .type_text("10")
+            .press(&[(Key::Enter, NONE)])
+            .type_text("1500")
+            .press(&[(Key::Enter, NONE), (Key::Enter, NONE)]),
+        // A blank second line ends the lines; Enter on the narration asks to save.
+        pumps_invoice_line(
+            "sales-invoice.save-confirm",
+            ("Narmada", "24"),
+            "HDPE",
+            "10",
+            "1500",
+        )
+        .press(&[(Key::Enter, NONE), (Key::Enter, NONE)]),
+        // sales-invoice.saved is not captured: answering the question draws an empty content
+        // area in the harness (PARITY-GAPS, Sales invoice).
     ]
 }
+
+/// Ctrl+A: in a text field, selects all of its text.
+const SELECT_ALL: (Key, Modifiers) = (Key::A, Modifiers::COMMAND);
 
 /// Where the snapshot run is.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -672,9 +1086,19 @@ struct Snapshots {
     /// Escape presses so far in the current return to Home.
     presses: u32,
     image: Arc<Mutex<Option<Arc<egui::ColorImage>>>>,
+    /// The company file open in the shell.
+    company: Fixture,
 }
 
 impl Snapshots {
+    /// Closes the open company and opens `company` on a new shell, as the start of the run does.
+    fn reopen(&mut self, company: Fixture) {
+        self.shell = Shell::new(Box::new(GatewayScreen::new()));
+        self.shell.app_ctx_mut().api = Some(ApiWorker::spawn(company.open(&self.out)).unwrap());
+        submit::note_changed();
+        self.company = company;
+    }
+
     fn next_stage(&mut self, stage: Stage) {
         self.stage = stage;
         self.frames = 0;
@@ -714,6 +1138,12 @@ impl eframe::App for Snapshots {
             return;
         }
         if let Some(item) = self.inject.pop_front() {
+            // A wheel scroll is animated over several frames; the next click waits for it to end.
+            self.gap = if matches!(item, Inject::Scroll(..)) {
+                SCROLL_SETTLE_FRAMES
+            } else {
+                6
+            };
             match item {
                 Inject::Key(key, modifiers) => {
                     for pressed in [true, false] {
@@ -727,8 +1157,29 @@ impl eframe::App for Snapshots {
                     }
                 }
                 Inject::Text(text) => raw_input.events.push(Event::Text(text.to_owned())),
+                Inject::Scroll(x, y, wheel) => {
+                    raw_input.events.push(Event::PointerMoved(egui::pos2(x, y)));
+                    raw_input.events.push(Event::MouseWheel {
+                        unit: egui::MouseWheelUnit::Point,
+                        delta: egui::vec2(0.0, wheel),
+                        phase: egui::TouchPhase::Move,
+                        source: egui::MouseWheelSource::Unknown,
+                        modifiers: Modifiers::NONE,
+                    });
+                }
+                Inject::Click(x, y) => {
+                    let pos = egui::pos2(x, y);
+                    raw_input.events.push(Event::PointerMoved(pos));
+                    for pressed in [true, false] {
+                        raw_input.events.push(Event::PointerButton {
+                            pos,
+                            button: egui::PointerButton::Primary,
+                            pressed,
+                            modifiers: Modifiers::NONE,
+                        });
+                    }
+                }
             }
-            self.gap = 6;
         }
     }
 
@@ -769,6 +1220,13 @@ impl eframe::App for Snapshots {
                 }
             }
             Stage::Keys => {
+                let wanted = self.shots[self.index].company;
+                if wanted != self.company {
+                    // Another company file: open it and wait for its books as at the start.
+                    self.reopen(wanted);
+                    self.next_stage(Stage::Warm);
+                    return;
+                }
                 let current = &self.shots[self.index];
                 self.shell.set_theme(current.theme.kind());
                 self.inject = current
@@ -863,7 +1321,8 @@ fn main() -> eframe::Result<()> {
         .collect();
     assert!(!entries.is_empty(), "no entry matches --only {only:?}");
     std::fs::create_dir_all(&out).unwrap();
-    let api = company_file(&out);
+    let company = entries[0].company;
+    let api = company.open(&out);
     let mut shell = Shell::new(Box::new(GatewayScreen::new()));
     shell.app_ctx_mut().api = Some(ApiWorker::spawn(api).unwrap());
     submit::note_changed();
@@ -878,6 +1337,7 @@ fn main() -> eframe::Result<()> {
         gap: 0,
         presses: 0,
         image: Arc::new(Mutex::new(None)),
+        company,
     };
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
