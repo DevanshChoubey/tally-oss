@@ -342,3 +342,48 @@ fn the_day_book_says_who_entered_each_november_voucher_and_how() {
         t("Ananya K.", "Typed", "Monthly depreciation, November")
     );
 }
+
+#[test]
+fn gstr1_sections_count_what_the_return_holds() {
+    // provenance: the mock's `gstr1()` run with node over its November sales
+    // (design/mock-v2/index.html:698-715): 4A B2B invoices 4 / 3,43,585.00 taxable / 50,535.30
+    // tax. The mock also lists 7 B2C others (9,640.00, 482.00) and 12 HSN summary (3,49,385.00)
+    // from the counter sale SI/0415 whose item "Steel pickaxe" has no HSN; the engine holds that
+    // whole voucher back (rule A1: a voucher missing data is not half-reported), so 7 has no
+    // record and 12 is 3,49,385.00 - 5,800.00 (SI/0415's 4 x 1,450 spare line) = 3,43,585.00.
+    // Both differences are recorded in design/PARITY-GAPS.md. The held-back voucher is its own
+    // row, Needs correction, 1 record.
+    let (_dir, api) = sample();
+    let books = api.books().unwrap().value().unwrap();
+    let gstin = books.company.registrations[0].gstin.clone();
+    let period = Period::new(date!(2026 - 11 - 01), date!(2026 - 11 - 30)).unwrap();
+    let ret = api.gstr1(&gstin, period).unwrap().value().unwrap();
+    let rows: Vec<(String, u64, Option<i64>, Option<i64>, String)> = ret
+        .sections()
+        .unwrap()
+        .into_iter()
+        .map(|s| {
+            (
+                s.code.to_owned(),
+                s.records,
+                s.taxable.map(|p| p.get()),
+                s.tax.map(|p| p.get()),
+                format!("{:?}", s.status),
+            )
+        })
+        .collect();
+    let want = vec![
+        ("4A", 4, Some(34_358_500), Some(5_053_530), "Ready"),
+        ("5", 0, Some(0), Some(0), "NotRelevant"),
+        ("7", 0, Some(0), Some(0), "NotRelevant"),
+        ("9B", 0, Some(0), Some(0), "NotRelevant"),
+        ("12", 5, Some(34_358_500), None, "Ready"),
+        ("13", 5, None, None, "Ready"),
+        ("held", 1, None, None, "NeedsCorrection"),
+    ];
+    let want: Vec<(String, u64, Option<i64>, Option<i64>, String)> = want
+        .into_iter()
+        .map(|(c, r, t, x, s)| (c.to_owned(), r, t, x, s.to_owned()))
+        .collect();
+    assert_eq!(rows, want);
+}

@@ -440,10 +440,24 @@ pub struct GstScreen {
     run: worker::GstRun,
     /// Figures of the GSTR-1 tab, from the worker.
     figures1: Figures,
+    /// The GSTR-1 section table, from the worker.
+    sections: Vec<ledgerly_api::Gstr1Section>,
+    /// Whether `sections` was supplied; a screen with no sections counts nothing.
+    sections_loaded: bool,
     /// Figures of the GSTR-3B tab, from the worker.
     figures3b: Figures,
     /// The GSTR-3B table, from the worker.
     lines3b: Vec<look::Line3b>,
+}
+
+/// The screen's bucket for the engine's.
+pub(super) fn section_bucket(b: ledgerly_api::Bucket) -> Bucket {
+    match b {
+        ledgerly_api::Bucket::Ready => Bucket::Ready,
+        ledgerly_api::Bucket::NotRelevant => Bucket::NotRelevant,
+        ledgerly_api::Bucket::Mismatch => Bucket::Mismatch,
+        ledgerly_api::Bucket::NeedsCorrection => Bucket::NeedsCorrection,
+    }
 }
 
 /// What a click in the table asks for, applied after the frame is drawn.
@@ -456,6 +470,7 @@ enum UiEvent {
     Drill(usize),
     Decide(usize, ImsAction),
     ExportJson,
+    PeriodPicker,
 }
 
 impl GstScreen {
@@ -484,6 +499,8 @@ impl GstScreen {
             revision: 0,
             run: worker::GstRun::default(),
             figures1: Figures::default(),
+            sections: Vec::new(),
+            sections_loaded: false,
             figures3b: Figures::default(),
             lines3b: Vec::new(),
         }
@@ -538,6 +555,33 @@ impl GstScreen {
     pub fn set_gstr1(&mut self, feed: Feed<Vec<ExceptionItem>>) {
         self.gstr1 = feed;
         self.clamp_focus();
+    }
+
+    /// Supplies the GSTR-1 section table (one row per table of the return).
+    pub fn set_sections(&mut self, sections: Vec<ledgerly_api::Gstr1Section>) {
+        self.sections = sections;
+        self.sections_loaded = true;
+    }
+
+    /// Forgets the GSTR-1 section table (the return could not be built).
+    pub fn clear_sections(&mut self) {
+        self.sections = Vec::new();
+        self.sections_loaded = false;
+    }
+
+    /// Number of sections of the GSTR-1 table with this status, or `None` when no table is
+    /// loaded. The tiles of the GSTR-1 tab show these counts, as the mock's do.
+    #[must_use]
+    pub fn section_count(&self, bucket: Bucket) -> Option<usize> {
+        if !self.sections_loaded {
+            return None;
+        }
+        Some(
+            self.sections
+                .iter()
+                .filter(|s| section_bucket(s.status) == bucket)
+                .count(),
+        )
     }
 
     /// Supplies the GSTR-3B exceptions.
@@ -925,6 +969,13 @@ impl GstScreen {
             }
             UiEvent::Decide(row, action) => self.decide_with_notice(row, action),
             UiEvent::ExportJson => self.request_json_export(),
+            UiEvent::PeriodPicker => {
+                self.notice = Some(
+                    "The return period is the month the company is open on; changing it from \
+                     here is not built yet."
+                        .to_owned(),
+                );
+            }
         }
         self.clamp_focus();
     }

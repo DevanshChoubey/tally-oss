@@ -216,13 +216,22 @@ impl GstScreen {
                 let items = ret.buckets.iter().map(exception_item).collect();
                 self.set_gstr1(Feed::Loaded(items));
                 self.figures1 = gstr1_figures(&ret);
+                match ret.sections() {
+                    Ok(sections) => self.set_sections(sections),
+                    Err(e) => {
+                        self.clear_sections();
+                        self.run.error = Some(format!("GSTR-1 sections: {e}"));
+                    }
+                }
             }
             Ok(Outcome::Unsupported(u)) => {
                 self.set_gstr1(Feed::Unsupported(u));
+                self.clear_sections();
                 self.figures1 = Figures::default();
             }
             Err(message) => {
                 self.set_gstr1(failed("GSTR-1", &message));
+                self.clear_sections();
                 self.figures1 = Figures::default();
                 self.run.error = Some(format!("GSTR-1: {message}"));
             }
