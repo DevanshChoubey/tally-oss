@@ -266,10 +266,11 @@ impl Palette {
                         row.entry.target,
                         PaletteTarget::Command(_) | PaletteTarget::Run(_)
                     );
-                    let shortcut = match &row.entry.target {
-                        PaletteTarget::Master(k) if new_ledger_name(k).is_some() => CREATE_KEY,
-                        _ => "",
-                    };
+                    let creates_ledger = matches!(
+                        &row.entry.target,
+                        PaletteTarget::Master(k) if new_ledger_name(k).is_some()
+                    );
+                    let shortcut = if creates_ledger { CREATE_KEY } else { "" };
                     let line = Line {
                         icon: row_icon(&row.entry.target),
                         title: &row.entry.title,
