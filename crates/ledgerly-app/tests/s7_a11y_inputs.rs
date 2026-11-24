@@ -13,8 +13,8 @@
 
 use std::collections::BTreeMap;
 
-use egui::accesskit::{Node, Role, TreeUpdate};
-use egui::{Context, Pos2, RawInput, Rect, Ui, Vec2};
+use egui::accesskit::{Node, NodeId, Role, TreeUpdate};
+use egui::{Context, Event, Key, Modifiers, Pos2, RawInput, Rect, Ui, Vec2};
 use ledgerly_app::screens::masters::MastersScreen;
 use ledgerly_app::screens::setup::SetupScreen;
 use ledgerly_app::screens::voucher_entry::VoucherEntryScreen;
@@ -316,5 +316,74 @@ fn welcome_fields_read_their_captions() {
             "State",
             "Financial year from 1 April",
         ],
+    );
+}
+
+/// The role and name of the node that has focus in `update`.
+fn focused(update: &TreeUpdate) -> Option<(Role, String)> {
+    let focus: NodeId = update.focus;
+    update
+        .nodes
+        .iter()
+        .find(|(id, _)| *id == focus)
+        .and_then(|(_, node): &(NodeId, Node)| Some((node.role(), node.label()?.to_owned())))
+}
+
+/// One Tab press, then a settling frame (egui moves focus on the frame after the key), returning
+/// what has focus.
+fn tab(ctx: &Context, body: &mut impl FnMut(&mut Ui)) -> Option<(Role, String)> {
+    let input = RawInput {
+        screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(1280.0, 800.0))),
+        events: vec![Event::Key {
+            key: Key::Tab,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: Modifiers::NONE,
+        }],
+        ..RawInput::default()
+    };
+    let mut out = ctx.run_ui(input, &mut *body);
+    let _ = out.platform_output.accesskit_update.take();
+    out.drop_without_applying_deltas();
+    focused(&tree(ctx, 1, &mut *body))
+}
+
+#[test]
+fn tab_in_a_voucher_skips_the_entries_of_the_open_ledger_list() {
+    // Tally: "To move to the next field" is Tab (help.tallysolutions.com/keyboard-shortcuts-tally-prime/,
+    // read 2026-11-24, Vouchers and Masters table). derived: while the Ledger field of a voucher is
+    // open with its list, no Tab press may land on one of the list's ledger entries, which are
+    // buttons; Tab moves on to the next field instead.
+    let ctx = context();
+    let b = fixture_books();
+    let mut screen = open(&b, T_PAYMENT);
+    let mut app = AppCtx {
+        books: Some(b.clone()),
+        api: None,
+        lock_date: None,
+        ai_tier: None,
+    };
+    let mut body = |ui: &mut Ui| {
+        let _ = screen.ui(ui, &mut app);
+    };
+    tree(&ctx, 3, &mut body);
+    let ledger_names: Vec<String> = b.masters.ledgers.values().map(|l| l.name.clone()).collect();
+    let stops: Vec<(Role, String)> = (0..12).filter_map(|_| tab(&ctx, &mut body)).collect();
+    assert!(
+        stops
+            .iter()
+            .any(|(role, name)| *role == Role::TextInput && name == "Ledger"),
+        "Tab never reached the Ledger field: {stops:?}"
+    );
+    let on_entries: Vec<&(Role, String)> = stops
+        .iter()
+        .filter(|(role, name)| {
+            *role == Role::Button && ledger_names.iter().any(|l| name.contains(l.as_str()))
+        })
+        .collect();
+    assert!(
+        on_entries.is_empty(),
+        "Tab stopped on ledger list entries: {on_entries:?}"
     );
 }

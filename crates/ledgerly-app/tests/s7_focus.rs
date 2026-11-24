@@ -383,8 +383,10 @@ fn arrow_keys_move_the_highlighted_suggestion() {
 
 #[test]
 fn enter_picks_the_highlighted_suggestion() {
-    // Tally: the list is driven by Up and Down arrows and a choice is confirmed with Enter
-    // (help.tallysolutions.com/keyboard-shortcuts-tally-prime/, read 2026-11-24). derived: the
+    // The mock's option list picks the highlighted entry with Enter (design/mock-v2/index.html,
+    // taPick, near line 1257). Tally's keyboard page (help.tallysolutions.com/keyboard-shortcuts-
+    // tally-prime/, read 2026-11-24) documents Up and Down for moving in a list, not Enter for
+    // picking one. derived: the
     // party list opens on the first ledger, "Output CGST" (ledgers sort by name, "Output CGST" is
     // before "Sales - Local" and "Sharma Traders"); one Down highlights the second, and Enter
     // must put that ledger's name into the party field.
