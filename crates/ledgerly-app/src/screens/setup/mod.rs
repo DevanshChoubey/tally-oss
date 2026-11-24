@@ -54,6 +54,9 @@ fn is_key_event(event: &egui::Event, key: Key) -> bool {
     matches!(event, egui::Event::Key { key: k, .. } if *k == key)
 }
 
+/// The wizard's screen title, as the sidebar and the breadcrumbs name it.
+pub const SETUP_TITLE: &str = "Company setup";
+
 /// The width of the step rail, as the mock's card gives it (index.html:311, 240 px).
 const RAIL_WIDTH: f32 = 240.0;
 /// The widest the card gets (`.setup{max-width:980px}`, index.html:311).
@@ -135,6 +138,42 @@ pub struct SetupScreen {
     job: Option<Receiver<Created>>,
     /// The name of the company that was created, for the Done step.
     created_name: Option<String>,
+    /// The card chosen on the Start step.
+    start: StartChoice,
+    /// The file dialog of "Open a Ledgerly file": the chosen path, or `None` when cancelled.
+    picker: fn() -> Option<PathBuf>,
+    /// The company file being opened, if any.
+    open_job: Option<Receiver<Result<Api, String>>>,
+    /// A company file was opened: the next frame goes to its home screen.
+    opened: bool,
+}
+
+/// What the Start step's Continue button does: the cards that can be chosen (index.html:1863).
+/// "Import" and "Try the sample" cannot be chosen yet (see `design/PARITY-GAPS.md`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum StartChoice {
+    /// Create a company: the wizard goes on to the Company step.
+    Create,
+    /// Open a Ledgerly file: the system file dialog, then the company opens.
+    Open,
+}
+
+impl StartChoice {
+    /// The other choice. Two cards can be chosen, so every arrow key moves to the other one.
+    fn other(self) -> Self {
+        match self {
+            StartChoice::Create => StartChoice::Open,
+            StartChoice::Open => StartChoice::Create,
+        }
+    }
+}
+
+/// The system file dialog for a company file. `None` when the user cancels.
+fn pick_company_file() -> Option<PathBuf> {
+    rfd::FileDialog::new()
+        .set_title("Open a Ledgerly file")
+        .add_filter("Ledgerly company file", &["ledgerly"])
+        .pick_file()
 }
 
 impl Default for SetupScreen {
@@ -178,7 +217,18 @@ impl SetupScreen {
             job: None,
             created_name: None,
             focus_name: false,
+            start: StartChoice::Create,
+            picker: pick_company_file,
+            open_job: None,
+            opened: false,
         }
+    }
+
+    /// The same wizard with `picker` as the file dialog of "Open a Ledgerly file".
+    #[must_use]
+    pub fn with_picker(mut self, picker: fn() -> Option<PathBuf>) -> Self {
+        self.picker = picker;
+        self
     }
 
     /// The company form as the user has typed it. A GSTIN decides nothing here; [`check_gstin`]
@@ -230,10 +280,13 @@ impl SetupScreen {
     /// Continues from the current step. On Backup, that creates the company.
     fn continue_step(&mut self) {
         match self.step {
-            Step::Welcome => {
-                self.step = Step::Company;
-                self.focus_name = true;
-            }
+            Step::Welcome => match self.start {
+                StartChoice::Create => {
+                    self.step = Step::Company;
+                    self.focus_name = true;
+                }
+                StartChoice::Open => self.open_file(),
+            },
             Step::Company => {
                 if let Some(reason) = self.company_block() {
                     self.notice = Some(reason);
@@ -247,6 +300,48 @@ impl SetupScreen {
             Step::Ai => self.step = Step::Backup,
             Step::Backup => self.create(),
             Step::Done => {}
+        }
+    }
+
+    /// Asks for a company file in the system file dialog and opens it in the background. A
+    /// cancelled dialog changes nothing. Home replaces the wizard when the company is open.
+    fn open_file(&mut self) {
+        if self.open_job.is_some() {
+            return;
+        }
+        let Some(path) = (self.picker)() else {
+            return;
+        };
+        match spawn_file_job(move || {
+            Api::open(&path).map_err(|e| format!("The company file could not be opened: {e}"))
+        }) {
+            Ok(rx) => {
+                self.open_job = Some(rx);
+                self.notice = Some("Opening the company file...".to_owned());
+            }
+            Err(reason) => self.notice = Some(reason),
+        }
+    }
+
+    /// Checks the background open and, when it has answered, hands the company to the worker.
+    fn collect_open(&mut self, ctx: &mut AppCtx) {
+        let Some(rx) = self.open_job.as_ref() else {
+            return;
+        };
+        let answer = match rx.try_recv() {
+            Ok(answer) => answer,
+            Err(TryRecvError::Empty) => return,
+            Err(TryRecvError::Disconnected) => {
+                Err("The company file could not be opened; try again.".to_owned())
+            }
+        };
+        self.open_job = None;
+        match answer.and_then(|api| hand_over(ctx, api)) {
+            Ok(()) => {
+                self.notice = None;
+                self.opened = true;
+            }
+            Err(reason) => self.notice = Some(reason),
         }
     }
 
@@ -313,6 +408,7 @@ impl SetupScreen {
 
     /// Checks the background create and, when it has answered, opens the company.
     fn collect(&mut self, ctx: &mut AppCtx) {
+        self.collect_open(ctx);
         let Some(rx) = self.job.as_ref() else {
             return;
         };
@@ -391,11 +487,34 @@ impl SetupScreen {
     /// that disagrees with the state disables it (index.html:1861).
     fn continue_label_and_gate(&self) -> (&'static str, bool) {
         match self.step {
-            Step::Welcome => ("Create a company", true),
+            Step::Welcome => match self.start {
+                StartChoice::Create => ("Create a company", true),
+                StartChoice::Open => ("Open a Ledgerly file", self.open_job.is_none()),
+            },
             Step::Company => ("Continue", self.company_block().is_none()),
             Step::Features | Step::Keyboard | Step::Ai => ("Continue", true),
             Step::Backup => ("Finish", self.job.is_none()),
             Step::Done => ("Go to Home", true),
+        }
+    }
+
+    /// The arrow keys on the Start step move the choice between the cards that can be chosen.
+    fn take_start_keys(&mut self, ui: &mut egui::Ui) {
+        if self.step != Step::Welcome || ui.ctx().text_edit_focused() {
+            return;
+        }
+        let arrows = [
+            Key::ArrowDown,
+            Key::ArrowUp,
+            Key::ArrowLeft,
+            Key::ArrowRight,
+        ];
+        if arrows.iter().any(|k| pressed_key(ui, *k)) {
+            self.start = self.start.other();
+            ui.input_mut(|i| {
+                i.events
+                    .retain(|e| !arrows.iter().any(|k| is_key_event(e, *k)));
+            });
         }
     }
 
@@ -438,7 +557,7 @@ impl SetupScreen {
 
     /// The Welcome step (index.html:1863). Create is the one choice that works; the others say
     /// why they wait.
-    fn draw_welcome(ui: &mut egui::Ui) {
+    fn draw_welcome(&mut self, ui: &mut egui::Ui) {
         pane_head(
             ui,
             "Welcome to Ledgerly",
@@ -450,7 +569,7 @@ impl SetupScreen {
                 "Create a company",
                 "About 3 minutes. Name, GSTIN, financial year.",
             )
-            .selected(true),
+            .selected(self.start == StartChoice::Create),
             OptionCard::new(
                 Icon::Upload,
                 "Import from another accounting app",
@@ -462,7 +581,7 @@ impl SetupScreen {
                 "Open a Ledgerly file",
                 "From a backup or another computer.",
             )
-            .unavailable("Not available in this wizard yet."),
+            .selected(self.start == StartChoice::Open),
             OptionCard::new(
                 Icon::Eye,
                 "Try the sample company",
@@ -473,6 +592,12 @@ impl SetupScreen {
         let drawn = option_grid(ui, egui::Id::unique("setup-welcome"), 2, &cards);
         for (n, card) in drawn.iter().enumerate() {
             record_probe(ui, &format!("setup.option.{n}"), card.card);
+        }
+        // Cards 0 and 2 can be chosen; 1 (import) and 3 (sample) only say why they cannot.
+        for (n, choice) in [(0, StartChoice::Create), (2, StartChoice::Open)] {
+            if drawn.get(n).is_some_and(|card| card.response.clicked()) {
+                self.start = choice;
+            }
         }
     }
 
@@ -1166,7 +1291,7 @@ fn kind_label(kind: EntityKind) -> &'static str {
 
 impl Screen for SetupScreen {
     fn title(&self) -> String {
-        "Company setup".to_owned()
+        SETUP_TITLE.to_owned()
     }
 
     /// The key bar's name (index.html:1891): the step's place among the seven.
@@ -1190,9 +1315,13 @@ impl Screen for SetupScreen {
 
     fn ui(&mut self, ui: &mut egui::Ui, ctx: &mut AppCtx) -> ScreenAction {
         self.collect(ctx);
-        if self.job.is_some() {
+        if std::mem::take(&mut self.opened) {
+            return ScreenAction::Replace(Box::new(GatewayScreen::new()));
+        }
+        if self.job.is_some() || self.open_job.is_some() {
             ui.ctx().request_repaint();
         }
+        self.take_start_keys(ui);
         match self.take_keys(ui) {
             KeyOutcome::Continue => {
                 if self.step == Step::Done {
@@ -1296,7 +1425,7 @@ impl SetupScreen {
     fn draw_pane(&mut self, ui: &mut egui::Ui) -> Option<DoneChoice> {
         let mut chosen = None;
         match self.step {
-            Step::Welcome => Self::draw_welcome(ui),
+            Step::Welcome => self.draw_welcome(ui),
             Step::Company => self.draw_company(ui),
             Step::Features => self.draw_features(ui),
             Step::Keyboard => self.draw_keyboard(ui),

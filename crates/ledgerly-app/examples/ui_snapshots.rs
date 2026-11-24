@@ -307,15 +307,34 @@ enum Fixture {
     /// Fictional Pumps ([`stocked_company_file`]): stock sold before any was bought, an item with
     /// no HSN sold, a stored bank statement and the books locked to 31 Oct 2026.
     Stocked,
+    /// No company at all: the shell exactly as the app's `main` builds it
+    /// (`Shell::cold_start`), with nothing opened. This is what a user sees on first launch.
+    Cold,
 }
 
 impl Fixture {
-    /// Creates the company file in `dir` and opens it. Each call starts the file again.
-    fn open(self, dir: &Path) -> Api {
+    /// Creates the company file in `dir` and opens it. Each call starts the file again. `None`
+    /// for [`Fixture::Cold`], which opens nothing.
+    fn open(self, dir: &Path) -> Option<Api> {
         match self {
-            Fixture::Main => company_file(dir),
-            Fixture::New => new_company_file(dir),
-            Fixture::Stocked => stocked_company_file(dir),
+            Fixture::Main => Some(company_file(dir)),
+            Fixture::New => Some(new_company_file(dir)),
+            Fixture::Stocked => Some(stocked_company_file(dir)),
+            Fixture::Cold => None,
+        }
+    }
+
+    /// The shell this fixture starts with and the stage the harness continues at: a company's
+    /// shell waits for its books ([`Stage::Warm`]); the cold start has none to wait for.
+    fn shell(self, dir: &Path) -> (Shell, Stage) {
+        match self.open(dir) {
+            Some(api) => {
+                let mut shell = Shell::new(Box::new(GatewayScreen::new()));
+                shell.app_ctx_mut().api = Some(ApiWorker::spawn(api).unwrap());
+                submit::note_changed();
+                (shell, Stage::Warm)
+            }
+            None => (Shell::cold_start(), Stage::Home),
         }
     }
 }
@@ -585,13 +604,16 @@ enum Theme {
     Light,
     Dark,
     Hc,
+    /// The audit set (`audit_shots`): light theme, written to `<out>/audit/`. Its states have no
+    /// mock state of the same id, so `design/compare.mjs` leaves the folder alone.
+    Audit,
 }
 
 impl Theme {
     /// The shell's theme for this entry.
     fn kind(self) -> ThemeKind {
         match self {
-            Theme::Light => ThemeKind::Light,
+            Theme::Light | Theme::Audit => ThemeKind::Light,
             Theme::Dark => ThemeKind::Dark,
             Theme::Hc => ThemeKind::HighContrast,
         }
@@ -603,6 +625,7 @@ impl Theme {
             Theme::Light => "light",
             Theme::Dark => "dark",
             Theme::Hc => "hc",
+            Theme::Audit => "audit",
         }
     }
 }
@@ -740,15 +763,14 @@ const SETUP_GSTIN: &str = "27AAGFG4417K1ZA";
 /// harness removes it before a run, because the wizard does not overwrite a file.
 const SETUP_FILE: &str = "target/setup-capture/godavari.ledgerly";
 
-/// A company setup capture: the palette opens the wizard, the company form is filled by typing
-/// (Tab moves focus between its fields), then `after_company` Enters move on from the company step.
+/// A company setup capture, as a first-time user reaches it: the cold start (no company open) shows
+/// the wizard, Enter goes from Start to Company (where the name field takes focus by itself), the
+/// company form is filled by typing (Tab moves focus between its fields), then `after_company`
+/// Enters move on from the company step.
 fn setup_shot(state: &'static str, after_company: usize) -> Shot {
-    let palette = (Key::K, Modifiers::COMMAND);
-    let mut shot = shot(state, &[palette])
-        .query("Company setup")
-        // The palette's Enter opens the wizard; the next Enter goes from Start to Company, where the
-        // name field takes focus by itself.
-        .then(&[(Key::Enter, NONE), (Key::Enter, NONE)])
+    let mut shot = shot(state, &[])
+        .on(Fixture::Cold)
+        .then(&[(Key::Enter, NONE)])
         .type_text(SETUP_NAME)
         .press(&[(Key::Tab, NONE), (Key::Tab, NONE), (Key::Tab, NONE)])
         .type_text(SETUP_GSTIN)
@@ -805,6 +827,46 @@ fn pumps_invoice_line(
         .press(&[enter])
         .type_text(rate)
         .press(&[enter, enter])
+}
+
+/// The audit set: what a user reaches from the real cold start (no company open) by the sidebar's
+/// entries, the keys and the palette, plus the first-run states with no mock state. Written to
+/// `<out>/audit/<id>.ppm` with `--audit`; `design/REAL-PATH-AUDIT.md` judges each image.
+fn audit_shots() -> Vec<Shot> {
+    let palette = (Key::K, Modifiers::COMMAND);
+    let enter = (Key::Enter, NONE);
+    let cold = |id: &'static str, keys: &[(Key, Modifiers)]| {
+        let mut s = shot(id, keys).on(Fixture::Cold);
+        s.theme = Theme::Audit;
+        s
+    };
+    let by_palette =
+        |id: &'static str, query: &'static str| cold(id, &[palette]).query(query).then(&[enter]);
+    vec![
+        cold("cold.palette", &[palette]),
+        cold("cold.start-open-selected", &[]).then(&[(Key::ArrowDown, NONE)]),
+        cold("cold.rail", &[(Key::Backslash, Modifiers::COMMAND)]),
+        cold("cold.new-tab", &[(Key::T, Modifiers::COMMAND)]),
+        cold("cold.keys-help", &[(Key::Questionmark, NONE)]),
+        cold("cold.sales-f8", &[(Key::F8, NONE)]),
+        cold("cold.purchase-f9", &[(Key::F9, NONE)]),
+        cold("cold.payment-f5", &[(Key::F5, NONE)]),
+        cold("cold.receipt-f6", &[(Key::F6, NONE)]),
+        cold("cold.masters-m", &[(Key::M, NONE)]),
+        cold("cold.day-book-d", &[(Key::D, NONE)]),
+        cold("cold.balance-sheet-b", &[(Key::B, NONE)]),
+        cold("cold.gst-g", &[(Key::G, NONE)]),
+        by_palette("cold.home", "Home"),
+        by_palette("cold.review", "Review queue"),
+        by_palette("cold.quick-entry", "Plain-words entry"),
+        by_palette("cold.ask", "Ask your books"),
+        by_palette("cold.purchase-bill", "Purchase from bill photo"),
+        by_palette("cold.import", "Import from another app"),
+        by_palette("cold.bank", "Bank reconciliation"),
+        by_palette("cold.ai-settings", "AI and privacy"),
+        by_palette("cold.contra", "Contra"),
+        by_palette("cold.journal", "Journal"),
+    ]
 }
 
 /// The registry: every light shot of [`light_shots`], then a dark and a high-contrast copy of each
@@ -933,9 +995,8 @@ fn light_shots() -> Vec<Shot> {
             .query("Bank Reconciliation")
             .then(&[(Key::Enter, NONE), (Key::B, NONE)]),
         // Company setup (mock SCREENS.setup). The palette opens the wizard at Start; Enter goes on.
-        shot("setup.welcome", &[palette])
-            .query("Company setup")
-            .then(&[(Key::Enter, NONE)]),
+        // The true first launch: the shell as `main` builds it (`Shell::cold_start`), no company.
+        shot("setup.welcome", &[]).on(Fixture::Cold),
         setup_shot("setup.company", 0),
         setup_shot("setup.features", 1),
         setup_shot("setup.keyboard", 2),
@@ -1108,15 +1169,19 @@ struct Snapshots {
     image: Arc<Mutex<Option<Arc<egui::ColorImage>>>>,
     /// The company file open in the shell.
     company: Fixture,
+    /// The shell has not been driven since it was built. A cold-start shot needs this, since its
+    /// keys move the wizard on and a shell remembers where it was.
+    fresh: bool,
 }
 
 impl Snapshots {
     /// Closes the open company and opens `company` on a new shell, as the start of the run does.
-    fn reopen(&mut self, company: Fixture) {
-        self.shell = Shell::new(Box::new(GatewayScreen::new()));
-        self.shell.app_ctx_mut().api = Some(ApiWorker::spawn(company.open(&self.out)).unwrap());
-        submit::note_changed();
+    fn reopen(&mut self, company: Fixture) -> Stage {
+        let (shell, stage) = company.shell(&self.out);
+        self.shell = shell;
         self.company = company;
+        self.fresh = true;
+        stage
     }
 
     fn next_stage(&mut self, stage: Stage) {
@@ -1241,12 +1306,15 @@ impl eframe::App for Snapshots {
             }
             Stage::Keys => {
                 let wanted = self.shots[self.index].company;
-                if wanted != self.company {
+                // A cold-start shot always begins from a fresh shell, since its keys move the
+                // wizard on and a shell remembers where it was.
+                if wanted != self.company || (wanted == Fixture::Cold && !self.fresh) {
                     // Another company file: open it and wait for its books as at the start.
-                    self.reopen(wanted);
-                    self.next_stage(Stage::Warm);
+                    let stage = self.reopen(wanted);
+                    self.next_stage(stage);
                     return;
                 }
+                self.fresh = false;
                 let current = &self.shots[self.index];
                 self.shell.set_theme(current.theme.kind());
                 self.inject = current
@@ -1313,26 +1381,28 @@ impl eframe::App for Snapshots {
 }
 
 /// The output directory and the optional `--only` substring, from the command line.
-fn parse_args() -> (PathBuf, Option<String>) {
-    const USAGE: &str = "usage: ui_snapshots <output dir> [--only <substring>]";
+fn parse_args() -> (PathBuf, Option<String>, bool) {
+    const USAGE: &str = "usage: ui_snapshots <output dir> [--only <substring>] [--audit]";
     let mut args = std::env::args().skip(1);
     let out = PathBuf::from(args.next().expect(USAGE));
     let mut only = None;
+    let mut audit = false;
     while let Some(arg) = args.next() {
         match arg.as_str() {
+            "--audit" => audit = true,
             "--only" => only = Some(args.next().expect("--only needs a substring")),
             other => panic!("unknown argument {other}; {USAGE}"),
         }
     }
-    (out, only)
+    (out, only, audit)
 }
 
 fn main() -> eframe::Result<()> {
     // The setup captures create a company file; the wizard never overwrites one, so clear the last.
     let _ = std::fs::create_dir_all("target/setup-capture");
     let _ = std::fs::remove_file(SETUP_FILE);
-    let (out, only) = parse_args();
-    let entries: Vec<Shot> = shots()
+    let (out, only, audit) = parse_args();
+    let entries: Vec<Shot> = if audit { audit_shots() } else { shots() }
         .into_iter()
         .filter(|s| {
             only.as_deref()
@@ -1342,22 +1412,20 @@ fn main() -> eframe::Result<()> {
     assert!(!entries.is_empty(), "no entry matches --only {only:?}");
     std::fs::create_dir_all(&out).unwrap();
     let company = entries[0].company;
-    let api = company.open(&out);
-    let mut shell = Shell::new(Box::new(GatewayScreen::new()));
-    shell.app_ctx_mut().api = Some(ApiWorker::spawn(api).unwrap());
-    submit::note_changed();
+    let (shell, stage) = company.shell(&out);
     let app = Snapshots {
         shell,
         out,
         shots: entries,
         index: 0,
-        stage: Stage::Warm,
+        stage,
         frames: 0,
         inject: VecDeque::new(),
         gap: 0,
         presses: 0,
         image: Arc::new(Mutex::new(None)),
         company,
+        fresh: true,
     };
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()

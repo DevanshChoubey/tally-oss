@@ -40,6 +40,8 @@ function appCaptures() {
   for (const theme of readdirSync(appRoot).sort()) {
     const dir = join(appRoot, theme);
     if (!statSync(dir).isDirectory()) continue;
+    // The audit set has no mock states of the same ids (design/REAL-PATH-AUDIT.md judges it).
+    if (theme === 'audit') continue;
     for (const file of readdirSync(dir).sort()) {
       if (file.endsWith('.webp')) found.push({ theme, id: file.slice(0, -'.webp'.length) });
     }

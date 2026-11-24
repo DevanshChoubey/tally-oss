@@ -113,7 +113,6 @@
 | light | masters.items | 0.7540 |
 | dark | setup.welcome | 0.7540 |
 | light | balance-sheet.voucher | 0.7574 |
-| light | setup.welcome | 0.7587 |
 | dark | masters.ledger-detail | 0.7590 |
 | hc | ask.offline-ai | 0.7600 |
 | dark | setup.ai | 0.7611 |
@@ -134,6 +133,7 @@
 | light | home.empty | 0.8082 |
 | hc | review.empty | 0.8095 |
 | dark | ask.offline-ai | 0.8102 |
+| light | setup.welcome | 0.8199 |
 | dark | setup.done | 0.8215 |
 | dark | review.empty | 0.8224 |
 | light | setup.done | 0.8226 |
@@ -1450,18 +1450,6 @@ SSIM 0.7574
 </tr>
 </table>
 
-## light / setup.welcome
-
-SSIM 0.7587
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/light/setup.welcome.webp" width="480" alt="mock light setup.welcome"></td>
-<td><img src="app-captures/light/setup.welcome.webp" width="480" alt="app light setup.welcome"></td>
-</tr>
-</table>
-
 ## dark / masters.ledger-detail
 
 SSIM 0.7590
@@ -1699,6 +1687,18 @@ SSIM 0.8102
 <tr>
 <td><img src="mock-v2/captures/states/dark/ask.offline-ai.webp" width="480" alt="mock dark ask.offline-ai"></td>
 <td><img src="app-captures/dark/ask.offline-ai.webp" width="480" alt="app dark ask.offline-ai"></td>
+</tr>
+</table>
+
+## light / setup.welcome
+
+SSIM 0.8199
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/setup.welcome.webp" width="480" alt="mock light setup.welcome"></td>
+<td><img src="app-captures/light/setup.welcome.webp" width="480" alt="app light setup.welcome"></td>
 </tr>
 </table>
 
