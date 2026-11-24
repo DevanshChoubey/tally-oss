@@ -5,6 +5,7 @@
 //! settings. Every figure comes from the engine or the report engines (spec section 4).
 
 mod ai;
+mod balance;
 mod bank;
 mod command;
 mod error;
@@ -20,6 +21,7 @@ mod tally_import;
 mod voucher_gst;
 
 pub use ai::{AiLogEntry, AiTier};
+pub use balance::BalanceChange;
 pub use command::{Command, CommandResult, CreatedId};
 // Report types the app names when it builds and reads reports (card W7). The app depends on this
 // crate only, so the report model is re-exported here instead of adding a manifest dependency.
@@ -42,7 +44,7 @@ pub use maintenance::{VoucherCheck, verify_file};
 pub use report::ExportFormat;
 pub use search::{MatchedOn, SearchHit};
 pub use tally_import::ImportSummary;
-pub use voucher_gst::InvoiceGst;
+pub use voucher_gst::{InvoiceGst, PartyBill};
 
 pub use ledgerly_bank::brs::Brs;
 pub use ledgerly_bank::matcher::{Candidate, LineDirection, MatchRule};

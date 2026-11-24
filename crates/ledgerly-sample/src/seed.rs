@@ -137,6 +137,9 @@ pub(crate) struct LedgerSeed {
     pub(crate) credit_days: Option<u32>,
     pub(crate) bank: Option<BankSeed>,
     pub(crate) gst: Option<GstClassSeed>,
+    /// The ledger an invoice's round-off posts to (the engine's invoice-rounding role).
+    #[serde(default)]
+    pub(crate) invoice_rounding: bool,
 }
 
 /// A stock item master.

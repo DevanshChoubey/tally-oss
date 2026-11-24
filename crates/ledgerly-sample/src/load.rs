@@ -18,8 +18,9 @@ use ledgerly_model::{
     Address, BankAllocation, BankDetails, BaseVoucherKind, BillAllocation, BillRefKind,
     BillWiseConfig, Company, EntityKind, Features, GodownAllocation, GstClassification, GstHistory,
     GstRegistration, InstrumentKind, InventoryLine, Ledger, LedgerLine, NegativeStockPolicy,
-    PartyDetails, RegistrationType, ReservedGroup, StockItem, TaxDetails, TaxLedgerKind,
-    Taxability, Unit, UnitKind, ValuationMethod, Voucher, VoucherMode, VoucherStatus,
+    PartyDetails, RegistrationType, ReservedGroup, ReservedLedger, StockItem, TaxDetails,
+    TaxLedgerKind, Taxability, Unit, UnitKind, ValuationMethod, Voucher, VoucherMode,
+    VoucherStatus,
 };
 use time::format_description::well_known::Iso8601;
 
@@ -297,7 +298,9 @@ fn ledger(l: &LedgerSeed, id: LedgerId) -> Result<Ledger, SampleError> {
             rate_percent: None,
         }),
         gst,
-        reserved: None,
+        reserved: l
+            .invoice_rounding
+            .then_some(ReservedLedger::InvoiceRounding),
         tally: None,
     })
 }

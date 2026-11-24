@@ -315,6 +315,7 @@ group = "IndirectExpenses"
 key = "roundoff"
 name = "Round off"
 group = "IndirectExpenses"
+invoice_rounding = true
 
 [[ledger]]
 key = "disc"

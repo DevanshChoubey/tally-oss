@@ -265,6 +265,33 @@ fn assign_number(mut v: Voucher, vt: &VoucherType, books: &Books) -> Result<Vouc
     Ok(v)
 }
 
+/// Names the New Ref allocations that were left without a name after the voucher's own number.
+///
+/// With bill-wise on in the party master, TallyPrime tracks the bill with the voucher number as the
+/// bill reference (<https://help.tallysolutions.com/tally-prime/accounting-financial-reports/manage-outstanding-payables-tally/>,
+/// read 2026-11-25, as quoted in a search result; the page could not be fetched verbatim). A caller
+/// that builds the lines before the number exists (the invoice screen) leaves the name empty.
+///
+/// # Errors
+/// [`EngineError::Invalid`] on field `bill name` when a New Ref has no name and the voucher has no
+/// number to give it.
+fn name_default_bills(mut v: Voucher) -> Result<Voucher, EngineError> {
+    let number = v.number.clone();
+    for line in &mut v.ledger_lines {
+        for bill in &mut line.bills {
+            if bill.kind == BillRefKind::New && bill.name.trim().is_empty() {
+                bill.name = number.clone().ok_or_else(|| {
+                    invalid(
+                        "bill name",
+                        "a new bill reference has no name and this voucher has no number to name it by; type a name",
+                    )
+                })?;
+            }
+        }
+    }
+    Ok(v)
+}
+
 /// The (ledger, bill name) pairs a voucher opens.
 fn opened_bills(v: &Voucher) -> BTreeSet<BillKey> {
     let mut keys = BTreeSet::new();
@@ -459,7 +486,7 @@ pub fn post_voucher_with_lock(
             ),
         ));
     }
-    let v = assign_number(v, vt, books)?;
+    let v = name_default_bills(assign_number(v, vt, books)?)?;
     validate_bill_refs(&v, books)?;
     Ok(Outcome::Value(vec![Event::VoucherPosted(v)]))
 }
