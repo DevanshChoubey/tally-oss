@@ -34,7 +34,9 @@ mkdir -p "$out"
 dmg_src="$work/dmg"
 mkdir -p "$dmg_src"
 cp -R "$app" "$dmg_src/"
-cp "$root/LICENSE-AGPL" "$dmg_src/"
+cp "$root/LICENSE-AGPL" "$root/LICENSE-APACHE" "$root/LICENSE-MIT" "$root/NOTICE" "$dmg_src/"
+cp "$root/crates/ledgerly-app/assets/fonts/OFL.txt" "$dmg_src/FONTS-OFL.txt"
+cp "$root/crates/ledgerly-app/assets/fonts/Inter-LICENSE.txt" "$dmg_src/FONTS-Inter-LICENSE.txt"
 ln -s /Applications "$dmg_src/Applications"
 hdiutil create -volname "Ledgerly $version" -srcfolder "$dmg_src" -ov -format UDZO "$out/$name.dmg" >/dev/null
 

@@ -15,9 +15,9 @@
 set -uo pipefail
 
 export PATH="$HOME/.cargo/bin:$PATH"
-export RUSTC_WRAPPER=sccache
-export CARGO_TARGET_DIR=/media/devansh/Experiment/playground/tally-oss-targets/integration
-export TMPDIR=/media/devansh/Experiment/playground/claude-tmp
+if command -v sccache >/dev/null 2>&1; then export RUSTC_WRAPPER="${RUSTC_WRAPPER:-sccache}"; fi
+export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-target}"
+export TMPDIR="${TMPDIR:-/tmp}"
 
 usage() {
   echo "usage: capture.sh [--only <substring>]" >&2

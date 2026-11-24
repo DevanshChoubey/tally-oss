@@ -35,6 +35,8 @@ Name: "desktopicon"; Description: "Create a desktop shortcut"; Flags: unchecked
 Source: "{#SourceDir}\ledgerly-app.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\ledgerly.exe"; DestDir: "{app}"; Flags: ignoreversion
 Source: "{#SourceDir}\LICENSE-*"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SourceDir}\NOTICE.txt"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SourceDir}\FONTS-*"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\Ledgerly"; Filename: "{app}\ledgerly-app.exe"

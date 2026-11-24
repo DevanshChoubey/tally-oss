@@ -12,11 +12,16 @@ $Version = $Version.TrimStart('v')
 $root = Resolve-Path (Join-Path $PSScriptRoot '..\..')
 $name = "ledgerly-$Version-windows-x86_64"
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
+# iscc resolves relative paths against the .iss file's folder, so hand it absolute ones.
+$OutDir = (Resolve-Path $OutDir).Path
 $stage = Join-Path $OutDir 'stage'
 Remove-Item -Recurse -Force $stage -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $stage | Out-Null
 Copy-Item (Join-Path $ReleaseDir 'ledgerly-app.exe'), (Join-Path $ReleaseDir 'ledgerly.exe') $stage
 Copy-Item (Join-Path $root 'LICENSE-*') $stage
+Copy-Item (Join-Path $root 'NOTICE') (Join-Path $stage 'NOTICE.txt')
+Copy-Item (Join-Path $root 'crates\ledgerly-app\assets\fonts\OFL.txt') (Join-Path $stage 'FONTS-OFL.txt')
+Copy-Item (Join-Path $root 'crates\ledgerly-app\assets\fonts\Inter-LICENSE.txt') (Join-Path $stage 'FONTS-Inter-LICENSE.txt')
 
 $zipDir = Join-Path $OutDir $name
 New-Item -ItemType Directory -Force -Path $zipDir | Out-Null

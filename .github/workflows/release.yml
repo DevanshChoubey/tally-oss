@@ -5,17 +5,17 @@ name: release
 # time as SOURCE_DATE_EPOCH), packages its files, and uploads them. The publish job writes
 # SHA256SUMS.txt over every artifact and attaches everything to the GitHub release.
 #
-# Actions used: actions/checkout, dtolnay/rust-toolchain, Swatinem/rust-cache (as in ci.yml),
+# Actions used: actions/checkout, dtolnay/rust-toolchain (no build cache, so a cache cannot reach
+# a release),
 # actions/upload-artifact and actions/download-artifact (GitHub's own). Everything else is a
 # shell command on the runner.
 
 on:
   push:
     tags: ["v*"]
-  workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 env:
   CARGO_TERM_COLOR: always
@@ -27,7 +27,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.100
-      - uses: Swatinem/rust-cache@v2
       - name: Set reproducible build flags
         run: |
           echo "SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)" >> "$GITHUB_ENV"
@@ -47,7 +46,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.100
-      - uses: Swatinem/rust-cache@v2
       - name: Set reproducible build flags
         shell: pwsh
         run: |
@@ -82,7 +80,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.100
-      - uses: Swatinem/rust-cache@v2
       - name: Set reproducible build flags
         run: |
           echo "SOURCE_DATE_EPOCH=$(git log -1 --format=%ct)" >> "$GITHUB_ENV"
@@ -102,6 +99,8 @@ jobs:
   publish:
     needs: [linux, windows, macos]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4

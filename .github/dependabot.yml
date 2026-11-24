@@ -15,6 +15,10 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    # The rust-toolchain action's tag is the pinned Rust version (rust-toolchain.toml), not a
+    # release of the action, so Dependabot must not bump it.
+    ignore:
+      - dependency-name: dtolnay/rust-toolchain
     groups:
       github-actions:
         patterns: ["*"]
