@@ -59,9 +59,6 @@ mod import;
 mod view;
 mod worker;
 
-/// The page title of the screen, shown in the page head.
-pub const PAGE_TITLE: &str = "Bank reconciliation";
-
 // ---------------------------------------------------------------------------------------------
 // View types handed in by the host
 // ---------------------------------------------------------------------------------------------
@@ -311,6 +308,8 @@ pub(super) struct LineState {
 /// The bank reconciliation screen.
 #[derive(Debug)]
 pub struct BankScreen {
+    /// The strings of the language the user chose, set each frame from the app context.
+    tr: Tr,
     ledger_name: String,
     statement: BankStatementId,
     lines: Vec<LineState>,
@@ -382,6 +381,7 @@ impl BankScreen {
             check_suggestion(s, &numbers, &seen)?;
         }
         Ok(BankScreen {
+            tr: Tr::default(),
             ledger_name: ledger_name.to_owned(),
             statement,
             lines: lines
@@ -805,7 +805,8 @@ pub fn format_flow(amount: Paise, flow: Flow) -> String {
     format!("{sign} {}", crate::ui::format::amount(amount))
 }
 
-/// The label of a match kind. An assistant suggestion is marked as the assistant's (spec 6.8).
+/// The English label of a match kind. The screen draws [`kind_label_in`]; this stays for callers
+/// that have no translation table.
 pub fn kind_label(kind: MatchKind) -> &'static str {
     match kind {
         MatchKind::Exact => "Exact",
@@ -815,53 +816,72 @@ pub fn kind_label(kind: MatchKind) -> &'static str {
     }
 }
 
-fn confidence_label(c: Confidence) -> &'static str {
-    match c {
-        Confidence::High => "high",
-        Confidence::Medium => "medium",
-        Confidence::Low => "low",
+/// The label of a match kind in the words of `tr`. An assistant suggestion is marked as the
+/// assistant's (spec 6.8).
+pub fn kind_label_in(kind: MatchKind, tr: &Tr) -> String {
+    match kind {
+        MatchKind::Exact => tr.t("bank.kind.exact"),
+        MatchKind::Rule => tr.t("bank.kind.rule"),
+        MatchKind::AiSuggested => tr.t("bank.kind.ai_proposed"),
+        MatchKind::Manual => tr.t("bank.kind.manual"),
     }
 }
 
-fn status_label(s: LineStatus) -> &'static str {
+/// The confidence of a suggestion in the words of `tr`.
+pub fn confidence_label_in(c: Confidence, tr: &Tr) -> String {
+    match c {
+        Confidence::High => tr.t("bank.confidence.high"),
+        Confidence::Medium => tr.t("bank.confidence.medium"),
+        Confidence::Low => tr.t("bank.confidence.low"),
+    }
+}
+
+/// The word for where a statement line stands, in the words of `tr`.
+pub fn status_label_in(s: LineStatus, tr: &Tr) -> String {
     match s {
-        LineStatus::Pending => "Not matched",
-        LineStatus::Matched => "Matched",
-        LineStatus::Skipped => "Skipped",
+        LineStatus::Pending => tr.t("bank.status.pending"),
+        LineStatus::Matched => tr.t("bank.status.matched"),
+        LineStatus::Skipped => tr.t("bank.status.skipped"),
+    }
+}
+
+/// The key bar of a tab, in the words of `tr`. The key names themselves stay as written.
+pub fn key_hints(tab: Tab, tr: &Tr) -> Vec<KeyHint> {
+    match tab {
+        Tab::Matching => vec![
+            KeyHint::new("Enter", tr.t("bank.key.match")),
+            KeyHint::new("S", tr.t("bank.key.skip")),
+            KeyHint::new("J / K", tr.t("keys.move")),
+            KeyHint::new("M", tr.t("bank.key.match_by_hand")),
+            KeyHint::new("B", tr.t("bank.key.statement")),
+            KeyHint::new("Ctrl+O", tr.t("bank.key.import")),
+        ],
+        Tab::Statement => vec![
+            KeyHint::new("B", tr.t("bank.key.all_lines")),
+            KeyHint::new("Ctrl+O", tr.t("bank.key.import")),
+        ],
     }
 }
 
 impl Screen for BankScreen {
-    fn title(&self, _tr: &Tr) -> String {
-        format!("Bank reconciliation: {}", self.ledger_name)
+    fn title(&self, tr: &Tr) -> String {
+        tr.tf("bank.title", &[("ledger", self.ledger_name.as_str())])
     }
 
-    fn page_title(&self, _tr: &Tr) -> String {
-        PAGE_TITLE.to_owned()
+    fn page_title(&self, tr: &Tr) -> String {
+        tr.t("bank.page_title")
     }
 
     fn subtitle(&self, _tr: &Tr) -> Option<String> {
         Some(self.ledger_name.clone())
     }
 
-    fn keys(&self, _tr: &Tr) -> Vec<KeyHint> {
-        match self.tab {
-            Tab::Matching => vec![
-                KeyHint::new("Enter", "Match"),
-                KeyHint::new("S", "Skip"),
-                KeyHint::new("J / K", "Move"),
-                KeyHint::new("M", "Match by hand"),
-                KeyHint::new("B", "Reconciliation statement"),
-                KeyHint::new("Ctrl+O", "Import statement"),
-            ],
-            Tab::Statement => vec![
-                KeyHint::new("B", "All lines"),
-                KeyHint::new("Ctrl+O", "Import statement"),
-            ],
-        }
+    fn keys(&self, tr: &Tr) -> Vec<KeyHint> {
+        key_hints(self.tab, tr)
     }
 
     fn ui(&mut self, ui: &mut Ui, ctx: &mut AppCtx) -> ScreenAction {
+        self.tr = ctx.tr.clone();
         self.tick(ctx.api.as_ref());
         if self.is_loading() {
             ui.ctx().request_repaint();

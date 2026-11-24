@@ -89,6 +89,7 @@ impl BankScreen {
     #[must_use]
     pub fn worker(ledger_name: &str, ledger: LedgerId, as_of: Date) -> Self {
         BankScreen {
+            tr: crate::i18n::Tr::default(),
             ledger_name: ledger_name.to_owned(),
             statement: BankStatementId(0),
             lines: Vec::new(),

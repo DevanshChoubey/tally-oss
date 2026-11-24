@@ -542,7 +542,7 @@ Left, in order of the brief:
   the books" in `view.rs`, and `VOUCHER_TYPES_NOT_YET` in `command.rs`. Each needs a `message_in(tr)`
   or a key at the call site. Acronyms (GSTIN, PAN, IFSC, HSN/SAC, UQC, CGST and the rest) and
   "Dr"/"Cr" stay Latin on purpose.
-- **bank screen: not started.** `screens/bank/` (view.rs, import.rs, worker.rs).
+- **bank screen: done in the fourth round** (see that section).
 - **GST screen: not started.** `screens/gst/` (draw.rs, look.rs).
 - **company setup: not started.** `screens/setup/` (mod.rs, form.rs).
 - **AI screens: not started.** `ai_gate.rs`, `ask.rs`, `assist.rs`, `ai_settings.rs`.
@@ -552,3 +552,23 @@ Left, in order of the brief:
 - **captures not retaken.** `hi.home.default`, `hi.balance-sheet.default`,
   `hi.sales-invoice.default` and `hi.masters.default` wait until every screen above is done, so
   the masters capture is still the earlier English-body one.
+
+## Hindi UI, fourth round (card s7, 2026-11-24)
+
+Done: the bank screen (`tests/i18n_bank.rs`). Its title, page head, key bar, tabs, match and
+status words, action column, column headings, empty state, file layout labels, import dialog
+title and filter, the pending and manual match cards, and the reconciliation statement heading
+come from the translation files. The English stub of `key_hints` and `kind_label_in` failed the
+`i18n_bank` assertions before the change.
+
+Left, for the bank screen:
+
+- **bank: worker-built texts stay English.** The notices and reasons built in `screens/bank/worker.rs`
+  ("No company is open, so the statement cannot be imported.", the suggestion notices, "Other
+  suggestions compete for the same line or voucher", "The matcher found no competing suggestion")
+  and the reconciliation statement's row labels ("Balance as per company books", "Amounts not
+  reflected in bank: deposits", and the rest). They need a `Tr` or a key on the worker side.
+- **bank: error texts stay English.** The `BankScreenError` messages (thiserror, `bank.rs`) show
+  through the error note with the "Error:" prefix from the file. Each message needs a key.
+- **bank: captures not retaken.** No `hi.bank.*` shot is in the registry yet.
+

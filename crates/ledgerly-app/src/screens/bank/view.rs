@@ -13,9 +13,11 @@ use egui_extras::{Column, Size, StripBuilder};
 
 use super::import;
 use super::{
-    BankScreen, BrsRow, BrsRowKind, Flow, LineState, LineStatus, PAGE_TITLE, SuggestionView, Tab,
-    brs_line_height, confidence_label, format_flow, format_line_date, kind_label, status_label,
+    BankScreen, BrsRow, BrsRowKind, Flow, LineState, LineStatus, SuggestionView, Tab,
+    brs_line_height, confidence_label_in, format_flow, format_line_date, kind_label_in,
+    status_label_in,
 };
+use crate::i18n::Tr;
 use crate::screens::wire::unsupported_text;
 use crate::theme::{RADIUS_M, TEXT_BODY, border_width, shadow_1};
 use crate::ui::badge::{BadgeKind, badge};
@@ -30,9 +32,6 @@ use crate::ui::tabs::tabs;
 use crate::ui::{bold_font, kind, tokens};
 use ledgerly_core::{Outcome, VoucherId};
 use ledgerly_model::MatchKind;
-
-/// The sentence under the empty state, from the mock's bank empty state.
-const NO_STATEMENT_SENTENCE: &str = "Download a statement from your bank's website as CSV, XLSX or MT940, then import it here. The file is read on this computer. Ledgerly never signs in to your bank.";
 
 /// Width of the card beside the statement lines.
 const FOCUS_WIDTH: f32 = 340.0;
@@ -122,25 +121,32 @@ fn suggestion_badge(kind: MatchKind) -> BadgeKind {
 
 /// The match badge of a statement line: the status when it is not waiting, else the kind of the
 /// suggestion on it, else "Not matched".
-fn match_badge(line: &LineState, suggestion: Option<&SuggestionView>) -> (BadgeKind, String) {
+fn match_badge(
+    line: &LineState,
+    suggestion: Option<&SuggestionView>,
+    tr: &Tr,
+) -> (BadgeKind, String) {
     match line.status {
-        LineStatus::Matched => (BadgeKind::Ok, "Matched".to_owned()),
-        LineStatus::Skipped => (BadgeKind::Neutral, "Skipped".to_owned()),
+        LineStatus::Matched => (BadgeKind::Ok, status_label_in(line.status, tr)),
+        LineStatus::Skipped => (BadgeKind::Neutral, status_label_in(line.status, tr)),
         LineStatus::Pending => match suggestion {
-            Some(s) => (suggestion_badge(s.kind), kind_label(s.kind).to_owned()),
-            None => (BadgeKind::Warn, "Not matched".to_owned()),
+            Some(s) => (suggestion_badge(s.kind), kind_label_in(s.kind, tr)),
+            None => (BadgeKind::Warn, status_label_in(line.status, tr)),
         },
     }
 }
 
 /// The action column of a statement line.
-fn action_text(line: &LineState, suggestion: Option<&SuggestionView>) -> String {
+fn action_text(line: &LineState, suggestion: Option<&SuggestionView>, tr: &Tr) -> String {
     match line.status {
-        LineStatus::Matched => "Matched by you".to_owned(),
-        LineStatus::Skipped => "Set aside".to_owned(),
+        LineStatus::Matched => tr.t("bank.action.matched_by_you"),
+        LineStatus::Skipped => tr.t("bank.action.set_aside"),
         LineStatus::Pending => match suggestion {
-            Some(s) => format!("Matches {}", s.voucher_label),
-            None => "Match by hand".to_owned(),
+            Some(s) => tr.tf(
+                "bank.action.matches",
+                &[("voucher", s.voucher_label.as_str())],
+            ),
+            None => tr.t("bank.action.by_hand"),
         },
     }
 }
@@ -158,7 +164,7 @@ impl BankScreen {
             note(
                 ui,
                 NoteKind::Bad,
-                &format!("Not imported. {text} Nothing was imported."),
+                &self.tr.tf("bank.notice.not_imported", &[("text", text)]),
             );
         }
         match self.tab() {
@@ -166,10 +172,20 @@ impl BankScreen {
             Tab::Statement => self.draw_statement(ui),
         }
         if let Some(err) = self.last_error() {
-            note(ui, NoteKind::Bad, &format!("Error: {err}"));
+            note(
+                ui,
+                NoteKind::Bad,
+                &self
+                    .tr
+                    .tf("bank.notice.error", &[("text", &err.to_string())]),
+            );
         }
         if let Some(text) = self.notice() {
-            note(ui, NoteKind::Bad, &format!("Error: {text}"));
+            note(
+                ui,
+                NoteKind::Bad,
+                &self.tr.tf("bank.notice.error", &[("text", text)]),
+            );
         }
         for event in events {
             self.run_event(event);
@@ -265,18 +281,15 @@ impl BankScreen {
     /// the first action at the far right, so the reconciliation statement is added first.
     fn draw_head(&self, ui: &mut Ui, events: &mut Vec<UiEvent>) {
         let sub = self.ledger_name().to_owned();
-        page_head(ui, PAGE_TITLE, Some(&sub), |ui| {
-            if button(ui, "Reconciliation statement", None, ButtonKind::Secondary).clicked() {
+        let title = self.tr.t("bank.page_title");
+        let statement = self.tr.t("bank.key.statement");
+        let import = self.tr.t("bank.key.import");
+        page_head(ui, &title, Some(&sub), |ui| {
+            if button(ui, &statement, None, ButtonKind::Secondary).clicked() {
                 events.push(UiEvent::Tab(Tab::Statement));
             }
             if self.is_worker()
-                && button(
-                    ui,
-                    "Import statement",
-                    Some("Ctrl+O"),
-                    ButtonKind::Secondary,
-                )
-                .clicked()
+                && button(ui, &import, Some("Ctrl+O"), ButtonKind::Secondary).clicked()
             {
                 events.push(UiEvent::Import);
             }
@@ -289,7 +302,9 @@ impl BankScreen {
             Tab::Matching => 0,
             Tab::Statement => 1,
         };
-        let response = tabs(ui, &["All lines", "Reconciliation statement"], selected);
+        let all_lines = self.tr.t("bank.key.all_lines");
+        let statement = self.tr.t("bank.key.statement");
+        let response = tabs(ui, &[all_lines.as_str(), statement.as_str()], selected);
         if let Some(i) = response.clicked {
             let tab = match i {
                 0 => Tab::Matching,
@@ -303,16 +318,18 @@ impl BankScreen {
     fn draw_matching(&self, ui: &mut Ui, events: &mut Vec<UiEvent>) {
         if self.line_count() == 0 {
             if self.is_loading() {
-                ui.weak("Loading the statement and its suggestions.");
+                ui.weak(self.tr.t("bank.loading"));
             } else {
                 self.draw_no_statement(ui, events);
             }
             return;
         }
-        ui.weak(format!(
-            "{} of {} statement lines are not matched. Enter accepts the suggestion, S skips, M matches by hand, J and K move.",
-            self.pending_count(),
-            self.line_count()
+        ui.weak(self.tr.tf(
+            "bank.count",
+            &[
+                ("pending", self.pending_count().to_string().as_str()),
+                ("total", self.line_count().to_string().as_str()),
+            ],
         ));
         StripBuilder::new(ui)
             .size(Size::remainder().at_least(420.0))
@@ -330,22 +347,23 @@ impl BankScreen {
             return;
         }
         card(ui, |ui| {
+            let import = self.tr.t("bank.key.import");
             if empty_state(
                 ui,
-                "No statement for this account yet",
-                NO_STATEMENT_SENTENCE,
-                Some(("Import statement", "Ctrl+O")),
+                &self.tr.t("bank.no_statement.title"),
+                &self.tr.t("bank.no_statement.sentence"),
+                Some((import.as_str(), "Ctrl+O")),
             ) {
                 events.push(UiEvent::Import);
             }
             let current = self.import_layout();
             ui.horizontal(|ui| {
-                ui.weak("File layout");
+                ui.weak(self.tr.t("bank.layout.label"));
                 egui::ComboBox::from_id_salt("bank-import-layout")
-                    .selected_text(import::layout_label(current))
+                    .selected_text(import::layout_label_in(current, &self.tr))
                     .show_ui(ui, |ui| {
-                        for (id, label) in import::LAYOUTS {
-                            if ui.selectable_label(id == current, label).clicked() {
+                        for (id, key) in import::LAYOUTS {
+                            if ui.selectable_label(id == current, self.tr.t(key)).clicked() {
                                 events.push(UiEvent::Layout(id));
                             }
                         }
@@ -356,6 +374,12 @@ impl BankScreen {
 
     /// The statement lines as a table, one row per line, the focused row selected.
     fn draw_lines(&self, ui: &mut Ui, events: &mut Vec<UiEvent>) {
+        let date = self.tr.t("bank.col.date");
+        let narration = self.tr.t("bank.col.narration");
+        let withdrawal = self.tr.t("bank.col.withdrawal");
+        let deposit = self.tr.t("bank.col.deposit");
+        let match_col = self.tr.t("bank.col.match");
+        let action = self.tr.t("bank.col.action");
         table::builder(ui)
             .sense(Sense::click())
             .column(Column::exact(96.0))
@@ -365,12 +389,12 @@ impl BankScreen {
             .column(Column::exact(128.0))
             .column(Column::exact(150.0))
             .header(table::HEADER_HEIGHT, |mut row| {
-                table::header(&mut row, "Date", false);
-                table::header(&mut row, "Narration (as imported)", false);
-                table::header(&mut row, "Withdrawal", true);
-                table::header(&mut row, "Deposit", true);
-                table::header(&mut row, "Match", false);
-                table::header(&mut row, "Action", false);
+                table::header(&mut row, &date, false);
+                table::header(&mut row, &narration, false);
+                table::header(&mut row, &withdrawal, true);
+                table::header(&mut row, &deposit, true);
+                table::header(&mut row, &match_col, false);
+                table::header(&mut row, &action, false);
             })
             .body(|body| {
                 body.rows(table::ROW_HEIGHT, self.line_count(), |mut row| {
@@ -385,7 +409,7 @@ impl BankScreen {
                         Flow::Out => (amount.as_str(), ""),
                         Flow::In => ("", amount.as_str()),
                     };
-                    let (kind, text) = match_badge(line, suggestion);
+                    let (kind, text) = match_badge(line, suggestion, &self.tr);
                     row.col(|ui| table::text(ui, &format_line_date(line.view.date)));
                     row.col(|ui| table::text(ui, &line.view.description));
                     row.col(|ui| table::numeric(ui, withdrawal));
@@ -393,7 +417,7 @@ impl BankScreen {
                     row.col(|ui| {
                         badge(ui, kind, &text);
                     });
-                    row.col(|ui| table::text(ui, &action_text(line, suggestion)));
+                    row.col(|ui| table::text(ui, &action_text(line, suggestion, &self.tr)));
                     if row.response().clicked() {
                         events.push(UiEvent::Focus(i));
                     }
@@ -417,7 +441,7 @@ impl BankScreen {
             match line.status {
                 LineStatus::Pending => self.draw_pending(ui, events, self.focus_index()),
                 LineStatus::Matched | LineStatus::Skipped => {
-                    ui.label(status_label(line.status));
+                    ui.label(status_label_in(line.status, &self.tr));
                 }
             }
             if self.is_manual_open() {
@@ -434,38 +458,43 @@ impl BankScreen {
         };
         if let Some(s) = self.suggestion_for(line.view.line_no) {
             let together = s.lines.len() > 1 || s.vouchers.len() > 1;
-            ui.horizontal(|ui| {
-                badge(ui, suggestion_badge(s.kind), kind_label(s.kind));
+            let kind = kind_label_in(s.kind, &self.tr);
+            let match_word = self.tr.t(if together {
+                "bank.match.together"
+            } else {
+                "bank.match.single"
             });
-            ui.label(format!(
-                "{}{}",
-                if together {
-                    "Match together: "
-                } else {
-                    "Match: "
-                },
-                s.voucher_label
-            ));
-            ui.weak(format!(
-                "{}. Confidence {}.",
-                s.reason,
-                confidence_label(s.confidence)
+            let confidence = confidence_label_in(s.confidence, &self.tr);
+            let match_button = self.tr.t("bank.key.match");
+            let skip = self.tr.t("bank.key.skip");
+            ui.horizontal(|ui| {
+                badge(ui, suggestion_badge(s.kind), &kind);
+            });
+            ui.label(format!("{match_word}{}", s.voucher_label));
+            ui.weak(self.tr.tf(
+                "bank.pending.confidence",
+                &[
+                    ("reason", s.reason.as_str()),
+                    ("level", confidence.as_str()),
+                ],
             ));
             ui.horizontal(|ui| {
-                if button(ui, "Match", Some("Enter"), ButtonKind::Primary).clicked() {
+                if button(ui, &match_button, Some("Enter"), ButtonKind::Primary).clicked() {
                     events.push(UiEvent::Accept(index));
                 }
-                if button(ui, "Skip", Some("S"), ButtonKind::Secondary).clicked() {
+                if button(ui, &skip, Some("S"), ButtonKind::Secondary).clicked() {
                     events.push(UiEvent::Skip(index));
                 }
             });
         } else {
-            ui.weak("No suggestion. Press M to match it by hand.");
+            ui.weak(self.tr.t("bank.pending.no_suggestion"));
+            let by_hand = self.tr.t("bank.key.match_by_hand");
+            let skip = self.tr.t("bank.key.skip");
             ui.horizontal(|ui| {
-                if button(ui, "Match by hand", Some("M"), ButtonKind::Secondary).clicked() {
+                if button(ui, &by_hand, Some("M"), ButtonKind::Secondary).clicked() {
                     events.push(UiEvent::ToggleManual);
                 }
-                if button(ui, "Skip", Some("S"), ButtonKind::Secondary).clicked() {
+                if button(ui, &skip, Some("S"), ButtonKind::Secondary).clicked() {
                     events.push(UiEvent::Skip(index));
                 }
             });
@@ -474,13 +503,11 @@ impl BankScreen {
 
     /// The manual match panel: the open vouchers as choices, then the confirm button.
     fn draw_manual(&self, ui: &mut Ui, events: &mut Vec<UiEvent>) {
-        ui.strong("Match by hand");
-        ui.weak(
-            "Choose the vouchers for the focused statement line (Space), then Enter. The engine checks the amounts before the bank date is set. Esc closes.",
-        );
+        ui.strong(self.tr.t("bank.manual.title"));
+        ui.weak(self.tr.t("bank.manual.help"));
         let candidates = self.manual_candidates();
         if candidates.is_empty() {
-            ui.label("Every open voucher is matched.");
+            ui.label(self.tr.t("bank.manual.all_matched"));
         }
         for (j, v) in candidates.iter().enumerate() {
             let mut chosen = self.is_voucher_chosen(v.voucher);
@@ -499,7 +526,8 @@ impl BankScreen {
                 events.push(UiEvent::Choose(v.voucher));
             }
         }
-        if button(ui, "Match by hand", Some("Enter"), ButtonKind::Primary).clicked() {
+        let by_hand = self.tr.t("bank.key.match_by_hand");
+        if button(ui, &by_hand, Some("Enter"), ButtonKind::Primary).clicked() {
             events.push(UiEvent::ConfirmManual);
         }
     }
@@ -508,9 +536,9 @@ impl BankScreen {
     fn draw_statement(&self, ui: &mut Ui) {
         match self.brs() {
             Outcome::Value(view) => {
-                ui.strong(format!(
-                    "Reconciliation statement as of {}",
-                    format_line_date(view.as_of)
+                ui.strong(self.tr.tf(
+                    "bank.statement.as_of",
+                    &[("date", format_line_date(view.as_of).as_str())],
                 ));
                 statement_lines(ui, &view.rows);
                 if let Some(text) = self.brs_note() {
@@ -532,7 +560,7 @@ impl BankScreen {
         if !self.is_worker() {
             return;
         }
-        match import::pick_file(self.import_layout()) {
+        match import::pick_file(self.import_layout(), &self.tr) {
             Ok(Some(picked)) => {
                 self.set_import_layout(picked.layout);
                 self.queue_import(picked.bytes, picked.layout);
