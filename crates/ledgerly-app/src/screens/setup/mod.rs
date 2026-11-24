@@ -489,7 +489,9 @@ impl SetupScreen {
         ui.horizontal_top(|ui| {
             ui.spacing_mut().item_spacing.x = FIELD_GAP_X;
             field(ui, span(col, 2), "Company name", |ui, w| {
-                let name = ui.add(
+                let name = crate::ui::a11y::text_edit(
+                    ui,
+                    "Company name",
                     egui::TextEdit::singleline(&mut self.name)
                         .id_salt("setup-name")
                         .desired_width(w),
@@ -515,14 +517,20 @@ impl SetupScreen {
                     });
             });
             field(ui, col, "City", |ui, w| {
-                ui.add(egui::TextEdit::singleline(&mut self.city).desired_width(w));
+                crate::ui::a11y::text_edit(
+                    ui,
+                    "City",
+                    egui::TextEdit::singleline(&mut self.city).desired_width(w),
+                );
             });
         });
         ui.add_space(FIELD_GAP_Y);
         ui.horizontal_top(|ui| {
             ui.spacing_mut().item_spacing.x = FIELD_GAP_X;
             field(ui, span(col, 2), "GSTIN", |ui, w| {
-                ui.add(
+                crate::ui::a11y::text_edit(
+                    ui,
+                    "GSTIN",
                     egui::TextEdit::singleline(&mut self.gstin)
                         .hint_text("15 characters, or blank")
                         .desired_width(w),
@@ -564,8 +572,7 @@ impl SetupScreen {
                 read_only(ui, &format!("{} to {fy_end}", long_date(self.fy_start)));
             });
             field(ui, span(col, 2), "Books begin from", |ui, w| {
-                ui.add(
-                    egui::TextEdit::singleline(&mut self.books_begin)
+                crate::ui::a11y::text_edit(ui, "Books begin from", egui::TextEdit::singleline(&mut self.books_begin)
                         .hint_text("YYYY-MM-DD")
                         .desired_width(w),
                 );
@@ -577,7 +584,9 @@ impl SetupScreen {
         });
         ui.add_space(FIELD_GAP_Y);
         field(ui, span(col, 4), "Company file", |ui, w| {
-            ui.add(
+            crate::ui::a11y::text_edit(
+                ui,
+                "Company file",
                 egui::TextEdit::singleline(&mut self.file)
                     .hint_text("blank: Documents/Ledgerly/<company>.ledgerly")
                     .desired_width(w),
@@ -762,7 +771,9 @@ impl SetupScreen {
         ui.horizontal_top(|ui| {
             ui.spacing_mut().item_spacing.x = FIELD_GAP_X;
             field(ui, span(col, 2), "Backup folder", |ui, w| {
-                ui.add(
+                crate::ui::a11y::text_edit(
+                    ui,
+                    "Backup folder",
                     egui::TextEdit::singleline(&mut self.backup_folder)
                         .hint_text("Documents/Ledgerly backups")
                         .desired_width(w),

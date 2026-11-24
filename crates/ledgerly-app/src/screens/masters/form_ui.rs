@@ -85,9 +85,11 @@ fn enter_moves_focus(ui: &Ui) {
     }
 }
 
-/// Adds a one-line field and notes its id for [`enter_moves_focus`].
-fn one_line(ui: &mut Ui, edit: egui::TextEdit<'_>) -> egui::Response {
+/// Adds a one-line field named `label` (its visible caption) and notes its id for
+/// [`enter_moves_focus`].
+fn one_line(ui: &mut Ui, label: &str, edit: egui::TextEdit<'_>) -> egui::Response {
     let response = ui.add(edit);
+    crate::ui::a11y::name(ui, &response, egui::accesskit::Role::TextInput, label);
     ui.data_mut(|d| {
         d.get_temp_mut_or_default::<Vec<Id>>(lines_key())
             .push(response.id);
@@ -238,9 +240,10 @@ fn fld(ui: &mut Ui, span: u8, label: &str, body: impl FnOnce(&mut Ui)) {
 }
 
 /// A one-line input as wide as its field, 32 points tall.
-fn input(ui: &mut Ui, value: &mut String) -> egui::Response {
+fn input(ui: &mut Ui, label: &str, value: &mut String) -> egui::Response {
     one_line(
         ui,
+        label,
         egui::TextEdit::singleline(value)
             .font(FontId::proportional(TEXT_INPUT))
             .align(Align2::LEFT_CENTER)
@@ -252,7 +255,7 @@ fn input(ui: &mut Ui, value: &mut String) -> egui::Response {
 /// A one-line text field.
 fn text_row(ui: &mut Ui, span: u8, label: &str, value: &mut String) {
     fld(ui, span, label, |ui| {
-        input(ui, value);
+        input(ui, label, value);
     });
 }
 
@@ -261,6 +264,7 @@ fn number_row(ui: &mut Ui, span: u8, label: &str, value: &mut String) {
     fld(ui, span, label, |ui| {
         one_line(
             ui,
+            label,
             egui::TextEdit::singleline(value)
                 .font(FontId::proportional(TEXT_INPUT))
                 .align(Align2::RIGHT_CENTER)
@@ -273,12 +277,18 @@ fn number_row(ui: &mut Ui, span: u8, label: &str, value: &mut String) {
 /// A multi-line text field.
 fn area_row(ui: &mut Ui, span: u8, id: Id, label: &str, value: &mut String) {
     fld(ui, span, label, |ui| {
-        ui.add(
+        let response = ui.add(
             egui::TextEdit::multiline(value)
                 .id(id)
                 .font(FontId::proportional(TEXT_INPUT))
                 .desired_rows(3)
                 .desired_width(ui.available_width()),
+        );
+        crate::ui::a11y::name(
+            ui,
+            &response,
+            egui::accesskit::Role::MultilineTextInput,
+            label,
         );
     });
 }
@@ -583,6 +593,7 @@ fn draw_ledger(ui: &mut Ui, masters: &Masters, d: &mut LedgerDraft, balance: Opt
             let text_w = (ui.available_width() - side_w - 8.0).max(40.0);
             one_line(
                 ui,
+                "Opening balance",
                 egui::TextEdit::singleline(&mut d.opening)
                     .font(FontId::proportional(TEXT_INPUT))
                     .align(Align2::RIGHT_CENTER)
@@ -638,7 +649,7 @@ fn draw_ledger(ui: &mut Ui, masters: &Masters, d: &mut LedgerDraft, balance: Opt
 /// columns wide, then the state (index.html:1804).
 fn draw_party_head(ui: &mut Ui, p: &mut PartyDraft) {
     fld(ui, 2, "GSTIN", |ui| {
-        input(ui, &mut p.gstin);
+        input(ui, "GSTIN", &mut p.gstin);
         draw_gstin_check(ui, &p.gstin);
     });
     let states: Vec<(StateCode, String)> = StateCode::all()

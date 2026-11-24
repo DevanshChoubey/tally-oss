@@ -56,3 +56,10 @@ pub fn focus_ring(ui: &Ui, response: &Response, rect: Rect) {
         StrokeKind::Middle,
     );
 }
+
+/// Adds a single-line or multi-line text edit and names it `label`, the caption it is drawn under.
+pub fn text_edit(ui: &mut Ui, label: &str, edit: egui::TextEdit<'_>) -> Response {
+    let response = ui.add(edit);
+    name(ui, &response, Role::TextInput, label);
+    response
+}

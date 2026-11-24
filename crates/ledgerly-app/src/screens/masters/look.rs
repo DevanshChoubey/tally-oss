@@ -67,7 +67,7 @@ pub(super) fn filter_box(ui: &mut Ui, text: &mut String, hint: &str) -> bool {
                     ui.allocate_exact_size(vec2(ICON_SIZE, FILTER_LINE), Sense::hover());
                 let glyph = Rect::from_center_size(spot.center(), Vec2::splat(ICON_SIZE));
                 icon::paint(ui.painter(), glyph, Icon::Search, t.text_2);
-                ui.add(
+                let filter = ui.add(
                     egui::TextEdit::singleline(text)
                         .id(filter_id())
                         .hint_text(RichText::new(hint).size(TEXT_BODY).color(t.text_3))
@@ -78,8 +78,9 @@ pub(super) fn filter_box(ui: &mut Ui, text: &mut String, hint: &str) -> bool {
                         .align(Align2::LEFT_CENTER)
                         .min_size(vec2(0.0, FILTER_LINE))
                         .desired_width(ui.available_width()),
-                )
-                .changed()
+                );
+                crate::ui::a11y::name(ui, &filter, egui::accesskit::Role::TextInput, hint);
+                filter.changed()
             })
             .inner
         })
