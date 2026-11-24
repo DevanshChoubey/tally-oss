@@ -62,6 +62,16 @@ Each release has a `SHA256SUMS.txt` file with the SHA-256 of every artifact.
 The Windows and macOS packages are built by CI. They were not tried by hand before the 1.0.0
 release (see [known gaps](#project-status-and-known-gaps)).
 
+The packages are not signed with an Apple or Microsoft developer certificate, so the first launch
+shows a warning:
+
+- **macOS:** open Ledgerly once, then allow it in System Settings > Privacy & Security > Open
+  Anyway. If macOS says the app is "damaged" (the 1.0.0 package had no bundle signature), run
+  `xattr -dr com.apple.quarantine /Applications/Ledgerly.app` and open it again.
+- **Windows:** SmartScreen may say it protected your PC; choose More info > Run anyway.
+
+Check a download against `SHA256SUMS.txt` from the same release before you run it.
+
 ### Build from source
 
 The Rust toolchain is pinned in `rust-toolchain.toml` (channel `1.100`). With
