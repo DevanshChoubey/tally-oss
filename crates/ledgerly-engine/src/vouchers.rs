@@ -267,10 +267,12 @@ fn assign_number(mut v: Voucher, vt: &VoucherType, books: &Books) -> Result<Vouc
 
 /// Names the New Ref allocations that were left without a name after the voucher's own number.
 ///
-/// With bill-wise on in the party master, TallyPrime tracks the bill with the voucher number as the
-/// bill reference (<https://help.tallysolutions.com/tally-prime/accounting-financial-reports/manage-outstanding-payables-tally/>,
-/// read 2026-11-25, as quoted in a search result; the page could not be fetched verbatim). A caller
-/// that builds the lines before the number exists (the invoice screen) leaves the name empty.
+/// The sales help page says New Ref "create[s] a new reference for the sales transaction" and that
+/// "you can use the voucher number as the bill reference number"
+/// (<https://help.tallysolutions.com/sales-of-goods-services/>, fetched 2026-11-25). That page
+/// permits the voucher number as the reference; making it the default name is our own choice, so a
+/// caller that builds the lines before the number exists (the invoice screen) can leave the name
+/// empty. A name the caller typed is kept.
 ///
 /// # Errors
 /// [`EngineError::Invalid`] on field `bill name` when a New Ref has no name and the voucher has no
