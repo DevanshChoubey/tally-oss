@@ -310,7 +310,15 @@ impl VoucherEntryScreen {
                     match c {
                         0 => cell_text(ui, &i.to_string()),
                         1 => {
-                            ledger_field(ui, cx, base, i, row, "Ledger: type to search", Look::Cell)
+                            ledger_field(
+                                ui,
+                                cx,
+                                base,
+                                i,
+                                row,
+                                "Ledger: type to search",
+                                Look::Cell,
+                            );
                         }
                         2 => cell_text(ui, group_name(masters, row).as_deref().unwrap_or("")),
                         3 => amount_field(ui, cx, base, i, row),
@@ -326,7 +334,15 @@ impl VoucherEntryScreen {
                             }
                         }
                         1 => {
-                            ledger_field(ui, cx, base, i, row, "Ledger: type to search", Look::Cell)
+                            ledger_field(
+                                ui,
+                                cx,
+                                base,
+                                i,
+                                row,
+                                "Ledger: type to search",
+                                Look::Cell,
+                            );
                         }
                         2 => {
                             let text = match &row.ledger {
@@ -421,6 +437,10 @@ impl VoucherEntryScreen {
         }
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one sheet drawn top to bottom; splitting would only pass the same borrows around"
+    )]
     pub(super) fn draw(&mut self, ui: &mut Ui, masters: &Masters) -> ScreenAction {
         self.shown = Shown::default();
         let base = ui.scope_id().with("voucher-entry");

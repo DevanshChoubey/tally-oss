@@ -264,22 +264,23 @@ pub fn input(ui: &mut Ui, text: &mut String, spec: &InputSpec<'_>) -> Response {
     } else {
         Align2::LEFT_CENTER
     };
+    let inner = rect.shrink2(vec2(f32::from(INPUT_PAD_X), 0.0));
     let mut cell = ui.new_child(
         UiBuilder::new()
-            .max_rect(rect)
+            .max_rect(inner)
             .layout(Layout::left_to_right(Align::Center)),
     );
     cell.add(
         egui::TextEdit::singleline(text)
             .id(spec.id)
             .frame(Frame::NONE)
-            .margin(Margin::symmetric(INPUT_PAD_X, 0))
+            .margin(Margin::ZERO)
             .font(FontId::proportional(TEXT_INPUT))
             .text_color(t.text)
             .hint_text(RichText::new(spec.hint).size(TEXT_INPUT).color(t.text_3))
             .align(align)
-            .min_size(rect.size())
-            .desired_width(width),
+            .min_size(inner.size())
+            .desired_width(inner.width()),
     )
 }
 
@@ -580,17 +581,17 @@ fn entry(ui: &mut Ui, label: &str, hi: bool) -> Response {
     let width = ui.available_width();
     // Click-only: an entry is not a Tab stop, so Tab leaves the field for the next one. Up, Down
     // and Enter move and pick the highlighted entry instead.
-    let (rect, response) = ui.allocate_exact_size(vec2(width, LIST_ROW_HEIGHT), Sense::click());
+    let (row_rect, response) = ui.allocate_exact_size(vec2(width, LIST_ROW_HEIGHT), Sense::click());
     if hi {
-        ui.painter().rect_filled(rect, RADIUS_XS, t.accent_soft);
+        ui.painter().rect_filled(row_rect, RADIUS_XS, t.accent_soft);
         response.scroll_to_me(None);
     } else if response.hovered() {
-        ui.painter().rect_filled(rect, RADIUS_XS, t.hover);
+        ui.painter().rect_filled(row_rect, RADIUS_XS, t.hover);
     }
     let ink = if hi { t.accent_ink } else { t.text };
     let quiet = if hi { t.accent_ink } else { t.text_3 };
     ui.painter().text(
-        pos2(rect.left() + 8.0, rect.center().y),
+        pos2(row_rect.left() + 8.0, row_rect.center().y),
         Align2::LEFT_CENTER,
         name,
         FontId::proportional(TEXT_BODY),
@@ -598,7 +599,7 @@ fn entry(ui: &mut Ui, label: &str, hi: bool) -> Response {
     );
     if !rest.is_empty() {
         ui.painter().text(
-            pos2(rect.right() - 8.0, rect.center().y),
+            pos2(row_rect.right() - 8.0, row_rect.center().y),
             Align2::RIGHT_CENTER,
             rest,
             FontId::proportional(TEXT_META),

@@ -363,13 +363,13 @@ fn an_invoice_with_a_round_off_shows_unsupported_and_does_not_save() {
 /// Every piece of text a frame painted, in drawing order.
 fn painted_text(out: &egui::FullOutput) -> String {
     fn walk(shape: &egui::Shape, into: &mut String) {
-        match shape {
-            egui::Shape::Text(t) => {
-                into.push_str(t.galley.text());
-                into.push('\n');
+        if let egui::Shape::Text(t) = shape {
+            into.push_str(t.galley.text());
+            into.push('\n');
+        } else if let egui::Shape::Vec(shapes) = shape {
+            for inner in shapes {
+                walk(inner, into);
             }
-            egui::Shape::Vec(shapes) => shapes.iter().for_each(|s| walk(s, into)),
-            _ => {}
         }
     }
     let mut text = String::new();

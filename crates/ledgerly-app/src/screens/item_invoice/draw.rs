@@ -292,6 +292,61 @@ fn list_caption(focus: Field) -> &'static str {
     }
 }
 
+/// The save question at the foot of the sheet (index.html `savebar`): a green bar with the
+/// question in bold, then Yes and No.
+fn save_bar(ui: &mut Ui, clicks: &mut Option<Click>) {
+    let t = tokens(ui);
+    let width = ui.available_width() - 32.0;
+    Frame::new()
+        .outer_margin(Margin {
+            left: 16,
+            right: 16,
+            top: 0,
+            bottom: 16,
+        })
+        .fill(t.ok_soft)
+        .corner_radius(crate::theme::RADIUS_S)
+        .inner_margin(Margin::symmetric(12, 10))
+        .show(ui, |ui| {
+            ui.set_width(width - 24.0);
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 10.0;
+                crate::ui::icon::icon(ui, crate::ui::icon::Icon::Save, t.ok);
+                let mut job = egui::text::LayoutJob::default();
+                let line = crate::ui::line_height(crate::theme::TEXT_META);
+                job.append(
+                    "Save this invoice?",
+                    0.0,
+                    egui::TextFormat {
+                        font_id: crate::ui::bold_font(ui, crate::theme::TEXT_META),
+                        color: t.ok,
+                        line_height: Some(line),
+                        ..egui::TextFormat::default()
+                    },
+                );
+                job.append(
+                    " The engine checks it again before it is posted.",
+                    0.0,
+                    egui::TextFormat {
+                        font_id: egui::FontId::proportional(crate::theme::TEXT_META),
+                        color: t.ok,
+                        line_height: Some(line),
+                        ..egui::TextFormat::default()
+                    },
+                );
+                ui.label(job);
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if button(ui, "No", Some("Esc"), ButtonKind::Secondary).clicked() {
+                        *clicks = Some(Click::Cancel);
+                    }
+                    if button(ui, "Yes", Some("Enter"), ButtonKind::Primary).clicked() {
+                        *clicks = Some(Click::Save);
+                    }
+                });
+            });
+        });
+}
+
 impl ItemInvoiceScreen {
     /// The lines of the table as the screen shows them, for the invoice as it stands. The
     /// engine's answer fills the GST and amount cells only when it is for exactly this invoice.
@@ -509,7 +564,8 @@ impl ItemInvoiceScreen {
                 let (Some(line), Some(cells)) = (shown.get(r), rows.get_mut(r)) else {
                     return;
                 };
-                let item_flag = cells.item.is_none() && !cells.item_text.trim().is_empty();
+                let item_flag =
+                    !line.focused && cells.item.is_none() && !cells.item_text.trim().is_empty();
                 let qty_flag = cells.item.is_some() && cells.qty_text.trim().is_empty();
                 let spec =
                     |id: &str, name: &'static str, field: Field, hint: &'static str| FieldSpec {
@@ -693,28 +749,7 @@ impl ItemInvoiceScreen {
         });
         self.shown.narration = narration;
         if self.confirming_save {
-            Frame::new()
-                .inner_margin(Margin {
-                    left: 16,
-                    right: 16,
-                    top: 0,
-                    bottom: 16,
-                })
-                .show(ui, |ui| {
-                    ui.horizontal(|ui| {
-                        note(
-                            ui,
-                            NoteKind::Ok,
-                            "Save this invoice? The engine checks it again before it is posted.",
-                        );
-                        if button(ui, "Yes", Some("Enter"), ButtonKind::Primary).clicked() {
-                            *clicks = Some(Click::Save);
-                        }
-                        if button(ui, "No", Some("Esc"), ButtonKind::Secondary).clicked() {
-                            *clicks = Some(Click::Cancel);
-                        }
-                    });
-                });
+            save_bar(ui, clicks);
         }
     }
 
@@ -754,6 +789,10 @@ impl ItemInvoiceScreen {
         }
     }
 
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one sheet drawn top to bottom; splitting would only pass the same borrows around"
+    )]
     fn draw(&mut self, ui: &mut Ui, masters: &Masters) -> ScreenAction {
         self.shown = Shown::default();
         let base = ui.scope_id().with("item-invoice");
