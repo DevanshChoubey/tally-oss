@@ -513,3 +513,13 @@ Tally or CBIC Hindi term was readable (see that file's header).
 - **gap: footer "Saved on this computer" and the version line stay English** on the sidebar.
 - **by design: "Ledgerly" and "Tally"-style product names are not translated.** The brand is kept
   as it is in every language.
+
+## Hindi UI, second round (card s7, 2026-11-24)
+
+- **deferred: sales invoice, payment and the other voucher forms, masters, bank, GST, setup and
+  AI screens are still English in Hindi.** `hi.sales-invoice.default` and `hi.masters.default`
+  show the Hindi shell and footer with English screen text. Each screen moves its literals to the
+  files with a test, as the home screen did.
+- **gap: print messages and report bodies** stay English.
+- **gap: Hindi terms are unsourced.** The official glossaries (CSTT, RBI shabdavali, CBIC and
+  GST portal Hindi pages) could not be read on 2026-11-24. See the header of `assets/i18n/hi.toml`.

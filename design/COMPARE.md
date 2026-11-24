@@ -791,5 +791,7 @@ SSIM 0.8323
 
 - `light/hi.balance-sheet.default`
 - `light/hi.home.default`
+- `light/hi.masters.default`
+- `light/hi.sales-invoice.default`
 - `light/quick-entry.offline-ai`
 

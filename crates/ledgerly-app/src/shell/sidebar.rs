@@ -338,7 +338,7 @@ pub(super) fn sidebar(
         }
     }
     if !rail {
-        footer(ui, t);
+        footer(ui, t, tr);
     }
     cmds
 }
@@ -364,10 +364,11 @@ fn group_heading(ui: &mut Ui, title: &str, t: &Tokens) {
 
 /// The footer at the bottom of the sidebar (`nav.side .foot`): the app's version, and where the
 /// company file is kept.
-fn footer(ui: &mut Ui, t: &Tokens) {
+fn footer(ui: &mut Ui, t: &Tokens, tr: &Tr) {
     let text = format!(
-        "Ledgerly {}\nSaved on this computer",
-        env!("CARGO_PKG_VERSION")
+        "Ledgerly {}\n{}",
+        env!("CARGO_PKG_VERSION"),
+        tr.t("footer.saved")
     );
     ui.with_layout(egui::Layout::bottom_up(egui::Align::Min), |ui| {
         ui.add_space(8.0);

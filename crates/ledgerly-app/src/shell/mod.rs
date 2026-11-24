@@ -316,6 +316,7 @@ impl Shell {
                     .shadow(theme::shadow_2(kind))
                     .show(ui, |ui| {
                         ui.set_width(rect.width());
+                        self.palette.set_tr(&self.tr);
                         self.palette.ui(ui)
                     })
                     .inner

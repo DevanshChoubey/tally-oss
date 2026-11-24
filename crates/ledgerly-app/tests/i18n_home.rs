@@ -100,3 +100,45 @@ fn hindi_report_titles_and_keys_come_from_the_hindi_file() {
     }
     assert_eq!(en.t("report.balance_sheet"), "Balance sheet");
 }
+
+#[test]
+fn hindi_footer_and_theme_names_come_from_the_hindi_file() {
+    let catalog = Catalog::builtin().unwrap();
+    let hi = catalog.tr("hi");
+    let en = catalog.tr("en");
+    for key in [
+        "footer.saved",
+        "theme.light",
+        "theme.dark",
+        "theme.high_contrast",
+    ] {
+        assert!(!hi.t(key).starts_with('\u{27E6}'), "{key} is missing");
+        assert_ne!(hi.t(key), en.t(key), "{key} is not translated");
+    }
+    assert_eq!(en.t("theme.high_contrast"), "High contrast");
+}
+
+#[test]
+fn hindi_palette_words_come_from_the_hindi_file() {
+    let catalog = Catalog::builtin().unwrap();
+    let hi = catalog.tr("hi");
+    let en = catalog.tr("en");
+    for key in [
+        "palette.placeholder",
+        "palette.go_to",
+        "palette.section.recent",
+        "palette.section.reports",
+        "palette.section.ledgers",
+        "palette.section.vouchers",
+        "palette.section.commands",
+        "palette.section.settings",
+        "palette.section.no_match",
+    ] {
+        assert!(!hi.t(key).starts_with('\u{27E6}'), "{key} is missing");
+        assert_ne!(hi.t(key), en.t(key), "{key} is not translated");
+    }
+    assert!(
+        hi.tf("palette.no_match_for", &[("query", "zzqx")])
+            .contains("zzqx")
+    );
+}

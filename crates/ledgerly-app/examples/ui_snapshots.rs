@@ -539,6 +539,8 @@ fn shots() -> Vec<Shot> {
         // in Indian grouping. The state ids carry `hi.` so each file is its own capture.
         shot("hi.home.default", &[]).lang("hi"),
         shot("hi.balance-sheet.default", &[(Key::B, NONE)]).lang("hi"),
+        shot("hi.sales-invoice.default", &[(Key::F8, NONE)]).lang("hi"),
+        shot("hi.masters.default", &[(Key::M, NONE)]).lang("hi"),
         // Recent needs a choice first: open the balance sheet from the palette, go back, and
         // reopen the palette on the empty query (index.html:1115 lists recents there).
         shot("palette.default", &[palette])

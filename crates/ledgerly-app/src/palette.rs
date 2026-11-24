@@ -355,6 +355,8 @@ impl Row {
 /// [`Palette::results`] is always the list the user sees, in the order it is drawn.
 #[derive(Debug, Clone, Default)]
 pub struct Palette {
+    /// The language of the palette's words, set by the shell before each frame.
+    tr: crate::i18n::Tr,
     open: Option<PaletteMode>,
     query: String,
     /// The rows the host fed in ([`Palette::set_entries`]).
@@ -385,6 +387,12 @@ pub struct Palette {
 
 impl Palette {
     /// A closed palette with no entries.
+    /// Uses `tr` for the palette's words from the next frame on.
+    pub fn set_tr(&mut self, tr: &crate::i18n::Tr) {
+        self.tr = tr.clone();
+    }
+
+    /// A new palette, in English until [`Palette::set_tr`].
     #[must_use]
     pub fn new() -> Palette {
         Palette::default()

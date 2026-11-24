@@ -5,9 +5,18 @@
 #     (read 2026-11-24): confirms that Hindi is a UI language of the accounting product. It gives no
 #     term translations, so no term below is taken from it.
 #   * https://abcaus.in/gst/cbic-lexicon-gst-hindi-words-phrases.html/amp (read 2026-11-24): says a
-#     CBIC Hindi GST lexicon exists. The lexicon itself could not be read, so no GST term is sourced
-#     from it.
-# No term is sourced yet. Every term without a source is marked `# unsourced` on its line.
+#     CBIC Hindi GST lexicon exists. The lexicon itself could not be read.
+#   * https://shabdavali.rbi.org.in (read 2026-11-24): the RBI banking glossary. It returned a
+#     human-verification challenge, so no term was read from it.
+#   * https://www.rbi.org.in (read 2026-11-24): links to that glossary; no Hindi term on it.
+#   * https://cbic-gst.gov.in (read 2026-11-24): its Hindi control has no Hindi URL and no Hindi GST
+#     term page. https://www.gst.gov.in/faq (read 2026-11-24): HTTP 404 on the fetched URL.
+#   * https://cstt.education.gov.in and https://cstt.gov.in (tried 2026-11-24): connection refused
+#     and no DNS entry. No CSTT glossary was read.
+#   * https://hisab-kitab.pages.dev/en/glossary/terms (read 2026-11-24): a third-party accounting
+#     and GST glossary (IndusForward). It is not an official source and does not settle any term
+#     here, so its equivalents (for example ledger = खाता बही, trial balance = तलपट) are not used.
+# No official source settled any term, so every term below is marked `# unsourced`.
 # Digits, dates and amounts are not in this file: they come from the formatters, Latin digits in
 # Indian grouping (12,34,567.00) in both languages.
 
@@ -113,3 +122,20 @@ name = "हिन्दी"
 "keys.back_up" = "वापस जाएँ"  # unsourced
 "keys.export" = "निर्यात"  # unsourced
 "keys.period" = "अवधि"  # unsourced
+"footer.saved" = "इसी कंप्यूटर पर सहेजा गया"  # unsourced
+"theme.light" = "हल्का"  # unsourced
+"theme.dark" = "गहरा"  # unsourced
+"theme.high_contrast" = "उच्च कंट्रास्ट"  # unsourced
+"palette.placeholder" = "रिपोर्ट, खाते, वाउचर खोजें, या ? से पूछें और + से प्रविष्टि करें"  # unsourced
+"palette.go_to" = "पर जाएँ"  # unsourced
+"palette.no_match_for" = "\"{query}\" के लिए कोई मेल नहीं"  # unsourced
+"palette.section.recent" = "हाल के"  # unsourced
+"palette.section.prefixes" = "उपसर्ग लिखें"  # unsourced
+"palette.section.no_match" = "कोई मेल नहीं"  # unsourced
+"palette.section.reports" = "रिपोर्ट और स्क्रीन"  # unsourced
+"palette.section.ledgers" = "खाते"  # unsourced
+"palette.section.vouchers" = "वाउचर"  # unsourced
+"palette.section.commands" = "आदेश"  # unsourced
+"palette.section.settings" = "सेटिंग्स"  # unsourced
+"palette.section.ask" = "अपनी बही से पूछें"  # unsourced
+"palette.section.entry" = "सरल भाषा में प्रविष्टि"  # unsourced

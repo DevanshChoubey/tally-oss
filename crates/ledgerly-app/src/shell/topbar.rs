@@ -67,6 +67,16 @@ fn company_parts(ctx: &AppCtx) -> Option<(String, String)> {
     })
 }
 
+/// A theme's name in `tr`.
+#[must_use]
+pub fn theme_name(theme: ThemeKind, tr: &Tr) -> String {
+    match theme {
+        ThemeKind::Light => tr.t("theme.light"),
+        ThemeKind::Dark => tr.t("theme.dark"),
+        ThemeKind::HighContrast => tr.t("theme.high_contrast"),
+    }
+}
+
 /// The date chip's words, such as `Sat, 21 Nov 2026` (the mock's top bar).
 #[must_use]
 pub fn date_chip(today: Date, tr: &Tr) -> String {
@@ -273,7 +283,10 @@ fn right_items(
                 ThemeKind::Dark | ThemeKind::HighContrast => Icon::Contrast,
             };
             if chip::icon_button(ui, theme_icon)
-                .on_hover_text(ctx.tr.tf("topbar.theme_hover", &[("theme", theme.label())]))
+                .on_hover_text(ctx.tr.tf(
+                    "topbar.theme_hover",
+                    &[("theme", &theme_name(theme, &ctx.tr))],
+                ))
                 .clicked()
             {
                 cmds.push(ChromeCmd::CycleTheme);
