@@ -99,6 +99,8 @@ impl VoucherEntryScreen {
     pub(super) fn handle_escape(&mut self) -> ScreenAction {
         if self.create.is_some() {
             self.create = None;
+        } else if self.panel.is_some() {
+            self.close_bills();
         } else if self.confirm_discard {
             self.confirm_discard = false;
         } else if self.searching() {

@@ -57,21 +57,21 @@ pub(super) struct Shown {
 }
 
 /// Which text field to draw.
-struct FieldSpec {
-    id: Id,
-    field: Field,
+pub(super) struct FieldSpec {
+    pub(super) id: Id,
+    pub(super) field: Field,
     /// The caption the field is drawn under; its accessible name.
-    name: &'static str,
-    hint: &'static str,
+    pub(super) name: &'static str,
+    pub(super) hint: &'static str,
 }
 
 /// What every field of a frame reports to: the field the keyboard is wanted on, the field it is on,
 /// the events, and where the type-ahead list for the focused field hangs.
-struct Cx<'a> {
-    want: Option<Field>,
-    focus: Field,
-    events: &'a mut Vec<UiEvent>,
-    anchor: &'a mut Option<Rect>,
+pub(super) struct Cx<'a> {
+    pub(super) want: Option<Field>,
+    pub(super) focus: Field,
+    pub(super) events: &'a mut Vec<UiEvent>,
+    pub(super) anchor: &'a mut Option<Rect>,
 }
 
 fn item_label(item: &PickerItem) -> String {
@@ -95,7 +95,7 @@ fn item_label(item: &PickerItem) -> String {
 
 /// A single-line field that can take the keyboard on request. Reports focus and Enter as events,
 /// notes where it sits so the list can hang under it, and returns the response.
-fn text_field(
+pub(super) fn text_field(
     ui: &mut Ui,
     cx: &mut Cx<'_>,
     spec: &FieldSpec,
@@ -293,6 +293,30 @@ impl VoucherEntryScreen {
                         },
                     );
                     fields.push(("Account", shown.response.rect));
+                    let mode_spec = FieldSpec {
+                        id: base.with("mode"),
+                        field: Field::Mode,
+                        name: "Mode",
+                        hint: "NEFT, UPI, cheque",
+                    };
+                    let shown = sheet::fld(
+                        ui,
+                        total,
+                        1,
+                        |ui| sheet::caption(ui, "Mode", None),
+                        |ui| {
+                            text_field(
+                                ui,
+                                cx,
+                                &mode_spec,
+                                &mut self.draft.mode_text,
+                                Look::Boxed,
+                                false,
+                                None,
+                            );
+                        },
+                    );
+                    fields.push(("Mode", shown.response.rect));
                 }
             });
         });
@@ -306,7 +330,8 @@ impl VoucherEntryScreen {
         let skip = usize::from(single);
         let focused_row = match self.focus {
             Field::Ledger(i) | Field::Amount(i) => Some(i),
-            Field::Date | Field::Narration => None,
+            Field::Bill(_) => self.panel.map(|p| p.row),
+            Field::Date | Field::Mode | Field::Narration => None,
         };
         let balances = &self.balances;
         let rows = &mut self.draft.rows;
@@ -397,6 +422,7 @@ impl VoucherEntryScreen {
             hint: "Optional",
         };
         let box_rows = self.balance_box(masters);
+        let overdraft = self.overdraft_note(masters);
         let mut narration = None;
         sheet::foot(ui, |left, right| {
             sheet::fld(
@@ -420,6 +446,9 @@ impl VoucherEntryScreen {
                 },
             );
             sheet::hint(left, &aid);
+            if let Some(text) = &overdraft {
+                note(left, NoteKind::Warn, text);
+            }
             self.draw_notice(left);
             if let Some((rows, after)) = &box_rows {
                 sheet::taxbox(
@@ -464,6 +493,29 @@ impl VoucherEntryScreen {
         ))
     }
 
+    /// The warning of `payScreen`'s overdraft state (index.html:1407): the account would be below
+    /// zero once the voucher is saved, by the engine's own figures. Saving is not blocked: the
+    /// company has no overdraft limit or block policy yet.
+    fn overdraft_note(&self, masters: &Masters) -> Option<String> {
+        let (account, voucher) = self.balance_request(masters)?;
+        let BalanceShown::Change(change) = self.extras.balance_for(account, &voucher)? else {
+            return None;
+        };
+        if change.after.side != ledgerly_core::DrCr::Cr || change.after.amount.is_zero() {
+            return None;
+        }
+        let name = masters.ledgers.get(&account)?.name.clone();
+        let lead = if change.now.side == ledgerly_core::DrCr::Cr && !change.now.amount.is_zero() {
+            format!("{name} is below zero.")
+        } else {
+            format!("This takes {name} below zero.")
+        };
+        Some(format!(
+            "{lead} Shortfall {} (engine). You can still save: the company has no overdraft limit or block policy yet.",
+            format_amount(change.after.amount)
+        ))
+    }
+
     /// The notice of the last action, as a kit note: an error or information.
     pub(super) fn draw_notice(&self, ui: &mut Ui) {
         match &self.notice {
@@ -501,6 +553,7 @@ impl VoucherEntryScreen {
         // While a save is out the sheet stays on screen but takes no keys.
         let busy = self.posting.is_some();
         let escape_wanted = self.create.is_some()
+            || self.panel.is_some()
             || self.confirm_discard
             || self.searching()
             || !self.draft.is_blank();
@@ -562,6 +615,7 @@ impl VoucherEntryScreen {
                 self.draw_table(ui, base, masters, &mut cx);
                 self.draw_foot(ui, base, masters, &mut cx);
             });
+            self.draw_bill_panel(ui, base, &mut cx);
         });
         if let Some(anchor) = anchor
             && !items.is_empty()

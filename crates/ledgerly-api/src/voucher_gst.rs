@@ -178,6 +178,27 @@ impl Api {
         Ok(build_invoice(books, v, breakup, bills)?)
     }
 
+    /// The bills of `ledger` still open on `as_of` (the list of the payment and receipt screens'
+    /// bill-wise details). A ledger that does not track bills has none.
+    ///
+    /// # Errors
+    /// [`ApiError::Engine`] when the ledger does not exist or its bills cannot be worked out (for
+    /// example a bill-wise ledger with an opening balance, which has no bill breakup);
+    /// [`ApiError::Stale`] after a saved change whose reload failed.
+    pub fn open_bills(
+        &self,
+        ledger: LedgerId,
+        as_of: Date,
+    ) -> Result<Outcome<Vec<ledgerly_engine::bills::OpenBill>>, ApiError> {
+        let books = match self.cached_books()? {
+            Outcome::Value(books) => books,
+            Outcome::Unsupported(u) => return Ok(Outcome::Unsupported(u)),
+        };
+        Ok(Outcome::Value(ledgerly_engine::bills::open_bills(
+            books, ledger, as_of,
+        )?))
+    }
+
     /// The number the engine will give the next voucher of type `type_id` dated `date`, for the
     /// title of a new voucher ("Sales invoice SI/0418"). `None` when the type takes a number typed
     /// in or has no numbers. `Unsupported` when the type has several series (the screen has no

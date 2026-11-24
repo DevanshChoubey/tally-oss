@@ -591,7 +591,9 @@ impl ItemInvoiceScreen {
                         // stays a field, so Tab and a screen reader still reach it.
                         let s = spec("date", "Date", Field::Date, "dd-mm-yyyy");
                         let style = if date_plain { CELL } else { BOXED };
-                        let shown = date_value.filter(|_| date_plain).map(crate::ui::format::date);
+                        let shown = date_value
+                            .filter(|_| date_plain)
+                            .map(crate::ui::format::date);
                         text_field_shown(ui, cx, &s, &mut self.draft.date_text, style, shown);
                     },
                 );

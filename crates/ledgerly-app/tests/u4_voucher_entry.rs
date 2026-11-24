@@ -509,6 +509,7 @@ fn row(ledger: LedgerId, side: DrCr, amount: &str) -> DraftRow {
         ledger_text: String::new(),
         side,
         amount_text: amount.to_owned(),
+        ..DraftRow::empty(DrCr::Dr)
     }
 }
 
@@ -519,6 +520,7 @@ fn draft(kind: EntryKind, date_text: &str, rows: Vec<DraftRow>) -> VoucherDraft 
         date_text: date_text.to_owned(),
         narration: String::new(),
         rows,
+        mode_text: String::new(),
     }
 }
 

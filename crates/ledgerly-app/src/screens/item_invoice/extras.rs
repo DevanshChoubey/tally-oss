@@ -3,7 +3,7 @@
 //! narration). Both come from the API through the worker; the screen shows the answers and adds
 //! nothing to them (rule C4).
 
-use ledgerly_api::{Api, BalanceChange};
+use ledgerly_api::{Api, BalanceChange, OpenBill};
 use ledgerly_core::{Date, LedgerId, Outcome, VoucherTypeId};
 use ledgerly_model::Voucher;
 
@@ -14,6 +14,9 @@ type NumberReply = Result<Outcome<Option<String>>, String>;
 
 /// The worker's answer for the balance change.
 type BalanceReply = Result<Outcome<BalanceChange>, String>;
+
+/// The worker's answer for a ledger's open bills.
+type OpenReply = Result<Outcome<Vec<OpenBill>>, String>;
 
 /// The balance line's content.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -37,6 +40,11 @@ pub(crate) struct Extras {
     /// The balance answer.
     pub(crate) balance: Option<BalanceShown>,
     balance_ticket: Option<((LedgerId, Voucher), Ticket<BalanceReply>)>,
+    /// What the open-bills answer is for.
+    open_for: Option<(LedgerId, Date)>,
+    /// The open bills of that ledger on that date, when the engine gave them.
+    pub(crate) open: Option<Vec<OpenBill>>,
+    open_ticket: Option<((LedgerId, Date), Ticket<OpenReply>)>,
 }
 
 impl Extras {
@@ -123,6 +131,55 @@ impl Extras {
             self.balance_ticket = Some((key, ticket));
         }
         self.balance_ticket.is_some()
+    }
+
+    /// As [`Self::drive_number`] for the bills of `ledger` open on `date`. `None` for `want`
+    /// forgets the answer. Returns whether a request is in flight.
+    pub(crate) fn drive_open_bills(
+        &mut self,
+        worker: &ApiWorker,
+        want: Option<(LedgerId, Date)>,
+    ) -> bool {
+        if let Some((key, mut ticket)) = self.open_ticket.take() {
+            match ticket.poll() {
+                Poll::Pending | Poll::Taken => self.open_ticket = Some((key, ticket)),
+                Poll::Ready(reply) => {
+                    self.open = match reply {
+                        Ok(Outcome::Value(bills)) => Some(bills),
+                        Ok(Outcome::Unsupported(_)) | Err(_) => None,
+                    };
+                    self.open_for = Some(key);
+                }
+                Poll::Lost => {
+                    self.open = None;
+                    self.open_for = Some(key);
+                }
+            }
+        }
+        let Some(key) = want else {
+            return self.open_ticket.is_some();
+        };
+        if self.open_ticket.is_none() && self.open_for != Some(key) {
+            let (ledger, date) = key;
+            let ticket = worker
+                .run(move |api: &mut Api| api.open_bills(ledger, date).map_err(|e| e.to_string()));
+            self.open_ticket = Some((key, ticket));
+        }
+        self.open_ticket.is_some()
+    }
+
+    /// The open bills, when the answer held is for exactly `ledger` on `date`.
+    pub(crate) fn open_bills_for(&self, ledger: LedgerId, date: Date) -> Option<&[OpenBill]> {
+        match self.open_for {
+            Some(key) if key == (ledger, date) => self.open.as_deref(),
+            Some(_) | None => None,
+        }
+    }
+
+    /// Holds `bills` as the answer for `ledger` on `date` (a host or test that already has them).
+    pub(crate) fn set_open_bills(&mut self, ledger: LedgerId, date: Date, bills: Vec<OpenBill>) {
+        self.open_for = Some((ledger, date));
+        self.open = Some(bills);
     }
 
     /// The balance answer, when it is for exactly `party` and `voucher`.

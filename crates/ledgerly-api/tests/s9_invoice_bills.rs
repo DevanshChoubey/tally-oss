@@ -771,3 +771,25 @@ fn a_voucher_types_base_kind_cannot_change_and_an_unknown_type_is_refused() {
     ghost.id = VoucherTypeId(999);
     assert!(api.execute(Command::AlterVoucherType(ghost)).is_err());
 }
+
+/// The open bills of a bill-wise party, for the payment and receipt screens' bill-wise list (the
+/// mock's `openBills()`, design/mock-v2/index.html line 1388). Derivation: a posted invoice of
+/// Rs 10,000.00 plus 18 per cent tax (Rs 11,800.00) opens one bill named by its voucher number,
+/// dated the voucher's date, still open for the whole 11,800.00 on the debit side; a party that
+/// does not track bills has none.
+#[test]
+fn the_open_bills_of_a_party_are_those_its_invoices_opened() {
+    let (_dir, mut api) = billed_file(true);
+    let mut v = item_sale(BILLED, Some(29), 10, 1_000_000);
+    let built = ok(api.invoice_gst(&v));
+    v.ledger_lines = built.ledger_lines;
+    v.gst = Some(built.stored);
+    let posted = ok(api.execute(Command::PostVoucher(v))).posted.unwrap();
+    let number = posted.number.clone().unwrap();
+    let bills = ok(api.open_bills(BILLED, date!(2026 - 10 - 31)));
+    assert_eq!(bills.len(), 1);
+    assert_eq!(bills[0].name, number);
+    assert_eq!(bills[0].ledger, BILLED);
+    assert_eq!(bills[0].open, SignedAmount::dr(Paise::new(1_180_000)));
+    assert!(ok(api.open_bills(KA_BUYER, date!(2026 - 10 - 31))).is_empty());
+}

@@ -158,6 +158,7 @@ fn row(ledger: LedgerId, side: DrCr, amount: &str) -> DraftRow {
         ledger_text: String::new(),
         side,
         amount_text: amount.to_owned(),
+        ..DraftRow::empty(DrCr::Dr)
     }
 }
 
@@ -188,6 +189,7 @@ fn the_account_amount_is_the_total_of_the_particulars() {
         kind: EntryKind::Payment,
         date_text: "15-4".to_owned(),
         narration: String::new(),
+        mode_text: String::new(),
         rows: vec![
             DraftRow::empty(DrCr::Cr),
             row(RENT, DrCr::Dr, "1000"),
@@ -252,18 +254,45 @@ fn the_payment_subtitle_says_single_entry_with_its_key() {
 }
 
 #[test]
-fn a_bill_wise_particular_stays_unsupported_in_single_entry() {
-    // Bill allocation is not built yet (E-6): a bill-wise ledger is Unsupported, never saved
-    // without its allocations. derived: any draft with that ledger is Unsupported.
+fn a_bill_wise_particular_needs_its_bill_details_in_single_entry_and_stays_unsupported_elsewhere() {
+    // Changed in s9: payment and receipt now have the bill-wise details (the mock's popup,
+    // design/mock-v2/index.html lines 1398-1403), so a bill-wise particular is no longer refused
+    // outright there, but it is still never saved without them. derived: a draft whose details
+    // were not accepted gives `BillsNeeded` for its line (line 2); accepted with nothing typed the
+    // whole 10 is On Account (one allocation of the line's amount); a double-entry journal has no
+    // such details, so the same ledger there is still Unsupported.
     let b = books();
-    let d = VoucherDraft {
+    let mut d = VoucherDraft {
         type_id: T_PAYMENT,
         kind: EntryKind::Payment,
         date_text: "15-4".to_owned(),
         narration: String::new(),
         rows: vec![row(CASH, DrCr::Cr, "10"), row(BILLWISE, DrCr::Dr, "10")],
+        mode_text: String::new(),
     };
-    let out = d
+    let err = d
+        .build_voucher(&b.masters, fy(), b.company.books_begin)
+        .unwrap_err();
+    assert_eq!(
+        err,
+        ledgerly_app::screens::voucher_entry::DraftError::BillsNeeded { line: 2 }
+    );
+    d.rows[1].bills_done = true;
+    let ledgerly_core::Outcome::Value(v) = d
+        .build_voucher(&b.masters, fy(), b.company.books_begin)
+        .unwrap()
+    else {
+        panic!("accepted details build");
+    };
+    let bills = &v.ledger_lines[1].bills;
+    assert_eq!(bills.len(), 1);
+    assert_eq!(bills[0].amount.amount, ledgerly_core::Paise::new(1000));
+    let journal = VoucherDraft {
+        type_id: T_PAYMENT,
+        kind: EntryKind::Journal,
+        ..d
+    };
+    let out = journal
         .build_voucher(&b.masters, fy(), b.company.books_begin)
         .unwrap();
     assert!(out.is_unsupported());
