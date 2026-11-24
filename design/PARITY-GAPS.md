@@ -523,3 +523,32 @@ Tally or CBIC Hindi term was readable (see that file's header).
 - **gap: print messages and report bodies** stay English.
 - **gap: Hindi terms are unsourced.** The official glossaries (CSTT, RBI shabdavali, CBIC and
   GST portal Hindi pages) could not be read on 2026-11-24. See the header of `assets/i18n/hi.toml`.
+
+## Hindi UI, third round (card s7, 2026-11-24)
+
+Done: masters screen chrome (`tests/i18n_masters.rs`). Its title, subtitle, key bar, kind names,
+empty and no-match lines, filter hints, column headings, form labels, switches, enum choices, the
+delete question, notices and the open bills card come from the translation files. The voucher test
+(`tests/i18n_voucher.rs`) was checked: with `voucher.save` set to the English word it fails at the
+"is not translated" assertion.
+
+Left, in order of the brief:
+
+- **masters: validation and reason texts stay English.** The `MasterError` messages
+  (`masters.rs`, thiserror), the field and reason strings in `masters/draft.rs` and
+  `masters/check.rs` (for example "the parent group does not exist"), the feature names in
+  `draft.rs` ("Inventory", "Godowns", "Cost centres", "Bill-wise details"), the reason texts in
+  `balances.rs`, `bills.rs` ("Not due", "No due date", "overdue") and `stock.rs`, "Group not found in
+  the books" in `view.rs`, and `VOUCHER_TYPES_NOT_YET` in `command.rs`. Each needs a `message_in(tr)`
+  or a key at the call site. Acronyms (GSTIN, PAN, IFSC, HSN/SAC, UQC, CGST and the rest) and
+  "Dr"/"Cr" stay Latin on purpose.
+- **bank screen: not started.** `screens/bank/` (view.rs, import.rs, worker.rs).
+- **GST screen: not started.** `screens/gst/` (draw.rs, look.rs).
+- **company setup: not started.** `screens/setup/` (mod.rs, form.rs).
+- **AI screens: not started.** `ai_gate.rs`, `ask.rs`, `assist.rs`, `ai_settings.rs`.
+- **print messages: not started.** `screens/print_job.rs`.
+- **report bodies: not started.** Balance sheet labels, day book and voucher view in
+  `screens/report_view/`.
+- **captures not retaken.** `hi.home.default`, `hi.balance-sheet.default`,
+  `hi.sales-invoice.default` and `hi.masters.default` wait until every screen above is done, so
+  the masters capture is still the earlier English-body one.
