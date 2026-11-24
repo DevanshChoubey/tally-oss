@@ -8,7 +8,8 @@ use egui::{RichText, Ui};
 
 use super::stack::Tabs;
 use crate::screen::KeyHint;
-use crate::theme::{TEXT_META, Tokens};
+use crate::theme::{TEXT_META, Tokens, border_width};
+use crate::ui::button::{ButtonKind, button_icon};
 use crate::ui::icon::{self, Icon};
 use crate::ui::{a11y, bold_font, keycap, tabs};
 
@@ -37,39 +38,83 @@ pub(super) enum ChromeCmd {
     Replace(crate::palette::PaletteTarget),
     /// Show this line in the key bar: why a chip or a row cannot do its job yet.
     Say(String),
+    /// Show this text as a toast offering "Create a company".
+    NeedCompany(String),
+    /// Go to the setup wizard at the root of the active tab.
+    ToSetup,
 }
 
-/// Tab strip: the open tabs with the active one underlined, then the new-tab and close-tab
-/// buttons. Close-tab shows only when more than one tab is open, because the last tab stays.
-pub(super) fn tab_strip(ui: &mut Ui, tabs_set: &Tabs) -> Vec<ChromeCmd> {
+/// Labels for the tab strip: a title that two tabs share gets its place number after it for the
+/// later ones ("Company setup", "Company setup 2"), so every tab reads differently.
+#[must_use]
+pub fn unique_tab_labels(titles: &[String]) -> Vec<String> {
+    titles
+        .iter()
+        .enumerate()
+        .map(|(i, title)| {
+            let before = titles.iter().take(i).filter(|t| *t == title).count();
+            if before == 0 {
+                title.clone()
+            } else {
+                format!("{title} {}", before.saturating_add(1))
+            }
+        })
+        .collect()
+}
+
+/// Tab strip: the open tabs in the kit's tab style (the active one underlined, a rule beneath),
+/// then the new-tab and close-tab buttons at the right in the kit's buttons. Close-tab shows
+/// only when more than one tab is open, because the last tab stays.
+pub(super) fn tab_strip(ui: &mut Ui, tabs_set: &Tabs, t: &Tokens) -> Vec<ChromeCmd> {
     let mut cmds = Vec::new();
-    ui.horizontal(|ui| {
-        let titles = tabs_set.titles();
+    let slot = ui.painter().add(egui::Shape::Noop);
+    let row = ui.horizontal(|ui| {
+        let titles = unique_tab_labels(&tabs_set.titles());
         let labels: Vec<&str> = titles.iter().map(String::as_str).collect();
-        let response = tabs::tabs(ui, &labels, tabs_set.active_index());
+        let response = tabs::tab_strip(ui, &labels, Some(tabs_set.active_index()));
         if let Some(index) = response.clicked {
             cmds.push(ChromeCmd::SelectTab(index));
         }
-        let new_tab = ui.small_button("+").on_hover_text("New tab (Ctrl+T)");
-        // The bare "+" is what is drawn; a screen reader is told what it does.
-        a11y::name(ui, &new_tab, egui::Role::Button, "New tab (Ctrl+T)");
-        if new_tab.clicked() {
-            cmds.push(ChromeCmd::NewTab);
-        }
-        if tabs_set.len() > 1 && close_tab_button(ui).clicked() {
-            cmds.push(ChromeCmd::CloseActiveTab);
-        }
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if tabs_set.len() > 1
+                && button_icon(
+                    ui,
+                    Some(Icon::X),
+                    "Close tab",
+                    Some("Ctrl+W"),
+                    ButtonKind::Secondary,
+                )
+                .clicked()
+            {
+                cmds.push(ChromeCmd::CloseActiveTab);
+            }
+            if button_icon(
+                ui,
+                Some(Icon::Plus),
+                "New tab",
+                Some("Ctrl+T"),
+                ButtonKind::Secondary,
+            )
+            .clicked()
+            {
+                cmds.push(ChromeCmd::NewTab);
+            }
+        });
     });
+    let rect = row.response.rect;
+    let clip = ui.max_rect();
+    ui.painter().set(
+        slot,
+        egui::Shape::line_segment(
+            [
+                egui::pos2(clip.min.x, rect.bottom()),
+                egui::pos2(clip.max.x, rect.bottom()),
+            ],
+            egui::Stroke::new(border_width(crate::ui::kind(ui)), t.border),
+        ),
+    );
+    ui.add_space(10.0);
     cmds
-}
-
-/// The close-tab button: "Close tab", with its key as the hover text and the spoken name.
-fn close_tab_button(ui: &mut Ui) -> egui::Response {
-    let close = ui
-        .small_button("Close tab")
-        .on_hover_text("Close tab (Ctrl+W)");
-    a11y::name(ui, &close, egui::Role::Button, "Close tab (Ctrl+W)");
-    close
 }
 
 /// Breadcrumb trail for the active tab (`.crumbs`: meta size, `text-3`, earlier crumbs in
@@ -136,6 +181,80 @@ pub fn palette_key_bar(palette: &[KeyHint]) -> (String, Vec<(String, String)>) {
     (context, hints)
 }
 
+/// A modifier key held down: the key bar then lists the keys that use it (mock `renderKeys`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Held {
+    /// Alt is held.
+    Alt,
+    /// Ctrl is held.
+    Ctrl,
+}
+
+impl Held {
+    /// The held modifier in `modifiers`, Alt first, or `None`.
+    #[must_use]
+    pub fn of(modifiers: egui::Modifiers) -> Option<Held> {
+        if modifiers.alt {
+            Some(Held::Alt)
+        } else if modifiers.command || modifiers.ctrl {
+            Some(Held::Ctrl)
+        } else {
+            None
+        }
+    }
+
+    /// The word the bar shows after "Holding".
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            Held::Alt => "Alt",
+            Held::Ctrl => "Ctrl",
+        }
+    }
+}
+
+/// The keys the bar lists while a modifier is held, in the mock's order and words
+/// (`ALT_KEYS`, `CTRL_KEYS`, index.html:916-917). Each is listed only when `keymap` binds the
+/// action to a chord with that modifier, and shows that chord, so the bar never names a key that
+/// does nothing.
+#[must_use]
+pub fn held_hints(keymap: &crate::keymap::Keymap, held: Held) -> Vec<(String, String)> {
+    use crate::keymap::Action;
+    let wanted: &[(Action, &str)] = match held {
+        Held::Alt => &[
+            (Action::CreateMaster, "Create master here"),
+            (Action::DeleteVoucher, "Delete / reject draft"),
+            (Action::CancelVoucher, "Cancel voucher"),
+            (Action::DuplicateVoucher, "Duplicate"),
+            (Action::InsertVoucher, "Insert voucher"),
+            (Action::ToggleDetail, "Detailed / condensed"),
+        ],
+        Held::Ctrl => &[
+            (Action::Save, "Accept / save"),
+            (Action::OpenPalette, "Palette"),
+            (Action::SwitchPalette, "Switch to (replace)"),
+            (Action::MoreDetails, "More details / source"),
+            (Action::AlterMaster, "Alter master"),
+            (Action::Print, "Print"),
+            (Action::Export, "Export"),
+            (Action::Undo, "Undo field"),
+        ],
+    };
+    wanted
+        .iter()
+        .filter_map(|(action, words)| {
+            let chord = keymap.chords(*action).iter().find(|chord| match held {
+                Held::Alt => chord.alt && !chord.command,
+                Held::Ctrl => chord.command && !chord.alt,
+            })?;
+            Some((chord.to_string(), (*words).to_owned()))
+        })
+        .collect()
+}
+
+/// The words before Ctrl+K at the right of the bar while no modifier is held.
+pub const KEY_BAR_HOLD_HINT: &str = "Hold Alt or Ctrl for more \u{00B7}";
+
 /// The right end of the key bar: each keycap and the words after it (`.keys .right`).
 pub const KEY_BAR_RIGHT: [(&str, &str); 2] = [("Ctrl+K", "anything \u{00B7}"), ("?", "all keys")];
 
@@ -146,11 +265,24 @@ const KEY_GAP: f32 = 5.0;
 
 /// Draws the key bar: the screen's name in bold (`.keys .ctx`), its entries from [`key_hints`]
 /// (a keycap, then its words), and [`KEY_BAR_RIGHT`] at the right in `text-3`.
-pub(super) fn key_bar(ui: &mut Ui, context: &str, hints: &[(String, String)], t: &Tokens) {
+pub(super) fn key_bar(
+    ui: &mut Ui,
+    context: &str,
+    hints: &[(String, String)],
+    held: Option<Held>,
+    t: &Tokens,
+) {
     ui.spacing_mut().item_spacing.x = KEY_GAP;
     ui.horizontal_centered(|ui| {
         ui.spacing_mut().item_spacing.x = KEY_GAP;
-        if !context.is_empty() {
+        if let Some(held) = held {
+            ui.label(
+                RichText::new(format!("Holding {}", held.name()))
+                    .font(bold_font(ui, TEXT_META))
+                    .color(t.accent_ink),
+            );
+            ui.add_space(ENTRY_GAP - KEY_GAP);
+        } else if !context.is_empty() {
             ui.label(
                 RichText::new(context)
                     .font(bold_font(ui, TEXT_META))
@@ -159,6 +291,10 @@ pub(super) fn key_bar(ui: &mut Ui, context: &str, hints: &[(String, String)], t:
             ui.add_space(ENTRY_GAP - KEY_GAP);
         }
         for (keys, label) in hints {
+            // The right end needs room; entries that do not fit are left out.
+            if ui.available_width() < RIGHT_END_WIDTH {
+                break;
+            }
             keycap::keycap(ui, keys);
             ui.label(
                 RichText::new(label.as_str())
@@ -173,6 +309,16 @@ pub(super) fn key_bar(ui: &mut Ui, context: &str, hints: &[(String, String)], t:
                 ui.label(RichText::new(*label).size(TEXT_META).color(t.text_3));
                 keycap::keycap(ui, keys);
             }
+            if held.is_none() {
+                ui.label(
+                    RichText::new(KEY_BAR_HOLD_HINT)
+                        .size(TEXT_META)
+                        .color(t.text_3),
+                );
+            }
         });
     });
 }
+
+/// Room kept free at the right of the key bar for [`KEY_BAR_RIGHT`] and the hold hint, in points.
+const RIGHT_END_WIDTH: f32 = 330.0;

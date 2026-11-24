@@ -7,7 +7,7 @@
 
 use std::path::Path;
 
-use ledgerly_api::{AiTier, Api};
+use ledgerly_api::{AiTier, Api, GstFiling};
 use ledgerly_core::{Clock, CompanyId, Date, Gstin, GstinError, Outcome, Pan, StateCode};
 use ledgerly_model::{
     Address, Company, EntityKind, Features, GstRegistration, NegativeStockPolicy,
@@ -177,6 +177,29 @@ pub fn create_company(
     Ok((api, note))
 }
 
+/// Like [`create_company`], and also stores the GST filing frequency chosen on the company step.
+///
+/// # Errors
+/// The reason the company file could not be created.
+pub fn create_company_with_filing(
+    path: &Path,
+    company: &Company,
+    clock: Clock,
+    ai: AiTier,
+    filing: GstFiling,
+) -> Result<(Api, Option<String>), String> {
+    let (mut api, note) = create_company(path, company, clock, ai)?;
+    let note = match api.set_gst_filing(filing) {
+        Ok(Outcome::Value(())) => note,
+        Ok(Outcome::Unsupported(refused)) => Some(format!(
+            "The GST filing choice was not saved: {}.",
+            refused.reason
+        )),
+        Err(e) => Some(format!("The GST filing choice was not saved: {e}.")),
+    };
+    Ok((api, note))
+}
+
 /// What a key does on `step`. Enter and Escape do nothing while a field has focus (index.html:1887
 /// and 1888 check `isTyping()`), and Escape does nothing on the first step or on Done.
 #[must_use]
@@ -294,20 +317,42 @@ pub fn financial_year_end(fy_start: Date) -> Result<Date, String> {
         .map_err(|_| "That date is outside the supported range.".to_owned())
 }
 
-/// Reads the "Books begin from" text, `YYYY-MM-DD`. Books may begin on any day of the financial
-/// year (Tally help, read 2026-11-23: change the date to the actual start of transactions).
+/// The three-letter month names the books date is written with.
+const MONTH_ABBREVIATIONS: [&str; 12] = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+];
+
+/// Reads the "Books begin from" text: `1 Apr 2026` (as the box shows it) or `YYYY-MM-DD`. Books
+/// may begin on any day of the financial year (Tally help, read 2026-11-23: change the date to the
+/// actual start of transactions).
 ///
 /// # Errors
 /// A message when the text is not a date, or the date is outside `fy_start` to `fy_end`.
 pub fn parse_books_begin(text: &str, fy_start: Date, fy_end: Date) -> Result<Date, String> {
-    let parts: Vec<&str> = text.trim().split('-').collect();
-    let [year, month, day] = parts.as_slice() else {
-        return Err("Type the date as YYYY-MM-DD, for example 2026-04-01.".to_owned());
+    let not_a_date = || "Type the date as 1 Apr 2026 or 2026-04-01.".to_owned();
+    let words: Vec<&str> = text.split_whitespace().collect();
+    let (year, month, day) = if let [day, month, year] = words.as_slice() {
+        let month = MONTH_ABBREVIATIONS
+            .iter()
+            .position(|m| m.eq_ignore_ascii_case(month))
+            .and_then(|i| u8::try_from(i + 1).ok())
+            .ok_or_else(not_a_date)?;
+        (
+            (*year).parse::<i32>().map_err(|_| not_a_date())?,
+            month,
+            (*day).parse::<u8>().map_err(|_| not_a_date())?,
+        )
+    } else {
+        let parts: Vec<&str> = text.trim().split('-').collect();
+        let [year, month, day] = parts.as_slice() else {
+            return Err(not_a_date());
+        };
+        (
+            year.parse::<i32>().map_err(|_| not_a_date())?,
+            month.parse::<u8>().map_err(|_| not_a_date())?,
+            day.parse::<u8>().map_err(|_| not_a_date())?,
+        )
     };
-    let not_a_date = || "Type the date as YYYY-MM-DD, for example 2026-04-01.".to_owned();
-    let year: i32 = year.parse().map_err(|_| not_a_date())?;
-    let month: u8 = month.parse().map_err(|_| not_a_date())?;
-    let day: u8 = day.parse().map_err(|_| not_a_date())?;
     let month = Month::try_from(month).map_err(|_| not_a_date())?;
     let date = Date::from_calendar_date(year, month, day).map_err(|_| not_a_date())?;
     if date < fy_start || date > fy_end {

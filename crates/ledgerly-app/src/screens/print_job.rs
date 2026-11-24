@@ -26,11 +26,7 @@ type Rendered = Result<Outcome<Vec<u8>>, String>;
 
 /// The system save dialog, offering PDF.
 fn save_pdf_dialog(suggested: &str) -> Option<PathBuf> {
-    rfd::FileDialog::new()
-        .set_title("Save as PDF")
-        .set_file_name(suggested)
-        .add_filter("PDF", &["pdf"])
-        .save_file()
+    crate::ui::dialogs::save_file("Save as PDF", Some(suggested), &[("PDF", &["pdf"])])
 }
 
 /// The file name a PDF of a report or voucher titled `title` is saved under: the name Export

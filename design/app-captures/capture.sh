@@ -60,7 +60,8 @@ fi
 # The flat captures from before the <theme>/<state-id> layout.
 find "$OUT" -maxdepth 1 -name '*.webp' -delete
 # A full run replaces every capture, so a renamed or removed registry entry leaves nothing behind.
-if (( ${#only[@]} == 0 && ${#audit[@]} == 0 )); then
+# Converting a folder somebody else captured (CAPTURE_RAW) only adds or replaces what is in it.
+if (( ${#only[@]} == 0 && ${#audit[@]} == 0 )) && [[ -z "${CAPTURE_RAW:-}" ]]; then
   rm -rf "$OUT/light" "$OUT/dark" "$OUT/hc"
 fi
 

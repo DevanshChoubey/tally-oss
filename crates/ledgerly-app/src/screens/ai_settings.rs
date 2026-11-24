@@ -464,11 +464,11 @@ fn gap(ui: &mut Ui, points: f32) {
 
 /// The system save dialog for the log export, CSV only.
 fn save_dialog() -> Option<PathBuf> {
-    rfd::FileDialog::new()
-        .set_title("Export AI activity log")
-        .set_file_name("ai-activity-log.csv")
-        .add_filter("CSV", &["csv"])
-        .save_file()
+    crate::ui::dialogs::save_file(
+        "Export AI activity log",
+        Some("ai-activity-log.csv"),
+        &[("CSV", &["csv"])],
+    )
 }
 
 pub use crate::ui::probe::{read_probe, record_probe};

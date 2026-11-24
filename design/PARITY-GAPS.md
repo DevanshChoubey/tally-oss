@@ -582,16 +582,23 @@ financial year starts. The model supports that (`Company::books_begin`), so it i
   picked, and Done shows the engine's reason; the company starts with AI not set up.
 - **bug: backup folder is not saved and no backup runs on a schedule.** `backup_to` writes one
   file when called; nothing stores a folder or runs daily. The Backup step says so.
-- **gap: GST filing frequency (Monthly) is not saved.** The model has no filing-frequency field.
+- **fixed (S9): GST filing frequency is stored.** The company step has a Monthly / Quarterly list
+  like the mock's field; the choice is kept in the company file as an audited `gst.filing`
+  setting (`Api::set_gst_filing`, `Api::gst_filing`; tests in `ledgerly-api/tests/s9_gst_filing.rs`).
+  Nothing reads it yet: the GST screens do not change with it.
 - **gap: the "Company file" field is ours.** The mock has no file location; the wizard asks for
-  it, defaulting to `Documents/Ledgerly/<company>.ledgerly` when blank.
+  it. Blank, it shows the path it will use as a hint (`~/Documents/Ledgerly/<company>.ledgerly`,
+  made from the company name). The capture leaves it blank and runs with a throwaway home folder
+  (`set_home_override`), so the shot shows what a user sees and nothing is written to Documents.
 - **gap: City is kept as the first address line.** The model's `Address` has no city field.
 - **gap: the state mismatch has no red outline or icon.** `setup.gstin-error` (24 Gujarat chosen
   against a GSTIN starting 27, by clicks on the State list) shows the mock's words and disables
   Continue, as the mock does, but the GSTIN and State fields are not outlined in red and the
   message has no cross icon. The rule is tested in `tests/w4_setup.rs`.
-- **gap: the import card on Start is shown, not working.** Import needs the import wizard (not
-  routed from here). "Open a Ledgerly file" works (round of 2026-11-24, card S8): the system file
+- **gap: the import card on Start opens a screen that cannot finish with no company.** The card
+  is a choice like the others (arrows move onto it, Enter opens the import screen). With no
+  company open the screen says "No company is open yet" and its import button is disabled: the
+  one-step import writes into an open, empty company file. "Open a Ledgerly file" works (round of 2026-11-24, card S8): the system file
   dialog, then the company opens and Home replaces the wizard. "Try the sample company" works
   (S8, sample company): it builds Godavari Drip & Pump Works from `ledgerly-sample` into a
   throwaway file under the user's cache folder (`$XDG_CACHE_HOME` or `~/.cache`, else the system
@@ -607,22 +614,39 @@ financial year starts. The model supports that (`Company::books_begin`), so it i
 - **gap: a breadcrumb sits above the setup card when it is opened over Home.** The mock draws the
   card with no crumbs. The first launch (`Shell::cold_start`, no company) has none, as the mock;
   opened from the palette or sidebar over an open company, the shell draws "Home > Company setup".
-- **gap: the import card on Start carries a muted line saying why.** The mock draws it as a plain
-  choice; ours cannot be chosen (see above), so it says so under its text.
-- **gap: first-launch chrome.** With no company the top bar shows the mock's one "New company"
-  chip, but the AI chip says "AI: not set up" where the mock says "AI on this computer" (nothing
-  is stored to name), and the sidebar footer shows the app version where the mock shows "Engine
-  0.1 mock - rule pack ...". The sidebar lists every screen with no company open, as the mock
-  does; what each does with no company is in `design/REAL-PATH-AUDIT.md`.
+- **gap: the import screen's step-by-step path is not connected.** The five-step wizard
+  (detect, choose, pull, map, reconcile) is a state machine nothing in the shell drives, so its
+  "Look for a running app" and "Read exported file" controls are drawn disabled with the reason
+  (`STEP_BY_STEP_CONNECTED` in `screens/import/view.rs`). Only the one-step import works. The
+  mock has no import state; the screen is designed in the app's own kit (page head, card, step
+  line, kit buttons, notes and badges).
+- **by design: refusals are a toast.** Messages that used to be red text in the key bar are a dark
+  pill above it (`ui::toast`, the mock's `.toast`, index.html:290), gone after 6 seconds. With no
+  company, F4-F9 and D, B, M, G, and screens that need a company, say "X needs a company. Create or
+  open one first." with a "Create a company" action.
+- **by design: first-launch chrome words.** With no company the top bar shows the mock's one "New
+  company" chip. The AI chip says "AI: not set up" in the neutral style where the mock says "AI on
+  this computer" in the green style: nothing is stored to say the AI runs, and the app never claims
+  it. The sidebar footer keeps the mock's two lines and check icon but names the app version
+  ("Ledgerly 1.0.1") where the mock says "Engine 0.1 mock - rule pack ..." (a mock label; no rule
+  pack version is shown anywhere in the app). **fixed (S9): "Hold Alt or Ctrl for more"** is drawn
+  at the right of the key bar, and holding Alt or Ctrl really swaps the bar to "Holding Alt" or
+  "Holding Ctrl" with the chords the keymap binds with that key (none is listed that is unbound).
+  **fixed (S9): setup dates and badge.** Books begin from shows "1 Apr 2026" (typed "1 Apr 2026"
+  or 2026-04-01 are both read), the Financial year line has the "April to March" badge, and the
+  "fills the state" hint stays on one line. The capture harness parks the pointer off-window, so no
+  hover highlight leaks into a shot. The sidebar lists every screen with no company open, as the mock does; what each does
+  with no company is in `design/REAL-PATH-AUDIT.md`.
 - **gap: no F11 on the Features step.** The mock's line ends "F11 changes this later"; no F11
   feature screen exists, so the sentence is left out. Rows the model has no switch for show an
   off switch that does not move and say why.
 - **gap: the backup note has no info icon.** The kit's note draws text only.
-- **gap: fields are the kit's text inputs and combo boxes.** The mock's inputs on Company and
-  Backup are drawn by the shared egui styling, not the mock's `.fld input`; read-only values
-  (GST filing, Keep, When) are text with a "Not saved yet" hint instead of inputs.
+- **fixed (S9): fields use the mock's input size.** Setup's text inputs now share one helper
+  (`input()` in `screens/setup/mod.rs`: 10 x 7 margin, the input font) and combo boxes use the
+  kit's `style_combo`, so rows are the mock's height. Read-only values (Keep, When)
+  are still text with a "Not saved yet" hint instead of inputs.
 - **data: the mock's sample is prefilled; the wizard starts blank.** The capture types the mock's
-  company (name, GSTIN, file). The mock's City "Pune" is not typed.
+  company (name, City "Pune", GSTIN).
 
 ## Print (card P1, round of 2026-11-24)
 
@@ -695,12 +719,14 @@ quick-entry offline-AI state has no dark or hc mock capture). Theme differences 
   2 px. The masters filter box draws a literal 2 px outline (masters/look.rs), which matches the
   mock but not the app's own hc focus width.
 
-## Real-path audit findings (2026-11-24)
+## Real-path audit findings (2026-11-24, updated S9)
 
-Full table in `design/REAL-PATH-AUDIT.md`. Open gaps, worst first: Import screen is raw egui;
-shortcut keys are silently ignored on a cold start; refusal messages are shown in the bottom key
-bar in red with developer wording; the tab strip is unstyled with duplicate "Company setup"
-titles; dark and high-contrast `setup.welcome` captures are not yet reshot cold.
+Full table in `design/REAL-PATH-AUDIT.md`. Fixed in S9: the import screen is in the app's kit and
+the welcome's Import card opens it; shortcuts and refusals give a toast with a "Create a company"
+action; the tab strip is styled with distinct titles. Still open: the import screen's step-by-step
+path is not connected. `setup.welcome` SSIM is light 0.8417, dark 0.8473, hc 0.8147 and `setup.company` is
+light 0.7966, dark 0.7952, hc 0.7930; the words of the AI chip and the sidebar footer are by
+design (setup section).
 
 ## Reports not in the mock (S8)
 

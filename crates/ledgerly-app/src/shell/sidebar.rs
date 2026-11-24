@@ -323,15 +323,23 @@ fn group_heading(ui: &mut Ui, title: &str, t: &Tokens) {
 /// The footer at the bottom of the sidebar (`nav.side .foot`): the app's version, and where the
 /// company file is kept.
 fn footer(ui: &mut Ui, t: &Tokens) {
-    let text = format!(
-        "Ledgerly {}\nSaved on this computer",
-        env!("CARGO_PKG_VERSION")
-    );
+    let version = format!("Ledgerly {}", env!("CARGO_PKG_VERSION"));
     ui.with_layout(egui::Layout::bottom_up(egui::Align::Min), |ui| {
         ui.add_space(8.0);
+        // The mock's `.foot` ends the second line with a check icon.
         ui.horizontal(|ui| {
             ui.add_space(ROW_PAD_X);
-            ui.label(egui::RichText::new(text).size(TEXT_CAP).color(t.text_3));
+            ui.spacing_mut().item_spacing.x = 4.0;
+            ui.label(
+                egui::RichText::new("Saved on this computer")
+                    .size(TEXT_CAP)
+                    .color(t.text_3),
+            );
+            icon::icon_sized(ui, Icon::Check, t.text_3, 12.0);
+        });
+        ui.horizontal(|ui| {
+            ui.add_space(ROW_PAD_X);
+            ui.label(egui::RichText::new(version).size(TEXT_CAP).color(t.text_3));
         });
     });
 }

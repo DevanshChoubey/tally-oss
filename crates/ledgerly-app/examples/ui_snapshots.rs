@@ -792,9 +792,16 @@ fn masters_down(n: usize) -> Vec<(Key, Modifiers)> {
 const SETUP_NAME: &str = "Godavari Drip & Pump Works";
 /// The GSTIN the setup captures type; its first two digits fill the state (index.html:1868).
 const SETUP_GSTIN: &str = "27AAGFG4417K1ZA";
-/// Where the setup captures create their company file, relative to the repository root. The
-/// harness removes it before a run, because the wizard does not overwrite a file.
-const SETUP_FILE: &str = "target/setup-capture/godavari.ledgerly";
+/// The city the setup captures type (the mock's, index.html:1867).
+const SETUP_CITY: &str = "Pune";
+/// The home folder the setup captures run with, relative to the repository root, so the default
+/// company file (`~/Documents/Ledgerly/<name>.ledgerly`) is made here and never in the real
+/// Documents folder. The capture shows the path as `~/Documents/...`, as a user sees it.
+const SETUP_HOME: &str = "target/setup-capture/home";
+/// The company file the setup captures create (the default under [`SETUP_HOME`]). The harness
+/// removes it before a run, because the wizard does not overwrite a file.
+const SETUP_FILE: &str =
+    "target/setup-capture/home/Documents/Ledgerly/godavari-drip-pump-works.ledgerly";
 
 /// A company setup capture, as a first-time user reaches it: the cold start (no company open) shows
 /// the wizard, Enter goes from Start to Company (where the name field takes focus by itself), the
@@ -805,10 +812,18 @@ fn setup_shot(state: &'static str, after_company: usize) -> Shot {
         .on(Fixture::Cold)
         .then(&[(Key::Enter, NONE)])
         .type_text(SETUP_NAME)
-        .press(&[(Key::Tab, NONE), (Key::Tab, NONE), (Key::Tab, NONE)])
+        .press(&[(Key::Tab, NONE), (Key::Tab, NONE)])
+        .type_text(SETUP_CITY)
+        .press(&[(Key::Tab, NONE)])
         .type_text(SETUP_GSTIN)
-        .press(&[(Key::Tab, NONE), (Key::Tab, NONE), (Key::Tab, NONE)])
-        .type_text(SETUP_FILE)
+        // State, GST filing, Books begin, then the Company file field, which stays blank: the
+        // capture shows the default path under the user's Documents folder.
+        .press(&[
+            (Key::Tab, NONE),
+            (Key::Tab, NONE),
+            (Key::Tab, NONE),
+            (Key::Tab, NONE),
+        ])
         .press(&[(Key::Tab, NONE), (Key::Tab, NONE)]);
     for _ in 0..after_company {
         shot = shot.press(&[(Key::Enter, NONE)]);
@@ -1256,6 +1271,8 @@ impl Snapshots {
 
 impl eframe::App for Snapshots {
     fn raw_input_hook(&mut self, _ctx: &egui::Context, raw_input: &mut egui::RawInput) {
+        // No hover from the real pointer or an earlier click may reach a capture.
+        ledgerly_app::ui::capture::park_pointer(raw_input);
         if self.gap > 0 {
             self.gap -= 1;
             return;
@@ -1442,7 +1459,10 @@ fn main() -> eframe::Result<()> {
     // build of the same example in a shared target directory.
     std::hint::black_box("ledgerly-sheet-marker");
     // The setup captures create a company file; the wizard never overwrites one, so clear the last.
-    let _ = std::fs::create_dir_all("target/setup-capture");
+    let _ = std::fs::create_dir_all(format!("{SETUP_HOME}/Documents/Ledgerly"));
+    if let Ok(home) = std::fs::canonicalize(SETUP_HOME) {
+        ledgerly_app::screens::setup::set_home_override(home);
+    }
     // Every screen reads "today" from the sample's own date, as the mock does (CO.today).
     ledgerly_app::shell::navigate::set_clock_override(ledgerly_sample::today().unwrap(), 10);
     let _ = std::fs::remove_file(SETUP_FILE);

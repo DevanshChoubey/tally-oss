@@ -14,9 +14,11 @@
 pub mod a11y;
 pub mod badge;
 pub mod button;
+pub mod capture;
 pub mod card;
 pub mod chip;
 pub mod conf;
+pub mod dialogs;
 pub mod empty;
 pub mod format;
 pub mod icon;
@@ -29,9 +31,11 @@ pub mod probe;
 pub mod prop;
 pub mod prov;
 pub mod skeleton;
+pub mod step_marker;
 pub mod switch;
 pub mod table;
 pub mod tabs;
+pub mod toast;
 
 use egui::{Align, Color32, FontFamily, FontId, Layout, Response, RichText, Ui};
 

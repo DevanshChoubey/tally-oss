@@ -87,7 +87,7 @@ pub enum NavError {
     NoCompany,
     /// The screen shows the open company's data and no company is open. Opening it would leave a
     /// page that waits for books that never come.
-    #[error("no company is open: create one or open a file in Company setup first ({0})")]
+    #[error("{0} needs a company. Create or open one first.")]
     NoCompanyOpen(&'static str),
     /// The palette key is not one this module wrote.
     #[error("\"{0}\" is not something the palette can open")]

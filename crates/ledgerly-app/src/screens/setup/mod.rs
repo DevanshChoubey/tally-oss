@@ -14,7 +14,7 @@ use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, TryRecvError};
 
 use egui::Key;
-use ledgerly_api::{AiTier, Api};
+use ledgerly_api::{AiTier, Api, GstFiling};
 use ledgerly_core::{Clock, Date, StateCode};
 use ledgerly_model::{EntityKind, Features};
 
@@ -26,7 +26,7 @@ use self::form::{
 use crate::shell::navigate::{self, MASTERS_KEY};
 use crate::shell::{GatewayScreen, hand_over, spawn_file_job};
 use crate::theme::{
-    RADIUS_M, RADIUS_S, TEXT_BODY, TEXT_CAP, TEXT_H1, TEXT_INPUT, TEXT_META, border_width, shadow_1,
+    RADIUS_M, RADIUS_S, TEXT_BODY, TEXT_H1, TEXT_INPUT, TEXT_META, border_width, shadow_1,
 };
 use crate::ui::badge::{BadgeKind, badge};
 use crate::ui::button::{ButtonKind, button};
@@ -35,6 +35,7 @@ use crate::ui::keycap;
 use crate::ui::note::{NoteKind, note};
 use crate::ui::option_card::{OptionCard, option_grid};
 use crate::ui::probe::record_probe;
+use crate::ui::step_marker::{self, StepMarker};
 use crate::ui::switch::switch;
 use crate::ui::{bold_font, kind, para, tokens};
 use crate::{AppCtx, Screen, ScreenAction};
@@ -71,8 +72,6 @@ const RAIL_PAD_X: f32 = 10.0;
 const RAIL_LABEL_GAP: f32 = 10.0;
 /// A rail marker's diameter (`.steps button i{width:22px;height:22px}`, index.html:314).
 const MARKER_SIZE: f32 = 22.0;
-/// The check inside a passed step's marker.
-const CHECK_SIZE: f32 = 14.0;
 /// The space above Back and Continue (`margin-top:22px`, index.html:1861).
 const NAV_GAP: f32 = 22.0;
 /// The field grid's gap between columns (`.vhead{gap:12px 16px}`, index.html:234).
@@ -120,7 +119,7 @@ pub struct SetupScreen {
     state: Option<StateCode>,
     /// Where the company file is saved; blank means the default under Documents.
     file: String,
-    /// The books begin date text, `YYYY-MM-DD`.
+    /// The books begin date text, `1 Apr 2026` or `YYYY-MM-DD`.
     books_begin: String,
     /// The features switched on.
     features: Features,
@@ -128,6 +127,8 @@ pub struct SetupScreen {
     keyboard_classic: bool,
     /// The AI tier the user picked, stored with the new company ([`form::create_company`]).
     ai: AiTier,
+    /// How often GST returns are filed, stored with the new company.
+    filing: GstFiling,
     /// The backup folder typed. Not stored yet.
     backup_folder: String,
     /// What the last action said, shown on the step.
@@ -148,14 +149,24 @@ pub struct SetupScreen {
     open_job: Option<Receiver<Result<Api, String>>>,
     /// A company file was opened: the next frame goes to its home screen.
     opened: bool,
+    /// Continue was pressed on the Import card: the next frame opens the import screen.
+    open_screen: Option<OpenScreen>,
+}
+
+/// A screen the wizard opens on top of itself after the frame.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum OpenScreen {
+    /// The import screen.
+    Import,
 }
 
 /// What the Start step's Continue button does: the cards that can be chosen (index.html:1863).
-/// "Import" cannot be chosen yet (see `design/PARITY-GAPS.md`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum StartChoice {
     /// Create a company: the wizard goes on to the Company step.
     Create,
+    /// Import from another app: the import screen opens on top of the wizard.
+    Import,
     /// Open a Ledgerly file: the system file dialog, then the company opens.
     Open,
     /// Try the sample company: a throwaway company file is built and opened.
@@ -164,17 +175,21 @@ enum StartChoice {
 
 impl StartChoice {
     /// Where an arrow key moves the choice. The cards sit in two columns: Create and Import on
-    /// the first row, Open and the sample on the second. Import cannot be chosen, so Create goes
-    /// to Open with any arrow, as it always did; Open goes up to Create or right to the sample;
-    /// the sample goes left to Open or up to Create.
+    /// the first row, Open and the sample on the second. A key that would leave the grid stays.
     fn moved(self, key: Key) -> Self {
-        let up = matches!(key, Key::ArrowUp);
-        let back = matches!(key, Key::ArrowUp | Key::ArrowLeft);
-        match self {
-            StartChoice::Sample if up => StartChoice::Create,
-            StartChoice::Create | StartChoice::Sample => StartChoice::Open,
-            StartChoice::Open if back => StartChoice::Create,
-            StartChoice::Open => StartChoice::Sample,
+        match (self, key) {
+            (StartChoice::Create, Key::ArrowRight) | (StartChoice::Sample, Key::ArrowUp) => {
+                StartChoice::Import
+            }
+            (StartChoice::Create | StartChoice::Open, Key::ArrowUp)
+            | (StartChoice::Import, Key::ArrowLeft) => StartChoice::Create,
+            (StartChoice::Create, Key::ArrowDown) | (StartChoice::Sample, Key::ArrowLeft) => {
+                StartChoice::Open
+            }
+            (StartChoice::Import, Key::ArrowDown) | (StartChoice::Open, Key::ArrowRight) => {
+                StartChoice::Sample
+            }
+            (choice, _) => choice,
         }
     }
 }
@@ -193,12 +208,63 @@ fn default_sample_base() -> PathBuf {
     cache.unwrap_or_else(std::env::temp_dir)
 }
 
-/// The system file dialog for a company file. `None` when the user cancels.
-fn pick_company_file() -> Option<PathBuf> {
-    rfd::FileDialog::new()
-        .set_title("Open a Ledgerly file")
-        .add_filter("Ledgerly company file", &["ledgerly"])
-        .pick_file()
+/// Lets the app raise native file dialogs (see [`crate::ui::dialogs`]). Only `shell::run` calls
+/// this.
+pub fn enable_system_dialogs() {
+    crate::ui::dialogs::enable_system_dialogs();
+}
+
+/// `true` once [`enable_system_dialogs`] was called.
+#[must_use]
+pub fn system_dialogs_enabled() -> bool {
+    crate::ui::dialogs::system_dialogs_enabled()
+}
+
+/// The wizard's default file dialog: the system dialog when dialogs were switched on, otherwise
+/// "cancelled" at once.
+#[must_use]
+pub fn default_file_dialog() -> Option<PathBuf> {
+    crate::ui::dialogs::open_file(
+        "Open a Ledgerly file",
+        &[("Ledgerly company file", &["ledgerly"])],
+    )
+}
+
+/// A home folder to use instead of `$HOME` for the default company file (captures and tests).
+static HOME_OVERRIDE: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+
+/// Makes the default company file go under `home` instead of the user's home folder. The first
+/// call wins; the real window never calls it.
+pub fn set_home_override(home: PathBuf) {
+    let _first = HOME_OVERRIDE.set(home);
+}
+
+/// The path the company file gets when the field is left blank, as the field shows it.
+#[must_use]
+pub fn default_file_label(name: &str) -> String {
+    let slug = file_slug(name);
+    if slug.is_empty() {
+        "~/Documents/Ledgerly/<company name>.ledgerly".to_owned()
+    } else {
+        format!("~/Documents/Ledgerly/{slug}.ledgerly")
+    }
+}
+
+/// The company name as a file name: lower case, each run of other characters one hyphen, no
+/// hyphen at either end.
+fn file_slug(name: &str) -> String {
+    let mut slug = String::new();
+    for c in name.trim().chars() {
+        if c.is_ascii_alphanumeric() {
+            slug.push(c.to_ascii_lowercase());
+        } else if !slug.is_empty() && !slug.ends_with('-') {
+            slug.push('-');
+        }
+    }
+    while slug.ends_with('-') {
+        slug.pop();
+    }
+    slug
 }
 
 impl Default for SetupScreen {
@@ -233,10 +299,11 @@ impl SetupScreen {
             gstin_seen: String::new(),
             state: None,
             file: String::new(),
-            books_begin: fy_start.to_string(),
+            books_begin: long_date(fy_start),
             features: default_features(),
             keyboard_classic: true,
             ai: AiTier::Local,
+            filing: GstFiling::Monthly,
             backup_folder: String::new(),
             notice: None,
             job: None,
@@ -244,9 +311,10 @@ impl SetupScreen {
             focus_name: false,
             start: StartChoice::Create,
             sample_base: default_sample_base(),
-            picker: pick_company_file,
+            picker: default_file_dialog,
             open_job: None,
             opened: false,
+            open_screen: None,
         }
     }
 
@@ -318,6 +386,7 @@ impl SetupScreen {
                     self.step = Step::Company;
                     self.focus_name = true;
                 }
+                StartChoice::Import => self.open_screen = Some(OpenScreen::Import),
                 StartChoice::Open => self.open_file(),
                 StartChoice::Sample => self.open_sample(),
             },
@@ -425,8 +494,10 @@ impl SetupScreen {
                 return;
             }
         };
-        let (clock, ai) = (self.clock, self.ai);
-        match spawn_file_job(move || form::create_company(&path, &company, clock, ai)) {
+        let (clock, ai, filing) = (self.clock, self.ai, self.filing);
+        match spawn_file_job(move || {
+            form::create_company_with_filing(&path, &company, clock, ai, filing)
+        }) {
             Ok(rx) => {
                 self.job = Some(rx);
                 self.notice = Some("Working on the company file...".to_owned());
@@ -440,24 +511,16 @@ impl SetupScreen {
         if !self.file.trim().is_empty() {
             return Ok(PathBuf::from(self.file.trim()));
         }
-        let home = std::env::var_os("HOME")
-            .or_else(|| std::env::var_os("USERPROFILE"))
+        let home = HOME_OVERRIDE
+            .get()
+            .cloned()
+            .or_else(|| std::env::var_os("HOME").map(PathBuf::from))
+            .or_else(|| std::env::var_os("USERPROFILE").map(PathBuf::from))
             .ok_or_else(|| {
                 "Type where the company file goes; no home folder is known.".to_owned()
             })?;
-        let slug: String = self
-            .name
-            .trim()
-            .chars()
-            .map(|c| {
-                if c.is_ascii_alphanumeric() {
-                    c.to_ascii_lowercase()
-                } else {
-                    '-'
-                }
-            })
-            .collect();
-        Ok(PathBuf::from(home)
+        let slug = file_slug(&self.name);
+        Ok(home
             .join("Documents")
             .join("Ledgerly")
             .join(format!("{slug}.ledgerly")))
@@ -546,6 +609,7 @@ impl SetupScreen {
         match self.step {
             Step::Welcome => match self.start {
                 StartChoice::Create => ("Create a company", true),
+                StartChoice::Import => ("Import from another app", true),
                 StartChoice::Open => ("Open a Ledgerly file", self.open_job.is_none()),
                 StartChoice::Sample => ("Try the sample company", self.open_job.is_none()),
             },
@@ -633,7 +697,7 @@ impl SetupScreen {
                 "Import from another accounting app",
                 "Masters and vouchers from an XML or spreadsheet export. A report shows what moved.",
             )
-            .unavailable("Not available in this wizard yet."),
+            .selected(self.start == StartChoice::Import),
             OptionCard::new(
                 Icon::File,
                 "Open a Ledgerly file",
@@ -651,9 +715,9 @@ impl SetupScreen {
         for (n, card) in drawn.iter().enumerate() {
             record_probe(ui, &format!("setup.option.{n}"), card.card);
         }
-        // Cards 0, 2 and 3 can be chosen; 1 (import) only says why it cannot.
         for (n, choice) in [
             (0, StartChoice::Create),
+            (1, StartChoice::Import),
             (2, StartChoice::Open),
             (3, StartChoice::Sample),
         ] {
@@ -679,9 +743,7 @@ impl SetupScreen {
                 let name = crate::ui::a11y::text_edit(
                     ui,
                     "Company name",
-                    egui::TextEdit::singleline(&mut self.name)
-                        .id_salt("setup-name")
-                        .desired_width(w),
+                    input(&mut self.name).id_salt("setup-name").desired_width(w),
                 );
                 if std::mem::take(&mut self.focus_name) {
                     name.request_focus();
@@ -704,11 +766,7 @@ impl SetupScreen {
                     });
             });
             field(ui, col, "City", |ui, w| {
-                crate::ui::a11y::text_edit(
-                    ui,
-                    "City",
-                    egui::TextEdit::singleline(&mut self.city).desired_width(w),
-                );
+                crate::ui::a11y::text_edit(ui, "City", input(&mut self.city).desired_width(w));
             });
         });
         ui.add_space(FIELD_GAP_Y);
@@ -718,7 +776,7 @@ impl SetupScreen {
                 crate::ui::a11y::text_edit(
                     ui,
                     "GSTIN",
-                    egui::TextEdit::singleline(&mut self.gstin)
+                    input(&mut self.gstin)
                         .hint_text("15 characters, or blank")
                         .desired_width(w),
                 );
@@ -740,9 +798,15 @@ impl SetupScreen {
                         }
                     });
             });
-            field(ui, col, "GST filing", |ui, _| {
-                read_only(ui, "Monthly");
-                hint(ui, "Not saved yet: no filing frequency is kept.");
+            field(ui, col, "GST filing", |ui, w| {
+                egui::ComboBox::from_id_salt("setup-filing")
+                    .width(w)
+                    .selected_text(self.filing.label())
+                    .show_ui(ui, |ui| {
+                        for filing in [GstFiling::Monthly, GstFiling::Quarterly] {
+                            ui.selectable_value(&mut self.filing, filing, filing.label());
+                        }
+                    });
             });
         });
         self.draw_company_dates(ui, col);
@@ -756,11 +820,14 @@ impl SetupScreen {
             field(ui, span(col, 2), "Financial year", |ui, _| {
                 let fy_end = financial_year_end(self.fy_start)
                     .map_or_else(|_| "the end of March".to_owned(), long_date);
-                read_only(ui, &format!("{} to {fy_end}", long_date(self.fy_start)));
+                ui.horizontal(|ui| {
+                    read_only(ui, &format!("{} to {fy_end}", long_date(self.fy_start)));
+                    rule_pill(ui, "April to March");
+                });
             });
             field(ui, span(col, 2), "Books begin from", |ui, w| {
-                crate::ui::a11y::text_edit(ui, "Books begin from", egui::TextEdit::singleline(&mut self.books_begin)
-                        .hint_text("YYYY-MM-DD")
+                crate::ui::a11y::text_edit(ui, "Books begin from", input(&mut self.books_begin)
+                        .hint_text("1 Apr 2026")
                         .desired_width(w),
                 );
                 hint(
@@ -774,8 +841,8 @@ impl SetupScreen {
             crate::ui::a11y::text_edit(
                 ui,
                 "Company file",
-                egui::TextEdit::singleline(&mut self.file)
-                    .hint_text("blank: Documents/Ledgerly/<company>.ledgerly")
+                input(&mut self.file)
+                    .hint_text(default_file_label(&self.name))
                     .desired_width(w),
             );
         });
@@ -794,12 +861,18 @@ impl SetupScreen {
                 );
             }
             Some(GstinCheck::Valid(gstin)) => {
-                ui.horizontal_wrapped(|ui| {
+                ui.horizontal(|ui| {
                     badge(ui, BadgeKind::Ok, "Check character OK");
-                    ui.label(
-                        egui::RichText::new(format!("PAN {} · fills the state", gstin.pan_str()))
+                    ui.add(
+                        egui::Label::new(
+                            egui::RichText::new(format!(
+                                "PAN {} · fills the state",
+                                gstin.pan_str()
+                            ))
                             .size(TEXT_META)
                             .color(t.text_3),
+                        )
+                        .wrap_mode(egui::TextWrapMode::Extend),
                     );
                 });
             }
@@ -961,7 +1034,7 @@ impl SetupScreen {
                 crate::ui::a11y::text_edit(
                     ui,
                     "Backup folder",
-                    egui::TextEdit::singleline(&mut self.backup_folder)
+                    input(&mut self.backup_folder)
                         .hint_text("Documents/Ledgerly backups")
                         .desired_width(w),
                 );
@@ -1189,7 +1262,6 @@ fn rail_marker(step: Step, on: Step) -> Marker {
 #[expect(clippy::float_arithmetic, reason = "laying out the marker in its row")]
 fn rail_row(ui: &mut egui::Ui, step: Step, marker: Marker, clickable: bool) -> egui::Response {
     let t = tokens(ui);
-    let bw = border_width(kind(ui));
     let sense = if clickable {
         egui::Sense::click()
     } else {
@@ -1213,40 +1285,13 @@ fn rail_row(ui: &mut egui::Ui, step: Step, marker: Marker, clickable: bool) -> e
         egui::Vec2::splat(MARKER_SIZE),
     );
     record_probe(ui, &format!("setup.rail.marker.{n}"), dot);
-    let radius = MARKER_SIZE / 2.0;
-    let number = (n + 1).to_string();
-    let cap = bold_font(ui, TEXT_CAP);
-    match marker {
-        Marker::Passed => {
-            painter.circle_filled(dot.center(), radius, t.ok);
-            let check = egui::Rect::from_center_size(dot.center(), egui::Vec2::splat(CHECK_SIZE));
-            icon::paint(painter, check, Icon::Check, t.surface);
-        }
-        Marker::Current => {
-            painter.circle_filled(dot.center(), radius, t.accent);
-            painter.text(
-                dot.center(),
-                egui::Align2::CENTER_CENTER,
-                number,
-                cap,
-                t.on_accent,
-            );
-        }
-        Marker::Ahead => {
-            painter.circle_stroke(
-                dot.center(),
-                radius - bw / 2.0,
-                egui::Stroke::new(bw, t.border_strong),
-            );
-            painter.text(
-                dot.center(),
-                egui::Align2::CENTER_CENTER,
-                number,
-                cap,
-                t.text_2,
-            );
-        }
-    }
+    let kit = match marker {
+        Marker::Passed => StepMarker::Passed,
+        Marker::Current => StepMarker::Current,
+        Marker::Ahead => StepMarker::Ahead,
+    };
+    step_marker::paint(ui, dot.center(), kit, &(n + 1).to_string());
+    let painter = ui.painter();
     let (font, ink) = if marker == Marker::Current {
         (bold_font(ui, TEXT_BODY), t.accent_ink)
     } else {
@@ -1316,10 +1361,36 @@ fn field(ui: &mut egui::Ui, width: f32, label: &str, add: impl FnOnce(&mut egui:
     let t = tokens(ui);
     ui.vertical(|ui| {
         ui.set_width(width);
+        crate::ui::button::style_combo(ui);
         ui.spacing_mut().item_spacing.y = 4.0;
         ui.label(egui::RichText::new(label).size(TEXT_META).color(t.text_2));
         add(ui, width);
     });
+}
+
+/// A single-line text box as the mock draws its inputs (`.fld input`, index.html:236): a 32 point
+/// box with 10 points of padding and the input size of text.
+fn input(text: &mut String) -> egui::TextEdit<'_> {
+    egui::TextEdit::singleline(text)
+        .margin(egui::Margin::symmetric(10, 7))
+        .font(FontId::proportional(TEXT_INPUT))
+}
+
+/// A small label that says where a value comes from (`.prov.rule`, a deterministic rule): the
+/// sunken fill, the muted ink, 10.5 points, bold.
+fn rule_pill(ui: &mut egui::Ui, text: &str) {
+    let t = tokens(ui);
+    egui::Frame::new()
+        .fill(t.sunken)
+        .corner_radius(3.0)
+        .inner_margin(egui::Margin::symmetric(5, 0))
+        .show(ui, |ui| {
+            ui.label(
+                egui::RichText::new(text)
+                    .font(bold_font(ui, 10.5))
+                    .color(t.text_2),
+            );
+        });
 }
 
 /// A value the user cannot change, in the field's place (`.ro`).
@@ -1398,6 +1469,13 @@ impl Screen for SetupScreen {
                 }
             }
             KeyOutcome::Pass => {}
+        }
+        if self.open_screen.take() == Some(OpenScreen::Import) {
+            match navigate::screen_for_key(navigate::IMPORT_KEY, ctx) {
+                Some(Ok(screen)) => return ScreenAction::Push(screen),
+                Some(Err(e)) => self.notice = Some(e.to_string()),
+                None => self.notice = Some("that screen is not available yet".to_owned()),
+            }
         }
         let mut chosen = self.take_launch_key(ui).map(DoneChoice::Open);
         if let Some(next) = self.draw_card(ui) {
