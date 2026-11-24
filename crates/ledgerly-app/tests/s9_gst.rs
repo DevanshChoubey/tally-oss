@@ -23,6 +23,7 @@ fn section(code: &'static str, status: ApiBucket) -> Gstr1Section {
         taxable: Some(Paise::ZERO),
         tax: None,
         status,
+        note: None,
     }
 }
 
