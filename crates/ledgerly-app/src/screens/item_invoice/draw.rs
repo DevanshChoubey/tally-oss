@@ -30,14 +30,6 @@ use ledgerly_core::LedgerId;
 use ledgerly_core::format::amount_in_words;
 use ledgerly_model::Masters;
 
-/// The one-line purpose under the page title of an item invoice. It says when the engine works
-/// out tax: when the invoice changes, not on every keystroke.
-const SUBTITLE: &str =
-    "Item invoice · tax is worked out by the GST engine when the invoice changes";
-
-/// The one-line purpose under the page title of an accounting invoice.
-const ACCOUNTING_SUBTITLE: &str = "Accounting invoice · ledgers under Particulars; tax is worked out by the GST engine when the invoice changes";
-
 /// Width of the header's date field, and so of its first column.
 const DATE_WIDTH: f32 = 120.0;
 /// Width of the party and ledger fields, and so of the header's second column.
@@ -45,12 +37,12 @@ const PARTY_WIDTH: f32 = 300.0;
 /// Width of the place and reference fields, and so of the header's third column.
 const PLACE_WIDTH: f32 = 200.0;
 
-/// The particulars table's column headings, and whether each column holds numbers.
+/// The particulars table's column headings (keys), and whether each column holds numbers.
 const PARTICULAR_HEADS: [(&str, bool); 4] = [
     ("#", false),
-    ("Particulars", false),
-    ("Amount", true),
-    ("GST", true),
+    ("invoice.col.particulars", false),
+    ("invoice.col.amount", true),
+    ("invoice.col.gst", true),
 ];
 
 /// Where a text field sits in the focus order, how wide it is and what it says when empty.
@@ -58,21 +50,21 @@ struct FieldSpec {
     id: Id,
     field: Field,
     width: f32,
-    hint: &'static str,
+    hint: String,
 }
 
-/// The line table's column headings, and whether each column holds numbers.
+/// The line table's column headings (keys), and whether each column holds numbers.
 const LINE_HEADS: [(&str, bool); 10] = [
     ("#", false),
-    ("Item", false),
-    ("HSN", false),
-    ("Qty", true),
-    ("Unit", false),
-    ("Rate", true),
-    ("Disc %", true),
-    ("Typed amount", true),
-    ("GST", true),
-    ("Amount", true),
+    ("invoice.col.item", false),
+    ("invoice.col.hsn", false),
+    ("invoice.col.qty", true),
+    ("invoice.col.unit", false),
+    ("invoice.col.rate", true),
+    ("invoice.col.disc", true),
+    ("invoice.col.typed_amount", true),
+    ("invoice.col.gst", true),
+    ("invoice.col.amount", true),
 ];
 
 /// The button pressed this frame, reported after the widgets are drawn.
@@ -108,6 +100,15 @@ pub struct LineShown {
     pub focused: bool,
 }
 
+/// A table heading in `tr`: a key from the file, or the symbol `#` as it is.
+fn heading(tr: &Tr, key: &str) -> String {
+    if key.starts_with("invoice.") {
+        tr.t(key)
+    } else {
+        key.to_owned()
+    }
+}
+
 /// The row a field belongs to, for the field kinds that live in the line table.
 fn row_of(field: Field) -> Option<usize> {
     match field {
@@ -129,21 +130,26 @@ fn row_of(field: Field) -> Option<usize> {
 /// The rows of the tax box above the invoice total, in display order, as (label, amount): the
 /// engine's taxable value, each tax head it returned, and the round-off. Nothing is added here.
 #[must_use]
-pub fn tax_rows(block: &GstBlock) -> Vec<(String, String)> {
+pub fn tax_rows(block: &GstBlock, tr: &Tr) -> Vec<(String, String)> {
     let mut rows = vec![(
-        "Taxable value".to_owned(),
+        tr.t("invoice.taxable_value"),
         format::amount(block.taxable_total),
     )];
     for head in &block.heads {
         rows.push((head.head.clone(), format::amount(head.amount)));
     }
-    rows.push(("Round off".to_owned(), format::amount(block.round_off)));
+    rows.push((tr.t("invoice.round_off"), format::amount(block.round_off)));
     rows
 }
 
 /// One line of the item table: its number, the item and number fields, and the engine's figures.
+#[allow(
+    clippy::too_many_arguments,
+    reason = "one table row's widgets and where it reports to"
+)]
 fn line_row(
     row: &mut TableRow<'_, '_>,
+    tr: &Tr,
     line: &LineShown,
     cells: &mut InvoiceRow,
     base: Id,
@@ -158,14 +164,22 @@ fn line_row(
             id: base.with(("item", i)),
             field: Field::Item(i),
             width: ui.available_width(),
-            hint: "Item: type to search",
+            hint: tr.t("invoice.hint_item"),
         };
         text_field(ui, &s, &mut cells.item_text, want, ev);
     });
     row.col(|ui| table::text(ui, &line.hsn));
     row.col(|ui| {
         let id = base.with(("qty", i));
-        numeric_field(ui, id, Field::Qty(i), "Qty", &mut cells.qty_text, want, ev);
+        numeric_field(
+            ui,
+            id,
+            Field::Qty(i),
+            &tr.t("invoice.col.qty"),
+            &mut cells.qty_text,
+            want,
+            ev,
+        );
     });
     row.col(|ui| table::text(ui, &line.unit));
     row.col(|ui| {
@@ -174,7 +188,7 @@ fn line_row(
             ui,
             id,
             Field::Rate(i),
-            "Rate",
+            &tr.t("invoice.col.rate"),
             &mut cells.rate_text,
             want,
             ev,
@@ -198,7 +212,7 @@ fn line_row(
             ui,
             id,
             Field::Amount(i),
-            "optional",
+            &tr.t("invoice.hint_optional"),
             &mut cells.amount_text,
             want,
             ev,
@@ -216,6 +230,7 @@ fn line_row(
 )]
 fn particular_row(
     row: &mut TableRow<'_, '_>,
+    tr: &Tr,
     cells: &mut ParticularRow,
     gst: &str,
     base: Id,
@@ -231,7 +246,7 @@ fn particular_row(
             id: base.with(("ledger", i)),
             field: Field::Ledger(i),
             width: ui.available_width(),
-            hint: "Ledger: type to search",
+            hint: tr.t("invoice.hint_ledger"),
         };
         text_field(ui, &s, &mut cells.ledger_text, want, ev);
     });
@@ -241,7 +256,7 @@ fn particular_row(
             ui,
             id,
             Field::LedgerAmount(i),
-            "Amount",
+            &tr.t("invoice.col.amount"),
             &mut cells.amount_text,
             want,
             ev,
@@ -255,7 +270,7 @@ fn numeric_field(
     ui: &mut Ui,
     id: Id,
     field: Field,
-    hint: &'static str,
+    hint: &str,
     text: &mut String,
     want: Option<Field>,
     events: &mut Vec<UiEvent>,
@@ -265,7 +280,7 @@ fn numeric_field(
             id,
             field,
             width: ui.available_width(),
-            hint,
+            hint: hint.to_owned(),
         };
         text_field(ui, &spec, text, want, events);
     });
@@ -283,7 +298,7 @@ fn text_field(
         egui::TextEdit::singleline(text)
             .id(spec.id)
             .desired_width(spec.width)
-            .hint_text(spec.hint),
+            .hint_text(spec.hint.as_str()),
     );
     if want == Some(spec.field) {
         response.request_focus();
@@ -346,11 +361,11 @@ fn draw_picker(
 }
 
 /// The party's GSTIN with its check badge, or the B2C words for an unregistered party.
-fn gstin_line(ui: &mut Ui, masters: &Masters, party: Option<LedgerId>) {
+fn gstin_line(ui: &mut Ui, tr: &Tr, masters: &Masters, party: Option<LedgerId>) {
     let t = tokens(ui);
     let Some(party) = party else {
         ui.label(
-            RichText::new("Choose a party first")
+            RichText::new(tr.t("invoice.choose_party"))
                 .size(TEXT_BODY)
                 .color(t.text_3),
         );
@@ -366,12 +381,12 @@ fn gstin_line(ui: &mut Ui, masters: &Masters, party: Option<LedgerId>) {
             ui.horizontal(|ui| {
                 ui.label(RichText::new(gstin.as_str()).size(TEXT_BODY).color(t.text));
                 // A `Gstin` exists only after `Gstin::parse`, which checks the check character.
-                badge(ui, BadgeKind::Ok, "Check OK");
+                badge(ui, BadgeKind::Ok, &tr.t("invoice.check_ok"));
             });
         }
         None => {
             ui.label(
-                RichText::new("Unregistered (B2C)")
+                RichText::new(tr.t("invoice.unregistered"))
                     .size(TEXT_BODY)
                     .color(t.text_2),
             );
@@ -392,16 +407,16 @@ fn tax_line(ui: &mut Ui, label: &str, value: &str) {
 
 /// The tax box for an answer the engine computed: its rows, then the invoice total with its
 /// engine tag and the total in words.
-fn tax_box(ui: &mut Ui, block: &GstBlock) {
+fn tax_box(ui: &mut Ui, tr: &Tr, block: &GstBlock) {
     let t = tokens(ui);
-    for (label, value) in tax_rows(block) {
+    for (label, value) in tax_rows(block, tr) {
         tax_line(ui, &label, &value);
     }
     ui.separator();
     ui.horizontal(|ui| {
         let h2 = bold_font(ui, TEXT_H2);
         ui.label(
-            RichText::new("Invoice total")
+            RichText::new(tr.t("invoice.total"))
                 .font(h2.clone())
                 .color(t.text),
         );
@@ -478,9 +493,15 @@ impl ItemInvoiceScreen {
         shown
     }
 
+    #[allow(
+        clippy::too_many_arguments,
+        clippy::too_many_lines,
+        reason = "the header's widgets and where they report to"
+    )]
     fn draw_header(
         &mut self,
         ui: &mut Ui,
+        tr: &Tr,
         base: Id,
         masters: &Masters,
         labels: &[String],
@@ -490,11 +511,11 @@ impl ItemInvoiceScreen {
         let (focus, pick, fy) = (self.focus, self.pick_index, self.fy);
         let kind = self.draft.kind;
         let t = tokens(ui);
-        let spec = |name: &str, field: Field, width: f32, hint: &'static str| FieldSpec {
+        let spec = |name: &str, field: Field, width: f32, hint: &str| FieldSpec {
             id: base.with(name),
             field,
             width,
-            hint,
+            hint: hint.to_owned(),
         };
         egui::Grid::new(base.with("header"))
             .num_columns(3)
@@ -505,7 +526,7 @@ impl ItemInvoiceScreen {
                 // how wide their columns are.
                 ui.vertical(|ui| {
                     ui.set_min_width(DATE_WIDTH);
-                    caption(ui, "Date");
+                    caption(ui, &tr.t("invoice.date"));
                     let s = spec("date", Field::Date, DATE_WIDTH, "dd-mm-yyyy");
                     text_field(ui, &s, &mut self.draft.date_text, want, ev);
                     if let Ok(date) = parse_entry_date(&self.draft.date_text, fy) {
@@ -518,8 +539,13 @@ impl ItemInvoiceScreen {
                 });
                 ui.vertical(|ui| {
                     ui.set_min_width(PARTY_WIDTH);
-                    caption(ui, kind.party_label());
-                    let s = spec("party", Field::Party, PARTY_WIDTH, "type to search");
+                    caption(ui, &kind.party_label_in(tr));
+                    let s = spec(
+                        "party",
+                        Field::Party,
+                        PARTY_WIDTH,
+                        &tr.t("invoice.hint_search"),
+                    );
                     text_field(ui, &s, &mut self.draft.party_text, want, ev);
                     if focus == Field::Party {
                         self.shown.picker = draw_picker(ui, labels, pick, ev);
@@ -527,21 +553,31 @@ impl ItemInvoiceScreen {
                 });
                 ui.vertical(|ui| {
                     ui.set_min_width(PLACE_WIDTH);
-                    caption(ui, "Place of supply");
-                    let s = spec("place", Field::Place, PLACE_WIDTH, "code or name");
+                    caption(ui, &tr.t("invoice.place_of_supply"));
+                    let s = spec(
+                        "place",
+                        Field::Place,
+                        PLACE_WIDTH,
+                        &tr.t("invoice.hint_code_or_name"),
+                    );
                     text_field(ui, &s, &mut self.draft.place_text, want, ev);
                 });
                 ui.end_row();
 
                 ui.vertical(|ui| {
-                    caption(ui, "Party GSTIN");
-                    gstin_line(ui, masters, self.draft.party);
+                    caption(ui, &tr.t("invoice.party_gstin"));
+                    gstin_line(ui, tr, masters, self.draft.party);
                 });
                 match self.draft.mode {
                     InvoiceMode::Item => {
                         ui.vertical(|ui| {
-                            caption(ui, kind.account_label());
-                            let s = spec("account", Field::Account, PARTY_WIDTH, "type to search");
+                            caption(ui, &kind.account_label_in(tr));
+                            let s = spec(
+                                "account",
+                                Field::Account,
+                                PARTY_WIDTH,
+                                &tr.t("invoice.hint_search"),
+                            );
                             text_field(ui, &s, &mut self.draft.account_text, want, ev);
                             if focus == Field::Account {
                                 self.shown.picker = draw_picker(ui, labels, pick, ev);
@@ -554,16 +590,26 @@ impl ItemInvoiceScreen {
                     }
                 }
                 ui.vertical(|ui| {
-                    caption(ui, kind.reference_label());
-                    let s = spec("ref", Field::Reference, PLACE_WIDTH, "Optional");
+                    caption(ui, &kind.reference_label_in(tr));
+                    let s = spec(
+                        "ref",
+                        Field::Reference,
+                        PLACE_WIDTH,
+                        &tr.t("invoice.hint_optional"),
+                    );
                     text_field(ui, &s, &mut self.draft.reference_text, want, ev);
                 });
                 ui.end_row();
 
                 if self.draft.number_required {
                     ui.vertical(|ui| {
-                        caption(ui, "Voucher no.");
-                        let s = spec("number", Field::Number, 160.0, "Required");
+                        caption(ui, &tr.t("invoice.voucher_no"));
+                        let s = spec(
+                            "number",
+                            Field::Number,
+                            160.0,
+                            &tr.t("invoice.hint_required"),
+                        );
                         text_field(ui, &s, &mut self.draft.number_text, want, ev);
                     });
                     ui.end_row();
@@ -602,6 +648,7 @@ impl ItemInvoiceScreen {
     fn draw_particulars(
         &mut self,
         ui: &mut Ui,
+        tr: &Tr,
         base: Id,
         masters: &Masters,
         labels: &[String],
@@ -635,7 +682,7 @@ impl ItemInvoiceScreen {
             .column(Column::exact(64.0))
             .header(table::HEADER_HEIGHT, |mut row| {
                 for (label, numeric) in PARTICULAR_HEADS {
-                    table::header(&mut row, label, numeric);
+                    table::header(&mut row, &heading(tr, label), numeric);
                 }
             })
             .body(|body| {
@@ -647,7 +694,7 @@ impl ItemInvoiceScreen {
                         return;
                     };
                     let focused = focused_row == Some(i);
-                    particular_row(&mut row, cells, gst, base, i, focused, want, ev);
+                    particular_row(&mut row, tr, cells, gst, base, i, focused, want, ev);
                 });
             });
         if matches!(focus, Field::Ledger(_)) {
@@ -658,13 +705,14 @@ impl ItemInvoiceScreen {
     fn draw_lines(
         &mut self,
         ui: &mut Ui,
+        tr: &Tr,
         base: Id,
         masters: &Masters,
         labels: &[String],
         ev: &mut Vec<UiEvent>,
     ) {
         if self.draft.mode == InvoiceMode::Accounting {
-            return self.draw_particulars(ui, base, masters, labels, ev);
+            return self.draw_particulars(ui, tr, base, masters, labels, ev);
         }
         let want = self.focus_pending.then_some(self.focus);
         let (focus, pick) = (self.focus, self.pick_index);
@@ -685,7 +733,7 @@ impl ItemInvoiceScreen {
             .column(Column::exact(112.0))
             .header(table::HEADER_HEIGHT, |mut row| {
                 for (label, numeric) in LINE_HEADS {
-                    table::header(&mut row, label, numeric);
+                    table::header(&mut row, &heading(tr, label), numeric);
                 }
             })
             .body(|body| {
@@ -695,7 +743,7 @@ impl ItemInvoiceScreen {
                     else {
                         return;
                     };
-                    line_row(&mut row, line, cells, base, i, want, ev);
+                    line_row(&mut row, tr, line, cells, base, i, want, ev);
                 });
             });
         if matches!(focus, Field::Item(_)) {
@@ -708,39 +756,43 @@ impl ItemInvoiceScreen {
         }
     }
 
-    fn draw_tax(&self, ui: &mut Ui, masters: &Masters) {
+    fn draw_tax(&self, ui: &mut Ui, tr: &Tr, masters: &Masters) {
         match self.gst_status(masters) {
             GstStatus::Incomplete(why) => {
                 note(
                     ui,
                     NoteKind::Info,
-                    &format!("Tax appears once the invoice is complete: {why}."),
+                    &tr.tf("invoice.tax_appears", &[("why", &why)]),
                 );
             }
             GstStatus::NotComputedYet => {
-                note(
-                    ui,
-                    NoteKind::Info,
-                    "Tax is not computed yet for this invoice.",
-                );
+                note(ui, NoteKind::Info, &tr.t("invoice.tax_not_computed"));
             }
             GstStatus::Unsupported(u) => {
                 note(
                     ui,
                     NoteKind::Warn,
-                    &format!("Not supported yet: {} ({})", u.what, u.reason),
+                    &tr.tf(
+                        "invoice.not_supported",
+                        &[("what", &u.what), ("reason", &u.reason)],
+                    ),
                 );
             }
             GstStatus::Failed(m) => {
-                note(ui, NoteKind::Bad, &format!("The tax engine failed: {m}"));
+                note(
+                    ui,
+                    NoteKind::Bad,
+                    &tr.tf("invoice.engine_failed", &[("message", m)]),
+                );
             }
-            GstStatus::Computed(block) => tax_box(ui, block),
+            GstStatus::Computed(block) => tax_box(ui, tr, block),
         }
     }
 
     fn draw_footer(
         &mut self,
         ui: &mut Ui,
+        tr: &Tr,
         base: Id,
         masters: &Masters,
         ev: &mut Vec<UiEvent>,
@@ -750,14 +802,15 @@ impl ItemInvoiceScreen {
         ui.columns(2, |cols| {
             if let [left, right] = cols {
                 left.vertical(|ui| {
-                    caption(ui, "Narration");
+                    caption(ui, &tr.t("invoice.narration"));
                     let s = FieldSpec {
                         id: base.with("narration"),
                         field: Field::Narration,
                         width: ui.available_width(),
-                        hint: "Optional",
+                        hint: tr.t("invoice.hint_optional"),
                     };
-                    let field = ui.scope(|ui| text_field(ui, &s, &mut self.draft.narration, want, ev));
+                    let field =
+                        ui.scope(|ui| text_field(ui, &s, &mut self.draft.narration, want, ev));
                     self.shown.narration = Some(field.response.rect);
                     match &self.notice {
                         Some(Notice::Error(s)) => {
@@ -770,28 +823,35 @@ impl ItemInvoiceScreen {
                     }
                     if self.confirming_save {
                         ui.horizontal(|ui| {
-                            note(
-                                ui,
-                                NoteKind::Ok,
-                                "Save this invoice? The engine checks it again before it is posted.",
-                            );
-                            if button(ui, "Yes", Some("Enter"), ButtonKind::Primary).clicked() {
+                            note(ui, NoteKind::Ok, &tr.t("invoice.confirm_save"));
+                            if button(ui, &tr.t("invoice.yes"), Some("Enter"), ButtonKind::Primary)
+                                .clicked()
+                            {
                                 *clicks = Some(Click::Save);
                             }
-                            if button(ui, "No", Some("Esc"), ButtonKind::Secondary).clicked() {
+                            if button(ui, &tr.t("invoice.no"), Some("Esc"), ButtonKind::Secondary)
+                                .clicked()
+                            {
                                 *clicks = Some(Click::Cancel);
                             }
                         });
                     } else {
                         ui.horizontal(|ui| {
-                            if button(ui, "Discard", Some("Esc"), ButtonKind::Danger).clicked() {
+                            if button(
+                                ui,
+                                &tr.t("invoice.discard"),
+                                Some("Esc"),
+                                ButtonKind::Danger,
+                            )
+                            .clicked()
+                            {
                                 *clicks = Some(Click::Discard);
                             }
                         });
                     }
                 });
                 right.vertical(|ui| {
-                    card(ui, |ui| self.draw_tax(ui, masters));
+                    card(ui, |ui| self.draw_tax(ui, tr, masters));
                 });
             }
         });
@@ -823,22 +883,17 @@ impl ItemInvoiceScreen {
     }
 
     /// The discard question and the period-lock note above the invoice.
-    fn draw_notes(&self, ui: &mut Ui) {
+    fn draw_notes(&self, ui: &mut Ui, tr: &Tr) {
         if self.confirm_discard {
-            note(
-                ui,
-                NoteKind::Warn,
-                "Discard this invoice? Press Y to discard it, or N to keep it.",
-            );
+            note(ui, NoteKind::Warn, &tr.t("invoice.confirm_discard"));
         }
         if let Some((date, lock)) = self.locked_on() {
             note(
                 ui,
                 NoteKind::Bad,
-                &format!(
-                    "Period locked. {} is on or before the lock date {}. You can look, but saving is blocked. Choose a later date to save.",
-                    format::date(date),
-                    format::date(lock)
+                &tr.tf(
+                    "invoice.period_locked",
+                    &[("date", &format::date(date)), ("lock", &format::date(lock))],
                 ),
             );
         }
@@ -862,13 +917,19 @@ impl ItemInvoiceScreen {
         let locked = self.locked_on().is_some();
         let subtitle = self.subtitle(tr).unwrap_or_default();
         let mode_label = match self.draft.mode {
-            InvoiceMode::Item => "Item invoice",
-            InvoiceMode::Accounting => "Accounting invoice",
+            InvoiceMode::Item => tr.t("invoice.mode.item"),
+            InvoiceMode::Accounting => tr.t("invoice.mode.accounting"),
         };
         page_head(ui, &self.page_title(tr), Some(subtitle.as_str()), |ui| {
             let saved = ui
                 .add_enabled_ui(!locked, |ui| {
-                    button(ui, "Save", Some("Ctrl+A"), ButtonKind::Primary).clicked()
+                    button(
+                        ui,
+                        &tr.t("invoice.save"),
+                        Some("Ctrl+A"),
+                        ButtonKind::Primary,
+                    )
+                    .clicked()
                 })
                 .inner;
             if saved {
@@ -876,23 +937,23 @@ impl ItemInvoiceScreen {
             }
             // The head lays buttons out right to left: the mode button sits left of Save, as in
             // the mock.
-            if button(ui, mode_label, Some("Ctrl+H"), ButtonKind::Secondary).clicked() {
+            if button(ui, &mode_label, Some("Ctrl+H"), ButtonKind::Secondary).clicked() {
                 clicks = Some(Click::ChangeMode);
             }
         });
-        self.draw_notes(ui);
+        self.draw_notes(ui, tr);
         self.draw_create_form(ui, masters);
 
         let mut events = Vec::new();
         let enabled = !self.confirm_discard && self.create.is_none();
         ui.add_enabled_ui(enabled, |ui| {
             card(ui, |ui| {
-                self.draw_header(ui, base, masters, &labels, &mut events);
+                self.draw_header(ui, tr, base, masters, &labels, &mut events);
                 ui.add_space(SPACE_3);
-                self.draw_lines(ui, base, masters, &labels, &mut events);
+                self.draw_lines(ui, tr, base, masters, &labels, &mut events);
             });
             ui.add_space(SPACE_3);
-            self.draw_footer(ui, base, masters, &mut events, &mut clicks);
+            self.draw_footer(ui, tr, base, masters, &mut events, &mut clicks);
         });
         self.focus_pending = false;
 
@@ -939,42 +1000,45 @@ impl ItemInvoiceScreen {
 }
 
 impl Screen for ItemInvoiceScreen {
-    fn title(&self, _tr: &Tr) -> String {
-        format!("{} invoice", self.type_name)
+    fn title(&self, tr: &Tr) -> String {
+        tr.tf("invoice.title", &[("kind", &self.type_name)])
     }
 
-    fn subtitle(&self, _tr: &Tr) -> Option<String> {
-        let text = match self.draft.mode {
-            InvoiceMode::Item => SUBTITLE,
-            InvoiceMode::Accounting => ACCOUNTING_SUBTITLE,
+    fn subtitle(&self, tr: &Tr) -> Option<String> {
+        let key = match self.draft.mode {
+            InvoiceMode::Item => "invoice.subtitle_item",
+            InvoiceMode::Accounting => "invoice.subtitle_accounting",
         };
-        Some(text.to_owned())
+        Some(tr.t(key))
     }
 
-    fn keys(&self, _tr: &Tr) -> Vec<KeyHint> {
+    fn keys(&self, tr: &Tr) -> Vec<KeyHint> {
         if self.confirm_discard {
-            return vec![KeyHint::new("Y", "Discard"), KeyHint::new("N", "Keep it")];
+            return vec![
+                KeyHint::new("Y", tr.t("invoice.discard")),
+                KeyHint::new("N", tr.t("invoice.keep_it")),
+            ];
         }
         if self.confirming_save {
             return vec![
-                KeyHint::new("Enter", "Save"),
-                KeyHint::new("Esc", "Keep editing"),
+                KeyHint::new("Enter", tr.t("invoice.save")),
+                KeyHint::new("Esc", tr.t("invoice.keep_editing")),
             ];
         }
         vec![
-            KeyHint::new("Enter", "Next field"),
-            KeyHint::new("Shift+Enter", "Previous"),
-            KeyHint::new("\u{2191} \u{2193}", "List"),
-            KeyHint::new("Alt+C", "Create master"),
-            KeyHint::new("Ctrl+H", "Change mode"),
-            KeyHint::new("Ctrl+A", "Save"),
-            KeyHint::new("Esc", "Back"),
+            KeyHint::new("Enter", tr.t("invoice.key.next_field")),
+            KeyHint::new("Shift+Enter", tr.t("invoice.key.previous")),
+            KeyHint::new("\u{2191} \u{2193}", tr.t("invoice.key.list")),
+            KeyHint::new("Alt+C", tr.t("invoice.key.create_master")),
+            KeyHint::new("Ctrl+H", tr.t("invoice.key.change_mode")),
+            KeyHint::new("Ctrl+A", tr.t("invoice.save")),
+            KeyHint::new("Esc", tr.t("invoice.key.back")),
         ]
     }
 
     fn ui(&mut self, ui: &mut Ui, ctx: &mut AppCtx) -> ScreenAction {
         if self.posting.is_some() {
-            self.wait_for_post(ui);
+            self.wait_for_post(ui, &ctx.tr);
             return ScreenAction::Stay;
         }
         self.lock_date = ctx.lock_date;
@@ -982,7 +1046,7 @@ impl Screen for ItemInvoiceScreen {
         let action = if let Some(books) = ctx.books.as_ref() {
             self.draw(ui, &books.masters, &ctx.tr)
         } else {
-            ui.label(no_books_text(ctx));
+            ui.label(no_books_text(ctx, &ctx.tr));
             ScreenAction::Stay
         };
         if ctx.api.is_some() {
@@ -995,11 +1059,11 @@ impl Screen for ItemInvoiceScreen {
 }
 
 /// What the screen says when it has no books to draw from.
-fn no_books_text(ctx: &AppCtx) -> &'static str {
+fn no_books_text(ctx: &AppCtx, tr: &Tr) -> String {
     if ctx.api.is_some() {
-        "The company is open, but this screen cannot read its masters yet."
+        tr.t("invoice.no_masters")
     } else {
-        "No company is open."
+        tr.t("invoice.no_company")
     }
 }
 
@@ -1037,12 +1101,12 @@ impl ItemInvoiceScreen {
         };
         if let Some(voucher) = self.take_save_request() {
             self.posting = Some(submit::send(worker, Command::PostVoucher(voucher)));
-            self.notice = Some(Notice::Info("Saving...".to_owned()));
+            self.notice = Some(Notice::Info(ctx.tr.t("invoice.saving")));
         }
     }
 
     /// Polls the post in progress and shows "Saving..." until the worker answers.
-    fn wait_for_post(&mut self, ui: &mut Ui) {
+    fn wait_for_post(&mut self, ui: &mut Ui, tr: &Tr) {
         let Some(ticket) = self.posting.as_mut() else {
             return;
         };
@@ -1050,7 +1114,7 @@ impl ItemInvoiceScreen {
             self.posting = None;
             self.finish_post(reply);
         } else {
-            ui.label("Saving...");
+            ui.label(tr.t("invoice.saving"));
             ui.ctx().request_repaint();
         }
     }

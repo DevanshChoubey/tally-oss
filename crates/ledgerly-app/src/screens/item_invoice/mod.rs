@@ -155,11 +155,30 @@ impl InvoiceKind {
         }
     }
 
-    fn reference_label(self) -> &'static str {
+    /// The account field's caption in `tr`.
+    pub(super) fn account_label_in(self, tr: &crate::i18n::Tr) -> String {
         match self {
-            InvoiceKind::Sales => "Order or reference",
-            InvoiceKind::Purchase => "Supplier invoice no.",
-            InvoiceKind::CreditNote | InvoiceKind::DebitNote => "Original invoice no.",
+            InvoiceKind::Sales | InvoiceKind::CreditNote => tr.t("invoice.label.sales_ledger"),
+            InvoiceKind::Purchase | InvoiceKind::DebitNote => tr.t("invoice.label.purchase_ledger"),
+        }
+    }
+
+    /// The party field's caption in `tr`.
+    pub(super) fn party_label_in(self, tr: &crate::i18n::Tr) -> String {
+        match self {
+            InvoiceKind::Sales | InvoiceKind::CreditNote => tr.t("invoice.label.customer"),
+            InvoiceKind::Purchase | InvoiceKind::DebitNote => tr.t("invoice.label.supplier"),
+        }
+    }
+
+    /// The reference field's caption in `tr`.
+    pub(super) fn reference_label_in(self, tr: &crate::i18n::Tr) -> String {
+        match self {
+            InvoiceKind::Sales => tr.t("invoice.ref.order"),
+            InvoiceKind::Purchase => tr.t("invoice.ref.supplier_invoice"),
+            InvoiceKind::CreditNote | InvoiceKind::DebitNote => {
+                tr.t("invoice.ref.original_invoice")
+            }
         }
     }
 }

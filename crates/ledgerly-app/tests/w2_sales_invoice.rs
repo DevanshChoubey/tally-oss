@@ -269,7 +269,7 @@ fn key(key: Key) -> RawInput {
 
 #[test]
 fn tax_box_shows_the_engine_heads_in_order_without_adding_anything() {
-    let rows = tax_rows(&block_for_10000());
+    let rows = tax_rows(&block_for_10000(), &ledgerly_app::i18n::Tr::default());
     let labels: Vec<&str> = rows.iter().map(|(l, _)| l.as_str()).collect();
     assert_eq!(labels, ["Taxable value", "CGST", "SGST", "Round off"]);
     // provenance: derived. Indian grouping of 10,000.00, 900.00 and 900.00 (below one lakh).
