@@ -16,11 +16,10 @@ use ledgerly_model::seed_groups::reserved_groups;
 use ledgerly_model::seed_voucher_types::default_voucher_types;
 use ledgerly_model::{
     Address, BankAllocation, BankDetails, BaseVoucherKind, BillAllocation, BillRefKind,
-    BillWiseConfig, Company, EntityKind, Features, GodownAllocation, GstClassification,
-    GstHistory, GstRegistration, InstrumentKind, InventoryLine, Ledger, LedgerLine,
-    NegativeStockPolicy, PartyDetails, RegistrationType, ReservedGroup, StockItem, TaxDetails,
-    TaxLedgerKind, Taxability, Unit, UnitKind, ValuationMethod, Voucher, VoucherMode,
-    VoucherStatus,
+    BillWiseConfig, Company, EntityKind, Features, GodownAllocation, GstClassification, GstHistory,
+    GstRegistration, InstrumentKind, InventoryLine, Ledger, LedgerLine, NegativeStockPolicy,
+    PartyDetails, RegistrationType, ReservedGroup, StockItem, TaxDetails, TaxLedgerKind,
+    Taxability, Unit, UnitKind, ValuationMethod, Voucher, VoucherMode, VoucherStatus,
 };
 use time::format_description::well_known::Iso8601;
 
@@ -191,8 +190,7 @@ pub(crate) fn build(seed: &Seed, path: &Path, clock: Clock) -> Result<Built, Sam
 fn company(seed: &Seed) -> Result<Company, SampleError> {
     let c = &seed.company;
     let state = state_code("company state", c.state)?;
-    let gstin =
-        Gstin::parse(&c.gstin).map_err(|e| value_error("company gstin", e.to_string()))?;
+    let gstin = Gstin::parse(&c.gstin).map_err(|e| value_error("company gstin", e.to_string()))?;
     let fy_start = parse_date("company fy_start", &c.fy_start)?;
     Ok(Company {
         ineligible_itc_default: None,
@@ -388,10 +386,10 @@ fn masters(seed: &Seed, api: &mut Api) -> Result<Keys, SampleError> {
         items.insert(it.key.clone(), (id, unit));
     }
     let by_tax = |kind: TaxSeed| -> Result<LedgerId, SampleError> {
-        let found = seed.ledger.iter().find(|l| {
-            l.tax
-                .is_some_and(|t| tax_kind(t) == tax_kind(kind))
-        });
+        let found = seed
+            .ledger
+            .iter()
+            .find(|l| l.tax.is_some_and(|t| tax_kind(t) == tax_kind(kind)));
         let key = found
             .map(|l| l.key.as_str())
             .ok_or_else(|| value_error("tax ledger", format!("none of kind {kind:?}")))?;
@@ -505,11 +503,7 @@ fn typed_line(
     })
 }
 
-fn typed_lines(
-    keys: &Keys,
-    v: &VoucherSeed,
-    date: Date,
-) -> Result<Vec<LedgerLine>, SampleError> {
+fn typed_lines(keys: &Keys, v: &VoucherSeed, date: Date) -> Result<Vec<LedgerLine>, SampleError> {
     let field = format!("voucher {}", v.number);
     let mut lines = Vec::new();
     for l in &v.dr {
@@ -642,17 +636,18 @@ fn taxed_lines(
             .map_err(|e| value_error("round-off", e.to_string()))?;
         let party_bigger = !round.is_negative();
         let on_tax_side = party_bigger;
-        let amount = if on_tax_side { side(magnitude) } else { opposite(magnitude) };
+        let amount = if on_tax_side {
+            side(magnitude)
+        } else {
+            opposite(magnitude)
+        };
         lines.push(plain(keys.round_off, amount));
     }
     Ok(lines)
 }
 
 /// The bill a party line of an invoice opens, when the party is bill-wise.
-fn party_bill(
-    info: &LedgerInfo,
-    name: &str,
-) -> Option<BillAllocation> {
+fn party_bill(info: &LedgerInfo, name: &str) -> Option<BillAllocation> {
     info.bill_wise.then(|| BillAllocation {
         kind: BillRefKind::New,
         name: name.to_owned(),
@@ -663,12 +658,7 @@ fn party_bill(
     })
 }
 
-fn build_voucher(
-    api: &Api,
-    keys: &Keys,
-    id: u64,
-    v: &VoucherSeed,
-) -> Result<Voucher, SampleError> {
+fn build_voucher(api: &Api, keys: &Keys, id: u64, v: &VoucherSeed) -> Result<Voucher, SampleError> {
     let field = format!("voucher {}", v.number);
     let date = parse_date(&field, &v.date)?;
     let kind = voucher_kind(v.kind);
@@ -692,7 +682,8 @@ fn build_voucher(
             out.party = Some(party.id);
             out.place_of_supply = Some(place(keys, v, &field)?);
             for l in &v.items {
-                out.inventory_lines.push(inventory_line(keys, &field, l, account)?);
+                out.inventory_lines
+                    .push(inventory_line(keys, &field, l, account)?);
             }
             let mut total_paise = Paise::ZERO;
             for l in &out.inventory_lines {
@@ -727,7 +718,14 @@ fn build_voucher(
                 cost: Vec::new(),
                 bank: None,
             });
-            let lines = taxed_lines(api, keys, &out, kind, (target.id, party_line), vec![particular])?;
+            let lines = taxed_lines(
+                api,
+                keys,
+                &out,
+                kind,
+                (target.id, party_line),
+                vec![particular],
+            )?;
             out.ledger_lines = lines;
         }
         ModeSeed::Taxed => {
@@ -746,13 +744,18 @@ fn build_voucher(
                 cost: Vec::new(),
                 bank: None,
             });
-            out.ledger_lines = taxed_lines(api, keys, &out, kind, (party.id, party_line), particulars)?;
+            out.ledger_lines =
+                taxed_lines(api, keys, &out, kind, (party.id, party_line), particulars)?;
         }
     }
     Ok(out)
 }
 
-fn party_of<'k>(keys: &'k Keys, field: &str, v: &VoucherSeed) -> Result<&'k LedgerInfo, SampleError> {
+fn party_of<'k>(
+    keys: &'k Keys,
+    field: &str,
+    v: &VoucherSeed,
+) -> Result<&'k LedgerInfo, SampleError> {
     keys.ledger(field, v.party.as_deref().unwrap_or_default())
 }
 
@@ -763,7 +766,9 @@ fn place(keys: &Keys, v: &VoucherSeed, field: &str) -> Result<StateCode, SampleE
         return state_code(field, code);
     }
     match v.kind {
-        KindSeed::Sales => Ok(party_of(keys, field, v)?.state.unwrap_or(keys.company_state)),
+        KindSeed::Sales => Ok(party_of(keys, field, v)?
+            .state
+            .unwrap_or(keys.company_state)),
         KindSeed::Purchase
         | KindSeed::Payment
         | KindSeed::Receipt

@@ -2237,6 +2237,7 @@ dependencies = [
  "ledgerly-api",
  "ledgerly-core",
  "ledgerly-model",
+ "ledgerly-sample",
  "ledgerly-store",
  "rfd",
  "serde",
@@ -2453,6 +2454,20 @@ dependencies = [
  "thiserror 2.0.21",
  "time",
  "tracing",
+]
+
+[[package]]
+name = "ledgerly-sample"
+version = "1.0.1"
+dependencies = [
+ "ledgerly-api",
+ "ledgerly-core",
+ "ledgerly-model",
+ "serde",
+ "tempfile",
+ "thiserror 2.0.21",
+ "time",
+ "toml",
 ]
 
 [[package]]

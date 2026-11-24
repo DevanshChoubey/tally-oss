@@ -12,9 +12,7 @@
 
 use std::collections::BTreeMap;
 
-use ledgerly_api::{
-    Api, Cell, ColumnSpec, Detail, Report, ReportFilter, ReportKind, ReportParams,
-};
+use ledgerly_api::{Api, Cell, ColumnSpec, Detail, Report, ReportFilter, ReportKind, ReportParams};
 use ledgerly_core::{Clock, Date, Outcome, Period, SignedAmount};
 use ledgerly_model::Scenario;
 use time::OffsetDateTime;

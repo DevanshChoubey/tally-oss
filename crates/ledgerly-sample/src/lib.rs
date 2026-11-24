@@ -29,9 +29,9 @@ const SEED_VERSION: u32 = 1;
 /// The name of the sample company.
 pub const NAME: &str = "Godavari Drip & Pump Works";
 
-
 /// What the welcome card says about the sample company.
-pub const CARD_TEXT: &str = "Godavari Drip & Pump Works, fictional data. Nothing you do there is kept.";
+pub const CARD_TEXT: &str =
+    "Godavari Drip & Pump Works, fictional data. Nothing you do there is kept.";
 
 /// The folder, under the base folder, that holds the sample company's file.
 const FOLDER: &str = "ledgerly-sample";

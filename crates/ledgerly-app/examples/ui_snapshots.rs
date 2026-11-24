@@ -300,7 +300,11 @@ fn new_company_file(dir: &Path) -> Api {
 /// Which company file a shot opens.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Fixture {
-    /// Fictional Traders ([`company_file`]): every shot that names no other company.
+    /// Godavari Drip & Pump Works, the sample company (`ledgerly-sample`): the company the mock
+    /// shows on nearly every screen, so every shot that names no other company.
+    Godavari,
+    /// Fictional Traders ([`company_file`]): the shots whose key paths or typed names need its
+    /// data, or that show a state the sample does not have.
     Main,
     /// Fictional Traders' masters with no voucher yet ([`new_company_file`]).
     New,
@@ -317,6 +321,7 @@ impl Fixture {
     /// for [`Fixture::Cold`], which opens nothing.
     fn open(self, dir: &Path) -> Option<Api> {
         match self {
+            Fixture::Godavari => Some(godavari_company_file(dir)),
             Fixture::Main => Some(company_file(dir)),
             Fixture::New => Some(new_company_file(dir)),
             Fixture::Stocked => Some(stocked_company_file(dir)),
@@ -415,6 +420,20 @@ fn item_invoice(
 /// (stock went negative during the period and closes positive, so closing stock is provisional;
 /// the pickaxe has no HSN, so GSTR-1 holds its sale for correction), rent paid on 20 Nov, a
 /// stored bank statement, and the books locked to 31 Oct 2026 last.
+/// The sample company, posted from its seed through the API in `dir`. Its clock is the sample's
+/// own "today" (21 Nov 2026, noon IST), so audit stamps and dates agree with the mock.
+fn godavari_company_file(dir: &Path) -> Api {
+    let (api, _path) = ledgerly_sample::create_under(dir, sample_clock()).unwrap();
+    api
+}
+
+/// The clock the sample company is made on and the screens read: 21 Nov 2026, 10:00 IST.
+fn sample_clock() -> Clock {
+    let today = ledgerly_sample::today().unwrap();
+    let at = today.with_hms(4, 30, 0).unwrap().assume_utc();
+    Clock::Fixed(at)
+}
+
 fn stocked_company_file(dir: &Path) -> Api {
     let features = Features {
         gst: true,
@@ -734,7 +753,7 @@ fn shot(state: &'static str, keys: &[(Key, Modifiers)]) -> Shot {
         keys: keys.to_vec(),
         query: None,
         after: Vec::new(),
-        company: Fixture::Main,
+        company: Fixture::Godavari,
     }
 }
 
@@ -744,19 +763,29 @@ const ESC: (Key, Modifiers) = (Key::Escape, Modifiers::NONE);
 /// The most Escape presses one return to Home may take before the screens are closed directly.
 const HOME_PRESSES_MAX: u32 = 12;
 
-/// From Home to the balance sheet's Sundry Debtors drill: B, three lines down to Current Assets,
-/// Enter, two lines down to Sundry Debtors, Enter.
+/// From Home to the balance sheet's Sundry Debtors drill on the sample company: B, four lines down
+/// to Current Assets, Enter, three lines down to Sundry Debtors (after Bank Accounts, Cash-in-Hand
+/// and Loans & Advances), Enter.
 fn to_debtors() -> Vec<(Key, Modifiers)> {
     vec![
         (Key::B, NONE),
         (Key::J, NONE),
         (Key::J, NONE),
         (Key::J, NONE),
+        (Key::J, NONE),
         (Key::Enter, NONE),
+        (Key::J, NONE),
         (Key::J, NONE),
         (Key::J, NONE),
         (Key::Enter, NONE),
     ]
+}
+
+/// Masters, then `n` lines down the ledger list.
+fn masters_down(n: usize) -> Vec<(Key, Modifiers)> {
+    let mut keys = vec![(Key::M, NONE)];
+    keys.extend(std::iter::repeat_n((Key::J, NONE), n));
+    keys
 }
 
 /// The company name the setup captures type (the mock's sample company, index.html:489).
@@ -805,7 +834,7 @@ fn ai_off_shot(state: &'static str, screen: &'static str) -> Shot {
 fn pumps_invoice(state: &'static str, party: &'static str, place: &'static str) -> Shot {
     let enter = (Key::Enter, NONE);
     shot(state, &[(Key::F8, NONE)])
-        .on(Fixture::Stocked)
+        .on(Fixture::Godavari)
         .type_text(party)
         .press(&[enter])
         .type_text(place)
@@ -913,7 +942,8 @@ fn light_shots() -> Vec<Shot> {
         // The Review queue opens from the palette ("Review queue" is a screen row there).
         shot("review.empty", &[palette])
             .query("Review queue")
-            .then(&[(Key::Enter, NONE)]),
+            .then(&[(Key::Enter, NONE)])
+            .on(Fixture::Main),
         shot("palette.no-results", &[palette]).query("zzqx"),
         shot("balance-sheet.default", &[(Key::B, NONE)]),
         shot(
@@ -951,24 +981,9 @@ fn light_shots() -> Vec<Shot> {
         shot("gst.recon-empty", &[(Key::G, NONE), (Key::Num3, NONE)]),
         shot("masters.ledgers", &[(Key::M, NONE)]),
         // The mock's party detail is the alter form of a bill-wise party ledger (index.html:1803).
-        // The cursor starts on the first row; Sample Buyer Pvt Ltd is the tenth ledger of the
-        // capture company, so nine steps down, then Ctrl+Enter alters it.
-        shot(
-            "masters.ledger-detail",
-            &[
-                (Key::M, NONE),
-                (Key::J, NONE),
-                (Key::J, NONE),
-                (Key::J, NONE),
-                (Key::J, NONE),
-                (Key::J, NONE),
-                (Key::J, NONE),
-                (Key::J, NONE),
-                (Key::J, NONE),
-                (Key::J, NONE),
-                (Key::Enter, Modifiers::COMMAND),
-            ],
-        ),
+        // The list is alphabetical: Shree Ganesh Traders is the 35th ledger of the sample company, so
+        // 34 steps down, then Ctrl+Enter alters it.
+        shot("masters.ledger-detail", &masters_down(34)).press(&[(Key::Enter, Modifiers::COMMAND)]),
         // Alt+Right walks the kinds from Ledger; the fourth step is Stock item.
         shot(
             "masters.items",
@@ -1019,7 +1034,8 @@ fn light_shots() -> Vec<Shot> {
         // (index.html:434 "No statement imported for this account").
         shot("bank.empty", &[palette])
             .query("Bank Reconciliation")
-            .then(&[(Key::Enter, NONE)]),
+            .then(&[(Key::Enter, NONE)])
+            .on(Fixture::Main),
         // F2 on the day book asks for one date; Ctrl+A selects the prefilled day so the typed one
         // replaces it. The capture company has no voucher on 21 Nov (index.html:1641 uses 21 Nov).
         shot("day-book.empty", &[(Key::D, NONE), (Key::F2, NONE)])
@@ -1085,37 +1101,42 @@ fn light_shots() -> Vec<Shot> {
         shot("gst.gstr1-correction", &[(Key::G, NONE), (Key::Num1, NONE)]).on(Fixture::Stocked),
         // Fictional Pumps has a stored statement whose lines match two vouchers.
         shot("review.default", &[palette])
-            .on(Fixture::Stocked)
             .query("Review queue")
             .then(&[(Key::Enter, NONE)]),
         // The item list open on the first line, filtered by what is typed (index.html: type-ahead
         // over item masters).
-        pumps_invoice("sales-invoice.item-list", "Narmada", "24").type_text("p"),
+        pumps_invoice("sales-invoice.item-list", "Mehta", "24").type_text("p"),
         // A Gujarat party: the place of supply is 24, so the engine charges IGST.
         pumps_invoice_line(
             "sales-invoice.gst-inter-state",
-            ("Narmada", "24"),
+            ("Mehta", "24"),
             "HDPE",
             "10",
             "1500",
         ),
         // A cash sale: Cash has no GSTIN, so the sale is B2C.
-        pumps_invoice_line("sales-invoice.b2c", ("Cash", "27"), "HDPE", "2", "1500"),
+        pumps_invoice_line(
+            "sales-invoice.b2c",
+            ("Cash sale", "27"),
+            "HDPE",
+            "2",
+            "1500",
+        ),
         // An item picked with no quantity, then Ctrl+A: the save is refused with the reason.
-        pumps_invoice("sales-invoice.validation-error", "Narmada", "24")
+        pumps_invoice("sales-invoice.validation-error", "Mehta", "24")
             .type_text("HDPE")
             .press(&[(Key::Enter, NONE), (Key::A, Modifiers::COMMAND)]),
         // A click puts the keyboard in the date (Ctrl+A is Save on this screen, so the date is
         // cleared with End and Backspace), and 31 Oct is the lock date of Fictional Pumps
         // (index.html sales-invoice.period-locked). Enter then goes on to the customer.
         shot("sales-invoice.period-locked", &[(Key::F8, NONE)])
-            .on(Fixture::Stocked)
+            .on(Fixture::Godavari)
             .click(360.0, 215.0)
             .press(&[(Key::End, NONE)])
             .press(&[(Key::Backspace, NONE); 12])
             .type_text("31-10-2026")
             .press(&[(Key::Enter, NONE)])
-            .type_text("Narmada")
+            .type_text("Mehta")
             .press(&[(Key::Enter, NONE)])
             .type_text("24")
             .press(&[(Key::Enter, NONE)])
@@ -1130,7 +1151,7 @@ fn light_shots() -> Vec<Shot> {
         // A blank second line ends the lines; Enter on the narration asks to save.
         pumps_invoice_line(
             "sales-invoice.save-confirm",
-            ("Narmada", "24"),
+            ("Mehta", "24"),
             "HDPE",
             "10",
             "1500",
@@ -1138,14 +1159,11 @@ fn light_shots() -> Vec<Shot> {
         .press(&[(Key::Enter, NONE), (Key::Enter, NONE)]),
         // Yes on the save question: the invoice is posted and a fresh one opens (index.html
         // sales-invoice.saved).
-        pumps_invoice_line(
-            "sales-invoice.saved",
-            ("Narmada", "24"),
-            "HDPE",
-            "10",
-            "1500",
-        )
-        .press(&[(Key::Enter, NONE), (Key::Enter, NONE), (Key::Enter, NONE)]),
+        pumps_invoice_line("sales-invoice.saved", ("Mehta", "24"), "HDPE", "10", "1500").press(&[
+            (Key::Enter, NONE),
+            (Key::Enter, NONE),
+            (Key::Enter, NONE),
+        ]),
     ]
 }
 
@@ -1425,6 +1443,8 @@ fn main() -> eframe::Result<()> {
     std::hint::black_box("ledgerly-sheet-marker");
     // The setup captures create a company file; the wizard never overwrites one, so clear the last.
     let _ = std::fs::create_dir_all("target/setup-capture");
+    // Every screen reads "today" from the sample's own date, as the mock does (CO.today).
+    ledgerly_app::shell::navigate::set_clock_override(ledgerly_sample::today().unwrap(), 10);
     let _ = std::fs::remove_file(SETUP_FILE);
     let (out, only, audit) = parse_args();
     let entries: Vec<Shot> = if audit { audit_shots() } else { shots() }
