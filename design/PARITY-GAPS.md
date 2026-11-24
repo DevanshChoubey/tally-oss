@@ -592,3 +592,31 @@ Left, for the GST screen:
   reasons ("Not supported" texts) are not in the files.
 - **GST: captures not retaken.** No `hi.gst.*` shot is in the registry yet.
 
+
+## Hindi UI, fifth round (card s7, 2026-11-24)
+
+Done: the company setup wizard (`tests/i18n_setup.rs`). The title, key bar, step rail names,
+navigation buttons, welcome cards, company form labels and hints, GSTIN and date notices, the
+feature rows (label, hint and unavailable reason by key), the keyboard and AI choices, backup text,
+the Done launch cards and the company type names come from the translation files, with Hindi per
+key (`# unsourced`). The English stubs of `step_label_in`, `kind_label_in`, `key_hints_in` and
+`unsaved_notice_in` failed the `i18n_setup` assertions before the change.
+
+Left, for the setup screen:
+
+- **setup: English text kept on purpose.** `FeatureRow.label`, `hint` and `unavailable` stay English
+  because `tests/w4_setup.rs` reads them; `unsaved_notice` and `ai_notice` return the English text
+  for the same reason; `Step::label`, `check_gstin`, `financial_year_*`, `parse_books_begin`,
+  `build_company` and `create_company` are English wrappers over the `_in` versions. The screen
+  never calls the wrappers.
+- **setup: not translated.** State names and the GSTIN and PAN reasons from `ledgerly-core` (engine
+  and reference data, shown as given), the month abbreviations in `long_date` (the core date
+  display), `YYYY-MM-DD` and the `Documents/Ledgerly` path text, the key names (F8, Ctrl+S, Enter),
+  and the acronyms GSTIN and PAN.
+- **setup: the notice "not available" and the Done note.** `screens/setup/mod.rs` notices from
+  `hand_over` (`ledgerly_api` errors) show as the engine gave them.
+
+Left, in order: the AI screens (`ai_gate.rs` gate reasons and `gate_note`, `ask.rs`, `assist.rs`,
+`ai_settings.rs` with its static tables and log headers, `review.rs`). They still show English in
+Hindi. Each needs a `_in(tr)` version of its static text, with the English versions kept where a
+test reads them.
