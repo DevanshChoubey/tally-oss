@@ -155,9 +155,9 @@ fn value(out: Result<Outcome<CommandResult>, ApiError>) -> CommandResult {
     }
 }
 
-fn report_params() -> ReportParams {
+fn report_params(kind: ReportKind) -> ReportParams {
     ReportParams {
-        kind: ReportKind::BalanceSheet,
+        kind,
         period: Period::new(date!(2026 - 04 - 01), date!(2027 - 03 - 31)).unwrap(),
         as_of: date!(2026 - 06 - 30),
         scenario: Scenario::Actual,
@@ -196,16 +196,82 @@ fn a_voucher_that_is_not_in_the_books_is_an_error() {
     }
 }
 
+/// The strings a PDF writes as text, read back from the uncompressed content streams.
+fn texts(pdf: &[u8]) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < pdf.len() {
+        if pdf[i] != b'(' {
+            i += 1;
+            continue;
+        }
+        let mut depth = 1;
+        let mut s = Vec::new();
+        i += 1;
+        while i < pdf.len() && depth > 0 {
+            match pdf[i] {
+                b'\\' => {
+                    i += 1;
+                    s.push(pdf[i]);
+                }
+                b'(' => {
+                    depth += 1;
+                    s.push(b'(');
+                }
+                b')' => {
+                    depth -= 1;
+                    if depth > 0 {
+                        s.push(b')');
+                    }
+                }
+                other => s.push(other),
+            }
+            i += 1;
+        }
+        out.push(String::from_utf8(s).unwrap());
+    }
+    out
+}
+
 #[test]
-fn a_report_prints_as_unsupported_until_a_report_layout_exists() {
-    // Derived: the print crate draws invoices only. A report is refused with a reason that
-    // names the report, and the export formats the user can still use.
+fn a_report_without_a_print_layout_is_unsupported_with_the_export_instead() {
+    // Derived: a stock summary has no print layout yet, so it is refused with a reason that names
+    // the export formats the user can still use.
     let (_dir, _path, api) = setup();
-    match api.print_report(&report_params()) {
+    match api.print_report(&report_params(ReportKind::StockSummary)) {
         Ok(Outcome::Unsupported(u)) => {
             assert!(u.what.contains("report"), "what was {:?}", u.what);
             assert!(u.reason.contains("CSV"), "reason was {:?}", u.reason);
         }
         other => panic!("expected Unsupported for a report, got {other:?}"),
+    }
+}
+
+#[test]
+fn a_balance_sheet_and_a_trial_balance_print_as_pdfs_that_name_the_company() {
+    // Derived: the company name is the one written in `company()` above; the report title is
+    // checked as a word only, so the test does not depend on the exact title the engine gives.
+    let (_dir, _path, api) = setup();
+    for kind in [
+        ReportKind::BalanceSheet,
+        ReportKind::TrialBalance,
+        ReportKind::ProfitAndLoss,
+        ReportKind::DayBook,
+    ] {
+        match api.print_report(&report_params(kind.clone())) {
+            Ok(Outcome::Value(pdf)) => {
+                assert!(
+                    pdf.starts_with(b"%PDF"),
+                    "not a PDF: {:?}",
+                    &pdf[..pdf.len().min(8)]
+                );
+                let t = texts(&pdf);
+                assert!(
+                    t.iter().any(|s| s == "Test Traders"),
+                    "company missing in {t:?}"
+                );
+            }
+            other => panic!("expected a PDF for {kind:?}, got {other:?}"),
+        }
     }
 }

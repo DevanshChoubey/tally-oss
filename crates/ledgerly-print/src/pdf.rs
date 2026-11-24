@@ -869,8 +869,8 @@ mod page {
     }
 
     /// A table column: heading, share of the width and alignment.
-    pub(super) struct Column {
-        pub(super) title: &'static str,
+    pub(super) struct Column<'a> {
+        pub(super) title: &'a str,
         pub(super) weight: i32,
         pub(super) align: Align,
     }
@@ -1042,7 +1042,7 @@ mod page {
             Ok(())
         }
 
-        fn column_widths(&self, cols: &[Column]) -> Vec<i32> {
+        fn column_widths(&self, cols: &[Column<'_>]) -> Vec<i32> {
             let total: i32 = cols
                 .iter()
                 .fold(0_i32, |a, c| a.saturating_add(c.weight.max(1)));
@@ -1065,7 +1065,7 @@ mod page {
         /// which repeats the heading. Every row must have one cell per column.
         pub(super) fn table(
             &mut self,
-            cols: &[Column],
+            cols: &[Column<'_>],
             rows: &[Vec<String>],
         ) -> Result<(), PrintError> {
             let widths = self.column_widths(cols);
@@ -1085,7 +1085,7 @@ mod page {
 
         fn table_row(
             &mut self,
-            cols: &[Column],
+            cols: &[Column<'_>],
             widths: &[i32],
             cells: &[String],
             heading: bool,
@@ -1395,7 +1395,7 @@ fn render_upi(
     canvas.modules(&dark, side, QR_MODULE)
 }
 
-fn item_columns(cols: &[ItemColumn]) -> Vec<Column> {
+fn item_columns(cols: &[ItemColumn]) -> Vec<Column<'_>> {
     cols.iter()
         .map(|c| match c {
             ItemColumn::Serial => column("#", 4, Align::Left),
@@ -1412,7 +1412,7 @@ fn item_columns(cols: &[ItemColumn]) -> Vec<Column> {
         .collect()
 }
 
-fn tax_columns(cols: &[TaxColumn]) -> Vec<Column> {
+fn tax_columns(cols: &[TaxColumn]) -> Vec<Column<'_>> {
     cols.iter()
         .map(|c| match c {
             TaxColumn::Hsn => column("HSN/SAC", 9, Align::Left),
@@ -1429,10 +1429,59 @@ fn tax_columns(cols: &[TaxColumn]) -> Vec<Column> {
         .collect()
 }
 
-fn column(title: &'static str, weight: i32, align: Align) -> Column {
+fn column(title: &'static str, weight: i32, align: Align) -> Column<'static> {
     Column {
         title,
         weight,
         align,
     }
+}
+
+/// A report to print: the engine's column headings and cell text, as the engine returns them
+/// (see `ledgerly_reports::report_text`). Nothing here is computed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReportPage {
+    /// The company's name, printed at the top.
+    pub company: String,
+    /// The report's title, such as "Balance Sheet".
+    pub title: String,
+    /// The period or date the report is for, as text.
+    pub period: String,
+    /// Column headings; the first is the label column.
+    pub headings: Vec<String>,
+    /// Rows: one cell per heading.
+    pub rows: Vec<Vec<String>>,
+    /// Notes printed under the table.
+    pub notes: Vec<String>,
+}
+
+/// Renders a report as an A4 PDF: the company, title and period, then the table, with the
+/// heading repeated on each page and "Page n of N" at the foot.
+///
+/// # Errors
+/// [`PrintError::Unsupported`] for a character outside plain ASCII (the built-in font covers
+/// nothing else), and [`PrintError::Render`] when a row does not have one cell per heading, so a
+/// figure is never printed under the wrong heading.
+pub fn render_report(page: &ReportPage) -> Result<Vec<u8>, PrintError> {
+    let mut canvas = Canvas::new(mm_to_points(210), mm_to_points(297));
+    canvas.paragraph(&page.company, BODY, true)?;
+    canvas.paragraph(&page.title, BODY, true)?;
+    canvas.paragraph(&page.period, BODY, false)?;
+    canvas.skip(8);
+    let columns: Vec<Column<'_>> = page
+        .headings
+        .iter()
+        .enumerate()
+        .map(|(n, heading)| Column {
+            title: heading.as_str(),
+            weight: if n == 0 { 4 } else { 2 },
+            align: if n == 0 { Align::Left } else { Align::Right },
+        })
+        .collect();
+    canvas.table(&columns, &page.rows)?;
+    for note in &page.notes {
+        canvas.skip(6);
+        canvas.paragraph(&format!("Note: {note}"), BODY, false)?;
+    }
+    canvas.finish()
 }
