@@ -61,10 +61,16 @@ use crate::{AppCtx, Screen, ScreenAction};
 
 impl Screen for VoucherEntryScreen {
     fn title(&self) -> String {
-        format!("{} voucher", self.type_name)
+        self.type_name.clone()
     }
 
     fn page_title(&self) -> String {
+        self.type_name.clone()
+    }
+
+    /// The sidebar row of the voucher type stays selected, as the mock marks the open screen's
+    /// row (index.html line 904): Payment and Receipt have rows; Contra and Journal have none.
+    fn sidebar_title(&self) -> String {
         self.type_name.clone()
     }
 
@@ -115,6 +121,7 @@ impl Screen for VoucherEntryScreen {
         // A save that is out is polled first; the sheet is drawn either way, taking no input
         // while it waits.
         self.wait_for_post(ui);
+        self.drive_extras(ui, ctx);
         let action = if let Some(books) = ctx.books.as_ref() {
             self.draw(ui, &books.masters)
         } else {
@@ -126,6 +133,48 @@ impl Screen for VoucherEntryScreen {
             self.send_ledger_creates(ctx);
         }
         action
+    }
+}
+
+impl VoucherEntryScreen {
+    /// Asks the engine for the number the voucher will get and, for a single-entry voucher, the
+    /// account's balance now and after it. The screen shows the answers and adds nothing to them.
+    fn drive_extras(&mut self, ui: &Ui, ctx: &AppCtx) {
+        let (Some(worker), Some(books)) = (ctx.api.as_ref(), ctx.books.as_ref()) else {
+            return;
+        };
+        let date = parse_entry_date(&self.draft.date_text, self.fy).ok();
+        let number_busy = self
+            .extras
+            .drive_number(worker, date.map(|d| (self.draft.type_id, d)));
+        let want = self.balance_request(&books.masters);
+        let balance_busy = self.extras.drive_balance(worker, want);
+        if number_busy || balance_busy {
+            ui.ctx().request_repaint();
+        }
+    }
+
+    /// The account and the voucher the balance box asks about: a single-entry voucher whose
+    /// account is picked and whose lines build.
+    pub(super) fn balance_request(
+        &self,
+        masters: &ledgerly_model::Masters,
+    ) -> Option<(ledgerly_core::LedgerId, ledgerly_model::Voucher)> {
+        if !self.draft.is_single_entry() {
+            return None;
+        }
+        let account = match self.draft.rows.first()?.ledger {
+            Some(LedgerRef::Chosen(id)) => id,
+            Some(LedgerRef::Pending(_)) | None => return None,
+        };
+        match self
+            .draft
+            .build_voucher(masters, self.fy, self.books_begin)
+            .ok()?
+        {
+            ledgerly_core::Outcome::Value(v) => Some((account, v)),
+            ledgerly_core::Outcome::Unsupported(_) => None,
+        }
     }
 }
 

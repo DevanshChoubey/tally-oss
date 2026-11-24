@@ -1158,3 +1158,161 @@ fn shift_y_does_not_discard_a_started_invoice() {
     assert!(matches!(action, ScreenAction::Stay));
     assert!(s.is_confirming_discard());
 }
+
+// ---- s9: the mock's columns, bill references, toast, Alt+R ------------------------------------
+
+#[test]
+fn the_discount_and_typed_amount_columns_are_hidden_until_asked_for() {
+    // provenance: the mock's line table has # Item HSN Qty Unit Rate GST Amount and nothing for a
+    // discount or a typed amount (design/mock-v2/index.html line 1295). Alt+D shows them (ours).
+    let b = books();
+    let m = &b.masters;
+    let mut s = open(&b, T_SALES);
+    fill(&mut s, m);
+    assert!(!s.discount_columns());
+    s.toggle_discount();
+    assert!(s.discount_columns());
+    s.toggle_discount();
+    assert!(!s.discount_columns());
+    // A value typed in a hidden column keeps the columns up: hiding a figure that changes the
+    // amount would be a wrong number on screen.
+    s.draft_mut().rows[0].discount_text = "10".to_owned();
+    s.toggle_discount();
+    assert!(s.discount_columns());
+}
+
+#[test]
+fn enter_on_the_rate_goes_to_the_discount_only_when_its_column_shows() {
+    let b = books();
+    let m = &b.masters;
+    let mut s = open(&b, T_SALES);
+    s.toggle_discount();
+    s.set_party_text("sharma");
+    s.submit(m);
+    s.draft_mut().place_text = "27".to_owned();
+    s.submit(m);
+    s.set_account_text("sales");
+    s.submit(m);
+    s.submit(m);
+    s.set_item_text(0, "widget");
+    s.submit(m);
+    s.draft_mut().rows[0].qty_text = "1".to_owned();
+    s.submit(m);
+    s.draft_mut().rows[0].rate_text = "100".to_owned();
+    s.submit(m);
+    assert_eq!(s.focus(), Field::Discount(0));
+}
+
+#[test]
+fn bill_references_open_with_ctrl_i_for_a_bill_wise_party_and_read_as_typed() {
+    // provenance: our own design (the mock's More details is only a toast); the types are the
+    // product's four (New Ref, Agst Ref, Advance, On Account), https://help.tallysolutions.com/
+    // advances-received/ and https://help.tallysolutions.com/sales-of-goods-services/ (read
+    // 2026-11-25).
+    let b = books();
+    let m = &b.masters;
+    let mut s = open(&b, T_SALES);
+    fill(&mut s, m);
+    s.draft_mut().party = Some(KAVERI);
+    s.toggle_more(m);
+    assert_eq!(s.focus(), Field::BillKind(0));
+    assert_eq!(s.draft().bills.len(), 1);
+    s.draft_mut().bills[0].kind_text = "agst".to_owned();
+    s.draft_mut().bills[0].name = "INV-1".to_owned();
+    s.draft_mut().bills[0].amount_text = "500".to_owned();
+    let bills = s.draft().party_bills().unwrap();
+    assert_eq!(bills.len(), 1);
+    assert_eq!(bills[0].kind, ledgerly_model::BillRefKind::Against);
+    assert_eq!(bills[0].name, "INV-1");
+    assert_eq!(bills[0].amount, Some(rupees(500)));
+    // Enter through the row; on the last typed amount a blank row opens.
+    s.submit(m);
+    assert_eq!(s.focus(), Field::BillName(0));
+    s.submit(m);
+    assert_eq!(s.focus(), Field::BillAmount(0));
+    s.submit(m);
+    assert_eq!(s.draft().bills.len(), 2);
+}
+
+#[test]
+fn a_bill_type_that_is_none_of_the_four_is_refused() {
+    let b = books();
+    let m = &b.masters;
+    let mut s = open(&b, T_SALES);
+    fill(&mut s, m);
+    s.draft_mut().party = Some(KAVERI);
+    s.toggle_more(m);
+    s.draft_mut().bills[0].kind_text = "zzz".to_owned();
+    assert!(matches!(
+        s.draft().party_bills(),
+        Err(InvoiceError::Bill { line: 1, .. })
+    ));
+    s.submit(m);
+    assert_eq!(s.focus(), Field::BillKind(0));
+}
+
+#[test]
+fn a_save_leaves_the_toast_the_mock_shows() {
+    // derived: the mock's toast is `Saved <number> · <party> · ₹<total>` (design/mock-v2/
+    // index.html line 1306). The stand-in answer is 10,000 plus 9% and 9% = 11,800.00.
+    let b = books();
+    let m = &b.masters;
+    let (mut s, _) = answered(&b);
+    s.save(m);
+    let _ = s.take_save_request().unwrap();
+    s.confirm_saved_as(Some("SI/0418"));
+    assert_eq!(
+        s.toast_text(),
+        Some("Saved SI/0418 \u{b7} Sharma Traders \u{b7} \u{20b9}11,800.00")
+    );
+}
+
+#[test]
+fn alt_r_recalls_the_narration_of_the_partys_last_voucher() {
+    // provenance: the mock's Narration caption "Alt+R recalls the last one for this party"
+    // (design/mock-v2/index.html line 1297).
+    let mut b = books();
+    let (_, mut earlier) = answered(&b);
+    earlier.id = ledgerly_core::VoucherId(9);
+    earlier.number = Some("SI/0001".to_owned());
+    earlier.narration = "Against PO 77".to_owned();
+    b.vouchers.insert(earlier.id, earlier);
+    let m = b.masters.clone();
+    let mut s = open(&b, T_SALES);
+    fill(&mut s, &m);
+    assert_eq!(s.focus(), Field::Item(1));
+    s.submit(&m);
+    assert_eq!(s.focus(), Field::Narration);
+    let mut app = AppCtx {
+        books: Some(b.clone()),
+        api: None,
+        lock_date: None,
+        ai_tier: None,
+    };
+    let ctx = egui::Context::default();
+    frame(&ctx, &mut s, &mut app, RawInput::default());
+    frame(&ctx, &mut s, &mut app, key(Key::R, Modifiers::ALT));
+    assert_eq!(s.draft().narration, "Against PO 77");
+}
+
+#[test]
+fn no_type_ahead_list_hangs_over_the_narration_after_the_lines_end() {
+    // The ghost list over Narration: with the keyboard on the narration no list is drawn.
+    let b = books();
+    let m = b.masters.clone();
+    let mut s = open(&b, T_SALES);
+    fill(&mut s, &m);
+    s.submit(&m);
+    assert_eq!(s.focus(), Field::Narration);
+    let mut app = AppCtx {
+        books: Some(b.clone()),
+        api: None,
+        lock_date: None,
+        ai_tier: None,
+    };
+    let ctx = egui::Context::default();
+    for _ in 0..4 {
+        frame(&ctx, &mut s, &mut app, RawInput::default());
+    }
+    assert!(s.picker_rect().is_none());
+}

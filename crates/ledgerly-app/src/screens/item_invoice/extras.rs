@@ -17,7 +17,7 @@ type BalanceReply = Result<Outcome<BalanceChange>, String>;
 
 /// The balance line's content.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) enum BalanceShown {
+pub(crate) enum BalanceShown {
     /// The engine's balance now and after saving.
     Change(BalanceChange),
     /// The engine cannot give it; the reason is not shown as a figure.
@@ -26,29 +26,29 @@ pub(super) enum BalanceShown {
 
 /// The answers held, and the requests in flight.
 #[derive(Default)]
-pub(super) struct Extras {
+pub(crate) struct Extras {
     /// What the number answer is for.
     number_for: Option<(VoucherTypeId, Date)>,
     /// The number the engine will give, when it gives one.
-    pub(super) number: Option<String>,
+    pub(crate) number: Option<String>,
     number_ticket: Option<((VoucherTypeId, Date), Ticket<NumberReply>)>,
     /// What the balance answer is for.
     balance_for: Option<(LedgerId, Voucher)>,
     /// The balance answer.
-    pub(super) balance: Option<BalanceShown>,
+    pub(crate) balance: Option<BalanceShown>,
     balance_ticket: Option<((LedgerId, Voucher), Ticket<BalanceReply>)>,
 }
 
 impl Extras {
     /// Forgets the number, so the next frame asks again (after a save the next number is a new one).
-    pub(super) fn forget_number(&mut self) {
+    pub(crate) fn forget_number(&mut self) {
         self.number_for = None;
         self.number = None;
     }
 
     /// Hands in finished answers and asks for the number of a voucher of `want` when the held
     /// answer is for another. Returns whether a request is in flight.
-    pub(super) fn drive_number(
+    pub(crate) fn drive_number(
         &mut self,
         worker: &ApiWorker,
         want: Option<(VoucherTypeId, Date)>,
@@ -85,7 +85,7 @@ impl Extras {
 
     /// As [`Self::drive_number`] for the balance of `party` once `voucher` (with its ledger lines)
     /// is saved. `None` for `want` clears the line.
-    pub(super) fn drive_balance(
+    pub(crate) fn drive_balance(
         &mut self,
         worker: &ApiWorker,
         want: Option<(LedgerId, Voucher)>,
@@ -126,7 +126,7 @@ impl Extras {
     }
 
     /// The balance answer, when it is for exactly `party` and `voucher`.
-    pub(super) fn balance_for(&self, party: LedgerId, voucher: &Voucher) -> Option<&BalanceShown> {
+    pub(crate) fn balance_for(&self, party: LedgerId, voucher: &Voucher) -> Option<&BalanceShown> {
         match &self.balance_for {
             Some((p, v)) if *p == party && v == voucher => self.balance.as_ref(),
             Some(_) | None => None,

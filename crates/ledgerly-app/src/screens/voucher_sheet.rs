@@ -540,8 +540,11 @@ pub fn type_ahead(
     let k = kind(ui);
     let mut clicked = None;
     let width = below.width().clamp(LIST_WIDTH.0, LIST_WIDTH.1);
+    // No fade: a list that fades in or out leaves a ghost of itself over the field below it for a
+    // few frames after the keyboard has moved on.
     let shown = Area::new(id)
         .order(Order::Foreground)
+        .fade_in(false)
         .fixed_pos(pos2(below.left(), below.bottom() + 4.0))
         .constrain(true)
         .show(ui.ctx(), |ui| {

@@ -7,6 +7,7 @@ use ledgerly_model::{Books, Masters, Voucher};
 use thiserror::Error;
 
 use crate::keymap::{self, Keymap};
+use crate::screens::item_invoice::extras::Extras;
 use crate::shell::submit::CommandReply;
 use crate::worker::Ticket;
 
@@ -92,6 +93,8 @@ pub struct VoucherEntryScreen {
     pub(super) creating: Option<(String, Ticket<CommandReply>)>,
     /// Where parts of the screen were drawn in the last frame, for layout tests.
     pub(super) shown: super::draw::Shown,
+    /// The number the voucher will get and the account's balance after it, from the engine.
+    pub(super) extras: Extras,
 }
 impl VoucherEntryScreen {
     /// Opens an entry screen for voucher type `type_id`, dated `today` (in financial year `fy`).
@@ -138,6 +141,7 @@ impl VoucherEntryScreen {
             create_queue: VecDeque::new(),
             creating: None,
             shown: super::draw::Shown::default(),
+            extras: Extras::default(),
         }))
     }
 

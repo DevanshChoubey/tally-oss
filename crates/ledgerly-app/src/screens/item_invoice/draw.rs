@@ -1514,6 +1514,9 @@ impl ItemInvoiceScreen {
     /// finds the party's last narration for Alt+R. All three are the engine's or the books' own
     /// words; the screen adds nothing to them.
     fn drive_extras(&mut self, ui: &Ui, ctx: &AppCtx) {
+        if let Some(books) = ctx.books.as_ref() {
+            self.find_last_narration(books);
+        }
         let (Some(worker), Some(books)) = (ctx.api.as_ref(), ctx.books.as_ref()) else {
             return;
         };
@@ -1522,29 +1525,34 @@ impl ItemInvoiceScreen {
         let number_busy = self.extras.drive_number(worker, want);
         let balance_want = self.draft.party.zip(self.computed_voucher(&books.masters));
         let balance_busy = self.extras.drive_balance(worker, balance_want);
+        if number_busy || balance_busy {
+            ui.ctx().request_repaint();
+        }
+    }
+
+    /// Finds the narration of the party's latest voucher of this type, for Alt+R.
+    fn find_last_narration(&mut self, books: &ledgerly_model::Books) {
         let party = self.draft.party;
         if self
             .last_narration
             .as_ref()
-            .is_none_or(|(p, _)| *p != party)
+            .is_some_and(|(p, _)| *p == party)
         {
-            let text = party.and_then(|p| {
-                books
-                    .vouchers
-                    .values()
-                    .filter(|v| {
-                        v.type_id == self.draft.type_id
-                            && v.party == Some(p)
-                            && !v.narration.trim().is_empty()
-                    })
-                    .max_by_key(|v| (v.date, v.id))
-                    .map(|v| v.narration.clone())
-            });
-            self.last_narration = Some((party, text));
+            return;
         }
-        if number_busy || balance_busy {
-            ui.ctx().request_repaint();
-        }
+        let text = party.and_then(|p| {
+            books
+                .vouchers
+                .values()
+                .filter(|v| {
+                    v.type_id == self.draft.type_id
+                        && v.party == Some(p)
+                        && !v.narration.trim().is_empty()
+                })
+                .max_by_key(|v| (v.date, v.id))
+                .map(|v| v.narration.clone())
+        });
+        self.last_narration = Some((party, text));
     }
 
     /// Sends the voucher the user asked to save to the worker. Without a worker nothing can be

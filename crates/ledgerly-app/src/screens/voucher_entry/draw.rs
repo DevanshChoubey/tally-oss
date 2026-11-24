@@ -12,14 +12,17 @@ use super::create::{FormAnswer, create_form_ui};
 use super::display::{format_amount, format_signed, side_label};
 use super::draft::{Balance, DraftRow, LedgerRef};
 use super::keys::{UiEvent, read_keys};
+use super::kind::EntryKind;
 use super::search::PickerItem;
 use super::state::{Field, Notice, VoucherEntryScreen};
 use crate::keymap::Action;
-use crate::screens::voucher_sheet::{self as sheet, Col, InputSpec, Look};
+use crate::screens::item_invoice::extras::BalanceShown;
+use crate::screens::voucher_sheet::{self as sheet, Col, InputSpec, Look, Total};
 use crate::theme::TEXT_BODY;
 use crate::ui::button::{ButtonKind, button};
 use crate::ui::note::{NoteKind, note};
-use crate::ui::page_head::page_head;
+use crate::ui::page_head::page_head_numbered;
+use crate::ui::prov::ProvKind;
 use crate::ui::{para_text, tokens};
 use crate::{Screen, ScreenAction};
 
@@ -238,14 +241,16 @@ impl VoucherEntryScreen {
                     ui,
                     total,
                     1,
-                    |ui| sheet::caption(ui, "Date", None),
+                    |ui| sheet::caption(ui, "Date", Some("F2")),
                     |ui| {
+                        // Bare like the mock's read-only date until the keyboard or pointer is on
+                        // it; it stays a field so Tab and a screen reader still reach it.
                         text_field(
                             ui,
                             cx,
                             &date_spec,
                             &mut self.draft.date_text,
-                            Look::Boxed,
+                            Look::Cell,
                             false,
                             None,
                         );
@@ -271,7 +276,7 @@ impl VoucherEntryScreen {
                             // The line is always there, so the fields under it never move when a
                             // balance appears.
                             let text = account_balance.map_or_else(String::new, |b| {
-                                format!("Balance now {}", format_signed(b))
+                                format!("balance now {} (engine)", format_signed(b))
                             });
                             sheet::hint(ui, if text.is_empty() { " " } else { &text });
                         },
@@ -366,7 +371,7 @@ impl VoucherEntryScreen {
     }
 
     /// The foot: the narration, the entry aid and the notice of the last action.
-    fn draw_foot(&mut self, ui: &mut Ui, base: Id, cx: &mut Cx<'_>) {
+    fn draw_foot(&mut self, ui: &mut Ui, base: Id, masters: &Masters, cx: &mut Cx<'_>) {
         let single = self.draft.is_single_entry();
         let aid = if single {
             "The account takes the total of the particulars. The engine checks the voucher when it posts."
@@ -380,8 +385,9 @@ impl VoucherEntryScreen {
             name: "Narration",
             hint: "Optional",
         };
+        let box_rows = self.balance_box(masters);
         let mut narration = None;
-        sheet::foot(ui, |left, _right| {
+        sheet::foot(ui, |left, right| {
             sheet::fld(
                 left,
                 left.available_width(),
@@ -404,10 +410,47 @@ impl VoucherEntryScreen {
             );
             sheet::hint(left, &aid);
             self.draw_notice(left);
+            if let Some((rows, after)) = &box_rows {
+                sheet::taxbox(
+                    right,
+                    rows,
+                    Some(&Total {
+                        label: "Balance after",
+                        value: after,
+                        tag: Some(ProvKind::Engine),
+                    }),
+                );
+            }
         });
         if let Some(rect) = narration {
             self.shown.fields.push(("Narration", rect));
         }
+    }
+
+    /// The box at the right of a single-entry voucher's foot (index.html:1409): the total paid out
+    /// or received, the account's balance now and, as the total row, its balance after saving, the
+    /// engine's own. `None` until the engine has answered for the voucher as it stands.
+    fn balance_box(&self, masters: &Masters) -> Option<(Vec<(String, String)>, String)> {
+        let (account, voucher) = self.balance_request(masters)?;
+        let BalanceShown::Change(change) = self.extras.balance_for(account, &voucher)? else {
+            return None;
+        };
+        let total = self.draft.particulars_total().ok().flatten()?;
+        let label = match self.draft.kind {
+            EntryKind::Payment => "Paid out",
+            EntryKind::Receipt => "Received",
+            EntryKind::Contra
+            | EntryKind::Journal
+            | EntryKind::Memorandum
+            | EntryKind::ReversingJournal => return None,
+        };
+        Some((
+            vec![
+                (label.to_owned(), format_amount(total)),
+                ("Balance now".to_owned(), format_signed(change.now)),
+            ],
+            format_signed(change.after),
+        ))
     }
 
     /// The notice of the last action, as a kit note: an error or information.
@@ -477,6 +520,7 @@ impl VoucherEntryScreen {
             items = self.picker_items(masters);
         }
         let title = self.page_title();
+        let number = self.extras.number.clone();
         let subtitle = self.subtitle();
         let save_key = self.keymap.shortcut_label(Action::Save);
         if self.confirm_discard {
@@ -492,7 +536,7 @@ impl VoucherEntryScreen {
         let (focus, pick) = (self.focus, self.pick_index);
         let want = self.focus_pending.then_some(self.focus);
         ui.add_enabled_ui(enabled, |ui| {
-            page_head(ui, &title, subtitle.as_deref(), |ui| {
+            page_head_numbered(ui, &title, number.as_deref(), subtitle.as_deref(), |ui| {
                 save_clicked =
                     button(ui, "Save", save_key.as_deref(), ButtonKind::Primary).clicked();
             });
@@ -505,7 +549,7 @@ impl VoucherEntryScreen {
             sheet::sheet(ui, |ui| {
                 self.draw_head(ui, base, &mut cx);
                 self.draw_table(ui, base, masters, &mut cx);
-                self.draw_foot(ui, base, &mut cx);
+                self.draw_foot(ui, base, masters, &mut cx);
             });
         });
         if let Some(anchor) = anchor

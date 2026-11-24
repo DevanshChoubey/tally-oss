@@ -58,7 +58,7 @@ mod compute;
 mod create;
 mod draft;
 mod draw;
-mod extras;
+pub(crate) mod extras;
 mod keys;
 mod nav;
 mod picker;
@@ -944,7 +944,7 @@ impl ItemInvoiceScreen {
     }
 
     /// [`Self::confirm_saved`] with the number the engine gave the posted voucher, for the toast.
-    pub(super) fn confirm_saved_as(&mut self, number: Option<&str>) {
+    pub fn confirm_saved_as(&mut self, number: Option<&str>) {
         self.toast = match (number, self.save_info.take()) {
             (Some(number), Some((party, total))) => Some(Toast {
                 text: format!(
@@ -971,6 +971,12 @@ impl ItemInvoiceScreen {
         self.pick_index = 0;
         self.confirming_save = false;
         self.notice = Some(Notice::Info("Saved.".to_owned()));
+    }
+
+    /// The toast the last save left: "Saved SI/0418 · party · amount", until it times out.
+    #[must_use]
+    pub fn toast_text(&self) -> Option<&str> {
+        self.toast.as_ref().map(|t| t.text.as_str())
     }
 
     /// Whether the discount and typed-amount columns show: Alt+D turned them on, or a line has a

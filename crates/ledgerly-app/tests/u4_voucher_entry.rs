@@ -1174,7 +1174,9 @@ fn the_screen_draws_with_and_without_a_company() {
     let b = books();
     let ctx = egui::Context::default();
     let mut s = open(&b, T_JOURNAL);
-    assert_eq!(s.title(), "Journal voucher");
+    // provenance: the mock's crumbs for payment and receipt are Home > <type> only
+    // (design/mock-v2/index.html line 1388, `[s.type]`); the other kinds follow the same pattern.
+    assert_eq!(s.title(), "Journal");
     let mut closed = AppCtx::default();
     assert!(matches!(
         frame(&ctx, &mut s, &mut closed, RawInput::default()),
