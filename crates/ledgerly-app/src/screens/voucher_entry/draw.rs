@@ -36,6 +36,8 @@ struct RowCtx<'a> {
 struct FieldSpec {
     id: Id,
     field: Field,
+    /// The caption the field is drawn under; its accessible name.
+    name: &'static str,
     width: f32,
     hint: &'static str,
 }
@@ -74,6 +76,7 @@ fn text_field(
             .desired_width(spec.width)
             .hint_text(spec.hint),
     );
+    crate::ui::a11y::name(ui, &response, egui::accesskit::Role::TextInput, spec.name);
     if want == Some(spec.field) {
         response.request_focus();
     }
@@ -95,8 +98,13 @@ fn draw_picker(ui: &mut Ui, i: usize, rc: &RowCtx<'_>, events: &mut Vec<UiEvent>
     if rc.focused == Field::Ledger(i) && !rc.items.is_empty() {
         ui.group(|ui| {
             for (j, item) in rc.items.iter().enumerate() {
+                // Click-only, as the invoice list: Tab leaves the field, Up and Down move the
+                // highlight and Enter picks it.
                 if ui
-                    .selectable_label(j == rc.pick, item_label(item))
+                    .add(
+                        egui::Button::selectable(j == rc.pick, item_label(item))
+                            .sense(egui::Sense::CLICK),
+                    )
                     .clicked()
                 {
                     events.push(UiEvent::Pick(j));
@@ -132,6 +140,7 @@ fn draw_row(ui: &mut Ui, i: usize, row: &mut DraftRow, rc: &RowCtx<'_>, events: 
         let ledger_spec = FieldSpec {
             id: rc.base.with(("ledger", i)),
             field: Field::Ledger(i),
+            name: "Ledger",
             width: 320.0,
             hint: "Ledger: type to search",
         };
@@ -142,6 +151,7 @@ fn draw_row(ui: &mut Ui, i: usize, row: &mut DraftRow, rc: &RowCtx<'_>, events: 
         let amount_spec = FieldSpec {
             id: rc.base.with(("amount", i)),
             field: Field::Amount(i),
+            name: "Amount",
             width: 150.0,
             hint: "Amount, e.g. 1200*18%",
         };
@@ -173,6 +183,7 @@ fn draw_account(ui: &mut Ui, row: &mut DraftRow, rc: &RowCtx<'_>, events: &mut V
     let spec = FieldSpec {
         id: rc.base.with(("ledger", 0)),
         field: Field::Ledger(0),
+        name: "Ledger",
         width: 320.0,
         hint: "Cash or bank ledger",
     };
@@ -201,6 +212,7 @@ fn draw_single_line(
         let ledger_spec = FieldSpec {
             id: rc.base.with(("ledger", i)),
             field: Field::Ledger(i),
+            name: "Ledger",
             width: 300.0,
             hint: "Ledger: type to search",
         };
@@ -212,6 +224,7 @@ fn draw_single_line(
         let amount_spec = FieldSpec {
             id: rc.base.with(("amount", i)),
             field: Field::Amount(i),
+            name: "Amount",
             width: 150.0,
             hint: "Amount, e.g. 1200*18%",
         };
@@ -257,6 +270,7 @@ impl VoucherEntryScreen {
         let spec = FieldSpec {
             id: base.with("date"),
             field: Field::Date,
+            name: "Date",
             width: 110.0,
             hint: "dd-mm-yyyy",
         };
@@ -299,6 +313,7 @@ impl VoucherEntryScreen {
         let spec = FieldSpec {
             id: base.with("narration"),
             field: Field::Narration,
+            name: "Narration",
             width: 480.0,
             hint: "Optional",
         };
@@ -331,12 +346,14 @@ impl VoucherEntryScreen {
         let date_spec = FieldSpec {
             id: base.with("date"),
             field: Field::Date,
+            name: "Date",
             width: 110.0,
             hint: "dd-mm-yyyy",
         };
         let narration_spec = FieldSpec {
             id: base.with("narration"),
             field: Field::Narration,
+            name: "Narration",
             width: 480.0,
             hint: "Optional",
         };

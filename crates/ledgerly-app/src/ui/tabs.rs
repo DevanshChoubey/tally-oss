@@ -1,8 +1,8 @@
 //! Tabs with a 2 px accent underline under the selected tab (`.tabs` in the mock).
 
-use egui::{CornerRadius, FontId, Rect, Response, Sense, Stroke, Ui, Vec2, pos2};
+use egui::{CornerRadius, FontId, Rect, Response, Role, Sense, Stroke, Ui, Vec2, pos2};
 
-use super::{bold_font, keycap, kind, tokens};
+use super::{a11y, bold_font, keycap, kind, tokens};
 use crate::theme::{TEXT_BODY, Tokens, border_width};
 
 /// Height of a tab, in points.
@@ -132,6 +132,7 @@ fn tab(
         Vec2::new(text_size.x + key_w + 2.0 * TAB_PAD, TAB_HEIGHT),
         Sense::click(),
     );
+    a11y::name_selected(ui, &response, Role::Tab, selected, label);
     let painter = ui.painter();
     let text_pos = pos2(rect.min.x + TAB_PAD, rect.center().y - text_size.y / 2.0);
     painter.galley(text_pos, galley, ink);
@@ -147,5 +148,6 @@ fn tab(
         let underline = Rect::from_min_max(pos2(rect.min.x, rect.max.y - UNDERLINE), rect.max);
         painter.rect_filled(underline, CornerRadius::ZERO, t.accent);
     }
+    a11y::focus_ring(ui, &response, rect);
     (rect, response)
 }

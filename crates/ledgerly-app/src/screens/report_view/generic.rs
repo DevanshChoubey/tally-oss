@@ -6,13 +6,13 @@
 //! a long register costs only what is on screen (spec 8). The screen moves figures into cells and
 //! never computes one.
 
-use egui::{Frame, Rect, ScrollArea, Sense, Stroke, Ui, pos2, vec2};
+use egui::{Frame, Rect, Role, ScrollArea, Sense, Stroke, Ui, pos2, vec2};
 
 use super::text::cell_text;
 use super::{TableEvents, ViewCell, ViewReport, ViewRow, ViewRowKind};
 use crate::theme::{RADIUS_M, TEXT_BODY, TEXT_META, border_width, shadow_1};
 use crate::ui::table::{self, CellPlace, RowState, T_HEAD_HEIGHT, T_ROW_HEIGHT, T_TOTAL_HEIGHT};
-use crate::ui::{bold_font, kind, tokens};
+use crate::ui::{a11y, bold_font, kind, tokens};
 
 /// Heading of the label column.
 const LABEL_HEADING: &str = "Particulars";
@@ -196,6 +196,8 @@ fn draw_rows(
                     hovered: response.hovered(),
                     sub: emphasised(row.kind),
                 };
+                a11y::name(ui, &response, Role::Row, &line_name(row));
+                a11y::focus_ring(ui, &response, rect);
                 paint_line(ui, rect, cols, row, state);
                 if state.selected {
                     drawn.selected = Some(rect);
@@ -340,6 +342,15 @@ fn paint_line(ui: &Ui, rect: Rect, cols: &Columns, row: &ViewRow, state: RowStat
             );
         }
     }
+}
+
+/// What a screen reader says for a row: its label, then each cell as the row draws it, in column
+/// order (`cell_text` keeps the Dr or Cr word).
+fn line_name(row: &ViewRow) -> String {
+    let cells: Vec<String> = row.cells.iter().map(cell_text).collect();
+    let mut parts: Vec<&str> = vec![row.label.as_str()];
+    parts.extend(cells.iter().map(String::as_str));
+    a11y::join(&parts)
 }
 
 /// The total line: semibold, with the rule above and the double rule below.

@@ -2,8 +2,11 @@
 //! (`.chip` in the mock: 30 px high, 10 px side padding, 6 px gaps, meta-size text in `text-2`,
 //! a bold part in `text`, an optional icon first and keycap last).
 
-use egui::{Align2, Color32, FontId, Response, Sense, Stroke, StrokeKind, Ui, Vec2, pos2, vec2};
+use egui::{
+    Align2, Color32, FontId, Response, Role, Sense, Stroke, StrokeKind, Ui, Vec2, pos2, vec2,
+};
 
+use super::a11y;
 use super::icon::{self, ICON_SIZE, Icon};
 use super::{bold_font, keycap, kind, tokens};
 use crate::theme::{RADIUS_S, TEXT_BODY, TEXT_META, border_width};
@@ -78,6 +81,12 @@ pub fn chip_parts(ui: &mut Ui, parts: Chip<'_>) -> Response {
     let inner: f32 = widths.iter().sum::<f32>() + gaps;
     let (rect, response) =
         ui.allocate_exact_size(Vec2::new(2.0 * PAD_X + inner, CHIP_HEIGHT), Sense::click());
+    a11y::name(
+        ui,
+        &response,
+        Role::Button,
+        &a11y::join(&[parts.bold.unwrap_or(""), parts.text]),
+    );
     let fill = if response.hovered() {
         t.hover
     } else {
@@ -105,6 +114,7 @@ pub fn chip_parts(ui: &mut Ui, parts: Chip<'_>) -> Response {
         );
         keycap::paint(&painter, r, k, t.surface_2, t.border, t.text_2);
     }
+    a11y::focus_ring(ui, &response, rect);
     response
 }
 
@@ -115,6 +125,7 @@ pub fn search_chip(ui: &mut Ui, width: f32, text: &str, key: &str) -> Response {
     let t = tokens(ui);
     let bw = border_width(kind(ui));
     let (rect, response) = ui.allocate_exact_size(Vec2::new(width, SEARCH_HEIGHT), Sense::click());
+    a11y::name(ui, &response, Role::Button, text);
     let fill = if response.hovered() {
         t.hover
     } else {
@@ -150,14 +161,17 @@ pub fn search_chip(ui: &mut Ui, width: f32, text: &str, key: &str) -> Response {
         vec2(key_w, keycap::KEYCAP_HEIGHT),
     );
     keycap::paint(painter, key_rect, key, t.surface_2, t.border, t.text_2);
+    a11y::focus_ring(ui, &response, rect);
     response
 }
 
 /// A 32-point square icon button (`.iconbtn`): `text-2` ink, the hover fill and `text` ink on
-/// hover.
-pub fn icon_button(ui: &mut Ui, which: Icon) -> Response {
+/// hover. `name` is both the hover text and the accessible name, so the two cannot drift apart.
+pub fn icon_button(ui: &mut Ui, which: Icon, name: &str) -> Response {
     let t = tokens(ui);
     let (rect, response) = ui.allocate_exact_size(Vec2::splat(SEARCH_HEIGHT), Sense::click());
+    a11y::name(ui, &response, Role::Button, name);
+    let response = response.on_hover_text(name);
     let ink = if response.hovered() {
         ui.painter().rect_filled(rect, RADIUS_S, t.hover);
         t.text
@@ -166,5 +180,6 @@ pub fn icon_button(ui: &mut Ui, which: Icon) -> Response {
     };
     let r = egui::Rect::from_center_size(rect.center(), Vec2::splat(ICON_SIZE));
     icon::paint(ui.painter(), r, which, ink);
+    a11y::focus_ring(ui, &response, rect);
     response
 }

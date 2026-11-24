@@ -27,12 +27,13 @@
 //! liabilities at the top and the assets at the bottom. It names its own headings, which this
 //! screen does not copy; the two section names above are the standard ones.
 
-use egui::{Frame, Margin, Rect, ScrollArea, Sense, Stroke, Ui, vec2};
+use egui::{Frame, Margin, Rect, Role, ScrollArea, Sense, Stroke, Ui, vec2};
 use ledgerly_core::{Date, DrCr, FinancialYear};
 
 use super::text::amount_on_side;
 use super::{TableEvents, ViewCell, ViewReport};
 use crate::theme::{RADIUS_M, TEXT_BODY, TEXT_META, border_width, shadow_1};
+use crate::ui::a11y;
 use crate::ui::badge::{BadgeKind, badge};
 use crate::ui::table::{
     self, CellPlace, RowState, T_HEAD_GAP, T_HEAD_HEIGHT, T_ROW_HEIGHT, T_TOTAL_HEIGHT,
@@ -342,6 +343,8 @@ fn draw_lines(
                             hovered: response.hovered(),
                             sub: report.rows.get(index).is_some_and(|r| r.depth == 0),
                         };
+                        a11y::name(ui, &response, Role::Row, &line_name(report, section, index));
+                        a11y::focus_ring(ui, &response, rect);
                         paint_line(ui, rect, report, section, index, state);
                         if state.selected && scroll_to_selected {
                             response.scroll_to_me(None);
@@ -357,6 +360,19 @@ fn draw_lines(
             }
         });
     events
+}
+
+/// What a screen reader says for a statement line: its label, then the amount drawn in its
+/// section, as the line shows it.
+fn line_name(report: &ViewReport, section: Section, index: usize) -> String {
+    let Some(row) = report.rows.get(index) else {
+        return String::new();
+    };
+    let amount = row
+        .cells
+        .get(section.column())
+        .map_or_default(|cell| amount_in(cell, section));
+    a11y::join(&[row.label.as_str(), amount.as_str()])
 }
 
 /// The label part of a line: everything left of the amount column.
@@ -462,4 +478,77 @@ fn paint_total(ui: &Ui, rect: Rect, section: Section, balance: &VerticalBalance)
         t.text,
         CellPlace::Right,
     );
+}
+
+#[cfg(test)]
+mod a11y_names {
+    //! Card S7: a statement line reads its label, then the figure drawn in its section.
+    //!
+    //! derived: a liabilities line shows its figure in the liabilities column (the credit side
+    //! is that section's usual side, so no side word), and an assets line in the assets column.
+    #![allow(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        reason = "test code: the fixture is known to build"
+    )]
+
+    use super::*;
+    use crate::screens::report_view::{ReportToken, ViewDetail, ViewParams, ViewRow, ViewRowKind};
+    use ledgerly_core::{Paise, Period, SignedAmount};
+    use time::macros::date;
+
+    fn statement() -> ViewReport {
+        let line = |label: &str, cells: Vec<ViewCell>| ViewRow {
+            key: None,
+            label: label.to_owned(),
+            depth: 0,
+            kind: ViewRowKind::Ledger,
+            cells,
+        };
+        ViewReport {
+            token: ReportToken("balance sheet".to_owned()),
+            title: "Balance Sheet".to_owned(),
+            params: ViewParams {
+                period: Period::new(date!(2026 - 04 - 01), date!(2026 - 11 - 30)).unwrap(),
+                detail: ViewDetail::Condensed,
+            },
+            columns: ["Liabilities", "Assets"].map(str::to_owned).to_vec(),
+            rows: vec![
+                line(
+                    "Capital Account",
+                    vec![
+                        ViewCell::Amount(SignedAmount::cr(Paise::new(500_000))),
+                        ViewCell::Empty,
+                    ],
+                ),
+                line(
+                    "Cash",
+                    vec![
+                        ViewCell::Empty,
+                        ViewCell::Amount(SignedAmount::dr(Paise::new(120_000))),
+                    ],
+                ),
+            ],
+            totals: Vec::new(),
+            notes: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn a_liability_line_reads_its_label_and_its_figure() {
+        // derived: 5,000.00 credit under liabilities, the section's usual side, so no "Cr".
+        assert_eq!(
+            line_name(&statement(), Section::Liabilities, 0),
+            "Capital Account, 5,000.00"
+        );
+    }
+
+    #[test]
+    fn an_asset_line_reads_its_label_and_its_figure() {
+        // derived: 1,200.00 debit under assets, the usual side, so no "Dr".
+        assert_eq!(
+            line_name(&statement(), Section::Assets, 1),
+            "Cash, 1,200.00"
+        );
+    }
 }

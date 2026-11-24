@@ -133,6 +133,12 @@ fn match_badge(line: &LineState, suggestion: Option<&SuggestionView>) -> (BadgeK
     }
 }
 
+/// What a screen reader says for a statement line: its cells as drawn, in column order, with the
+/// empty ones left out.
+fn line_name(cells: &[&str]) -> String {
+    crate::ui::a11y::join(cells)
+}
+
 /// The action column of a statement line.
 fn action_text(line: &LineState, suggestion: Option<&SuggestionView>) -> String {
     match line.status {
@@ -386,14 +392,27 @@ impl BankScreen {
                         Flow::In => ("", amount.as_str()),
                     };
                     let (kind, text) = match_badge(line, suggestion);
-                    row.col(|ui| table::text(ui, &format_line_date(line.view.date)));
+                    let date = format_line_date(line.view.date);
+                    let action = action_text(line, suggestion);
+                    row.col(|ui| table::text(ui, &date));
                     row.col(|ui| table::text(ui, &line.view.description));
                     row.col(|ui| table::numeric(ui, withdrawal));
                     row.col(|ui| table::numeric(ui, deposit));
                     row.col(|ui| {
                         badge(ui, kind, &text);
                     });
-                    row.col(|ui| table::text(ui, &action_text(line, suggestion)));
+                    row.col(|ui| table::text(ui, &action));
+                    let name = line_name(&[
+                        date.as_str(),
+                        line.view.description.as_str(),
+                        withdrawal,
+                        deposit,
+                        text.as_str(),
+                        action.as_str(),
+                    ]);
+                    row.response().widget_info(|| {
+                        egui::WidgetInfo::labeled(egui::accesskit::Role::Row, true, &name)
+                    });
                     if row.response().clicked() {
                         events.push(UiEvent::Focus(i));
                     }
@@ -628,4 +647,27 @@ fn paint_statement_line(ui: &Ui, rect: Rect, row: &BrsRow) {
         t.text,
         CellPlace::Right,
     );
+}
+
+#[cfg(test)]
+mod a11y_names {
+    use super::*;
+
+    #[test]
+    fn a_statement_line_reads_its_cells_and_leaves_out_the_empty_ones() {
+        // derived: the columns are Date, Narration, Withdrawal, Deposit, Match, Action; a
+        // withdrawal leaves Deposit empty, and an empty cell is not spoken.
+        let name = line_name(&[
+            "03-11-2026",
+            "NEFT RAMESH",
+            "1,200.00",
+            "",
+            "Not matched",
+            "Set aside",
+        ]);
+        assert_eq!(
+            name,
+            "03-11-2026, NEFT RAMESH, 1,200.00, Not matched, Set aside"
+        );
+    }
 }

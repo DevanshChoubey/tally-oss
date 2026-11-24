@@ -489,3 +489,30 @@ financial year starts. The model supports that (`Company::books_begin`), so it i
   and the voucher screen have no Print key, so neither shows Ctrl+P. The key map lists
   "Print" under Reports (index.html:1839; `keymap_map::layout`), and Ctrl+P prints the open
   report or voucher.
+
+## Accessibility (card S7, round of 2026-11-24)
+
+Tests: `s7_a11y_inputs` (every text input named by its caption), `s7_a11y_rows` (masters rows
+read their cells), `s7_a11y_labels`, `s7_a11y_screens` (names, read from the AccessKit tree),
+`s7_contrast` (WCAG 2.1 ratios over theme pairs), `s7_focus` (Tab order; suggestion entries are
+not Tab stops, on the invoice and in voucher entry (`s7_a11y_inputs`); Up, Down and Enter move and pick the highlighted entry), `s7_zoom` (Ctrl+= /
+Ctrl+- / Ctrl+0), `s7_colour` (status words). Unit tests name GST, bank, balance sheet and day
+book rows from their cells, the day book in drawn column order. Token values are unchanged.
+
+Keys for the suggestion lists are from help.tallysolutions.com/keyboard-shortcuts-tally-prime/
+(read 2026-11-24): Up and Down move one line in a list, Tab and Shift+Tab move between fields.
+
+- **gap: divider border fails 3:1 non-text in light and dark.** `border` (light `#E2DFD8`, dark
+  `#34322E`) measures 1.33:1 and 1.35:1 on the surface. It is used for hairline dividers.
+  Pinned by `divider_border_is_a_known_gap_below_the_non_text_minimum`. A control outline should
+  use `border_strong`, which passes 3:1 in light and dark.
+- **by design: zoom is egui's built-in, session-only.** Ctrl+= / Ctrl+- / Ctrl+0 step the scale
+  by 0.1 between 0.2 and 5.0 (egui 0.37 `gui_zoom.rs`). The scale lives in the egui context, so it
+  lasts the session and is not saved, the same as the theme. The mock (`design/mock-v2/index.html`)
+  has no zoom key, so there is no mock state to match.
+- **audit: colour-only signals.** Debit and credit read "Dr" and "Cr"; bank matches read "Matched",
+  "Not matched" or the suggestion kind; GST buckets and review states read their word; notes carry
+  their text beside the colour; the setup rail check has a check icon. No listed signal is colour only.
+  `s7_colour` pins the words of each badge and note kind.
+- **focus rings.** The focus stroke is thicker in high contrast (`u1_theme`). No per-screen pixel
+  check of the ring in all three themes was added in this card.

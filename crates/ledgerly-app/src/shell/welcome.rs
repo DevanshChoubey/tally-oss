@@ -253,7 +253,9 @@ impl Screen for WelcomeScreen {
         ui.separator();
         ui.label("Open a company file");
         ui.horizontal(|ui| {
-            ui.add(
+            crate::ui::a11y::text_edit(
+                ui,
+                "Open a company file",
                 egui::TextEdit::singleline(&mut self.open_path)
                     .hint_text("path to a .ledgerly file")
                     .desired_width(360.0),
@@ -266,24 +268,34 @@ impl Screen for WelcomeScreen {
         ui.label("Create a company file");
         egui::Grid::new("welcome-create").show(ui, |ui| {
             ui.label("Name");
-            ui.add(egui::TextEdit::singleline(&mut self.name).desired_width(280.0));
+            crate::ui::a11y::text_edit(
+                ui,
+                "Name",
+                egui::TextEdit::singleline(&mut self.name).desired_width(280.0),
+            );
             ui.end_row();
             ui.label("File");
-            ui.add(
+            crate::ui::a11y::text_edit(
+                ui,
+                "File",
                 egui::TextEdit::singleline(&mut self.new_path)
                     .hint_text("path for the new .ledgerly file")
                     .desired_width(280.0),
             );
             ui.end_row();
             ui.label("State");
-            ui.add(
+            crate::ui::a11y::text_edit(
+                ui,
+                "State",
                 egui::TextEdit::singleline(&mut self.state)
                     .hint_text("state code, for example 27")
                     .desired_width(280.0),
             );
             ui.end_row();
             ui.label("Financial year from 1 April");
-            ui.add(
+            crate::ui::a11y::text_edit(
+                ui,
+                "Financial year from 1 April",
                 egui::TextEdit::singleline(&mut self.fy_year)
                     .hint_text("for example 2026")
                     .desired_width(280.0),

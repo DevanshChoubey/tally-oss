@@ -608,7 +608,7 @@ fn draw_features(ui: &mut Ui, panel: Panel) {
                             cell_rule(ui);
                         });
                         row.col(|ui| {
-                            switch(ui, !off, Sense::hover());
+                            switch(ui, !off, Sense::hover(), feature);
                             cell_rule(ui);
                         });
                     });

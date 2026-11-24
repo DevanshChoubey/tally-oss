@@ -63,7 +63,8 @@ pub(crate) fn create_form_ui(
         ui.label("Create ledger");
         ui.horizontal(|ui| {
             ui.label("Name");
-            ui.add(egui::TextEdit::singleline(&mut form.name).desired_width(280.0));
+            let name = ui.add(egui::TextEdit::singleline(&mut form.name).desired_width(280.0));
+            crate::ui::a11y::name(ui, &name, egui::accesskit::Role::TextInput, "Name");
         });
         let selected = form
             .group

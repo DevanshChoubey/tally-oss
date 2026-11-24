@@ -11,7 +11,7 @@
 //! * [`selected_label`] names the entry for the screen on top of the stack, which is the one drawn
 //!   as selected.
 
-use egui::{Color32, Pos2, Rect, Ui, Vec2};
+use egui::{Color32, Pos2, Rect, Role, Ui, Vec2};
 use ledgerly_core::{FinancialYear, Outcome};
 use ledgerly_model::{BaseVoucherKind, Books};
 
@@ -22,7 +22,7 @@ use crate::palette::PaletteTarget;
 use crate::screens::voucher_entry::VoucherEntryScreen;
 use crate::theme::{RADIUS_S, TEXT_BODY, TEXT_CAP, Tokens};
 use crate::ui::icon::{self, ICON_SIZE, Icon};
-use crate::ui::{bold_font, keycap};
+use crate::ui::{a11y, bold_font, keycap};
 use crate::{AppCtx, Screen};
 
 /// Width of the sidebar, in points (`--navw` in the mock, 208 px).
@@ -351,6 +351,7 @@ fn entry_row(
         Vec2::new(ui.available_width(), ROW_HEIGHT),
         egui::Sense::click(),
     );
+    a11y::name_selected(ui, &response, Role::Button, selected, entry.label);
     let hovered = response.hovered();
     let (ink, fill) = if selected {
         (t.accent_ink, t.accent_soft)
@@ -405,6 +406,7 @@ fn entry_row(
             paint_count(ui, right, mid, count, t);
         }
     }
+    a11y::focus_ring(ui, &response, rect);
     let response = if rail {
         response.on_hover_text(entry.label)
     } else {
