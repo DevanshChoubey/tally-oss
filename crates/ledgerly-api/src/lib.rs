@@ -31,7 +31,6 @@ pub use gst::{
     Bucket, BucketedVoucher, Gstr1, Gstr1Return, Gstr3bTaxAmounts, Gstr3bWorking, RulePack,
 };
 pub use home::{CashAndBank, HomeFigures, LateBills, MonthSales};
-pub use nudges::{DuplicatePayment, Gstr1Due, HomeNudges, PaymentRef, gstr1_next_due};
 pub use ledgerly_gst::compute::GstBreakup;
 pub use ledgerly_model::{
     Address, Books, Company, EntityKind, Features, NegativeStockPolicy, Voucher,
@@ -43,6 +42,7 @@ pub use ledgerly_reports::{
 pub use ledgerly_store::backup::{RebuildOutcome, RebuildReport};
 pub use ledgerly_store::verify::{ChainProblem, VerifyReport};
 pub use maintenance::{VoucherCheck, verify_file};
+pub use nudges::{DuplicatePayment, Gstr1Due, HomeNudges, PaymentRef, gstr1_next_due};
 pub use report::ExportFormat;
 pub use search::{MatchedOn, SearchHit};
 pub use tally_import::ImportSummary;
