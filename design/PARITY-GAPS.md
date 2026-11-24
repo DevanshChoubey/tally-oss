@@ -635,3 +635,10 @@ quick-entry offline-AI state has no dark or hc mock capture). Theme differences 
 - **gap: the hc focus ring is 3 px.** theme.rs `focus_width` widens it on purpose; the mock keeps
   2 px. The masters filter box draws a literal 2 px outline (masters/look.rs), which matches the
   mock but not the app's own hc focus width.
+
+## Real-path audit findings (2026-11-24)
+
+Full table in `design/REAL-PATH-AUDIT.md`. Open gaps, worst first: Import screen is raw egui;
+shortcut keys are silently ignored on a cold start; refusal messages are shown in the bottom key
+bar in red with developer wording; the tab strip is unstyled with duplicate "Company setup"
+titles; dark and high-contrast `setup.welcome` captures are not yet reshot cold.

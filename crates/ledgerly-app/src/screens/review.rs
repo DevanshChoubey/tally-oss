@@ -411,6 +411,8 @@ impl Screen for ReviewScreen {
             note(ui, NoteKind::Bad, &error);
         }
         match self.panel.clone() {
+            // An error is on screen already; "loading" beside it would say the opposite.
+            None if self.error.is_some() => {}
             None => {
                 note(ui, NoteKind::Info, "Loading the queue from the engine.");
             }

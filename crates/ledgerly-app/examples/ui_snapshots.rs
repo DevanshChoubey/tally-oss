@@ -858,6 +858,7 @@ fn audit_shots() -> Vec<Shot> {
         cold("cold.gst-g", &[(Key::G, NONE)]),
         by_palette("cold.home", "Home"),
         by_palette("cold.review", "Review queue"),
+        by_palette("cold.masters", "Masters"),
         by_palette("cold.quick-entry", "Plain-words entry"),
         by_palette("cold.ask", "Ask your books"),
         by_palette("cold.purchase-bill", "Purchase from bill photo"),

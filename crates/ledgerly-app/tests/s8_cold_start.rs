@@ -265,3 +265,63 @@ fn a_new_tab_with_no_company_opens_the_setup_welcome_too() {
         "Setup, step 1 of 7"
     );
 }
+
+/// The notice the key bar shows after the palette opens `title` on the cold start.
+fn palette_pick(shell: &mut Shell, ctx: &Context, query: &'static str) {
+    frame(
+        ctx,
+        shell,
+        vec![Event::Key {
+            key: Key::K,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: Modifiers::COMMAND,
+        }],
+    );
+    frame(ctx, shell, vec![]);
+    shell.palette_mut().set_query(query);
+    frame(ctx, shell, vec![]);
+    frame(ctx, shell, vec![key(Key::Enter)]);
+    frame(ctx, shell, vec![]);
+}
+
+#[test]
+fn screens_that_only_show_a_companys_data_do_not_open_with_no_company() {
+    // provenance: the audit of the real cold start (design/REAL-PATH-AUDIT.md): Home waited for
+    // books forever ("Loading the company's books...") and Masters opened a page of empty tables. With no company open these opens must leave a notice and no new screen.
+    for (query, name) in [("Home", "Home"), ("Masters", "Masters")] {
+        let mut shell = Shell::cold_start();
+        let (ctx, _) = settled(&mut shell);
+        palette_pick(&mut shell, &ctx, query);
+        assert_eq!(
+            shell.tabs().active_stack().unwrap().depth(),
+            1,
+            "{name} opened with no company"
+        );
+        let notice = shell.notice().unwrap_or_default().to_owned();
+        assert!(
+            notice.contains("no company is open") && notice.contains(name),
+            "{name}: {notice:?}"
+        );
+    }
+}
+
+#[test]
+fn the_review_queue_with_no_company_says_so_without_also_saying_it_is_loading() {
+    // provenance: the audit of the real cold start (design/REAL-PATH-AUDIT.md) showed the red
+    // "No company is open" note and "Loading the queue from the engine." together.
+    let mut shell = Shell::cold_start();
+    let (ctx, _) = settled(&mut shell);
+    palette_pick(&mut shell, &ctx, "Review queue");
+    frame(&ctx, &mut shell, vec![]);
+    let painted = frame(&ctx, &mut shell, vec![]);
+    assert!(
+        painted.iter().any(|t| t.contains("No company is open")),
+        "{painted:?}"
+    );
+    assert!(
+        !painted.iter().any(|t| t.contains("Loading the queue")),
+        "{painted:?}"
+    );
+}
