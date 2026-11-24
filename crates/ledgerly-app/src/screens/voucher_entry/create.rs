@@ -11,6 +11,7 @@ use super::state::{CreateForm, CreateLedgerRequest, Field, Notice, VoucherEntryS
 /// ledger (or request still waiting in `queued`) with the same name in any case. Returns the
 /// trimmed name and the group, or what to tell the user.
 pub(crate) fn check_new_ledger(
+    tr: &crate::i18n::Tr,
     masters: &Masters,
     name: &str,
     group: Option<GroupId>,
@@ -18,13 +19,13 @@ pub(crate) fn check_new_ledger(
 ) -> Result<(String, GroupId), String> {
     let name = name.trim();
     let Some(group) = group else {
-        return Err("Choose a group for the new ledger.".to_owned());
+        return Err(tr.t("voucher.new_ledger.no_group"));
     };
     if name.is_empty() {
-        return Err("Type a name for the new ledger.".to_owned());
+        return Err(tr.t("voucher.new_ledger.no_name"));
     }
     if !masters.groups.contains_key(&group) {
-        return Err("That group does not exist.".to_owned());
+        return Err(tr.t("voucher.new_ledger.no_such_group"));
     }
     let lower = name.to_lowercase();
     let taken = masters
@@ -33,9 +34,7 @@ pub(crate) fn check_new_ledger(
         .any(|l| l.name.to_lowercase() == lower)
         || queued.iter().any(|r| r.name.to_lowercase() == lower);
     if taken {
-        return Err(format!(
-            "A ledger called '{name}' already exists; pick it from the list."
-        ));
+        return Err(tr.tf("voucher.new_ledger.taken", &[("name", name)]));
     }
     Ok((name.to_owned(), group))
 }
@@ -54,21 +53,22 @@ pub(crate) enum FormAnswer {
 /// Cancel.
 pub(crate) fn create_form_ui(
     ui: &mut Ui,
+    tr: &crate::i18n::Tr,
     form: &mut CreateForm,
     masters: &Masters,
     salt: &str,
 ) -> FormAnswer {
     let mut answer = FormAnswer::Open;
     ui.group(|ui| {
-        ui.label("Create ledger");
+        ui.label(tr.t("voucher.create_form.title"));
         ui.horizontal(|ui| {
-            ui.label("Name");
+            ui.label(tr.t("voucher.create_form.name"));
             ui.add(egui::TextEdit::singleline(&mut form.name).desired_width(280.0));
         });
-        let selected = form
-            .group
-            .and_then(|g| masters.groups.get(&g))
-            .map_or("Choose a group", |g| g.name.as_str());
+        let selected = form.group.and_then(|g| masters.groups.get(&g)).map_or_else(
+            || tr.t("voucher.create_form.choose_group"),
+            |g| g.name.clone(),
+        );
         egui::ComboBox::from_id_salt(salt)
             .selected_text(selected)
             .show_ui(ui, |ui| {
@@ -77,10 +77,10 @@ pub(crate) fn create_form_ui(
                 }
             });
         ui.horizontal(|ui| {
-            if ui.button("Create").clicked() {
+            if ui.button(tr.t("voucher.create_form.create")).clicked() {
                 answer = FormAnswer::Confirm;
             }
-            if ui.button("Cancel (Esc)").clicked() {
+            if ui.button(tr.t("voucher.create_form.cancel")).clicked() {
                 answer = FormAnswer::Cancel;
             }
         });
@@ -112,13 +112,14 @@ impl VoucherEntryScreen {
 
     /// Confirms the create form: records a [`CreateLedgerRequest`] and marks the line pending.
     pub fn confirm_create(&mut self, masters: &Masters, name: &str, group: Option<GroupId>) {
-        let (name, group) = match check_new_ledger(masters, name, group, &self.master_requests) {
-            Ok(checked) => checked,
-            Err(message) => return self.fail(message),
-        };
+        let (name, group) =
+            match check_new_ledger(&self.tr, masters, name, group, &self.master_requests) {
+                Ok(checked) => checked,
+                Err(message) => return self.fail(message),
+            };
         let name = name.as_str();
         let Field::Ledger(i) = self.focus else {
-            return self.fail("Put the cursor on a ledger field first.");
+            return self.fail(self.tr.t("voucher.put_cursor_on_ledger"));
         };
         if let Some(r) = self.draft.rows.get_mut(i) {
             r.ledger = Some(LedgerRef::Pending(name.to_owned()));
@@ -129,7 +130,9 @@ impl VoucherEntryScreen {
             group,
         });
         self.create = None;
-        self.notice = Some(Notice::Info(format!("Creating ledger '{name}'.")));
+        self.notice = Some(Notice::Info(
+            self.tr.tf("voucher.creating_ledger", &[("name", name)]),
+        ));
         self.go(self.after_ledger(i));
     }
 
@@ -155,6 +158,9 @@ impl VoucherEntryScreen {
                 row.ledger = None;
             }
         }
-        self.fail(format!("Ledger '{name}' was not created: {reason}"));
+        self.fail(self.tr.tf(
+            "voucher.ledger_not_created",
+            &[("name", name), ("reason", reason)],
+        ));
     }
 }

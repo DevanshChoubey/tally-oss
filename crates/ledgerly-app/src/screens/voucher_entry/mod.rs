@@ -61,47 +61,35 @@ use crate::screen::KeyHint;
 use crate::{AppCtx, Screen, ScreenAction};
 
 impl Screen for VoucherEntryScreen {
-    fn title(&self, _tr: &Tr) -> String {
-        format!("{} voucher", self.type_name)
+    fn title(&self, tr: &Tr) -> String {
+        tr.tf("voucher.title", &[("kind", &self.draft.kind.label_in(tr))])
     }
 
-    fn page_title(&self, _tr: &Tr) -> String {
-        self.type_name.clone()
+    fn page_title(&self, tr: &Tr) -> String {
+        self.draft.kind.label_in(tr)
     }
 
-    fn subtitle(&self, _tr: &Tr) -> Option<String> {
+    fn subtitle(&self, tr: &Tr) -> Option<String> {
         let (action, text) = match self.draft.kind {
-            EntryKind::Payment => (
-                Action::NewPayment,
-                "single entry: pick the cash or bank account once, then the ledgers",
-            ),
-            EntryKind::Receipt => (
-                Action::NewReceipt,
-                "single entry: pick the cash or bank account once, then the ledgers",
-            ),
-            EntryKind::Contra => (
-                Action::NewContra,
-                "double entry: every line has its own Dr or Cr",
-            ),
-            EntryKind::Journal => (
-                Action::NewJournal,
-                "double entry: every line has its own Dr or Cr",
-            ),
+            EntryKind::Payment => (Action::NewPayment, tr.t("voucher.sub.single")),
+            EntryKind::Receipt => (Action::NewReceipt, tr.t("voucher.sub.single")),
+            EntryKind::Contra => (Action::NewContra, tr.t("voucher.sub.double")),
+            EntryKind::Journal => (Action::NewJournal, tr.t("voucher.sub.double")),
             EntryKind::Memorandum | EntryKind::ReversingJournal => return None,
         };
         Some(match self.keymap.shortcut_label(action) {
             Some(key) => format!("{key} · {text}"),
-            None => text.to_owned(),
+            None => text,
         })
     }
 
-    fn keys(&self, _tr: &Tr) -> Vec<KeyHint> {
-        let mut hints = vec![KeyHint::new("Enter", "Next field")];
+    fn keys(&self, tr: &Tr) -> Vec<KeyHint> {
+        let mut hints = vec![KeyHint::new("Enter", tr.t("voucher.key.next_field"))];
         let bound = [
-            (Action::CreateMaster, "Create ledger"),
-            (Action::DeleteLine, "Delete line"),
-            (Action::Save, "Save"),
-            (Action::Back, "Discard"),
+            (Action::CreateMaster, tr.t("voucher.key.create_ledger")),
+            (Action::DeleteLine, tr.t("voucher.key.delete_line")),
+            (Action::Save, tr.t("voucher.save")),
+            (Action::Back, tr.t("voucher.discard")),
         ];
         for (action, label) in bound {
             if let Some(keys) = self.keymap.shortcut_label(action) {
@@ -112,6 +100,7 @@ impl Screen for VoucherEntryScreen {
     }
 
     fn ui(&mut self, ui: &mut Ui, ctx: &mut AppCtx) -> ScreenAction {
+        self.tr = ctx.tr.clone();
         self.poll_ledger_create(ui);
         if self.posting.is_some() {
             self.wait_for_post(ui);
@@ -120,7 +109,7 @@ impl Screen for VoucherEntryScreen {
         let action = if let Some(books) = ctx.books.as_ref() {
             self.draw(ui, &books.masters, &ctx.tr)
         } else {
-            ui.label(no_books_text(ctx));
+            ui.label(no_books_text(ctx, &ctx.tr));
             ScreenAction::Stay
         };
         if ctx.api.is_some() {
@@ -132,10 +121,10 @@ impl Screen for VoucherEntryScreen {
 }
 
 /// What the screen says when it has no books to draw from.
-fn no_books_text(ctx: &AppCtx) -> &'static str {
+fn no_books_text(ctx: &AppCtx, tr: &Tr) -> String {
     if ctx.api.is_some() {
-        "The company is open. Its masters are being read, or could not be read."
+        tr.t("voucher.no_masters")
     } else {
-        "No company is open."
+        tr.t("voucher.no_company")
     }
 }

@@ -500,6 +500,8 @@ enum Stock {
 
 /// The item invoice entry screen (card U5).
 pub struct ItemInvoiceScreen {
+    /// The language of the screen's words, set from the context on each frame.
+    tr: crate::i18n::Tr,
     type_name: String,
     /// Whether the item mode has stock items to pick.
     stock: Stock,
@@ -586,6 +588,7 @@ impl ItemInvoiceScreen {
             NumberingMethod::Automatic | NumberingMethod::None => false,
         };
         Ok(Outcome::Value(ItemInvoiceScreen {
+            tr: crate::i18n::Tr::default(),
             type_name: vt.name.clone(),
             stock: if books.company.features.inventory {
                 Stock::Kept

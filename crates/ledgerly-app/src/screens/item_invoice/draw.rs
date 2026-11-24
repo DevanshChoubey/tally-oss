@@ -1037,6 +1037,7 @@ impl Screen for ItemInvoiceScreen {
     }
 
     fn ui(&mut self, ui: &mut Ui, ctx: &mut AppCtx) -> ScreenAction {
+        self.tr = ctx.tr.clone();
         if self.posting.is_some() {
             self.wait_for_post(ui, &ctx.tr);
             return ScreenAction::Stay;

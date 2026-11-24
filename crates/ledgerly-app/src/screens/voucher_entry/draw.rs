@@ -25,6 +25,7 @@ use crate::{Screen, ScreenAction};
 
 /// What the line drawing needs to know about the screen.
 struct RowCtx<'a> {
+    tr: &'a Tr,
     base: Id,
     want: Option<Field>,
     focused: Field,
@@ -38,10 +39,10 @@ struct FieldSpec {
     id: Id,
     field: Field,
     width: f32,
-    hint: &'static str,
+    hint: String,
 }
 
-fn item_label(item: &PickerItem) -> String {
+fn item_label(item: &PickerItem, tr: &Tr) -> String {
     match item {
         PickerItem::Ledger(hit) => {
             let mut parts = vec![hit.name.clone()];
@@ -56,7 +57,7 @@ fn item_label(item: &PickerItem) -> String {
             }
             parts.join("   ")
         }
-        PickerItem::Create { name } => format!("+ Create ledger \"{name}\"   (Alt+C)"),
+        PickerItem::Create { name } => tr.tf("voucher.create_ledger_row", &[("name", name)]),
     }
 }
 
@@ -73,7 +74,7 @@ fn text_field(
         egui::TextEdit::singleline(text)
             .id(spec.id)
             .desired_width(spec.width)
-            .hint_text(spec.hint),
+            .hint_text(spec.hint.as_str()),
     );
     if want == Some(spec.field) {
         response.request_focus();
@@ -97,7 +98,7 @@ fn draw_picker(ui: &mut Ui, i: usize, rc: &RowCtx<'_>, events: &mut Vec<UiEvent>
         ui.group(|ui| {
             for (j, item) in rc.items.iter().enumerate() {
                 if ui
-                    .selectable_label(j == rc.pick, item_label(item))
+                    .selectable_label(j == rc.pick, item_label(item, rc.tr))
                     .clicked()
                 {
                     events.push(UiEvent::Pick(j));
@@ -125,7 +126,7 @@ fn draw_row(ui: &mut Ui, i: usize, row: &mut DraftRow, rc: &RowCtx<'_>, events: 
     ui.horizontal(|ui| {
         if ui
             .button(side_label(row.side))
-            .on_hover_text("Switch Dr / Cr")
+            .on_hover_text(rc.tr.t("voucher.switch_side"))
             .clicked()
         {
             events.push(UiEvent::Side(i));
@@ -134,7 +135,7 @@ fn draw_row(ui: &mut Ui, i: usize, row: &mut DraftRow, rc: &RowCtx<'_>, events: 
             id: rc.base.with(("ledger", i)),
             field: Field::Ledger(i),
             width: 320.0,
-            hint: "Ledger: type to search",
+            hint: rc.tr.t("voucher.hint_ledger"),
         };
         if text_field(ui, &ledger_spec, &mut row.ledger_text, rc.want, events) {
             row.ledger = None;
@@ -144,14 +145,17 @@ fn draw_row(ui: &mut Ui, i: usize, row: &mut DraftRow, rc: &RowCtx<'_>, events: 
             id: rc.base.with(("amount", i)),
             field: Field::Amount(i),
             width: 150.0,
-            hint: "Amount, e.g. 1200*18%",
+            hint: rc.tr.t("voucher.hint_amount"),
         };
         text_field(ui, &amount_spec, &mut row.amount_text, rc.want, events);
         if let Some(balance) = rc.balance {
-            ui.weak(format!("Balance {}", format_signed(balance)));
+            ui.weak(
+                rc.tr
+                    .tf("voucher.balance", &[("amount", &format_signed(balance))]),
+            );
         }
         if let Some(LedgerRef::Pending(_)) = row.ledger {
-            ui.weak("new ledger, not created yet");
+            ui.weak(rc.tr.t("voucher.new_ledger"));
         }
         let plain = row
             .amount_text
@@ -175,7 +179,7 @@ fn draw_account(ui: &mut Ui, row: &mut DraftRow, rc: &RowCtx<'_>, events: &mut V
         id: rc.base.with(("ledger", 0)),
         field: Field::Ledger(0),
         width: 320.0,
-        hint: "Cash or bank ledger",
+        hint: rc.tr.t("voucher.hint_cash_bank"),
     };
     let changed = ui
         .horizontal(|ui| text_field(ui, &spec, &mut row.ledger_text, rc.want, events))
@@ -203,7 +207,7 @@ fn draw_single_line(
             id: rc.base.with(("ledger", i)),
             field: Field::Ledger(i),
             width: 300.0,
-            hint: "Ledger: type to search",
+            hint: rc.tr.t("voucher.hint_ledger"),
         };
         if text_field(ui, &ledger_spec, &mut row.ledger_text, rc.want, events) {
             row.ledger = None;
@@ -214,11 +218,11 @@ fn draw_single_line(
             id: rc.base.with(("amount", i)),
             field: Field::Amount(i),
             width: 150.0,
-            hint: "Amount, e.g. 1200*18%",
+            hint: rc.tr.t("voucher.hint_amount"),
         };
         text_field(ui, &amount_spec, &mut row.amount_text, rc.want, events);
         if let Some(LedgerRef::Pending(_)) = row.ledger {
-            ui.weak("new ledger, not created yet");
+            ui.weak(rc.tr.t("voucher.new_ledger"));
         }
         let plain = row
             .amount_text
@@ -238,33 +242,42 @@ fn draw_single_line(
 
 impl VoucherEntryScreen {
     /// The entry aid under the lines: whether the lines as typed balance.
-    pub(super) fn balance_text(&self) -> String {
+    pub(super) fn balance_text(&self, tr: &Tr) -> String {
         match self.draft.balance() {
-            Ok(Balance::Balanced) => {
-                "Lines as typed balance (the engine checks again when it posts).".to_owned()
-            }
-            Ok(Balance::Needs { side, amount }) => format!(
-                "Lines as typed do not balance: a {} line of {} would balance them.",
-                side_label(side),
-                format_amount(amount)
+            Ok(Balance::Balanced) => tr.t("voucher.balance_ok"),
+            Ok(Balance::Needs { side, amount }) => tr.tf(
+                "voucher.balance_needs",
+                &[
+                    ("side", side_label(side)),
+                    ("amount", &format_amount(amount)),
+                ],
             ),
-            Err(e) => format!("Difference not available: {e}"),
+            Err(e) => tr.tf(
+                "voucher.difference_unavailable",
+                &[("error", &e.to_string())],
+            ),
         }
     }
 
     /// The date and financial year of a double-entry voucher.
-    pub(super) fn draw_header(&mut self, ui: &mut Ui, base: Id, events: &mut Vec<UiEvent>) {
+    pub(super) fn draw_header(
+        &mut self,
+        ui: &mut Ui,
+        tr: &Tr,
+        base: Id,
+        events: &mut Vec<UiEvent>,
+    ) {
         let want = self.focus_pending.then_some(self.focus);
         let spec = FieldSpec {
             id: base.with("date"),
             field: Field::Date,
             width: 110.0,
-            hint: "dd-mm-yyyy",
+            hint: "dd-mm-yyyy".to_owned(),
         };
         ui.horizontal(|ui| {
-            ui.label("Date");
+            ui.label(tr.t("voucher.label.date"));
             text_field(ui, &spec, &mut self.draft.date_text, want, events);
-            ui.weak(format!("Financial year {}", self.fy.label()));
+            ui.weak(tr.tf("voucher.financial_year", &[("year", &self.fy.label())]));
         });
     }
 
@@ -272,6 +285,7 @@ impl VoucherEntryScreen {
     pub(super) fn draw_rows(
         &mut self,
         ui: &mut Ui,
+        tr: &Tr,
         base: Id,
         items: &[PickerItem],
         events: &mut Vec<UiEvent>,
@@ -283,6 +297,7 @@ impl VoucherEntryScreen {
                 Some(LedgerRef::Pending(_)) | None => None,
             };
             let rc = RowCtx {
+                tr,
                 base,
                 want,
                 focused: self.focus,
@@ -295,19 +310,25 @@ impl VoucherEntryScreen {
     }
 
     /// The narration and the entry aid of a double-entry voucher.
-    pub(super) fn draw_footer(&mut self, ui: &mut Ui, base: Id, events: &mut Vec<UiEvent>) {
+    pub(super) fn draw_footer(
+        &mut self,
+        ui: &mut Ui,
+        tr: &Tr,
+        base: Id,
+        events: &mut Vec<UiEvent>,
+    ) {
         let want = self.focus_pending.then_some(self.focus);
         let spec = FieldSpec {
             id: base.with("narration"),
             field: Field::Narration,
             width: 480.0,
-            hint: "Optional",
+            hint: tr.t("voucher.hint_optional"),
         };
         ui.horizontal(|ui| {
-            ui.label("Narration");
+            ui.label(tr.t("voucher.label.narration"));
             text_field(ui, &spec, &mut self.draft.narration, want, events);
         });
-        ui.label(self.balance_text());
+        ui.label(self.balance_text(tr));
     }
 
     /// The single-entry voucher: the date and the account, the particulars, then the narration.
@@ -316,6 +337,7 @@ impl VoucherEntryScreen {
     pub(super) fn draw_single(
         &mut self,
         ui: &mut Ui,
+        tr: &Tr,
         base: Id,
         masters: &Masters,
         items: &[PickerItem],
@@ -333,13 +355,13 @@ impl VoucherEntryScreen {
             id: base.with("date"),
             field: Field::Date,
             width: 110.0,
-            hint: "dd-mm-yyyy",
+            hint: "dd-mm-yyyy".to_owned(),
         };
         let narration_spec = FieldSpec {
             id: base.with("narration"),
             field: Field::Narration,
             width: 480.0,
-            hint: "Optional",
+            hint: tr.t("voucher.hint_optional"),
         };
         let date_text = &mut self.draft.date_text;
         let narration = &mut self.draft.narration;
@@ -347,7 +369,7 @@ impl VoucherEntryScreen {
         card(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.vertical(|ui| {
-                    ui.weak("Date");
+                    ui.weak(tr.t("voucher.label.date"));
                     text_field(ui, &date_spec, date_text, want, events);
                     if let Some(date) = typed_date {
                         ui.weak(format::date(date));
@@ -355,9 +377,10 @@ impl VoucherEntryScreen {
                 });
                 ui.add_space(24.0);
                 ui.vertical(|ui| {
-                    ui.weak("Account");
+                    ui.weak(tr.t("voucher.label.account"));
                     if let Some((account, lines)) = rows.split_first_mut() {
                         let rc = RowCtx {
+                            tr,
                             base,
                             want,
                             focused,
@@ -367,14 +390,18 @@ impl VoucherEntryScreen {
                         };
                         draw_account(ui, account, &rc, events);
                         if let Some(balance) = account_balance {
-                            ui.weak(format!("Balance now {}", format_signed(balance)));
+                            ui.weak(tr.tf(
+                                "voucher.balance_now",
+                                &[("amount", &format_signed(balance))],
+                            ));
                         }
                         ui.separator();
-                        ui.weak("#   Particulars");
+                        ui.weak(tr.t("voucher.col.particulars"));
                         for (offset, row) in lines.iter_mut().enumerate() {
                             let i = offset.saturating_add(1);
                             let group = group_name(masters, row);
                             let rc = RowCtx {
+                                tr,
                                 base,
                                 want,
                                 focused,
@@ -389,12 +416,10 @@ impl VoucherEntryScreen {
             });
             ui.separator();
             ui.horizontal(|ui| {
-                ui.label("Narration");
+                ui.label(tr.t("voucher.label.narration"));
                 text_field(ui, &narration_spec, narration, want, events);
             });
-            ui.weak(
-                "The account takes the total of the particulars. The engine checks the voucher when it posts.",
-            );
+            ui.weak(tr.t("voucher.account_takes_total"));
         });
     }
 
@@ -411,11 +436,11 @@ impl VoucherEntryScreen {
         }
     }
 
-    pub(super) fn draw_create_form(&mut self, ui: &mut Ui, masters: &Masters) {
+    pub(super) fn draw_create_form(&mut self, ui: &mut Ui, tr: &Tr, masters: &Masters) {
         let Some(form) = self.create.as_mut() else {
             return;
         };
-        match create_form_ui(ui, form, masters, "u4-create-group") {
+        match create_form_ui(ui, tr, form, masters, "u4-create-group") {
             FormAnswer::Open => {}
             FormAnswer::Confirm => {
                 let (name, group) = (form.name.clone(), form.group);
@@ -425,6 +450,10 @@ impl VoucherEntryScreen {
         }
     }
 
+    #[allow(
+        clippy::too_many_lines,
+        reason = "the voucher draw pass lays out header, rows, footer and modals in one place"
+    )]
     pub(super) fn draw(&mut self, ui: &mut Ui, masters: &Masters, tr: &Tr) -> ScreenAction {
         let base = ui.scope_id().with("voucher-entry");
         let escape_wanted = self.create.is_some()
@@ -458,10 +487,7 @@ impl VoucherEntryScreen {
         let save_key = self.keymap.shortcut_label(Action::Save);
         let back_key = self.keymap.shortcut_label(Action::Back);
         if self.confirm_discard {
-            ui.colored_label(
-                ui.visuals().warn_fg_color,
-                "Warning: discard this voucher? Press Y to discard, N to keep it.",
-            );
+            ui.colored_label(ui.visuals().warn_fg_color, tr.t("voucher.confirm_discard"));
         }
         let mut events = Vec::new();
         let mut save_clicked = false;
@@ -469,25 +495,35 @@ impl VoucherEntryScreen {
         let enabled = !self.confirm_discard && self.create.is_none();
         ui.add_enabled_ui(enabled, |ui| {
             page_head(ui, &title, subtitle.as_deref(), |ui| {
-                save_clicked =
-                    button(ui, "Save", save_key.as_deref(), ButtonKind::Primary).clicked();
-                discard_clicked =
-                    button(ui, "Discard", back_key.as_deref(), ButtonKind::Secondary).clicked();
+                save_clicked = button(
+                    ui,
+                    &tr.t("voucher.save"),
+                    save_key.as_deref(),
+                    ButtonKind::Primary,
+                )
+                .clicked();
+                discard_clicked = button(
+                    ui,
+                    &tr.t("voucher.discard"),
+                    back_key.as_deref(),
+                    ButtonKind::Secondary,
+                )
+                .clicked();
             });
             if self.draft.is_single_entry() {
-                self.draw_single(ui, base, masters, &items, &mut events);
+                self.draw_single(ui, tr, base, masters, &items, &mut events);
             } else {
                 card(ui, |ui| {
-                    self.draw_header(ui, base, &mut events);
+                    self.draw_header(ui, tr, base, &mut events);
                     ui.separator();
-                    self.draw_rows(ui, base, &items, &mut events);
+                    self.draw_rows(ui, tr, base, &items, &mut events);
                     ui.separator();
-                    self.draw_footer(ui, base, &mut events);
+                    self.draw_footer(ui, tr, base, &mut events);
                 });
             }
         });
         self.draw_notice(ui);
-        self.draw_create_form(ui, masters);
+        self.draw_create_form(ui, tr, masters);
         self.focus_pending = false;
         if save_clicked {
             self.save(masters);

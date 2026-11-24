@@ -21,6 +21,20 @@ pub enum EntryKind {
 }
 
 impl EntryKind {
+    /// The voucher type's name in `tr`.
+    #[must_use]
+    pub fn label_in(self, tr: &crate::i18n::Tr) -> String {
+        let key = match self {
+            EntryKind::Contra => "voucher.kind.contra",
+            EntryKind::Payment => "voucher.kind.payment",
+            EntryKind::Receipt => "voucher.kind.receipt",
+            EntryKind::Journal => "voucher.kind.journal",
+            EntryKind::Memorandum => "voucher.kind.memorandum",
+            EntryKind::ReversingJournal => "voucher.kind.reversing_journal",
+        };
+        tr.t(key)
+    }
+
     /// The entry kind of a voucher type's base, or `Unsupported` when this screen does not enter it.
     #[must_use]
     pub fn from_base(base: BaseVoucherKind) -> Outcome<EntryKind> {
