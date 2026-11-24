@@ -20,8 +20,8 @@
 | hc | home.ai-off | 0.5450 |
 | hc | ai-settings.local | 0.5507 |
 | dark | home.default | 0.5545 |
-| hc | sales-invoice.saved | 0.5654 |
 | light | home.default | 0.5675 |
+| hc | sales-invoice.saved | 0.5693 |
 | hc | palette.default | 0.5708 |
 | hc | masters.ledgers | 0.5717 |
 | hc | gst.gstr1 | 0.5774 |
@@ -46,8 +46,8 @@
 | dark | bank.default | 0.6095 |
 | light | palette.entry | 0.6150 |
 | light | sales-invoice.default | 0.6161 |
-| dark | sales-invoice.saved | 0.6166 |
 | light | palette.ask | 0.6183 |
+| dark | sales-invoice.saved | 0.6183 |
 | hc | bank.brs | 0.6190 |
 | dark | ai-settings.cloud | 0.6192 |
 | hc | gst.gstr1-correction | 0.6205 |
@@ -96,8 +96,8 @@
 | dark | balance-sheet.provisional | 0.6675 |
 | dark | sales-invoice.b2c | 0.6685 |
 | light | palette.commands | 0.6782 |
-| light | sales-invoice.saved | 0.6814 |
 | light | ai-settings.off | 0.6850 |
+| light | sales-invoice.saved | 0.6861 |
 | dark | gst.gstr1-correction | 0.6863 |
 | dark | palette.commands | 0.6867 |
 | light | gst.gstr1-correction | 0.6879 |
@@ -371,18 +371,6 @@ SSIM 0.5545
 </tr>
 </table>
 
-## hc / sales-invoice.saved
-
-SSIM 0.5654
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/hc/sales-invoice.saved.webp" width="480" alt="mock hc sales-invoice.saved"></td>
-<td><img src="app-captures/hc/sales-invoice.saved.webp" width="480" alt="app hc sales-invoice.saved"></td>
-</tr>
-</table>
-
 ## light / home.default
 
 SSIM 0.5675
@@ -392,6 +380,18 @@ SSIM 0.5675
 <tr>
 <td><img src="mock-v2/captures/states/light/home.default.webp" width="480" alt="mock light home.default"></td>
 <td><img src="app-captures/light/home.default.webp" width="480" alt="app light home.default"></td>
+</tr>
+</table>
+
+## hc / sales-invoice.saved
+
+SSIM 0.5693
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/hc/sales-invoice.saved.webp" width="480" alt="mock hc sales-invoice.saved"></td>
+<td><img src="app-captures/hc/sales-invoice.saved.webp" width="480" alt="app hc sales-invoice.saved"></td>
 </tr>
 </table>
 
@@ -683,18 +683,6 @@ SSIM 0.6161
 </tr>
 </table>
 
-## dark / sales-invoice.saved
-
-SSIM 0.6166
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/dark/sales-invoice.saved.webp" width="480" alt="mock dark sales-invoice.saved"></td>
-<td><img src="app-captures/dark/sales-invoice.saved.webp" width="480" alt="app dark sales-invoice.saved"></td>
-</tr>
-</table>
-
 ## light / palette.ask
 
 SSIM 0.6183
@@ -704,6 +692,18 @@ SSIM 0.6183
 <tr>
 <td><img src="mock-v2/captures/states/light/palette.ask.webp" width="480" alt="mock light palette.ask"></td>
 <td><img src="app-captures/light/palette.ask.webp" width="480" alt="app light palette.ask"></td>
+</tr>
+</table>
+
+## dark / sales-invoice.saved
+
+SSIM 0.6183
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/dark/sales-invoice.saved.webp" width="480" alt="mock dark sales-invoice.saved"></td>
+<td><img src="app-captures/dark/sales-invoice.saved.webp" width="480" alt="app dark sales-invoice.saved"></td>
 </tr>
 </table>
 
@@ -1283,18 +1283,6 @@ SSIM 0.6782
 </tr>
 </table>
 
-## light / sales-invoice.saved
-
-SSIM 0.6814
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/light/sales-invoice.saved.webp" width="480" alt="mock light sales-invoice.saved"></td>
-<td><img src="app-captures/light/sales-invoice.saved.webp" width="480" alt="app light sales-invoice.saved"></td>
-</tr>
-</table>
-
 ## light / ai-settings.off
 
 SSIM 0.6850
@@ -1304,6 +1292,18 @@ SSIM 0.6850
 <tr>
 <td><img src="mock-v2/captures/states/light/ai-settings.off.webp" width="480" alt="mock light ai-settings.off"></td>
 <td><img src="app-captures/light/ai-settings.off.webp" width="480" alt="app light ai-settings.off"></td>
+</tr>
+</table>
+
+## light / sales-invoice.saved
+
+SSIM 0.6861
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/sales-invoice.saved.webp" width="480" alt="mock light sales-invoice.saved"></td>
+<td><img src="app-captures/light/sales-invoice.saved.webp" width="480" alt="app light sales-invoice.saved"></td>
 </tr>
 </table>
 

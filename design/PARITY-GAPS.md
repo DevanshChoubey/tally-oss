@@ -405,7 +405,9 @@ the selected one.
 - **gap: the empty tax box shows dashes**, not 0.00, until the engine has answered.
 - **gap: the rate shows as typed** ("3850"), not "3,850.00": the field is text, and rate
   parsing stays strict (a pinned test refuses "1,000").
-- **gap: the party and place are not carried over after a save.**
+- **gap: after a save the party and place are not carried over,** and the party list opens over
+  the empty form (the mock keeps the party and shows no list); the toast itself matches except
+  for its Undo.
 - **needs a decision: the party list offers every ledger.** The Customer and Supplier fields list
   all ledgers (Capital, Output CGST, Sales, ...). TallyPrime's pages say what to pick there:
   "Select Cash or Bank for cash sales and the party name for credit sales"

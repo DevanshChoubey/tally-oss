@@ -524,6 +524,10 @@ struct Toast {
 }
 
 /// The item invoice entry screen (card U5).
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "independent screen modes (focus pending, discard prompt, save prompt, bill panel); a state enum would not model them"
+)]
 pub struct ItemInvoiceScreen {
     type_name: String,
     /// Whether the item mode has stock items to pick.
@@ -900,7 +904,7 @@ impl ItemInvoiceScreen {
         self.confirming_save = false;
         match self.saveable(masters) {
             Ok(voucher) => {
-                self.save_info = self.save_summary(masters, &voucher);
+                self.save_info = Self::save_summary(masters, &voucher);
                 self.outbox = Some(voucher);
                 self.notice = Some(Notice::Info("Saving...".to_owned()));
             }
@@ -909,7 +913,7 @@ impl ItemInvoiceScreen {
     }
 
     /// The party's name and the engine's invoice total for the voucher about to be saved.
-    fn save_summary(&self, masters: &Masters, voucher: &Voucher) -> Option<(String, Paise)> {
+    fn save_summary(masters: &Masters, voucher: &Voucher) -> Option<(String, Paise)> {
         let party = voucher.party?;
         let name = masters.ledgers.get(&party)?.name.clone();
         let total = voucher

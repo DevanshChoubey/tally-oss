@@ -549,7 +549,8 @@ fn the_next_voucher_number_follows_the_books() {
     let ty = vtype(BaseVoucherKind::Sales);
     let first = match api.next_voucher_number(ty, date!(2026 - 10 - 05)).unwrap() {
         Outcome::Value(Some(n)) => n,
-        other => panic!("{other:?}"),
+        Outcome::Value(None) => panic!("an automatic type has a next number"),
+        Outcome::Unsupported(u) => panic!("{u:?}"),
     };
     let mut v = item_sale(KA_BUYER, Some(29), 10, 1_000_000);
     let built = ok(api.invoice_gst(&v));
@@ -559,7 +560,8 @@ fn the_next_voucher_number_follows_the_books() {
     assert_eq!(posted.number.as_deref(), Some(first.as_str()));
     let second = match api.next_voucher_number(ty, date!(2026 - 10 - 05)).unwrap() {
         Outcome::Value(Some(n)) => n,
-        other => panic!("{other:?}"),
+        Outcome::Value(None) => panic!("an automatic type has a next number"),
+        Outcome::Unsupported(u) => panic!("{u:?}"),
     };
     assert_ne!(first, second);
 }

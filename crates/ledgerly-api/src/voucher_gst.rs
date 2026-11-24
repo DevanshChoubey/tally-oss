@@ -529,6 +529,10 @@ fn rounding_ledger(books: &Books) -> Option<LedgerId> {
 /// A party that is not bill-wise has none (and takes none). A bill-wise party with no typed
 /// references gets one New Ref for the whole value with the master's credit days. Typed references
 /// are resolved as [`PartyBill`] says.
+#[expect(
+    clippy::too_many_lines,
+    reason = "one pass over the typed references, with a refusal per rule; splitting it would scatter one rule"
+)]
 fn party_bills(
     books: &Books,
     party: LedgerId,
@@ -630,6 +634,10 @@ fn format_rupees(p: Paise) -> String {
 }
 
 /// Builds the lines and block of an item invoice from the engine's tax.
+#[expect(
+    clippy::too_many_lines,
+    reason = "one pass that builds the lines, the per-rate rows and the party bills from one breakup"
+)]
 fn build_invoice(
     books: &Books,
     v: &Voucher,

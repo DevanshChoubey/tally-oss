@@ -330,7 +330,8 @@ impl ItemInvoiceScreen {
         }
         match BillRow::parse_kind(&row.kind_text) {
             Some(kind) => {
-                row.kind_text = BillRow::kind_label(kind).to_owned();
+                row.kind_text.clear();
+                row.kind_text.push_str(BillRow::kind_label(kind));
                 Step::Next
             }
             None => self.refuse("The type is New Ref, Agst Ref, Advance or On Account.".to_owned()),

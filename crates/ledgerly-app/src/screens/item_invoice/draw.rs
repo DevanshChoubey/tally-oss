@@ -236,9 +236,9 @@ fn info_note(ui: &mut Ui, lead: &str, bold: &str, rest: &str) {
             ui.set_width(width - 24.0 - 2.0);
             ui.horizontal_top(|ui| {
                 ui.spacing_mut().item_spacing.x = 10.0;
-                let (rect, _) =
+                let (slot, _) =
                     ui.allocate_exact_size(egui::vec2(16.0, 18.0), egui::Sense::hover());
-                let c = egui::pos2(rect.center().x, rect.top() + 9.0);
+                let c = egui::pos2(slot.center().x, slot.top() + 9.0);
                 ui.painter()
                     .circle_stroke(c, 7.0, egui::Stroke::new(1.3, t.text_2));
                 ui.painter().text(
@@ -428,7 +428,7 @@ fn list_caption(focus: Field) -> &'static str {
 
 /// The save question at the foot of the sheet (index.html `savebar`): a green bar with the
 /// question in bold, then Yes and No.
-fn save_bar(ui: &mut Ui, clicks: &mut Option<Click>, title: String) {
+fn save_bar(ui: &mut Ui, clicks: &mut Option<Click>, title: &str) {
     let t = tokens(ui);
     let width = ui.available_width() - 32.0;
     Frame::new()
@@ -449,7 +449,7 @@ fn save_bar(ui: &mut Ui, clicks: &mut Option<Click>, title: String) {
                 let mut job = egui::text::LayoutJob::default();
                 let line = crate::ui::line_height(crate::theme::TEXT_META);
                 job.append(
-                    &title,
+                    title,
                     0.0,
                     egui::TextFormat {
                         font_id: crate::ui::bold_font(ui, crate::theme::TEXT_META),
@@ -1059,7 +1059,7 @@ impl ItemInvoiceScreen {
         });
         self.shown.narration = narration;
         if self.confirming_save {
-            save_bar(ui, clicks, self.save_title());
+            save_bar(ui, clicks, &self.save_title());
         }
     }
 

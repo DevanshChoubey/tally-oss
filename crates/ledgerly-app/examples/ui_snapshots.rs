@@ -672,7 +672,7 @@ const SETUP_SETTLE_FRAMES: u32 = 900;
 
 /// Frames the `sales-invoice.saved` shot waits after Ctrl+A: the post goes through the worker and
 /// the screen says "Saved." only when it answers (60 frames showed "Saving...").
-const SAVE_SETTLE_FRAMES: u32 = 900;
+const SAVE_SETTLE_FRAMES: u32 = 240;
 
 /// One thing the harness sends after a shot's setup: a key press or typed text (the company setup
 /// wizard's name and GSTIN fields need text).
@@ -829,7 +829,7 @@ fn ai_off_shot(state: &'static str, screen: &'static str) -> Shot {
 
 /// The mock's invoice head on Godavari: F8 opens an item invoice, `party` and `place` typed, Sales
 /// as the sales ledger and `order` as the buyer's order number, so the keyboard is on the first
-/// item (design/mock-v2/index.html INV_SEED, lines 1261-1269).
+/// item (design/mock-v2/index.html `INV_SEED`, lines 1261-1269).
 fn godavari_invoice(
     state: &'static str,
     party: &'static str,
