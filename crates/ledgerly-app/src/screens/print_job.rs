@@ -195,16 +195,18 @@ impl PrintJob {
 /// the path is one argument.
 #[must_use]
 pub fn viewer_command(path: &Path) -> (String, Vec<String>) {
+    viewer_command_for(std::env::consts::OS, path)
+}
+
+/// [`viewer_command`] for the operating system named `os` (as [`std::env::consts::OS`] names
+/// it), so every platform's command can be tested on any platform.
+#[must_use]
+pub fn viewer_command_for(os: &str, path: &Path) -> (String, Vec<String>) {
     let file = path.display().to_string();
-    if cfg!(target_os = "macos") {
-        ("open".to_owned(), vec![file])
-    } else if cfg!(target_os = "windows") {
-        (
-            "cmd".to_owned(),
-            vec!["/C".to_owned(), "start".to_owned(), String::new(), file],
-        )
-    } else {
-        ("xdg-open".to_owned(), vec![file])
+    match os {
+        "macos" => ("open".to_owned(), vec![file]),
+        "windows" => ("explorer.exe".to_owned(), vec![file]),
+        _ => ("xdg-open".to_owned(), vec![file]),
     }
 }
 
@@ -267,7 +269,7 @@ mod tests {
 
     #[test]
     fn the_saved_pdf_opens_with_the_systems_viewer() {
-        // Derived: xdg-open on Linux, open on macOS, and `cmd /C start` on Windows; the file is the
+        // Derived: xdg-open on Linux, open on macOS, and explorer.exe on Windows; the file is the
         // last argument in each. Only the platform this test is built for is checked.
         let path = Path::new("/home/someone/Report.pdf");
         let (program, args) = viewer_command(path);
@@ -280,7 +282,18 @@ mod tests {
         } else if cfg!(target_os = "macos") {
             assert_eq!(program, "open");
         } else if cfg!(target_os = "windows") {
-            assert_eq!(program, "cmd");
+            assert_eq!(program, "explorer.exe");
         }
+    }
+
+    #[test]
+    fn on_windows_the_pdf_opens_without_cmd_so_an_ampersand_in_its_name_is_not_a_command() {
+        // Derived: `cmd /C start "" <path>` re-parses its command line, so `&` in a file name
+        // splits it into a second command; explorer.exe takes the path as one argument and opens
+        // it with the file's default application.
+        let path = Path::new(r"C:\Books\Q1 & Q2.pdf");
+        let (program, args) = viewer_command_for("windows", path);
+        assert_eq!(program, "explorer.exe");
+        assert_eq!(args, vec![r"C:\Books\Q1 & Q2.pdf".to_owned()]);
     }
 }
