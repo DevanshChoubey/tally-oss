@@ -16,6 +16,7 @@ path = "src/main.rs"
 ledgerly-core.workspace = true
 ledgerly-model.workspace = true
 ledgerly-api.workspace = true
+ledgerly-sample.workspace = true
 egui.workspace = true
 eframe.workspace = true
 egui_extras.workspace = true
