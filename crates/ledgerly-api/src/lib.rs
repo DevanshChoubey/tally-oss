@@ -13,6 +13,7 @@ pub mod facade;
 mod gst;
 mod home;
 mod maintenance;
+mod nudges;
 mod print;
 mod report;
 mod review;
@@ -30,6 +31,7 @@ pub use gst::{
     Bucket, BucketedVoucher, Gstr1, Gstr1Return, Gstr3bTaxAmounts, Gstr3bWorking, RulePack,
 };
 pub use home::{CashAndBank, HomeFigures, LateBills, MonthSales};
+pub use nudges::{DuplicatePayment, Gstr1Due, HomeNudges, PaymentRef, gstr1_next_due};
 pub use ledgerly_gst::compute::GstBreakup;
 pub use ledgerly_model::{
     Address, Books, Company, EntityKind, Features, NegativeStockPolicy, Voucher,
