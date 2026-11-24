@@ -16,23 +16,25 @@ new-company card (book icon, three buttons with icons, info note) follow the moc
 comes from `Api::home_figures` and `Api::home_nudges`.
 
 - **gap: GST cash payable is unsupported.** The mock shows 39,498.00 "after accepted ITC". The
-  engine has no GSTR-2B reader, so accepted credit is unknown; the tile keeps its slot and says
-  "Not supported yet" with the reason. Its text is longer than the mock's figure, so that tile is
-  taller than the other three.
+  engine has no GSTR-2B reader, so accepted credit is unknown; the tile keeps its slot and size
+  and says "Not supported yet" and "Needs GSTR-2B: not readable yet".
 - **gap: no IMS nudge.** "3 2B records have no IMS action" needs the 2B reader above.
 - **gap: GSTR-1 due date is the monthly one.** The 11th of the next month (CBIC Notification
   83/2020-Central Tax). Quarterly (QRMP) filers' 13th and holiday shifts are not modelled; no
   filing record is kept, so the nudge shows until the month passes. The count is of vouchers
   needing correction, not "items"; "Open GSTR-1" opens the GST returns screen.
-- **gap: the compare dialog is shorter than the mock's.** It has no bank-line row, no "books are
-  on bank statements" check, and no "Adjust rule" or "Not a duplicate" buttons: the engine has no
-  bank matching for these payments and no way to record that a pair is not a duplicate. Esc closes
-  it; Investigate (Ctrl+A) opens the day book. The nudge names the debit ledger (Electricity), not a
-  payee, because rule D-02 compares ledgers. D-02 is our own rule (documented on
+- **gap: the compare dialog differs from the mock's.** It has a "Bank date" row (the date a
+  user-confirmed bank match cleared each payment, or "Not matched to a statement") and the
+  matching status line, in place of the mock's bank-line text ("L03, 12 Nov 2026"), which needs
+  statement line numbers per payment. It has no "Adjust rule" or "Not a duplicate" buttons: the
+  engine cannot record that a pair is not a duplicate. Esc closes it; Investigate (Ctrl+A) opens
+  the day book. The nudge names the party both vouchers share, else the debit ledger (Electricity
+  on Godavari, whose payments have no party). D-02 is our own rule (documented on
   `Api::home_nudges`); the seed's PY/0304 narration was set to "City Power, October bill" so that
   it can fire on Godavari.
-- **gap: review rows.** No age ("2 min ago"): proposals carry no timestamps. Every row shows the
-  bank icon (no camera/bill origin yet, the unlisted sources are named in the footer note). The
+- **gap: review rows.** No age ("2 min ago"): the engine's `ReviewItem` carries no created time.
+  Every row shows the bank icon because every listed proposal is a bank match (the camera and
+  other kinds come from sources that are not listed yet, and are named in the footer note). The
   review queue does not list duplicates. J/K/Enter on Home open the generic queue, not the row.
 - **gap: the entry bar.** It says "not connected in this build" where the mock says "runs on this
   computer"; the greeting has no name and the "Start" card is dropped, by design.
@@ -42,18 +44,18 @@ comes from `Api::home_figures` and `Api::home_nudges`.
 
 ## Palette (round of 2026-11-23, commit d4f0bcb)
 
-- **deferred: the mock's other commands.** After the four voucher commands the mock's `>` list
-  has Read a bill photo, Import bank statement, Import 2B / IMS JSON, Export GSTR-1 JSON, Switch
-  theme, Collapse side bar and Back up now (index.html:1110). Ours follows with the keymap's
-  other commands; the mock's are not built as commands.
+- **gap: three of the mock's other commands are not built.** Read a bill photo, Import bank
+  statement, Switch theme and Collapse side bar now follow the four voucher commands
+  (`RunCommand`; the first two open the purchase-bill and bank screens, the others run in the
+  shell). Left out: Import 2B / IMS JSON (no 2B reader), Export GSTR-1 JSON (it needs the GST
+  screen's file flow, so it is not a one-step command) and Back up now (no backup folder setting
+  to run it against). Their shortcuts (Alt+O, Ctrl+Shift+L, Ctrl+E) are not bound, so no key is
+  shown, except Ctrl+\ for the side bar.
 - **gap: a recent GSTR-1 row has no live detail.** The mock's Recent rows say "As at 21 Nov
   2026", "3 sections ready, 1 needs correction" and "Ledger · Sundry debtors · 1,93,500.00 Dr"
   (index.html:1115). A recent balance sheet and a recent ledger now show the date it opens at and
   the engine's balance, fetched on every opening (`palette/recent.rs`). The GST return is a
   screen, not a palette target, so it is never a recent row; its section count is not built.
-- **deferred: Alt+C keycap on 'Create ledger "q"'** (index.html:1129). Not drawn because the
-  palette takes the keyboard, so Alt+C would not work there. Needs the palette to pass row
-  shortcuts through.
 - **deferred: Ask rows.** The no-match "Ask: q" row and the "Or" Ask/Draft rows (index.html:1129,
   1127) are left out while AI is off, as the mock's own `tierOff` does. Return with the assistant.
 - **data: `#0412` (resolved by the sample company, S8).** Godavari has SI/0412, so a search for it

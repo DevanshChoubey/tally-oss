@@ -103,7 +103,10 @@ fn duplicate_nudge(index: usize, pair: &DuplicatePayment) -> Nudge {
     Nudge {
         tone: NudgeTone::Bad,
         icon: Icon::Alert,
-        title: format!("Possible double payment to {}", pair.ledger),
+        title: format!(
+            "Possible double payment to {}",
+            pair.payee.as_deref().unwrap_or(&pair.ledger)
+        ),
         body: format!(
             "{} on {} repeats {} on {}: same ledger, amount and narration.",
             payment_name(&pair.second),

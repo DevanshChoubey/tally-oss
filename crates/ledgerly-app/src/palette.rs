@@ -107,12 +107,65 @@ pub const LEGEND: [(&str, &str); 5] = [
     ("+", "entry"),
 ];
 
+/// A palette command that is not a keymap action (`design/mock-v2/index.html:1110`, `PAL_CMDS`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum RunCommand {
+    /// Open the screen that reads a bill photo into a draft purchase.
+    ReadBillPhoto,
+    /// Open the bank screen, where a statement file is imported.
+    ImportBankStatement,
+    /// Move to the next theme (light, dark, high contrast).
+    SwitchTheme,
+    /// Fold the sidebar to its rail, or open it again.
+    CollapseSideBar,
+}
+
+impl RunCommand {
+    /// Every command, in the order the palette lists them (the mock's order).
+    pub const ALL: [RunCommand; 4] = [
+        RunCommand::ReadBillPhoto,
+        RunCommand::ImportBankStatement,
+        RunCommand::SwitchTheme,
+        RunCommand::CollapseSideBar,
+    ];
+
+    /// The title the palette shows.
+    #[must_use]
+    pub fn label(self) -> &'static str {
+        match self {
+            RunCommand::ReadBillPhoto => "Read a bill photo",
+            RunCommand::ImportBankStatement => "Import bank statement",
+            RunCommand::SwitchTheme => "Switch theme",
+            RunCommand::CollapseSideBar => "Collapse side bar",
+        }
+    }
+
+    /// The shortcut the shell really binds to this command, if it has one.
+    #[must_use]
+    pub fn shortcut(self) -> &'static str {
+        match self {
+            RunCommand::CollapseSideBar => "Ctrl+\\",
+            RunCommand::ReadBillPhoto
+            | RunCommand::ImportBankStatement
+            | RunCommand::SwitchTheme => "",
+        }
+    }
+
+    /// This command as a palette row.
+    #[must_use]
+    pub fn entry(self) -> PaletteEntry {
+        PaletteEntry::new(PaletteTarget::Run(self), self.label()).with_detail(self.shortcut())
+    }
+}
+
 /// What choosing an entry should do. The string is an opaque key the host understands (a report
 /// id, a ledger id, a voucher id, a setting name, an AI intent name).
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum PaletteTarget {
     /// Run an action from the keymap.
     Command(Action),
+    /// Run a command that is not a keymap action: a shell command or a screen's task.
+    Run(RunCommand),
     /// Open a report.
     Report(String),
     /// Open a master (ledger, item, party).
@@ -201,6 +254,9 @@ const LEAD_COMMANDS: [Action; 4] = [
     Action::NewPayment,
     Action::NewReceipt,
 ];
+
+/// How many commands lead the list.
+pub const LEAD_COMMAND_COUNT: usize = LEAD_COMMANDS.len();
 
 /// One entry per keymap action, with the first chord as the detail text: new sales, purchase,
 /// payment and receipt first (the mock's order), then the rest in [`Action::ALL`] order.

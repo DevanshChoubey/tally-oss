@@ -61,7 +61,9 @@ impl PaletteScope {
             PaletteScope::All => true,
             PaletteScope::Vouchers => matches!(target, PaletteTarget::Voucher(_)),
             PaletteScope::Parties => matches!(target, PaletteTarget::Master(_)),
-            PaletteScope::Commands => matches!(target, PaletteTarget::Command(_)),
+            PaletteScope::Commands => {
+                matches!(target, PaletteTarget::Command(_) | PaletteTarget::Run(_))
+            }
             PaletteScope::Ask | PaletteScope::Entry => {
                 matches!(target, PaletteTarget::AiIntent(_))
             }
@@ -110,7 +112,7 @@ impl Section {
     #[must_use]
     pub(crate) fn of(target: &PaletteTarget) -> Section {
         match target {
-            PaletteTarget::Command(_) => Section::Commands,
+            PaletteTarget::Command(_) | PaletteTarget::Run(_) => Section::Commands,
             PaletteTarget::Report(_) => Section::Reports,
             PaletteTarget::Master(_) => Section::Ledgers,
             PaletteTarget::Voucher(_) => Section::Vouchers,

@@ -483,7 +483,41 @@ fn body(ui: &mut Ui, pair: &DuplicatePayment) {
         plain(pair.narration.clone()),
         plain(pair.narration.clone()),
     );
+    let bank_cell = |p: &ledgerly_api::PaymentRef| {
+        let text = p.bank_date.map_or_else(
+            || "Not matched to a statement".to_owned(),
+            |d| format!("{} (statement)", format::date(d)),
+        );
+        plain(text)
+    };
+    row(
+        ui,
+        "Bank date",
+        cell_w,
+        bank_cell(&pair.first),
+        bank_cell(&pair.second),
+    );
     ui.separator();
+    ui.add_space(SPACE_2);
+    ui.horizontal(|ui| {
+        if pair.first.bank_date.is_some() && pair.second.bank_date.is_some() {
+            icon::icon_sized(ui, Icon::Check, t.ok, 14.0);
+            ui.label(
+                RichText::new("Both payments are on bank statements, so both left the account.")
+                    .size(TEXT_BODY)
+                    .color(t.ok),
+            );
+        } else {
+            icon::icon_sized(ui, Icon::Info, t.text_2, 14.0);
+            ui.label(
+                RichText::new(
+                    "A payment not matched to a bank statement may not have left the account. Match them in Bank reconciliation.",
+                )
+                .size(TEXT_BODY)
+                .color(t.text_2),
+            );
+        }
+    });
     for p in [&pair.first, &pair.second] {
         if p.locked {
             ui.add_space(SPACE_2);

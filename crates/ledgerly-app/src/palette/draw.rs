@@ -14,7 +14,7 @@ use super::{
     LEGEND, PLACEHOLDER, Palette, PaletteChoice, PaletteMode, PaletteScope, PaletteTarget,
     match_span,
 };
-use crate::shell::navigate::row_icon;
+use crate::shell::navigate::{new_ledger_name, row_icon};
 use crate::theme::{RADIUS_L, RADIUS_S, TEXT_BODY, TEXT_CAP, TEXT_META, border_width};
 use crate::ui::icon::{self, ICON_SIZE, Icon};
 use crate::ui::keycap::{self, KEYCAP_HEIGHT};
@@ -60,6 +60,9 @@ pub fn palette_rect(screen: Rect) -> Rect {
     Rect::from_min_max(pos2(left, top), pos2(left + width, bottom))
 }
 
+/// The key the palette reads for the create-ledger row.
+const CREATE_KEY: &str = "Alt+C";
+
 /// A key the palette reads this frame. Escape closes; the rest move or choose.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum KeyPress {
@@ -73,6 +76,8 @@ enum KeyPress {
     ShiftEnter,
     /// Closes the palette without choosing.
     Escape,
+    /// Alt+C: chooses the row that creates a ledger of the typed name, when it is listed.
+    CreateLedger,
 }
 
 /// The other mode: a replace becomes an open on top, and the reverse.
@@ -91,6 +96,9 @@ fn take_keys(ui: &mut Ui) -> Vec<KeyPress> {
         let mut presses = Vec::new();
         if i.consume_key(Modifiers::NONE, Key::Escape) {
             presses.push(KeyPress::Escape);
+        }
+        if i.consume_key(Modifiers::ALT, Key::C) {
+            presses.push(KeyPress::CreateLedger);
         }
         if i.consume_key(Modifiers::NONE, Key::ArrowDown) {
             presses.push(KeyPress::Down);
@@ -137,6 +145,15 @@ impl Palette {
                 KeyPress::Down => self.move_selection(1),
                 KeyPress::Enter => choose_with = choose_with.or(Some(false)),
                 KeyPress::ShiftEnter => choose_with = Some(true),
+                KeyPress::CreateLedger => {
+                    let found = self.results().iter().position(|e| {
+                        matches!(&e.target, PaletteTarget::Master(k) if new_ledger_name(k).is_some())
+                    });
+                    if let Some(row) = found {
+                        self.selected = row;
+                        choose_with = Some(false);
+                    }
+                }
             }
         }
 
@@ -245,13 +262,21 @@ impl Palette {
                         heading = Some(row.section);
                     }
                     let selected = index == self.selected;
-                    let keycap = matches!(row.entry.target, PaletteTarget::Command(_));
+                    let keycap = matches!(
+                        row.entry.target,
+                        PaletteTarget::Command(_) | PaletteTarget::Run(_)
+                    );
+                    let shortcut = match &row.entry.target {
+                        PaletteTarget::Master(k) if new_ledger_name(k).is_some() => CREATE_KEY,
+                        _ => "",
+                    };
                     let line = Line {
                         icon: row_icon(&row.entry.target),
                         title: &row.entry.title,
                         mark: match_span(&row.entry.title, typed),
                         detail: &row.entry.detail,
                         keycap,
+                        shortcut,
                     };
                     let response = padded(ui, |ui| paint_line(ui, &line, selected));
                     if selected {
@@ -432,6 +457,8 @@ struct Line<'a> {
     detail: &'a str,
     /// Whether `detail` is a key, drawn in a keycap at the right (a command's key).
     keycap: bool,
+    /// A key drawn in a keycap at the right of a two-line row (the create-ledger row's Alt+C).
+    shortcut: &'a str,
 }
 
 /// One clickable row (`.it`): the icon, then `title` with `detail` on a second line in the muted
@@ -483,6 +510,21 @@ fn paint_line(ui: &mut Ui, line: &Line<'_>, selected: bool) -> Response {
             line.detail,
             TEXT_META,
             detail_ink,
+        );
+    }
+    if !line.shortcut.is_empty() {
+        let width = keycap::width(ui, line.shortcut);
+        let key_rect = Rect::from_min_size(
+            pos2(rect.right() - ROW_PAD_X - width, mid - KEYCAP_HEIGHT / 2.0),
+            vec2(width, KEYCAP_HEIGHT),
+        );
+        keycap::paint(
+            ui.painter(),
+            key_rect,
+            line.shortcut,
+            t.surface_2,
+            t.border,
+            t.text_2,
         );
     }
     if key_at_right {

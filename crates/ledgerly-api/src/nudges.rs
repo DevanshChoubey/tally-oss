@@ -47,6 +47,9 @@ pub struct PaymentRef {
     pub date: Date,
     /// `true` when the date is on or before the lock date, so a correction goes in a later month.
     pub locked: bool,
+    /// The date the bank cleared the payment, from a bank line a user confirmed against a
+    /// statement; `None` when no line of the payment has been matched.
+    pub bank_date: Option<Date>,
 }
 
 /// Two payments rule D-02 flags: same ledger, same amount, same narration, close in date.
@@ -58,6 +61,8 @@ pub struct DuplicatePayment {
     pub second: PaymentRef,
     /// Name of the ledger both pay.
     pub ledger: String,
+    /// Name of the party both vouchers name, when both name the same one.
+    pub payee: Option<String>,
     /// The amount of each.
     pub amount: Paise,
     /// The narration both carry.
@@ -250,10 +255,17 @@ fn duplicate_payments(
             if days_apart > DUPLICATE_WINDOW_DAYS || a.bills != b.bills {
                 continue;
             }
+            let payee = match (a.voucher.party, b.voucher.party) {
+                (Some(x), Some(y)) if x == y => {
+                    books.masters.ledgers.get(&x).map(|l| l.name.clone())
+                }
+                _ => None,
+            };
             found.push(DuplicatePayment {
                 first: payment_ref(a.voucher, lock),
                 second: payment_ref(b.voucher, lock),
                 ledger: ledger.name.clone(),
+                payee,
                 amount: Paise::new(key.amount),
                 narration: b.voucher.narration.trim().to_owned(),
                 days_apart,
@@ -287,5 +299,10 @@ fn payment_ref(voucher: &Voucher, lock: Option<Date>) -> PaymentRef {
         number: voucher.number.clone(),
         date: voucher.date,
         locked: lock.is_some_and(|lock| voucher.date <= lock),
+        bank_date: voucher
+            .ledger_lines
+            .iter()
+            .filter(|l| l.amount.side == DrCr::Cr)
+            .find_map(|l| l.bank.as_ref().and_then(|b| b.bank_date)),
     }
 }

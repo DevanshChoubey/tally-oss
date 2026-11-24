@@ -4,43 +4,43 @@
 
 | Theme | State | SSIM |
 | --- | --- | --- |
-| hc | home.ai-off | 0.4269 |
-| hc | home.nudge-open | 0.4334 |
-| hc | home.default | 0.4571 |
-| dark | home.ai-off | 0.4849 |
-| hc | palette.entry | 0.4981 |
-| hc | palette.ask | 0.5008 |
-| hc | palette.voucher | 0.5096 |
-| hc | palette.no-results | 0.5227 |
-| light | home.nudge-open | 0.5305 |
-| light | home.default | 0.5345 |
-| dark | home.default | 0.5366 |
-| dark | home.nudge-open | 0.5520 |
-| hc | palette.search | 0.5608 |
-| light | home.ai-off | 0.5646 |
-| hc | palette.default | 0.5840 |
-| light | palette.entry | 0.5850 |
-| light | palette.ask | 0.5881 |
-| light | palette.no-results | 0.5917 |
-| light | palette.voucher | 0.5972 |
-| dark | palette.entry | 0.6122 |
-| dark | palette.no-results | 0.6145 |
-| dark | palette.ask | 0.6150 |
-| hc | palette.commands | 0.6153 |
-| light | palette.search | 0.6191 |
-| dark | palette.voucher | 0.6241 |
-| dark | palette.search | 0.6407 |
-| light | palette.default | 0.6429 |
-| dark | palette.default | 0.6614 |
-| light | palette.commands | 0.6641 |
-| dark | palette.commands | 0.6827 |
+| hc | home.ai-off | 0.4349 |
+| hc | home.nudge-open | 0.4442 |
+| hc | home.default | 0.4741 |
+| dark | home.ai-off | 0.4974 |
+| hc | palette.entry | 0.5155 |
+| hc | palette.ask | 0.5183 |
+| hc | palette.voucher | 0.5271 |
+| light | home.default | 0.5313 |
+| hc | palette.no-results | 0.5336 |
+| dark | home.default | 0.5361 |
+| light | home.nudge-open | 0.5432 |
+| dark | home.nudge-open | 0.5619 |
+| hc | palette.search | 0.5775 |
+| light | home.ai-off | 0.5783 |
+| light | palette.entry | 0.5836 |
+| light | palette.ask | 0.5864 |
+| hc | palette.default | 0.5932 |
+| light | palette.voucher | 0.5955 |
+| light | palette.no-results | 0.5964 |
+| dark | palette.entry | 0.6144 |
+| dark | palette.ask | 0.6172 |
+| dark | palette.no-results | 0.6217 |
+| dark | palette.voucher | 0.6263 |
+| light | palette.search | 0.6277 |
+| hc | palette.commands | 0.6294 |
+| dark | palette.search | 0.6496 |
+| light | palette.default | 0.6539 |
+| dark | palette.default | 0.6722 |
+| light | palette.commands | 0.6764 |
+| dark | palette.commands | 0.6969 |
 | hc | home.empty | 0.7564 |
 | dark | home.empty | 0.7980 |
 | light | home.empty | 0.8024 |
 
 ## hc / home.ai-off
 
-SSIM 0.4269
+SSIM 0.4349
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -52,7 +52,7 @@ SSIM 0.4269
 
 ## hc / home.nudge-open
 
-SSIM 0.4334
+SSIM 0.4442
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -64,7 +64,7 @@ SSIM 0.4334
 
 ## hc / home.default
 
-SSIM 0.4571
+SSIM 0.4741
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -76,7 +76,7 @@ SSIM 0.4571
 
 ## dark / home.ai-off
 
-SSIM 0.4849
+SSIM 0.4974
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -88,7 +88,7 @@ SSIM 0.4849
 
 ## hc / palette.entry
 
-SSIM 0.4981
+SSIM 0.5155
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -100,7 +100,7 @@ SSIM 0.4981
 
 ## hc / palette.ask
 
-SSIM 0.5008
+SSIM 0.5183
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -112,7 +112,7 @@ SSIM 0.5008
 
 ## hc / palette.voucher
 
-SSIM 0.5096
+SSIM 0.5271
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -122,33 +122,9 @@ SSIM 0.5096
 </tr>
 </table>
 
-## hc / palette.no-results
-
-SSIM 0.5227
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/hc/palette.no-results.webp" width="480" alt="mock hc palette.no-results"></td>
-<td><img src="app-captures/hc/palette.no-results.webp" width="480" alt="app hc palette.no-results"></td>
-</tr>
-</table>
-
-## light / home.nudge-open
-
-SSIM 0.5305
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/light/home.nudge-open.webp" width="480" alt="mock light home.nudge-open"></td>
-<td><img src="app-captures/light/home.nudge-open.webp" width="480" alt="app light home.nudge-open"></td>
-</tr>
-</table>
-
 ## light / home.default
 
-SSIM 0.5345
+SSIM 0.5313
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -158,9 +134,21 @@ SSIM 0.5345
 </tr>
 </table>
 
+## hc / palette.no-results
+
+SSIM 0.5336
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/hc/palette.no-results.webp" width="480" alt="mock hc palette.no-results"></td>
+<td><img src="app-captures/hc/palette.no-results.webp" width="480" alt="app hc palette.no-results"></td>
+</tr>
+</table>
+
 ## dark / home.default
 
-SSIM 0.5366
+SSIM 0.5361
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -170,9 +158,21 @@ SSIM 0.5366
 </tr>
 </table>
 
+## light / home.nudge-open
+
+SSIM 0.5432
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/home.nudge-open.webp" width="480" alt="mock light home.nudge-open"></td>
+<td><img src="app-captures/light/home.nudge-open.webp" width="480" alt="app light home.nudge-open"></td>
+</tr>
+</table>
+
 ## dark / home.nudge-open
 
-SSIM 0.5520
+SSIM 0.5619
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -184,7 +184,7 @@ SSIM 0.5520
 
 ## hc / palette.search
 
-SSIM 0.5608
+SSIM 0.5775
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -196,7 +196,7 @@ SSIM 0.5608
 
 ## light / home.ai-off
 
-SSIM 0.5646
+SSIM 0.5783
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -206,21 +206,9 @@ SSIM 0.5646
 </tr>
 </table>
 
-## hc / palette.default
-
-SSIM 0.5840
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/hc/palette.default.webp" width="480" alt="mock hc palette.default"></td>
-<td><img src="app-captures/hc/palette.default.webp" width="480" alt="app hc palette.default"></td>
-</tr>
-</table>
-
 ## light / palette.entry
 
-SSIM 0.5850
+SSIM 0.5836
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -232,7 +220,7 @@ SSIM 0.5850
 
 ## light / palette.ask
 
-SSIM 0.5881
+SSIM 0.5864
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -242,21 +230,21 @@ SSIM 0.5881
 </tr>
 </table>
 
-## light / palette.no-results
+## hc / palette.default
 
-SSIM 0.5917
+SSIM 0.5932
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
 <tr>
-<td><img src="mock-v2/captures/states/light/palette.no-results.webp" width="480" alt="mock light palette.no-results"></td>
-<td><img src="app-captures/light/palette.no-results.webp" width="480" alt="app light palette.no-results"></td>
+<td><img src="mock-v2/captures/states/hc/palette.default.webp" width="480" alt="mock hc palette.default"></td>
+<td><img src="app-captures/hc/palette.default.webp" width="480" alt="app hc palette.default"></td>
 </tr>
 </table>
 
 ## light / palette.voucher
 
-SSIM 0.5972
+SSIM 0.5955
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -266,9 +254,21 @@ SSIM 0.5972
 </tr>
 </table>
 
+## light / palette.no-results
+
+SSIM 0.5964
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/palette.no-results.webp" width="480" alt="mock light palette.no-results"></td>
+<td><img src="app-captures/light/palette.no-results.webp" width="480" alt="app light palette.no-results"></td>
+</tr>
+</table>
+
 ## dark / palette.entry
 
-SSIM 0.6122
+SSIM 0.6144
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -278,21 +278,9 @@ SSIM 0.6122
 </tr>
 </table>
 
-## dark / palette.no-results
-
-SSIM 0.6145
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/dark/palette.no-results.webp" width="480" alt="mock dark palette.no-results"></td>
-<td><img src="app-captures/dark/palette.no-results.webp" width="480" alt="app dark palette.no-results"></td>
-</tr>
-</table>
-
 ## dark / palette.ask
 
-SSIM 0.6150
+SSIM 0.6172
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -302,33 +290,21 @@ SSIM 0.6150
 </tr>
 </table>
 
-## hc / palette.commands
+## dark / palette.no-results
 
-SSIM 0.6153
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/hc/palette.commands.webp" width="480" alt="mock hc palette.commands"></td>
-<td><img src="app-captures/hc/palette.commands.webp" width="480" alt="app hc palette.commands"></td>
-</tr>
-</table>
-
-## light / palette.search
-
-SSIM 0.6191
+SSIM 0.6217
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
 <tr>
-<td><img src="mock-v2/captures/states/light/palette.search.webp" width="480" alt="mock light palette.search"></td>
-<td><img src="app-captures/light/palette.search.webp" width="480" alt="app light palette.search"></td>
+<td><img src="mock-v2/captures/states/dark/palette.no-results.webp" width="480" alt="mock dark palette.no-results"></td>
+<td><img src="app-captures/dark/palette.no-results.webp" width="480" alt="app dark palette.no-results"></td>
 </tr>
 </table>
 
 ## dark / palette.voucher
 
-SSIM 0.6241
+SSIM 0.6263
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -338,9 +314,33 @@ SSIM 0.6241
 </tr>
 </table>
 
+## light / palette.search
+
+SSIM 0.6277
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/palette.search.webp" width="480" alt="mock light palette.search"></td>
+<td><img src="app-captures/light/palette.search.webp" width="480" alt="app light palette.search"></td>
+</tr>
+</table>
+
+## hc / palette.commands
+
+SSIM 0.6294
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/hc/palette.commands.webp" width="480" alt="mock hc palette.commands"></td>
+<td><img src="app-captures/hc/palette.commands.webp" width="480" alt="app hc palette.commands"></td>
+</tr>
+</table>
+
 ## dark / palette.search
 
-SSIM 0.6407
+SSIM 0.6496
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -352,7 +352,7 @@ SSIM 0.6407
 
 ## light / palette.default
 
-SSIM 0.6429
+SSIM 0.6539
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -364,7 +364,7 @@ SSIM 0.6429
 
 ## dark / palette.default
 
-SSIM 0.6614
+SSIM 0.6722
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -376,7 +376,7 @@ SSIM 0.6614
 
 ## light / palette.commands
 
-SSIM 0.6641
+SSIM 0.6764
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -388,7 +388,7 @@ SSIM 0.6641
 
 ## dark / palette.commands
 
-SSIM 0.6827
+SSIM 0.6969
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>

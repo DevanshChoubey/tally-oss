@@ -539,3 +539,110 @@ fn a_payment_on_or_before_the_lock_date_is_marked_locked() {
     let d = found.first().unwrap();
     assert_eq!((d.first.locked, d.second.locked), (true, false));
 }
+
+/// `v` with `party` set as its party ledger.
+fn with_party(mut v: Voucher, party: Option<LedgerId>) -> Voucher {
+    v.party = party;
+    v
+}
+
+#[test]
+fn the_payee_is_the_party_both_payments_name() {
+    // provenance: derived. PY/1 and PY/2 as in the test above, each naming Supplier as its party
+    // ledger, so the payee is "Supplier". With no party on either, or two different parties, there
+    // is no single payee and the field is None (the Home nudge then names the ledger).
+    let pay = |id, number, on, party| {
+        with_party(
+            payment(
+                id,
+                number,
+                on,
+                POWER,
+                14_860,
+                NARRATION,
+                VoucherStatus::Regular,
+            ),
+            party,
+        )
+    };
+    let named = books(
+        "s9_nudge_payee.ledgerly",
+        vec![
+            pay(1, "PY/1", date!(2026 - 10 - 28), Some(SUPPLIER)),
+            pay(2, "PY/2", date!(2026 - 11 - 12), Some(SUPPLIER)),
+        ],
+    );
+    let found = duplicates(&named, date!(2026 - 11 - 21));
+    assert_eq!(
+        found.first().map(|d| d.payee.as_deref()),
+        Some(Some("Supplier"))
+    );
+    let none = books(
+        "s9_nudge_nopayee.ledgerly",
+        vec![
+            pay(1, "PY/1", date!(2026 - 10 - 28), None),
+            pay(2, "PY/2", date!(2026 - 11 - 12), None),
+        ],
+    );
+    assert_eq!(
+        duplicates(&none, date!(2026 - 11 - 21))
+            .first()
+            .map(|d| d.payee.as_deref()),
+        Some(None)
+    );
+    let mixed = books(
+        "s9_nudge_mixedpayee.ledgerly",
+        vec![
+            pay(1, "PY/1", date!(2026 - 10 - 28), Some(SUPPLIER)),
+            pay(2, "PY/2", date!(2026 - 11 - 12), None),
+        ],
+    );
+    assert_eq!(
+        duplicates(&mixed, date!(2026 - 11 - 21))
+            .first()
+            .map(|d| d.payee.as_deref()),
+        Some(None)
+    );
+}
+
+#[test]
+fn a_payment_matched_to_a_statement_carries_its_bank_date() {
+    // provenance: derived. PY/1's cash line (the credit) carries a confirmed bank date of 2 Nov
+    // 2026 (the mock's "2 Nov 2026 statement"); PY/2's has none, so it is not on a statement.
+    let mut first = payment(
+        1,
+        "PY/1",
+        date!(2026 - 10 - 28),
+        POWER,
+        14_860,
+        NARRATION,
+        VoucherStatus::Regular,
+    );
+    for l in &mut first.ledger_lines {
+        if l.amount.side == ledgerly_core::DrCr::Cr {
+            l.bank = Some(ledgerly_model::BankAllocation {
+                instrument: ledgerly_model::InstrumentKind::Neft,
+                instrument_number: None,
+                instrument_date: None,
+                bank_date: Some(date!(2026 - 11 - 02)),
+                favouring: None,
+            });
+        }
+    }
+    let second = payment(
+        2,
+        "PY/2",
+        date!(2026 - 11 - 12),
+        POWER,
+        14_860,
+        NARRATION,
+        VoucherStatus::Regular,
+    );
+    let api = books("s9_nudge_bankdate.ledgerly", vec![first, second]);
+    let found = duplicates(&api, date!(2026 - 11 - 21));
+    let d = found.first().unwrap();
+    assert_eq!(
+        (d.first.bank_date, d.second.bank_date),
+        (Some(date!(2026 - 11 - 02)), None)
+    );
+}

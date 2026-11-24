@@ -11,7 +11,7 @@ use crate::ui::format;
 /// Why the GST tile has no figure: the engine has the GSTR-3B working but not the payable
 /// after set-off, which needs the input credit accepted from GSTR-2B, and it has no reader for
 /// that file.
-const GST_REASON: &str = "the set-off needs the input credit accepted from GSTR-2B, and the engine cannot read GSTR-2B yet";
+const GST_REASON: &str = "not readable yet";
 
 /// "s" for any count but one.
 fn plural(count: usize) -> &'static str {
@@ -93,7 +93,7 @@ pub fn tiles(figures: &HomeFigures, as_of: Date) -> Vec<Kpi> {
 fn gst_tile(as_of: Date) -> Kpi {
     Kpi {
         label: format!("GST cash payable, {}", format::month_abbrev(as_of.month())),
-        value: Outcome::unsupported("Payable after set-off", GST_REASON),
+        value: Outcome::unsupported("Needs GSTR-2B", GST_REASON),
         footnote: "GSTR-3B working, after accepted ITC".to_owned(),
         target: HomeTarget::GstReturns {
             tab: "gstr3b".to_owned(),

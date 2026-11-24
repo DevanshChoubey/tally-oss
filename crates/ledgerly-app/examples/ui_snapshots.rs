@@ -930,7 +930,7 @@ fn light_shots() -> Vec<Shot> {
     vec![
         shot("home.default", &[]),
         // The possible-double-payment nudge's Compare button (rule D-02) opens the comparison.
-        shot("home.nudge-open", &[]).click(1186.0, 610.0),
+        shot("home.nudge-open", &[]).click(1176.0, 570.0),
         // Recent needs a choice first: open the balance sheet from the palette, go back, and
         // reopen the palette on the empty query (index.html:1115 lists recents there).
         shot("palette.default", &[palette])

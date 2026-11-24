@@ -67,13 +67,14 @@ pub(super) fn show(
         }
         if !panel.not_connected.is_empty() {
             ui.add_space(SPACE_2);
-            note(
+            para(
                 ui,
-                NoteKind::Info,
                 &format!(
                     "{} sources are not connected yet, so their proposals are not listed. The Review queue says which.",
                     panel.not_connected.len()
                 ),
+                TEXT_META,
+                t.text_3,
             );
         }
         ui.add_space(SPACE_2);
@@ -151,7 +152,7 @@ fn proposal_row(ui: &mut Ui, row: &QueueRow, selected: bool) -> egui::Response {
                         6.0,
                         TextFormat::simple(FontId::proportional(TEXT_BODY), t.text_2),
                     );
-                    ui.add(egui::Label::new(job).wrap());
+                    ui.add(egui::Label::new(job).truncate());
                     ui.label(RichText::new(&row.source).size(TEXT_META).color(t.text_3));
                 });
                 ui.allocate_ui_with_layout(

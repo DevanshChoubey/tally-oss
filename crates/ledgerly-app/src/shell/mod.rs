@@ -58,7 +58,7 @@ use egui::{Key, Modifiers};
 
 use crate::keymap::{self, Action, Keymap};
 use crate::palette::{
-    Palette, PaletteChoice, PaletteEntry, PaletteMode, PaletteSearch, PaletteTarget,
+    Palette, PaletteChoice, PaletteEntry, PaletteMode, PaletteSearch, PaletteTarget, RunCommand,
 };
 use crate::screens::setup::{SETUP_TITLE, SetupScreen};
 use crate::theme::{self, ThemeKind, Tokens};
@@ -300,13 +300,18 @@ impl Shell {
     fn pick(&mut self, choice: &PaletteChoice) {
         match &choice.target {
             PaletteTarget::Command(action) => self.pick_command(*action, choice),
+            PaletteTarget::Run(RunCommand::SwitchTheme) => self.run_shell_cmd(ChromeCmd::CycleTheme),
+            PaletteTarget::Run(RunCommand::CollapseSideBar) => {
+                self.run_shell_cmd(ChromeCmd::ToggleRail);
+            }
             PaletteTarget::AiIntent(name) => {
                 self.notice = Some(format!(
                     "Not supported yet: the assistant request \"{name}\" (the assistant is not \
                      connected to the app yet)."
                 ));
             }
-            PaletteTarget::Report(_)
+            PaletteTarget::Run(RunCommand::ReadBillPhoto | RunCommand::ImportBankStatement)
+            | PaletteTarget::Report(_)
             | PaletteTarget::Master(_)
             | PaletteTarget::Voucher(_)
             | PaletteTarget::Setting(_)

@@ -62,7 +62,7 @@ use ledgerly_model::{BaseVoucherKind, Books, Scenario};
 use thiserror::Error;
 
 use crate::keymap::{Action, Keymap};
-use crate::palette::{PaletteEntry, PaletteTarget, command_entries};
+use crate::palette::{PaletteEntry, PaletteTarget, RunCommand, command_entries};
 use crate::screens::ai_settings::AiSettingsScreen;
 use crate::screens::ask::AskScreen;
 use crate::screens::bank::BankScreen;
@@ -247,11 +247,15 @@ pub fn menu_entries() -> Vec<PaletteEntry> {
         .collect()
 }
 
-/// The rows the host feeds the palette: every keymap command, then the report menu. Ledgers,
+/// The rows the host feeds the palette: every keymap command (with the commands that are not
+/// keymap actions after the four voucher ones), then the report menu. Ledgers,
 /// vouchers and settings come from the API search ([`crate::palette::PaletteSearch`]).
 #[must_use]
 pub fn host_entries(keymap: &Keymap) -> Vec<PaletteEntry> {
     let mut entries = command_entries(keymap);
+    // The mock lists these straight after the four voucher commands (`PAL_CMDS`).
+    let at = entries.len().min(crate::palette::LEAD_COMMAND_COUNT);
+    entries.splice(at..at, RunCommand::ALL.map(RunCommand::entry));
     entries.extend(menu_entries());
     entries
 }
@@ -291,7 +295,7 @@ pub const SETUP_KEY: &str = "setup";
 #[must_use]
 pub fn row_icon(target: &PaletteTarget) -> Icon {
     match target {
-        PaletteTarget::Command(_) => Icon::Sliders,
+        PaletteTarget::Command(_) | PaletteTarget::Run(_) => Icon::Sliders,
         PaletteTarget::Master(key) => {
             if new_ledger_name(key).is_some() {
                 Icon::Plus
@@ -818,9 +822,10 @@ pub fn open_report(kind: ReportKind, ctx: &AppCtx) -> Result<Box<dyn Screen>, Na
 /// [`NavError::VoucherNotFound`] for a voucher the books do not hold.
 pub fn open_target(target: &PaletteTarget, ctx: &AppCtx) -> Result<Box<dyn Screen>, NavError> {
     match target {
-        PaletteTarget::Command(_) | PaletteTarget::AiIntent(_) | PaletteTarget::Fill(_) => {
-            Err(NavError::NotNavigation)
-        }
+        PaletteTarget::Command(_)
+        | PaletteTarget::Run(_)
+        | PaletteTarget::AiIntent(_)
+        | PaletteTarget::Fill(_) => Err(NavError::NotNavigation),
         PaletteTarget::Report(key) => {
             if let Some(screen) = screen_for_key(key, ctx) {
                 return screen;

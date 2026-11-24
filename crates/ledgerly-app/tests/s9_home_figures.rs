@@ -53,14 +53,17 @@ fn pair() -> DuplicatePayment {
             number: Some("PY/0304".to_owned()),
             date: date!(2026 - 10 - 28),
             locked: true,
+            bank_date: None,
         },
         second: PaymentRef {
             id: VoucherId(2),
             number: Some("PY/0316".to_owned()),
             date: date!(2026 - 11 - 12),
             locked: false,
+            bank_date: None,
         },
         ledger: "Electricity".to_owned(),
+        payee: None,
         amount: rs(14_860),
         narration: "City Power, October bill".to_owned(),
         days_apart: 15,
@@ -308,4 +311,31 @@ fn a_rule_that_could_not_run_says_so() {
     assert_eq!(n[1].title, "Overdue customer bills not counted");
     assert_eq!(n[1].body, "no bill detail");
     assert!(n.iter().all(|x| x.tone == NudgeTone::Neutral));
+}
+
+#[test]
+fn the_duplicate_nudge_names_the_payee_when_the_pair_has_one() {
+    // provenance: derived from the card's own rule: the title names the payee the engine gives
+    // (the party both vouchers name) and falls back to the ledger when there is none.
+    let mut with_payee = pair();
+    with_payee.payee = Some("City Power Distribution".to_owned());
+    let found = |p: DuplicatePayment| {
+        nudges(
+            &figures(Outcome::Value(LateBills {
+                count: 0,
+                open: Paise::ZERO,
+            })),
+            &HomeNudges {
+                gstr1: None,
+                duplicates: Outcome::Value(vec![p]),
+            },
+        )
+    };
+    assert_eq!(
+        found(with_payee)
+            .iter()
+            .find(|n| n.title.starts_with("Possible double payment"))
+            .map(|n| n.title.as_str()),
+        Some("Possible double payment to City Power Distribution")
+    );
 }
