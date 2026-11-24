@@ -23,7 +23,10 @@ use ledgerly_core::{Date, DrCr, Period};
 
 use super::text::{amount_on_side, cell_text};
 use super::{TableEvents, ViewCell, ViewReport};
-use crate::theme::{RADIUS_M, TEXT_BODY, TEXT_META, border_width, shadow_1};
+use crate::keymap::Action;
+use crate::theme::{RADIUS_M, TEXT_BODY, TEXT_H2, TEXT_META, border_width, shadow_1};
+use crate::ui::button::{ButtonKind, button};
+use crate::ui::icon::Icon;
 use crate::ui::table::{self, CellPlace, RowState, T_HEAD_HEIGHT, T_ROW_HEIGHT, T_TOTAL_HEIGHT};
 use crate::ui::{a11y, format};
 use crate::ui::{bold_font, kind, tokens};
@@ -179,8 +182,94 @@ pub fn empty_title(period: Period) -> String {
 }
 
 /// The sentence under the empty title: what to do next, with the voucher keys.
-pub const EMPTY_SENTENCE: &str = "Start with a voucher key: F8 sales, F9 purchase, F5 payment, \
-F6 receipt. Every voucher you save lands here.";
+pub const EMPTY_SENTENCE: &str = "Start with a voucher key. Every voucher you save lands here.";
+
+/// The buttons under the empty day book, each with the voucher it opens and its key
+/// (index.html:1646: Sales F8, Purchase F9, Payment F5, Receipt F6).
+pub const EMPTY_ACTIONS: [(&str, &str, Action); 4] = [
+    ("Sales", "F8", Action::NewSales),
+    ("Purchase", "F9", Action::NewPurchase),
+    ("Payment", "F5", Action::NewPayment),
+    ("Receipt", "F6", Action::NewReceipt),
+];
+
+/// Draws the empty day book in a card (index.html:1646): the book icon, the title, the sentence
+/// and the four voucher buttons, then the footnote under it. Returns the voucher the user chose
+/// to start, and the footnote's rectangle.
+pub(super) fn draw_empty(ui: &mut Ui, report: &ViewReport) -> (Option<Action>, Rect) {
+    let t = tokens(ui);
+    let k = kind(ui);
+    let mut chosen = None;
+    Frame::new()
+        .fill(t.surface)
+        .stroke(Stroke::new(border_width(k), t.border))
+        .corner_radius(RADIUS_M)
+        .shadow(shadow_1(k))
+        .show(ui, |ui| {
+            ui.set_min_width(ui.available_width());
+            ui.vertical_centered(|ui| {
+                ui.add_space(40.0);
+                let (icon_rect, _) = ui.allocate_exact_size(vec2(32.0, 32.0), Sense::hover());
+                crate::ui::icon::paint(ui.painter(), icon_rect, Icon::Book, t.text_3);
+                ui.add_space(10.0);
+                ui.label(
+                    egui::RichText::new(empty_title(report.params.period))
+                        .font(bold_font(ui, TEXT_H2))
+                        .color(t.text),
+                );
+                ui.add_space(4.0);
+                ui.label(
+                    egui::RichText::new(EMPTY_SENTENCE)
+                        .size(TEXT_BODY)
+                        .color(t.text_2),
+                );
+                ui.add_space(14.0);
+                ui.horizontal(|ui| {
+                    let widths: f32 = EMPTY_ACTIONS
+                        .iter()
+                        .map(|(label, key, _)| button_width(ui, label, key) + 8.0)
+                        .sum();
+                    ui.add_space(((ui.available_width() - widths) / 2.0).max(0.0));
+                    ui.spacing_mut().item_spacing.x = 8.0;
+                    for (label, key, action) in EMPTY_ACTIONS {
+                        if button(ui, label, Some(key), ButtonKind::Secondary).clicked() {
+                            chosen = Some(action);
+                        }
+                    }
+                });
+                ui.add_space(40.0);
+            });
+        });
+    ui.add_space(6.0);
+    let foot = ui
+        .scope(|ui| {
+            ui.spacing_mut().item_spacing = vec2(8.0, 2.0);
+            for line in report
+                .notes
+                .iter()
+                .map(String::as_str)
+                .chain([NOT_RECORDED])
+            {
+                ui.label(egui::RichText::new(line).size(TEXT_META).color(t.text_3));
+            }
+        })
+        .response
+        .rect;
+    (chosen, foot)
+}
+
+/// The width a button reading `label` with `key` takes, so a row of buttons can be centred.
+fn button_width(ui: &Ui, label: &str, key: &str) -> f32 {
+    let font = egui::FontId::proportional(TEXT_BODY);
+    let galley = |text: &str| {
+        ui.painter()
+            .layout_no_wrap(text.to_owned(), font.clone(), tokens(ui).text)
+            .size()
+            .x
+    };
+    // 12 px padding each side, 8 between the label and the keycap, 14 of keycap padding.
+    galley(label) + galley(key) + 12.0 * 2.0 + 8.0 + 14.0
+}
 
 /// The Date cell as the mock writes dates (`fmtDate`, "20 Nov 2026"); any other cell as
 /// [`cell_text`] writes it.

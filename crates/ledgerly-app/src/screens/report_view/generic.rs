@@ -8,7 +8,9 @@
 
 use egui::{Frame, Rect, Role, ScrollArea, Sense, Stroke, Ui, pos2, vec2};
 
-use super::text::cell_text;
+use ledgerly_core::DrCr;
+
+use super::text::{amount_on_side, cell_text};
 use super::{TableEvents, ViewCell, ViewReport, ViewRow, ViewRowKind};
 use crate::theme::{RADIUS_M, TEXT_BODY, TEXT_META, border_width, shadow_1};
 use crate::ui::table::{self, CellPlace, RowState, T_HEAD_HEIGHT, T_ROW_HEIGHT, T_TOTAL_HEIGHT};
@@ -105,6 +107,36 @@ pub fn line_heights(report: &ViewReport) -> Vec<f32> {
     out
 }
 
+/// Whether column `i` only repeats the label column: it is headed like the label column and every
+/// cell in it is empty or the row's own label. Such a column is not drawn a second time (the
+/// ledger vouchers report carries its particulars both as the row label and as a column).
+#[must_use]
+pub fn repeats_label(report: &ViewReport, i: usize) -> bool {
+    report.columns.get(i).is_some_and(|c| c == LABEL_HEADING)
+        && report.rows.iter().all(|row| match row.cells.get(i) {
+            Some(ViewCell::Empty) | None => true,
+            Some(ViewCell::Text(text)) => *text == row.label,
+            Some(_) => false,
+        })
+        && report
+            .totals
+            .get(i)
+            .is_none_or(|cell| matches!(cell, ViewCell::Empty))
+}
+
+/// The text of `cell` in the column headed `heading`. A figure in the `Debit` column is a debit
+/// and one in `Credit` a credit, so they drop their Dr or Cr word (the mock prints bare figures,
+/// index.html:1604-1605); a figure on the other side of its column keeps its side word. Every
+/// other column reads as [`cell_text`] writes it.
+#[must_use]
+pub fn column_cell_text(heading: &str, cell: &ViewCell) -> String {
+    match heading {
+        "Debit" => amount_on_side(cell, DrCr::Dr),
+        "Credit" => amount_on_side(cell, DrCr::Cr),
+        _ => cell_text(cell),
+    }
+}
+
 /// What [`draw`] reports back besides the clicks.
 pub(super) struct Drawn {
     /// Clicks and double-clicks on lines.
@@ -148,7 +180,7 @@ pub(super) fn draw(
             drawn = draw_rows(ui, report, &cols, selected, scroll_to_selected, room);
             if !report.totals.is_empty() {
                 let (rect, _) = ui.allocate_exact_size(vec2(width, T_TOTAL_HEIGHT), Sense::hover());
-                paint_total(ui, rect, &cols, &report.totals);
+                paint_total(ui, rect, &cols, &report.columns, &report.totals);
             }
         });
     drawn
@@ -198,7 +230,7 @@ fn draw_rows(
                 };
                 a11y::name(ui, &response, Role::Row, &line_name(row));
                 a11y::focus_ring(ui, &response, rect);
-                paint_line(ui, rect, cols, row, state);
+                paint_line(ui, rect, cols, &report.columns, row, state);
                 if state.selected {
                     drawn.selected = Some(rect);
                 }
@@ -248,18 +280,32 @@ fn emphasised(kind: ViewRowKind) -> bool {
 
 /// Where the label and each column sit across a line, and how their cells sit in them.
 struct Columns {
-    /// [`column_spans`]: the label's, then each column's.
+    /// [`column_spans`] of the drawn columns: the label's, then each drawn column's.
     spans: Vec<(f32, f32)>,
-    /// [`column_kinds`].
+    /// [`column_kinds`] of the drawn columns.
     kinds: Vec<ColumnKind>,
+    /// For each report column, its place among the drawn columns; `None` when it is not drawn
+    /// (see [`repeats_label`]).
+    slot: Vec<Option<usize>>,
 }
 
 impl Columns {
     fn new(report: &ViewReport, width: f32) -> Self {
-        let kinds = column_kinds(report);
+        let all = column_kinds(report);
+        let mut slot = Vec::with_capacity(all.len());
+        let mut kinds = Vec::with_capacity(all.len());
+        for (i, kind) in all.iter().enumerate() {
+            if repeats_label(report, i) {
+                slot.push(None);
+            } else {
+                slot.push(Some(kinds.len()));
+                kinds.push(*kind);
+            }
+        }
         Self {
             spans: column_spans(width, &kinds),
             kinds,
+            slot,
         }
     }
 
@@ -277,10 +323,12 @@ impl Columns {
             .map_or(line, |span| Self::span(line, *span))
     }
 
-    /// Column `i` of `line` and where its text goes; `None` past the last column.
+    /// Report column `i` of `line` and where its text goes; `None` past the last column or for a
+    /// column that is not drawn.
     fn cell(&self, line: Rect, i: usize) -> Option<(Rect, CellPlace)> {
-        let span = *self.spans.get(i + 1)?;
-        let place = match self.kinds.get(i)? {
+        let drawn = (*self.slot.get(i)?)?;
+        let span = *self.spans.get(drawn + 1)?;
+        let place = match self.kinds.get(drawn)? {
             ColumnKind::Text => CellPlace::Left(table::CELL_PAD_X),
             ColumnKind::Figure => CellPlace::Right,
         };
@@ -312,7 +360,14 @@ fn paint_heading(ui: &Ui, rect: Rect, cols: &Columns, columns: &[String]) {
 
 /// A row: fill, rule and bar by [`table::paint_row`], the label at its depth's indent and each
 /// figure at its column's right.
-fn paint_line(ui: &Ui, rect: Rect, cols: &Columns, row: &ViewRow, state: RowState) {
+fn paint_line(
+    ui: &Ui,
+    rect: Rect,
+    cols: &Columns,
+    headings: &[String],
+    row: &ViewRow,
+    state: RowState,
+) {
     let t = tokens(ui);
     table::paint_row(ui, rect, state);
     let font = if state.sub {
@@ -335,7 +390,7 @@ fn paint_line(ui: &Ui, rect: Rect, cols: &Columns, row: &ViewRow, state: RowStat
                 ui,
                 cell_rect,
                 1.0,
-                &cell_text(cell),
+                &column_cell_text(headings.get(i).map_or("", String::as_str), cell),
                 font.clone(),
                 t.text,
                 place,
@@ -354,7 +409,7 @@ fn line_name(row: &ViewRow) -> String {
 }
 
 /// The total line: semibold, with the rule above and the double rule below.
-fn paint_total(ui: &Ui, rect: Rect, cols: &Columns, totals: &[ViewCell]) {
+fn paint_total(ui: &Ui, rect: Rect, cols: &Columns, headings: &[String], totals: &[ViewCell]) {
     let t = tokens(ui);
     table::paint_total_rules(ui, rect);
     let font = bold_font(ui, TEXT_BODY);
@@ -373,7 +428,7 @@ fn paint_total(ui: &Ui, rect: Rect, cols: &Columns, totals: &[ViewCell]) {
                 ui,
                 cell_rect,
                 3.0,
-                &cell_text(cell),
+                &column_cell_text(headings.get(i).map_or("", String::as_str), cell),
                 font.clone(),
                 t.text,
                 place,

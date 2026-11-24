@@ -22,15 +22,20 @@
 //! voucher it cannot show yet (stock lines, stored GST) are named in words, never dropped
 //! silently.
 
-use egui::{Key, Modifiers, RichText, Ui};
-use ledgerly_core::{Date, SignedAmount, VoucherId};
+use egui::{Frame, Key, Margin, Modifiers, Rect, RichText, Sense, Stroke, Ui, pos2, vec2};
+use ledgerly_core::{Date, DrCr, SignedAmount, VoucherId, format::format_inr};
 use ledgerly_model::{Books, VoucherStatus};
 use thiserror::Error;
 
 use super::Notice;
-use super::text::{amount_text, date_text};
+use super::text::date_text;
 use crate::screens::print_job::PrintJob;
+use crate::theme::{RADIUS_M, TEXT_BODY, TEXT_H2, TEXT_META, border_width, shadow_1};
+use crate::ui::badge::{BadgeKind, badge};
 use crate::ui::button::{ButtonKind, button};
+use crate::ui::page_head::page_head;
+use crate::ui::table::{self, CellPlace, RowState, T_HEAD_HEIGHT, T_ROW_HEIGHT};
+use crate::ui::{bold_font, kind, tokens};
 use crate::{AppCtx, Screen, ScreenAction};
 
 /// Why a voucher could not be shown.
@@ -160,6 +165,28 @@ pub fn voucher_view(books: &Books, id: VoucherId) -> Result<VoucherView, Voucher
     })
 }
 
+/// The page title of a voucher (index.html:1574: "Voucher SI/0412"); a voucher with no number yet
+/// says so.
+#[must_use]
+pub fn voucher_title(view: &VoucherView) -> String {
+    match view.number.as_deref() {
+        Some(number) => format!("Voucher {number}"),
+        None => "Voucher (no number yet)".to_owned(),
+    }
+}
+
+/// A posting's amount as the Debit and Credit columns show it: the figure in the column of its
+/// side and nothing in the other (index.html:1621), bare of any Dr or Cr word. A line is never
+/// added to another.
+#[must_use]
+pub fn posting_columns(amount: SignedAmount) -> (String, String) {
+    let figure = format_inr(amount.amount);
+    match amount.side {
+        DrCr::Dr => (figure, String::new()),
+        DrCr::Cr => (String::new(), figure),
+    }
+}
+
 /// The read-only voucher screen.
 #[derive(Debug)]
 pub struct VoucherViewScreen {
@@ -170,6 +197,9 @@ pub struct VoucherViewScreen {
     /// The print in flight (Ctrl+P), and the last notice about a print.
     print: PrintJob,
     notice: Option<Notice>,
+    /// The voucher's number and page title, once the books have been read (the breadcrumb is
+    /// asked for without the books).
+    shown: std::cell::RefCell<Option<(String, String)>>,
 }
 
 impl VoucherViewScreen {
@@ -181,6 +211,7 @@ impl VoucherViewScreen {
             origin: None,
             print: PrintJob::default(),
             notice: None,
+            shown: std::cell::RefCell::new(None),
         }
     }
 
@@ -197,43 +228,222 @@ impl VoucherViewScreen {
         self.id
     }
 
+    /// The voucher as the mock's two cards (index.html:1612-1630): the voucher and its postings
+    /// on the left, what this screen cannot do on the right.
     fn draw_view(ui: &mut Ui, view: &VoucherView) {
-        let number = view.number.as_deref().unwrap_or("(no number yet)");
-        ui.heading(format!("{} {number}", view.type_name));
-        ui.label(format!(
-            "Date {}    Status {}",
-            date_text(view.date),
-            view.status
-        ));
-        if let Some(party) = view.party.as_deref() {
-            ui.label(format!("Party {party}"));
-        }
-        ui.separator();
-        egui::Grid::new(("voucher-view-lines", view.lines.len())).show(ui, |ui| {
-            for line in &view.lines {
-                ui.label(line.ledger.as_str());
-                ui.label(amount_text(line.amount));
-                ui.end_row();
+        let gap = 12.0;
+        let total = ui.available_width();
+        // `.g-main`: minmax(0, 1.55fr) minmax(320px, 1fr).
+        let right = ((total - gap) / 2.55).max(320.0).min(total - gap);
+        let left = total - gap - right;
+        ui.horizontal_top(|ui| {
+            ui.spacing_mut().item_spacing = vec2(gap, 0.0);
+            let down = egui::Layout::top_down(egui::Align::Min);
+            ui.allocate_ui_with_layout(vec2(left, 0.0), down, |ui| {
+                Self::draw_voucher_card(ui, view, left);
+            });
+            ui.allocate_ui_with_layout(vec2(right, 0.0), down, |ui| {
+                Self::draw_notes_card(ui, view);
+            });
+        });
+    }
+
+    fn card_frame(ui: &Ui) -> Frame {
+        let t = tokens(ui);
+        let k = kind(ui);
+        Frame::new()
+            .fill(t.surface)
+            .stroke(Stroke::new(border_width(k), t.border))
+            .corner_radius(RADIUS_M)
+            .shadow(shadow_1(k))
+    }
+
+    fn draw_voucher_card(ui: &mut Ui, view: &VoucherView, width: f32) {
+        let t = tokens(ui);
+        Self::card_frame(ui).show(ui, |ui| {
+            ui.set_width(width - 2.0);
+            ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
+            // `.vhead`: four fields in a row, 16 px around, a rule under.
+            let number = view.number.as_deref().unwrap_or("(no number yet)");
+            let date = date_text(view.date);
+            Frame::new().inner_margin(Margin::same(16)).show(ui, |ui| {
+                ui.set_width(width - 34.0);
+                ui.spacing_mut().item_spacing = vec2(16.0, 12.0);
+                let cell = (width - 34.0 - 3.0 * 16.0) / 4.0;
+                ui.horizontal_top(|ui| {
+                    for (label, value) in [
+                        ("Type", view.type_name.as_str()),
+                        ("Number", number),
+                        ("Date", date.as_str()),
+                    ] {
+                        ui.allocate_ui(vec2(cell, 0.0), |ui| {
+                            field(ui, label, |ui| {
+                                ui.label(RichText::new(value).size(TEXT_BODY).color(t.text));
+                            });
+                        });
+                    }
+                    ui.allocate_ui(vec2(cell, 0.0), |ui| {
+                        field(ui, "Status", |ui| {
+                            let kind_of = if view.status == "Regular" {
+                                BadgeKind::Ok
+                            } else {
+                                BadgeKind::Warn
+                            };
+                            badge(ui, kind_of, view.status);
+                        });
+                    });
+                });
+                if let Some(party) = view.party.as_deref() {
+                    field(ui, "Party", |ui| {
+                        ui.label(RichText::new(party).size(TEXT_BODY).color(t.text));
+                    });
+                }
+            });
+            let (rule, _) = ui.allocate_exact_size(vec2(width - 2.0, 1.0), Sense::hover());
+            ui.painter()
+                .hline(rule.x_range(), rule.center().y, Stroke::new(1.0, t.border));
+            Self::draw_postings(ui, view, width - 2.0);
+            if !view.narration.is_empty() {
+                Frame::new()
+                    .inner_margin(Margin::symmetric(16, 10))
+                    .show(ui, |ui| {
+                        ui.label(
+                            RichText::new(format!("Narration: {}", view.narration))
+                                .size(TEXT_META)
+                                .color(t.text_2),
+                        );
+                    });
             }
         });
-        if !view.narration.is_empty() {
-            ui.separator();
-            ui.label(format!("Narration: {}", view.narration));
-        }
-        for note in &view.not_shown {
-            ui.label(RichText::new(note.as_str()).italics());
-        }
-        ui.separator();
-        ui.label(
-            RichText::new("Display only. Altering a voucher from a report is not available yet.")
-                .italics(),
-        );
     }
+
+    /// The ledger lines, one per posting, in the Debit or Credit column of their side. No total
+    /// is drawn: the screen never adds figures.
+    fn draw_postings(ui: &mut Ui, view: &VoucherView, width: f32) {
+        let t = tokens(ui);
+        let amount_w = 150.0_f32.min(width / 3.0);
+        let split = |rect: Rect| {
+            let credit = Rect::from_min_max(pos2(rect.right() - amount_w, rect.top()), rect.max);
+            let debit = Rect::from_min_max(
+                pos2(credit.left() - amount_w, rect.top()),
+                pos2(credit.left(), rect.bottom()),
+            );
+            let label = Rect::from_min_max(rect.min, pos2(debit.left(), rect.bottom()));
+            (label, debit, credit)
+        };
+        let (head, _) = ui.allocate_exact_size(vec2(width, T_HEAD_HEIGHT), Sense::hover());
+        table::paint_head_rule(ui, head);
+        let (label, debit, credit) = split(head);
+        let font = bold_font(ui, TEXT_META);
+        table::paint_cell_text(
+            ui,
+            label,
+            1.0,
+            "Ledger posting",
+            font.clone(),
+            t.text_3,
+            CellPlace::Left(table::CELL_PAD_X),
+        );
+        table::paint_cell_text(
+            ui,
+            debit,
+            1.0,
+            "Debit",
+            font.clone(),
+            t.text_3,
+            CellPlace::Right,
+        );
+        table::paint_cell_text(ui, credit, 1.0, "Credit", font, t.text_3, CellPlace::Right);
+        for line in &view.lines {
+            let (rect, _) = ui.allocate_exact_size(vec2(width, T_ROW_HEIGHT), Sense::hover());
+            table::paint_row(
+                ui,
+                rect,
+                RowState {
+                    selected: false,
+                    hovered: false,
+                    sub: false,
+                },
+            );
+            let (label, debit, credit) = split(rect);
+            let font = egui::FontId::proportional(TEXT_BODY);
+            table::paint_cell_text(
+                ui,
+                label,
+                1.0,
+                &line.ledger,
+                font.clone(),
+                t.text,
+                CellPlace::Left(table::CELL_PAD_X),
+            );
+            let (dr, cr) = posting_columns(line.amount);
+            table::paint_cell_text(ui, debit, 1.0, &dr, font.clone(), t.text, CellPlace::Right);
+            table::paint_cell_text(ui, credit, 1.0, &cr, font, t.text, CellPlace::Right);
+        }
+    }
+
+    /// The right-hand card: what the screen is (read-only) and what it leaves out.
+    fn draw_notes_card(ui: &mut Ui, view: &VoucherView) {
+        let t = tokens(ui);
+        Self::card_frame(ui).show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            Frame::new()
+                .inner_margin(Margin::symmetric(16, 14))
+                .show(ui, |ui| {
+                    ui.set_width(ui.available_width());
+                    ui.spacing_mut().item_spacing = vec2(0.0, 6.0);
+                    ui.label(
+                        RichText::new("Read-only")
+                            .font(bold_font(ui, TEXT_H2))
+                            .color(t.text),
+                    );
+                    ui.add_space(4.0);
+                    let lines = view.not_shown.iter().map(String::as_str).chain([
+                        "Display only. Altering a voucher from a report is not available yet.",
+                    ]);
+                    for line in lines {
+                        ui.horizontal_top(|ui| {
+                            ui.label(RichText::new("\u{2022}").color(t.text_2));
+                            ui.add(
+                                egui::Label::new(
+                                    RichText::new(line).size(TEXT_BODY).color(t.text_2),
+                                )
+                                .wrap(),
+                            );
+                        });
+                    }
+                });
+        });
+    }
+}
+
+/// One field of the voucher head (`.fld`): its label in the meta style, then the value.
+fn field(ui: &mut Ui, label: &str, value: impl FnOnce(&mut Ui)) {
+    let t = tokens(ui);
+    ui.vertical(|ui| {
+        ui.spacing_mut().item_spacing = vec2(0.0, 4.0);
+        ui.label(RichText::new(label).size(TEXT_META).color(t.text_2));
+        value(ui);
+    });
 }
 
 impl Screen for VoucherViewScreen {
     fn title(&self) -> String {
-        format!("Voucher #{}", self.id.0)
+        match self.shown.borrow().as_ref() {
+            Some((number, _)) => number.clone(),
+            None => format!("Voucher #{}", self.id.0),
+        }
+    }
+
+    fn page_title(&self) -> String {
+        match self.shown.borrow().as_ref() {
+            Some((_, title)) => title.clone(),
+            None => format!("Voucher #{}", self.id.0),
+        }
+    }
+
+    fn subtitle(&self) -> Option<String> {
+        Some("Read-only. Esc goes back up".to_owned())
     }
 
     fn sidebar_title(&self) -> String {
@@ -277,7 +487,13 @@ impl Screen for VoucherViewScreen {
                 ui.label("The company's books are not loaded, so the voucher cannot be shown.");
             }
             Some(books) => match voucher_view(books, self.id) {
-                Ok(view) => Self::draw_view(ui, &view),
+                Ok(view) => {
+                    let title = voucher_title(&view);
+                    let number = view.number.clone().unwrap_or_else(|| title.clone());
+                    *self.shown.borrow_mut() = Some((number, title.clone()));
+                    page_head(ui, &title, self.subtitle().as_deref(), |_| {});
+                    Self::draw_view(ui, &view);
+                }
                 Err(e) => {
                     ui.label(e.to_string());
                 }

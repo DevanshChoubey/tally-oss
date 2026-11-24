@@ -75,7 +75,8 @@ pub use text::{
     period_text,
 };
 pub use voucher_view::{
-    VoucherView, VoucherViewError, VoucherViewLine, VoucherViewScreen, voucher_view,
+    VoucherView, VoucherViewError, VoucherViewLine, VoucherViewScreen, posting_columns,
+    voucher_title, voucher_view,
 };
 
 /// Rows moved by Page Up and Page Down.
@@ -231,6 +232,32 @@ fn look_of(kind: &ReportKind) -> Look {
     }
 }
 
+/// The title a drill level is shown under: the engine's title without its report-kind prefix, so
+/// a group summary reads as the group's name and a ledger's vouchers as the ledger's (index.html:
+/// 1570-1574). Every kind is listed, so a new kind fails to compile until it is placed.
+#[must_use]
+pub fn drill_title(title: &str, kind: &ReportKind) -> String {
+    let prefix = match kind {
+        ReportKind::GroupSummary(_) => "Group Summary: ",
+        ReportKind::LedgerVouchers(_) => "Ledger Vouchers: ",
+        ReportKind::BalanceSheet
+        | ReportKind::DayBook
+        | ReportKind::TrialBalance
+        | ReportKind::ProfitAndLoss
+        | ReportKind::Register(_)
+        | ReportKind::Outstanding { .. }
+        | ReportKind::StockSummary
+        | ReportKind::Audit(_) => return title.to_owned(),
+    };
+    title.strip_prefix(prefix).unwrap_or(title).to_owned()
+}
+
+/// The subtitle of a drill level (index.html:1577).
+#[must_use]
+pub fn drill_subtitle(as_of: ledgerly_core::Date) -> String {
+    balance::drill_subtitle(as_of)
+}
+
 /// Shows one report, with row selection, drill-down, the detail toggle and the period editor.
 pub struct ReportViewScreen {
     report: ViewReport,
@@ -255,6 +282,8 @@ pub struct ReportViewScreen {
     export: Latest<Exported>,
     /// Ctrl+P was pressed; the print starts after the frame is drawn.
     print_wanted: bool,
+    /// A voucher button of the empty day book was pressed; the voucher opens after the frame.
+    open_wanted: Option<crate::keymap::Action>,
     /// The print in flight, and its save dialog (see [`PrintJob`]).
     print: PrintJob,
 }
@@ -281,6 +310,7 @@ impl ReportViewScreen {
             origin: None,
             export: Latest::default(),
             print_wanted: false,
+            open_wanted: None,
             print: PrintJob::default(),
         })
     }
@@ -331,6 +361,7 @@ impl ReportViewScreen {
             origin: None,
             export: Latest::default(),
             print_wanted: false,
+            open_wanted: None,
             print: PrintJob::default(),
         })
     }
@@ -792,6 +823,14 @@ impl ReportViewScreen {
             })
     }
 
+    /// The title of a report drawn as a generic table: a drill level reads as the name drilled.
+    fn generic_title(&self) -> String {
+        match self.worker.as_ref() {
+            Some(run) => drill_title(&self.report.title, &run.engine.kind),
+            None => self.report.title.clone(),
+        }
+    }
+
     /// The layout this screen draws in.
     fn look(&self) -> Look {
         match self.worker.as_ref() {
@@ -862,7 +901,6 @@ impl ReportViewScreen {
             self.set_period(period);
         }
         if self.is_loading() {
-            ui.weak("Loading the report...");
             ui.ctx().request_repaint();
         }
         match &self.notice {
@@ -887,6 +925,13 @@ impl ReportViewScreen {
         }
         let look = self.look();
         self.draw_head(ui, look);
+        if self.is_loading() && self.report.rows.is_empty() {
+            // Nothing has arrived yet: say so, and draw no figure.
+            draw_loading(ui);
+            self.footer = None;
+            self.selected_line = None;
+            return action;
+        }
 
         let balance = if look == Look::BalanceSheet {
             balance::vertical_balance(&self.report)
@@ -922,33 +967,7 @@ impl ReportViewScreen {
             self.footer = Some(foot);
             events
         } else {
-            // The footnote is a bottom panel added before the table, so the table takes the
-            // space left above it and the footnote stays inside the screen, above the key bar
-            // (B7).
-            let footer = egui::Panel::bottom("u7-footer")
-                .show(ui, |ui| self.draw_footer(ui, look))
-                .response
-                .rect;
-            self.footer = Some(footer);
-            let empty_day = look == Look::DayBook && self.report.rows.is_empty();
-            let report = &self.report;
-            let drawn = egui::CentralPanel::default()
-                .frame(egui::Frame::NONE)
-                .show(ui, |ui| {
-                    if empty_day {
-                        let title = day_book::empty_title(report.params.period);
-                        crate::ui::empty::empty_state(ui, &title, day_book::EMPTY_SENTENCE, None);
-                        generic::Drawn {
-                            events: TableEvents::default(),
-                            selected: None,
-                        }
-                    } else {
-                        generic::draw(ui, report, selected, scroll)
-                    }
-                })
-                .inner;
-            self.selected_line = drawn.selected;
-            drawn.events
+            self.draw_plain(ui, look, selected, scroll)
         };
         self.scroll_pending = false;
         if let Some(i) = events.clicked {
@@ -966,11 +985,54 @@ impl ReportViewScreen {
         action
     }
 
+    /// The generic table, or the empty day book's card, with the footnote under it.
+    fn draw_plain(
+        &mut self,
+        ui: &mut Ui,
+        look: Look,
+        selected: usize,
+        scroll: bool,
+    ) -> TableEvents {
+        let empty_day = look == Look::DayBook && self.report.rows.is_empty();
+        if empty_day {
+            // The empty day book is a card with its voucher buttons, the footnote under it.
+            let (chosen, foot) = egui::CentralPanel::default()
+                .frame(egui::Frame::NONE)
+                .show(ui, |ui| day_book::draw_empty(ui, &self.report))
+                .inner;
+            self.footer = Some(foot);
+            self.open_wanted = chosen;
+            TableEvents::default()
+        } else {
+            // The footnote is a bottom panel added before the table, so the table takes the
+            // space left above it and the footnote stays inside the screen, above the key bar
+            // (B7).
+            let footer = egui::Panel::bottom("u7-footer")
+                .frame(egui::Frame::NONE.inner_margin(egui::Margin::symmetric(0, 6)))
+                .show(ui, |ui| self.draw_footer(ui, look))
+                .response
+                .rect;
+            self.footer = Some(footer);
+            let report = &self.report;
+            let drawn = egui::CentralPanel::default()
+                .frame(egui::Frame::NONE)
+                .show(ui, |ui| generic::draw(ui, report, selected, scroll))
+                .inner;
+            self.selected_line = drawn.selected;
+            drawn.events
+        }
+    }
+
     /// The footnote under a table: the report's notes, and what the day book does not show yet.
     /// The balance sheet draws its own (see [`balance::draw`]).
     fn draw_footer(&self, ui: &mut Ui, look: Look) {
+        let t = crate::ui::tokens(ui);
         for line in &self.report.notes {
-            ui.label(line.as_str());
+            ui.label(
+                egui::RichText::new(line.as_str())
+                    .size(crate::theme::TEXT_META)
+                    .color(t.text_3),
+            );
         }
         if look == Look::DayBook {
             note(ui, NoteKind::Info, day_book::NOT_RECORDED);
@@ -1026,6 +1088,42 @@ impl ReportViewScreen {
             self.cancel_period_edit();
         }
     }
+}
+
+/// Percent widths of the loading skeleton rows (index.html:1579).
+const LOADING_BARS: [u8; 8] = [60, 45, 70, 40, 55, 80, 35, 65];
+
+/// The report while it computes (index.html:1579): a card with a line that says so, then
+/// placeholder bars that never look like figures.
+fn draw_loading(ui: &mut Ui) {
+    let t = crate::ui::tokens(ui);
+    let k = crate::ui::kind(ui);
+    egui::Frame::new()
+        .fill(t.surface)
+        .stroke(egui::Stroke::new(crate::theme::border_width(k), t.border))
+        .corner_radius(crate::theme::RADIUS_M)
+        .shadow(crate::theme::shadow_1(k))
+        .inner_margin(egui::Margin::symmetric(16, 14))
+        .show(ui, |ui| {
+            ui.set_min_width(ui.available_width());
+            ui.horizontal(|ui| {
+                ui.label(
+                    egui::RichText::new(
+                        "Computing from all vouchers\u{2026} Esc cancels. The previous result is not shown as current.",
+                    )
+                    .size(crate::theme::TEXT_BODY)
+                    .color(t.text_2),
+                );
+            });
+            ui.add_space(14.0);
+            let width = ui.available_width();
+            // index.html:1579: twelve rows, their widths cycling through LOADING_BARS.
+            for i in 0..12_usize {
+                let pct = f32::from(LOADING_BARS.get(i % LOADING_BARS.len()).copied().unwrap_or(50));
+                crate::ui::skeleton::skeleton_bar(ui, width * pct / 100.0);
+                ui.add_space(crate::theme::SPACE_2);
+            }
+        });
 }
 
 /// Draws a subtitle made of text and keycaps on one line, in the subtitle's ink.
@@ -1101,7 +1199,7 @@ impl Screen for ReportViewScreen {
         // (index.html:1572: "Balance sheet").
         match self.look() {
             Look::BalanceSheet | Look::DayBook => self.page_title(),
-            Look::Generic => self.report.title.clone(),
+            Look::Generic => self.generic_title(),
         }
     }
 
@@ -1109,7 +1207,7 @@ impl Screen for ReportViewScreen {
         match self.look() {
             Look::BalanceSheet => "Balance sheet".to_owned(),
             Look::DayBook => "Day book".to_owned(),
-            Look::Generic => self.report.title.clone(),
+            Look::Generic => self.generic_title(),
         }
     }
 
@@ -1124,6 +1222,13 @@ impl Screen for ReportViewScreen {
                 Some(balance::subtitle(as_of))
             }
             Look::DayBook => Some(day_book::subtitle(period)),
+            Look::Generic if self.is_drill_level() => {
+                let as_of = self
+                    .worker
+                    .as_ref()
+                    .map_or(period.to(), |run| run.engine.as_of);
+                Some(balance::drill_subtitle(as_of))
+            }
             Look::Generic => Some(format!(
                 "{}  |  {}",
                 period_text(period),
@@ -1166,7 +1271,13 @@ impl Screen for ReportViewScreen {
     fn ui(&mut self, ui: &mut Ui, ctx: &mut AppCtx) -> ScreenAction {
         self.tick(ctx.api.as_ref());
         self.poll_export();
-        let action = self.draw(ui);
+        let mut action = self.draw(ui);
+        if let Some(wanted) = self.open_wanted.take() {
+            match crate::screens::ai_gate::open_voucher(wanted, ctx) {
+                Ok(open) => action = open,
+                Err(why) => self.notice = Some(Notice::Error(why)),
+            }
+        }
         if self.print.saved_path().is_some()
             && button(ui, "Open PDF", None, ButtonKind::Secondary).clicked()
             && let Some(note) = self.print.open_saved()
@@ -1196,5 +1307,70 @@ fn pending_report(params: ViewParams) -> ViewReport {
         rows: Vec::new(),
         totals: Vec::new(),
         notes: Vec::new(),
+    }
+}
+
+#[cfg(test)]
+mod loading_card {
+    //! The loading state is a card that says what is happening, with placeholder bars, never a
+    //! figure (mock v2 `balance-sheet.loading`).
+    //!
+    //! provenance: index.html:1579: "Computing from all vouchers… Esc cancels. The previous
+    //! result is not shown as current." over twelve skeleton rows.
+    #![allow(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        reason = "test code: the fixture is known to build"
+    )]
+
+    use super::*;
+    use egui::Shape;
+    use ledgerly_api::{ColumnSpec, Detail};
+    use time::macros::date;
+
+    fn texts(shape: &Shape, out: &mut Vec<String>) {
+        if let Shape::Text(t) = shape {
+            out.push(t.galley.text().to_owned());
+        } else if let Shape::Vec(inner) = shape {
+            for s in inner {
+                texts(s, out);
+            }
+        }
+    }
+
+    #[test]
+    fn a_pending_balance_sheet_says_it_is_computing() {
+        let period = Period::new(date!(2026 - 04 - 01), date!(2026 - 11 - 21)).unwrap();
+        let params = ReportParams {
+            kind: ReportKind::BalanceSheet,
+            period,
+            as_of: date!(2026 - 11 - 21),
+            scenario: ledgerly_model::Scenario::Actual,
+            detail: Detail::Condensed,
+            columns: ColumnSpec::Single,
+            filter: ledgerly_api::ReportFilter::default(),
+            exceptions_only: false,
+        };
+        let mut screen = ReportViewScreen::worker(ReportSource::worker(params)).unwrap();
+        assert!(screen.is_loading());
+        let ctx = egui::Context::default();
+        let out = ctx.run_ui(egui::RawInput::default(), |ui| {
+            screen.draw(ui);
+        });
+        let mut drawn = Vec::new();
+        for clipped in &out.shapes {
+            texts(&clipped.shape, &mut drawn);
+        }
+        out.drop_without_applying_deltas();
+        assert!(
+            drawn
+                .iter()
+                .any(|t| t.starts_with("Computing from all vouchers")),
+            "texts drawn: {drawn:?}"
+        );
+        assert!(
+            drawn.iter().all(|t| !t.contains("Loading the report")),
+            "texts drawn: {drawn:?}"
+        );
     }
 }

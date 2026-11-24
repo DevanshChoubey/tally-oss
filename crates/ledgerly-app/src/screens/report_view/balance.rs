@@ -96,13 +96,21 @@ impl Section {
 /// the edges of the calendar, where there is no such year.
 #[must_use]
 pub fn subtitle(as_of: Date) -> String {
+    subtitle_with(as_of, "Enter opens a row, Esc goes back up")
+}
+
+/// The subtitle of a level below the balance sheet (index.html:1577: "Enter goes deeper, Esc
+/// goes back up").
+#[must_use]
+pub fn drill_subtitle(as_of: Date) -> String {
+    subtitle_with(as_of, "Enter goes deeper, Esc goes back up")
+}
+
+fn subtitle_with(as_of: Date, keys: &str) -> String {
     let date = crate::ui::format::date(as_of);
     match FinancialYear::containing(as_of) {
-        Ok(fy) => format!(
-            "As at {date} \u{00B7} FY {} \u{00B7} Enter opens a row, Esc goes back up",
-            fy.label()
-        ),
-        Err(_) => format!("As at {date} \u{00B7} Enter opens a row, Esc goes back up"),
+        Ok(fy) => format!("As at {date} \u{00B7} FY {} \u{00B7} {keys}", fy.label()),
+        Err(_) => format!("As at {date} \u{00B7} {keys}"),
     }
 }
 
