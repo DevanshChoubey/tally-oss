@@ -45,7 +45,11 @@ const STATUS_W: f32 = 150.0;
 /// Width of each figure column of the GSTR-3B table.
 const FIGURE_W: f32 = 84.0;
 /// Width of the Records column of the GSTR-1 section table.
-const RECORDS_W: f32 = 80.0;
+const RECORDS_W: f32 = 64.0;
+/// Width of the Status column of the GSTR-1 section table (a badge and "Needs correction").
+const SECTION_STATUS_W: f32 = 136.0;
+/// Width of the Taxable and Tax columns of the GSTR-1 section table.
+const SECTION_AMOUNT_W: f32 = 96.0;
 /// Width of the amount column of the figures table.
 const AMOUNT_W: f32 = 130.0;
 /// Gap between a label and its source chip.
@@ -641,13 +645,13 @@ fn paint_heads(ui: &Ui, head: Rect, left: &[(Rect, &str)], right: &[(Rect, &str)
 /// The Section, Records, Taxable, Tax and Status cells of a GSTR-1 section line.
 #[allow(clippy::float_arithmetic, reason = "sharing a line between columns")]
 fn section_columns(line: Rect) -> [Rect; 5] {
-    let status = Rect::from_min_max(egui::pos2(line.right() - STATUS_W, line.top()), line.max);
+    let status = Rect::from_min_max(egui::pos2(line.right() - SECTION_STATUS_W, line.top()), line.max);
     let tax = Rect::from_min_max(
-        egui::pos2(status.left() - AMOUNT_W, line.top()),
+        egui::pos2(status.left() - SECTION_AMOUNT_W, line.top()),
         egui::pos2(status.left(), line.bottom()),
     );
     let taxable = Rect::from_min_max(
-        egui::pos2(tax.left() - AMOUNT_W, line.top()),
+        egui::pos2(tax.left() - SECTION_AMOUNT_W, line.top()),
         egui::pos2(tax.left(), line.bottom()),
     );
     let records = Rect::from_min_max(
