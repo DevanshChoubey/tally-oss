@@ -79,15 +79,22 @@ and `home.ai-off`. Not captured: `home.loading` and `home.nudge-open`.
   ("Sundry Debtors"), the subtitle is "As at ... Enter goes deeper, Esc goes back up", Debit and
   Credit figures drop the Dr/Cr word, the repeated Particulars column is not drawn twice, and the
   footnote is small text under the card.
-- **needs a decision: sub-groups in the condensed view.** The mock's condensed statement shows
-  each top group's sub-groups (Loans > Secured loans; index.html:1588, `depth===0` children).
-  Ours shows the primary groups only, which is what the engine's condensed report gives. Before
-  changing it, check the TallyPrime help on what its condensed balance sheet lists (not checked
-  in this round); showing sub-groups needs the engine, or the detailed report cut by depth.
-- **needs a decision: indent past two levels.** The mock indents two steps (`ind1`, `ind2`) and
-  stops; ours keeps adding 16 points per level so deeper groups stay apart.
+- **closed (s9): sub-groups in the default view.** The default (Alt+F1 "condensed") view now
+  lists each top group, its sub-groups and the closing stock, with no ledgers, as the mock's
+  `balanceSheet()` does (index.html:1581-1589). The screen asks the engine for the detailed report
+  and drops ledger rows (`remote::groups_and_sub_groups`); the engine's own `Condensed` (primary
+  groups only) is unchanged and still what Export writes. Help page read 2026-11-25
+  (help.tallysolutions.com/docs/te9rel66/Reports/Display_Financial_Statements/display_balance_sheet.htm):
+  the standard view is condensed and Alt+F1 shows the detailed view; the page does not say which
+  group levels the condensed view lists, so the sub-group level follows the mock.
+  Tested in `tests/s9_reports.rs`.
+- **gap: Export of the balance sheet writes the engine's primary-groups-only condensed report**,
+  not the sub-group view on screen.
+- **closed (s9): indent past two levels.** The default view stops at depth 1; the detailed view
+  still indents each level by 16 points.
 - **by design: F2 says "Period".** The mock says "F2 Date"; ours opens a from-to period editor.
-- **by design: section and group names** follow decision 2 of the 2026-11-22 parity report:
+- **by design: section and group names** follow decision 2 of the 2026-11-22 parity report (a
+  recorded user decision, kept in s9 although the brief asked for the mock's heading):
   "Liabilities" (not "Equity and liabilities"), "Capital Account", "Profit and Loss A/c".
 - **by design: the as-at date** is the last voucher date (decision 1), so the capture says 20 Nov
   where the mock says 21 Nov.
