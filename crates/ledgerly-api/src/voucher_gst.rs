@@ -69,6 +69,24 @@ pub struct InvoiceGst {
     pub ledger_lines: Vec<LedgerLine>,
     /// The block to store on the voucher.
     pub stored: StoredGst,
+    /// The tax box rows: each head at each rate, by rate then head, as "CGST 9% on 1,30,085.00".
+    /// Empty when the rounded rows would not add up to the head totals (the box then lists the
+    /// head totals alone, since showing rows that disagree with the posting would be a wrong
+    /// number).
+    pub rate_rows: Vec<RateRow>,
+}
+
+/// One row of the tax box: a tax head at one rate.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RateRow {
+    /// `CGST`, `SGST`, `UTGST` or `IGST`.
+    pub head: String,
+    /// The head's own rate in percent (half the slab for CGST, SGST and UTGST).
+    pub rate_percent: Decimal,
+    /// The taxable value of the lines at this rate.
+    pub taxable: Paise,
+    /// The head's tax on them, rounded to the paisa from the unrounded line tax.
+    pub amount: Paise,
 }
 
 /// One bill reference the user typed for the party line of an invoice (TallyPrime's Bill-wise
@@ -715,12 +733,74 @@ fn build_invoice(
             },
         ));
     }
+    let rate_rows = rate_rows(&breakup)?;
     Ok(Outcome::Value(InvoiceGst {
         breakup,
         invoice_total,
         ledger_lines: lines,
         stored,
+        rate_rows,
     }))
+}
+
+/// Per-rate sums of one voucher: taxable value and the unrounded tax of each head.
+#[derive(Default)]
+struct RateSums {
+    taxable: Paise,
+    cgst: Decimal,
+    sgst: Decimal,
+    utgst: Decimal,
+    igst: Decimal,
+}
+
+/// The tax box rows of `breakup`: for each rate (ascending) the heads with tax, each summed over
+/// the lines at that rate and rounded once to the paisa. Empty when any head's rows do not add up
+/// to the head total the invoice posts, so the box never shows rows that disagree with it.
+fn rate_rows(breakup: &GstBreakup) -> Result<Vec<RateRow>, GstError> {
+    let mut by_rate: BTreeMap<Decimal, RateSums> = BTreeMap::new();
+    for l in &breakup.lines {
+        let sums = by_rate.entry(l.rate_percent.normalize()).or_default();
+        sums.taxable = sums.taxable.checked_add(l.taxable)?;
+        sums.cgst = sums.cgst.checked_add(l.cgst).ok_or(MoneyError::Overflow)?;
+        sums.sgst = sums.sgst.checked_add(l.sgst).ok_or(MoneyError::Overflow)?;
+        sums.utgst = sums
+            .utgst
+            .checked_add(l.utgst)
+            .ok_or(MoneyError::Overflow)?;
+        sums.igst = sums.igst.checked_add(l.igst).ok_or(MoneyError::Overflow)?;
+    }
+    let two = Decimal::from(2);
+    let mut rows = Vec::new();
+    let (mut cgst, mut sgst, mut utgst, mut igst) =
+        (Paise::ZERO, Paise::ZERO, Paise::ZERO, Paise::ZERO);
+    for (rate, sums) in &by_rate {
+        let half = rate.checked_div(two).ok_or(MoneyError::Overflow)?;
+        let heads = [
+            ("CGST", half, sums.cgst, &mut cgst),
+            ("SGST", half, sums.sgst, &mut sgst),
+            ("UTGST", half, sums.utgst, &mut utgst),
+            ("IGST", *rate, sums.igst, &mut igst),
+        ];
+        for (head, head_rate, unrounded, total) in heads {
+            if unrounded.is_zero() {
+                continue;
+            }
+            let amount = round_rupees_to_paise(unrounded, RoundingRule::HalfUpToPaise)?;
+            *total = total.checked_add(amount)?;
+            rows.push(RateRow {
+                head: head.to_owned(),
+                rate_percent: head_rate,
+                taxable: sums.taxable,
+                amount,
+            });
+        }
+    }
+    let t = &breakup.totals;
+    if cgst == t.cgst && sgst == t.sgst && utgst == t.utgst && igst == t.igst {
+        Ok(rows)
+    } else {
+        Ok(Vec::new())
+    }
 }
 
 /// The sales or purchase ledgers of an item invoice, with the sum of its inventory lines on each.

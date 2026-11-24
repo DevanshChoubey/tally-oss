@@ -10,12 +10,10 @@
 //! * <https://help.tallysolutions.com/advances-received/>: an advance is recorded on the receipt
 //!   with the reference type Advance; the sales invoice links to it by choosing the reference type
 //!   Agst Ref in the invoice's Bill-wise Details.
-//! * <https://help.tallysolutions.com/tally-prime/accounting-financial-reports/manage-outstanding-payables-tally/>
-//!   and <https://help.tallysolutions.com/tally/manage-receivables-outstanding-tally/>: with bill-wise
-//!   on in the party master, TallyPrime tracks the bill with the voucher number as the bill reference;
-//!   the credit period comes from the party master (as seen in search results quoting these pages;
-//!   the pages could not be re-fetched verbatim, so this test pins the behaviour the brief states:
-//!   New Ref by default, named by the voucher number).
+//! * <https://help.tallysolutions.com/sales-of-goods-services/> (fetched 2026-11-25): New Ref
+//!   "create[s] a new reference for the sales transaction" and the voucher number may be used as the
+//!   bill reference number. The page does not say it is the default; naming an empty New Ref by the
+//!   voucher number is our own choice, and these tests pin that choice, not a claim about the product.
 //! * <https://help.tallysolutions.com/set-up-receivables-and-payables-tracking-in-tallyprime/>:
 //!   credit periods apply only when bill-wise tracking is on.
 
@@ -659,4 +657,64 @@ fn a_ledger_without_a_balance_row_gives_unsupported() {
     v.ledger_lines = built.ledger_lines;
     let (what, _) = unsupported_what(api.balance_change(KA_BUYER, &v));
     assert!(what.contains("balance"), "{what}");
+}
+
+const ITEM5: StockItemId = StockItemId(2);
+
+/// A second item taxed at 5 per cent, so one invoice can carry two rates.
+fn five_percent_item() -> StockItem {
+    StockItem {
+        id: ITEM5,
+        name: "Sprayer".to_owned(),
+        gst_history: vec![GstHistory {
+            effective_from: date!(2025 - 09 - 22),
+            taxability: Taxability::Taxable,
+            rate_percent: Some(Rate(Decimal::from(5))),
+        }],
+        ..widget()
+    }
+}
+
+/// An item line of `item` worth `amount` paise.
+fn item_line(item: StockItemId, amount: i64) -> InventoryLine {
+    InventoryLine {
+        item,
+        ..items(1, amount, SALES).remove(0)
+    }
+}
+
+/// Derivation (the mock's sales-invoice.default): one line of Rs 58,000.00 at 5% and one of
+/// Rs 1,30,085.00 at 18%, intra-state. 5% splits 2.5% + 2.5%: 58,000.00 x 2.5% = 1,450.00 each.
+/// 18% splits 9% + 9%: 1,30,085.00 x 9% = 11,707.65 each. So the tax box lists CGST 2.5% on
+/// 58,000.00 = 1,450.00; SGST 2.5% = 1,450.00; CGST 9% on 1,30,085.00 = 11,707.65; SGST 9% =
+/// 11,707.65. Head totals: CGST 13,157.65 = 1,450.00 + 11,707.65. Value = 1,88,085.00 +
+/// 26,315.30 = 2,14,400.30, rounded to the rupee 2,14,400.00, round-off -0.30.
+#[test]
+fn the_tax_box_lists_each_head_at_each_rate() {
+    let (_dir, mut api) = billed_file(true);
+    ok(api.execute(Command::CreateStockItem(five_percent_item())));
+    let mut v = item_sale(KA_BUYER, Some(29), 1, 5_800_000);
+    v.inventory_lines = vec![item_line(ITEM5, 5_800_000), item_line(ITEM, 13_008_500)];
+    let built = ok(api.invoice_gst(&v));
+    assert_eq!(built.invoice_total, Paise::new(21_440_000));
+    assert_eq!(built.breakup.round_off, Paise::new(-30));
+    let got: Vec<(String, String, i64, i64)> = built
+        .rate_rows
+        .iter()
+        .map(|r| {
+            (
+                r.head.clone(),
+                r.rate_percent.normalize().to_string(),
+                r.taxable.get(),
+                r.amount.get(),
+            )
+        })
+        .collect();
+    let want = vec![
+        ("CGST".to_owned(), "2.5".to_owned(), 5_800_000, 145_000),
+        ("SGST".to_owned(), "2.5".to_owned(), 5_800_000, 145_000),
+        ("CGST".to_owned(), "9".to_owned(), 13_008_500, 1_170_765),
+        ("SGST".to_owned(), "9".to_owned(), 13_008_500, 1_170_765),
+    ];
+    assert_eq!(got, want);
 }

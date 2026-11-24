@@ -44,7 +44,7 @@ pub use maintenance::{VoucherCheck, verify_file};
 pub use report::ExportFormat;
 pub use search::{MatchedOn, SearchHit};
 pub use tally_import::ImportSummary;
-pub use voucher_gst::{InvoiceGst, PartyBill};
+pub use voucher_gst::{InvoiceGst, PartyBill, RateRow};
 
 pub use ledgerly_bank::brs::Brs;
 pub use ledgerly_bank::matcher::{Candidate, LineDirection, MatchRule};
