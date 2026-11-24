@@ -464,14 +464,18 @@ financial year starts. The model supports that (`Company::books_begin`), so it i
 
 ## Print (card P1, round of 2026-11-24)
 
-- **gap: no print preview or configuration.** TallyPrime's flow is Ctrl+P (Current), then C
-  (configure), I (preview), P (print), as read on "How to Print Invoices/Reports in TallyPrime"
-  (help.tallysolutions.com/print-invoices-reports/, read 2026-11-24, last updated 2026-11-20).
-  The mock has no print state. Ours goes straight from Ctrl+P to a save dialog for a PDF file.
+- **gap: no in-app print preview or configuration.** TallyPrime's flow is Ctrl+P (Current),
+  then C (configure), I (preview), P (print), as read on "How to Print Invoices/Reports in
+  TallyPrime" (help.tallysolutions.com/print-invoices-reports/, read 2026-11-24, last updated
+  2026-11-20). The mock has no print state. Ours saves a PDF to a file chosen in a save dialog,
+  and an "Open PDF" button then opens it in the system's PDF viewer (xdg-open, open or start).
+  That viewer is the preview until an in-app preview exists.
 - **gap: no printing to a device.** Ours writes PDF files only. The Alt+P > Configuration
   printer and paper setup is not built.
-- **gap: reports cannot be printed.** Ctrl+P on a report says "not supported" with the reason
-  (`Api::print_report`). The print crate draws invoices only; CSV and XLSX export remain.
+- **gap: some reports cannot be printed.** Trial balance, balance sheet, profit and loss, day book
+  and ledger vouchers print (`Api::print_report`, `ledgerly-print::pdf::render_report`). Other
+  reports (group summary, registers, outstanding, stock summary, audit) say "not supported" with
+  the reason; CSV and XLSX export remain.
 - **gap: only sales invoices, credit notes and debit notes print.** Any other voucher, and a
   voucher with no GST block, says "not supported" with the reason. Reasons come from the print
   crate (`PrintError::Unsupported`), never a blank page.
@@ -481,6 +485,7 @@ financial year starts. The model supports that (`Company::books_begin`), so it i
   field before it can.
 - **by design: printed text is plain ASCII.** The print crate refuses other characters (built-in
   Helvetica); the refusal is shown as "not supported", not replaced.
-- **by design: Ctrl+P is not in the voucher screen's key bar.** The mock has no voucher print
-  state. The Reports cheat sheet lists Ctrl+P (index.html:1839); the balance sheet key bar
-  (index.html:1634) does not, so the report screen's key bar does not list it either.
+- **by design: Ctrl+P is not on the key bars.** The mock's report key bars (index.html:1634)
+  and the voucher screen have no Print key, so neither shows Ctrl+P. The key map lists
+  "Print" under Reports (index.html:1839; `keymap_map::layout`), and Ctrl+P prints the open
+  report or voucher.

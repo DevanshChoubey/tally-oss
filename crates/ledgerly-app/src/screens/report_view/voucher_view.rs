@@ -30,6 +30,7 @@ use thiserror::Error;
 use super::Notice;
 use super::text::{amount_text, date_text};
 use crate::screens::print_job::PrintJob;
+use crate::ui::button::{ButtonKind, button};
 use crate::{AppCtx, Screen, ScreenAction};
 
 /// Why a voucher could not be shown.
@@ -264,6 +265,12 @@ impl Screen for VoucherViewScreen {
         }
         if let Some(note) = &self.notice {
             ui.label(note.text());
+        }
+        if self.print.saved_path().is_some()
+            && button(ui, "Open PDF", None, ButtonKind::Secondary).clicked()
+            && let Some(note) = self.print.open_saved()
+        {
+            self.notice = Some(note);
         }
         match ctx.books.as_ref() {
             None => {

@@ -74,6 +74,7 @@ pub struct PrintJob {
     render: Latest<Rendered>,
     picker: SavePicker,
     writing: Option<Receiver<Result<PathBuf, String>>>,
+    saved: Option<PathBuf>,
 }
 
 impl fmt::Debug for PrintJob {
@@ -100,6 +101,22 @@ impl PrintJob {
             render: Latest::default(),
             picker,
             writing: None,
+            saved: None,
+        }
+    }
+
+    /// The PDF this job last saved, when there is one.
+    #[must_use]
+    pub fn saved_path(&self) -> Option<&Path> {
+        self.saved.as_deref()
+    }
+
+    /// Opens the saved PDF in the system's viewer. `None` when nothing is saved yet.
+    pub fn open_saved(&self) -> Option<Notice> {
+        let path = self.saved.as_deref()?;
+        match open_in_viewer(path) {
+            Ok(()) => None,
+            Err(e) => Some(Notice::Error(e)),
         }
     }
 
@@ -128,7 +145,9 @@ impl PrintJob {
                 Err(TryRecvError::Empty) => {}
                 Ok(Ok(path)) => {
                     self.writing = None;
-                    return Some(Notice::Info(format!("Saved PDF to {}.", path.display())));
+                    let shown = path.display().to_string();
+                    self.saved = Some(path);
+                    return Some(Notice::Info(format!("Saved PDF to {shown}.")));
                 }
                 Ok(Err(e)) => {
                     self.writing = None;
@@ -172,6 +191,36 @@ impl PrintJob {
     }
 }
 
+/// The program and arguments that open `path` in the system's PDF viewer. No shell is involved:
+/// the path is one argument.
+#[must_use]
+pub fn viewer_command(path: &Path) -> (String, Vec<String>) {
+    let file = path.display().to_string();
+    if cfg!(target_os = "macos") {
+        ("open".to_owned(), vec![file])
+    } else if cfg!(target_os = "windows") {
+        (
+            "cmd".to_owned(),
+            vec!["/C".to_owned(), "start".to_owned(), String::new(), file],
+        )
+    } else {
+        ("xdg-open".to_owned(), vec![file])
+    }
+}
+
+/// Opens `path` in the system's PDF viewer, without waiting for the viewer to close.
+///
+/// # Errors
+/// A message when the viewer cannot be started (for example, no viewer is installed).
+pub fn open_in_viewer(path: &Path) -> Result<(), String> {
+    let (program, args) = viewer_command(path);
+    std::process::Command::new(&program)
+        .args(&args)
+        .spawn()
+        .map(|_child| ())
+        .map_err(|e| format!("the PDF could not be opened with {program}: {e}"))
+}
+
 #[cfg(test)]
 mod tests {
     #![allow(
@@ -213,6 +262,25 @@ mod tests {
         match print_notice("Voucher 1", &Err("the store is closed".to_owned())) {
             Notice::Error(text) => assert!(text.contains("the store is closed"), "{text}"),
             Notice::Info(text) => panic!("an engine error must be shown, got {text:?}"),
+        }
+    }
+
+    #[test]
+    fn the_saved_pdf_opens_with_the_systems_viewer() {
+        // Derived: xdg-open on Linux, open on macOS, and `cmd /C start` on Windows; the file is the
+        // last argument in each. Only the platform this test is built for is checked.
+        let path = Path::new("/home/someone/Report.pdf");
+        let (program, args) = viewer_command(path);
+        assert_eq!(
+            args.last().map(String::as_str),
+            Some("/home/someone/Report.pdf")
+        );
+        if cfg!(target_os = "linux") {
+            assert_eq!(program, "xdg-open");
+        } else if cfg!(target_os = "macos") {
+            assert_eq!(program, "open");
+        } else if cfg!(target_os = "windows") {
+            assert_eq!(program, "cmd");
         }
     }
 }

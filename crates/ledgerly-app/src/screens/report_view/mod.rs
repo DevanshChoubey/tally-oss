@@ -1167,6 +1167,12 @@ impl Screen for ReportViewScreen {
         self.tick(ctx.api.as_ref());
         self.poll_export();
         let action = self.draw(ui);
+        if self.print.saved_path().is_some()
+            && button(ui, "Open PDF", None, ButtonKind::Secondary).clicked()
+            && let Some(note) = self.print.open_saved()
+        {
+            self.notice = Some(note);
+        }
         self.run_export_request(ctx.api.as_ref());
         if let Some(note) = self.print.tick() {
             self.notice = Some(note);
