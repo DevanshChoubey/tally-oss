@@ -7,6 +7,7 @@
 mod ai;
 mod bank;
 mod command;
+mod day_book_meta;
 mod error;
 mod events;
 pub mod facade;

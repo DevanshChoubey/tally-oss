@@ -9,7 +9,8 @@ use std::str::FromStr as _;
 use ledgerly_api::{Api, Command};
 use ledgerly_core::{
     Clock, CompanyId, Date, Decimal, GroupId, Gstin, Hsn, LedgerId, Outcome, Paise, Qty, Rate,
-    RoundingRule, SignedAmount, StateCode, StockItemId, UnitId, VoucherId, round_rupees_to_paise,
+    RoundingRule, SignedAmount, StateCode, StockItemId, UnitId, UserId, VoucherId,
+    round_rupees_to_paise,
 };
 use ledgerly_model::seed_godowns::MAIN_LOCATION;
 use ledgerly_model::seed_groups::reserved_groups;
@@ -21,6 +22,7 @@ use ledgerly_model::{
     PartyDetails, RegistrationType, ReservedGroup, StockItem, TaxDetails, TaxLedgerKind,
     Taxability, Unit, UnitKind, ValuationMethod, Voucher, VoucherMode, VoucherStatus,
 };
+use ledgerly_store::Actor;
 use time::format_description::well_known::Iso8601;
 
 use crate::SampleError;
@@ -781,7 +783,36 @@ fn place(keys: &Keys, v: &VoucherSeed, field: &str) -> Result<StateCode, SampleE
     }
 }
 
+/// The company's two users (the mock's "Ananya K." and "Rohan D."): the first is the default
+/// actor of the company file.
+const USERS: [(&str, u64, &str); 2] = [("ananya", 1, "Ananya K."), ("rohan", 2, "Rohan D.")];
+
+/// The actor that entered `v`: the user it names, or the assistant acting for that user when it
+/// was an accepted draft.
+fn actor_of(v: &VoucherSeed) -> Result<Actor, SampleError> {
+    let user = match v.by.as_deref() {
+        None => UserId(1),
+        Some(key) => USERS
+            .iter()
+            .find(|(k, _, _)| *k == key)
+            .map(|(_, id, _)| UserId(*id))
+            .ok_or_else(|| value_error(format!("voucher {}", v.number), "unknown user"))?,
+    };
+    Ok(if v.ai {
+        Actor::Assistant {
+            model: "assistant".to_owned(),
+            on_behalf_of: user,
+        }
+    } else {
+        Actor::User(user)
+    })
+}
+
 fn vouchers(seed: &Seed, api: &mut Api, keys: &Keys) -> Result<(), SampleError> {
+    for (_, id, name) in USERS {
+        api.set_user_name(UserId(id), name)
+            .map_err(|e| value_error("users", e.to_string()))?;
+    }
     let mut november_seen = false;
     for (n, v) in (1_u64..).zip(&seed.voucher) {
         match v.section {
@@ -795,12 +826,14 @@ fn vouchers(seed: &Seed, api: &mut Api, keys: &Keys) -> Result<(), SampleError> 
             SectionSeed::History => {}
         }
         let built = build_voucher(api, keys, n, v)?;
+        api.set_actor(actor_of(v)?);
         run(
             api,
             &format!("voucher {}", v.number),
             Command::PostVoucher(built),
         )?;
     }
+    api.set_actor(Actor::User(UserId(1)));
     Ok(())
 }
 

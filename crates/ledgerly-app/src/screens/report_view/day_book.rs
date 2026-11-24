@@ -7,11 +7,13 @@
 //! mock's order, with the party as the Particulars column, in a card painted to the mock's
 //! `table.t` lines ([`crate::ui::table::paint_row`]).
 //!
-//! What the screen leaves out, because the engine does not give it yet:
-//!
-//! * narration: the report has no narration field, so the Particulars column shows the party only;
-//! * entered by and origin: the report has no field for them (engine item E-4). The screen says
-//!   so in its footnote instead of showing a value, and keeps the engine's Status column.
+//! The facade adds three columns after those (`ledgerly-api` `day_book_meta`): `Narration`,
+//! `Entered by` and `Origin`. The screen draws the narration as a second line under the party
+//! (index.html:1651, `div.meta`), Entered by in the secondary ink and the origin as the mock does:
+//! `Typed` in the meta ink, an accepted AI draft as an AI badge. What the engine does not record
+//! is not drawn (no attachment or bank rule is stored, so no "Image attached" or "Bank rule").
+//! The engine's `Status` column is empty for a regular voucher; any other status is a badge at the
+//! right of the Origin cell, and is spoken last.
 //!
 //! Period tabs: `Day` is the single day that ends the report's period; the month tab (named after
 //! that day's month, as the mock's "November") runs from the first of that month to the same day.
@@ -22,18 +24,19 @@ use egui::{Frame, Rect, Role, ScrollArea, Sense, Stroke, Ui, pos2, vec2};
 use ledgerly_core::{Date, DrCr, Period};
 
 use super::text::{amount_on_side, cell_text};
-use super::{TableEvents, ViewCell, ViewReport};
+use super::{TableEvents, ViewCell, ViewReport, ViewRow};
 use crate::keymap::Action;
 use crate::theme::{RADIUS_M, TEXT_BODY, TEXT_H2, TEXT_META, border_width, shadow_1};
+use crate::ui::badge::{BadgeKind, paint_badge};
 use crate::ui::button::{ButtonKind, button};
 use crate::ui::icon::Icon;
 use crate::ui::table::{self, CellPlace, RowState, T_HEAD_HEIGHT, T_ROW_HEIGHT, T_TOTAL_HEIGHT};
 use crate::ui::{a11y, format};
 use crate::ui::{bold_font, kind, tokens};
 
-/// The footnote that says what the day book does not yet show.
-pub const NOT_RECORDED: &str = "Entered by and origin are not recorded yet (engine item E-4). \
-Narration is not in the day book report yet, so the party is shown alone.";
+/// The footnote under the table (index.html:1657, without the Ctrl+I sentence: the original
+/// proposal is not shown from the day book yet).
+pub const NOT_RECORDED: &str = "An AI badge means a person accepted an AI draft; the voucher itself is ordinary and the engine computed its figures.";
 
 /// Index of the `Day` tab.
 pub const DAY_TAB: usize = 0;
@@ -67,6 +70,29 @@ pub fn day_columns(columns: &[String]) -> Option<DayColumns> {
         amount: find("Amount")?,
         status: find("Status")?,
     })
+}
+
+/// Where the facade's extra columns sit, when the report has them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct ExtraColumns {
+    /// Column of the narration.
+    pub narration: Option<usize>,
+    /// Column of who entered the voucher.
+    pub by: Option<usize>,
+    /// Column of how it was entered.
+    pub origin: Option<usize>,
+}
+
+/// Finds the `Narration`, `Entered by` and `Origin` columns by heading; each is `None` when the
+/// report does not carry it.
+#[must_use]
+pub fn extra_columns(columns: &[String]) -> ExtraColumns {
+    let find = |name: &str| columns.iter().position(|column| column.as_str() == name);
+    ExtraColumns {
+        narration: find("Narration"),
+        by: find("Entered by"),
+        origin: find("Origin"),
+    }
 }
 
 /// The labels of the two tabs: `Day`, and the month of the day the period ends on, in full
@@ -182,7 +208,8 @@ pub fn empty_title(period: Period) -> String {
 }
 
 /// The sentence under the empty title: what to do next, with the voucher keys.
-pub const EMPTY_SENTENCE: &str = "Start with a voucher key. Every voucher you save lands here.";
+pub const EMPTY_SENTENCE: &str =
+    "Start with a voucher key. Every voucher you save lands here, with who entered it.";
 
 /// The buttons under the empty day book, each with the voucher it opens and its key
 /// (index.html:1646: Sales F8, Purchase F9, Payment F5, Receipt F6).
@@ -318,25 +345,55 @@ pub fn line_heights(rows: usize, total: bool) -> Vec<f32> {
 }
 
 /// Fixed column widths, left to right: Date, Type, No.; Particulars takes what is left, then
-/// Amount and Status. Date, Type and No. are read off the mock's capture at 1280 by 800.
+/// Amount, Entered by and Origin. Read off the mock's capture at 1280 by 800 (the Amount column
+/// ends at x 973, Entered by at 1080, Origin runs to the card edge).
 const DATE_W: f32 = 133.0;
 const TYPE_W: f32 = 100.0;
 const NUMBER_W: f32 = 100.0;
-const AMOUNT_W: f32 = 150.0;
-const STATUS_W: f32 = 160.0;
+const AMOUNT_W: f32 = 130.0;
+const BY_W: f32 = 107.0;
+const ORIGIN_W: f32 = 175.0;
 const PARTICULARS_MIN: f32 = 160.0;
+/// What the narration line adds to a row's height (the mock's rows are 51 and 33 tall).
+const META_LINE: f32 = 17.0;
 
-/// The six column rectangles of a line, left to right.
-fn column_rects(rect: Rect) -> [Rect; 6] {
-    let fixed = DATE_W + TYPE_W + NUMBER_W + AMOUNT_W + STATUS_W;
+/// The seven column rectangles of a line, left to right: Date, Type, No., Particulars, Amount,
+/// Entered by, Origin.
+fn column_rects(rect: Rect) -> [Rect; 7] {
+    let fixed = DATE_W + TYPE_W + NUMBER_W + AMOUNT_W + BY_W + ORIGIN_W;
     let particulars = (rect.width() - fixed).max(PARTICULARS_MIN);
-    let widths = [DATE_W, TYPE_W, NUMBER_W, particulars, AMOUNT_W, STATUS_W];
+    let widths = [
+        DATE_W,
+        TYPE_W,
+        NUMBER_W,
+        particulars,
+        AMOUNT_W,
+        BY_W,
+        ORIGIN_W,
+    ];
     let mut x = rect.left();
     widths.map(|w| {
         let r = Rect::from_min_max(pos2(x, rect.top()), pos2(x + w, rect.bottom()));
         x += w;
         r
     })
+}
+
+/// The text of the cell at `index`, empty when the column is absent or the cell is not text.
+fn text_at(row: &ViewRow, index: Option<usize>) -> String {
+    index
+        .and_then(|i| row.cells.get(i))
+        .map_or_default(cell_text)
+}
+
+/// The height of a voucher line: one text line, plus the narration line when there is one.
+#[must_use]
+pub fn row_height(has_narration: bool) -> f32 {
+    if has_narration {
+        T_ROW_HEIGHT + META_LINE
+    } else {
+        T_ROW_HEIGHT
+    }
 }
 
 /// Draws the vouchers in a card that hugs them (index.html:1650-1656), then the footnote under
@@ -393,14 +450,15 @@ fn paint_heading(ui: &Ui, rect: Rect) {
     let t = tokens(ui);
     table::paint_head_rule(ui, rect);
     let font = bold_font(ui, TEXT_META);
-    let [date, kind, number, particulars, amount, status] = column_rects(rect);
+    let [date, kind, number, particulars, amount, by, origin] = column_rects(rect);
     let left = CellPlace::Left(table::CELL_PAD_X);
     for (r, label) in [
         (date, "Date"),
         (kind, "Type"),
         (number, "No."),
         (particulars, "Particulars"),
-        (status, "Status"),
+        (by, "Entered by"),
+        (origin, "Origin"),
     ] {
         table::paint_cell_text(ui, r, 1.0, label, font.clone(), t.text_3, left);
     }
@@ -424,9 +482,10 @@ fn draw_rows(
         .show(ui, |ui| {
             ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
             let width = ui.available_width();
-            for index in 0..report.rows.len() {
-                let (rect, response) =
-                    ui.allocate_exact_size(vec2(width, T_ROW_HEIGHT), Sense::click());
+            let extra = extra_columns(&report.columns);
+            for (index, row) in report.rows.iter().enumerate() {
+                let height = row_height(!text_at(row, extra.narration).is_empty());
+                let (rect, response) = ui.allocate_exact_size(vec2(width, height), Sense::click());
                 let state = RowState {
                     selected: index == selected,
                     hovered: response.hovered(),
@@ -453,11 +512,12 @@ fn draw_rows(
     events
 }
 
-/// One voucher: date, type, number, party, amount and status. Type and status are in the mock's
-/// secondary ink (`td.t2`).
+/// One voucher: date, type, number, party with its narration under it, amount, who entered it
+/// and how. Type and Entered by are in the mock's secondary ink (`td.t2`); a status other than
+/// regular is a badge at the right of the Origin cell.
 ///
 /// Returns what a screen reader says for the row: the words and the figure as drawn, in column
-/// order.
+/// order, the status last.
 fn paint_voucher(
     ui: &Ui,
     rect: Rect,
@@ -473,35 +533,97 @@ fn paint_voucher(
     table::paint_row(ui, rect, state);
     let font = egui::FontId::proportional(TEXT_BODY);
     let cell = |i: usize| row.cells.get(i);
-    let [date, kind, number, particulars, amount, status] = column_rects(rect);
+    let [date, kind, number, particulars, amount, by, origin] = column_rects(rect);
     let left = CellPlace::Left(table::CELL_PAD_X);
+    let extra = extra_columns(&report.columns);
     // The cells as text, once each, so the spoken name and the painted cells agree.
     let date_text_of = cell(columns.date).map_or_default(date_text);
     let kind_text_of = cell(columns.kind).map_or_default(cell_text);
     let number_text_of = cell(columns.number).map_or_default(cell_text);
     let status_text_of = cell(columns.status).map_or_default(cell_text);
     let figure = cell(columns.amount).map_or_default(amount_text);
-    // Spoken in the order the columns are drawn: date, type, number, particulars, amount, status.
+    let narration = text_at(row, extra.narration);
+    let by_text = text_at(row, extra.by);
+    let origin_text = text_at(row, extra.origin);
+    // Spoken in the order the columns are drawn: date, type, number, particulars, narration,
+    // amount, entered by, origin; the status last.
     let name = a11y::join(&[
         date_text_of.as_str(),
         kind_text_of.as_str(),
         number_text_of.as_str(),
         row.label.as_str(),
+        narration.as_str(),
         figure.as_str(),
+        by_text.as_str(),
+        origin_text.as_str(),
         status_text_of.as_str(),
     ]);
-    let texts = [
+    for (r, text, ink) in [
         (date, date_text_of, t.text),
         (kind, kind_text_of, t.text_2),
         (number, number_text_of, t.text),
-        (particulars, row.label.clone(), t.text),
-        (status, status_text_of, t.text_2),
-    ];
-    for (r, text, ink) in texts {
+        (by, by_text, t.text_2),
+    ] {
         table::paint_cell_text(ui, r, 1.0, &text, font.clone(), ink, left);
     }
+    paint_particulars(ui, particulars, &row.label, &narration);
     table::paint_cell_text(ui, amount, 1.0, &figure, font, t.text, CellPlace::Right);
+    paint_origin(ui, origin, &origin_text, &status_text_of);
     name
+}
+
+/// The party, with the narration under it in the meta ink when there is one.
+fn paint_particulars(ui: &Ui, rect: Rect, label: &str, narration: &str) {
+    let t = tokens(ui);
+    let font = egui::FontId::proportional(TEXT_BODY);
+    let left = CellPlace::Left(table::CELL_PAD_X);
+    if narration.is_empty() {
+        table::paint_cell_text(ui, rect, 1.0, label, font, t.text, left);
+        return;
+    }
+    let top = Rect::from_min_max(rect.min, pos2(rect.right(), rect.bottom() - META_LINE));
+    let bottom = Rect::from_min_max(pos2(rect.left(), rect.bottom() - META_LINE), rect.max);
+    table::paint_cell_text(ui, top, 0.0, label, font, t.text, left);
+    table::paint_cell_text(
+        ui,
+        bottom,
+        1.0,
+        narration,
+        egui::FontId::proportional(TEXT_META),
+        t.text_3,
+        left,
+    );
+}
+
+/// The origin: `Typed` as meta text, an accepted AI draft as the AI badge, an import as a neutral
+/// badge, and any other word the engine gives as meta text. A status other than regular is a
+/// neutral badge at the right edge.
+fn paint_origin(ui: &Ui, rect: Rect, origin: &str, status: &str) {
+    let t = tokens(ui);
+    let x = rect.left() + table::CELL_PAD_X;
+    let y = rect.center().y;
+    if origin == "AI draft" {
+        paint_badge(ui, x, y, BadgeKind::Ai, "AI draft, accepted");
+    } else if origin == "Imported" {
+        paint_badge(ui, x, y, BadgeKind::Neutral, "Imported");
+    } else {
+        table::paint_cell_text(
+            ui,
+            rect,
+            1.0,
+            origin,
+            egui::FontId::proportional(TEXT_META),
+            t.text_3,
+            CellPlace::Left(table::CELL_PAD_X),
+        );
+    }
+    if !status.is_empty() {
+        let galley =
+            ui.painter()
+                .layout_no_wrap(status.to_owned(), bold_font(ui, TEXT_META), t.text_2);
+        let left = (rect.right() - table::CELL_PAD_X - galley.size().x - 40.0).max(x);
+        paint_badge(ui, left, y, BadgeKind::Neutral, status);
+    }
 }
 
 /// The total: the number of vouchers and the engine's total, semibold between the total rules.
@@ -509,7 +631,7 @@ fn paint_total(ui: &Ui, rect: Rect, report: &ViewReport, columns: DayColumns) {
     let t = tokens(ui);
     table::paint_total_rules(ui, rect);
     let font = bold_font(ui, TEXT_BODY);
-    let [date, _, _, _, amount, _] = column_rects(rect);
+    let [date, _, _, _, amount, _, _] = column_rects(rect);
     let label_rect = Rect::from_min_max(date.min, pos2(amount.left(), rect.bottom()));
     table::paint_cell_text(
         ui,

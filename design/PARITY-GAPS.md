@@ -131,15 +131,23 @@ and `home.ai-off`. Not captured: `home.loading` and `home.nudge-open`.
 
 ## Day book (round of 2026-11-23)
 
-- **deferred: Entered by and Origin columns, and Ctrl+I Origin** (index.html:1650-1653, 1659).
-  The engine records neither who entered a voucher nor whether it came from an AI draft or a
-  bank rule (engine item E-4). The table keeps the engine's Status column in their place and the
-  footnote says so; Ctrl+I is not offered.
-- **deferred: narration under the party** (index.html:1652, the `meta` line). The engine's day
-  book has no narration field, so Particulars shows the party alone and every row is one line.
+- **closed (s9): Entered by, Origin and the narration line.** The facade adds `Narration`,
+  `Entered by` and `Origin` to the day book from each voucher's `VoucherPosted` record
+  (`ledgerly-api` `day_book_meta`); user names come from `SettingChanged user.<id>.name`
+  (`Api::set_user_name`). The sample company posts each November voucher as the mock's user, and
+  PY/0315 and PB/0141 as the assistant acting for Ananya K. Tested in
+  `ledgerly-api/tests/s9_day_book.rs`, `ledgerly-sample/tests/sample.rs`, `ledgerly-app/tests/s9_reports.rs`.
+- **gap: Origin shows Typed, AI draft, accepted or Imported only.** The mock also shows "Image
+  attached" (PB/0144) and "Bank rule" (PY/0316) and names the draft kind ("Plain-words draft",
+  "Bill photo draft"). The company file stores no attachment, no bank-rule posting and no draft
+  kind, so PB/0144 and PY/0316 read Typed and the two AI drafts read "AI draft, accepted".
+- **deferred: Ctrl+I Origin.** The original proposal is not opened from the day book, so the
+  footnote leaves out the mock's Ctrl+I sentence and the key bar does not offer it.
+- **by design: a non-regular status is a badge in the Origin cell.** The mock has no Status column;
+  a cancelled, optional or post-dated voucher still has to say so.
 - **closed (S8): the empty state is a card** with the book icon, title, sentence and the four
-  voucher buttons (they open the voucher forms); the sentence leaves out the mock's "with who
-  entered it" because that is not recorded (E-4). The buttons sit centred; the mock's sit at the
+  voucher buttons (they open the voucher forms); the sentence now includes the mock's "with who
+  entered it" (s9). The buttons sit centred; the mock's sit at the
   left of the card.
 - **by design: the month view keeps the cursor on the voucher it was on.** `day-book.month`
   (Alt+F2, 1 Nov to 20 Nov) keeps the selected voucher selected when the period changes
@@ -148,10 +156,7 @@ and `home.ai-off`. Not captured: `home.loading` and `home.nudge-open`.
   the day after the current date; ours fills in the day shown. Check the TallyPrime page (only
   the Tally.ERP 9 page was read) before changing it.
 - **data: voucher numbers and the sample day (resolved, S8).** Godavari carries the mock's own
-  numbers (SI/0417 ...) and its five vouchers on 20 Nov; "Entered by" and "Origin" are still not
-  recorded (see "Sample company").
-- **by design: Status column.** Kept from the engine (it shows a cancelled voucher as such) until
-  Entered by and Origin exist.
+  numbers (SI/0417 ...) and its five vouchers on 20 Nov, entered by the mock's two users (s9).
 
 ## GST returns (round of 2026-11-23)
 
@@ -771,9 +776,9 @@ Mismatches between the mock's totals and the engine's, and why:
   before 1 Nov and carry only the party, sales and bill lines the mock states.
 - **data: voucher numbering.** Numbers are typed on each voucher as the mock shows them; the mock's
   next number (SI/0418) is not reproduced: the engine numbers a new voucher from its own series.
-- **data: no 2B or IMS rows, no "Entered by", no AI origin.** The seed has no portal data, and
-  the engine records no actor or origin yet (E-4), so the mock's reconciliation states, "Entered
-  by" and "Image attached" columns and AI chips cannot show.
+- **data: no 2B or IMS rows.** The seed has no portal data, so the mock's reconciliation states
+  cannot show. (The day book's "Entered by" and AI origin are recorded since s9; "Image attached"
+  is not, see "Day book".)
 - **gap: GST cash payable on Home.** The mock shows 39,498.00; the engine gives the GSTR-3B working
   but no payable after set-off, so the tile says "Not supported yet" with its reason.
 - **gap: the invoice screen cannot save to a bill-wise party.** Every Godavari party is bill-wise

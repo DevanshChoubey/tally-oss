@@ -16,7 +16,7 @@ use ledgerly_reports::profit_loss::profit_loss;
 use ledgerly_reports::registers::{day_book, register};
 use ledgerly_reports::stock_summary::stock_summary;
 use ledgerly_reports::trial_balance::trial_balance;
-use ledgerly_reports::{AuditReportKind, Report, ReportKind, ReportParams};
+use ledgerly_reports::{AuditReportKind, ColumnSpec, Report, ReportKind, ReportParams};
 use ledgerly_stock::avg::average_cost;
 use ledgerly_stock::fifo::fifo;
 use ledgerly_stock::other_methods::{last_purchase_cost, standard_cost};
@@ -27,6 +27,7 @@ use ledgerly_store::verify::verify_chain;
 use std::path::Path;
 
 use crate::ApiError;
+use crate::day_book_meta::annotate;
 use crate::events::read_all;
 
 /// Runs `p` over `books`. `store` is read only by the audit reports.
@@ -49,7 +50,12 @@ pub(crate) fn run(
         }
         ReportKind::GroupSummary(group) => group_summary(books, p, *group)?,
         ReportKind::LedgerVouchers(ledger) => ledger_vouchers(books, p, *ledger)?,
-        ReportKind::DayBook => day_book(books, p)?,
+        ReportKind::DayBook => match day_book(books, p)? {
+            Outcome::Value(report) if p.columns == ColumnSpec::Single => {
+                Outcome::Value(annotate(store, books, report)?)
+            }
+            other => other,
+        },
         ReportKind::Register(kind) => register(books, p, *kind)?,
         ReportKind::Outstanding { receivable } => outstanding(books, p, *receivable)?,
         ReportKind::StockSummary => {

@@ -12,6 +12,7 @@ publish = false
 ledgerly-core.workspace = true
 ledgerly-model.workspace = true
 ledgerly-api.workspace = true
+ledgerly-store.workspace = true
 serde.workspace = true
 toml.workspace = true
 time.workspace = true

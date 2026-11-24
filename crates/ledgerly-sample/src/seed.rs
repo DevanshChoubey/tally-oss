@@ -220,6 +220,11 @@ pub(crate) struct VoucherSeed {
     pub(crate) mode: ModeSeed,
     pub(crate) date: String,
     pub(crate) number: String,
+    /// Who entered it: `ananya` or `rohan` (the company's two users); the first when absent.
+    pub(crate) by: Option<String>,
+    /// The voucher was an assistant's draft that the user accepted.
+    #[serde(default)]
+    pub(crate) ai: bool,
     pub(crate) reference: Option<String>,
     pub(crate) party: Option<String>,
     /// The sales or purchase ledger of an item invoice.

@@ -287,3 +287,58 @@ fn signed_or_provisional(cell: &Cell) -> i64 {
         other => signed(other),
     }
 }
+
+#[test]
+fn the_day_book_says_who_entered_each_november_voucher_and_how() {
+    // provenance: the mock's VOUCHERS list (design/mock-v2/index.html:567-580): `by` is who
+    // entered it and `ai` marks an accepted draft. Bank rule (PY/0316) and Image attached
+    // (PB/0144) are not recorded in the company file, so they read as Typed here (see
+    // design/PARITY-GAPS.md). The rest of the 14 are Typed by the named user.
+    let (_dir, api) = sample();
+    let r = report(&api, ReportKind::DayBook, date!(2026 - 11 - 21));
+    let col = |name: &str| r.columns.iter().position(|c| c.label == name).unwrap();
+    let text = |row: &ledgerly_api::ReportRow, c: usize| match &row.cells[c] {
+        Cell::Text(t) => t.clone(),
+        other => panic!("{other:?}"),
+    };
+    let (no, by, origin, narr) = (
+        col("Voucher no."),
+        col("Entered by"),
+        col("Origin"),
+        col("Narration"),
+    );
+    let find = |number: &str| {
+        let row = r
+            .rows
+            .iter()
+            .find(|row| matches!(&row.cells[no], Cell::Text(t) if t == number))
+            .unwrap_or_else(|| panic!("no {number}"));
+        (text(row, by), text(row, origin), text(row, narr))
+    };
+    let t = |a: &str, b: &str, c: &str| (a.to_owned(), b.to_owned(), c.to_owned());
+    assert_eq!(
+        find("SI/0401"),
+        t("Ananya K.", "Typed", "Against PO MAI/77")
+    );
+    assert_eq!(
+        find("PY/0315"),
+        t(
+            "Ananya K.",
+            "AI draft",
+            "Office rent, November, Sharma Properties"
+        )
+    );
+    assert_eq!(find("SI/0405"), t("Rohan D.", "Typed", ""));
+    assert_eq!(
+        find("PB/0141"),
+        t("Ananya K.", "AI draft", "Cartons, bill KP/2231")
+    );
+    assert_eq!(
+        find("RC/0215"),
+        t("Rohan D.", "Typed", "NEFT, part against SI/0372")
+    );
+    assert_eq!(
+        find("JV/0032"),
+        t("Ananya K.", "Typed", "Monthly depreciation, November")
+    );
+}
