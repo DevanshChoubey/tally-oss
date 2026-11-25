@@ -1037,3 +1037,33 @@ proptest! {
         prop_assert_eq!(&party(&r, "Asha Traders").cells[C_PENDING], &dr(pending));
     }
 }
+
+#[test]
+fn days_overdue_counts_whole_days_past_the_due_date() {
+    // provenance: derived. The ageing rule in the module doc: overdue days = as_of - due in whole
+    // days; a bill due on the report date is 0 days overdue; a bill due after it, or with no due
+    // date, is not aged. 20 Nov 2026 less a due date of 14 Oct 2026: 17 (rest of October after
+    // the 14th: 31 - 14) + 20 (November) = 37 days. 30 Jun 2026 less 20 Apr 2026: 10 + 31 + 30 = 71.
+    use ledgerly_reports::outstanding::days_overdue;
+    let d = |y, m, day| Date::from_calendar_date(y, m, day).unwrap();
+    assert_eq!(
+        days_overdue(
+            d(2026, Month::November, 20),
+            Some(d(2026, Month::October, 14))
+        ),
+        Some(37)
+    );
+    assert_eq!(
+        days_overdue(d(2026, Month::June, 30), Some(d(2026, Month::April, 20))),
+        Some(71)
+    );
+    assert_eq!(
+        days_overdue(d(2026, Month::June, 30), Some(d(2026, Month::June, 30))),
+        Some(0)
+    );
+    assert_eq!(
+        days_overdue(d(2026, Month::June, 30), Some(d(2026, Month::July, 1))),
+        None
+    );
+    assert_eq!(days_overdue(d(2026, Month::June, 30), None), None);
+}

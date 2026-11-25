@@ -364,14 +364,23 @@ enum Bucket {
     NoDue,
 }
 
+/// Whole days a bill is overdue as of `as_of`: `as_of - due`. A bill due on `as_of` is 0 days
+/// overdue. `None` when the bill is not yet due (its due date is after `as_of`) or has no due
+/// date, so it is not aged. This is the count the ageing buckets are cut from.
+#[must_use]
+pub fn days_overdue(as_of: Date, due: Option<Date>) -> Option<i64> {
+    let overdue = (as_of - due?).whole_days();
+    (overdue >= 0).then_some(overdue)
+}
+
 fn bucket_of(as_of: Date, due: Option<Date>) -> Bucket {
     let Some(due) = due else {
         return Bucket::NoDue;
     };
-    let overdue = (as_of - due).whole_days();
-    if overdue < 0 {
-        Bucket::NotDue
-    } else if overdue <= 30 {
+    let Some(overdue) = days_overdue(as_of, Some(due)) else {
+        return Bucket::NotDue;
+    };
+    if overdue <= 30 {
         Bucket::Days0To30
     } else if overdue <= 60 {
         Bucket::Days31To60

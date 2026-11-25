@@ -15,7 +15,7 @@
 
 use ledgerly_api::{
     Api, ApiError, Cell, ColumnSpec, Detail, DrillKey, Report, ReportFilter, ReportKind,
-    ReportParams, RowKind,
+    ReportParams, RowKind, days_overdue,
 };
 use ledgerly_core::{Date, LedgerId, Outcome, Period, SignedAmount};
 use ledgerly_model::Scenario;
@@ -33,6 +33,8 @@ const ON_ACCOUNT_HEADING: &str = "On account";
 const NOT_DUE_HEADING: &str = "Not yet due";
 /// The outstanding report's heading of a bill with no due date.
 const NO_DUE_HEADING: &str = "No due date";
+/// The outstanding report's heading of a bill's due date.
+const DUE_HEADING: &str = "Due date";
 /// The outstanding report's overdue buckets, youngest first.
 const OVERDUE_HEADINGS: [&str; 4] = ["0-30 days", "31-60 days", "61-90 days", "Over 90 days"];
 
@@ -41,8 +43,14 @@ const OVERDUE_HEADINGS: [&str; 4] = ["0-30 days", "31-60 days", "61-90 days", "O
 pub enum BillAge {
     /// The due date is after the report date.
     NotDue,
-    /// Overdue, in the report's bucket (its heading, such as "31-60 days").
-    Overdue(String),
+    /// Overdue: the whole days past the due date as of the report date (the engine's count,
+    /// `ledgerly_api::days_overdue`) and the report's bucket (its heading, such as "31-60 days").
+    Overdue {
+        /// Days past the due date.
+        days: i64,
+        /// The report's age column the amount sits in.
+        bucket: String,
+    },
     /// The bill has no due date, so it is not aged.
     NoDueDate,
     /// The party's unallocated amount, which is never aged.
@@ -217,7 +225,7 @@ pub fn party_lines(report: &Report, ledger: LedgerId) -> Option<Vec<BillLine>> {
                         Some(_) | None => None,
                     },
                     pending: amount(at(PENDING_HEADING).and_then(|i| row.cells.get(i))),
-                    age: age(report, &row.cells),
+                    age: age(report, &row.cells, due_date(report, &row.cells)),
                 });
             }
             (RowKind::Bill, Some(DrillKey::Ledger(id))) if *id == ledger => {
@@ -257,8 +265,20 @@ fn amount(cell: Option<&Cell>) -> Result<SignedAmount, String> {
     }
 }
 
-/// A bill's age: the bucket column that holds its amount.
-fn age(report: &Report, cells: &[Cell]) -> BillAge {
+/// The due date cell of a bill row, when it holds a date.
+fn due_date(report: &Report, cells: &[Cell]) -> Option<Date> {
+    let at = report.columns.iter().position(|c| c.label == DUE_HEADING)?;
+    match cells.get(at) {
+        Some(Cell::Date(d)) => Some(*d),
+        Some(_) | None => None,
+    }
+}
+
+/// A bill's age: the bucket column that holds its amount, and for an overdue bill the engine's
+/// count of days past the due date as of the report date (`ledgerly_api::days_overdue`, the rule
+/// the buckets are cut from). An overdue bill with no due date cell, or one the count calls not
+/// overdue, is not given an age (rule A1).
+fn age(report: &Report, cells: &[Cell], due: Option<Date>) -> BillAge {
     let filled = |label: &str| {
         report
             .columns
@@ -273,7 +293,18 @@ fn age(report: &Report, cells: &[Cell]) -> BillAge {
     }
     for label in OVERDUE_HEADINGS {
         if filled(label) {
-            found.push(BillAge::Overdue(label.to_owned()));
+            match days_overdue(report.params.as_of, due) {
+                Some(days) => found.push(BillAge::Overdue {
+                    days,
+                    bucket: label.to_owned(),
+                }),
+                None => {
+                    return BillAge::Unknown(
+                        "the outstanding report puts the bill in an overdue column but gives no due date to count the days from"
+                            .to_owned(),
+                    );
+                }
+            }
         }
     }
     if filled(NO_DUE_HEADING) {
@@ -293,7 +324,8 @@ fn age(report: &Report, cells: &[Cell]) -> BillAge {
 pub fn age_badge(age: &BillAge) -> Option<(String, bool)> {
     match age {
         BillAge::NotDue => Some(("Not due".to_owned(), false)),
-        BillAge::Overdue(bucket) => Some((format!("{bucket} overdue"), true)),
+        BillAge::Overdue { days: 1, .. } => Some(("1 day overdue".to_owned(), true)),
+        BillAge::Overdue { days, .. } => Some((format!("{days} days overdue"), true)),
         BillAge::NoDueDate => Some(("No due date".to_owned(), false)),
         BillAge::OnAccount => None,
         BillAge::Unknown(_) => Some(("\u{2014}".to_owned(), false)),

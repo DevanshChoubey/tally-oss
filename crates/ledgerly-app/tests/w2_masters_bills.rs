@@ -273,7 +273,8 @@ fn the_card_lists_the_partys_open_bills_from_the_engine() {
     // provenance: derived, as of 30 Jun 2026 (the last voucher date).
     // INV-1: 10,000 Dr less 4,000 received against it = 6,000.00 Dr open. Due 20 Apr, so
     // 30 Jun - 20 Apr = 10 (rest of April) + 31 (May) + 30 (June) = 71 days overdue: the
-    // 61-90 days bucket.
+    // 61-90 days bucket. The card keeps both: the day count (the badge's "71 days overdue",
+    // index.html:1806) and the report's bucket.
     // INV-2: 5,000.00 Dr open, due 30 Jul, after the report date: not yet due.
     // On account: the 1,000 received with no bill, 1,000.00 Cr, never aged.
     let worker = ApiWorker::spawn(setup("w2_masters_bills.ledgerly")).unwrap();
@@ -288,7 +289,10 @@ fn the_card_lists_the_partys_open_bills_from_the_engine() {
                 name: "INV-1".to_owned(),
                 date: Some(date!(2026 - 04 - 10)),
                 pending: Ok(SignedAmount::dr(rs(6_000))),
-                age: BillAge::Overdue("61-90 days".to_owned()),
+                age: BillAge::Overdue {
+                    days: 71,
+                    bucket: "61-90 days".to_owned(),
+                },
             },
             BillLine {
                 name: "INV-2".to_owned(),
@@ -372,6 +376,7 @@ fn bill_row(id: LedgerId, name: &str, buckets: &[usize]) -> ReportRow {
     let cells = (0..11)
         .map(|i| match i {
             0 => Cell::Date(date!(2026 - 04 - 10)),
+            1 => Cell::Date(date!(2026 - 05 - 15)),
             2 => Cell::Amount(SignedAmount::dr(rs(100))),
             i if buckets.contains(&i) => Cell::Amount(SignedAmount::dr(rs(100))),
             _ => Cell::Empty,
@@ -402,7 +407,15 @@ fn only_the_partys_own_rows_are_kept() {
     let lines = party_lines(&r, CUSTOMER).unwrap();
     assert_eq!(lines.len(), 1);
     assert_eq!(lines[0].name, "C-1");
-    assert_eq!(lines[0].age, BillAge::Overdue("31-60 days".to_owned()));
+    // provenance: derived. The bill's due date is 15 May 2026 (bill_row), the report date is
+    // 30 Jun 2026: 16 (rest of May) + 30 (June) = 46 days, in the 31-60 bucket.
+    assert_eq!(
+        lines[0].age,
+        BillAge::Overdue {
+            days: 46,
+            bucket: "31-60 days".to_owned()
+        }
+    );
     assert_eq!(party_lines(&r, CASH), None);
 }
 
@@ -425,11 +438,20 @@ fn a_bill_in_no_age_column_or_in_two_is_not_given_an_age() {
 #[test]
 fn the_badges_name_the_reports_bucket() {
     // provenance: index.html:1806: `${x.overdue} days overdue` in the warning style, or "Not due"
-    // in the neutral style. Derived: the report gives the bucket, not the day count, so the badge
-    // names the bucket; a bill with no due date says so; the on-account line has no badge.
+    // in the neutral style. Derived: the badge reads the day count the engine worked out
+    // ("37 days overdue", the mock's own wording), with "1 day" for a single day; a bill with no
+    // due date says so; the on-account line has no badge.
+    let overdue = |days| BillAge::Overdue {
+        days,
+        bucket: "31-60 days".to_owned(),
+    };
     assert_eq!(
-        age_badge(&BillAge::Overdue("61-90 days".to_owned())),
-        Some(("61-90 days overdue".to_owned(), true))
+        age_badge(&overdue(37)),
+        Some(("37 days overdue".to_owned(), true))
+    );
+    assert_eq!(
+        age_badge(&overdue(1)),
+        Some(("1 day overdue".to_owned(), true))
     );
     assert_eq!(
         age_badge(&BillAge::NotDue),

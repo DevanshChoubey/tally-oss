@@ -1627,7 +1627,8 @@ fn bills_table(ui: &mut Ui, lines: &[bills::BillLine]) {
         })
         .collect();
     // Each text column is as wide as its widest text, so nothing overlaps in a narrow card; the
-    // badges take what is left.
+    // badges take what is left. The badge ("37 days overdue") is never clipped: when the card is
+    // narrow, the padding between the text columns gives way first.
     let widest = |each: &mut dyn Iterator<Item = &str>| {
         each.map(|text| {
             ui.painter()
@@ -1636,11 +1637,16 @@ fn bills_table(ui: &mut Ui, lines: &[bills::BillLine]) {
                 .x
         })
         .fold(0.0_f32, f32::max)
-            + 2.0 * table::CELL_PAD_X
     };
-    let name_w = widest(&mut lines.iter().map(|l| l.name.as_str()));
-    let date_w = widest(&mut texts.iter().map(|(d, _)| d.as_str()));
-    let amount_w = widest(&mut texts.iter().map(|(_, a)| a.as_str()));
+    let text_w = [
+        widest(&mut lines.iter().map(|l| l.name.as_str())),
+        widest(&mut texts.iter().map(|(d, _)| d.as_str())),
+        widest(&mut texts.iter().map(|(_, a)| a.as_str())),
+    ];
+    let pad = column_pad(ui, lines, width, text_w.iter().sum());
+    let name_w = text_w[0] + 2.0 * pad;
+    let date_w = text_w[1] + 2.0 * pad;
+    let amount_w = text_w[2] + 2.0 * pad;
     for (line, (date, amount)) in lines.iter().zip(&texts) {
         let (rect, _) =
             ui.allocate_exact_size(egui::vec2(width, T_ROW_HEIGHT), egui::Sense::hover());
@@ -1659,7 +1665,7 @@ fn bills_table(ui: &mut Ui, lines: &[bills::BillLine]) {
                 egui::pos2(rect.left() + to, rect.bottom()),
             )
         };
-        let left = CellPlace::Left(table::CELL_PAD_X);
+        let left = CellPlace::Left(pad);
         let date_at = name_w;
         let amount_at = date_at + date_w;
         let badge_at = amount_at + amount_w;
@@ -1668,7 +1674,9 @@ fn bills_table(ui: &mut Ui, lines: &[bills::BillLine]) {
             (date_at, amount_at, date.as_str(), t.text_2, left),
             (
                 amount_at,
-                badge_at,
+                // Right-aligned text keeps the table's own padding, so the cell runs on into the
+                // badge column by what the narrower padding took.
+                badge_at + (table::CELL_PAD_X - pad),
                 amount.as_str(),
                 t.text,
                 CellPlace::Right,
@@ -1682,6 +1690,29 @@ fn bills_table(ui: &mut Ui, lines: &[bills::BillLine]) {
         }
     }
 }
+
+/// The padding on each side of the text columns of the Open bills card: the table's own, less
+/// what the widest age badge needs when the card is narrow (never below 2 px).
+fn column_pad(ui: &Ui, lines: &[bills::BillLine], width: f32, text_total: f32) -> f32 {
+    let t = tokens(ui);
+    let badge_font = crate::ui::bold_font(ui, crate::theme::TEXT_CAP);
+    let badge_w = lines
+        .iter()
+        .filter_map(|l| bills::age_badge(&l.age).map(|(text, _)| text))
+        .map(|text| {
+            ui.painter()
+                .layout_no_wrap(text, badge_font.clone(), t.text)
+                .size()
+                .x
+        })
+        .fold(0.0_f32, f32::max)
+        + BADGE_CHROME
+        + 2.0 * crate::ui::table::CELL_PAD_X;
+    ((width - badge_w - text_total) / 6.0).clamp(2.0, crate::ui::table::CELL_PAD_X)
+}
+
+/// The width of a badge besides its text: icon, gaps and padding (see `ui::badge`).
+const BADGE_CHROME: f32 = 34.0;
 
 /// Draws an open bill's age badge in `cell`.
 fn age_badge(ui: &mut Ui, cell: egui::Rect, (text, warn): &(String, bool)) {
