@@ -13,7 +13,7 @@
 //! 1041 to 1078; the light capture is `design/mock-v2/captures/states/light/home.default.webp`):
 //!
 //! * a page head with "Day book" and "New sale" (F8) on the right. Once drawn, the title is the
-//!   mock's greeting without the user's name ([`greeting`], the user's decision of 2026-11-23)
+//!   mock's greeting with the user's first name when one is stored ([`greeting_for`])
 //!   and the line under it names today, the financial year and the lock ([`date_line`]). Before
 //!   the first frame it is "Home"; the key bar always says "Home".
 //! * the KPI row: "Cash in hand", "Bank accounts", "Receivables", "Payables" and "GST cash
@@ -61,7 +61,7 @@ use crate::theme::SPACE_3;
 use crate::worker::ApiWorker;
 use crate::{AppCtx, Screen, ScreenAction};
 
-/// Title of the page head. The mock's greeting needs a user name, which the app does not have yet.
+/// Title of the page head until the greeting is set (the first frame).
 const PAGE_TITLE: &str = "Home";
 /// Smallest width of a KPI tile that still fits its figure, in points.
 pub const TILE_MIN_WIDTH: f32 = 200.0;
@@ -279,6 +279,16 @@ pub fn figure_parts(value_text: &str) -> (Option<&str>, &str) {
     }
 }
 
+/// The greeting for `hour` with the signed-in user's first name, as the mock's head has it
+/// ("Good afternoon, Ananya"). With no stored name it is the plain greeting.
+#[must_use]
+pub fn greeting_for(hour: u8, name: Option<&str>) -> String {
+    match name.and_then(|n| n.split_whitespace().next()) {
+        Some(first) => format!("{}, {first}", greeting(hour)),
+        None => greeting(hour).to_owned(),
+    }
+}
+
 /// The greeting for `hour` (0 to 23): "Good morning" from 05:00, "Good afternoon" from 12:00,
 /// "Good evening" from 17:00 until 05:00.
 #[must_use]
@@ -485,7 +495,9 @@ pub struct HomeScreen {
     /// Where each KPI tile was drawn in the last frame, in order. Empty when no tile was drawn.
     tile_rects: Vec<Rect>,
     /// The greeting and the date line, set from the clock and the books on each frame.
-    head: Option<(&'static str, String)>,
+    head: Option<(String, String)>,
+    /// The signed-in user's stored name, read with the books on each refresh.
+    user_name: Option<String>,
 }
 
 impl HomeScreen {
@@ -508,6 +520,7 @@ impl HomeScreen {
             notice: None,
             tile_rects: Vec::new(),
             head: None,
+            user_name: None,
         }
     }
 
@@ -558,6 +571,7 @@ impl HomeScreen {
                 self.chart = Some(load.chart);
                 self.nudges = load.nudges;
                 self.duplicates = load.duplicates;
+                self.user_name = load.user_name;
                 if self.compare.is_some_and(|i| i >= self.duplicates.len()) {
                     self.compare = None;
                 }
@@ -709,7 +723,7 @@ impl Screen for HomeScreen {
     fn page_title(&self) -> String {
         self.head
             .as_ref()
-            .map_or(PAGE_TITLE, |(greet, _)| greet)
+            .map_or(PAGE_TITLE, |(greet, _)| greet.as_str())
             .to_owned()
     }
 
@@ -770,7 +784,10 @@ impl Screen for HomeScreen {
             )
         });
         self.head = Some((
-            greeting(crate::shell::navigate::hour_now()),
+            greeting_for(
+                crate::shell::navigate::hour_now(),
+                self.user_name.as_deref(),
+            ),
             date_line(
                 crate::shell::navigate::today(),
                 fy.as_deref(),

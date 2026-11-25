@@ -76,6 +76,17 @@ pub(super) fn tab_strip(ui: &mut Ui, tabs_set: &Tabs, t: &Tokens) -> Vec<ChromeC
             cmds.push(ChromeCmd::SelectTab(index));
         }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if button_icon(
+                ui,
+                Some(Icon::Plus),
+                "New tab",
+                Some("Ctrl+T"),
+                ButtonKind::Secondary,
+            )
+            .clicked()
+            {
+                cmds.push(ChromeCmd::NewTab);
+            }
             if tabs_set.len() > 1
                 && button_icon(
                     ui,
@@ -87,17 +98,6 @@ pub(super) fn tab_strip(ui: &mut Ui, tabs_set: &Tabs, t: &Tokens) -> Vec<ChromeC
                 .clicked()
             {
                 cmds.push(ChromeCmd::CloseActiveTab);
-            }
-            if button_icon(
-                ui,
-                Some(Icon::Plus),
-                "New tab",
-                Some("Ctrl+T"),
-                ButtonKind::Secondary,
-            )
-            .clicked()
-            {
-                cmds.push(ChromeCmd::NewTab);
             }
         });
     });

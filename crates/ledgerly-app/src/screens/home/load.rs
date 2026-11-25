@@ -20,6 +20,8 @@ pub(super) struct HomeLoad {
     pub(super) nudges: Vec<Nudge>,
     /// The possible duplicate payments, in the order `NudgeAction::Compare` indexes them.
     pub(super) duplicates: Vec<DuplicatePayment>,
+    /// The signed-in user's stored name, when there is one.
+    pub(super) user_name: Option<String>,
 }
 
 /// Reads everything Home shows for `as_of`, with the nudges as of `today`.
@@ -41,5 +43,6 @@ pub(super) fn home_load(api: &Api, as_of: Date, today: Date) -> HomeLoad {
         chart: chart::chart_of(&figures.sales_by_month),
         nudges: nudge::nudges(&figures, &found),
         duplicates,
+        user_name: api.actor_name().unwrap_or(None),
     }
 }

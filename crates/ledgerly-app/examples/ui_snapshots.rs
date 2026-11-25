@@ -7,7 +7,7 @@
 //! Each entry in [`shots`] is named by the mock state id it should match (`states.json`) and a
 //! theme. It writes `<output dir>/<theme>/<state-id>.ppm` (theme `light`, `dark` or `hc`); convert
 //! with `ffmpeg -i in.ppm out.webp`. `--only` keeps the entries whose `<theme>/<state-id>` label
-//! contains the substring. The company file is created in the output directory. All names, GSTINs
+//! contains the substring (several, separated by `|`, keep the entries that match any). The company file is created in the output directory. All names, GSTINs
 //! and amounts are fictional; the figures on screen are whatever the engine computes, and this
 //! tool asserts none of them.
 //!
@@ -283,6 +283,11 @@ fn traders() -> Company {
     maharashtra_company("Fictional Traders", features, NegativeStockPolicy::Block)
 }
 
+/// A company with nothing in it but what a new file starts with (mock `masters.empty`).
+fn blank_company_file(dir: &Path) -> Api {
+    create_file(dir, "snapshot-blank.ledgerly", &traders())
+}
+
 /// A fictional Maharashtra trader with a bank, two GST buyers and a few November vouchers.
 fn company_file(dir: &Path) -> Api {
     let mut api = create_file(dir, "snapshot-company.ledgerly", &traders());
@@ -323,6 +328,8 @@ enum Fixture {
     Main,
     /// Fictional Traders' masters with no voucher yet ([`new_company_file`]).
     New,
+    /// A company just created, with no master and no voucher ([`blank_company_file`]).
+    Blank,
     /// No company at all: the shell exactly as the app's `main` builds it
     /// (`Shell::cold_start`), with nothing opened. This is what a user sees on first launch.
     Cold,
@@ -338,6 +345,7 @@ impl Fixture {
             Fixture::GodavariShortStock => Some(godavari_short_stock_file(dir)),
             Fixture::Main => Some(company_file(dir)),
             Fixture::New => Some(new_company_file(dir)),
+            Fixture::Blank => Some(blank_company_file(dir)),
             Fixture::Cold => None,
         }
     }
@@ -359,6 +367,7 @@ impl Fixture {
                     | Fixture::GodavariShortStock
                     | Fixture::Main
                     | Fixture::New
+                    | Fixture::Blank
                     | Fixture::Cold => None,
                 };
                 let mut shell = Shell::new(Box::new(GatewayScreen::new()));
@@ -668,9 +677,36 @@ enum Inject {
     /// can be driven here ([`ledgerly_app::ui::dialogs::script_open_file`]). The key that opens the
     /// dialog goes in after it.
     ScriptFile(ScriptedFile),
+    /// Makes the next save dialog answer with a path (see [`SaveTarget`]).
+    ScriptSave(SaveTarget),
     /// Panics unless the top screen is the expected one (see [`Expect`]). Every flow that drills
     /// or picks a row ends in one, so a capture of the wrong screen stops the run.
     Expect(Expect),
+}
+
+/// Where a flow's save dialog answers.
+#[derive(Clone, Copy)]
+enum SaveTarget {
+    /// A new file in a folder that exists, so the write succeeds.
+    Writable,
+    /// A file in a folder that does not exist, so the write fails with the system's reason.
+    MissingFolder,
+}
+
+impl SaveTarget {
+    /// The path under `dir` the dialog answers with.
+    fn path(self, dir: &Path) -> PathBuf {
+        let dir = dir.join("scripted-saves");
+        std::fs::create_dir_all(&dir).unwrap();
+        match self {
+            SaveTarget::Writable => {
+                let path = dir.join("Profit and loss.pdf");
+                let _removed = std::fs::remove_file(&path);
+                path
+            }
+            SaveTarget::MissingFolder => dir.join("no-such-folder").join("Profit and loss.pdf"),
+        }
+    }
 }
 
 /// A file a flow hands to the next open-file dialog.
@@ -818,6 +854,12 @@ impl Shot {
     /// The same shot with `file` handed to the next open-file dialog, after what came before it.
     fn script_file(mut self, file: ScriptedFile) -> Self {
         self.after.push(Inject::ScriptFile(file));
+        self
+    }
+
+    /// The same shot with the next save dialog answering `target`, after what came before it.
+    fn script_save(mut self, target: SaveTarget) -> Self {
+        self.after.push(Inject::ScriptSave(target));
         self
     }
 
@@ -1126,7 +1168,8 @@ const ENGINE_SETTLED: [&str; 5] = [
 ];
 
 fn shots() -> Vec<Shot> {
-    let light = light_shots();
+    let mut light = light_shots();
+    light.extend(s13_shots());
     let mock = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../design/mock-v2/captures/states");
     let mut all = light.clone();
     for theme in [Theme::Dark, Theme::Hc] {
@@ -1729,6 +1772,123 @@ fn light_shots() -> Vec<Shot> {
     ]
 }
 
+/// Round S13: the states that had no app capture. Each is named by its mock state id.
+fn s13_shots() -> Vec<Shot> {
+    let palette = (Key::K, Modifiers::COMMAND);
+    let new_tab = (Key::T, Modifiers::COMMAND);
+    vec![
+        // Ctrl+T with a company open: a second Home tab.
+        shot("home.new-tab", &[new_tab]).expect("Home", None),
+        // Ctrl+T and Ctrl+\ before any company is open.
+        shot("setup.new-tab", &[new_tab]).on(Fixture::Cold),
+        shot("setup.rail", &[(Key::Backslash, Modifiers::COMMAND)]).on(Fixture::Cold),
+        shot("home.gst-unsupported", &[]).on(Fixture::GodavariNo2b),
+        // The worker is held, so each report's request never answers: the computing card.
+        shot("trial-balance.loading", &[palette])
+            .query("Trial Balance")
+            .then(&[(Key::Enter, NONE)])
+            .on(Fixture::GodavariHeld)
+            .expect_bar("Trial balance", "Computing"),
+        shot("profit-and-loss.loading", &[palette])
+            .query("Profit and Loss")
+            .then(&[(Key::Enter, NONE)])
+            .on(Fixture::GodavariHeld)
+            .expect_bar("Profit and loss", "Computing"),
+        shot("outstanding.loading", &[palette])
+            .query("Receivables Outstanding")
+            .then(&[(Key::Enter, NONE)])
+            .on(Fixture::GodavariHeld)
+            .expect_bar("Receivables", "Computing"),
+        shot("stock-summary.loading", &[palette])
+            .query("Stock Summary")
+            .then(&[(Key::Enter, NONE)])
+            .on(Fixture::GodavariHeld)
+            .expect_bar("Stock summary", "Computing"),
+        shot("profit-and-loss.detailed", &[palette])
+            .query("Profit and Loss")
+            .then(&[(Key::Enter, NONE)])
+            .expect_bar("Profit and loss", "Profit and loss")
+            .press(&[(Key::F1, Modifiers::ALT)])
+            .expect_bar("Profit and loss", "Profit and loss"),
+        shot("profit-and-loss.print-saved", &[palette])
+            .query("Profit and Loss")
+            .then(&[(Key::Enter, NONE)])
+            .expect_bar("Profit and loss", "Profit and loss")
+            .script_save(SaveTarget::Writable)
+            .press(&[(Key::P, Modifiers::COMMAND)])
+            .wait(120)
+            .expect_bar("Profit and loss", "Profit and loss"),
+        shot("profit-and-loss.print-failed", &[palette])
+            .query("Profit and Loss")
+            .then(&[(Key::Enter, NONE)])
+            .expect_bar("Profit and loss", "Profit and loss")
+            .script_save(SaveTarget::MissingFolder)
+            .press(&[(Key::P, Modifiers::COMMAND)])
+            .wait(120)
+            .expect_bar("Profit and loss", "Profit and loss"),
+        // The worker is held: the GST returns have not been asked for yet.
+        shot("gst.gstr1-not-loaded", &[(Key::G, NONE), (Key::Num1, NONE)])
+            .on(Fixture::GodavariHeld)
+            .expect("GST returns", None),
+        shot(
+            "gst.gstr3b-not-loaded",
+            &[(Key::G, NONE), (Key::Num2, NONE)],
+        )
+        .on(Fixture::GodavariHeld)
+        .expect("GST returns", None),
+        // October's GSTR-3B: the engine refuses it, because a ledger line has no GST
+        // classification (a real refusal of the sample's books).
+        shot(
+            "gst.gstr3b-unsupported",
+            &[(Key::G, NONE), (Key::Num2, NONE)],
+        )
+        .expect("GST returns", None)
+        .press(&[(Key::F2, Modifiers::ALT), (Key::K, NONE)])
+        .expect("GST returns", Some("October 2026"))
+        .press(&[(Key::Enter, NONE)])
+        .wait(90)
+        .expect("GST returns", None),
+        shot("audit.loading", &[palette])
+            .query("Integrity Certificate")
+            .then(&[(Key::Enter, NONE)])
+            .on(Fixture::GodavariHeld)
+            .expect("Audit", None),
+        shot("audit.unsupported", &[palette])
+            .query("Integrity Certificate")
+            .then(&[(Key::Enter, NONE)])
+            .expect_bar("Audit", "Audit")
+            .click(1195.0, 127.0)
+            .wait(60)
+            .expect_bar("Audit", "Audit"),
+        shot("masters.loading", &[(Key::M, NONE)]).on(Fixture::GodavariHeld),
+        shot("masters.no-match", &[(Key::M, NONE)]).type_text("zzqx"),
+        shot("masters.empty", &[(Key::M, NONE)]).on(Fixture::Blank),
+        shot(
+            "masters.items-empty",
+            &[
+                (Key::M, NONE),
+                (Key::ArrowRight, Modifiers::ALT),
+                (Key::ArrowRight, Modifiers::ALT),
+                (Key::ArrowRight, Modifiers::ALT),
+                (Key::ArrowRight, Modifiers::ALT),
+            ],
+        )
+        .on(Fixture::Blank),
+        shot(
+            "masters.create-item",
+            &[
+                (Key::M, NONE),
+                (Key::ArrowRight, Modifiers::ALT),
+                (Key::ArrowRight, Modifiers::ALT),
+                (Key::ArrowRight, Modifiers::ALT),
+                (Key::ArrowRight, Modifiers::ALT),
+            ],
+        )
+        .on(Fixture::Blank)
+        .press(&[(Key::C, Modifiers::ALT)]),
+    ]
+}
+
 /// Ctrl+A: in a text field, selects all of its text.
 const SELECT_ALL: (Key, Modifiers) = (Key::A, Modifiers::COMMAND);
 
@@ -1922,7 +2082,11 @@ impl eframe::App for Snapshots {
                 Inject::Scroll(..) => SCROLL_SETTLE_FRAMES,
                 Inject::Wait(frames) => frames,
                 Inject::Seek(_) | Inject::Expect(_) => 0,
-                Inject::Key(..) | Inject::Text(_) | Inject::Click(..) | Inject::ScriptFile(_) => 6,
+                Inject::Key(..)
+                | Inject::Text(_)
+                | Inject::Click(..)
+                | Inject::ScriptFile(_)
+                | Inject::ScriptSave(_) => 6,
             };
             match item {
                 Inject::Key(key, modifiers) => {
@@ -1940,6 +2104,9 @@ impl eframe::App for Snapshots {
                 Inject::Wait(_) | Inject::Seek(_) | Inject::Expect(_) => {}
                 Inject::ScriptFile(file) => {
                     ledgerly_app::ui::dialogs::script_open_file(file.write(&self.out));
+                }
+                Inject::ScriptSave(target) => {
+                    ledgerly_app::ui::dialogs::script_save_file(target.path(&self.out));
                 }
                 Inject::Scroll(x, y, wheel) => {
                     raw_input.events.push(Event::PointerMoved(egui::pos2(x, y)));
@@ -2111,7 +2278,7 @@ fn main() -> eframe::Result<()> {
         .into_iter()
         .filter(|s| {
             only.as_deref()
-                .is_none_or(|needle| s.label().contains(needle))
+                .is_none_or(|needles| needles.split('|').any(|needle| s.label().contains(needle)))
         })
         .collect();
     assert!(!entries.is_empty(), "no entry matches --only {only:?}");

@@ -993,7 +993,13 @@ impl ReportViewScreen {
         match &self.notice {
             Some(Notice::Error(s)) => draw_error(ui, s),
             Some(Notice::Info(s)) => {
-                ui.label(format!("Note: {s}"));
+                let text = s.clone();
+                let saved = self.print.saved_path().is_some();
+                if draw_info(ui, &text, saved)
+                    && let Some(note) = self.print.open_saved()
+                {
+                    self.notice = Some(note);
+                }
             }
             None => {}
         }
@@ -1626,12 +1632,6 @@ impl Screen for ReportViewScreen {
                 Err(why) => self.notice = Some(Notice::Error(why)),
             }
         }
-        if self.print.saved_path().is_some()
-            && button(ui, "Open PDF", None, ButtonKind::Secondary).clicked()
-            && let Some(note) = self.print.open_saved()
-        {
-            self.notice = Some(note);
-        }
         self.run_export_request(ctx.api.as_ref());
         if let Some(note) = self.print.tick() {
             self.notice = Some(note);
@@ -1642,6 +1642,34 @@ impl Screen for ReportViewScreen {
         }
         action
     }
+}
+
+/// The green note over a report after something went right (an export, a saved PDF). A saved PDF
+/// gets the mock's "PDF saved." lead and an Open file button; the return is `true` when it was
+/// clicked (the mock's `profit-and-loss.print-saved`).
+fn draw_info(ui: &mut Ui, text: &str, saved_pdf: bool) -> bool {
+    let mut open = false;
+    let (lead, rest) = match text.strip_prefix("Saved PDF to ") {
+        Some(path) if saved_pdf => ("PDF saved.", format!("It was written to {path}")),
+        Some(_) | None => ("", text.to_owned()),
+    };
+    crate::ui::note::note_with_icon(ui, NoteKind::Ok, Icon::Check, |ui, ink| {
+        ui.horizontal_wrapped(|ui| {
+            if !lead.is_empty() {
+                ui.label(
+                    egui::RichText::new(lead)
+                        .font(crate::ui::bold_font(ui, crate::theme::TEXT_META))
+                        .color(ink),
+                );
+            }
+            ui.label(para_text(&rest, crate::theme::TEXT_META, ink));
+            if saved_pdf {
+                open = button(ui, "Open file", None, ButtonKind::Secondary).clicked();
+            }
+        });
+    });
+    ui.add_space(8.0);
+    open
 }
 
 /// The red note over a report the engine refused or could not run: the words the engine gave,
@@ -1655,12 +1683,14 @@ fn draw_error(ui: &mut Ui, text: &str) {
         ),
     };
     crate::ui::note::note_with_icon(ui, NoteKind::Bad, Icon::Alert, |ui, ink| {
-        ui.label(
-            egui::RichText::new(lead)
-                .font(crate::ui::bold_font(ui, crate::theme::TEXT_META))
-                .color(ink),
-        );
-        ui.label(para_text(&rest, crate::theme::TEXT_META, ink));
+        ui.horizontal_wrapped(|ui| {
+            ui.label(
+                egui::RichText::new(lead)
+                    .font(crate::ui::bold_font(ui, crate::theme::TEXT_META))
+                    .color(ink),
+            );
+            ui.label(para_text(&rest, crate::theme::TEXT_META, ink));
+        });
     });
     ui.add_space(8.0);
 }
