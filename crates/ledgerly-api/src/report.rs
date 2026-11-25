@@ -10,7 +10,7 @@ use ledgerly_core::{Date, Outcome, Period, PeriodError, Unsupported};
 use ledgerly_model::{Books, StockItem, StockMove, ValuationMethod};
 use ledgerly_reports::audit::{audit_report, integrity_certificate};
 use ledgerly_reports::balance_sheet::balance_sheet;
-use ledgerly_reports::ledger::{group_summary, ledger_vouchers};
+use ledgerly_reports::ledger::{group_ledgers, group_summary, ledger_vouchers};
 use ledgerly_reports::outstanding::outstanding;
 use ledgerly_reports::profit_loss::profit_loss;
 use ledgerly_reports::registers::{day_book, register};
@@ -49,6 +49,7 @@ pub(crate) fn run(
             profit_loss(books, p, &opening, &closing)?
         }
         ReportKind::GroupSummary(group) => group_summary(books, p, *group)?,
+        ReportKind::GroupLedgers(group) => group_ledgers(books, p, *group)?,
         ReportKind::LedgerVouchers(ledger) => ledger_vouchers(books, p, *ledger)?,
         ReportKind::DayBook => match day_book(books, p)? {
             Outcome::Value(report) if p.columns == ColumnSpec::Single => {

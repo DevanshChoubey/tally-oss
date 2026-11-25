@@ -562,12 +562,44 @@ fn draw_group(ui: &mut Ui, masters: &Masters, d: &mut GroupDraft, editing: Optio
     }
 }
 
-/// The ledger: the mock's fields first, in its order (index.html:1803-1805: Name, Alias, Under;
-/// GSTIN, State, Credit days; Bill-wise, Balance), then the fields the mock does not show.
-/// `balance` is the altered ledger's closing balance as the engine gave it, shown read-only.
+/// Where the form keeps whether the ledger's "More details" are open.
+fn more_key() -> Id {
+    Id::unique("masters-ledger-more-details")
+}
+
+/// Opens or closes the ledger form's "More details" section. A test that needs a field in it
+/// (Alias on a new ledger, Opening balance, the section switches) opens it first.
+pub fn set_more_details(ctx: &egui::Context, open: bool) {
+    ctx.data_mut(|d| d.insert_temp(more_key(), open));
+}
+
+/// True when a field in the "More details" section holds something that could fail the checks
+/// or would otherwise be hidden; the section then stays open so the user can see it.
+fn more_in_use(d: &LedgerDraft, altering: bool) -> bool {
+    let party_rest = d.party.as_ref().is_some_and(|p| {
+        !p.pan.trim().is_empty()
+            || !p.pincode.trim().is_empty()
+            || p.registration != RegistrationType::Regular
+    });
+    (!altering && !d.aliases.trim().is_empty())
+        || !d.opening.trim().is_empty()
+        || d.cost_centres
+        || d.bank.is_some()
+        || d.tax.is_some()
+        || d.gst.is_some()
+        || party_rest
+}
+
+/// The ledger, as the mock's compact form (index.html:1802-1812): Name, Under and Bill-wise;
+/// GSTIN, State and Credit days. An altered ledger (`balance` is its closing balance as the
+/// engine gave it) shows the mock's detail layout: Name, Alias, Under; then Bill-wise and Balance.
+/// Everything else the master holds sits under "More details".
 fn draw_ledger(ui: &mut Ui, masters: &Masters, d: &mut LedgerDraft, balance: Option<&str>) {
+    let altering = balance.is_some();
     text_row(ui, 2, "Name", &mut d.name);
-    text_row(ui, 1, "Alias", &mut d.aliases);
+    if altering {
+        text_row(ui, 1, "Alias", &mut d.aliases);
+    }
     let groups = sorted_options(
         masters
             .groups
@@ -576,16 +608,68 @@ fn draw_ledger(ui: &mut Ui, masters: &Masters, d: &mut LedgerDraft, balance: Opt
         None,
     );
     choose_opt(ui, 1, "l-group", "Under", &mut d.group, "(choose)", &groups);
+    if !altering {
+        switch_row(ui, 1, "Bill-wise", &mut d.bill_wise);
+    }
     ui.end_row();
     if let Some(p) = d.party.as_mut() {
         draw_party_head(ui, p);
+    } else {
+        // The mock always shows the GSTIN line; ours is the party section's, so its switch takes
+        // the line's place until it is on (it is then switched off under "More details").
+        section_switch(ui, "Party details", &mut d.party, PartyDraft::default);
     }
-    switch_row(ui, 1, "Bill-wise", &mut d.bill_wise);
     if d.bill_wise {
         number_row(ui, 1, "Credit days", &mut d.credit_days);
     }
+    ui.end_row();
+    if altering {
+        // Spacer: Bill-wise and Balance sit under the name's two columns, as the mock's City does.
+        fld(ui, 2, "", |_| {});
+        switch_row(ui, 1, "Bill-wise", &mut d.bill_wise);
+    }
     if let Some(text) = balance {
         read_only_row(ui, 1, "Balance", text);
+    }
+    if altering {
+        ui.end_row();
+    }
+    // Content in a hidden field opens the section and keeps it open (a latch), so the user always
+    // sees what they typed. The toggle row is always drawn so the fields below keep their ids.
+    if more_in_use(d, altering) {
+        set_more_details(ui.ctx(), true);
+    }
+    let open = ui
+        .ctx()
+        .data(|x| x.get_temp::<bool>(more_key()))
+        .unwrap_or(false);
+    fld(ui, COLUMNS, "", |ui| {
+        let t = tokens(ui);
+        let text = if open {
+            "Fewer details"
+        } else {
+            "More details: opening balance, party, bank and tax"
+        };
+        let r = ui.add(
+            egui::Button::new(RichText::new(text).size(TEXT_META).color(t.accent_ink)).frame(false),
+        );
+        crate::ui::a11y::name(ui, &r, egui::accesskit::Role::Button, "More details");
+        if r.clicked() && !more_in_use(d, altering) {
+            set_more_details(ui.ctx(), !open);
+        }
+    });
+    ui.end_row();
+    if open {
+        draw_ledger_more(ui, d, altering);
+    }
+}
+
+/// The fields under "More details": alias (on create), opening balance, cost centres and the
+/// optional sections.
+fn draw_ledger_more(ui: &mut Ui, d: &mut LedgerDraft, altering: bool) {
+    if !altering {
+        text_row(ui, 1, "Alias", &mut d.aliases);
+        ui.end_row();
     }
     fld(ui, 2, "Opening balance", |ui| {
         ui.horizontal(|ui| {
@@ -618,7 +702,9 @@ fn draw_ledger(ui: &mut Ui, masters: &Masters, d: &mut LedgerDraft, balance: Opt
     });
     ui.end_row();
     switch_row(ui, 1, "Cost centres", &mut d.cost_centres);
-    section_switch(ui, "Party details", &mut d.party, PartyDraft::default);
+    if d.party.is_some() {
+        section_switch(ui, "Party details", &mut d.party, PartyDraft::default);
+    }
     section_switch(ui, "Bank details", &mut d.bank, BankDraft::default);
     section_switch(ui, "Tax details", &mut d.tax, || TaxDraft {
         kind: TaxLedgerKind::Cgst,

@@ -18,6 +18,8 @@ use crate::ui::{a11y, bold_font, kind, tokens};
 
 /// Heading of the label column.
 const LABEL_HEADING: &str = "Particulars";
+/// Heading of the label column of the group ledgers report (index.html:1600, "Ledger or group").
+const GROUP_LABEL_HEADING: &str = "Ledger or group";
 /// Width a figure column takes when there is room (the table's earlier width).
 const FIGURE_WIDTH: f32 = 170.0;
 /// The narrowest a figure column gets on a narrow window.
@@ -32,6 +34,17 @@ pub enum ColumnKind {
     Text,
     /// Amounts and quantities: right-aligned in a fixed width (`td.num`).
     Figure,
+}
+
+/// The heading of the label column: the group ledgers report (its first column is the GSTIN)
+/// lists ledgers and groups, every other report lists particulars.
+#[must_use]
+pub fn label_heading(report: &ViewReport) -> &'static str {
+    if report.columns.first().is_some_and(|c| c == "GSTIN") {
+        GROUP_LABEL_HEADING
+    } else {
+        LABEL_HEADING
+    }
 }
 
 /// The kind of each column, read from its first cell that is neither empty nor unsupported (the
@@ -69,29 +82,123 @@ fn kind_of(cell: &ViewCell) -> Option<ColumnKind> {
 /// label and each text column keep 120; the label and the text columns share the rest equally.
 #[must_use]
 pub fn column_spans(width: f32, kinds: &[ColumnKind]) -> Vec<(f32, f32)> {
+    let mut all = Vec::with_capacity(kinds.len() + 1);
+    all.push(ColumnKind::Text);
+    all.extend_from_slice(kinds);
+    ordered_spans(width, &all)
+}
+
+/// The left and right of each place in a line `width` wide, in the order given (the label's
+/// place is a text place wherever it sits). Sized as [`column_spans`] says.
+fn ordered_spans(width: f32, kinds: &[ColumnKind]) -> Vec<(f32, f32)> {
     let figures = kinds.iter().filter(|k| **k == ColumnKind::Figure).count();
-    let fills = 1 + kinds.iter().filter(|k| **k == ColumnKind::Text).count();
+    let fills = kinds.len() - figures;
     let figure = if figures == 0 {
         0.0
     } else {
         ((width - FILL_MIN * f32_of(fills)) / f32_of(figures)).clamp(FIGURE_MIN, FIGURE_WIDTH)
     };
-    let fill = ((width - figure * f32_of(figures)) / f32_of(fills)).max(0.0);
-    let mut x = 0.0;
-    let mut span = |w: f32| {
-        let s = (x, x + w);
-        x += w;
-        s
+    let fill = if fills == 0 {
+        0.0
+    } else {
+        ((width - figure * f32_of(figures)) / f32_of(fills)).max(0.0)
     };
-    let mut out = Vec::with_capacity(kinds.len() + 1);
-    out.push(span(fill));
-    for kind in kinds {
-        out.push(span(match kind {
-            ColumnKind::Text => fill,
-            ColumnKind::Figure => figure,
-        }));
+    let mut x = 0.0;
+    kinds
+        .iter()
+        .map(|kind| {
+            let w = match kind {
+                ColumnKind::Text => fill,
+                ColumnKind::Figure => figure,
+            };
+            let s = (x, x + w);
+            x += w;
+            s
+        })
+        .collect()
+}
+
+/// Widths of the ledger vouchers report's Date, Voucher and Type columns: as wide as their
+/// text, so the particulars and the figures keep the rest of a narrow card.
+const LEDGER_FIXED: [f32; 3] = [98.0, 68.0, 58.0];
+/// Widths of its Debit, Credit and Balance columns (the balance carries its Dr or Cr word).
+const LEDGER_FIGURES: [f32; 3] = [90.0, 90.0, 108.0];
+
+/// The spans of the ledger vouchers report's `places` places (Date, Voucher, Type, Particulars,
+/// then three figures): fixed text and figure columns, and the particulars taking what is left.
+fn ledger_spans(width: f32, places: usize) -> Vec<(f32, f32)> {
+    let taken: f32 = LEDGER_FIXED.iter().chain(&LEDGER_FIGURES).sum();
+    let label = (width - taken).max(0.0);
+    let mut widths: Vec<f32> = LEDGER_FIXED.to_vec();
+    widths.push(label);
+    widths.extend(LEDGER_FIGURES);
+    let mut x = 0.0;
+    widths
+        .into_iter()
+        .take(places)
+        .map(|w| {
+            let s = (x, x + w);
+            x += w;
+            s
+        })
+        .collect()
+}
+
+/// One place in a line: the label, or a report column.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Place {
+    Label,
+    Col(usize),
+}
+
+/// The ledger vouchers report's columns, as the engine gives them.
+const LEDGER_COLUMNS: [&str; 7] = [
+    "Date",
+    "Particulars",
+    "Voucher Type",
+    "Voucher No",
+    "Debit",
+    "Credit",
+    "Balance",
+];
+
+/// Whether `report` is the ledger vouchers report (its columns are exactly the engine's).
+fn is_ledger_report(report: &ViewReport) -> bool {
+    report.columns.iter().map(String::as_str).eq(LEDGER_COLUMNS)
+}
+
+/// The order the places of a line are drawn in. Every report draws the label first, then its
+/// columns in order, except the ledger vouchers report, which follows the mock's ledger table
+/// (index.html:1600): Date, Voucher, Type, then the particulars, then Debit, Credit, Balance.
+fn place_order(report: &ViewReport) -> Vec<Place> {
+    if is_ledger_report(report) {
+        return vec![
+            Place::Col(0),
+            Place::Col(3),
+            Place::Col(2),
+            Place::Label,
+            Place::Col(1),
+            Place::Col(4),
+            Place::Col(5),
+            Place::Col(6),
+        ];
     }
+    let mut out = vec![Place::Label];
+    out.extend((0..report.columns.len()).map(Place::Col));
     out
+}
+
+/// The heading drawn over column `i`: the engine's, except where the mock names it shorter.
+fn column_heading<'a>(report: &ViewReport, name: &'a str) -> &'a str {
+    if is_ledger_report(report) {
+        match name {
+            "Voucher No" => "Voucher",
+            "Voucher Type" => "Type",
+            other => other,
+        }
+    } else {
+        name
+    }
 }
 
 /// The height of each line, top to bottom: the heading, one per row, then the total when the
@@ -176,7 +283,7 @@ pub(super) fn draw(
             let width = ui.available_width();
             let cols = Columns::new(report, width);
             let (head, _) = ui.allocate_exact_size(vec2(width, T_HEAD_HEIGHT), Sense::hover());
-            paint_heading(ui, head, &cols, &report.columns);
+            paint_heading(ui, head, &cols, label_heading(report), report);
             drawn = draw_rows(ui, report, &cols, selected, scroll_to_selected, room);
             if !report.totals.is_empty() {
                 let (rect, _) = ui.allocate_exact_size(vec2(width, T_TOTAL_HEIGHT), Sense::hover());
@@ -280,32 +387,59 @@ fn emphasised(kind: ViewRowKind) -> bool {
 
 /// Where the label and each column sit across a line, and how their cells sit in them.
 struct Columns {
-    /// [`column_spans`] of the drawn columns: the label's, then each drawn column's.
-    spans: Vec<(f32, f32)>,
-    /// [`column_kinds`] of the drawn columns.
-    kinds: Vec<ColumnKind>,
-    /// For each report column, its place among the drawn columns; `None` when it is not drawn
-    /// (see [`repeats_label`]).
-    slot: Vec<Option<usize>>,
+    /// The label's span.
+    label: (f32, f32),
+    /// The span a line with no drill key (the ledger report's opening and closing balances) draws
+    /// its label across, so the words are not clipped: from the Voucher column to the label's end.
+    wide_label: Option<(f32, f32)>,
+    /// For each report column, its span and how its cells sit; `None` when it is not drawn (see
+    /// [`repeats_label`]).
+    cols: Vec<Option<((f32, f32), CellPlace)>>,
 }
 
 impl Columns {
     fn new(report: &ViewReport, width: f32) -> Self {
-        let all = column_kinds(report);
-        let mut slot = Vec::with_capacity(all.len());
-        let mut kinds = Vec::with_capacity(all.len());
-        for (i, kind) in all.iter().enumerate() {
-            if repeats_label(report, i) {
-                slot.push(None);
-            } else {
-                slot.push(Some(kinds.len()));
-                kinds.push(*kind);
+        let kinds = column_kinds(report);
+        let order: Vec<Place> = place_order(report)
+            .into_iter()
+            .filter(|p| match p {
+                Place::Label => true,
+                Place::Col(i) => !repeats_label(report, *i),
+            })
+            .collect();
+        let order_kinds: Vec<ColumnKind> = order
+            .iter()
+            .map(|p| match p {
+                Place::Label => ColumnKind::Text,
+                Place::Col(i) => kinds.get(*i).copied().unwrap_or(ColumnKind::Figure),
+            })
+            .collect();
+        let spans = if is_ledger_report(report) {
+            ledger_spans(width, order.len())
+        } else {
+            ordered_spans(width, &order_kinds)
+        };
+        let mut label = (0.0, width);
+        let mut cols = vec![None; kinds.len()];
+        for ((place, span), kind) in order.iter().zip(spans).zip(order_kinds) {
+            match place {
+                Place::Label => label = span,
+                Place::Col(i) => {
+                    let how = match kind {
+                        ColumnKind::Text => CellPlace::Left(table::CELL_PAD_X),
+                        ColumnKind::Figure => CellPlace::Right,
+                    };
+                    if let Some(slot) = cols.get_mut(*i) {
+                        *slot = Some((span, how));
+                    }
+                }
             }
         }
+        let wide_label = is_ledger_report(report).then_some((LEDGER_FIXED[0], label.1));
         Self {
-            spans: column_spans(width, &kinds),
-            kinds,
-            slot,
+            label,
+            wide_label,
+            cols,
         }
     }
 
@@ -318,27 +452,28 @@ impl Columns {
 
     /// The label part of `line`.
     fn label(&self, line: Rect) -> Rect {
-        self.spans
-            .first()
-            .map_or(line, |span| Self::span(line, *span))
+        Self::span(line, self.label)
+    }
+
+    /// The label part of a `row`'s line: wider for a line with no drill key in the ledger report.
+    fn label_of(&self, line: Rect, row: &ViewRow) -> Rect {
+        match (self.wide_label, &row.key) {
+            (Some(span), None) => Self::span(line, span),
+            _ => self.label(line),
+        }
     }
 
     /// Report column `i` of `line` and where its text goes; `None` past the last column or for a
     /// column that is not drawn.
     fn cell(&self, line: Rect, i: usize) -> Option<(Rect, CellPlace)> {
-        let drawn = (*self.slot.get(i)?)?;
-        let span = *self.spans.get(drawn + 1)?;
-        let place = match self.kinds.get(drawn)? {
-            ColumnKind::Text => CellPlace::Left(table::CELL_PAD_X),
-            ColumnKind::Figure => CellPlace::Right,
-        };
+        let (span, place) = (*self.cols.get(i)?)?;
         Some((Self::span(line, span), place))
     }
 }
 
 /// The heading line in the `th` style: the label column's heading, then each column's at its
 /// right.
-fn paint_heading(ui: &Ui, rect: Rect, cols: &Columns, columns: &[String]) {
+fn paint_heading(ui: &Ui, rect: Rect, cols: &Columns, label: &str, report: &ViewReport) {
     let t = tokens(ui);
     table::paint_head_rule(ui, rect);
     let font = bold_font(ui, TEXT_META);
@@ -346,13 +481,14 @@ fn paint_heading(ui: &Ui, rect: Rect, cols: &Columns, columns: &[String]) {
         ui,
         cols.label(rect),
         1.0,
-        LABEL_HEADING,
+        label,
         font.clone(),
         t.text_3,
         CellPlace::Left(table::CELL_PAD_X),
     );
-    for (i, name) in columns.iter().enumerate() {
+    for (i, name) in report.columns.iter().enumerate() {
         if let Some((cell_rect, place)) = cols.cell(rect, i) {
+            let name = column_heading(report, name);
             table::paint_cell_text(ui, cell_rect, 1.0, name, font.clone(), t.text_3, place);
         }
     }
@@ -377,7 +513,7 @@ fn paint_line(
     };
     table::paint_cell_text(
         ui,
-        cols.label(rect),
+        cols.label_of(rect, row),
         1.0,
         &row.label,
         font.clone(),

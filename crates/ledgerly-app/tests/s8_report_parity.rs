@@ -156,3 +156,16 @@ fn a_voucher_is_titled_by_its_number() {
     assert_eq!(voucher_title(&view(Some("SI/0412"))), "Voucher SI/0412");
     assert_eq!(voucher_title(&view(None)), "Voucher (no number yet)");
 }
+
+#[test]
+fn the_group_ledgers_report_heads_its_label_column_ledger_or_group() {
+    // provenance: observed in the mock, index.html:1600, the group drill's first heading reads
+    // "Ledger or group". Derived: the group ledgers report's first column is the GSTIN, so that
+    // report is told apart by it; every other report keeps "Particulars".
+    let mut group = ledger_vouchers("x");
+    group.columns = ["GSTIN", "Opening", "Debit", "Credit", "Closing"]
+        .map(str::to_owned)
+        .to_vec();
+    assert_eq!(generic::label_heading(&group), "Ledger or group");
+    assert_eq!(generic::label_heading(&ledger_vouchers("x")), "Particulars");
+}

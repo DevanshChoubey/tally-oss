@@ -68,6 +68,7 @@ impl Api {
             | ReportKind::DayBook
             | ReportKind::LedgerVouchers(_) => true,
             ReportKind::GroupSummary(_)
+            | ReportKind::GroupLedgers(_)
             | ReportKind::Register(_)
             | ReportKind::Outstanding { .. }
             | ReportKind::StockSummary

@@ -680,3 +680,230 @@ fn summary_row(
         cells: balance_cells(balance)?,
     })
 }
+
+// ---------------------------------------------------------------------------------------------
+// Group ledgers
+// ---------------------------------------------------------------------------------------------
+
+/// One line of the group ledgers report: a ledger or a rolled-up sub-group.
+#[derive(Default, Clone, Copy)]
+struct Movement {
+    opening: Paise,
+    debit: Paise,
+    credit: Paise,
+    closing: Paise,
+}
+
+impl Movement {
+    fn add(&mut self, other: Movement) -> Result<(), ReportError> {
+        self.opening = self.opening.checked_add(other.opening)?;
+        self.debit = self.debit.checked_add(other.debit)?;
+        self.credit = self.credit.checked_add(other.credit)?;
+        self.closing = self.closing.checked_add(other.closing)?;
+        Ok(())
+    }
+}
+
+/// A side-tagged amount cell for a debit-positive balance; nil reads as a debit of nil.
+fn side_cell(balance: Paise) -> Result<Cell, ReportError> {
+    Ok(Cell::Amount(SignedAmount::from_signed(balance)?))
+}
+
+/// An amount cell for a total of one side; empty when nil.
+fn flow_cell(amount: Paise, side: DrCr) -> Cell {
+    if amount.is_zero() {
+        Cell::Empty
+    } else {
+        Cell::Amount(SignedAmount { amount, side })
+    }
+}
+
+fn movement_cells(gstin: Cell, m: Movement) -> Result<Vec<Cell>, ReportError> {
+    Ok(vec![
+        gstin,
+        side_cell(m.opening)?,
+        flow_cell(m.debit, DrCr::Dr),
+        flow_cell(m.credit, DrCr::Cr),
+        side_cell(m.closing)?,
+    ])
+}
+
+/// Each member ledger's opening (the master's, moved by every posting before `from`), debits and
+/// credits posted from `from`, and closing balance over `included`.
+fn movements(
+    members: &[&Ledger],
+    included: &[Included<'_>],
+    from: Date,
+) -> Result<BTreeMap<LedgerId, Movement>, ReportError> {
+    let mut lines: BTreeMap<LedgerId, Movement> = BTreeMap::new();
+    for l in members {
+        let opening = signed_amount(l.opening, "opening")?;
+        lines.insert(
+            l.id,
+            Movement {
+                opening,
+                closing: opening,
+                ..Movement::default()
+            },
+        );
+    }
+    for item in included {
+        let Some(m) = lines.get_mut(&item.posting.ledger) else {
+            continue;
+        };
+        m.closing = m.closing.checked_add(item.signed)?;
+        if item.posting.date < from {
+            m.opening = m.opening.checked_add(item.signed)?;
+        } else {
+            match item.posting.amount.side {
+                DrCr::Dr => m.debit = m.debit.checked_add(item.posting.amount.amount)?,
+                DrCr::Cr => m.credit = m.credit.checked_add(item.posting.amount.amount)?,
+            }
+        }
+    }
+    Ok(lines)
+}
+
+/// The rows of the group ledgers report (its direct sub-groups, then its own ledgers) and the
+/// sum of every figure over them.
+fn group_rows(
+    books: &Books,
+    group: GroupId,
+    members: &[&Ledger],
+    lines: &BTreeMap<LedgerId, Movement>,
+) -> Result<(Vec<ReportRow>, Movement), ReportError> {
+    let mut rows = Vec::new();
+    let mut total = Movement::default();
+    for child in books
+        .masters
+        .groups
+        .values()
+        .filter(|g| g.parent == Some(group))
+    {
+        let sub = descendants(books, child.id);
+        let mut sum = Movement::default();
+        for l in members.iter().filter(|l| sub.contains(&l.group)) {
+            sum.add(lines.get(&l.id).copied().unwrap_or_default())?;
+        }
+        total.add(sum)?;
+        let quiet = sum.opening.is_zero()
+            && sum.debit.is_zero()
+            && sum.credit.is_zero()
+            && sum.closing.is_zero();
+        if !quiet {
+            rows.push(ReportRow {
+                key: Some(DrillKey::Group(child.id)),
+                label: child.name.clone(),
+                depth: 0,
+                kind: RowKind::Group,
+                cells: movement_cells(Cell::Empty, sum)?,
+            });
+        }
+    }
+    for l in members.iter().filter(|l| l.group == group) {
+        let m = lines.get(&l.id).copied().unwrap_or_default();
+        total.add(m)?;
+        let gstin = l
+            .party
+            .as_ref()
+            .and_then(|p| p.gstin.as_ref())
+            .map_or(Cell::Empty, |g| Cell::Text(g.as_str().to_string()));
+        rows.push(ReportRow {
+            key: Some(DrillKey::Ledger(l.id)),
+            label: l.name.clone(),
+            depth: 0,
+            kind: RowKind::Ledger,
+            cells: movement_cells(gstin, m)?,
+        });
+    }
+    Ok((rows, total))
+}
+
+/// The ledgers directly in `group` and its direct sub-groups (rolled up), each with the balance
+/// at the start of `params.period`, the debits and credits posted from then to `params.as_of`,
+/// and the closing balance at `params.as_of`; a final `Subtotal` row carries the group's closing
+/// balance (the figure the balance sheet shows for the group). A ledger is listed even when
+/// nil; a sub-group with nothing in any of its figures is left out. The GSTIN column is the
+/// ledger's GSTIN, empty for a sub-group or a ledger without one.
+///
+/// # Errors
+/// As [`group_summary`]; the period's start before the books begin is not an error (the opening
+/// is then as at the master's opening balance).
+pub fn group_ledgers(
+    books: &Books,
+    params: &ReportParams,
+    group: GroupId,
+) -> Result<Outcome<Report>, ReportError> {
+    if params.kind != ReportKind::GroupLedgers(group) {
+        return Err(wrong_kind("the group ledgers engine"));
+    }
+    let master = books
+        .masters
+        .groups
+        .get(&group)
+        .ok_or_else(|| ReportError::NotFound {
+            what: format!("group {}", group.0),
+        })?;
+    if let Some(unsupported) = unsupported_params(params, GROUP_NAME) {
+        return Ok(unsupported);
+    }
+    if params.as_of < books.company.books_begin {
+        return Err(ReportError::Invalid {
+            field: "as_of".to_string(),
+            reason: format!(
+                "{} is before the books begin on {}",
+                params.as_of, books.company.books_begin
+            ),
+        });
+    }
+    let subtree = descendants(books, group);
+    let members: Vec<&Ledger> = books
+        .masters
+        .ledgers
+        .values()
+        .filter(|l| subtree.contains(&l.group))
+        .collect();
+    if members.iter().any(|l| is_profit_and_loss(l)) {
+        return Ok(unsupported_profit_and_loss(GROUP_NAME));
+    }
+    let member_ids: BTreeSet<LedgerId> = members.iter().map(|l| l.id).collect();
+    let included = match collect(books, &params.scenario, params.as_of, |p| {
+        member_ids.contains(&p.ledger)
+    })? {
+        Collected::Postings(v) => v,
+        Collected::Unsupported => return Ok(unsupported_scenario(GROUP_NAME)),
+    };
+    let from = params.period.from();
+    let lines = movements(&members, &included, from)?;
+    let (mut rows, total) = group_rows(books, group, &members, &lines)?;
+    rows.push(ReportRow {
+        key: None,
+        label: format!("Total of {}", master.name),
+        depth: 0,
+        kind: RowKind::Subtotal,
+        cells: vec![
+            Cell::Empty,
+            Cell::Empty,
+            Cell::Empty,
+            Cell::Empty,
+            side_cell(total.closing)?,
+        ],
+    });
+    Ok(Outcome::Value(Report {
+        title: format!("Group Ledgers: {}", master.name),
+        params: params.clone(),
+        columns: ["GSTIN", "Opening", "Debit", "Credit", "Closing"]
+            .into_iter()
+            .map(column)
+            .collect(),
+        rows,
+        totals: vec![],
+        notes: vec![
+            scenario_note(&params.scenario),
+            format!(
+                "Opening is the balance at {}; Debit and Credit are posted from then to {}.",
+                from, params.as_of
+            ),
+        ],
+    }))
+}

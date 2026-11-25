@@ -74,7 +74,6 @@
 | dark | sales-invoice.validation-error | 0.6423 |
 | dark | sales-invoice.gst-inter-state | 0.6452 |
 | hc | payment.overdraft | 0.6455 |
-| hc | balance-sheet.ledger | 0.6491 |
 | dark | balance-sheet.provisional | 0.6499 |
 | dark | palette.search | 0.6514 |
 | dark | purchase-bill.offline-ai | 0.6543 |
@@ -89,6 +88,7 @@
 | light | ai-settings.local | 0.6612 |
 | light | balance-sheet.default | 0.6633 |
 | light | keys.classic | 0.6648 |
+| hc | balance-sheet.ledger | 0.6649 |
 | dark | keys.classic | 0.6651 |
 | dark | home.ai-off | 0.6666 |
 | dark | ai-settings.local | 0.6668 |
@@ -112,33 +112,27 @@
 | dark | palette.commands | 0.6974 |
 | dark | balance-sheet.default | 0.7009 |
 | light | gst.gstr3b | 0.7014 |
+| hc | balance-sheet.group | 0.7071 |
 | dark | gst.gstr3b | 0.7083 |
 | hc | setup.features | 0.7087 |
-| hc | masters.gstin-error | 0.7091 |
-| hc | masters.create-ledger | 0.7129 |
 | dark | masters.items | 0.7172 |
 | light | bank.brs | 0.7175 |
 | dark | bank.brs | 0.7190 |
 | light | masters.items | 0.7195 |
-| hc | masters.ledger-detail | 0.7236 |
+| light | balance-sheet.group | 0.7285 |
 | light | payment.overdraft | 0.7310 |
-| dark | balance-sheet.ledger | 0.7317 |
 | dark | payment.overdraft | 0.7321 |
 | light | receipt.default | 0.7344 |
+| dark | balance-sheet.ledger | 0.7361 |
 | light | payment.bill-wise | 0.7363 |
-| light | balance-sheet.ledger | 0.7363 |
 | hc | day-book.default | 0.7368 |
+| hc | masters.ledger-detail | 0.7368 |
+| light | balance-sheet.ledger | 0.7369 |
+| dark | balance-sheet.group | 0.7376 |
 | dark | receipt.default | 0.7406 |
 | dark | payment.bill-wise | 0.7428 |
-| dark | masters.create-ledger | 0.7435 |
-| dark | masters.gstin-error | 0.7439 |
-| hc | balance-sheet.group | 0.7439 |
 | light | purchase-bill.offline-ai | 0.7449 |
-| light | balance-sheet.group | 0.7452 |
-| light | masters.create-ledger | 0.7519 |
-| light | masters.gstin-error | 0.7530 |
-| dark | balance-sheet.group | 0.7535 |
-| dark | masters.ledger-detail | 0.7546 |
+| hc | masters.create-ledger | 0.7524 |
 | light | day-book.default | 0.7562 |
 | hc | home.empty | 0.7590 |
 | light | payment.default | 0.7591 |
@@ -146,15 +140,21 @@
 | light | setup.features | 0.7592 |
 | dark | payment.default | 0.7605 |
 | dark | balance-sheet.voucher | 0.7616 |
-| light | masters.ledger-detail | 0.7617 |
+| hc | masters.gstin-error | 0.7628 |
 | hc | ask.offline-ai | 0.7641 |
 | hc | setup.done | 0.7647 |
 | dark | day-book.default | 0.7656 |
 | dark | setup.features | 0.7682 |
+| dark | masters.ledger-detail | 0.7762 |
+| light | masters.ledger-detail | 0.7794 |
 | hc | bank.empty | 0.7837 |
 | hc | setup.company | 0.7930 |
 | dark | setup.company | 0.7952 |
+| light | masters.create-ledger | 0.7961 |
 | light | setup.company | 0.7966 |
+| dark | masters.create-ledger | 0.7970 |
+| light | masters.gstin-error | 0.7981 |
+| dark | masters.gstin-error | 0.7986 |
 | hc | setup.gstin-error | 0.7987 |
 | dark | home.empty | 0.8001 |
 | hc | review.empty | 0.8022 |
@@ -1028,18 +1028,6 @@ SSIM 0.6455
 </tr>
 </table>
 
-## hc / balance-sheet.ledger
-
-SSIM 0.6491
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/hc/balance-sheet.ledger.webp" width="480" alt="mock hc balance-sheet.ledger"></td>
-<td><img src="app-captures/hc/balance-sheet.ledger.webp" width="480" alt="app hc balance-sheet.ledger"></td>
-</tr>
-</table>
-
 ## dark / balance-sheet.provisional
 
 SSIM 0.6499
@@ -1205,6 +1193,18 @@ SSIM 0.6648
 <tr>
 <td><img src="mock-v2/captures/states/light/keys.classic.webp" width="480" alt="mock light keys.classic"></td>
 <td><img src="app-captures/light/keys.classic.webp" width="480" alt="app light keys.classic"></td>
+</tr>
+</table>
+
+## hc / balance-sheet.ledger
+
+SSIM 0.6649
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/hc/balance-sheet.ledger.webp" width="480" alt="mock hc balance-sheet.ledger"></td>
+<td><img src="app-captures/hc/balance-sheet.ledger.webp" width="480" alt="app hc balance-sheet.ledger"></td>
 </tr>
 </table>
 
@@ -1484,6 +1484,18 @@ SSIM 0.7014
 </tr>
 </table>
 
+## hc / balance-sheet.group
+
+SSIM 0.7071
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/hc/balance-sheet.group.webp" width="480" alt="mock hc balance-sheet.group"></td>
+<td><img src="app-captures/hc/balance-sheet.group.webp" width="480" alt="app hc balance-sheet.group"></td>
+</tr>
+</table>
+
 ## dark / gst.gstr3b
 
 SSIM 0.7083
@@ -1505,30 +1517,6 @@ SSIM 0.7087
 <tr>
 <td><img src="mock-v2/captures/states/hc/setup.features.webp" width="480" alt="mock hc setup.features"></td>
 <td><img src="app-captures/hc/setup.features.webp" width="480" alt="app hc setup.features"></td>
-</tr>
-</table>
-
-## hc / masters.gstin-error
-
-SSIM 0.7091
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/hc/masters.gstin-error.webp" width="480" alt="mock hc masters.gstin-error"></td>
-<td><img src="app-captures/hc/masters.gstin-error.webp" width="480" alt="app hc masters.gstin-error"></td>
-</tr>
-</table>
-
-## hc / masters.create-ledger
-
-SSIM 0.7129
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/hc/masters.create-ledger.webp" width="480" alt="mock hc masters.create-ledger"></td>
-<td><img src="app-captures/hc/masters.create-ledger.webp" width="480" alt="app hc masters.create-ledger"></td>
 </tr>
 </table>
 
@@ -1580,15 +1568,15 @@ SSIM 0.7195
 </tr>
 </table>
 
-## hc / masters.ledger-detail
+## light / balance-sheet.group
 
-SSIM 0.7236
+SSIM 0.7285
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
 <tr>
-<td><img src="mock-v2/captures/states/hc/masters.ledger-detail.webp" width="480" alt="mock hc masters.ledger-detail"></td>
-<td><img src="app-captures/hc/masters.ledger-detail.webp" width="480" alt="app hc masters.ledger-detail"></td>
+<td><img src="mock-v2/captures/states/light/balance-sheet.group.webp" width="480" alt="mock light balance-sheet.group"></td>
+<td><img src="app-captures/light/balance-sheet.group.webp" width="480" alt="app light balance-sheet.group"></td>
 </tr>
 </table>
 
@@ -1601,18 +1589,6 @@ SSIM 0.7310
 <tr>
 <td><img src="mock-v2/captures/states/light/payment.overdraft.webp" width="480" alt="mock light payment.overdraft"></td>
 <td><img src="app-captures/light/payment.overdraft.webp" width="480" alt="app light payment.overdraft"></td>
-</tr>
-</table>
-
-## dark / balance-sheet.ledger
-
-SSIM 0.7317
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/dark/balance-sheet.ledger.webp" width="480" alt="mock dark balance-sheet.ledger"></td>
-<td><img src="app-captures/dark/balance-sheet.ledger.webp" width="480" alt="app dark balance-sheet.ledger"></td>
 </tr>
 </table>
 
@@ -1640,6 +1616,18 @@ SSIM 0.7344
 </tr>
 </table>
 
+## dark / balance-sheet.ledger
+
+SSIM 0.7361
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/dark/balance-sheet.ledger.webp" width="480" alt="mock dark balance-sheet.ledger"></td>
+<td><img src="app-captures/dark/balance-sheet.ledger.webp" width="480" alt="app dark balance-sheet.ledger"></td>
+</tr>
+</table>
+
 ## light / payment.bill-wise
 
 SSIM 0.7363
@@ -1652,18 +1640,6 @@ SSIM 0.7363
 </tr>
 </table>
 
-## light / balance-sheet.ledger
-
-SSIM 0.7363
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/light/balance-sheet.ledger.webp" width="480" alt="mock light balance-sheet.ledger"></td>
-<td><img src="app-captures/light/balance-sheet.ledger.webp" width="480" alt="app light balance-sheet.ledger"></td>
-</tr>
-</table>
-
 ## hc / day-book.default
 
 SSIM 0.7368
@@ -1673,6 +1649,42 @@ SSIM 0.7368
 <tr>
 <td><img src="mock-v2/captures/states/hc/day-book.default.webp" width="480" alt="mock hc day-book.default"></td>
 <td><img src="app-captures/hc/day-book.default.webp" width="480" alt="app hc day-book.default"></td>
+</tr>
+</table>
+
+## hc / masters.ledger-detail
+
+SSIM 0.7368
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/hc/masters.ledger-detail.webp" width="480" alt="mock hc masters.ledger-detail"></td>
+<td><img src="app-captures/hc/masters.ledger-detail.webp" width="480" alt="app hc masters.ledger-detail"></td>
+</tr>
+</table>
+
+## light / balance-sheet.ledger
+
+SSIM 0.7369
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/balance-sheet.ledger.webp" width="480" alt="mock light balance-sheet.ledger"></td>
+<td><img src="app-captures/light/balance-sheet.ledger.webp" width="480" alt="app light balance-sheet.ledger"></td>
+</tr>
+</table>
+
+## dark / balance-sheet.group
+
+SSIM 0.7376
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/dark/balance-sheet.group.webp" width="480" alt="mock dark balance-sheet.group"></td>
+<td><img src="app-captures/dark/balance-sheet.group.webp" width="480" alt="app dark balance-sheet.group"></td>
 </tr>
 </table>
 
@@ -1700,42 +1712,6 @@ SSIM 0.7428
 </tr>
 </table>
 
-## dark / masters.create-ledger
-
-SSIM 0.7435
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/dark/masters.create-ledger.webp" width="480" alt="mock dark masters.create-ledger"></td>
-<td><img src="app-captures/dark/masters.create-ledger.webp" width="480" alt="app dark masters.create-ledger"></td>
-</tr>
-</table>
-
-## dark / masters.gstin-error
-
-SSIM 0.7439
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/dark/masters.gstin-error.webp" width="480" alt="mock dark masters.gstin-error"></td>
-<td><img src="app-captures/dark/masters.gstin-error.webp" width="480" alt="app dark masters.gstin-error"></td>
-</tr>
-</table>
-
-## hc / balance-sheet.group
-
-SSIM 0.7439
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/hc/balance-sheet.group.webp" width="480" alt="mock hc balance-sheet.group"></td>
-<td><img src="app-captures/hc/balance-sheet.group.webp" width="480" alt="app hc balance-sheet.group"></td>
-</tr>
-</table>
-
 ## light / purchase-bill.offline-ai
 
 SSIM 0.7449
@@ -1748,63 +1724,15 @@ SSIM 0.7449
 </tr>
 </table>
 
-## light / balance-sheet.group
+## hc / masters.create-ledger
 
-SSIM 0.7452
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/light/balance-sheet.group.webp" width="480" alt="mock light balance-sheet.group"></td>
-<td><img src="app-captures/light/balance-sheet.group.webp" width="480" alt="app light balance-sheet.group"></td>
-</tr>
-</table>
-
-## light / masters.create-ledger
-
-SSIM 0.7519
+SSIM 0.7524
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
 <tr>
-<td><img src="mock-v2/captures/states/light/masters.create-ledger.webp" width="480" alt="mock light masters.create-ledger"></td>
-<td><img src="app-captures/light/masters.create-ledger.webp" width="480" alt="app light masters.create-ledger"></td>
-</tr>
-</table>
-
-## light / masters.gstin-error
-
-SSIM 0.7530
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/light/masters.gstin-error.webp" width="480" alt="mock light masters.gstin-error"></td>
-<td><img src="app-captures/light/masters.gstin-error.webp" width="480" alt="app light masters.gstin-error"></td>
-</tr>
-</table>
-
-## dark / balance-sheet.group
-
-SSIM 0.7535
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/dark/balance-sheet.group.webp" width="480" alt="mock dark balance-sheet.group"></td>
-<td><img src="app-captures/dark/balance-sheet.group.webp" width="480" alt="app dark balance-sheet.group"></td>
-</tr>
-</table>
-
-## dark / masters.ledger-detail
-
-SSIM 0.7546
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/dark/masters.ledger-detail.webp" width="480" alt="mock dark masters.ledger-detail"></td>
-<td><img src="app-captures/dark/masters.ledger-detail.webp" width="480" alt="app dark masters.ledger-detail"></td>
+<td><img src="mock-v2/captures/states/hc/masters.create-ledger.webp" width="480" alt="mock hc masters.create-ledger"></td>
+<td><img src="app-captures/hc/masters.create-ledger.webp" width="480" alt="app hc masters.create-ledger"></td>
 </tr>
 </table>
 
@@ -1892,15 +1820,15 @@ SSIM 0.7616
 </tr>
 </table>
 
-## light / masters.ledger-detail
+## hc / masters.gstin-error
 
-SSIM 0.7617
+SSIM 0.7628
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
 <tr>
-<td><img src="mock-v2/captures/states/light/masters.ledger-detail.webp" width="480" alt="mock light masters.ledger-detail"></td>
-<td><img src="app-captures/light/masters.ledger-detail.webp" width="480" alt="app light masters.ledger-detail"></td>
+<td><img src="mock-v2/captures/states/hc/masters.gstin-error.webp" width="480" alt="mock hc masters.gstin-error"></td>
+<td><img src="app-captures/hc/masters.gstin-error.webp" width="480" alt="app hc masters.gstin-error"></td>
 </tr>
 </table>
 
@@ -1952,6 +1880,30 @@ SSIM 0.7682
 </tr>
 </table>
 
+## dark / masters.ledger-detail
+
+SSIM 0.7762
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/dark/masters.ledger-detail.webp" width="480" alt="mock dark masters.ledger-detail"></td>
+<td><img src="app-captures/dark/masters.ledger-detail.webp" width="480" alt="app dark masters.ledger-detail"></td>
+</tr>
+</table>
+
+## light / masters.ledger-detail
+
+SSIM 0.7794
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/masters.ledger-detail.webp" width="480" alt="mock light masters.ledger-detail"></td>
+<td><img src="app-captures/light/masters.ledger-detail.webp" width="480" alt="app light masters.ledger-detail"></td>
+</tr>
+</table>
+
 ## hc / bank.empty
 
 SSIM 0.7837
@@ -1988,6 +1940,18 @@ SSIM 0.7952
 </tr>
 </table>
 
+## light / masters.create-ledger
+
+SSIM 0.7961
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/masters.create-ledger.webp" width="480" alt="mock light masters.create-ledger"></td>
+<td><img src="app-captures/light/masters.create-ledger.webp" width="480" alt="app light masters.create-ledger"></td>
+</tr>
+</table>
+
 ## light / setup.company
 
 SSIM 0.7966
@@ -1997,6 +1961,42 @@ SSIM 0.7966
 <tr>
 <td><img src="mock-v2/captures/states/light/setup.company.webp" width="480" alt="mock light setup.company"></td>
 <td><img src="app-captures/light/setup.company.webp" width="480" alt="app light setup.company"></td>
+</tr>
+</table>
+
+## dark / masters.create-ledger
+
+SSIM 0.7970
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/dark/masters.create-ledger.webp" width="480" alt="mock dark masters.create-ledger"></td>
+<td><img src="app-captures/dark/masters.create-ledger.webp" width="480" alt="app dark masters.create-ledger"></td>
+</tr>
+</table>
+
+## light / masters.gstin-error
+
+SSIM 0.7981
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/masters.gstin-error.webp" width="480" alt="mock light masters.gstin-error"></td>
+<td><img src="app-captures/light/masters.gstin-error.webp" width="480" alt="app light masters.gstin-error"></td>
+</tr>
+</table>
+
+## dark / masters.gstin-error
+
+SSIM 0.7986
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/dark/masters.gstin-error.webp" width="480" alt="mock dark masters.gstin-error"></td>
+<td><img src="app-captures/dark/masters.gstin-error.webp" width="480" alt="app dark masters.gstin-error"></td>
 </tr>
 </table>
 

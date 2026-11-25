@@ -81,14 +81,18 @@ comes from `Api::home_figures` and `Api::home_nudges`.
   mock's `table.t` lines by hand (34-point rows, rules, the selected bar: `ui::table::paint_row`).
   So does the bank reconciliation statement. The bank lines and invoice tables still use
   `TableBuilder` at 30 points with egui's selection tint; each moves over in its own round.
-- **data: the drill reports' columns.** Captured as `balance-sheet.group` and
-  `balance-sheet.ledger`. The mock's group drill lists Ledger or group, GSTIN, Opening, Debit,
-  Credit and Closing, with "Group total, same as the balance sheet row"; ours is the engine's
-  group summary (Particulars, Debit, Credit, a "Net balance" row and Total). The ledger state's
-  side card (group, GSTIN, credit days, open bills, Alter ledger) is not built, and the ledger
-  list has the engine's columns (Particulars, Voucher Type, Voucher No, Debit, Credit, Balance)
-  in the engine's order, not the mock's Date, Voucher, Type, Narration. Each needs the engine's
-  report to carry the figures first; the screen computes none. Closed in the S8 round (tested in
+- **closed (s10): the drill reports' columns and the ledger side card.** The group drill is the
+  engine's new `ReportKind::GroupLedgers` (GSTIN, Opening, Debit, Credit, Closing, "Total of
+  <group>"; `tests/rp5_ledger.rs`, derived by hand, seen failing first). The ledger drill reads
+  Date, Voucher, Type, Particulars, Debit, Credit, Balance and has a side card: group, GSTIN and
+  credit days copied from the master, Open bills from the engine's outstanding report, Alter ledger
+  (Ctrl+Enter). Still different: the group drill's period is the financial year, so Opening is
+  0.00 Dr; Opening and Closing keep the Dr/Cr word; Particulars is the engine's counter-ledger
+  text, not the voucher narration, and rows do not wrap; the Open bills badge reads "31-60 days"
+  plus a clipped overdue tail instead of "37 days overdue" (the badge text is pinned by
+  `tests/w2_masters_bills.rs`); the sample GSTINs are fake. The ledger drill has no Audit card and
+  the voucher read-only view (Item table, Ledger posting, Audit) is not rebuilt: the voucher view
+  still shows the posting lines only. Closed in the S8 round (tested in
   `tests/s8_report_parity.rs`): the drill titles and crumbs read as the group or ledger name
   ("Sundry Debtors"), the subtitle is "As at ... Enter goes deeper, Esc goes back up", Debit and
   Credit figures drop the Dr/Cr word, the repeated Particulars column is not drawn twice, and the
@@ -561,7 +565,10 @@ The sales, purchase, payment and receipt screens draw to one shared sheet
   are named on the screen and on Home with the engine's reason: bill photo drafts (no bill
   reader), plain-words drafts (no assistant), new ledger suggestions, possible duplicates (rule
   D-02, index.html:1036), and 2B explanations (no 2B reader, engine item E-3). Closing each needs
-  its own engine list; nothing is shown for them until then.
+  its own engine list; nothing is shown for them until then. (s10 did not reach the queue: `Api::home_nudges`
+  already finds possible duplicate payments (rule D-02, `ledgerly-api/src/nudges.rs`), so a
+  duplicate row can be listed once the queue takes it from there; no kind was added and
+  Y/N/Ctrl+A remain deferred.)
 - **deferred: the sidebar count (6 in the mock) is off.** `ReviewQueue::count` is `None` while any
   source is unlisted, so no partial count is shown. It comes back when every source is listed.
 - **deferred: Y accept, N reject and Ctrl+A on the queue.** The mock's decisions
@@ -855,8 +862,12 @@ reason names the item); no state to compare with, so nothing further was changed
   is functional (masters.items).
 - **gap: "Missing: add HSN" badge.** The mock draws an alert triangle on a Bad badge; the kit has
   no such BadgeKind and adding one touches every exhaustive match.
-- **gap: create-ledger and ledger-detail field sets.** They follow the engine's fields, not the
-  mock's; the sidebar hover highlight in captures is a capture artifact.
+- **closed (s10): the create-ledger form is the mock's compact form** (Name, Under, GSTIN or
+  Party details switch, Alias/Opening and the rest behind a "More details" row that opens by
+  itself when a hidden field holds text). Still different: that "More details" row and a State
+  combo exist in ours, there is no City field. `masters.ledger-detail` follows the same form;
+  `masters.gstin-error` and `masters.items` were retaken (items keeps its filter box, sorts by
+  the engine's order, uses the Bad badge without the alert icon and has the cursor on row one).
 - **by design: the keys note keeps the "Keys in use now" line**, which is true of the app.
 - **data: `bank.import-error` has no capture** (see the Bank section); `bank.default` shows the
   empty state because the fixture has no statement.
