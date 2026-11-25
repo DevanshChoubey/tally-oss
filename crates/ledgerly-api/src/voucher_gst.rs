@@ -672,7 +672,7 @@ fn build_invoice(
             return Ok(Outcome::unsupported(
                 "invoice round-off line",
                 format!(
-                    "the engine rounds this invoice by Rs {}, and the masters have no invoice-rounding ledger to post it to (TallyPrime sets one with the ledger type Invoice Rounding); not posted",
+                    "the engine rounds this invoice by Rs {}, and the masters have no invoice-rounding ledger to post it to (the previous accounting app sets one with the ledger type Invoice Rounding); not posted",
                     breakup.round_off.to_rupees()
                 ),
             ));

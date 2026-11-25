@@ -610,8 +610,8 @@ the selected one.
   was PB/0147). **Party GSTINs** in the mock are now the sample's (they differed by digits).
 - **gap: the mock's day book still marks PY/0316 as an AI draft ("Bank rule")**; the sample has it
   as a typed voucher by Rohan, so the audit edit log says "user 2" there.
-- **not done: `import.imported`** is not on this branch (it is in s12/mock-coverage); its wording
-  must read "Imported from the other program's company ..." there.
+- **closed (s12-all): `import.imported`** now reads "Imported from the other program's company ...",
+  as the app's import summary does.
 
 ## Item invoices and entry leftovers (round s12 item-invoice-layout, 2026-11-25)
 
@@ -621,26 +621,19 @@ purchase, Save only on a note, "Note total", bare "Narration" caption, tax rows 
 the bill-wise popup table (right-aligned figures, header rule, selected row, "Left open" row); the
 journal's short side in the error ink and Save icons; contra's "Account" column.
 
-- **mock must change (documented behaviour wins; help pages read 2026-11-25):**
-  - Field order: a purchase asks Supplier invoice no., date, Party, ledger, Place; a note asks
-    Party, original invoice no. and date (help.tallysolutions.com/tally-prime/purchase-process/purchase-returns-tally/
-    and the credit-note page). The mock draws Party first on a purchase and puts Date in the head.
-    Ours has no Date step on a purchase or note (the voucher date is the session date).
-  - Journal: the mock's "Reason" text box does not exist in the documented journal voucher (only
-    Narration); ours has none. The mock should drop it.
-  - Contra: narration belongs in the foot, and each line has its own Dr/Cr; the mock puts narration
-    in the head and says "pick the account once". Ours keeps the documented layout with the mock's look.
-  - Credit note: the mock's "Reason" is a GST return-type picklist (01-07) in the product, not free text.
-  - Tax rows: the mock's combined "CGST and SGST 909.00" row is a sum the UI must not compute; ours
-    lists CGST 9% and SGST 9% from the engine. The mock's "inter-state" place label and the
-    "14 Nov, 67 sets invoiced" hint likewise need engine data (see below).
-- **gap: note data.** Credit-note shows Shree Ganesh Traders against SI/0412 with "Original invoice
-  date" and "Sales ledger" cells the engine needs but the mock omits; the debit note returns a
-  "Steel pickaxe" (the sample has no "MS angles"), so 1,890.00 differs from the mock's 2,360.00.
-  Voucher numbers CN/0001, DN/0001, PB/0145 and CT/0022 are the engine's next numbers.
+- **closed (s12-all): the mock changed to the documented behaviour.** Purchase Enter order (supplier
+  bill no. and date, supplier, purchase ledger, place; the Date box is the screen's date, F2),
+  notes (Party, Date, Place; original invoice no. and date; sales or purchase ledger; titles
+  "Credit Note" and "Debit Note"), no "Reason" field on the journal or the credit note, contra
+  narration in the foot with a Dr/Cr on every line, credit note tax rows CGST 9% and SGST 9% from
+  the engine, and the profit and loss in two sides with Debit/Credit headings, "Trading account"
+  and "Profit and loss account" bands and period end 20 Nov (the engine's balance date).
+  Still different: the app lists Direct Expenses before Purchase Accounts (engine group order);
+  the mock follows the owner's order.
+- **data: note numbers.** CN/0001, DN/0001, PB/0145 and CT/0022 are the engine's next numbers; the
+  debit note is to Rupa Polymers against RP/5398 as the mock's.
 - **gap: the figures of the credit-note hint** ("14 Nov, 67 sets invoiced") are not shown: the
   engine has no return-against-invoice quantity, so the UI cannot honestly draw them.
-- **gap: payment bill-wise amount cell** shows the typed text ("150000.00") without Indian grouping.
 - **gap: Group names** keep the sample's capitalisation ("Direct Expenses", "Purchase Accounts").
 - **gap: ghost "Next ledger" row** is drawn on the journal and contra (the keyboard path needs it).
 - **gap: first-row lilac** is not drawn when the keyboard is elsewhere (see the payment entry above).

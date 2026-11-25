@@ -28,6 +28,7 @@ use time::macros::date;
 
 const CASH: LedgerId = LedgerId(1);
 const RENT: LedgerId = LedgerId(5);
+const PARTY: LedgerId = LedgerId(6);
 const T_PAYMENT: VoucherTypeId = VoucherTypeId(2);
 const GROUP: GroupId = GroupId(1);
 const TODAY: Date = date!(2026 - 11 - 21);
@@ -67,7 +68,11 @@ fn books() -> Books {
             tally: None,
         },
     );
-    for l in [ledger(CASH, "Cash"), ledger(RENT, "Rent")] {
+    let mut party = ledger(PARTY, "Vardhaman Logistics");
+    party.bill_wise = Some(ledgerly_model::BillWiseConfig {
+        default_credit_days: None,
+    });
+    for l in [ledger(CASH, "Cash"), ledger(RENT, "Rent"), party] {
         masters.ledgers.insert(l.id, l);
     }
     masters.voucher_types.insert(
@@ -212,4 +217,37 @@ fn choosing_a_mode_stores_the_instrument_the_engine_expects() {
         ledgerly_app::screens::voucher_entry::parse_mode("UPI"),
         Some(InstrumentKind::Upi)
     );
+}
+
+/// derived: the bill-wise popup of a payment of 1,50,000 against a bill of 1,50,000 offers the
+/// bill's whole open amount, and the amount cell reads as every other amount does, 1,50,000.00
+/// (lakh grouping: 3 digits, then pairs), even while the keyboard is on it and the text is the
+/// offered default. What the user types stays as typed; the draft holds the plain digits.
+#[test]
+fn the_bill_wise_amount_reads_with_indian_grouping() {
+    let b = books();
+    let m = &b.masters;
+    let mut s = open(&b);
+    s.set_ledger_text(0, "cash");
+    s.submit(m);
+    s.set_ledger_text(1, "vardhaman");
+    s.submit(m);
+    s.set_amount_text(1, "150000");
+    s.submit(m);
+    s.set_open_bills(
+        PARTY,
+        vec![ledgerly_api::OpenBill {
+            ledger: PARTY,
+            name: "VL/861".to_owned(),
+            date: date!(2026 - 11 - 03),
+            due: None,
+            open: SignedAmount::cr(Paise::new(15_000_000)),
+        }],
+    );
+    let shown = frame(&mut s, &b);
+    // The line's amount, the bill's open amount and the amount cell: three cells, all grouped.
+    let grouped = shown.iter().filter(|t| *t == "1,50,000.00").count();
+    assert_eq!(grouped, 3, "{shown:?}");
+    assert!(!shown.iter().any(|t| t == "150000.00"), "{shown:?}");
+    assert_eq!(s.draft().rows[1].bills[0].amount_text, "150000.00");
 }

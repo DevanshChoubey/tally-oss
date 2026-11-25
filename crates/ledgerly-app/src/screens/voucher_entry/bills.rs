@@ -216,15 +216,43 @@ impl VoucherEntryScreen {
                         .max_rect(cell)
                         .layout(Layout::left_to_right(Align::Center)),
                     |ui| {
-                        text_field(
-                            ui,
-                            cx,
-                            &spec,
-                            &mut b.amount_text,
-                            Look::Cell,
-                            true,
-                            Some(cell.width()),
-                        );
+                        // The offered default and any amount the keyboard has left read with
+                        // Indian grouping; what the user is typing stays as typed.
+                        let plain = !b.amount_text.trim().is_empty()
+                            && b.amount_text
+                                .chars()
+                                .all(|c| c.is_ascii_digit() || c == '.');
+                        let canonical = |p: ledgerly_core::Paise| {
+                            p.to_rupees().to_string() == b.amount_text.trim()
+                        };
+                        let shown = eval_amount(&b.amount_text)
+                            .ok()
+                            .filter(|p| plain && (cx.focus != spec.field || canonical(*p)));
+                        if let Some(paise) = shown {
+                            let mut grouped = format_amount(paise);
+                            let r = text_field(
+                                ui,
+                                cx,
+                                &spec,
+                                &mut grouped,
+                                Look::Cell,
+                                true,
+                                Some(cell.width()),
+                            );
+                            if r.changed() {
+                                b.amount_text = grouped.chars().filter(|c| *c != ',').collect();
+                            }
+                        } else {
+                            text_field(
+                                ui,
+                                cx,
+                                &spec,
+                                &mut b.amount_text,
+                                Look::Cell,
+                                true,
+                                Some(cell.width()),
+                            );
+                        }
                     },
                 );
             }

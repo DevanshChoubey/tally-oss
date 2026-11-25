@@ -498,7 +498,7 @@ mark{background:var(--accent-soft);color:var(--accent-ink);border-radius:2px;pad
  {"id": "contra.validation-error", "kind": "validation-error", "hash": "screen=contra&state=validation-error", "title": "Contra, no account and zero amount", "description": "Neither account is picked and the amount is zero: both errors shown, Save blocked."},
  {"id": "bank-chooser.default", "kind": "happy", "hash": "screen=bank-chooser&state=default", "title": "Choose bank account", "description": "Two bank accounts: balances per books and whether a statement is imported, with Enter to open the one selected."},
  {"id": "start.recent", "kind": "happy", "hash": "screen=start&state=recent", "title": "Start, recent companies", "description": "The app opens with the recent company list (Godavari) and the create, import and open actions."},
- {"id": "profit-and-loss.default", "kind": "happy", "hash": "screen=profit-and-loss&state=default", "title": "Profit and loss", "description": "Trading account (opening stock, purchases, direct expenses, gross profit against sales and closing stock) then profit and loss, by group; nett profit equals the balance sheet's profit to date."},
+ {"id": "profit-and-loss.default", "kind": "happy", "hash": "screen=profit-and-loss&state=default", "title": "Profit and loss", "description": "Trading account (opening stock, purchases, direct expenses, gross profit against sales and closing stock) then profit and loss, by group; net profit equals the balance sheet's profit to date."},
  {"id": "profit-and-loss.provisional", "kind": "error", "hash": "screen=profit-and-loss&state=provisional", "title": "Profit and loss, provisional stock", "description": "A quantity below zero makes the closing stock Provisional; the figure is kept and marked, with the reason and a way to fix it."},
  {"id": "profit-and-loss.detailed", "kind": "happy", "hash": "screen=profit-and-loss&state=detailed", "title": "Profit and loss, detailed", "description": "Alt+F1 shows the ledgers under each group of the trading account and the profit and loss account."},
  {"id": "profit-and-loss.print-preview", "kind": "happy", "hash": "screen=profit-and-loss&state=print-preview", "title": "Profit and loss, print preview", "description": "Ctrl+P shows the page as it will print, with Save as PDF; paper printing is not offered."},
@@ -2037,14 +2037,15 @@ SCREENS.purchase = {title:'Purchase',default:'default',
   return `${phead([['Home',hashFor('home')],['Purchase']],`Purchase <span class="t2" style="font-weight:500">PB/0145</span>`,'Typed by hand · no bill reader · tax is recomputed by the GST engine on every keystroke',
     `<button class="btn" data-cmd="more">Bill photo ${kb('Alt+O')}</button><button class="btn primary" data-cmd="save" ${bad?'disabled':''}>${ic('save')}Save ${kb('Ctrl+A')}</button>`)}
   ${vsheetOpen(`<div class="fld span2"><label>Supplier</label><div class="ro">Nilgiri Steel Traders <span class="t2">· 29ZZZZZ0002Z1ZK ${badge('Check OK','b-ok','check')}</span></div></div>
-    <div class="fld"><label>Supplier bill no.</label><div class="ro">NST/1150</div></div>
+    <div class="fld"><label>Supplier bill no.</label><div class="ro" data-first="1">NST/1150</div></div>
     <div class="fld"><label>Bill date</label><div class="ro">21 Nov 2026</div></div>
     <div class="fld"><label>Purchase ledger</label><div class="ro">Purchases</div></div>
-    <div class="fld"><label>Place of supply</label><div class="ro">27 Maharashtra, inter-state</div></div>`)}
+    <div class="fld"><label>Place of supply</label><div class="ro">27 Maharashtra</div></div>
+    <div class="fld"><label>Date ${kb('F2')}</label><div class="ro">21 Nov 2026</div></div>`)}
    <table class="lines"><thead><tr><th class="n">#</th><th>Item</th><th style="width:70px">HSN</th><th style="width:90px" class="num">Qty</th><th style="width:120px" class="num">Rate</th><th style="width:60px" class="num">GST</th><th style="width:140px" class="num">Amount</th></tr></thead><tbody>${rows}
     <tr><td class="n">${lines.length+1}</td><td><input placeholder="Item, or Enter on empty to finish" aria-label="Item"></td><td></td><td></td><td></td><td></td><td></td></tr></tbody></table>
    <div class="vfoot"><div class="stack"><div class="fld"><label>Narration</label><input value="${bad?'':'Hand-typed, Nilgiri quote 19 Nov'}"></div>
-     ${errs.length?errNote(errs):''}<div class="meta">Each line is checked when you leave it. Accept waits until every line is complete.</div></div>
+     ${errs.length?errNote(errs):''}<div class="meta">Enter goes: supplier bill no. and date, supplier, purchase ledger, place of supply, then the lines. The voucher date is the screen's date (F2).</div></div>
     <div><div class="taxbox"><div class="taxrow"><span class="lab">Taxable value</span><span class="num">${bad?'Not computed':inr(inv.taxable)}</span></div>
      <div class="taxrow"><span class="lab">IGST 18%</span><span class="num">${bad?'Not computed':inr(inv.igst)}</span></div>
      <div class="taxrow"><span class="lab">Round off</span><span class="num">${bad?'Not computed':inr(inv.ro)}</span></div>
@@ -2076,8 +2077,8 @@ const NOTE_SEED = {
  credit:{default:{lines:[['noz6',10,R(505)]],narr:'Returned 10 sets, damaged in transit'},'validation-error':{lines:[['noz6',10,R(505)],['lat16',null,null]],narr:''}},
  debit:{default:{lines:[['hdpe32',2,R(2050)]],narr:'Returned 2 coils, cracked in transit'},'validation-error':{lines:[['hdpe32',2,R(2050)],['bv50',null,null]],narr:''}}};
 function noteScreen(kind){
- const cfg = kind==='credit'?{title:'Credit note',no:'CN/0001',party:'sgt',bad:'Sales return',refLabel:'Against sales invoice',ref:'SI/0412',refSub:'14 Nov 2026',hint:'Credit note, CGST Act s.34(1): reduces the tax on an invoice already issued'}
-   : {title:'Debit note',no:'DN/0001',party:'rupa',bad:'Purchase return',refLabel:'Against purchase bill',ref:'RP/5398',refSub:'bill of 15 Oct 2026',hint:'Debit note, purchase return: reduces what Godavari owes the supplier'};
+ const cfg = kind==='credit'?{title:'Credit Note',no:'CN/0001',party:'sgt',bad:'Sales return',refLabel:'Against sales invoice',ref:'SI/0412',refDate:'14 Nov 2026',hint:'Credit note, CGST Act s.34(1): reduces the tax on an invoice already issued'}
+   : {title:'Debit Note',no:'DN/0001',party:'rupa',bad:'Purchase return',refLabel:'Against purchase bill',ref:'RP/5398',refDate:'15 Oct 2026',hint:'Debit note, purchase return: reduces what Godavari owes the supplier'};
  return {title:cfg.title,default:'default',
  render(st){
   const s = NOTE_SEED[kind][st]||NOTE_SEED[kind].default; const p=LED[cfg.party]; const bad = st==='validation-error';
@@ -2087,19 +2088,21 @@ function noteScreen(kind){
   const body = s.lines.map(([item,qty,rate],i)=>{const it=ITEM[item];
     return `<tr class="${i===(bad?1:0)?'active':''}"><td class="n">${i+1}</td><td>${esc(it.name)}</td><td class="t2">${it.hsn}</td><td class="num">${qty?qty:`<span style="color:var(--bad)">blank</span>`}</td><td class="num">${qty?inr(rate):''}</td><td class="num">${qty?it.gst+'%':''}</td><td class="num">${qty?inr(qty*rate):''}</td></tr>`}).join('');
   const taxLab = kind==='credit'?'CGST and SGST':'IGST 18%', taxAmt = inv?(kind==='credit'?inv.cgst+inv.sgst:inv.igst):0;
-  const meta = kind==='credit'?'The original invoice number and date are kept on the note (rule 53(1A), CGST Rules).'
-    :'Supplier in Gujarat (24), place of supply Maharashtra (27). IGST applies. Rates come from the item masters.';
+  const meta = kind==='credit'?'Enter goes: party, original invoice no. and date, sales ledger, place of supply, then the lines. The original invoice number and date are kept on the note (rule 53(1A), CGST Rules).'
+    :'Enter goes: party, original bill no. and date, purchase ledger, place of supply, then the lines. Supplier in Gujarat (24), place of supply Maharashtra (27): IGST applies.';
   return `${phead([['Home',hashFor('home')],[cfg.title]],`${cfg.title} <span class="t2" style="font-weight:500">${cfg.no}</span>`,`${esc(cfg.hint)}`,
     `<button class="btn primary" data-cmd="save" ${bad?'disabled':''}>${ic('save')}Save ${kb('Ctrl+A')}</button>`)}
   ${vsheetOpen(`<div class="fld span2"><label>${kind==='credit'?'Party':'Supplier'}</label><div class="ro">${esc(p.name)} <span class="t2">· ${p.gstin} ${badge('Check OK','b-ok','check')}</span></div></div>
-    <div class="fld"><label>Date</label><div class="ro">21 Nov 2026</div></div>
-    <div class="fld span2"><label>${cfg.refLabel}</label><div class="ro">${cfg.ref} <span class="t2">· ${cfg.refSub}</span></div></div>
-    <div class="fld"><label>${kind==='credit'?'Reason':'Return from'}</label><div class="ro">${cfg.bad}</div></div>`)}
+    <div class="fld"><label>Date ${kb('F2')}</label><div class="ro">21 Nov 2026</div></div>
+    <div class="fld"><label>Place of supply</label><div class="ro">27 Maharashtra</div></div>
+    <div class="fld"><label>${cfg.refLabel}</label><div class="ro">${cfg.ref}</div></div>
+    <div class="fld"><label>Original invoice date</label><div class="ro">${cfg.refDate}</div></div>
+    <div class="fld"><label>${kind==='credit'?'Sales ledger':'Purchase ledger'}</label><div class="ro">${kind==='credit'?'Sales':'Purchases'}</div></div>`)}
    <table class="lines"><thead><tr><th class="n">#</th><th>Item</th><th style="width:70px">HSN</th><th class="num" style="width:90px">Qty</th><th class="num" style="width:120px">Rate</th><th class="num" style="width:60px">GST</th><th class="num" style="width:140px">Amount</th></tr></thead><tbody>${body}</tbody></table>
    <div class="vfoot"><div class="stack"><div class="fld"><label>Narration</label><input value="${esc(s.narr)}"></div>
      ${errs.length?errNote(errs):''}<div class="meta">${meta}</div></div>
     <div><div class="taxbox"><div class="taxrow"><span class="lab">Taxable value</span><span class="num">${bad?'Not computed':inr(inv.taxable)}</span></div>
-     <div class="taxrow"><span class="lab">${taxLab}</span><span class="num">${bad?'Not computed':inr(taxAmt)}</span></div>
+     ${kind==='credit'?`<div class="taxrow"><span class="lab">CGST 9%</span><span class="num">${bad?'Not computed':inr(inv.cgst)}</span></div><div class="taxrow"><span class="lab">SGST 9%</span><span class="num">${bad?'Not computed':inr(inv.sgst)}</span></div>`:`<div class="taxrow"><span class="lab">IGST 18%</span><span class="num">${bad?'Not computed':inr(inv.igst)}</span></div>`}
      <div class="taxrow tot"><span class="lab">Note total ${prov('eng','engine')}</span><span class="num">${bad?'Not computed':inr(inv.total)}</span></div></div></div></div>
   </div>`;
  },
@@ -2123,7 +2126,7 @@ SCREENS.journal = {title:'Journal',default:'default',
   const line = (led,amt,side,i)=>`<tr class="${i===0?'active':''}"><td class="n">${i+1}</td><td><input value="${esc(LED[led].name)}" aria-label="Ledger"></td><td class="t2">${side}</td><td class="t2">${esc(groupOf(LED[led].group).name)}</td><td><input class="num" value="${inr(amt)}" aria-label="Amount" style="${bad&&side==='Cr'?'color:var(--bad)':''}"></td></tr>`;
   return `${phead([['Home',hashFor('home')],['Journal']],`Journal <span class="t2" style="font-weight:500">JV/0033</span>`,'F7 · debit and credit lines, no cash or bank account set once · the entry must balance before it saves',
    `<button class="btn primary" data-cmd="save" ${bad?'disabled':''}>${ic('save')}Save ${kb('Ctrl+A')}</button>`)}
-  ${vsheetOpen(`<div class="fld"><label>Date</label><div class="ro">21 Nov 2026</div></div><div class="fld span2"><label>Reason</label><div class="ro">Reclassify freight paid</div></div>`)}
+  ${vsheetOpen(`<div class="fld"><label>Date ${kb('F2')}</label><div class="ro">21 Nov 2026</div></div>`)}
    <table class="lines"><thead><tr><th class="n">#</th><th>Ledger</th><th style="width:60px">Dr / Cr</th><th>Group</th><th class="num" style="width:170px">Amount</th></tr></thead><tbody>
     ${dr.map((l,i)=>line(l[0],l[1],'Dr',i)).join('')}${cr.map((l,i)=>line(l[0],l[1],'Cr',i+dr.length)).join('')}
     <tr><td class="n">${dr.length+cr.length+1}</td><td><input placeholder="Next ledger, or Enter on empty to finish" aria-label="Ledger"></td><td></td><td></td><td></td></tr></tbody></table>
@@ -2145,13 +2148,13 @@ SCREENS.journal = {title:'Journal',default:'default',
 SCREENS.contra = {title:'Contra',default:'default',
  render(st){
   const bad = st==='validation-error';
-  return `${phead([['Home',hashFor('home')],['Contra']],`Contra <span class="t2" style="font-weight:500">CT/0022</span>`,'F4 · cash and bank transfers · pick the account once, then the amount',
+  return `${phead([['Home',hashFor('home')],['Contra']],`Contra <span class="t2" style="font-weight:500">CT/0022</span>`,'F4 · cash and bank transfers · every line has its own Dr or Cr',
    `<button class="btn primary" data-cmd="save" ${bad?'disabled':''}>${ic('save')}Save ${kb('Ctrl+A')}</button>`)}
-  ${vsheetOpen(`<div class="fld"><label>Date</label><div class="ro">21 Nov 2026</div></div><div class="fld span2"><label>Narration</label><div class="ro">${bad?'':'Cash deposited into the Saptagiri account'}</div></div>`)}
+  ${vsheetOpen(`<div class="fld"><label>Date ${kb('F2')}</label><div class="ro">21 Nov 2026</div></div>`)}
    <table class="lines"><thead><tr><th class="n">#</th><th>Account</th><th style="width:60px">Dr / Cr</th><th>Group</th><th class="num" style="width:170px">Amount</th></tr></thead><tbody>
     <tr class="active"><td class="n">1</td><td><input value="${bad?'':'Saptagiri Commercial Bank A/c'}" placeholder="${bad?'Pick the account the money goes to':''}" style="${bad?'color:var(--bad)':''}" aria-label="Account"></td><td class="t2">Dr</td><td class="t2">${bad?'':'Bank accounts'}</td><td class="num">${bad?'<span style="color:var(--bad)">blank</span>':inr(R(30000))}</td></tr>
     <tr><td class="n">2</td><td>${bad?'<input placeholder="Pick the account the money comes from" aria-label="Account" style="color:var(--bad)">':'Cash'}</td><td class="t2">Cr</td><td class="t2">${bad?'':'Cash-in-hand'}</td><td class="num">${bad?'<input class="num" value="0.00" style="color:var(--bad)" aria-label="Amount">':inr(R(30000))}</td></tr></tbody></table>
-   <div class="vfoot"><div class="stack">${bad?errNote(['Pick the cash or bank account first.','An amount of zero cannot be posted.']):''}<div class="meta">Balances after saving come from the engine. Dr and Cr always match in a contra.</div></div>
+   <div class="vfoot"><div class="stack"><div class="fld"><label>Narration</label><input value="${bad?'':'Cash deposited into the Saptagiri account'}"></div>${bad?errNote(['Pick the cash or bank account first.','An amount of zero cannot be posted.']):''}<div class="meta">Lines as typed balance (the engine checks again when it posts).</div></div>
     <div><div class="taxbox"><div class="taxrow"><span class="lab">Transfer</span><span class="num">${bad?'Not computed':inr(R(30000))}</span></div><div class="taxrow tot"><span class="lab">Cash after ${prov('eng','engine')}</span><span class="num">${bad?'Not computed':inr(balances().cash-R(30000))}</span></div></div></div></div>
   </div>`;
  },
@@ -2216,8 +2219,8 @@ function plRows(opt){
   const short=opt&&opt.short; const b=balances(short?SHORT_VOUCHERS:[]); const st=stockPosition(short);
   const grp=(name,gid,sign)=>{const children=LEDGERS.filter(l=>l.group===gid&&b[l.id]!==0).map(l=>({name:l.name,amt:sign*b[l.id]}));
     return {name,amt:children.reduce((s,c)=>s+c.amt,0),children}};
-  const open=grp('Opening Stock','openstock',1), purch=grp('Purchase Accounts','purchacc',1), dexp=grp('Direct Expenses','direxp',1);
-  const sales=grp('Sales Accounts','salesacc',-1), close={name:'Closing Stock',amt:st.value,children:[],provisional:st.provisional};
+  const open=grp('Opening stock','openstock',1), purch=grp('Purchase Accounts','purchacc',1), dexp=grp('Direct Expenses','direxp',1);
+  const sales=grp('Sales Accounts','salesacc',-1), close={name:'Closing stock',amt:st.value,children:[],provisional:st.provisional};
   const gp=sales.amt+close.amt-(open.amt+purch.amt+dexp.amt);
   const iexp=grp('Indirect Expenses','indexp',1), iinc=grp('Indirect Incomes','indinc',-1);
   const net=gp+iinc.amt-iexp.amt;
@@ -2229,34 +2232,35 @@ function plScreen(){
   const d=plRows(st==='provisional'?{short:true}:{}); const detailed=st==='detailed';
   const crumbs=[['Home',hashFor('home')],['Profit and loss']];
   const actions=`<button class="btn" data-go="${hashFor('profit-and-loss',detailed?'default':'detailed')}">${detailed?'Condensed':'Detailed'} ${kb('Alt+F1')}</button><button class="btn" data-go="${hashFor('profit-and-loss',st==='print-preview'?'default':'print-preview')}">${ic('upload')}Print preview ${kb('Ctrl+P')}</button><button class="btn" data-cmd="export">${ic('upload')}Export ${kb('Ctrl+E')}</button>`;
-  const head=phead(crumbs,'Profit and loss',`From 1 Apr to 21 Nov 2026 · FY ${CO.fy} · ${detailed?'ledgers under each group':'by group'}`,actions);
+  const head=phead(crumbs,'Profit and loss',`From 1 Apr to 20 Nov 2026 · FY ${CO.fy} · ${detailed?'ledgers under each group':'by group'}`,actions);
   if(st==='loading') return reportLoading(head);
   const warn = st==='provisional'?`<div class="note warn" style="margin:12px 16px 0" role="alert">${ic('alert')}<div><b>Closing stock is Provisional.</b> Steel pickaxe 2.5 kg first went below zero on 19 Nov 2026 (−30 nos after SI/0416); a purchase on 20 Nov brought it back to 70. The stock engine keeps the figure and marks it Provisional. <button class="btn ghost" data-go="${hashFor('masters','items')}">Open stock items</button></div></div>`:'';
   const side=(items)=>items.flatMap(g=>[{n:g.name,a:g.amt,t:'g',prov:g.provisional},...(detailed?g.children.map(c=>({n:c.name,a:c.amt,t:'l'})):[])]);
   const cells=x=>x?`<td class="${x.t==='l'?'ind1':''}">${esc(x.n)}${x.prov?' '+badge('Provisional','b-warn','alert'):''}</td><td class="num ${x.t==='l'?'t2':''}">${inr(x.a)}</td>`:'<td></td><td></td>';
   const bl='style="border-left:1px solid var(--border)"';
+  const band=n=>`<tr><td colspan="4" style="background:var(--accent-soft)">${n}</td></tr>`;
   const section=(L,Rt,total)=>{const n=Math.max(L.length,Rt.length);let o='';
     for(let i=0;i<n;i++){const l=cells(L[i]),r=cells(Rt[i]);o+=`<tr>${l}${r.replace('<td','<td '+bl)}</tr>`}
     return o+`<tr class="total"><td>Total</td><td class="num">${inr(total)}</td><td ${bl}>Total</td><td class="num">${inr(total)}</td></tr>`};
-  const gpL=d.gp>=0?[{n:'Gross Profit c/o',a:d.gp,t:'g'}]:[], gpR=d.gp<0?[{n:'Gross Loss c/o',a:-d.gp,t:'g'}]:[];
+  const gpL=d.gp>=0?[{n:'Gross profit c/o',a:d.gp,t:'g'}]:[], gpR=d.gp<0?[{n:'Gross loss c/o',a:-d.gp,t:'g'}]:[];
   const tL=[...side([d.open,d.purch,d.dexp]),...gpL], tR=[...side([d.sales,d.close]),...gpR];
   const trTot=d.open.amt+d.purch.amt+d.dexp.amt+(d.gp>=0?d.gp:0);
-  const nL=d.net>=0?[{n:'Nett Profit',a:d.net,t:'g'}]:[], nR=d.net<0?[{n:'Nett Loss',a:-d.net,t:'g'}]:[];
-  const pL=[...side([d.iexp]),...nL], pR=[...(d.gp>=0?[{n:'Gross Profit b/f',a:d.gp,t:'g'}]:[{n:'Gross Loss b/f',a:-d.gp,t:'g'}]),...side([d.iinc]),...nR];
+  const nL=d.net>=0?[{n:'Net profit c/o',a:d.net,t:'g'}]:[], nR=d.net<0?[{n:'Net loss c/o',a:-d.net,t:'g'}]:[];
+  const pL=[...side([d.iexp]),...nL], pR=[...(d.gp>=0?[{n:'Gross profit b/f',a:d.gp,t:'g'}]:[{n:'Gross loss b/f',a:-d.gp,t:'g'}]),...side([d.iinc]),...nR];
   const plTot=d.iexp.amt+(d.net>=0?d.net:0);
-  const table=`<table class="t" id="pl"><thead><tr><th>Particulars</th><th class="num" style="width:150px">₹</th><th ${bl}>Particulars</th><th class="num" style="width:150px">₹</th></tr></thead><tbody>
-     ${section(tL,tR,trTot)}</tbody><tbody>${section(pL,pR,plTot)}</tbody></table>
-     <div class="spread" style="padding:10px 16px"><span>${badge(d.net>=0?'Profit':'Loss','b-ok','check')} <b style="margin-left:8px">Nett ${d.net>=0?'profit':'loss'} ${inr(Math.abs(d.net))}</b></span><span class="meta">Equals "Profit to date" on the balance sheet, checked by the engine</span></div>`;
+  const table=`<table class="t" id="pl"><thead><tr><th>Particulars</th><th class="num" style="width:150px">Debit</th><th ${bl}>Particulars</th><th class="num" style="width:150px">Credit</th></tr></thead><tbody>
+     ${band('Trading account')}${section(tL,tR,trTot)}</tbody><tbody>${band('Profit and loss account')}${section(pL,pR,plTot)}</tbody></table>
+     <div class="spread" style="padding:10px 16px"><span>${badge(d.net>=0?'Profit':'Loss','b-ok','check')} <b style="margin-left:8px">Net ${d.net>=0?'profit':'loss'} ${inr(Math.abs(d.net))}</b></span><span class="meta">Equals "Profit to date" on the balance sheet, checked by the engine</span></div>`;
   let card;
   if(st==='print-preview'){
     card=`<div style="display:grid;grid-template-columns:1fr 280px;gap:16px;align-items:start">
-     <div class="card" style="background:#fff;color:#1c1b19;padding:24px 32px;min-height:460px"><h2 style="margin:0;color:#1c1b19">Godavari Drip &amp; Pump Works</h2><div style="color:#4a4741">Profit and loss, 1 Apr to 21 Nov 2026</div><div style="margin-top:14px">${table.replace(/class="t"/,'class="t" style="color:#1c1b19"')}</div></div>
+     <div class="card" style="background:#fff;color:#1c1b19;padding:24px 32px;min-height:460px"><h2 style="margin:0;color:#1c1b19">Godavari Drip &amp; Pump Works</h2><div style="color:#4a4741">Profit and loss, 1 Apr to 20 Nov 2026</div><div style="margin-top:14px">${table.replace(/class="t"/,'class="t" style="color:#1c1b19"')}</div></div>
      <div class="card pad"><h2>Print preview</h2><table class="t"><tbody><tr><td class="t2">Paper</td><td>A4, portrait</td></tr><tr><td class="t2">Pages</td><td>1</td></tr><tr><td class="t2">Destination</td><td>PDF file</td></tr></tbody></table>
       <p class="meta">Paper printing is not built yet. The PDF is written to a folder you choose.</p>
       <div class="actions"><button class="btn primary" data-cmd="pdf">${ic('upload')}Save as PDF ${kb('Ctrl+P')}</button><button class="btn" data-go="${hashFor('profit-and-loss')}">Close ${kb('Esc')}</button></div></div></div>`;
     return head+card;
   }
-  if(st==='print-saved') return head+`<div class="note ok" role="status" style="margin-bottom:12px">${ic('check')}<span><b>PDF saved.</b> Profit and loss, 1 Apr to 21 Nov 2026 was written to the folder you chose. <button class="btn ghost" data-cmd="open-pdf">Open file</button></span></div><div class="card" id="report-body">${warn}${table}</div>`;
+  if(st==='print-saved') return head+`<div class="note ok" role="status" style="margin-bottom:12px">${ic('check')}<span><b>PDF saved.</b> Profit and loss, 1 Apr to 20 Nov 2026 was written to the folder you chose. <button class="btn ghost" data-cmd="open-pdf">Open file</button></span></div><div class="card" id="report-body">${warn}${table}</div>`;
   if(st==='print-failed') return head+`<div class="note bad" role="alert" style="margin-bottom:12px">${ic('alert')}<span><b>The PDF was not saved.</b> The file is open in another program. Nothing was written. Close it, then press Ctrl+P again.</span></div><div class="card" id="report-body">${warn}${table}</div>`;
   if(st==='print-error') return head+`<div class="note bad" role="alert" style="margin-bottom:12px">${ic('alert')}<span><b>Profit and loss was not printed.</b> The company file could not be read for the PDF: the store is closed. Nothing was written. Open the company again, then press Ctrl+P.</span></div><div class="card" id="report-body">${warn}${table}</div>`;
   if(st==='print-busy') return head+`<div class="note" role="status" style="margin-bottom:12px">${ic('clock')}<span><b>Preparing the PDF.</b> The save dialog opens when it is ready.</span></div><div class="card" id="report-body">${warn}${table}</div>`;
@@ -2431,9 +2435,9 @@ SCREENS.import={title:'Import from another app',default:'default',
   if(st==='default'||noCo||st==='validation-error'){f.company='';}
   if(st==='port-error') f.port='99999';
   const vc={}; VOUCHERS.forEach(v=>{vc[v.type]=(vc[v.type]||0)+1});
-  const sumText=[`Imported from Tally company "${f.company}": ${VOUCHERS.length+LEDGERS.length} events committed.`,
+  const sumText=[`Imported from the other program's company "${f.company}": ${VOUCHERS.length+LEDGERS.length} events committed.`,
     'Vouchers were requested for 1 Apr 2026 to 21 Nov 2026 in 1 window(s). Vouchers dated outside that period are not in this import.',
-    'Read from Tally:',`  ${LEDGERS.length} ledger(s)`,...Object.entries(vc).map(([k,n])=>`  ${n} ${k} voucher(s)`),'No warnings.'].join('\n');
+    'Read from the other program:',`  ${LEDGERS.length} ledger(s)`,...Object.entries(vc).map(([k,n])=>`  ${n} ${k} voucher(s)`),'No warnings.'].join('\n');
   let note='';
   if(st==='validation-error') note=impNote('bad','Error: enter the name of the company in the other app');
   if(st==='port-error') note=impNote('bad','Error: "99999" is not a port number (1 to 65535)');

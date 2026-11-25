@@ -174,7 +174,7 @@ pub fn import_company(
         Ok(mapped) => mapped,
         Err(MapError::Unsupported { what, reason }) => {
             return Ok(Outcome::Unsupported(Unsupported {
-                what: format!("Tally import: {what}"),
+                what: format!("Import: {what}"),
                 reason: format!("{reason}. Nothing was imported."),
             }));
         }
@@ -242,7 +242,7 @@ fn align_voucher_types(events: Vec<Event>) -> Result<Vec<Event>, Unsupported> {
                     .get(&voucher.type_id)
                     .copied()
                     .ok_or_else(|| Unsupported {
-                        what: format!("Tally voucher dated {}", voucher.date),
+                        what: format!("Voucher dated {}", voucher.date),
                         reason: "its voucher type is not in the export".to_owned(),
                     })?;
                 voucher.type_id = new;
@@ -279,9 +279,9 @@ fn align_voucher_type(
     if let Some(seed) = seeds.iter().find(|s| s.name == vt.name) {
         if seed.base != vt.base {
             return Err(Unsupported {
-                what: format!("Tally voucher type '{}'", vt.name),
+                what: format!("Voucher type '{}'", vt.name),
                 reason: "Ledgerly has a default voucher type of this name with another behaviour, \
-                         and the import cannot merge the two. Rename it in Tally and import again"
+                         and the import cannot merge the two. Rename it in the other program and import again"
                     .to_owned(),
             });
         }
@@ -291,7 +291,7 @@ fn align_voucher_type(
         return Ok((Event::MasterAltered { before, after }, old, seed_id));
     }
     let next = last_id.checked_add(1).ok_or_else(|| Unsupported {
-        what: format!("Tally voucher type '{}'", vt.name),
+        what: format!("Voucher type '{}'", vt.name),
         reason: "too many voucher types to number".to_owned(),
     })?;
     *last_id = next;
@@ -367,7 +367,7 @@ fn split_openings(masters: &[TallyMaster]) -> Result<(Vec<TallyMaster>, Openings
         }
         let refuse = |reason: &str| Unsupported {
             what: format!(
-                "Tally import: ledger '{}' has an opening balance of {text}",
+                "Import: ledger '{}' has an opening balance of {text}",
                 rec.name
             ),
             reason: format!("{reason}. Nothing was imported."),
@@ -421,7 +421,7 @@ fn apply_openings(
             continue;
         }
         let overflow = || Unsupported {
-            what: "Tally import: the opening balances".to_owned(),
+            what: "Import: the opening balances".to_owned(),
             reason: "they add up to more than Ledgerly can hold. Nothing was imported.".to_owned(),
         };
         let signed = opening.to_signed().map_err(|_| overflow())?;
@@ -434,7 +434,7 @@ fn apply_openings(
             place: "opening balances".to_owned(),
             message: format!(
                 "the imported opening balances do not balance: the difference is {}.{:02} {side} \
-                 (Tally shows this as 'Difference in opening balances' in the Trial Balance)",
+                 (the other program shows this as 'Difference in opening balances' in the Trial Balance)",
                 shown / 100,
                 shown % 100
             ),
@@ -507,7 +507,7 @@ fn outside_warning(
         return Ok(Some(ImportWarning {
             place,
             message: format!(
-                "Ledgerly could not check whether Tally holds vouchers from {from} to {to}: Tally \
+                "Ledgerly could not check whether the other program holds vouchers from {from} to {to}: it \
                  did not answer with data (see {file}). Vouchers outside {} to {} are not imported",
                 range.from(),
                 range.to()

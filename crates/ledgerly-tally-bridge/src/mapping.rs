@@ -126,7 +126,9 @@ pub enum MapError {
         reserved_name: String,
     },
     /// A reserved group sits under a different parent than the reserved one.
-    #[error("reserved group '{group}' has been moved under another parent in Tally; not mapped")]
+    #[error(
+        "reserved group '{group}' has been moved under another parent in the other program; not mapped"
+    )]
     ReservedGroupMoved {
         /// Group name in the export.
         group: String,
@@ -577,7 +579,7 @@ impl State {
         self.warn_dropped(&object, rec, &[]);
         self.warn(
             &object,
-            "numbering settings are not imported; numbers from Tally are kept as typed",
+            "numbering settings are not imported; numbers from the other program are kept as typed",
         );
         self.events
             .push(Event::MasterCreated(MasterSnapshot::VoucherType(
@@ -883,7 +885,7 @@ fn check_opening_is_zero(object: &str, extra: &[RawElement]) -> Result<(), MapEr
     let Some(text) = extra_text(extra, "OPENINGBALANCE") else {
         return Err(MapError::Unsupported {
             what: format!("{object} has no OPENINGBALANCE in the export"),
-            reason: "an absent opening balance is unknown, not zero; whether Tally omits zero \
+            reason: "an absent opening balance is unknown, not zero; whether the other program omits zero \
                      openings is pending an observed capture"
                 .to_owned(),
         });

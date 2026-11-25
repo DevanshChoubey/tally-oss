@@ -1610,48 +1610,47 @@ fn light_shots() -> Vec<Shot> {
                 "SI/0412",
                 "14-11-2026",
             ),
-            "Drip lateral",
-            "2",
-            "3850",
+            "Brass nozzle",
+            "10",
+            "505",
         )
-        .type_text("Brass nozzle")
+        .type_text("Drip lateral")
         .press(&[(Key::Enter, NONE), (Key::A, Modifiers::COMMAND)]),
-        // STOPPED against the mock's `debit-note.default` and `.validation-error`: the mock returns
-        // 2 bundles of MS angles, an item the sample company does not have, and a return must link
-        // to a bill line, which the engine does not do. This is the app's own debit note.
-        // Debit note: two pickaxes of bill NST/1145 sent back to Nilgiri Steel Traders.
+        // The mock's `debit-note.default`: 2 HDPE pipe coils of Rupa Polymers' bill RP/5398
+        // (15 Oct 2026) returned at the bill's 2,050.00.
         invoice_line(
             godavari_bill(
                 shot("debit-note.default", &[(Key::F5, Modifiers::ALT)]).on(Fixture::Godavari),
                 "Debit Note",
-                "Nilgiri",
+                "Rupa",
                 "27",
                 "Purchases",
-                "NST/1145",
-                "20-11-2026",
+                "RP/5398",
+                "15-10-2026",
             ),
-            "Steel pickaxe",
+            "HDPE",
             "2",
-            "900",
+            "2050",
         )
         .press(&[(Key::Enter, NONE)])
-        .type_text("Two pickaxes returned, handles cracked"),
+        .type_text("Returned 2 coils, cracked in transit"),
+        // The mock's `debit-note.validation-error`: a second line with an item and no quantity.
         invoice_line(
             godavari_bill(
                 shot("debit-note.validation-error", &[(Key::F5, Modifiers::ALT)])
                     .on(Fixture::Godavari),
                 "Debit Note",
-                "Nilgiri",
+                "Rupa",
                 "27",
                 "Purchases",
-                "NST/1145",
-                "20-11-2026",
+                "RP/5398",
+                "15-10-2026",
             ),
-            "Steel pickaxe",
+            "HDPE",
             "2",
-            "900",
+            "2050",
         )
-        .type_text("Hand sprayer")
+        .type_text("PVC ball")
         .press(&[(Key::Enter, NONE), (Key::A, Modifiers::COMMAND)]),
         // The mock's journal (`journal.default`): freight paid was booked as Purchases and is moved
         // to Freight inward, 1,840.00 on both sides. The credit line's amount is the prefilled

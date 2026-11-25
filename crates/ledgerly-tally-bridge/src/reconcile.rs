@@ -233,22 +233,22 @@ pub fn reconcile(
         balance_sheet: not_compared(
             &theirs.bs,
             "reconciliation: balance sheet",
-            "Tally's balance sheet amounts carry a sign whose side is not established, and our balance sheet needs stock valuations this reconciliation is not given",
+            "The other program's balance sheet amounts carry a sign whose side is not established, and our balance sheet needs stock valuations this reconciliation is not given",
         ),
         profit_loss: not_compared(
             &theirs.pl,
             "reconciliation: profit and loss",
-            "Tally's profit and loss amounts carry a sign whose side is not established, and our profit and loss needs stock valuations this reconciliation is not given",
+            "The other program's profit and loss amounts carry a sign whose side is not established, and our profit and loss needs stock valuations this reconciliation is not given",
         ),
         stock: not_compared(
             &theirs.stock,
             "reconciliation: stock summary",
-            "Tally's stock values carry a sign whose side is not established, and our stock values need valuations this reconciliation is not given",
+            "The other program's stock values carry a sign whose side is not established, and our stock values need valuations this reconciliation is not given",
         ),
         outstanding: not_compared(
             &theirs.outstanding,
             "reconciliation: bills outstanding",
-            "Tally's bill amounts carry a sign whose side is not established, and the bills outstanding report is not part of this comparison yet",
+            "The other program's bill amounts carry a sign whose side is not established, and the bills outstanding report is not part of this comparison yet",
         ),
     })
 }
@@ -471,10 +471,13 @@ fn their_amount(row: &TReportRow) -> Result<ReconAmount, String> {
     match row.amount {
         TReportAmount::Columns { debit, credit } => Ok(ReconAmount { debit, credit }),
         TReportAmount::Signed(_) => Err(format!(
-            "Tally's row {} has one signed amount with no debit or credit column; its side is not established",
+            "The other program's row {} has one signed amount with no debit or credit column; its side is not established",
             row.label
         )),
-        TReportAmount::Nil => Err(format!("Tally's row {} has no amount", row.label)),
+        TReportAmount::Nil => Err(format!(
+            "The other program's row {} has no amount",
+            row.label
+        )),
     }
 }
 
@@ -568,7 +571,7 @@ fn compare_trial_balance(
                 let mut listed = detail_line(r, &ours, &uses);
                 listed.status = LineStatus::Ambiguous {
                     reason: format!(
-                        "Tally's row '{}' is recognised as a total by its label only, and it \
+                        "The other program's row '{}' is recognised as a total by its label only, and it \
                          also names one of our masters; totals detection is pending an observed \
                          capture, so it is not green",
                         r.row.label
@@ -628,7 +631,7 @@ fn detail_line(r: &Resolved<'_>, ours: &OurTb, uses: &BTreeMap<Target, usize>) -
                     their_amount(row).ok(),
                     LineStatus::Ambiguous {
                         reason: format!(
-                            "Tally lists {} more than once, so no row can be matched to it",
+                            "The other program lists {} more than once, so no row can be matched to it",
                             row.label
                         ),
                     },

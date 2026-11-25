@@ -136,8 +136,7 @@ loaded and unsupported, masters empty and loading variants.
 - Profit and loss layout: the page https://help.tallysolutions.com/profit-and-loss-statement-tally/
   (read 2026-11-25) documents the horizontal form, "Show with Gross Profit" and a detailed view;
   the group order inside each side follows the owner's brief of 2026-11-25.
-- import.imported (neutral wording instead of the other product's name) is not on this branch:
-  that state is added by s12/mock-coverage.
+- import.imported uses neutral wording ("the other program's company"), no product name.
 - Tally voucher fields (credit note reference, journal and contra rules) were found only as search
   snippets, not full pages. The layouts here follow the app's own forms and the GST rule, not a
   field-by-field copy of any other product.

@@ -14,19 +14,19 @@ pub trait TallyTransport {
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum TransportError {
     /// Nothing is listening.
-    #[error("Tally is not running or not accepting connections on port {port}")]
+    #[error("The other program is not running or not accepting connections on port {port}")]
     TallyNotRunning {
         /// Port tried.
         port: u16,
     },
     /// HTTP error status.
-    #[error("Tally answered with HTTP {status}")]
+    #[error("The other program answered with HTTP {status}")]
     Http {
         /// Status code.
         status: u16,
     },
     /// The request timed out.
-    #[error("request to Tally timed out after {seconds} s")]
+    #[error("request to the other program timed out after {seconds} s")]
     Timeout {
         /// Seconds waited.
         seconds: u64,

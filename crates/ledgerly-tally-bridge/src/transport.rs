@@ -115,7 +115,7 @@ impl TallyTransport for HttpTransport {
         tracing::debug!(
             port = self.port,
             bytes = xml_request.len(),
-            "posting request to Tally"
+            "posting request to the other program"
         );
         let mut response = self
             .agent

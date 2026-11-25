@@ -211,7 +211,7 @@ fn import_tally(args: &ImportTallyArgs) -> anyhow::Result<ExitCode> {
         .import_tally_http(&args.host, args.port, &args.company)
         .with_context(|| {
             format!(
-                "the import from TallyPrime at {}:{} failed; check that TallyPrime is running with its HTTP XML port open",
+                "the import from the other program at {}:{} failed; check that the other program is running with its HTTP XML port open",
                 args.host, args.port
             )
         })?;

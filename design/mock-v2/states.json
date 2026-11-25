@@ -935,7 +935,7 @@
    "kind": "happy",
    "hash": "screen=profit-and-loss&state=default",
    "title": "Profit and loss",
-   "description": "Trading account (opening stock, purchases, direct expenses, gross profit against sales and closing stock) then profit and loss, by group; nett profit equals the balance sheet's profit to date."
+   "description": "Trading account (opening stock, purchases, direct expenses, gross profit against sales and closing stock) then profit and loss, by group; net profit equals the balance sheet's profit to date."
   },
   {
    "id": "profit-and-loss.provisional",

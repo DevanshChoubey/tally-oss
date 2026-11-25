@@ -36,14 +36,14 @@ use crate::seam::{TallyTransport, TransportError};
 pub enum BridgeError {
     /// Tally could not be reached, or answered with an HTTP error.
     #[error(
-        "{0}. Check that TallyPrime is open and its HTTP server is enabled (F12, Advanced Configuration)."
+        "{0}. Check that the other program is open and its HTTP server is enabled (F12, Advanced Configuration)."
     )]
     Transport(#[from] TransportError),
     /// Tally's XML could not be read by the XML crate.
     #[error(transparent)]
     Xml(#[from] TallyXmlError),
     /// The reply is not well-formed enough to read.
-    #[error("Tally's reply cannot be read at byte {offset}: {reason}")]
+    #[error("The other program's reply cannot be read at byte {offset}: {reason}")]
     MalformedResponse {
         /// Byte offset in the decoded reply.
         offset: usize,
@@ -51,13 +51,13 @@ pub enum BridgeError {
         reason: String,
     },
     /// The reply is readable but is not the answer to the question asked.
-    #[error("Tally's reply is not the expected answer: {reason}")]
+    #[error("The other program's reply is not the expected answer: {reason}")]
     UnexpectedResponse {
         /// What was missing or different.
         reason: String,
     },
     /// Tally understood the request and reported a problem.
-    #[error("Tally reported a problem: {message}")]
+    #[error("The other program reported a problem: {message}")]
     TallyReported {
         /// Tally's own text.
         message: String,

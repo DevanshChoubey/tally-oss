@@ -196,14 +196,14 @@ pub enum PullError {
     },
     /// The response is not a Tally XML envelope (for example Tally's plain-text error).
     #[error(
-        "Tally did not answer with XML for {file}; the raw response is saved there. Check that the company is open in Tally"
+        "The other program did not answer with XML for {file}; the raw response is saved there. Check that the company is open in the other program"
     )]
     NotAnEnvelope {
         /// Capture file holding the raw response.
         file: String,
     },
     /// Tally answered with status 0.
-    #[error("Tally refused the request for {file}: {message}")]
+    #[error("The other program refused the request for {file}: {message}")]
     Refused {
         /// Capture file holding the raw response.
         file: String,

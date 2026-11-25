@@ -58,7 +58,7 @@ impl fmt::Display for ImportSummary {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(
             f,
-            "Imported from Tally company \"{}\": {} events committed.",
+            "Imported from the other program's company \"{}\": {} events committed.",
             self.company, self.events
         )?;
         writeln!(
@@ -69,7 +69,7 @@ impl fmt::Display for ImportSummary {
             self.period.to(),
             self.voucher_windows
         )?;
-        writeln!(f, "Read from Tally:")?;
+        writeln!(f, "Read from the other program:")?;
         for (kind, count) in &self.masters {
             writeln!(f, "  {count} {kind}(s)")?;
         }
@@ -147,7 +147,7 @@ impl Api {
         };
         if locked || !is_seed_only(books) {
             return Ok(Outcome::Unsupported(Unsupported {
-                what: "Tally import into this company".to_owned(),
+                what: "Import from the other program into this company".to_owned(),
                 reason: "the company already holds data, or a period is locked. An import needs \
                          a new company file, so that nothing is merged or overwritten. Nothing \
                          was imported"
