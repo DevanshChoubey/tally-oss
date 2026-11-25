@@ -1,9 +1,12 @@
 //! Saving a voucher and leaving the screen.
 
-use ledgerly_core::Outcome;
-use ledgerly_model::{Masters, Voucher};
+use ledgerly_core::{DrCr, Outcome, Paise};
+use ledgerly_model::validate::LineTotals;
+use ledgerly_model::{Masters, Voucher, VoucherError};
 
-use super::draft::VoucherDraft;
+use super::display::format_amount;
+use super::draft::{DraftError, VoucherDraft};
+use super::kind::EntryKind;
 use super::state::{Field, Notice, VoucherEntryScreen};
 
 impl VoucherEntryScreen {
@@ -22,6 +25,18 @@ impl VoucherEntryScreen {
             }
             Ok(Outcome::Unsupported(u)) => {
                 self.fail(format!("Not supported yet: {} ({})", u.what, u.reason));
+            }
+            // A contra with nothing in it has no account and no amount: both are said, as the
+            // mock's contra does (index.html:2082).
+            Err(DraftError::Voucher(VoucherError::Empty))
+                if self.draft.kind == EntryKind::Contra =>
+            {
+                self.fail(
+                    "Pick the cash or bank account first.\nAn amount of zero cannot be posted.",
+                );
+            }
+            Err(DraftError::Voucher(VoucherError::Unbalanced { dr, cr })) => {
+                self.fail(unbalanced_text(dr, cr));
             }
             Err(e) => self.fail(e.to_string()),
         }
@@ -71,5 +86,24 @@ impl VoucherEntryScreen {
     pub fn answer_discard(&mut self, discard: bool) -> bool {
         self.confirm_discard = false;
         discard
+    }
+}
+
+/// What saving says when debits and credits differ (index.html:2067): by how much, and which
+/// side the missing amount goes on. The figures are the model's totals, not a sum made here.
+fn unbalanced_text(debit: Paise, credit: Paise) -> String {
+    match (LineTotals { debit, credit }).difference() {
+        Ok(Some(d)) => {
+            let side = match d.side {
+                DrCr::Dr => "credit",
+                DrCr::Cr => "debit",
+            };
+            let amount = format_amount(d.amount);
+            format!(
+                "Debit and credit differ by {amount}. Enter {amount} more on the {side} side to save."
+            )
+        }
+        Ok(None) => "Debit and credit are equal.".to_owned(),
+        Err(e) => format!("Debit and credit cannot be compared: {e}"),
     }
 }

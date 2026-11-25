@@ -35,13 +35,19 @@ const SINGLE_COLS: [Col; 4] = [
     Col::num("Amount", 170.0),
 ];
 
-/// The double-entry table: each line has its own Dr / Cr switch and shows the ledger's balance.
-const DOUBLE_COLS: [Col; 4] = [
-    Col::text("Dr / Cr", 80.0),
+/// The double-entry table (index.html:2058): each line has its own Dr / Cr, which a click on it
+/// switches, and the group of its ledger.
+const DOUBLE_COLS: [Col; 5] = [
+    Col::text("#", 36.0),
     Col::rest("Ledger"),
-    Col::num("Balance", 170.0),
-    Col::num("Amount", 220.0),
+    Col::text("Dr / Cr", 70.0),
+    Col::text("Group", 200.0),
+    Col::num("Amount", 170.0),
 ];
+
+/// What the empty line at the end of the list says (index.html:2060, `Next ledger, or Enter on
+/// empty to finish`).
+const NEXT_LEDGER_HINT: &str = "Next ledger, or Enter on empty to finish";
 
 /// Room kept for the "= amount" aid beside a typed expression.
 const AID_WIDTH: f32 = 96.0;
@@ -228,6 +234,14 @@ fn masked_account(number: &str) -> String {
     format!("XXXX {tail}")
 }
 
+/// The box at the right of the foot: rows, then the total row.
+struct FootBox {
+    rows: Vec<(String, String)>,
+    label: String,
+    value: String,
+    bad: bool,
+}
+
 /// The titles of the open list.
 const LIST_CAPTION: &str = "Ledgers";
 
@@ -409,71 +423,62 @@ impl VoucherEntryScreen {
             Field::Bill(_) => self.panel.map(|p| p.row),
             Field::Date | Field::Mode | Field::Narration => None,
         };
-        let balances = &self.balances;
         let rows = &mut self.draft.rows;
         let count = rows.len().saturating_sub(skip);
+        // The list always ends with the empty line that says how to finish, as the mock draws it:
+        // a drawn hint when the last line is filled, or the last line's own field when it is empty.
+        let hint_row = count > 0 && rows.last().is_some_and(|r| !r.is_blank());
         let cols: &[Col] = if single { &SINGLE_COLS } else { &DOUBLE_COLS };
         let rects = sheet::lines(
             ui,
             cols,
-            count,
+            count.saturating_add(usize::from(hint_row)),
             |r| focused_row == Some(r.saturating_add(skip)),
             |ui, r, c| {
                 let i = r.saturating_add(skip);
                 let Some(row) = rows.get_mut(i) else {
+                    if c == 0 {
+                        cell_text(ui, &r.saturating_add(1).to_string());
+                    } else if c == 1 {
+                        let t = tokens(ui);
+                        ui.label(para_text(NEXT_LEDGER_HINT, TEXT_BODY, t.text_3));
+                    }
                     return;
+                };
+                let ledger_hint = if r >= 1 {
+                    NEXT_LEDGER_HINT
+                } else {
+                    "Ledger: type to search"
                 };
                 if single {
                     match c {
                         0 => cell_text(ui, &i.to_string()),
-                        1 => {
-                            ledger_field(
-                                ui,
-                                cx,
-                                base,
-                                i,
-                                row,
-                                "Ledger: type to search",
-                                Look::Cell,
-                            );
-                        }
+                        1 => ledger_field(ui, cx, base, i, row, ledger_hint, Look::Cell),
                         2 => cell_text(ui, group_name(masters, row).as_deref().unwrap_or("")),
                         3 => amount_field(ui, cx, base, i, row),
                         _ => {}
                     }
                 } else {
                     match c {
-                        0 => {
-                            if button(ui, side_label(row.side), None, ButtonKind::Secondary)
-                                .clicked()
-                            {
+                        0 => cell_text(ui, &r.saturating_add(1).to_string()),
+                        1 => ledger_field(ui, cx, base, i, row, ledger_hint, Look::Cell),
+                        2 => {
+                            // Plain text like the mock's, still the switch: a click flips the side.
+                            let t = tokens(ui);
+                            let side = ui.add(
+                                egui::Label::new(para_text(
+                                    side_label(row.side),
+                                    TEXT_BODY,
+                                    t.text_2,
+                                ))
+                                .sense(egui::Sense::click()),
+                            );
+                            if side.on_hover_text("Click to switch Dr and Cr").clicked() {
                                 cx.events.push(UiEvent::Side(i));
                             }
                         }
-                        1 => {
-                            ledger_field(
-                                ui,
-                                cx,
-                                base,
-                                i,
-                                row,
-                                "Ledger: type to search",
-                                Look::Cell,
-                            );
-                        }
-                        2 => {
-                            let text = match &row.ledger {
-                                Some(LedgerRef::Chosen(id)) => {
-                                    balances.get(id).copied().map(format_signed)
-                                }
-                                Some(LedgerRef::Pending(_)) => {
-                                    Some("new ledger, not created yet".to_owned())
-                                }
-                                None => None,
-                            };
-                            cell_text(ui, text.as_deref().unwrap_or(""));
-                        }
-                        3 => amount_field(ui, cx, base, i, row),
+                        3 => cell_text(ui, group_name(masters, row).as_deref().unwrap_or("")),
+                        4 => amount_field(ui, cx, base, i, row),
                         _ => {}
                     }
                 }
@@ -497,7 +502,7 @@ impl VoucherEntryScreen {
             name: "Narration",
             hint: "Optional",
         };
-        let box_rows = self.balance_box(masters);
+        let foot_box = self.foot_box(masters);
         let overdraft = self.overdraft_note(masters);
         let mut narration = None;
         sheet::foot(ui, |left, right| {
@@ -526,14 +531,15 @@ impl VoucherEntryScreen {
                 note(left, NoteKind::Warn, text);
             }
             self.draw_notice(left);
-            if let Some((rows, after)) = &box_rows {
+            if let Some(foot) = &foot_box {
                 sheet::taxbox(
                     right,
-                    rows,
+                    &foot.rows,
                     Some(&Total {
-                        label: "Balance after",
-                        value: after,
+                        label: &foot.label,
+                        value: &foot.value,
                         tag: Some(ProvKind::Engine),
+                        bad: foot.bad,
                     }),
                 );
             }
@@ -543,10 +549,81 @@ impl VoucherEntryScreen {
         }
     }
 
-    /// The box at the right of a single-entry voucher's foot (index.html:1409): the total paid out
-    /// or received, the account's balance now and, as the total row, its balance after saving, the
-    /// engine's own. `None` until the engine has answered for the voucher as it stands.
-    fn balance_box(&self, masters: &Masters) -> Option<(Vec<(String, String)>, String)> {
+    /// The box at the right of the foot. A single-entry voucher (index.html:1409) shows the total
+    /// paid out or received, the account's balance now and, as the total row, its balance after
+    /// saving, the engine's own. A journal (index.html:2065) shows the debit and credit totals and
+    /// their difference, from the model's totals of the lines. A contra (index.html:2081) shows the
+    /// transfer and the credited account's balance after. `None` until there is something to show.
+    fn foot_box(&self, masters: &Masters) -> Option<FootBox> {
+        match self.draft.kind {
+            EntryKind::Payment | EntryKind::Receipt => self.balance_box(masters),
+            EntryKind::Contra => self.contra_box(masters),
+            EntryKind::Journal | EntryKind::Memorandum | EntryKind::ReversingJournal => {
+                self.totals_box(masters)
+            }
+        }
+    }
+
+    /// The journal's foot box: "Debit total", "Credit total" and the difference. While a line is
+    /// incomplete the lines cannot be totalled, and the box says "Not computed" rather than a
+    /// figure.
+    fn totals_box(&self, masters: &Masters) -> Option<FootBox> {
+        if self.draft.rows.iter().all(DraftRow::is_blank) {
+            return None;
+        }
+        let not_computed = || "Not computed".to_owned();
+        let totals = self
+            .draft
+            .build_lines(masters, self.fy, self.books_begin)
+            .ok()
+            .and_then(|built| match built {
+                ledgerly_core::Outcome::Value((_, lines)) => {
+                    ledgerly_model::validate::LineTotals::of(&lines).ok()
+                }
+                ledgerly_core::Outcome::Unsupported(_) => None,
+            });
+        let Some(totals) = totals else {
+            return Some(FootBox {
+                rows: vec![
+                    ("Debit total".to_owned(), not_computed()),
+                    ("Credit total".to_owned(), not_computed()),
+                ],
+                label: "Difference".to_owned(),
+                value: not_computed(),
+                bad: false,
+            });
+        };
+        let difference = totals.difference().ok()?;
+        Some(FootBox {
+            rows: vec![
+                ("Debit total".to_owned(), format_amount(totals.debit)),
+                ("Credit total".to_owned(), format_amount(totals.credit)),
+            ],
+            label: "Difference".to_owned(),
+            value: format_amount(difference.map_or(ledgerly_core::Paise::ZERO, |d| d.amount)),
+            bad: difference.is_some(),
+        })
+    }
+
+    /// The contra's foot box: the amount moved and what the credited account holds after it, the
+    /// engine's figure. `None` until the engine has answered for the voucher as it stands.
+    fn contra_box(&self, masters: &Masters) -> Option<FootBox> {
+        let (account, voucher) = self.balance_request(masters)?;
+        let BalanceShown::Change(change) = self.extras.balance_for(account, &voucher)? else {
+            return None;
+        };
+        let totals = ledgerly_model::validate::LineTotals::of(&voucher.ledger_lines).ok()?;
+        let name = masters.ledgers.get(&account)?.name.clone();
+        Some(FootBox {
+            rows: vec![("Transfer".to_owned(), format_amount(totals.debit))],
+            label: format!("{name} after"),
+            value: format_balance(change.after),
+            bad: change.after.side == ledgerly_core::DrCr::Cr && !change.after.amount.is_zero(),
+        })
+    }
+
+    /// The payment or receipt's foot box (index.html:1409).
+    fn balance_box(&self, masters: &Masters) -> Option<FootBox> {
         let (account, voucher) = self.balance_request(masters)?;
         let BalanceShown::Change(change) = self.extras.balance_for(account, &voucher)? else {
             return None;
@@ -560,13 +637,16 @@ impl VoucherEntryScreen {
             | EntryKind::Memorandum
             | EntryKind::ReversingJournal => return None,
         };
-        Some((
-            vec![
+        Some(FootBox {
+            rows: vec![
                 (label.to_owned(), format_amount(total)),
                 ("Balance now".to_owned(), format_balance(change.now)),
             ],
-            format_balance(change.after),
-        ))
+            label: "Balance after".to_owned(),
+            value: format_balance(change.after),
+            // Below zero is drawn in the error colour, as the mock's overdraft state draws it.
+            bad: change.after.side == ledgerly_core::DrCr::Cr && !change.after.amount.is_zero(),
+        })
     }
 
     /// The warning of `payScreen`'s overdraft state (index.html:1407): the account would be below
@@ -669,6 +749,10 @@ impl VoucherEntryScreen {
                 "Warning: discard this voucher? Press Y to discard, N to keep it.",
             );
         }
+        let differ = matches!(
+            self.draft.kind,
+            EntryKind::Journal | EntryKind::Memorandum | EntryKind::ReversingJournal
+        ) && self.totals_box(masters).is_some_and(|b| b.bad);
         let mut events = Vec::new();
         let mut anchor = None;
         let mut save_clicked = false;
@@ -677,8 +761,12 @@ impl VoucherEntryScreen {
         let want = self.focus_pending.then_some(self.focus);
         ui.add_enabled_ui(enabled, |ui| {
             page_head_numbered(ui, &title, number.as_deref(), subtitle.as_deref(), |ui| {
-                save_clicked =
-                    button(ui, "Save", save_key.as_deref(), ButtonKind::Primary).clicked();
+                // The mock draws Save disabled while the debits and credits differ.
+                save_clicked = ui
+                    .add_enabled_ui(!differ, |ui| {
+                        button(ui, "Save", save_key.as_deref(), ButtonKind::Primary).clicked()
+                    })
+                    .inner;
             });
             let mut cx = Cx {
                 want,
@@ -709,8 +797,11 @@ impl VoucherEntryScreen {
         if save_clicked {
             self.save(masters);
         }
+        let before = self.focus;
         self.apply_events(masters, events);
-        if !keys.is_empty() || self.focus_pending {
+        // A click that moved the keyboard changes what the list under the field shows; the frame
+        // that saw the click has already drawn the old list.
+        if !keys.is_empty() || self.focus_pending || self.focus != before {
             ui.ctx().request_repaint();
         }
         action

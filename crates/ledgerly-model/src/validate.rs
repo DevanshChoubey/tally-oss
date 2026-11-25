@@ -130,19 +130,64 @@ fn check_party(v: &Voucher, base: BaseVoucherKind, masters: &Masters) -> Result<
     Ok(())
 }
 
-fn check_balance(v: &Voucher) -> Result<(), VoucherError> {
-    let mut dr = Paise::ZERO;
-    let mut cr = Paise::ZERO;
-    for line in &v.ledger_lines {
-        match line.amount.side {
-            ledgerly_core::DrCr::Dr => dr = dr.checked_add(line.amount.amount)?,
-            ledgerly_core::DrCr::Cr => cr = cr.checked_add(line.amount.amount)?,
+/// The debit and credit totals of a set of ledger lines.
+///
+/// The same sums `validate_voucher` checks for balance (spec 5 invariant 1); a screen that shows
+/// a voucher's totals asks here instead of adding lines itself (rule C4).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LineTotals {
+    /// Total of the debit lines.
+    pub debit: Paise,
+    /// Total of the credit lines.
+    pub credit: Paise,
+}
+
+impl LineTotals {
+    /// Totals the lines per side.
+    ///
+    /// # Errors
+    /// [`VoucherError::Money`] when a total overflows; never a wrapped figure.
+    pub fn of(lines: &[LedgerLine]) -> Result<LineTotals, VoucherError> {
+        let mut debit = Paise::ZERO;
+        let mut credit = Paise::ZERO;
+        for line in lines {
+            match line.amount.side {
+                ledgerly_core::DrCr::Dr => debit = debit.checked_add(line.amount.amount)?,
+                ledgerly_core::DrCr::Cr => credit = credit.checked_add(line.amount.amount)?,
+            }
         }
+        Ok(LineTotals { debit, credit })
     }
-    if dr == cr {
+
+    /// How far the sides are apart: the amount and the side that has more. `None` when they are
+    /// equal.
+    ///
+    /// # Errors
+    /// [`VoucherError::Money`] from the checked subtraction.
+    pub fn difference(&self) -> Result<Option<SignedAmount>, VoucherError> {
+        Ok(match self.debit.cmp(&self.credit) {
+            std::cmp::Ordering::Equal => None,
+            std::cmp::Ordering::Greater => Some(SignedAmount {
+                amount: self.debit.checked_sub(self.credit)?,
+                side: ledgerly_core::DrCr::Dr,
+            }),
+            std::cmp::Ordering::Less => Some(SignedAmount {
+                amount: self.credit.checked_sub(self.debit)?,
+                side: ledgerly_core::DrCr::Cr,
+            }),
+        })
+    }
+}
+
+fn check_balance(v: &Voucher) -> Result<(), VoucherError> {
+    let totals = LineTotals::of(&v.ledger_lines)?;
+    if totals.debit == totals.credit {
         Ok(())
     } else {
-        Err(VoucherError::Unbalanced { dr, cr })
+        Err(VoucherError::Unbalanced {
+            dr: totals.debit,
+            cr: totals.credit,
+        })
     }
 }
 

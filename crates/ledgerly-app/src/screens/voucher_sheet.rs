@@ -489,6 +489,9 @@ pub struct Total<'a> {
     pub value: &'a str,
     /// The provenance tag after the label.
     pub tag: Option<ProvKind>,
+    /// The amount is drawn in the error colour (a difference that blocks saving, a balance below
+    /// zero).
+    pub bad: bool,
 }
 
 /// The tax box (`.taxbox`): `rows` as (label, amount), then the `total` row when there is one.
@@ -519,7 +522,8 @@ pub fn taxbox(ui: &mut Ui, rows: &[(String, String)], total: Option<&Total<'_>>)
                                 prov(ui, tag);
                             }
                             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                                ui.label(RichText::new(total.value).font(h2).color(t.text));
+                                let ink = if total.bad { t.bad } else { t.text };
+                                ui.label(RichText::new(total.value).font(h2).color(ink));
                             });
                         });
                     });
