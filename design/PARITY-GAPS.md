@@ -597,24 +597,53 @@ Captures: `purchase.*`, `credit-note.*`, `debit-note.*` and `journal.*` (each `d
   228.40; credit note of 10 brass nozzle sets at 505.00 against SI/0412) and the engine gives the
   mock's figures: taxable 43,340.00, IGST 7,801.20, round off -0.20, total 51,141.00 (derived:
   20,500 + 22,840 = 43,340; 18% = 7,801.20; 51,141.20 rounds to 51,141.00); credit note 5,050.00
-  + 454.50 + 454.50 = 5,959.00. Voucher numbers differ: PB/0145 where the mock reads PB/0146,
-  CN/0001 where it reads CN/0007 (the sample has no earlier notes).
+  + 454.50 + 454.50 = 5,959.00. Voucher numbers now agree: the mock reads PB/0145 and CN/0001
+  (changed in s12-mock-fixes).
 - **gap (s12): the item-invoice layout** is still the sales invoice's: a Date field and Place of
   supply box on the head, "Item invoice" and "More details" buttons where the mock has "Bill
   photo Alt+O", a Unit column, and the extra place-of-supply
-  note and the balance line under the narration. The mock's purchase shows "29 Karnataka,
-  inter-state" as the place; with place 29 the engine (supplier in 29) would charge CGST and SGST,
-  so the mock's label looks wrong and ours shows 27 Maharashtra, with IGST, like the mock's
-  tax. Not changed to the mock's layout in this round.
-- **STOPPED (s12): `credit-note.validation-error`.** The mock's error is "70 sets returned, but
-  SI/0412 has 67 sets". The engine has no rule comparing a return with the invoice it names, so
-  no honest capture of it exists; ours shows the app's own refusal of an item with no quantity.
-  Needs an engine rule (the return line linked to the invoice line, `docs/interface-requests.md`).
-- **STOPPED (s12): `debit-note.default` and `debit-note.validation-error`.** The mock returns 2
-  bundles of "MS angles" against bill NST/1145 (2,000.00 + 360.00 = 2,360.00). The sample company
-  has no such item and NST/1145 is a taxed purchase with no item lines, so the same input cannot
-  be entered; the validation error needs a bill-line link the engine does not have. The
-  debit-note booking and the rule 53 footer sentence are unconfirmed and are not drawn.
+  note and the balance line under the narration. The mock's purchase read "29 Karnataka, inter-state" and now reads "27 Maharashtra, inter-state"
+  (s12-mock-fixes), as ours does. The layout is still not the mock's.
+- **mock changed (s12-mock-fixes): the credit and debit note states now use data and refusals the
+  app can produce.** `credit-note.validation-error` and `debit-note.validation-error` show the app's
+  refusal of an item line with no quantity ("Line 2: quantity: type a number.", tax and total Not
+  computed) instead of "70 returned against 67" and "no MS angles line", which no engine rule
+  gives. `debit-note.default` is DN/0001 to Rupa Polymers against its bill RP/5398 (the sample's only
+  purchase with item lines): 2 HDPE pipe coils at 2,050.00 = 4,100.00, IGST 18% 738.00, total
+  4,838.00 (derived by hand in the mock's comment). The app captures `credit-note.*` and
+  `debit-note.*` must be retaken with this input (the debit note's party is now Rupa Polymers, not
+  Nilgiri Steel). The "input tax reversed" and rule 53 sentences were removed from the debit note:
+  the commentary read on 2026-11-25 says nothing on a buyer's reversal.
+
+## Mock fixes (s12-mock-fixes, 2026-11-25)
+
+- **trial-balance.default:** rows are the sample's ledgers, group names as the engine's, CGST, SGST
+  and IGST as one ledger each (IGST 9,150.00 Dr: output 20,370.00 less input 29,520.00); total
+  1,25,33,742.30 (the mock said 1,25,54,112.30). Still different: the engine's balance date is
+  20 Nov, the mock's 21 Nov (no voucher falls between); the row order.
+- **stock-summary.provisional, balance-sheet.provisional, profit-and-loss.provisional:** the mock
+  used a typed -30 that no books could give ("-30 after the sales on record": the sales leave 144).
+  They now use the app's capture scenario: a sale of 174 on 19 Nov (item 30 below zero), a purchase
+  of 100 on 20 Nov, closing 70, value 70 x 470.00 = 32,900.00 kept and marked Provisional; total
+  closing stock 13,90,759.00.
+- **audit.default, audit.unsupported:** the edit log has the engine's columns and one line per posted
+  voucher (seq 135 to 148, "user 1", "assistant assistant for user 1" as the engine labels them),
+  period 1 to 20 Nov. Seq comes from the app's capture (RC/0208 is event 109) plus the seed order.
+  `audit.unsupported` keeps its id but shows the engine's empty EditsAfterLock table.
+- **profit-and-loss.default, .provisional, new .detailed:** trading account then profit and loss
+  (Opening Stock 9,12,000, Purchase Accounts 52,94,000, Direct Expenses 1,84,000, Gross Profit c/o
+  36,28,764 | Sales Accounts 85,93,225, Closing Stock 14,25,539; Indirect Expenses 19,50,594.30,
+  Nett Profit 16,96,569.70 | Gross Profit b/f, Indirect Incomes 18,400), hand-checked in the mock.
+  The help page read (https://help.tallysolutions.com/profit-and-loss-statement-tally/, 2026-11-25)
+  documents the horizontal form, the gross profit option and a detailed view, not the group order
+  (taken from the owner's brief). Detailed is Alt+F1, as on the balance sheet, because Alt+F5 is the
+  debit note key in the app.
+- **voucher numbers:** PB/0145, CN/0001, DN/0001 (and the bill photo's accepted purchase PB/0145,
+  was PB/0147). **Party GSTINs** in the mock are now the sample's (they differed by digits).
+- **gap: the mock's day book still marks PY/0316 as an AI draft ("Bank rule")**; the sample has it
+  as a typed voucher by Rohan, so the audit edit log says "user 2" there.
+- **not done: `import.imported`** is not on this branch (it is in s12/mock-coverage); its wording
+  must read "Imported from the other program's company ..." there.
 
 ## Sales invoice (round of 2026-11-23)
 

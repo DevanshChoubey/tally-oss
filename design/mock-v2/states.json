@@ -249,7 +249,7 @@
    "kind": "happy",
    "hash": "screen=purchase-bill&state=accepted",
    "title": "Bill photo, accepted",
-   "description": "The draft is posted as PB/0147 after the human accepted it; the audit note records the AI source."
+   "description": "The draft is posted as PB/0145 after the human accepted it; the audit note records the AI source."
   },
   {
    "id": "quick-entry.proposal",
@@ -851,7 +851,7 @@
    "kind": "happy",
    "hash": "screen=purchase&state=default",
    "title": "Purchase, typed by hand",
-   "description": "F9 purchase with no bill photo: supplier bill, item lines and IGST computed by the engine (Nilgiri, Karnataka, inter-state)."
+   "description": "F9 purchase with no bill photo: supplier bill, item lines and IGST computed by the engine (Nilgiri in Karnataka, place of supply Maharashtra, so IGST)."
   },
   {
    "id": "purchase.validation-error",
@@ -871,22 +871,22 @@
    "id": "credit-note.validation-error",
    "kind": "validation-error",
    "hash": "screen=credit-note&state=validation-error",
-   "title": "Credit note, more than invoiced",
-   "description": "70 sets returned against 67 invoiced: a return cannot exceed the invoice, and the line says so."
+   "title": "Credit note, quantity missing",
+   "description": "A line with an item and no quantity: the note cannot be saved, the line says so and the tax stays Not computed."
   },
   {
    "id": "debit-note.default",
    "kind": "happy",
    "hash": "screen=debit-note&state=default",
-   "title": "Debit note against NST/1145",
-   "description": "Purchase return to Nilgiri Steel: 2 bundles, IGST reversed on the purchase bill, Accept posts the note."
+   "title": "Debit note against RP/5398",
+   "description": "Purchase return to Rupa Polymers: 2 coils of HDPE pipe at the bill's rate, IGST 18% computed by the engine, note number DN/0001."
   },
   {
    "id": "debit-note.validation-error",
    "kind": "validation-error",
    "hash": "screen=debit-note&state=validation-error",
-   "title": "Debit note, return not on the bill",
-   "description": "The return names MS angles, but the bill has no such line to link to; the note refuses to link."
+   "title": "Debit note, quantity missing",
+   "description": "A line with an item and no quantity: the note cannot be saved, the line says so and the tax stays Not computed."
   },
   {
    "id": "journal.default",
@@ -935,14 +935,21 @@
    "kind": "happy",
    "hash": "screen=profit-and-loss&state=default",
    "title": "Profit and loss",
-   "description": "Income and expenses from the books and the engine's closing stock; net profit equals the balance sheet's profit to date."
+   "description": "Trading account (opening stock, purchases, direct expenses, gross profit against sales and closing stock) then profit and loss, by group; nett profit equals the balance sheet's profit to date."
   },
   {
    "id": "profit-and-loss.provisional",
    "kind": "error",
    "hash": "screen=profit-and-loss&state=provisional",
    "title": "Profit and loss, provisional stock",
-   "description": "Negative stock makes the closing stock Provisional; the figure is marked and explained with a way to fix it."
+   "description": "A quantity below zero makes the closing stock Provisional; the figure is kept and marked, with the reason and a way to fix it."
+  },
+  {
+   "id": "profit-and-loss.detailed",
+   "kind": "happy",
+   "hash": "screen=profit-and-loss&state=detailed",
+   "title": "Profit and loss, detailed",
+   "description": "Alt+F1 shows the ledgers under each group of the trading account and the profit and loss account."
   },
   {
    "id": "profit-and-loss.print-preview",
@@ -970,7 +977,7 @@
    "kind": "happy",
    "hash": "screen=trial-balance&state=default",
    "title": "Trial balance",
-   "description": "Every ledger with a balance, debit and credit columns totalling the same, checked by the engine."
+   "description": "The sample company's ledgers with a balance, debit and credit columns totalling the same, checked by the engine."
   },
   {
    "id": "outstanding.receivables",
@@ -998,14 +1005,14 @@
    "kind": "error",
    "hash": "screen=stock-summary&state=provisional",
    "title": "Stock summary, provisional item",
-   "description": "Steel pickaxe shows minus 30 nos: its value is marked Provisional and counted as zero."
+   "description": "Steel pickaxe went 30 nos below zero on 19 Nov and is back to 70: its value is kept and marked Provisional, and so is the total."
   },
   {
    "id": "audit.default",
    "kind": "happy",
    "hash": "screen=audit&state=default",
    "title": "Audit, edit log",
-   "description": "Who entered each November voucher and whether an AI draft was accepted; read-only."
+   "description": "The engine's edit log for 1 to 20 Nov: one line per posted voucher with Seq, Date, Time, User, Action, Object, Reason, Field, Before, After; read-only."
   },
   {
    "id": "audit.integrity",
@@ -1016,10 +1023,10 @@
   },
   {
    "id": "audit.unsupported",
-   "kind": "error",
+   "kind": "empty",
    "hash": "screen=audit&state=unsupported",
    "title": "Audit, edits after lock",
-   "description": "Not supported in this build: the report says so and gives the way to check instead."
+   "description": "The engine's edits-after-lock table, empty: every voucher was posted before the books were locked, so none is listed."
   }
  ]
 }

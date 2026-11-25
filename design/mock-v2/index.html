@@ -400,7 +400,7 @@ mark{background:var(--accent-soft);color:var(--accent-ink);border-radius:2px;pad
  {"id":"purchase-bill.offline-ai","kind":"offline-ai","hash":"screen=purchase-bill&state=offline-ai","title":"Bill photo, AI off","description":"Bill reading is off for this company; the purchase form stays available with the image beside it."},
  {"id":"purchase-bill.cloud-consent","kind":"low-confidence","hash":"screen=purchase-bill&state=cloud-consent","title":"Bill photo, cloud consent","description":"Local reading was weak; the user may send this one image to their own cloud key, with redaction listed."},
  {"id":"purchase-bill.error","kind":"error","hash":"screen=purchase-bill&state=error","title":"Bill photo, unreadable file","description":"The file is a password-protected PDF; the error says what failed and what to do."},
- {"id":"purchase-bill.accepted","kind":"happy","hash":"screen=purchase-bill&state=accepted","title":"Bill photo, accepted","description":"The draft is posted as PB/0147 after the human accepted it; the audit note records the AI source."},
+ {"id":"purchase-bill.accepted","kind":"happy","hash":"screen=purchase-bill&state=accepted","title":"Bill photo, accepted","description":"The draft is posted as PB/0145 after the human accepted it; the audit note records the AI source."},
  {"id":"quick-entry.proposal","kind":"happy","hash":"screen=quick-entry&state=proposal","title":"Plain-words entry, draft payment","description":"'paid rent 25k to Sharma Properties from Saptagiri' becomes a draft payment with each value traced."},
  {"id":"quick-entry.hinglish","kind":"happy","hash":"screen=quick-entry&state=hinglish","title":"Plain-words entry, Hinglish","description":"Hinglish text becomes a draft receipt against an open bill and links the matching bank line."},
  {"id":"quick-entry.unknown-ledger","kind":"validation-error","hash":"screen=quick-entry&state=unknown-ledger","title":"Plain-words entry, unknown name","description":"No ledger named 'Ramesh': the draft refuses to invent one and asks to pick or create."},
@@ -486,31 +486,32 @@ mark{background:var(--accent-soft);color:var(--accent-ink);border-radius:2px;pad
 {"id":"import.failed","kind":"error","hash":"screen=import&state=failed","title":"Import, failed with a reason","description":"The other app could not be read; the error names the company, the host and port, and the cause. Nothing is written."},
 {"id":"setup.new-tab","kind":"happy","hash":"screen=setup&state=welcome&tabs=2","title":"Cold start, new tab","description":"Ctrl+T with no company open opens a second Company setup tab; the tab strip shows both and New tab and Close tab."},
 {"id":"setup.rail","kind":"happy","hash":"screen=setup&state=welcome&rail=1","title":"Cold start, sidebar collapsed to the rail","description":"Ctrl+\\ folds the sidebar to its 60 px rail: icons only, labels hidden."},
- {"id": "purchase.default", "kind": "happy", "hash": "screen=purchase&state=default", "title": "Purchase, typed by hand", "description": "F9 purchase with no bill photo: supplier bill, item lines and IGST computed by the engine (Nilgiri, Karnataka, inter-state)."},
+ {"id": "purchase.default", "kind": "happy", "hash": "screen=purchase&state=default", "title": "Purchase, typed by hand", "description": "F9 purchase with no bill photo: supplier bill, item lines and IGST computed by the engine (Nilgiri in Karnataka, place of supply Maharashtra, so IGST)."},
  {"id": "purchase.validation-error", "kind": "validation-error", "hash": "screen=purchase&state=validation-error", "title": "Purchase, validation errors", "description": "A missing quantity and an unknown item block saving; each error names its line and the fix."},
  {"id": "credit-note.default", "kind": "happy", "hash": "screen=credit-note&state=default", "title": "Credit note against SI/0412", "description": "Sales return of 10 sets of brass nozzles to Shree Ganesh Traders: CGST and SGST reversed, reference to the invoice kept."},
- {"id": "credit-note.validation-error", "kind": "validation-error", "hash": "screen=credit-note&state=validation-error", "title": "Credit note, more than invoiced", "description": "70 sets returned against 67 invoiced: a return cannot exceed the invoice, and the line says so."},
- {"id": "debit-note.default", "kind": "happy", "hash": "screen=debit-note&state=default", "title": "Debit note against NST/1145", "description": "Purchase return to Nilgiri Steel: 2 bundles, IGST reversed on the purchase bill, Accept posts the note."},
- {"id": "debit-note.validation-error", "kind": "validation-error", "hash": "screen=debit-note&state=validation-error", "title": "Debit note, return not on the bill", "description": "The return names MS angles, but the bill has no such line to link to; the note refuses to link."},
+ {"id": "credit-note.validation-error", "kind": "validation-error", "hash": "screen=credit-note&state=validation-error", "title": "Credit note, quantity missing", "description": "A line with an item and no quantity: the note cannot be saved, the line says so and the tax stays Not computed."},
+ {"id": "debit-note.default", "kind": "happy", "hash": "screen=debit-note&state=default", "title": "Debit note against RP/5398", "description": "Purchase return to Rupa Polymers: 2 coils of HDPE pipe at the bill's rate, IGST 18% computed by the engine, note number DN/0001."},
+ {"id": "debit-note.validation-error", "kind": "validation-error", "hash": "screen=debit-note&state=validation-error", "title": "Debit note, quantity missing", "description": "A line with an item and no quantity: the note cannot be saved, the line says so and the tax stays Not computed."},
  {"id": "journal.default", "kind": "happy", "hash": "screen=journal&state=default", "title": "Journal, reclassify freight", "description": "JV/0033 moves freight paid from Purchases to Freight inward: debits and credits both 1,840.00."},
  {"id": "journal.validation-error", "kind": "validation-error", "hash": "screen=journal&state=validation-error", "title": "Journal, does not balance", "description": "Debits 1,840.00 against credits 1,480.00: the difference is shown and Save stays blocked."},
  {"id": "contra.default", "kind": "happy", "hash": "screen=contra&state=default", "title": "Contra, cash to bank", "description": "CT/0022: 30,000.00 cash paid into the Saptagiri account; the cash balance after saving comes from the engine."},
  {"id": "contra.validation-error", "kind": "validation-error", "hash": "screen=contra&state=validation-error", "title": "Contra, no account and zero amount", "description": "Neither account is picked and the amount is zero: both errors shown, Save blocked."},
  {"id": "bank-chooser.default", "kind": "happy", "hash": "screen=bank-chooser&state=default", "title": "Choose bank account", "description": "Two bank accounts: balances per books and whether a statement is imported, with Enter to open the one selected."},
  {"id": "start.recent", "kind": "happy", "hash": "screen=start&state=recent", "title": "Start, recent companies", "description": "The app opens with the recent company list (Godavari) and the create, import and open actions."},
- {"id": "profit-and-loss.default", "kind": "happy", "hash": "screen=profit-and-loss&state=default", "title": "Profit and loss", "description": "Income and expenses from the books and the engine's closing stock; net profit equals the balance sheet's profit to date."},
- {"id": "profit-and-loss.provisional", "kind": "error", "hash": "screen=profit-and-loss&state=provisional", "title": "Profit and loss, provisional stock", "description": "Negative stock makes the closing stock Provisional; the figure is marked and explained with a way to fix it."},
+ {"id": "profit-and-loss.default", "kind": "happy", "hash": "screen=profit-and-loss&state=default", "title": "Profit and loss", "description": "Trading account (opening stock, purchases, direct expenses, gross profit against sales and closing stock) then profit and loss, by group; nett profit equals the balance sheet's profit to date."},
+ {"id": "profit-and-loss.provisional", "kind": "error", "hash": "screen=profit-and-loss&state=provisional", "title": "Profit and loss, provisional stock", "description": "A quantity below zero makes the closing stock Provisional; the figure is kept and marked, with the reason and a way to fix it."},
+ {"id": "profit-and-loss.detailed", "kind": "happy", "hash": "screen=profit-and-loss&state=detailed", "title": "Profit and loss, detailed", "description": "Alt+F1 shows the ledgers under each group of the trading account and the profit and loss account."},
  {"id": "profit-and-loss.print-preview", "kind": "happy", "hash": "screen=profit-and-loss&state=print-preview", "title": "Profit and loss, print preview", "description": "Ctrl+P shows the page as it will print, with Save as PDF; paper printing is not offered."},
  {"id": "profit-and-loss.print-saved", "kind": "happy", "hash": "screen=profit-and-loss&state=print-saved", "title": "Profit and loss, PDF saved", "description": "The PDF is written and the screen says where, with an Open file action."},
  {"id": "profit-and-loss.print-failed", "kind": "error", "hash": "screen=profit-and-loss&state=print-failed", "title": "Profit and loss, PDF not saved", "description": "The file is open in another program: nothing is written, and the screen says so and how to retry."},
- {"id": "trial-balance.default", "kind": "happy", "hash": "screen=trial-balance&state=default", "title": "Trial balance", "description": "Every ledger with a balance, debit and credit columns totalling the same, checked by the engine."},
+ {"id": "trial-balance.default", "kind": "happy", "hash": "screen=trial-balance&state=default", "title": "Trial balance", "description": "The sample company's ledgers with a balance, debit and credit columns totalling the same, checked by the engine."},
  {"id": "outstanding.receivables", "kind": "happy", "hash": "screen=outstanding&state=receivables", "title": "Bills receivable", "description": "Open customer bills with bill date, due date from credit days, open amount and overdue days."},
  {"id": "outstanding.payables", "kind": "happy", "hash": "screen=outstanding&state=payables", "title": "Bills payable", "description": "Open supplier bills, including the Kaveri and Nilgiri bills, with due dates and overdue days."},
  {"id": "stock-summary.default", "kind": "happy", "hash": "screen=stock-summary&state=default", "title": "Stock summary", "description": "Each item with quantity from the stock engine, cost and value; the total is the balance sheet's closing stock."},
- {"id": "stock-summary.provisional", "kind": "error", "hash": "screen=stock-summary&state=provisional", "title": "Stock summary, provisional item", "description": "Steel pickaxe shows minus 30 nos: its value is marked Provisional and counted as zero."},
- {"id": "audit.default", "kind": "happy", "hash": "screen=audit&state=default", "title": "Audit, edit log", "description": "Who entered each November voucher and whether an AI draft was accepted; read-only."},
+ {"id": "stock-summary.provisional", "kind": "error", "hash": "screen=stock-summary&state=provisional", "title": "Stock summary, provisional item", "description": "Steel pickaxe went 30 nos below zero on 19 Nov and is back to 70: its value is kept and marked Provisional, and so is the total."},
+ {"id": "audit.default", "kind": "happy", "hash": "screen=audit&state=default", "title": "Audit, edit log", "description": "The engine's edit log for 1 to 20 Nov: one line per posted voucher with Seq, Date, Time, User, Action, Object, Reason, Field, Before, After; read-only."},
  {"id": "audit.integrity", "kind": "happy", "hash": "screen=audit&state=integrity", "title": "Audit, integrity certificate", "description": "Vouchers checked against the log and the count of broken hash links."},
- {"id": "audit.unsupported", "kind": "error", "hash": "screen=audit&state=unsupported", "title": "Audit, edits after lock", "description": "Not supported in this build: the report says so and gives the way to check instead."}
+ {"id": "audit.unsupported", "kind": "empty", "hash": "screen=audit&state=unsupported", "title": "Audit, edits after lock", "description": "The engine's edits-after-lock table, empty: every voucher was posted before the books were locked, so none is listed."}
 ],
 "transitions": [
  {"id":"screen-push","title":"Screen push","kind":"slide","start":"screen=home&state=default","end":"screen=balance-sheet&state=default","render":"end","targets":[{"selector":"#stage","keyframes":"push-in"}],"duration":"--dur-base","duration_ms":180,"easing":"--ease-out","frames_ms":[0,45,90,135,180]},
@@ -573,20 +574,20 @@ const LEDGERS = [
  ['ananya','Ananya Kulkarni, capital','capital',-R(1500000)],
  ['rohan','Rohan Deshpande, capital','capital',-R(500000)],
  ['mulaloan','Mula Valley Co-op Bank, term loan','secured',-R(840000)],
- ['kaveri','Kaveri Packaging Pvt Ltd','creditors',-R(214300),{gstin:'29ZZZZZ0101Z1ZK',st:'29',city:'Mysuru',days:30}],
- ['nilgiri','Nilgiri Steel Traders','creditors',-R(200150),{gstin:'29ZZZZZ0102Z1ZJ',st:'29',city:'Bengaluru',days:30}],
- ['vardhaman','Vardhaman Logistics','creditors',-R(150000),{gstin:'27ZZZZZ0103Z1ZM',st:'27',city:'Pune',days:15}],
- ['rupa','Rupa Polymers','creditors',0,{gstin:'24ZZZZZ0104Z1ZR',st:'24',city:'Ahmedabad',days:30}],
+ ['kaveri','Kaveri Packaging Pvt Ltd','creditors',-R(214300),{gstin:'29ZZZZZ0001Z1ZL',st:'29',city:'Mysuru',days:30}],
+ ['nilgiri','Nilgiri Steel Traders','creditors',-R(200150),{gstin:'29ZZZZZ0002Z1ZK',st:'29',city:'Bengaluru',days:30}],
+ ['vardhaman','Vardhaman Logistics','creditors',-R(150000),{gstin:'27ZZZZZ0003Z1ZN',st:'27',city:'Pune',days:15}],
+ ['rupa','Rupa Polymers','creditors',0,{gstin:'24ZZZZZ0004Z1ZS',st:'24',city:'Ahmedabad',days:30}],
  ['cgstout','CGST output','duties',0],['sgstout','SGST output','duties',0],['igstout','IGST output','duties',0],
  ['cgstin','CGST input','duties',0],['sgstin','SGST input','duties',0],['igstin','IGST input','duties',0],
  ['tdspay','TDS payable','duties',-R(12500)],
  ['audit','Audit fee payable','provisions',-R(45000)],['salpay','Salary payable','provisions',-R(286000)],
  ['plant','Plant and machinery','fixed',R(1840000)],['furn','Furniture and fixtures','fixed',R(235000)],['comp','Computers','fixed',R(303179)],
- ['sgt','Shree Ganesh Traders','debtors',R(120000),{gstin:'27ZZZZZ0105Z1ZK',st:'27',city:'Nashik',days:30,alias:'SGT'}],
- ['mai','Mehta Agro Industries','debtors',0,{gstin:'24ZZZZZ0106Z1ZP',st:'24',city:'Rajkot',days:30}],
- ['lfs','Lakshmi Farm Supplies','debtors',R(96250),{gstin:'33ZZZZZ0107Z1ZP',st:'33',city:'Coimbatore',days:30}],
- ['phs','Patil Hardware Stores','debtors',R(88420),{gstin:'27ZZZZZ0108Z1ZH',st:'27',city:'Satara',days:30}],
- ['ksk','Kisan Seva Kendra','debtors',R(147384.5),{gstin:'23ZZZZZ0109Z1ZO',st:'23',city:'Indore',days:30,alias:'KSK'}],
+ ['sgt','Shree Ganesh Traders','debtors',R(120000),{gstin:'27ZZZZZ0005Z1ZL',st:'27',city:'Nashik',days:30,alias:'SGT'}],
+ ['mai','Mehta Agro Industries','debtors',0,{gstin:'24ZZZZZ0006Z1ZQ',st:'24',city:'Rajkot',days:30}],
+ ['lfs','Lakshmi Farm Supplies','debtors',R(96250),{gstin:'33ZZZZZ0007Z1ZQ',st:'33',city:'Coimbatore',days:30}],
+ ['phs','Patil Hardware Stores','debtors',R(88420),{gstin:'27ZZZZZ0008Z1ZI',st:'27',city:'Satara',days:30}],
+ ['ksk','Kisan Seva Kendra','debtors',R(147384.5),{gstin:'23ZZZZZ0009Z1ZP',st:'23',city:'Indore',days:30,alias:'KSK'}],
  ['cashsale','Cash sale (unregistered)','debtors',0,{gstin:'',st:'27',city:'Pune',days:0}],
  ['cash','Cash','cash',R(48215.5)],
  ['saptagiri','Saptagiri Commercial Bank A/c','bank',R(610000),{acct:'XXXX 4471'}],
@@ -707,17 +708,30 @@ function balances(extra){
   const b=Object.fromEntries(LEDGERS.map(l=>[l.id,l.ob]));
   for(const v of [...VOUCHERS,...(extra||[])])for(const [l,a] of postings(v))b[l]+=a;
   return b; }
-function stockPosition(override){
-  const q=Object.fromEntries(ITEMS.map(i=>[i.id,i.qty]));
-  for(const v of VOUCHERS)if(v.type==='Sales')for(const [it,n] of v.lines)q[it]-=n;
-  Object.assign(q,override||{});
-  const neg=ITEMS.filter(i=>q[i.id]<0);
+/* The provisional-stock scenario (the *.provisional states of the balance sheet, profit and loss and stock
+   summary). It is a what-if on top of the sample company, the same two vouchers the app's capture adds:
+   on 19 Nov a counter sale of 174 Steel pickaxes (SI/0416, cash) when 144 are on hand (150 bought 15 Oct,
+   6 sold on SI/0415), so the item is 30 nos below zero; on 20 Nov a purchase of 100 at 470.00 (Rupa Polymers,
+   Gujarat, so IGST) brings it back to 70. The engine marks the value Provisional because the quantity went
+   below zero on 19 Nov, and keeps the figure.
+   Hand check: sale 174 x 640.00 = 1,11,360.00, CGST+SGST 5% = 2,784.00 + 2,784.00, total 1,16,928.00 (cash);
+   purchase 100 x 470.00 = 47,000.00, IGST 5% = 2,350.00, total 49,350.00. Pickaxe closing 144 - 174 + 100 = 70,
+   value 70 x 470.00 = 32,900.00 (every pickaxe in stock was bought at 470.00, so the average cost is 470.00). */
+const SHORT_VOUCHERS = [
+ {id:'SI/0416',type:'Sales',date:'19-11-2026',party:'cashsale',lines:[['pick',174,R(640)]],paidTo:'cash',narr:'Counter sale'},
+ {id:'PB/0145',type:'Purchase',date:'20-11-2026',party:'rupa',dr:[['purch',R(47000)],['igstin',R(2350)]],cr:[['rupa',R(49350)]],stock:[['pick',100]],narr:'Pickaxes'}];
+function stockPosition(short){
+  const q=Object.fromEntries(ITEMS.map(i=>[i.id,i.qty])); const low={};
+  for(const v of [...VOUCHERS,...(short?SHORT_VOUCHERS:[])]){
+    if(v.type==='Sales')for(const [it,n] of v.lines){q[it]-=n;if(q[it]<0&&!low[it])low[it]=v.date}
+    else for(const [it,n] of v.stock||[])q[it]+=n; }
+  const neg=ITEMS.filter(i=>low[i.id]);
   const value=ITEMS.reduce((s,i)=>s+Math.max(q[i.id],0)*i.cost,0);
-  return {qty:q,value,provisional:neg.length?{reason:'NegativeStock',items:neg.map(i=>i.name)}:null}; }
+  return {qty:q,value,provisional:neg.length?{reason:'NegativeStock',items:neg.map(i=>i.name),first:neg.map(i=>low[i.id])[0]}:null}; }
 function groupOf(id){return GROUPS.find(g=>g.id===id)}
 function rootOf(gid){let g=groupOf(gid);while(g.parent)g=groupOf(g.parent);return g}
 function balanceSheet(opt){
-  opt=opt||{}; const b=balances(); const st=stockPosition(opt.stockOverride);
+  opt=opt||{}; const b=balances(opt.short?SHORT_VOUCHERS:[]); const st=stockPosition(opt.short);
   const pl=LEDGERS.filter(l=>['I','E'].includes(rootOf(l.group).nature)).reduce((s,l)=>s+b[l.id],0);
   const profit=-pl+st.value; // Cr positive
   const node=(gid,sign)=>{const g=groupOf(gid);
@@ -1497,7 +1511,7 @@ SCREENS['purchase-bill']={title:'Purchase from bill photo',default:'proposal',
    <p class="t2">The local reader left <b>1 field blank</b> (line 2 rate). Your cloud provider may read it better. This is your own key, set in AI and privacy.</p>
    <table class="t" style="margin-top:10px"><tbody><tr><td class="t2">Sent</td><td>This image, cropped to the bill</td></tr><tr><td class="t2">Redacted before sending</td><td>Bank account number, phone numbers, PAN</td></tr><tr><td class="t2">Provider</td><td>Your key · region and retention per your provider's terms</td></tr><tr><td class="t2">Logged</td><td>AI event: provider, model, image hash, fields returned</td></tr></tbody></table>
    <div class="actions"><button class="btn" data-cmd="nocloud">Keep it local, I will type it ${kb('Esc')}</button><button class="btn primary" data-cmd="cloud">Send once ${kb('Enter')}</button></div></div></div>`;
-  if(st==='accepted'&&parseHash().toast!=='none')toast('Posted PB/0147 · Rupa Polymers · ₹'+inr(billDraft('proposal').inv.total),true,FREEZE!=null);
+  if(st==='accepted'&&parseHash().toast!=='none')toast('Posted PB/0145 · Rupa Polymers · ₹'+inr(billDraft('proposal').inv.total),true,FREEZE!=null);
   const f=$('.prop input.blank')||$('.prop input');if(f&&st!=='cloud-consent')f.focus({preventScroll:true});
  },
  key(k,e,st){
@@ -1520,7 +1534,7 @@ document.addEventListener('click',e=>{const b=e.target.closest('.prop [data-act]
 function billImage(st){
   const smudge=st==='low-confidence'||st==='cloud-consent';
   return `<div class="bill" id="bill" aria-label="Photo of a fictional supplier bill">
-   <h4 data-b="sup">RUPA POLYMERS</h4><div class="c">14, Naroda GIDC, Ahmedabad 382330</div><div class="c" data-b="gstin">GSTIN 24ZZZZZ0104Z1ZR</div>
+   <h4 data-b="sup">RUPA POLYMERS</h4><div class="c">14, Naroda GIDC, Ahmedabad 382330</div><div class="c" data-b="gstin">GSTIN 24ZZZZZ0004Z1ZS</div>
    <div class="c" style="margin:6px 0;font-weight:700">TAX INVOICE</div>
    <div style="display:flex;justify-content:space-between"><span data-b="no">Inv No: RP/5521</span><span data-b="date">Dt: 17/11/2026</span></div>
    <div>To: Godavari Drip &amp; Pump Works, Pune</div><div>GSTIN 27ZZZZZ0000Z1ZQ · POS: 27</div>
@@ -1552,13 +1566,13 @@ function billProposal(st,d){
    <div class="grid g2" style="margin-top:12px;align-items:start"><div class="meta">Purchase ledger: <b>Purchases</b> ${prov('ai','AI match')}, the purchase ledger set on both item masters. Tax ledgers, round off and totals are the engine's.</div>
     <div class="taxbox">${v?`<div class="taxrow"><span class="lab">Taxable value</span><span class="num">${inr(v.taxable)}</span></div><div class="taxrow"><span class="lab">IGST 18%</span><span class="num">${inr(v.igst)}</span></div><div class="taxrow tot"><span class="lab">Engine total ${prov('eng','engine')}</span><span class="num">${inr(v.total)}</span></div>`:`<div class="taxrow"><span class="lab">Engine total</span><span class="t2">Not computed: line 2 rate is blank</span></div>`}
      <div class="taxrow" data-f="total"><span class="lab">Printed total ${prov('doc','from bill')}</span><span class="num">${inr(d.printedTotal)}</span></div></div></div>`;
-  const checks=[['ok','GSTIN 24ZZZZZ0104Z1ZR: check character valid; state 24 Gujarat matches the supplier master.'],['ok','Bill date is after the lock date (31 Oct 2026).'],
+  const checks=[['ok','GSTIN 24ZZZZZ0004Z1ZS: check character valid; state 24 Gujarat matches the supplier master.'],['ok','Bill date is after the lock date (31 Oct 2026).'],
    v?(match?['ok',`Engine total ${inr(v.total)} equals the printed total.`]:['bad',`Engine total ${inr(v.total)} differs from the printed total ${inr(d.printedTotal)} by ${inr(d.printedTotal-v.total)}. Check line 2 against the bill, or record the supplier's figure with a reason. Accept stays blocked.`]):['bad','Engine total cannot be computed until line 2 has a rate. The field is blank because the reading was below the confidence threshold; nothing was guessed.'],
    v&&match?['ok',`Rate × taxable: 18% of ${inr(v.taxable)} is ${inr(v.igst)}, same as printed.`]:['info','Tax check waits for the total check.'],
    st==='duplicate'?['bad','Same image (hash 9f3c…e1) was read on 19 Nov; that draft is in the review queue. Reject this one, or open the other.']:['ok','No purchase in the books has supplier Rupa Polymers with bill RP/5521.'],
    ['info','2B record G4 (Rupa Polymers RP/5521) is waiting for this bill. Accepting lets the 2B match run.']];
   return proposal({kind:'Draft purchase voucher',by:'the bill reader',src:[srcChip('camera','IMG_2041.jpg, page 1'),srcChip('cpu','Local: reader 0.3')],conf:d.ok?3:1,body,checks,blocked,why:d.ok&&match?'All checks pass. Fields from the bill are dashed.':'Fix the red items first.',editKey:'Enter',
-   status:st==='accepted'?'done':'open',after:st==='accepted'?`<span class="why">Posted as <b>PB/0147</b>. Audit: AI proposal (reader 0.3, image hash 9f3c…e1, 2 fields matched to masters) accepted by Ananya K. with 0 edits.</span><button class="btn" data-go="${hashFor('day-book')}">Day book</button><button class="btn primary" data-go="${hashFor('gst','recon')}">Run 2B match</button>`:''}); }
+   status:st==='accepted'?'done':'open',after:st==='accepted'?`<span class="why">Posted as <b>PB/0145</b>. Audit: AI proposal (reader 0.3, image hash 9f3c…e1, 2 fields matched to masters) accepted by Ananya K. with 0 edits.</span><button class="btn" data-go="${hashFor('day-book')}">Day book</button><button class="btn primary" data-go="${hashFor('gst','recon')}">Run 2B match</button>`:''}); }
 function manualPurchase(){return `<div class="card vsheet"><div class="vhead"><div class="fld span2"><label>Supplier</label><input placeholder="Type a supplier name or GSTIN"></div><div class="fld"><label>Supplier bill no.</label><input></div><div class="fld"><label>Bill date</label><input></div></div>
   <table class="lines"><thead><tr><th class="n">#</th><th>Item</th><th class="num">Qty</th><th class="num">Rate</th><th class="num">Amount</th></tr></thead><tbody><tr class="active"><td class="n">1</td><td><input placeholder="Item"></td><td><input class="num"></td><td><input class="num"></td><td></td></tr></tbody></table>
   <div class="vfoot"><div class="meta">Tax and totals appear as you type, computed by the engine.</div><div class="taxbox"><div class="taxrow"><span class="lab">Invoice total</span><span class="t2">No lines yet</span></div></div></div></div>`}
@@ -1637,14 +1651,14 @@ SCREENS['balance-sheet']={title:'Balance sheet',default:'default',
   if(st==='loading')return head+`<div class="card pad" id="report-body"><div class="row t2">${ic('clock')}Computing from all vouchers… ${kb('Esc')} cancels. The previous result is not shown as current.</div>${skelRows(12,[60,45,70,40,55,80,35,65])}</div>`;
   let body='';
   if(BS_LEVEL[st]===0){
-   const bs=balanceSheet(st==='provisional'?{stockOverride:{pick:-30}}:{}); const detailed=st==='detailed'; const sel=p.sel;
+   const bs=balanceSheet(st==='provisional'?{short:true}:{}); const detailed=st==='detailed'; const sel=p.sel;
    const rows=(nodes,depth)=>nodes.map(n=>{const drill=n.id==='stock'?hashFor('masters','items'):n.kind==='group'?hashFor('balance-sheet','group',{g:n.id}):n.kind==='ledger'&&LED[n.id]?hashFor('balance-sheet','ledger',{g:LED[n.id].group,l:n.id}):n.kind==='stock'?hashFor('masters','items'):'';
      const isProv=n.provisional||(n.id==='stock'&&bs.stock.provisional);
      const me=`<tr data-row="${n.id}" ${drill?`data-go="${drill}" data-tx="drill-down"`:''} class="${sel===n.name?'sel':''} ${depth===0?'sub':''}"><td class="${depth?'ind'+Math.min(depth,2):''}">${esc(n.name)}${isProv?' '+badge('Provisional','b-warn','alert'):''}</td><td class="num">${inr(n.amt)}</td></tr>`;
      const kids=(n.children||[]).filter(c=>detailed||(depth===0&&c.kind!=='ledger'));
      return me+rows(kids,depth+1)}).join('');
    body=`<div class="card" id="report-body">
-    ${st==='provisional'?`<div class="note warn" style="margin:12px 16px 0" role="alert">${ic('alert')}<div><b>Closing stock is Provisional.</b> Steel pickaxe 2.5 kg shows −30 nos after the sales on record, so the stock engine cannot value it at average cost. The figure below counts it as zero and is marked. Fix: post the missing purchase, or check SI/0415. <button class="btn ghost" data-go="${hashFor('masters','items')}">Open stock items</button></div></div>`:''}
+    ${st==='provisional'?`<div class="note warn" style="margin:12px 16px 0" role="alert">${ic('alert')}<div><b>Closing stock is Provisional.</b> Steel pickaxe 2.5 kg first went below zero on 19 Nov 2026 (−30 nos after SI/0416); a purchase on 20 Nov brought it back to 70. The stock engine keeps the figure and marks it Provisional. Fix: post the missing purchase with its right date. <button class="btn ghost" data-go="${hashFor('masters','items')}">Open stock items</button></div></div>`:''}
     <table class="t" id="bs"><thead><tr><th>Equity and liabilities</th><th class="num" style="width:200px">₹</th></tr></thead><tbody>${rows(bs.liab,0)}<tr class="total"><td>Total</td><td class="num">${inr(bs.L)}</td></tr></tbody>
     <thead><tr><th style="padding-top:18px">Assets</th><th></th></tr></thead><tbody>${rows(bs.assets,0)}<tr class="total"><td>Total</td><td class="num">${inr(bs.A)}</td></tr></tbody></table>
     <div class="spread" style="padding:10px 16px"><span class="${bs.agree?'':'t2'}">${bs.agree?badge('Both sides agree','b-ok','check'):badge('Sides differ','b-bad','x')} <span class="meta">Difference ${inr(bs.L-bs.A)} · checked by the engine on every render</span></span><span class="meta">Profit to date ${inr(bs.profit)} includes closing stock ${inr(bs.stock.value)} (stock engine, average cost)</span></div></div>`;
@@ -1749,7 +1763,7 @@ SCREENS.gst={title:'GST returns',default:'gstr1',
     <tr class="total"><td>Payable in cash, rounded to rupees</td><td class="num">${inr(s.cashTotal)}</td>${c(s.cash.igst,s.cash.cgst,s.cash.sgst)}</tr></tbody></table></div>
     <div class="card pad"><h2>Read this before filing</h2><ul class="t2" style="padding-left:18px;margin:0;display:grid;gap:6px"><li>Credit counts only what you accepted in IMS. Records with no action are shown apart.</li><li>Set-off order: IGST credit first, then CGST, then SGST, as the rule pack says.</li><li>Your books show ITC of ${inr(s.books.igst)} IGST; accepted 2B shows ${inr(s.itc.igst)}. The 2B and IMS tab explains each record.</li></ul><div class="actions" style="margin-top:10px"><button class="btn" data-go="${hashFor('gst','recon')}">2B and IMS ${kb('3')}</button></div></div></div>`;}
   if(st==='recon-empty')return head+`<div class="card"><div class="empty">${ic('upload')}<h2>No 2B file for November yet</h2><p>On the GST portal, open Returns, then GSTR-2B, choose November 2026 and download the JSON. Drop it here or press ${kb('Ctrl+O')}. The engine matches it to your purchase vouchers; nothing is sent anywhere.</p><button class="btn primary" data-go="${hashFor('gst','recon')}">${ic('upload')}Import 2B JSON ${kb('Ctrl+O')}</button></div></div>`;
-  if(st==='recon-error')return head+`<div class="note bad" role="alert">${ic('alert')}<div><b>Not imported: this 2B file is for GSTIN 27ZZZZZ0105Z1ZK, not ${CO.gstin}.</b><div>The file looks like a customer's 2B. Nothing was imported or changed. Download the file again while signed in as ${esc(CO.name)}.</div><div class="actions" style="margin-top:8px"><button class="btn" data-go="${hashFor('gst','recon-empty')}">${ic('upload')}Choose another file</button></div></div></div>`;
+  if(st==='recon-error')return head+`<div class="note bad" role="alert">${ic('alert')}<div><b>Not imported: this 2B file is for GSTIN 27ZZZZZ0005Z1ZL, not ${CO.gstin}.</b><div>The file looks like a customer's 2B. Nothing was imported or changed. Download the file again while signed in as ${esc(CO.name)}.</div><div class="actions" style="margin-top:8px"><button class="btn" data-go="${hashFor('gst','recon-empty')}">${ic('upload')}Choose another file</button></div></div></div>`;
   const locked=st==='recon-locked'; const rows=locked?OCT_2B.map(r=>({...r,status:'Matched',kind:'Exact',suggest:r.action})):recon();
   const sel=locked?'O1':st==='recon-explain'?'G2':'G2';
   const actOf=r=>locked?r.action:(IMS_ACT[r.id]!==undefined?IMS_ACT[r.id]:r.action);
@@ -2004,6 +2018,9 @@ const errNote = (lines) => `<div class="note bad" role="alert" style="margin:0 1
 
 /* purchase, typed by hand (F9 without the bill reader). Supplier Nilgiri Steel Traders is in Karnataka (29),
    the company is in Maharashtra (27), so the engine applies IGST.
+   Place of supply: goods bought for the company's own premises, so 27 Maharashtra (IGST Act s.10(1)(a): the place of supply of goods
+   moved to the recipient is where the movement ends; https://taxguru.in/goods-and-service-tax/section-10-igst-act-2017-place-supply-goods.html, read 2026-11-25). Supplier in 29, place of supply 27, so the supply is inter-State and the engine
+   charges IGST, never CGST and SGST. The next purchase number in the sample is PB/0145 (highest posted PB/0144).
    Hand check: HDPE 10 x 2,050.00 = 20,500.00; valves 100 x 228.40 = 22,840.00; taxable 43,340.00;
    IGST 18% = 7,801.20; gross 51,141.20; round off -0.20; invoice total 51,141.00. */
 const PURCH_LINES = [['hdpe32',10,R(2050)],['bv50',100,R(228.4)]];
@@ -2017,13 +2034,13 @@ SCREENS.purchase = {title:'Purchase',default:'default',
     const amt = it&&qty?qty*rate:null;
     return `<tr class="${i===0?'active':''}"><td class="n">${i+1}</td><td>${it?esc(it.name):`<input value="${esc(text||'')}" style="color:var(--bad)" aria-label="Item">`}</td><td class="t2">${it?it.hsn:''}</td>
      <td class="num">${qty?qty:`<span style="color:var(--bad)">blank</span>`}</td><td class="num">${inr(rate)}</td><td class="num">${it?it.gst+'%':''}</td><td class="num">${amt?inr(amt):''}</td></tr>`}).join('');
-  return `${phead([['Home',hashFor('home')],['Purchase']],`Purchase <span class="t2" style="font-weight:500">PB/0146</span>`,'Typed by hand · no bill reader · tax is recomputed by the GST engine on every keystroke',
+  return `${phead([['Home',hashFor('home')],['Purchase']],`Purchase <span class="t2" style="font-weight:500">PB/0145</span>`,'Typed by hand · no bill reader · tax is recomputed by the GST engine on every keystroke',
     `<button class="btn" data-cmd="more">Bill photo ${kb('Alt+O')}</button><button class="btn primary" data-cmd="save" ${bad?'disabled':''}>${ic('save')}Save ${kb('Ctrl+A')}</button>`)}
-  ${vsheetOpen(`<div class="fld span2"><label>Supplier</label><div class="ro">Nilgiri Steel Traders <span class="t2">· 29ZZZZZ0102Z1ZJ ${badge('Check OK','b-ok','check')}</span></div></div>
+  ${vsheetOpen(`<div class="fld span2"><label>Supplier</label><div class="ro">Nilgiri Steel Traders <span class="t2">· 29ZZZZZ0002Z1ZK ${badge('Check OK','b-ok','check')}</span></div></div>
     <div class="fld"><label>Supplier bill no.</label><div class="ro">NST/1150</div></div>
     <div class="fld"><label>Bill date</label><div class="ro">21 Nov 2026</div></div>
     <div class="fld"><label>Purchase ledger</label><div class="ro">Purchases</div></div>
-    <div class="fld"><label>Place of supply</label><div class="ro">29 Karnataka, inter-state</div></div>`)}
+    <div class="fld"><label>Place of supply</label><div class="ro">27 Maharashtra, inter-state</div></div>`)}
    <table class="lines"><thead><tr><th class="n">#</th><th>Item</th><th style="width:70px">HSN</th><th style="width:90px" class="num">Qty</th><th style="width:120px" class="num">Rate</th><th style="width:60px" class="num">GST</th><th style="width:140px" class="num">Amount</th></tr></thead><tbody>${rows}
     <tr><td class="n">${lines.length+1}</td><td><input placeholder="Item, or Enter on empty to finish" aria-label="Item"></td><td></td><td></td><td></td><td></td><td></td></tr></tbody></table>
    <div class="vfoot"><div class="stack"><div class="fld"><label>Narration</label><input value="${bad?'':'Hand-typed, Nilgiri quote 19 Nov'}"></div>
@@ -2035,44 +2052,55 @@ SCREENS.purchase = {title:'Purchase',default:'default',
   </div>`;
  },
  mount(st){const i=$('.lines tbody tr.active input, .lines tbody tr input');i&&i.focus()},
- key(k){if(k==='Ctrl+A'||k==='Ctrl+S'){toast('Purchase PB/0146 saved (mock).',true);return true}return false},
+ key(k){if(k==='Ctrl+A'||k==='Ctrl+S'){toast('Purchase PB/0145 saved (mock).',true);return true}return false},
  cmd(c){if(c==='save')toast('Saved (mock).',true)},
  back(){return hashFor('home')},
  keys(st){return [['','Purchase'],['Enter','Next field'],['Alt+C','Create master'],['Alt+O','Read a bill'],['Ctrl+A','Save'],['Esc','Back']]}
 };
 
-/* credit note against SI/0412 (Shree Ganesh Traders, Maharashtra). CGST Act s.34(1) (primary text): the supplier may
-   issue it where the taxable value or tax charged exceeds what is payable, where the recipient returns goods, or where goods
-   or services are deficient. Particulars: CGST Rules r.53(1A)(a)-(i), including (g) the serial number and date of the invoice.
-   Hand check: noz6 10 x 505.00 = 5,050.00; intra-state, 18% split: CGST 454.50, SGST 454.50;
-   total 5,959.00. Validation: SI/0412 has 67 sets of noz6 (line 67 x 505 in VOUCHERS). */
-const CN_SEED = {default:{lines:[['noz6',10,R(505)]],ref:'SI/0412',narr:'Returned 10 sets, damaged in transit'},
- 'validation-error':{lines:[['noz6',70,R(505)]],ref:'SI/0412',narr:'Returned 70 sets'}};
+/* credit note against SI/0412 (Shree Ganesh Traders, Maharashtra) and debit note against Rupa Polymers' bill RP/5398 (the sample's
+   only purchase with item lines, PB/0125 of 15 Oct 2026: 58 HDPE pipe coils at 2,050.00 among others). Numbers are the sample's next:
+   CN/0001 and DN/0001 (no note is posted in the sample; the engine counts from the highest number of the type).
+   Credit note, CGST Act s.34(1): issued when goods are returned, or the taxable value or tax of an invoice is more than the actual
+   (https://taxguru.in/goods-and-service-tax/credit-note-debit-note-section-34-rule-53-cgst-act-2017.html, read 2026-11-25). The same
+   page gives Rule 53(1A): the note shows the serial number and date of the corresponding tax invoice. It says nothing about a buyer
+   reversing input tax on a purchase return, so the debit note makes no such claim.
+   Hand check, credit note: noz6 10 x 505.00 = 5,050.00; intra-state (supplier and place of supply 27), 18% split: CGST 454.50, SGST 454.50;
+   total 5,959.00.
+   Hand check, debit note: hdpe32 2 x 2,050.00 (the bill's rate) = 4,100.00; Rupa Polymers is in Gujarat (24), place of supply 27, so IGST
+   18% = 738.00; total 4,838.00, round off 0.00.
+   Validation (the app's refusal, crates/ledgerly-app/src/screens/item_invoice/draft.rs): a line whose item is chosen but whose quantity is
+   blank is refused, "line 2: quantity: type a number", and the tax and total stay "Not computed". The engine has no rule that compares
+   a returned quantity with the invoiced quantity, so the mock shows none. */
+const NOTE_SEED = {
+ credit:{default:{lines:[['noz6',10,R(505)]],narr:'Returned 10 sets, damaged in transit'},'validation-error':{lines:[['noz6',10,R(505)],['lat16',null,null]],narr:''}},
+ debit:{default:{lines:[['hdpe32',2,R(2050)]],narr:'Returned 2 coils, cracked in transit'},'validation-error':{lines:[['hdpe32',2,R(2050)],['bv50',null,null]],narr:''}}};
 function noteScreen(kind){
- const cfg = kind==='credit'?{title:'Credit note',no:'CN/0007',party:'sgt',bad:'Sales return',refLabel:'Against sales invoice',pl:'Sales ledger',hint:'Credit note, CGST Act s.34(1): issued by the supplier against an invoice already issued'}
-   : {title:'Debit note',no:'DN/0003',party:'nilgiri',bad:'Purchase return',refLabel:'Against purchase bill',pl:'Purchases',hint:'Debit note to the supplier for a purchase return. Not a s.34(3) note, which only the supplier issues (see MOCK-COVERAGE.md)'};
- const seed = kind==='credit'?CN_SEED:{default:{lines:[],ref:'NST/1145',narr:'Return of 2 bundles MS angles, damaged'},'validation-error':{lines:[],ref:'NST/1145',narr:''}};
+ const cfg = kind==='credit'?{title:'Credit note',no:'CN/0001',party:'sgt',bad:'Sales return',refLabel:'Against sales invoice',ref:'SI/0412',refSub:'14 Nov 2026',hint:'Credit note, CGST Act s.34(1): reduces the tax on an invoice already issued'}
+   : {title:'Debit note',no:'DN/0001',party:'rupa',bad:'Purchase return',refLabel:'Against purchase bill',ref:'RP/5398',refSub:'bill of 15 Oct 2026',hint:'Debit note, purchase return: reduces what Godavari owes the supplier'};
  return {title:cfg.title,default:'default',
  render(st){
-  const s = seed[st]||seed.default; const p=LED[cfg.party]; const bad = st==='validation-error';
-  const inv = kind==='credit' ? computeInvoice(s.lines.map(([item,qty,rate])=>({item,qty,rate})), p.st) : null;
-  const errs = bad ? [kind==='credit'?'Line 1: 70 sets returned, but SI/0412 has 67 sets of Brass nozzle set (6 pc). A return cannot exceed what was invoiced.':'Line 1: 2 bundles returned, but bill NST/1145 has no MS angles line to link the return to. Pick the bill line, or the return cannot be linked.']:[];
-  const rowFor = (i)=>{const [item,qty,rate]=s.lines[i]; const it=ITEM[item];
-    return `<tr class="${i===0?'active':''}"><td class="n">1</td><td>${esc(it.name)}</td><td class="t2">${it.hsn}</td><td class="num" style="${bad?'color:var(--bad)':''}">${qty}</td><td class="num">${inr(rate)}</td><td class="num">${it.gst}%</td><td class="num">${inr(qty*rate)}</td></tr>`};
-  const body = kind==='credit' ? rowFor(0) : `<tr class="active"><td class="n">1</td><td>Purchase return, MS angles (2 bundles at 1,000.00)</td><td class="t2"></td><td class="num">2</td><td class="num">1,000.00</td><td class="num">18%</td><td class="num">2,000.00</td></tr>`;
-  const taxable = kind==='credit'?inv.taxable:R(2000), tax = kind==='credit'?inv.cgst+inv.sgst:R(360), tot = kind==='credit'?inv.total:R(2360);
+  const s = NOTE_SEED[kind][st]||NOTE_SEED[kind].default; const p=LED[cfg.party]; const bad = st==='validation-error';
+  const ok = s.lines.filter(l=>l[1]);
+  const inv = bad ? null : computeInvoice(ok.map(([item,qty,rate])=>({item,qty,rate})), p.st);
+  const errs = bad ? ['Line 2: quantity: type a number.'] : [];
+  const body = s.lines.map(([item,qty,rate],i)=>{const it=ITEM[item];
+    return `<tr class="${i===(bad?1:0)?'active':''}"><td class="n">${i+1}</td><td>${esc(it.name)}</td><td class="t2">${it.hsn}</td><td class="num">${qty?qty:`<span style="color:var(--bad)">blank</span>`}</td><td class="num">${qty?inr(rate):''}</td><td class="num">${qty?it.gst+'%':''}</td><td class="num">${qty?inr(qty*rate):''}</td></tr>`}).join('');
+  const taxLab = kind==='credit'?'CGST and SGST':'IGST 18%', taxAmt = inv?(kind==='credit'?inv.cgst+inv.sgst:inv.igst):0;
+  const meta = kind==='credit'?'The original invoice number and date are kept on the note (rule 53(1A), CGST Rules).'
+    :'Supplier in Gujarat (24), place of supply Maharashtra (27). IGST applies. Rates come from the item masters.';
   return `${phead([['Home',hashFor('home')],[cfg.title]],`${cfg.title} <span class="t2" style="font-weight:500">${cfg.no}</span>`,`${esc(cfg.hint)}`,
     `<button class="btn primary" data-cmd="save" ${bad?'disabled':''}>${ic('save')}Save ${kb('Ctrl+A')}</button>`)}
-  ${vsheetOpen(`<div class="fld span2"><label>Party</label><div class="ro">${esc(p.name)} <span class="t2">· ${p.gstin} ${badge('Check OK','b-ok','check')}</span></div></div>
+  ${vsheetOpen(`<div class="fld span2"><label>${kind==='credit'?'Party':'Supplier'}</label><div class="ro">${esc(p.name)} <span class="t2">· ${p.gstin} ${badge('Check OK','b-ok','check')}</span></div></div>
     <div class="fld"><label>Date</label><div class="ro">21 Nov 2026</div></div>
-    <div class="fld span2"><label>${cfg.refLabel}</label><div class="ro">${s.ref} <span class="t2">· ${kind==='credit'?'14 Nov, 67 sets invoiced':'bill 20 Nov, open'}</span></div></div>
+    <div class="fld span2"><label>${cfg.refLabel}</label><div class="ro">${cfg.ref} <span class="t2">· ${cfg.refSub}</span></div></div>
     <div class="fld"><label>${kind==='credit'?'Reason':'Return from'}</label><div class="ro">${cfg.bad}</div></div>`)}
    <table class="lines"><thead><tr><th class="n">#</th><th>Item</th><th style="width:70px">HSN</th><th class="num" style="width:90px">Qty</th><th class="num" style="width:120px">Rate</th><th class="num" style="width:60px">GST</th><th class="num" style="width:140px">Amount</th></tr></thead><tbody>${body}</tbody></table>
    <div class="vfoot"><div class="stack"><div class="fld"><label>Narration</label><input value="${esc(s.narr)}"></div>
-     ${errs.length?errNote(errs):''}<div class="meta">${kind==='credit'?'Prints the original invoice serial and date, CGST Rules r.53(1A)(g). The return reverses the input tax on the bill through the engine.':'Posted to '+cfg.pl+'. The input tax on the bill is reversed by the engine; the GST basis for a buyer-side return is an open item in MOCK-COVERAGE.md.'}</div></div>
-    <div><div class="taxbox"><div class="taxrow"><span class="lab">Taxable value</span><span class="num">${inr(taxable)}</span></div>
-     <div class="taxrow"><span class="lab">${kind==='credit'?'CGST and SGST':'IGST reversed'}</span><span class="num">${inr(tax)}</span></div>
-     <div class="taxrow tot"><span class="lab">Note total ${prov('eng','engine')}</span><span class="num">${inr(tot)}</span></div></div></div></div>
+     ${errs.length?errNote(errs):''}<div class="meta">${meta}</div></div>
+    <div><div class="taxbox"><div class="taxrow"><span class="lab">Taxable value</span><span class="num">${bad?'Not computed':inr(inv.taxable)}</span></div>
+     <div class="taxrow"><span class="lab">${taxLab}</span><span class="num">${bad?'Not computed':inr(taxAmt)}</span></div>
+     <div class="taxrow tot"><span class="lab">Note total ${prov('eng','engine')}</span><span class="num">${bad?'Not computed':inr(inv.total)}</span></div></div></div></div>
   </div>`;
  },
  mount(){const i=$('.lines input');i&&i.focus()},
@@ -2166,32 +2194,59 @@ SCREENS.start = {title:'Start',default:'recent',
 /* reports. Hand check of the totals: Net profit equals the balance sheet's "Profit to date" (same ledgers,
    same stock value), so a mismatch would show on both screens. Trial balance Dr equals Cr because the
    ledgers sum to zero (the self-check at boot). Figures below are engine values at render time. */
+/* Profit and loss in the horizontal form with the gross profit split: Trading (Opening Stock, Purchase Accounts,
+   Direct Expenses, Gross Profit c/o on the left; Sales Accounts, Closing Stock on the right), then Indirect
+   Expenses and Nett Profit on the left against Gross Profit b/f and Indirect Incomes on the right. Groups by
+   default, the ledgers under each group in the detailed view (Alt+F1 here, as on the balance sheet).
+   Source: https://help.tallysolutions.com/profit-and-loss-statement-tally/ (read 2026-11-25) documents the
+   horizontal form, "Show with Gross Profit" (gross profit counts only the cost of sales and direct expenses,
+   indirect expenses are then deducted to reach the nett profit) and a detailed view; the order of the groups
+   inside each side is the owner's brief of 2026-11-25, the page does not spell it out. The look is ours.
+   Hand check, 1 Apr to 21 Nov 2026 (every figure from the sample company's vouchers, not typed):
+     Dr: Opening Stock 9,12,000.00 + Purchase Accounts 52,94,000.00 + Direct Expenses 1,84,000.00 = 63,90,000.00
+     Cr: Sales Accounts 85,93,225.00 + Closing Stock 14,25,539.00 = 1,00,18,764.00
+     Gross Profit = 1,00,18,764.00 - 63,90,000.00 = 36,28,764.00
+     Indirect Expenses = Salaries 14,10,000 + Rent 2,00,000 + Electricity 1,11,260 + Bank charges 6,820
+       + Depreciation 1,22,664 + Staff welfare 38,600 + Interest 61,250 + Round off 0.30 = 19,50,594.30
+     Indirect Incomes (Discount received) 18,400.00
+     Nett Profit = 36,28,764.00 - 19,50,594.30 + 18,400.00 = 16,96,569.70
+   Closing stock by item (qty after November's sales x average cost): 187 x 3,120 + 573 x 395 + 96 x 1,080
+     + 1,060 x 228.40 + 144 x 470 + 58 x 2,050 + 12 x 6,950 = 14,25,539.00. */
 function plRows(opt){
-  const b=balances(); const st=stockPosition(opt&&opt.stockOverride);
-  const L=id=>b[id];
-  const income=[['Sales',-L('sales')],['Discount received',-L('disc')],['Closing stock',st.value]];
-  const expense=[['Opening stock',L('ostock')],['Purchases',L('purch')],['Freight inward',L('freight')],
-    ...LEDGERS.filter(l=>l.group==='indexp').map(l=>[l.name,L(l.id)])];
-  const sumI=income.reduce((s,r)=>s+r[1],0), sumE=expense.reduce((s,r)=>s+r[1],0);
-  return {income,expense,sumI,sumE,net:sumI-sumE,stock:st,provisional:st.provisional};
+  const short=opt&&opt.short; const b=balances(short?SHORT_VOUCHERS:[]); const st=stockPosition(short);
+  const grp=(name,gid,sign)=>{const children=LEDGERS.filter(l=>l.group===gid&&b[l.id]!==0).map(l=>({name:l.name,amt:sign*b[l.id]}));
+    return {name,amt:children.reduce((s,c)=>s+c.amt,0),children}};
+  const open=grp('Opening Stock','openstock',1), purch=grp('Purchase Accounts','purchacc',1), dexp=grp('Direct Expenses','direxp',1);
+  const sales=grp('Sales Accounts','salesacc',-1), close={name:'Closing Stock',amt:st.value,children:[],provisional:st.provisional};
+  const gp=sales.amt+close.amt-(open.amt+purch.amt+dexp.amt);
+  const iexp=grp('Indirect Expenses','indexp',1), iinc=grp('Indirect Incomes','indinc',-1);
+  const net=gp+iinc.amt-iexp.amt;
+  return {open,purch,dexp,sales,close,gp,iexp,iinc,net,stock:st,provisional:st.provisional};
 }
 function plScreen(){
  return {title:'Profit and loss',default:'default',
  render(st){
-  const d=plRows(st==='provisional'?{stockOverride:{pick:-30}}:{});
+  const d=plRows(st==='provisional'?{short:true}:{}); const detailed=st==='detailed';
   const crumbs=[['Home',hashFor('home')],['Profit and loss']];
-  const actions=`<button class="btn" data-go="${hashFor('profit-and-loss',st==='print-preview'?'default':'print-preview')}">${ic('upload')}Print preview ${kb('Ctrl+P')}</button><button class="btn" data-cmd="export">${ic('upload')}Export ${kb('Ctrl+E')}</button>`;
-  const head=phead(crumbs,'Profit and loss',`From 1 Apr to 21 Nov 2026 · FY ${CO.fy} · Ledgerly's trading form, with sub-totals`,actions);
+  const actions=`<button class="btn" data-go="${hashFor('profit-and-loss',detailed?'default':'detailed')}">${detailed?'Condensed':'Detailed'} ${kb('Alt+F1')}</button><button class="btn" data-go="${hashFor('profit-and-loss',st==='print-preview'?'default':'print-preview')}">${ic('upload')}Print preview ${kb('Ctrl+P')}</button><button class="btn" data-cmd="export">${ic('upload')}Export ${kb('Ctrl+E')}</button>`;
+  const head=phead(crumbs,'Profit and loss',`From 1 Apr to 21 Nov 2026 · FY ${CO.fy} · ${detailed?'ledgers under each group':'by group'}`,actions);
   if(st==='loading') return reportLoading(head);
-  const warn = st==='provisional'?`<div class="note warn" style="margin:12px 16px 0" role="alert">${ic('alert')}<div><b>Closing stock is Provisional.</b> Steel pickaxe 2.5 kg shows −30 nos after the sales on record, so the stock engine cannot value it at average cost. The figure below counts it as zero and is marked. <button class="btn ghost" data-go="${hashFor('masters','items')}">Open stock items</button></div></div>`:'';
-  const r=(n,a,extra)=>`<tr class="${extra||''}"><td>${esc(n)}${extra==='sub'?'':''}</td><td class="num">${inr(a)}</td></tr>`;
-  const table=`<table class="t" id="pl"><thead><tr><th>Income</th><th class="num" style="width:200px">₹</th></tr></thead><tbody>
-     ${d.income.map(x=>r(x[0],x[1])).join('')}
-     <tr class="total"><td>Total income</td><td class="num">${inr(d.sumI)}</td></tr></tbody>
-     <thead><tr><th style="padding-top:18px">Expenses</th><th></th></tr></thead><tbody>
-     ${d.expense.map(x=>r(x[0],x[1])).join('')}
-     <tr class="total"><td>Total expenses</td><td class="num">${inr(d.sumE)}</td></tr></tbody></table>
-     <div class="spread" style="padding:10px 16px"><span>${badge(d.net>=0?'Profit':'Loss','b-ok','check')} <b style="margin-left:8px">Net ${d.net>=0?'profit':'loss'} ${inr(Math.abs(d.net))}</b></span><span class="meta">Equals "Profit to date" on the balance sheet, checked by the engine</span></div>`;
+  const warn = st==='provisional'?`<div class="note warn" style="margin:12px 16px 0" role="alert">${ic('alert')}<div><b>Closing stock is Provisional.</b> Steel pickaxe 2.5 kg first went below zero on 19 Nov 2026 (−30 nos after SI/0416); a purchase on 20 Nov brought it back to 70. The stock engine keeps the figure and marks it Provisional. <button class="btn ghost" data-go="${hashFor('masters','items')}">Open stock items</button></div></div>`:'';
+  const side=(items)=>items.flatMap(g=>[{n:g.name,a:g.amt,t:'g',prov:g.provisional},...(detailed?g.children.map(c=>({n:c.name,a:c.amt,t:'l'})):[])]);
+  const cells=x=>x?`<td class="${x.t==='l'?'ind1':''}">${esc(x.n)}${x.prov?' '+badge('Provisional','b-warn','alert'):''}</td><td class="num ${x.t==='l'?'t2':''}">${inr(x.a)}</td>`:'<td></td><td></td>';
+  const bl='style="border-left:1px solid var(--border)"';
+  const section=(L,Rt,total)=>{const n=Math.max(L.length,Rt.length);let o='';
+    for(let i=0;i<n;i++){const l=cells(L[i]),r=cells(Rt[i]);o+=`<tr>${l}${r.replace('<td','<td '+bl)}</tr>`}
+    return o+`<tr class="total"><td>Total</td><td class="num">${inr(total)}</td><td ${bl}>Total</td><td class="num">${inr(total)}</td></tr>`};
+  const gpL=d.gp>=0?[{n:'Gross Profit c/o',a:d.gp,t:'g'}]:[], gpR=d.gp<0?[{n:'Gross Loss c/o',a:-d.gp,t:'g'}]:[];
+  const tL=[...side([d.open,d.purch,d.dexp]),...gpL], tR=[...side([d.sales,d.close]),...gpR];
+  const trTot=d.open.amt+d.purch.amt+d.dexp.amt+(d.gp>=0?d.gp:0);
+  const nL=d.net>=0?[{n:'Nett Profit',a:d.net,t:'g'}]:[], nR=d.net<0?[{n:'Nett Loss',a:-d.net,t:'g'}]:[];
+  const pL=[...side([d.iexp]),...nL], pR=[...(d.gp>=0?[{n:'Gross Profit b/f',a:d.gp,t:'g'}]:[{n:'Gross Loss b/f',a:-d.gp,t:'g'}]),...side([d.iinc]),...nR];
+  const plTot=d.iexp.amt+(d.net>=0?d.net:0);
+  const table=`<table class="t" id="pl"><thead><tr><th>Particulars</th><th class="num" style="width:150px">₹</th><th ${bl}>Particulars</th><th class="num" style="width:150px">₹</th></tr></thead><tbody>
+     ${section(tL,tR,trTot)}</tbody><tbody>${section(pL,pR,plTot)}</tbody></table>
+     <div class="spread" style="padding:10px 16px"><span>${badge(d.net>=0?'Profit':'Loss','b-ok','check')} <b style="margin-left:8px">Nett ${d.net>=0?'profit':'loss'} ${inr(Math.abs(d.net))}</b></span><span class="meta">Equals "Profit to date" on the balance sheet, checked by the engine</span></div>`;
   let card;
   if(st==='print-preview'){
     card=`<div style="display:grid;grid-template-columns:1fr 280px;gap:16px;align-items:start">
@@ -2207,18 +2262,37 @@ function plScreen(){
   if(st==='print-busy') return head+`<div class="note" role="status" style="margin-bottom:12px">${ic('clock')}<span><b>Preparing the PDF.</b> The save dialog opens when it is ready.</span></div><div class="card" id="report-body">${warn}${table}</div>`;
   return head+`<div class="card" id="report-body">${warn}${table}</div>`;
  },
- key(k,e,st){if(k==='Ctrl+P'){go(hashFor('profit-and-loss','print-preview'));return true}if(k==='Escape'&&st==='print-preview'){go(hashFor('profit-and-loss'));return true}return false},
+ key(k,e,st){if(k==='Alt+F1'&&(st==='default'||st==='detailed')){go(hashFor('profit-and-loss',st==='detailed'?'default':'detailed'));return true}if(k==='Ctrl+P'){go(hashFor('profit-and-loss','print-preview'));return true}if(k==='Escape'&&st==='print-preview'){go(hashFor('profit-and-loss'));return true}return false},
  cmd(c){if(c==='pdf')go(hashFor('profit-and-loss','print-saved'));if(c==='open-pdf')toast('Opens in the PDF viewer on this computer.');if(c==='export')toast('Export writes CSV or XLSX from this screen (mock).')},
  back(){return hashFor('home')},
- keys(st){return st==='print-preview'?[['','Print preview'],['Ctrl+P','Save as PDF'],['Esc','Close']]:[['','Profit and loss'],['Ctrl+P','Print preview'],['Ctrl+E','Export'],['Esc','Back']]}
+ keys(st){return st==='print-preview'?[['','Print preview'],['Ctrl+P','Save as PDF'],['Esc','Close']]:[['','Profit and loss'],['Alt+F1','Detailed'],['Ctrl+P','Print preview'],['Ctrl+E','Export'],['Esc','Back']]}
  };
 }
 SCREENS['profit-and-loss'] = plScreen();
 
+/* trial balance. Rows are the sample company's ledgers with a balance (crates/ledgerly-sample/assets/godavari.toml),
+   one per ledger, with the group names the engine uses ("Capital Account", "Duties & Taxes", ...). The sample has one
+   ledger per tax head (CGST, SGST, IGST), so the mock's separate output and input ledgers are netted into three rows.
+   Hand check, as at 21 Nov 2026 (no voucher is dated after 20 Nov):
+     CGST: output 15,323.65 (sales) less input 0 on the mock's intra-state purchases = 15,323.65 Cr; SGST the same;
+     IGST: output 20,370.00 Cr less input 29,520.00 Dr = 9,150.00 Dr (the tax on the purchases is more than on the sales).
+     Debit total 1,25,33,742.30 = credit total 1,25,33,742.30 (the old total, 1,25,54,112.30, counted IGST gross on both sides). */
+const TB_GROUP = {capital:'Capital Account',secured:'Secured Loans',creditors:'Sundry Creditors',duties:'Duties & Taxes',provisions:'Provisions',
+  fixed:'Fixed Assets',debtors:'Sundry Debtors',cash:'Cash-in-Hand',bank:'Bank Accounts',advances:'Loans & Advances (Asset)',salesacc:'Sales Accounts',
+  purchacc:'Purchase Accounts',direxp:'Direct Expenses',indexp:'Indirect Expenses',indinc:'Indirect Incomes',openstock:'Direct Expenses'};
+const TB_TAX = [['CGST',['cgstout','cgstin']],['SGST',['sgstout','sgstin']],['IGST',['igstout','igstin']]];
+function tbRows(){
+  const b=balances(); const tax=new Set(TB_TAX.flatMap(t=>t[1])); const out=[];
+  for(const l of LEDGERS){
+    const t=TB_TAX.find(x=>x[1][0]===l.id);
+    if(t){const v=b[t[1][0]]+b[t[1][1]];if(v!==0)out.push([t[0],TB_GROUP.duties,v]);continue}
+    if(tax.has(l.id)||b[l.id]===0)continue;
+    out.push([l.name,TB_GROUP[l.group],b[l.id]]);}
+  return out.map(([n,g,v])=>[n,g,v>0?v:0,v<0?-v:0]); }
 SCREENS['trial-balance'] = {title:'Trial balance',default:'default',
  render(st){
   if(st==='loading') return reportLoading(phead([['Home',hashFor('home')],['Trial balance']],'Trial balance','As at 21 Nov 2026 · every ledger with a balance · Enter opens a ledger'));
-  const b=balances(); const rows=LEDGERS.filter(l=>b[l.id]!==0).map(l=>[l.name,groupOf(l.group).name,b[l.id]>0?b[l.id]:0,b[l.id]<0?-b[l.id]:0]);
+  const rows=tbRows();
   const dr=rows.reduce((s,r)=>s+r[2],0), cr=rows.reduce((s,r)=>s+r[3],0);
   return `${phead([['Home',hashFor('home')],['Trial balance']],'Trial balance','As at 21 Nov 2026 · every ledger with a balance · Enter opens a ledger',`<button class="btn" data-go="${hashFor('profit-and-loss')}">Profit and loss ${kb('F10')}</button>`)}
    <div class="card"><table class="t" id="tb"><thead><tr><th>Ledger</th><th>Group</th><th class="num" style="width:170px">Debit</th><th class="num" style="width:170px">Credit</th></tr></thead><tbody>
@@ -2255,41 +2329,69 @@ function outstandingScreen(){
 }
 SCREENS.outstanding = outstandingScreen();
 
-/* stock summary: quantities from the stock engine, value at average cost; negative stock makes the value Provisional. */
+/* stock summary: quantities from the stock engine, value at average cost; a quantity that went below zero makes the value Provisional.
+   Provisional state: Steel pickaxe 2.5 kg is 144 on hand (150 - 6), a sale of 174 on 19 Nov takes it to -30, a purchase of 100 on
+   20 Nov to 70; value 70 x 470.00 = 32,900.00, marked Provisional. See SHORT_VOUCHERS. Closing stock total 13,90,759.00:
+   base 14,25,539.00 - 144 x 470.00 (67,680.00) + 32,900.00. */
 SCREENS['stock-summary'] = {title:'Stock summary',default:'default',
  render(st){
   if(st==='loading') return reportLoading(phead([['Home',hashFor('home')],['Stock summary']],'Stock summary','As at 21 Nov 2026 · quantity from the stock engine, value at average cost'));
-  const s = stockPosition(st==='provisional'?{pick:-30}:{});
+  const s = stockPosition(st==='provisional');
   return `${phead([['Home',hashFor('home')],['Stock summary']],'Stock summary','As at 21 Nov 2026 · quantity from the stock engine, value at average cost',
     `<button class="btn" data-go="${hashFor('masters','items')}">Stock items ${kb('Enter')}</button>`)}
-   ${st==='provisional'?`<div class="note warn" role="alert" style="margin-bottom:12px">${ic('alert')}<div><b>Value is Provisional for Steel pickaxe 2.5 kg.</b> It shows −30 nos after the sales on record. Its value counts as zero until a purchase or a stock correction brings it to zero or more.</div></div>`:''}
+   ${st==='provisional'?`<div class="note warn" role="alert" style="margin-bottom:12px">${ic('alert')}<div><b>Value is Provisional for Steel pickaxe 2.5 kg.</b> Its quantity first went below zero on ${fmtDate(s.provisional?s.provisional.first:'19-11-2026')} (−30 nos after SI/0416); a purchase on 20 Nov brought it back to 70. The value is shown and marked, and the total with it.</div></div>`:''}
    <div class="card"><table class="t" id="ss"><thead><tr><th>Item</th><th>HSN</th><th class="num">Quantity</th><th>Unit</th><th class="num">Cost</th><th class="num">Value</th></tr></thead><tbody>
-    ${ITEMS.map((it,i)=>{const q=s.qty[it.id];return `<tr data-row="${it.id}" class="${i===0?'sel':''}"><td>${esc(it.name)}</td><td class="t2">${it.hsn||'none'}</td><td class="num" style="${q<0?'color:var(--bad)':''}">${q}</td><td class="t2">${it.unit}</td><td class="num">${inr(it.cost)}</td><td class="num">${q<0?badge('Provisional','b-warn','alert'):inr(Math.max(q,0)*it.cost)}</td></tr>`}).join('')}
-    <tr class="total"><td colspan="5">Total closing stock ${prov('eng','engine')}</td><td class="num">${inr(s.value)}</td></tr></tbody></table></div>`;
+    ${ITEMS.map((it,i)=>{const q=s.qty[it.id];return `<tr data-row="${it.id}" class="${i===0?'sel':''}"><td>${esc(it.name)}</td><td class="t2">${it.hsn||'none'}</td><td class="num">${q}</td><td class="t2">${it.unit}</td><td class="num">${inr(it.cost)}</td><td class="num">${s.provisional&&s.provisional.items.includes(it.name)?badge('Provisional','b-warn','alert')+' ':''}${inr(Math.max(q,0)*it.cost)}</td></tr>`}).join('')}
+    <tr class="total"><td colspan="5">Total closing stock ${prov('eng','engine')}</td><td class="num">${s.provisional?badge('Provisional','b-warn','alert')+' ':''}${inr(s.value)}</td></tr></tbody></table></div>`;
  },
  key(k){return listKeys('#ss',k)},
  back(){return hashFor('home')},
  keys(){return [['','Stock summary'],['J / K','Move'],['Enter','Stock items'],['Esc','Back']]}
 };
 
-/* audit: the audit trail read-only. Edit log of the November vouchers (the audit log keeps who entered each).
-   The Integrity certificate and the Edits-after-lock report: the second is Unsupported in this build (see note). */
+/* audit: the audit trail, read-only, in the shape the engine's reports give (crates/ledgerly-reports/src/audit.rs).
+   Edit log: one line per audit event of the period with Seq, Date, Time, User, Action, Object, Reason, Field, Before, After;
+   the notes count events per user. In the sample company every voucher is a "Posted voucher" event (no alteration, so the
+   Reason, Field, Before and After cells are empty), stamped at noon (+05:30) on the voucher's own date and entered by user 1
+   (Ananya K.) or user 2 (Rohan D.); an accepted AI draft shows as the assistant acting for that user. The engine labels users
+   "user N", not by name. Period 1 to 20 Nov 2026: the engine's other events (the masters, the number series, the lock, the bank
+   statement) are stamped 21 Nov, the day the company file was made, so they are outside it.
+   Seq: observed in the app's audit capture of 2026-11-25 (branch s12/reports-to-mock): the first sample voucher, RC/0208, is event 109;
+   the sample's vouchers are posted one event each in the order of godavari.toml, and the voucher id is that position (SI/0401 is the
+   27th, so voucher 27, event 135). Counts, hand check: 14 November vouchers = user 1 (SI/0401, SI/0412, SI/0417, RC/0219, PY/0318,
+   JV/0032) 6 + user 2 (SI/0405, RC/0215, PY/0316, CT/0021, SI/0415, PB/0144) 6 + assistant for user 1 (PY/0315, PB/0141) 2.
+   Edits after lock: the engine lists a voucher event that touches a date on or before the lock date in force WHEN the event was
+   recorded. The sample's books were locked (31 Oct) after every voucher was posted, so the list is empty: 0 events. */
+const AUDIT_ASSISTANT = new Set(['PY/0315','PB/0141']);
+const AUDIT_FIRST_SEQ = 135; // SI/0401, the 27th voucher of the sample, event 109 - 1 + 27
+function auditEvents(){
+  return VOUCHERS.map((v,i)=>{const u=v.by==='Ananya K.'?1:2; const ai=AUDIT_ASSISTANT.has(v.id);
+    const [dd,mm,yy]=v.date.split('-');
+    return {seq:AUDIT_FIRST_SEQ+i,date:v.date,user:ai?`assistant assistant for user ${u}`:`user ${u}`,
+      object:`${v.type} ${v.id} dated ${yy}-${mm}-${dd} [voucher ${27+i}]`}}); }
+const AUDIT_COLS=['Seq','Date','Time','User','Action','Object','Reason'];
+function auditCounts(ev){const m={};for(const e of ev)m[e.user]=(m[e.user]||0)+1;return Object.keys(m).sort().map(k=>`${k}: ${m[k]} event${m[k]===1?'':'s'}`)}
+
 SCREENS.audit = {title:'Audit',default:'default',
  render(st){
   const kinds=[['Edit log','default'],['Integrity certificate','integrity'],['Edits after lock','unsupported']];
   const tabs=`<div class="tabs" style="margin:0;border:0">${kinds.map(([l,s])=>`<button data-go="${hashFor('audit',s)}" aria-selected="${(['default','loading','failed'].includes(st)&&s==='default')||st===s}">${l}</button>`).join('')}</div>`;
-  const head=phead([['Home',hashFor('home')],['Audit']],'Audit','Read-only. Nothing here changes a voucher. Period from 1 Nov 2026 to 21 Nov 2026',tabs);
+  const head=phead([['Home',hashFor('home')],['Audit']],'Audit','Read-only. Nothing here changes a voucher. Period from 1 Nov 2026 to 20 Nov 2026',tabs);
   if(st==='loading') return head+`<div class="card pad" id="report-body"><div class="row t2">${ic('clock')}Reading the audit log…</div>${skelRows(8,[70,55,80,40,65,50,75,60])}</div>`;
   if(st==='failed') return head+`<div class="note bad" role="alert" style="margin-bottom:12px">${ic('alert')}<div><b>The audit log could not be read.</b> The company file is open in another program, so nothing was read. Nothing is shown from the log. Close the other program, then press Run again.</div></div>`;
-  if(st==='unsupported') return head+`<div class="note bad" role="alert" style="margin-bottom:12px">${ic('alert')}<div><b>Edits after lock is not supported in this build.</b> The audit log does not keep the lock date in force at the time of each edit, so this report cannot say which edits came after a lock. Nothing is shown as zero. Use the edit log and compare dates with the lock date, ${fmtDate(CO.lock)}.</div></div>`;
+  if(st==='unsupported') return head+`<div class="card" id="report-body"><table class="t" id="al"><thead><tr>${[...AUDIT_COLS,'Voucher date','Lock date'].map(c=>`<th>${c}</th>`).join('')}</tr></thead><tbody>
+    <tr class="total"><td>0 events</td><td colspan="8"></td></tr></tbody></table></div>
+    <div class="meta" style="padding:10px 4px">Listed: voucher events that touch a date on or before the lock date in force when the event was recorded. The lock date in force starts from the first record supplied. Every voucher of this company was posted before the books were locked to ${fmtDate(CO.lock)}, so none is listed.</div>`;
   if(st==='integrity') return head+`<div class="card pad" id="report-body"><h2>Integrity certificate</h2><table class="t"><tbody>
     <tr><td class="t2">Vouchers in the period</td><td class="num">${VOUCHERS.length}</td></tr>
     <tr><td class="t2">Entries checked against the log</td><td class="num">${VOUCHERS.length}</td></tr>
     <tr><td class="t2">Hash links broken</td><td class="num">0</td></tr>
     <tr><td class="t2">Checked by</td><td>the engine, on this computer</td></tr></tbody></table><p class="meta" style="margin-top:12px">Each log entry stores the hash of the entry before it. A broken link would be listed here with its voucher number.</p></div>`;
-  return head+`<div class="card" id="report-body"><table class="t" id="al"><thead><tr><th>Voucher</th><th>Type</th><th>Date</th><th>Entered by</th><th>Origin</th><th>Narration</th></tr></thead><tbody>
-    ${VOUCHERS.map((v,i)=>`<tr data-row="${v.id}" class="${i===0?'sel':''}"><td>${v.id}</td><td class="t2">${v.type}</td><td>${fmtDate(v.date)}</td><td class="t2">${esc(v.by)}</td><td>${v.ai?badge(v.ai+', accepted','b-ai','spark'):'<span class="meta">Typed</span>'}</td><td class="t2">${esc(v.narr||'')}</td></tr>`).join('')}
-    </tbody></table></div>`;
+  const ev=auditEvents();
+  return head+`<div class="card" id="report-body"><table class="t" id="al"><thead><tr>${[...AUDIT_COLS,'Field','Before','After'].map(c=>`<th${c==='Seq'?' class="num"':''}>${c}</th>`).join('')}</tr></thead><tbody>
+    ${ev.map((e,i)=>`<tr data-row="${e.seq}" class="${i===0?'sel':''}"><td class="num">${e.seq}</td><td>${fmtDate(e.date)}</td><td class="t2">12:00:00 +05:30</td><td class="t2">${esc(e.user)}</td><td>Posted voucher</td><td>${esc(e.object)}</td><td></td><td></td><td></td><td></td></tr>`).join('')}
+    <tr class="total"><td>${ev.length} events</td><td colspan="9"></td></tr></tbody></table></div>
+    <div class="meta" style="padding:10px 4px">${auditCounts(ev).map(esc).join('<br>')}</div>`;
  },
  key(k){return listKeys('#al',k)},
  back(){return hashFor('home')},
