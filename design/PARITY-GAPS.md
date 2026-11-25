@@ -414,10 +414,12 @@ captured: `suggested-ledger` (an AI state: the assistant proposes the ledger; no
   (the mock's account, with the sample's imported statement of 11 lines, amounts equal to the
   mock's), `bank.empty` is Mula Valley Co-op (no statement), all on Godavari. The subtitle reads
   "name, XXXX 4471, November 2026" as the mock's does.
-- **gap: the chooser differs from its mock state.** The mock now has `bank-chooser.default` (added
-  in round S12, 2026-11-25): one table of the two bank accounts with balances from the engine and
-  the statement status. Ours (`bank.chooser`, light only) is the page head and one card in the
-  reconciliation statement's `table.t` style, not yet redrawn to the mock's table.
+- **closed (S12): the chooser follows `bank-chooser.default`.** Head, subtitle, one table
+  (account, number, balance from `Api::brs`, a Statement badge with the period from the stored
+  statement's first and last line) and the footnote. Still different: the period starts on the
+  first statement line (5 Nov 2026) where the mock writes the opening-balance date (1 Nov); the
+  sidebar highlights Home, not Bank reconciliation, while the chooser is open; the mock's row
+  highlight is the engine's cursor row.
 - **by design: the key that changes account is C, not F4.** F4 is Contra in this app (the shell's
   voucher keys). The head carries a "Change account" button with the C keycap; the mock's head has
   only Import statement and Reconciliation statement, so the head differs by that button when the
@@ -938,16 +940,58 @@ path is not connected. `setup.welcome` SSIM is light 0.8417, dark 0.8473, hc 0.8
 light 0.7966, dark 0.7952, hc 0.7930; the words of the AI chip and the sidebar footer are by
 design (setup section).
 
-## Reports not in the mock (S8)
+## Reports (rounds S8 and S12)
 
-The mock now has states for the profit and loss (`profit-and-loss.*`), trial balance
-(`trial-balance.default`), outstanding bills (`outstanding.receivables`, `outstanding.payables`)
-and stock summary (`stock-summary.*`), added in round S12. The register report has no mock state
-yet. Ours still draws the generic table, which shares the drill levels' fixes (bare Debit and
-Credit figures, footnote style), so it differs from these states until the app round redraws it.
-s9: the profit and loss and trial balance run over the new sample seed through the same engine
-reports the balance sheet uses (Opening stock now sits under Direct Expenses, the provisional
-reason names the item); no state to compare with, so nothing further was changed.
+Drawn to the mock in S12: `trial-balance.default`, `outstanding.receivables`,
+`outstanding.payables`, `stock-summary.default`, `stock-summary.provisional`,
+`profit-and-loss.default`, `profit-and-loss.provisional`, `audit.default`, `audit.integrity`
+(light, dark, hc). The screen keeps the engine's own report as the model and draws lines made from
+it (`report_view/mock.rs`); no figure is computed in the screen. The register report has no mock
+state yet and still draws the generic table.
+
+- **gap: profit and loss shows the engine's refusal, not figures.** The sample's "Opening stock"
+  ledger has an opening balance on an expense ledger, which the engine's profit and loss refuses
+  ("how it splits across periods is not defined"). The mock shows 85,93,225.00 sales and a net
+  result. `profit-and-loss.default` and `.provisional` therefore show the mock's head, buttons and
+  keys and a red note with the engine's reason. Closing it needs the engine to split an opening
+  balance across periods (a reports task, not an app one).
+- **gap: no print preview, saved or failed state.** `profit-and-loss.print-preview`, `.print-saved`
+  and `.print-failed` are not captured: Print preview (Ctrl+P) starts the engine's print, which
+  refuses for the same reason as above, and the app has no in-app preview panel (see Print).
+- **gap: audit, edits after lock is a table here, Unsupported in the mock.** The engine returns an
+  `EditsAfterLock` table; the mock's `audit.unsupported` says it is unsupported. The tab opens and
+  shows what the engine gives; no capture is taken (it would not match the mock's claim). The
+  mock or the engine must change.
+- **gap: the audit edit log lists audit events, not vouchers.** The engine's edit log has one line
+  per audit event (156 in the sample: group and ledger creations, then vouchers) with Seq, Date,
+  Time, User, Action, Object, Reason, Field, Before, After. The mock lists the 14 November vouchers
+  (Voucher, Type, Date, Entered by, Origin, Narration). The page head, tabs, subtitle and keys are
+  the mock's; the table is the engine's, so `audit.default` differs in its columns and rows. The
+  period in its subtitle is the period asked for (1 Apr to 20 Nov), not the mock's "1 Nov to 21 Nov".
+- **gap: the integrity certificate is a table, not a card.** The rows are the engine's real result
+  (Result PASS, Events checked, Head, First broken event, Checkpoints); the mock shows a card
+  with "Vouchers in the period", "Entries checked against the log", "Hash links broken" and
+  "Checked by". The "0 broken links" in the mock is a sample: the app prints the verify result. The
+  head hash is longer than the column and is clipped.
+- **gap: outstanding bills.** The Overdue column names the engine's ageing bucket ("31-60 days",
+  "Not yet due"), not the mock's day count ("55 days", "not due"), because the engine ages a bill
+  into a bucket and does not give days; there is no red ink on overdue bills; the lines are in the
+  engine's party order (the mock's are by due date); the total line says "Total", not "7 open
+  bills"; the footnote is the engine's. The tabs Receivables and Payables switch the report.
+- **gap: stock summary.** There is no Cost column (the engine's stock summary has no cost per
+  unit) and the total line says "Total", not "Total closing stock" with an engine badge. HSN and
+  Unit come from the item masters. The subtitle reads "quantity and value from the stock engine"
+  because the engine values by each item's own method, not always at average cost. The provisional
+  state's banner naming the item is the engine's footnote, not the mock's alert note.
+- **gap: reports are as at 20 Nov 2026.** The mock's clock is 21 Nov; the engine's balance date is
+  the last voucher date (20 Nov), as in the balance sheet.
+- **gap: the trial balance names groups as the engine does.** "Capital Account", "Duties & Taxes"
+  and "Bank Accounts" where the mock says "Capital account", "Duties and taxes" and "Secured
+  loans" (the sample's chart differs from the mock's: its bank balances are bank ledgers, not a
+  term loan). The mock's 2,39,820.00 creditors are not in the sample.
+- **gap: start.recent is not built.** The cold Start screen with a recent-companies table needs a
+  recent-companies store (a file kept per user, with the last opened time) and its screen; neither
+  exists. The cold start still shows the first-run card.
 
 ## Masters, GST, keys (round of 2026-11-24, card S8)
 
@@ -1019,3 +1063,9 @@ Mismatches between the mock's totals and the engine's, and why:
 - **by design: UQC codes.** Units map to the GST portal's UQC codes from the portal's published
   list as the author remembers it (roll ROL, set SET, nos NOS), and the coil unit maps to OTH;
   the list was not re-read for this card.
+
+- **gap (S12): stock-summary.provisional.** The app prints the engine's provisional text in the
+  Value cell ("... below zero on 2026-11-19"), where the mock shows a "Provisional" badge, a
+  quantity of -30 and a warning banner above the table. The sample company's engine run gives
+  quantity 70 for Steel pickaxe 2.5 kg at 20 Nov, and the text is clipped at the cell's left edge.
+  Needs a badge cell and a top note for stock, as balance sheet has.

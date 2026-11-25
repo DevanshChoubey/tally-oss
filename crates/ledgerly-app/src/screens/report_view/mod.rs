@@ -41,6 +41,7 @@ pub mod balance;
 pub mod day_book;
 pub mod generic;
 mod ledger_side;
+mod mock;
 mod model;
 mod remote;
 mod text;
@@ -69,7 +70,7 @@ pub use model::{
     DrillTarget, ReportSource, ReportToken, ViewCell, ViewDetail, ViewError, ViewKey, ViewParams,
     ViewReport, ViewRow, ViewRowKind,
 };
-use remote::{drill_params, run_report, view_detail, with_view};
+use remote::{drill_params, mock_lines, run_report, view_detail, with_view};
 use text::numeric_date_text;
 pub use text::{
     PeriodTextError, amount_text, cell_text, date_text, parse_period_date, parse_period_text,
@@ -136,6 +137,8 @@ enum KeyCmd {
     CancelPeriod,
     Export,
     Print,
+    /// F10 on the trial balance.
+    ProfitLoss,
 }
 
 #[derive(Default)]
@@ -190,7 +193,12 @@ pub fn export_file_name(title: &str) -> String {
 type Exported = (PathBuf, Result<Outcome<()>, String>);
 
 /// The answer a worker-mode request brings back: the parameters it ran with, and the report.
-type Answer = (ReportParams, Result<Outcome<ViewReport>, ViewError>);
+/// The engine's answer, and for the reports drawn to the mock the lines to draw.
+type Answer = (
+    ReportParams,
+    Result<Outcome<ViewReport>, ViewError>,
+    Option<ViewReport>,
+);
 
 /// What a worker-mode screen sends to the API worker and waits for.
 struct WorkerRun {
@@ -213,6 +221,9 @@ enum Look {
     BalanceSheet,
     /// The day book: vouchers with a period tab (see [`day_book`]).
     DayBook,
+    /// A generic table under the mock's own head: title, subtitle, keys and actions (see
+    /// [`mock`]).
+    Mock(mock::Mock),
 }
 
 /// The look for an engine report kind. Every kind is listed, so a new kind fails to compile until
@@ -221,15 +232,15 @@ fn look_of(kind: &ReportKind) -> Look {
     match kind {
         ReportKind::BalanceSheet => Look::BalanceSheet,
         ReportKind::DayBook => Look::DayBook,
-        ReportKind::TrialBalance
-        | ReportKind::ProfitAndLoss
-        | ReportKind::GroupSummary(_)
+        ReportKind::GroupSummary(_)
         | ReportKind::GroupLedgers(_)
         | ReportKind::LedgerVouchers(_)
         | ReportKind::Register(_)
+        | ReportKind::TrialBalance
+        | ReportKind::ProfitAndLoss
         | ReportKind::Outstanding { .. }
         | ReportKind::StockSummary
-        | ReportKind::Audit(_) => Look::Generic,
+        | ReportKind::Audit(_) => mock::Mock::of(kind).map_or(Look::Generic, Look::Mock),
     }
 }
 
@@ -288,12 +299,20 @@ pub struct ReportViewScreen {
     export: Latest<Exported>,
     /// Ctrl+P was pressed; the print starts after the frame is drawn.
     print_wanted: bool,
+    /// A head button opens another report (the trial balance's "Profit and loss"): its palette
+    /// key. The screen opens after the frame.
+    goto: Option<&'static str>,
+    /// A head button asked for what Enter does on the selected row.
+    drill_wanted: bool,
     /// A voucher button of the empty day book was pressed; the voucher opens after the frame.
     open_wanted: Option<crate::keymap::Action>,
     /// The print in flight, and its save dialog (see [`PrintJob`]).
     print: PrintJob,
     /// The side card of a ledger drill (group, GSTIN, credit days, open bills, Alter ledger).
     side: ledger_side::LedgerSide,
+    /// The lines drawn to the mock for the trial balance, the outstanding bills and the stock
+    /// summary, made from [`ReportViewScreen::report`] (see `mock.rs`). `None` draws the report.
+    lines: Option<ViewReport>,
     /// Alter ledger was clicked; the masters screen opens after the frame.
     alter_wanted: bool,
 }
@@ -320,6 +339,9 @@ impl ReportViewScreen {
             origin: None,
             export: Latest::default(),
             print_wanted: false,
+            goto: None,
+            drill_wanted: false,
+            lines: None,
             open_wanted: None,
             print: PrintJob::default(),
             side: ledger_side::LedgerSide::default(),
@@ -373,6 +395,9 @@ impl ReportViewScreen {
             origin: None,
             export: Latest::default(),
             print_wanted: false,
+            goto: None,
+            drill_wanted: false,
+            lines: None,
             open_wanted: None,
             print: PrintJob::default(),
             side: ledger_side::LedgerSide::default(),
@@ -402,7 +427,7 @@ impl ReportViewScreen {
     pub fn tick(&mut self, worker: Option<&ApiWorker>) {
         let finished = self.worker.as_mut().and_then(|run| run.latest.poll());
         match finished {
-            Some(Done::Ready((params, answer))) => self.apply(params, answer),
+            Some(Done::Ready((params, answer, lines))) => self.apply(params, answer, lines),
             Some(Done::Lost) => self.fail(
                 "the engine stopped before it answered; check the books and open the report again",
             ),
@@ -426,13 +451,22 @@ impl ReportViewScreen {
         let params = with_view(&run.engine, view, as_of);
         run.latest.start(handle, move |api| {
             let answer = run_report(api, &params);
-            (params, answer)
+            let lines = match &answer {
+                Ok(Outcome::Value(view)) => mock_lines(api, &params, view),
+                Ok(Outcome::Unsupported(_)) | Err(_) => None,
+            };
+            (params, answer, lines)
         });
     }
 
     /// Shows the answer to a worker request. A failed or unsupported answer keeps the previous
     /// report on screen, with the reason.
-    fn apply(&mut self, params: ReportParams, answer: Result<Outcome<ViewReport>, ViewError>) {
+    fn apply(
+        &mut self,
+        params: ReportParams,
+        answer: Result<Outcome<ViewReport>, ViewError>,
+        lines: Option<ViewReport>,
+    ) {
         match answer {
             Err(e) => self.fail(e.to_string()),
             Ok(Outcome::Unsupported(u)) => self.fail(unsupported_text(&u)),
@@ -441,7 +475,7 @@ impl ReportViewScreen {
                     if let Some(run) = self.worker.as_mut() {
                         run.engine = params;
                     }
-                    self.replace_report(report);
+                    self.replace_report(report, lines);
                 }
                 Err(e) => self.fail(e.to_string()),
             },
@@ -576,7 +610,7 @@ impl ReportViewScreen {
     /// The selected row, if the report has rows.
     #[must_use]
     pub fn selected_row(&self) -> Option<&ViewRow> {
-        self.report.rows.get(self.selected)
+        self.shown().rows.get(self.selected)
     }
 
     /// The message under the header, if any.
@@ -592,7 +626,7 @@ impl ReportViewScreen {
     }
 
     fn last_row(&self) -> usize {
-        self.report.rows.len().saturating_sub(1)
+        self.shown().rows.len().saturating_sub(1)
     }
 
     /// Selects row `index`, or the last row when `index` is past the end.
@@ -625,7 +659,7 @@ impl ReportViewScreen {
     /// and say why in [`ReportViewScreen::notice`].
     pub fn drill(&mut self) -> ScreenAction {
         self.notice = None;
-        let (key, label) = if let Some(row) = self.report.rows.get(self.selected) {
+        let (key, label) = if let Some(row) = self.shown().rows.get(self.selected) {
             (row.key.clone(), row.label.clone())
         } else {
             self.info("This report has no rows to open.");
@@ -791,7 +825,7 @@ impl ReportViewScreen {
             Err(e) => self.fail(e.to_string()),
             Ok(Outcome::Unsupported(u)) => self.fail(unsupported_text(&u)),
             Ok(Outcome::Value(report)) => match report.check_shape() {
-                Ok(()) => self.replace_report(report),
+                Ok(()) => self.replace_report(report, None),
                 Err(e) => self.fail(e.to_string()),
             },
         }
@@ -800,22 +834,29 @@ impl ReportViewScreen {
     /// Swaps in a reshaped report and keeps the selection on the same row: the row with the same
     /// drill key, or for a keyless row the same kind and label; otherwise the same position, or
     /// the last row.
-    fn replace_report(&mut self, report: ViewReport) {
+    fn replace_report(&mut self, report: ViewReport, lines: Option<ViewReport>) {
         let old_index = self.selected;
         let old = self
-            .report
+            .shown()
             .rows
             .get(old_index)
             .map(|r| (r.key.clone(), r.label.clone(), r.kind));
         self.report = report;
+        self.lines = lines;
         let found = old.and_then(|(key, label, kind)| {
-            self.report.rows.iter().position(|r| match &key {
+            self.shown().rows.iter().position(|r| match &key {
                 Some(k) => r.key.as_ref() == Some(k),
                 None => r.key.is_none() && r.label == label && r.kind == kind,
             })
         });
         self.selected = found.unwrap_or_else(|| old_index.min(self.last_row()));
         self.scroll_pending = true;
+    }
+
+    /// What the table draws and the cursor moves over: the lines made for the mock when there
+    /// are some, otherwise the engine's report.
+    fn shown(&self) -> &ViewReport {
+        self.lines.as_ref().unwrap_or(&self.report)
     }
 
     fn run(&mut self, cmd: KeyCmd) -> ScreenAction {
@@ -834,6 +875,7 @@ impl ReportViewScreen {
             KeyCmd::CancelPeriod => self.cancel_period_edit(),
             KeyCmd::Export => self.export_wanted = true,
             KeyCmd::Print => self.print_wanted = true,
+            KeyCmd::ProfitLoss => self.goto = Some("profit-and-loss"),
         }
         ScreenAction::Stay
     }
@@ -908,6 +950,8 @@ impl ReportViewScreen {
                         .inner;
                 },
             );
+        } else if let Look::Mock(m) = look {
+            self.draw_mock_head(ui, m, &title, subtitle.as_deref());
         } else {
             let mut export = false;
             // index.html:1577: a drill level (a group, a ledger) has no action buttons; its keys
@@ -947,15 +991,132 @@ impl ReportViewScreen {
             ui.ctx().request_repaint();
         }
         match &self.notice {
-            Some(Notice::Error(s)) => {
-                ui.colored_label(ui.visuals().error_fg_color, format!("Error: {s}"));
-            }
+            Some(Notice::Error(s)) => draw_error(ui, s),
             Some(Notice::Info(s)) => {
                 ui.label(format!("Note: {s}"));
             }
             None => {}
         }
         self.draw_period_editor(ui);
+    }
+
+    /// The head of a report drawn to the mock: tabs for the audit screen and the outstanding
+    /// bills, and the buttons the mock puts at the right.
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one head: tabs, the buttons of each report and their clicks"
+    )]
+    fn draw_mock_head(&mut self, ui: &mut Ui, m: mock::Mock, title: &str, subtitle: Option<&str>) {
+        let tabs: Vec<(&str, bool)> = match m {
+            mock::Mock::Audit(current) => mock::AuditTab::ALL
+                .iter()
+                .map(|t| (t.label(), *t == current))
+                .collect(),
+            mock::Mock::Outstanding { receivable } => {
+                vec![("Receivables", receivable), ("Payables", !receivable)]
+            }
+            mock::Mock::Trial | mock::Mock::Stock | mock::Mock::ProfitLoss => Vec::new(),
+        };
+        let (mut export, mut print, mut goto, mut drill) = (false, false, false, false);
+        let mut clicked = None;
+        let sub = subtitle.unwrap_or_default().to_owned();
+        let t = crate::ui::tokens(ui);
+        let drawing_tabs = !tabs.is_empty();
+        let labels: Vec<&str> = tabs.iter().map(|(l, _)| *l).collect();
+        let selected = tabs.iter().position(|(_, on)| *on);
+        page_head_with(
+            ui,
+            title,
+            |ui| {
+                ui.label(para_text(&sub, crate::theme::TEXT_BODY, t.text_2));
+            },
+            |ui| {
+                if drawing_tabs {
+                    let size = egui::vec2(tab_strip_width(ui, &labels), ui.available_height());
+                    clicked = ui
+                        .allocate_ui_with_layout(size, Layout::left_to_right(Align::Center), |ui| {
+                            tab_strip(ui, &labels, selected).clicked
+                        })
+                        .inner;
+                    return;
+                }
+                match m {
+                    mock::Mock::Trial => {
+                        goto = button(ui, "Profit and loss", Some("F10"), ButtonKind::Secondary)
+                            .clicked();
+                    }
+                    mock::Mock::Stock => {
+                        drill = button(ui, "Stock items", Some("Enter"), ButtonKind::Secondary)
+                            .clicked();
+                    }
+                    mock::Mock::ProfitLoss => {
+                        export = button_icon(
+                            ui,
+                            Some(Icon::Upload),
+                            "Export",
+                            Some("Ctrl+E"),
+                            ButtonKind::Secondary,
+                        )
+                        .clicked();
+                        print = button_icon(
+                            ui,
+                            Some(Icon::Upload),
+                            "Print preview",
+                            Some("Ctrl+P"),
+                            ButtonKind::Secondary,
+                        )
+                        .clicked();
+                    }
+                    mock::Mock::Outstanding { .. } | mock::Mock::Audit(_) => {}
+                }
+            },
+        );
+        if export {
+            self.export_wanted = true;
+        }
+        if print {
+            self.print_wanted = true;
+        }
+        if goto {
+            self.goto = Some("profit-and-loss");
+        }
+        if drill {
+            self.drill_wanted = true;
+        }
+        if let Some(i) = clicked {
+            let kind = match m {
+                mock::Mock::Audit(_) => mock::AuditTab::ALL.get(i).map(|t| t.kind()),
+                mock::Mock::Outstanding { .. } => {
+                    Some(ReportKind::Outstanding { receivable: i == 0 })
+                }
+                mock::Mock::Trial | mock::Mock::Stock | mock::Mock::ProfitLoss => None,
+            };
+            if let Some(kind) = kind {
+                self.switch_kind(kind);
+            }
+        }
+    }
+
+    /// Shows another report of the same family (a tab): the placeholder until the engine answers,
+    /// so the old report is never shown under the new tab.
+    fn switch_kind(&mut self, kind: ReportKind) {
+        let Some(run) = self.worker.as_mut() else {
+            return;
+        };
+        if run.engine.kind == kind {
+            return;
+        }
+        run.engine.kind = kind;
+        // The period asked for, not the one the previous report carried (the audit reports carry
+        // the whole calendar).
+        let params = ViewParams {
+            period: run.engine.period,
+            ..self.report.params
+        };
+        self.report = pending_report(params);
+        self.lines = None;
+        self.selected = 0;
+        self.refresh(params);
     }
 
     fn draw(&mut self, ui: &mut Ui) -> ScreenAction {
@@ -968,6 +1129,17 @@ impl ReportViewScreen {
         }
         let look = self.look();
         self.draw_head(ui, look);
+        if self.report.columns.is_empty()
+            && self.report.rows.is_empty()
+            && !self.is_loading()
+            && matches!(self.notice, Some(Notice::Error(_)))
+        {
+            // The engine refused the report: the note above says why, and there is no table to
+            // draw (no empty card, no figure).
+            self.footer = None;
+            self.selected_line = None;
+            return action;
+        }
         if self.is_loading() && self.report.rows.is_empty() {
             // Nothing has arrived yet: say so, and draw no figure.
             draw_loading(ui);
@@ -1056,7 +1228,7 @@ impl ReportViewScreen {
                 .response
                 .rect;
             self.footer = Some(footer);
-            let report = &self.report;
+            let report = self.shown();
             let side = &self.side;
             let mut alter = false;
             let drawn = egui::CentralPanel::default()
@@ -1235,7 +1407,7 @@ fn read_keys(ctx: &Context, editing: bool, look: Look) -> Vec<KeyCmd> {
         // period; elsewhere F2 edits the period. Alt+F2 comes before F2 for the reason above.
         let f2 = match look {
             Look::DayBook => KeyCmd::EditDate,
-            Look::BalanceSheet | Look::Generic => KeyCmd::EditPeriod,
+            Look::BalanceSheet | Look::Generic | Look::Mock(_) => KeyCmd::EditPeriod,
         };
         let table = [
             (Modifiers::ALT, Key::F1, KeyCmd::ToggleDetail),
@@ -1256,6 +1428,9 @@ fn read_keys(ctx: &Context, editing: bool, look: Look) -> Vec<KeyCmd> {
             // Ctrl+P prints the open report (index.html:1839); see design/PARITY-GAPS.md.
             (Modifiers::COMMAND, Key::P, KeyCmd::Print),
         ];
+        if look == Look::Mock(mock::Mock::Trial) && i.consume_key(Modifiers::NONE, Key::F10) {
+            out.push(KeyCmd::ProfitLoss);
+        }
         for (modifiers, key, cmd) in table {
             if i.consume_key(modifiers, key) {
                 out.push(cmd);
@@ -1289,6 +1464,7 @@ impl Screen for ReportViewScreen {
         // (index.html:1572: "Balance sheet").
         match self.look() {
             Look::BalanceSheet | Look::DayBook => self.page_title(),
+            Look::Mock(m) => m.crumb().to_owned(),
             Look::Generic => self.generic_title(),
         }
     }
@@ -1297,6 +1473,7 @@ impl Screen for ReportViewScreen {
         match self.look() {
             Look::BalanceSheet => "Balance sheet".to_owned(),
             Look::DayBook => "Day book".to_owned(),
+            Look::Mock(m) => m.page_title().to_owned(),
             Look::Generic => self.generic_title(),
         }
     }
@@ -1312,6 +1489,16 @@ impl Screen for ReportViewScreen {
                 Some(balance::subtitle(as_of))
             }
             Look::DayBook => Some(day_book::subtitle(period)),
+            Look::Mock(m) => {
+                let as_of = self
+                    .worker
+                    .as_ref()
+                    .map_or(period.to(), |run| run.engine.as_of);
+                // The period asked for, not the one the report carries: the audit reports carry
+                // the whole calendar.
+                let asked = self.worker.as_ref().map_or(period, |run| run.engine.period);
+                Some(m.subtitle(as_of, asked))
+            }
             Look::Generic if self.is_drill_level() => {
                 let as_of = self
                     .worker
@@ -1336,7 +1523,10 @@ impl Screen for ReportViewScreen {
             // index.html:1579: while the report computes the bar says so and offers only Esc.
             return "Computing".to_owned();
         }
-        self.page_title()
+        match self.look() {
+            Look::Mock(m) => m.key_bar_name().to_owned(),
+            Look::BalanceSheet | Look::DayBook | Look::Generic => self.page_title(),
+        }
     }
 
     fn keys(&self) -> Vec<KeyHint> {
@@ -1358,6 +1548,11 @@ impl Screen for ReportViewScreen {
                 KeyHint::new("F2", "Date"),
                 KeyHint::new("Esc", "Back"),
             ],
+            Look::Mock(m) => m
+                .keys()
+                .into_iter()
+                .map(|(k, a)| KeyHint::new(k, a))
+                .collect(),
             Look::Generic => vec![
                 KeyHint::new("J / K", "Move"),
                 KeyHint::new("Enter", "Open"),
@@ -1392,6 +1587,20 @@ impl Screen for ReportViewScreen {
                 crate::screens::masters::MastersScreen::altering_ledger(ledger),
             ));
         }
+        if let Some(key) = self.goto.take() {
+            match crate::shell::navigate::open_target(
+                &crate::palette::PaletteTarget::Report(key.to_owned()),
+                ctx,
+            ) {
+                Ok(screen) => action = ScreenAction::Push(screen),
+                Err(e) => self.notice = Some(Notice::Error(e.to_string())),
+            }
+        }
+        if std::mem::take(&mut self.drill_wanted)
+            && let ScreenAction::Push(screen) = self.drill()
+        {
+            action = ScreenAction::Push(screen);
+        }
         if let Some(wanted) = self.open_wanted.take() {
             match crate::screens::ai_gate::open_voucher(wanted, ctx) {
                 Ok(open) => action = open,
@@ -1414,6 +1623,27 @@ impl Screen for ReportViewScreen {
         }
         action
     }
+}
+
+/// The red note over a report the engine refused or could not run: the words the engine gave,
+/// with the lead sentence in bold (the mock's `audit.unsupported`).
+fn draw_error(ui: &mut Ui, text: &str) {
+    let (lead, rest) = match text.split_once(": ") {
+        Some((lead, rest)) => (format!("{lead}."), rest.to_owned()),
+        None => (
+            String::from("The report could not be shown."),
+            text.to_owned(),
+        ),
+    };
+    crate::ui::note::note_with_icon(ui, NoteKind::Bad, Icon::Alert, |ui, ink| {
+        ui.label(
+            egui::RichText::new(lead)
+                .font(crate::ui::bold_font(ui, crate::theme::TEXT_META))
+                .color(ink),
+        );
+        ui.label(para_text(&rest, crate::theme::TEXT_META, ink));
+    });
+    ui.add_space(8.0);
 }
 
 /// The placeholder a worker-mode screen shows until its first report arrives: no rows, no

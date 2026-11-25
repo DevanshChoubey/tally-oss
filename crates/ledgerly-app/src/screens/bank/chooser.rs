@@ -18,12 +18,19 @@ use crate::screen::KeyHint;
 use crate::screens::wire::{Done, Latest, unsupported_text};
 use crate::shell::navigate;
 use crate::theme::{RADIUS_M, TEXT_BODY, TEXT_META, border_width, shadow_1};
+use crate::ui::badge::{BadgeKind, paint_badge};
 use crate::ui::format;
 use crate::ui::note::{NoteKind, note};
 use crate::ui::page_head::page_head;
 use crate::ui::table::{self, CellPlace, RowState};
 use crate::ui::{bold_font, kind, tokens};
 use crate::{AppCtx, Screen, ScreenAction};
+
+/// The page head's title (`design/mock-v2` bank-chooser).
+const HEAD_TITLE: &str = "Choose a bank account";
+
+/// The line under the card.
+const FOOTNOTE: &str = "The balance is the engine's balance on this computer, as at the last voucher date. Import a statement before matching.";
 
 /// One bank ledger the chooser offers.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -64,9 +71,16 @@ pub struct ChooserRow {
     name: String,
     account: String,
     balance: Balance,
+    statement: Statement,
 }
 
 impl ChooserRow {
+    /// The statement status of the account.
+    #[must_use]
+    pub fn statement(&self) -> &Statement {
+        &self.statement
+    }
+
     /// The bank ledger.
     #[must_use]
     pub fn ledger(&self) -> LedgerId {
@@ -89,7 +103,20 @@ impl ChooserRow {
     }
 }
 
-type Answer = Vec<(LedgerId, Result<Outcome<Paise>, String>)>;
+/// Whether a bank account has a statement imported, as the engine holds it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Statement {
+    /// The engine has not answered yet.
+    Loading,
+    /// No statement is stored for the account.
+    None,
+    /// A statement is stored; its first and last line dates when it has lines.
+    Imported(Option<(Date, Date)>),
+    /// The stored statements could not be read, and why (never shown as "no statement").
+    Unreadable(String),
+}
+
+type Answer = Vec<(LedgerId, Result<Outcome<Paise>, String>, Statement)>;
 
 /// The bank chooser screen.
 #[derive(Debug)]
@@ -102,10 +129,13 @@ pub struct BankChooserScreen {
     notice: Option<String>,
 }
 
-/// The width of the balance column.
-const BALANCE_WIDTH: f32 = 220.0;
-/// The width of the account number column.
-const ACCOUNT_WIDTH: f32 = 180.0;
+/// Where the columns sit in the card, as fractions of its width (`design/mock-v2` bank-chooser:
+/// the number column starts 35% in, the balance ends 63% in, the statement starts 65% in).
+const NUMBER_AT: f32 = 0.35;
+/// Right edge of the balance column.
+const BALANCE_TO: f32 = 0.633;
+/// Left edge of the statement column.
+const STATEMENT_AT: f32 = 0.654;
 
 impl BankChooserScreen {
     /// A chooser over `choices`, in the given order, with each bank's books balance as of
@@ -119,6 +149,7 @@ impl BankChooserScreen {
                 name: c.name,
                 account: c.account,
                 balance: Balance::Loading,
+                statement: Statement::Loading,
             })
             .collect();
         let focus = focus
@@ -167,7 +198,25 @@ impl BankChooserScreen {
                                 .brs(ledger, as_of)
                                 .map(|o| o.map(|brs| brs.books_balance))
                                 .map_err(|e| e.to_string());
-                            (ledger, answer)
+                            let statements = match api.stored_bank_statements(ledger) {
+                                Ok(statements) => statements,
+                                Err(e) => {
+                                    return (ledger, answer, Statement::Unreadable(e.to_string()));
+                                }
+                            };
+                            let period = statements.iter().filter_map(|(_, s)| s.period()).fold(
+                                None,
+                                |acc: Option<(Date, Date)>, (a, b)| match acc {
+                                    None => Some((a, b)),
+                                    Some((from, to)) => Some((from.min(a), to.max(b))),
+                                },
+                            );
+                            let statement = if statements.is_empty() {
+                                Statement::None
+                            } else {
+                                Statement::Imported(period)
+                            };
+                            (ledger, answer, statement)
                         })
                         .collect()
                 });
@@ -192,10 +241,11 @@ impl BankChooserScreen {
     }
 
     fn apply(&mut self, answers: Answer) {
-        for (ledger, answer) in answers {
+        for (ledger, answer, statement) in answers {
             let Some(row) = self.rows.iter_mut().find(|r| r.ledger == ledger) else {
                 continue;
             };
+            row.statement = statement;
             row.balance = match answer {
                 Ok(Outcome::Value(p)) => Balance::Value(p),
                 Ok(Outcome::Unsupported(u)) => Balance::Missing(unsupported_text(&u)),
@@ -237,7 +287,7 @@ impl BankChooserScreen {
                 let width = ui.available_width();
                 let (head, _) =
                     ui.allocate_exact_size(vec2(width, table::T_HEAD_HEIGHT), Sense::hover());
-                self.paint_head(ui, head);
+                Self::paint_head(ui, head);
                 for (i, row) in self.rows.iter().enumerate() {
                     let (rect, response) =
                         ui.allocate_exact_size(vec2(width, table::T_ROW_HEIGHT), Sense::click());
@@ -259,41 +309,66 @@ impl BankChooserScreen {
         clicked
     }
 
-    fn paint_head(&self, ui: &Ui, rect: Rect) {
+    fn paint_head(ui: &Ui, rect: Rect) {
         let t = tokens(ui);
         table::paint_head_rule(ui, rect);
         let font = bold_font(ui, TEXT_META);
-        let account = Rect::from_min_max(
-            pos2(rect.right() - BALANCE_WIDTH - ACCOUNT_WIDTH, rect.top()),
-            pos2(rect.right() - BALANCE_WIDTH, rect.bottom()),
-        );
+        let cols = columns(rect);
         table::paint_cell_text(
             ui,
             rect,
             1.0,
-            "Bank account",
+            "Account",
             font.clone(),
             t.text_3,
             CellPlace::Left(table::indent(0)),
         );
         table::paint_cell_text(
             ui,
-            account,
+            cols.number,
             1.0,
-            "Account number",
+            "Number",
             font.clone(),
             t.text_3,
             CellPlace::Left(0.0),
         );
         table::paint_cell_text(
             ui,
-            rect,
+            cols.balance,
             1.0,
-            &format!("Balance as per books, {}", format_line_date(self.as_of)),
-            font,
+            "Balance per books",
+            font.clone(),
             t.text_3,
             CellPlace::Right,
         );
+        table::paint_cell_text(
+            ui,
+            cols.statement,
+            1.0,
+            "Statement",
+            font,
+            t.text_3,
+            CellPlace::Left(0.0),
+        );
+    }
+}
+
+/// The three columns after the name, as rectangles of the line.
+struct Columns {
+    number: Rect,
+    balance: Rect,
+    statement: Rect,
+}
+
+fn columns(rect: Rect) -> Columns {
+    let at = |f: f32| rect.left() + rect.width() * f;
+    let band = |from: f32, to: f32| {
+        Rect::from_min_max(pos2(at(from), rect.top()), pos2(at(to), rect.bottom()))
+    };
+    Columns {
+        number: band(NUMBER_AT, BALANCE_TO - 0.15),
+        balance: band(NUMBER_AT, BALANCE_TO),
+        statement: band(STATEMENT_AT, 1.0),
     }
 }
 
@@ -306,28 +381,47 @@ fn balance_text(row: &ChooserRow) -> String {
     }
 }
 
-/// One bank line: fill and rule, the name, the account number and the balance.
+/// The words after the badge in the statement column: the period, or that there is none.
+#[must_use]
+pub(super) fn statement_text(statement: &Statement) -> String {
+    match statement {
+        Statement::Loading => "Loading".to_owned(),
+        Statement::None => "No statement imported".to_owned(),
+        Statement::Imported(None) => "Yes".to_owned(),
+        Statement::Imported(Some((from, to))) => {
+            let from_text = if from.year() == to.year() {
+                format!(
+                    "{} {}",
+                    from.day(),
+                    crate::ui::format::month_abbrev(from.month())
+                )
+            } else {
+                format_line_date(*from)
+            };
+            format!("Yes, {from_text} to {}", format_line_date(*to))
+        }
+        Statement::Unreadable(why) => format!("Could not be read: {why}"),
+    }
+}
+
+/// One bank line: fill and rule, the name, the account number, the balance and the statement.
 fn paint_line(ui: &Ui, rect: Rect, row: &ChooserRow, state: RowState) {
     let t = tokens(ui);
     table::paint_row(ui, rect, state);
     let font = FontId::proportional(TEXT_BODY);
-    let bold = bold_font(ui, TEXT_BODY);
+    let cols = columns(rect);
     table::paint_cell_text(
         ui,
         rect,
         1.0,
         &row.name,
-        bold,
+        font.clone(),
         t.text,
         CellPlace::Left(table::indent(0)),
     );
-    let account = Rect::from_min_max(
-        pos2(rect.right() - BALANCE_WIDTH - ACCOUNT_WIDTH, rect.top()),
-        pos2(rect.right() - BALANCE_WIDTH, rect.bottom()),
-    );
     table::paint_cell_text(
         ui,
-        account,
+        cols.number,
         1.0,
         &row.account,
         font.clone(),
@@ -340,12 +434,38 @@ fn paint_line(ui: &Ui, rect: Rect, row: &ChooserRow, state: RowState) {
     };
     table::paint_cell_text(
         ui,
-        rect,
+        cols.balance,
         1.0,
         &balance_text(row),
         font,
         colour,
         CellPlace::Right,
+    );
+    let y = rect.center().y;
+    let mut x = cols.statement.left();
+    let badge = match row.statement {
+        Statement::Imported(_) => Some((BadgeKind::Ok, "Imported")),
+        Statement::None => Some((BadgeKind::Neutral, "Not imported")),
+        Statement::Unreadable(_) => Some((BadgeKind::Bad, "Unreadable")),
+        Statement::Loading => None,
+    };
+    if let Some((kind_of, label)) = badge {
+        x += paint_badge(ui, x, y, kind_of, label) + 6.0;
+    }
+    let meta = match &row.statement {
+        Statement::Unreadable(why) => why.clone(),
+        Statement::Imported(_) | Statement::None | Statement::Loading => {
+            statement_text(&row.statement)
+        }
+    };
+    table::paint_cell_text(
+        ui,
+        Rect::from_min_max(pos2(x, rect.top()), pos2(rect.right(), rect.bottom())),
+        1.0,
+        &meta,
+        FontId::proportional(TEXT_META),
+        t.text_3,
+        CellPlace::Left(0.0),
     );
 }
 
@@ -358,14 +478,26 @@ impl Screen for BankChooserScreen {
         PAGE_TITLE.to_owned()
     }
 
+    fn page_title(&self) -> String {
+        HEAD_TITLE.to_owned()
+    }
+
+    fn key_bar_name(&self) -> String {
+        "Choose account".to_owned()
+    }
+
     fn subtitle(&self) -> Option<String> {
-        Some("Choose the bank account to reconcile".to_owned())
+        Some(
+            "Each account reconciles on its own statement. Enter opens the one selected."
+                .to_owned(),
+        )
     }
 
     fn keys(&self) -> Vec<KeyHint> {
         vec![
-            KeyHint::new("Enter", "Open account"),
             KeyHint::new("J / K", "Move"),
+            KeyHint::new("Enter", "Open reconciliation"),
+            KeyHint::new("Esc", "Back"),
         ]
     }
 
@@ -389,8 +521,15 @@ impl Screen for BankChooserScreen {
             self.focus = self.focus.saturating_sub(1);
         }
         let sub = self.subtitle();
-        page_head(ui, PAGE_TITLE, sub.as_deref(), |_| {});
+        page_head(ui, HEAD_TITLE, sub.as_deref(), |_| {});
         let clicked = self.draw_card(ui);
+        let t = tokens(ui);
+        ui.add_space(6.0);
+        ui.label(
+            egui::RichText::new(FOOTNOTE)
+                .size(TEXT_META)
+                .color(t.text_3),
+        );
         if let Some(text) = self.notice.as_deref() {
             note(ui, NoteKind::Bad, text);
         }

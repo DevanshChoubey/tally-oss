@@ -59,7 +59,7 @@ mod import;
 mod view;
 mod worker;
 
-pub use chooser::{BankChoice, BankChooserScreen, ChooserRow};
+pub use chooser::{BankChoice, BankChooserScreen, ChooserRow, Statement};
 
 /// The page title of the screen, shown in the page head.
 pub const PAGE_TITLE: &str = "Bank reconciliation";

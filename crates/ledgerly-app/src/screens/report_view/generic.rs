@@ -40,8 +40,20 @@ pub enum ColumnKind {
 /// lists ledgers and groups, every other report lists particulars.
 #[must_use]
 pub fn label_heading(report: &ViewReport) -> &'static str {
-    if report.columns.first().is_some_and(|c| c == "GSTIN") {
+    let columns = &report.columns;
+    if columns.first().is_some_and(|c| c == "GSTIN") {
         GROUP_LABEL_HEADING
+    } else if columns.first().is_some_and(|c| c == super::mock::TB_GROUP) {
+        // index.html `trial-balance.default`: Ledger, Group, Debit, Credit.
+        "Ledger"
+    } else if columns.iter().any(|c| c == "Open Dr") {
+        // `outstanding.receivables`: Customer, Bill, Bill date, Due, Open, Overdue.
+        "Customer"
+    } else if columns.iter().any(|c| c == "Open Cr") {
+        "Supplier"
+    } else if columns.iter().any(|c| c == super::mock::VALUE_HEADING) {
+        // `stock-summary.default`: Item, HSN, Quantity, Unit, Value.
+        "Item"
     } else {
         LABEL_HEADING
     }
@@ -53,6 +65,11 @@ pub fn label_heading(report: &ViewReport) -> &'static str {
 pub fn column_kinds(report: &ViewReport) -> Vec<ColumnKind> {
     (0..report.columns.len())
         .map(|i| {
+            // The overdue column holds words ("31-60 days") but sits at the right like a figure
+            // (index.html `outstanding.receivables`).
+            if report.columns.get(i).is_some_and(|c| c == "Overdue") {
+                return ColumnKind::Figure;
+            }
             report
                 .rows
                 .iter()
@@ -197,7 +214,13 @@ fn column_heading<'a>(report: &ViewReport, name: &'a str) -> &'a str {
             other => other,
         }
     } else {
-        name
+        match name {
+            // The engine-facing headings name the side (see `mock.rs`); the mock prints the
+            // plain word.
+            "Open Dr" | "Open Cr" => "Open",
+            "Value Dr" => "Value",
+            other => other,
+        }
     }
 }
 
@@ -219,7 +242,10 @@ pub fn line_heights(report: &ViewReport) -> Vec<f32> {
 /// ledger vouchers report carries its particulars both as the row label and as a column).
 #[must_use]
 pub fn repeats_label(report: &ViewReport, i: usize) -> bool {
-    report.columns.get(i).is_some_and(|c| c == LABEL_HEADING)
+    report
+        .columns
+        .get(i)
+        .is_some_and(|c| c == LABEL_HEADING || c == "Item")
         && report.rows.iter().all(|row| match row.cells.get(i) {
             Some(ViewCell::Empty) | None => true,
             Some(ViewCell::Text(text)) => *text == row.label,
@@ -238,8 +264,8 @@ pub fn repeats_label(report: &ViewReport, i: usize) -> bool {
 #[must_use]
 pub fn column_cell_text(heading: &str, cell: &ViewCell) -> String {
     match heading {
-        "Debit" => amount_on_side(cell, DrCr::Dr),
-        "Credit" => amount_on_side(cell, DrCr::Cr),
+        "Debit" | "Open Dr" | "Value Dr" => amount_on_side(cell, DrCr::Dr),
+        "Credit" | "Open Cr" => amount_on_side(cell, DrCr::Cr),
         _ => cell_text(cell),
     }
 }

@@ -1296,9 +1296,14 @@ fn light_shots() -> Vec<Shot> {
             .type_text("RTGS to Nilgiri Steel Traders"),
         // Godavari has two bank accounts, so Bank Reconciliation opens the chooser first; the
         // mock's statement is Saptagiri's (the first row), so Enter on the chooser opens it.
-        shot("bank.chooser", &[palette])
+        shot("bank-chooser.default", &[palette])
             .query("Bank Reconciliation")
-            .then(&[(Key::Enter, NONE)]),
+            .then(&[(Key::Enter, NONE)])
+            .expect_in(
+                "Bank reconciliation",
+                "Choose account",
+                "Saptagiri Commercial Bank A/c",
+            ),
         shot("bank.default", &[palette])
             .query("Bank Reconciliation")
             .then(&[(Key::Enter, NONE), (Key::Enter, NONE)]),
@@ -1389,6 +1394,50 @@ fn light_shots() -> Vec<Shot> {
         // Godavari with a late sale that takes the pickaxe 30 nos below zero, so closing stock is
         // provisional (the mock's `pick: -30`).
         shot("balance-sheet.provisional", &[(Key::B, NONE)]).on(Fixture::GodavariShortStock),
+        // The sample company has an opening balance on an expense ledger, which the engine's
+        // profit and loss refuses (see PARITY-GAPS): the screen shows that refusal.
+        shot("profit-and-loss.default", &[palette])
+            .query("Profit and Loss")
+            .then(&[(Key::Enter, NONE)])
+            .expect_bar("Profit and loss", "Profit and loss"),
+        shot("profit-and-loss.provisional", &[palette])
+            .query("Profit and Loss")
+            .then(&[(Key::Enter, NONE)])
+            .expect_bar("Profit and loss", "Profit and loss")
+            .on(Fixture::GodavariShortStock),
+        shot("trial-balance.default", &[palette])
+            .query("Trial Balance")
+            .then(&[(Key::Enter, NONE)])
+            .expect_bar("Trial balance", "Trial balance"),
+        shot("outstanding.receivables", &[palette])
+            .query("Receivables Outstanding")
+            .then(&[(Key::Enter, NONE)])
+            .expect_bar("Receivables", "Outstanding bills"),
+        shot("outstanding.payables", &[palette])
+            .query("Payables Outstanding")
+            .then(&[(Key::Enter, NONE)])
+            .expect_bar("Payables", "Outstanding bills"),
+        shot("stock-summary.default", &[palette])
+            .query("Stock Summary")
+            .then(&[(Key::Enter, NONE)])
+            .expect_bar("Stock summary", "Stock summary"),
+        shot("stock-summary.provisional", &[palette])
+            .query("Stock Summary")
+            .then(&[(Key::Enter, NONE)])
+            .expect_bar("Stock summary", "Stock summary")
+            .on(Fixture::GodavariShortStock),
+        // The edit log has no palette row; it is the first tab of the audit screen.
+        shot("audit.default", &[palette])
+            .query("Integrity Certificate")
+            .then(&[(Key::Enter, NONE)])
+            .expect_bar("Audit", "Audit")
+            .click(941.0, 127.0)
+            .wait(30)
+            .expect_bar("Audit", "Audit"),
+        shot("audit.integrity", &[palette])
+            .query("Integrity Certificate")
+            .then(&[(Key::Enter, NONE)])
+            .expect_bar("Audit", "Audit"),
         // Godavari as it is: the pickaxe has no HSN, so Table 12 needs correction. The cursor goes
         // to table 12 by its number, as the mock's `gstr1-correction` state selects it.
         shot("gst.gstr1-correction", &[(Key::G, NONE), (Key::Num1, NONE)])
