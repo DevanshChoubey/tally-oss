@@ -13,6 +13,7 @@ use ledgerly_gst::recon2b::{
 use ledgerly_gst_formats::gstr2b::{Gstr2b, parse_gstr2b};
 use ledgerly_store::{AuditRecord, Event, StoredImsAction};
 use sha2::{Digest, Sha256};
+use std::fmt::Write as _;
 use time::Month;
 
 use crate::error::ApiError;
@@ -111,7 +112,22 @@ fn last_import<'a>(
         } if same_gstin(g, gstin.as_str()) && *period_start == period.from() => {
             Some((file_name.as_str(), json.as_str()))
         }
-        _ => None,
+        Event::MasterCreated(_)
+        | Event::MasterAltered { .. }
+        | Event::MasterDeleted(_)
+        | Event::VoucherPosted(_)
+        | Event::VoucherAltered { .. }
+        | Event::VoucherCancelled { .. }
+        | Event::VoucherDeleted { .. }
+        | Event::SettingChanged { .. }
+        | Event::PeriodLocked { .. }
+        | Event::StatementImported(_)
+        | Event::MatchConfirmed(_)
+        | Event::AiProposalRecorded(_)
+        | Event::BankStatementStored { .. }
+        | Event::Gstr2bImported { .. }
+        | Event::ImsActionRecorded { .. }
+        | Event::Gstr3bFiled { .. } => None,
     })
 }
 
@@ -122,7 +138,22 @@ fn filed_on(records: &[AuditRecord], gstin: &Gstin, period: Period) -> Option<Da
             period_start,
             filed_on,
         } if same_gstin(g, gstin.as_str()) && *period_start == period.from() => Some(*filed_on),
-        _ => None,
+        Event::MasterCreated(_)
+        | Event::MasterAltered { .. }
+        | Event::MasterDeleted(_)
+        | Event::VoucherPosted(_)
+        | Event::VoucherAltered { .. }
+        | Event::VoucherCancelled { .. }
+        | Event::VoucherDeleted { .. }
+        | Event::SettingChanged { .. }
+        | Event::PeriodLocked { .. }
+        | Event::StatementImported(_)
+        | Event::MatchConfirmed(_)
+        | Event::AiProposalRecorded(_)
+        | Event::BankStatementStored { .. }
+        | Event::Gstr2bImported { .. }
+        | Event::ImsActionRecorded { .. }
+        | Event::Gstr3bFiled { .. } => None,
     })
 }
 
@@ -167,7 +198,10 @@ impl Api {
         }
         let documents = portal_documents(&data).len();
         let digest = Sha256::digest(json.as_bytes());
-        let file_hash: String = digest.iter().map(|b| format!("{b:02x}")).collect();
+        let file_hash: String = digest.iter().fold(String::new(), |mut acc, b| {
+            let _ = write!(acc, "{b:02x}");
+            acc
+        });
         let event = Event::Gstr2bImported {
             gstin: gstin.to_string(),
             period_start: from,
@@ -228,7 +262,22 @@ impl Api {
                 {
                     Some(shown(*action))
                 }
-                _ => None,
+                Event::MasterCreated(_)
+                | Event::MasterAltered { .. }
+                | Event::MasterDeleted(_)
+                | Event::VoucherPosted(_)
+                | Event::VoucherAltered { .. }
+                | Event::VoucherCancelled { .. }
+                | Event::VoucherDeleted { .. }
+                | Event::SettingChanged { .. }
+                | Event::PeriodLocked { .. }
+                | Event::StatementImported(_)
+                | Event::MatchConfirmed(_)
+                | Event::AiProposalRecorded(_)
+                | Event::BankStatementStored { .. }
+                | Event::Gstr2bImported { .. }
+                | Event::ImsActionRecorded { .. }
+                | Event::Gstr3bFiled { .. } => None,
             });
             rows.push(Gstr2bRow {
                 supplier_gstin: (*ctin).to_owned(),

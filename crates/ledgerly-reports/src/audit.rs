@@ -328,6 +328,10 @@ fn master_key(s: &MasterSnapshot) -> (ObjectKey, String) {
 }
 
 /// Object key, object label and action text of a record.
+#[allow(
+    clippy::too_many_lines,
+    reason = "one exhaustive match over every event kind, with no catch-all arm"
+)]
 fn describe(rec: &AuditRecord, books: &Books) -> (ObjectKey, String, String) {
     match &rec.event {
         Event::MasterCreated(snap) => {

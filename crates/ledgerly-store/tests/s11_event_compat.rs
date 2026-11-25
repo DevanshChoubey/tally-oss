@@ -75,7 +75,12 @@ fn lock() -> Event {
 }
 
 fn hex(bytes: &[u8; 32]) -> String {
-    bytes.iter().map(|b| format!("{b:02x}")).collect()
+    use std::fmt::Write as _;
+    let mut out = String::new();
+    for b in bytes {
+        let _ = write!(out, "{b:02x}");
+    }
+    out
 }
 
 const OLD_SETTING_HASH: &str = "be3da3c0caabbf0018c63e9e7f62a5e3a75c4d2d0071ee48df4e3ebbbd14bf24";

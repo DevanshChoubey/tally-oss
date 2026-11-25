@@ -159,7 +159,7 @@ fn without_a_file_there_are_no_rows() {
     let (_d, _p, api) = company(false);
     let rec = value(api.gstr2b_reconciliation(&gstin(), november()).unwrap());
     assert_eq!(rec.file_name, None);
-    assert!(rec.rows.is_empty());
+    assert_eq!(rec.rows.len(), 0);
     assert_eq!(rec.filed_on, None);
 }
 

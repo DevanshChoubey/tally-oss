@@ -1362,6 +1362,18 @@ fn is_open(row: &ReconRow, decision: Option<ImsAction>) -> bool {
 
 impl Screen for GstScreen {
     fn cursor_label(&self, _ctx: &AppCtx) -> Option<String> {
+        if let Some(at) = self.picker {
+            return self
+                .months()
+                .get(at)
+                .map(|m| crate::shell::navigate::return_label(*m));
+        }
+        if self.tab == GstTab::Reconciliation {
+            return self
+                .focused_index()
+                .and_then(|i| self.recon_rows().get(i))
+                .map(|r| r.invoice_no.clone());
+        }
         self.selected_section().map(|s| s.code.to_owned())
     }
 

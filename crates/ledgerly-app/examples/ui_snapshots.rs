@@ -315,6 +315,9 @@ enum Fixture {
     /// `home.loading` and `balance-sheet.loading` are photographed; the hold is dropped before the
     /// next shot opens its company.
     GodavariHeld,
+    /// The sample company with no 2B file imported and no IMS action or filing recorded
+    /// ([`ledgerly_sample::create_without_2b`]): the mock's `recon-empty` and `recon-error`.
+    GodavariNo2b,
     /// Fictional Traders ([`company_file`]): the shots whose key paths or typed names need its
     /// data, or that show a state the sample does not have.
     Main,
@@ -331,6 +334,7 @@ impl Fixture {
     fn open(self, dir: &Path) -> Option<Api> {
         match self {
             Fixture::Godavari | Fixture::GodavariHeld => Some(godavari_company_file(dir)),
+            Fixture::GodavariNo2b => Some(godavari_no_2b_file(dir)),
             Fixture::GodavariShortStock => Some(godavari_short_stock_file(dir)),
             Fixture::Main => Some(company_file(dir)),
             Fixture::New => Some(new_company_file(dir)),
@@ -351,6 +355,7 @@ impl Fixture {
                         other => panic!("no books to hand the shell: {other:?}"),
                     },
                     Fixture::Godavari
+                    | Fixture::GodavariNo2b
                     | Fixture::GodavariShortStock
                     | Fixture::Main
                     | Fixture::New
@@ -377,6 +382,14 @@ impl Fixture {
 fn godavari_company_file(dir: &Path) -> Api {
     let (api, _path) = ledgerly_sample::create_under(dir, sample_clock()).unwrap();
     api
+}
+
+/// The sample company with no 2B file, no IMS action and no filing recorded.
+fn godavari_no_2b_file(dir: &Path) -> Api {
+    let path = ledgerly_sample::path_under(dir);
+    std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let _removed = std::fs::remove_file(&path);
+    ledgerly_sample::create_without_2b(&path, sample_clock()).unwrap()
 }
 
 /// The sample company plus two vouchers that leave the pickaxe's stock negative for a day: a
@@ -666,6 +679,9 @@ enum ScriptedFile {
     /// The sample's November statement with its printed closing balance 640.00 too high, so the
     /// file does not add up (the mock's `bank.import-error`).
     StatementThatDoesNotAdd,
+    /// The sample's November 2B file with another company's GSTIN as its recipient, so the engine
+    /// refuses it (the mock's `recon-error`).
+    TwoBForAnotherGstin,
 }
 
 impl ScriptedFile {
@@ -685,6 +701,17 @@ impl ScriptedFile {
                 );
                 let path = dir.join("saptagiri-nov-2026-cut.mt940");
                 std::fs::write(&path, broken).unwrap();
+                path
+            }
+            ScriptedFile::TwoBForAnotherGstin => {
+                let sample = ledgerly_sample::GSTR2B_NOVEMBER;
+                let other = sample.replace("27ZZZZZ0000Z1ZQ", "27ZZZZZ0105Z1ZK");
+                assert_ne!(
+                    other, sample,
+                    "the sample 2B file no longer names the company"
+                );
+                let path = dir.join("gstr2b-nov-2026-other.json");
+                std::fs::write(&path, other).unwrap();
                 path
             }
         }
@@ -1113,7 +1140,30 @@ fn light_shots() -> Vec<Shot> {
         // The tabs are 1 GSTR-1, 2 GSTR-3B, 3 reconciliation (`screens/gst.rs`). The capture
         // company has no 2B data, so the reconciliation tab is the mock's empty state.
         shot("gst.gstr3b", &[(Key::G, NONE), (Key::Num2, NONE)]),
-        shot("gst.recon-empty", &[(Key::G, NONE), (Key::Num3, NONE)]),
+        // The mock selects G2, Nilgiri's NST/1145 (index.html:1695).
+        shot("gst.recon", &[(Key::G, NONE), (Key::Num3, NONE)])
+            .seek("NST/1145")
+            .expect("GST returns", Some("NST/1145")),
+        shot("gst.recon-empty", &[(Key::G, NONE), (Key::Num3, NONE)])
+            .on(Fixture::GodavariNo2b)
+            .expect("GST returns", None),
+        // Ctrl+O is handed another company's 2B file: the engine refuses it and the screen says why.
+        shot("gst.recon-error", &[(Key::G, NONE), (Key::Num3, NONE)])
+            .on(Fixture::GodavariNo2b)
+            .expect("GST returns", None)
+            .script_file(ScriptedFile::TwoBForAnotherGstin)
+            .press(&[(Key::O, Modifiers::COMMAND)])
+            .wait(60)
+            .expect("GST returns", None),
+        // Alt+F2 opens the period picker on November; one step back is October, checked before
+        // Enter chooses it. October's 3B was filed on 20 Nov, so its actions are final.
+        shot("gst.recon-locked", &[(Key::G, NONE), (Key::Num3, NONE)])
+            .expect("GST returns", None)
+            .press(&[(Key::F2, Modifiers::ALT), (Key::K, NONE)])
+            .expect("GST returns", Some("October 2026"))
+            .press(&[(Key::Enter, NONE)])
+            .seek("KP/2205")
+            .expect("GST returns", Some("KP/2205")),
         shot("masters.ledgers", &[(Key::M, NONE)]),
         // The mock's party detail is the alter form of a bill-wise party ledger (index.html:1803).
         // The cursor goes to Shree Ganesh Traders by name, then Ctrl+Enter alters it.

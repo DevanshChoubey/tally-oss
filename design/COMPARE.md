@@ -1,6 +1,6 @@
 # App against mock
 
-192 app captures are paired with a mock capture of the same theme and state id. SSIM is 1 for identical images; lower is a bigger difference, and the list runs worst first.
+201 app captures are paired with a mock capture of the same theme and state id. SSIM is 1 for identical images; lower is a bigger difference, and the list runs worst first.
 
 | Theme | State | SSIM |
 | --- | --- | --- |
@@ -114,6 +114,7 @@
 | light | gst.gstr3b | 0.7014 |
 | hc | balance-sheet.group | 0.7071 |
 | dark | gst.gstr3b | 0.7083 |
+| hc | gst.recon | 0.7086 |
 | hc | setup.features | 0.7087 |
 | dark | masters.items | 0.7172 |
 | light | bank.brs | 0.7175 |
@@ -123,6 +124,7 @@
 | light | balance-sheet.group | 0.7284 |
 | light | payment.overdraft | 0.7310 |
 | dark | payment.overdraft | 0.7321 |
+| light | gst.recon | 0.7321 |
 | light | receipt.default | 0.7344 |
 | dark | balance-sheet.ledger | 0.7360 |
 | light | payment.bill-wise | 0.7363 |
@@ -130,6 +132,7 @@
 | hc | masters.ledger-detail | 0.7368 |
 | hc | day-book.default | 0.7368 |
 | dark | balance-sheet.group | 0.7374 |
+| dark | gst.recon | 0.7383 |
 | dark | receipt.default | 0.7406 |
 | dark | payment.bill-wise | 0.7428 |
 | light | purchase-bill.offline-ai | 0.7449 |
@@ -151,6 +154,7 @@
 | dark | masters.ledger-detail | 0.7765 |
 | light | masters.ledger-detail | 0.7797 |
 | hc | bank.empty | 0.7837 |
+| hc | gst.recon-locked | 0.7901 |
 | dark | setup.company | 0.7954 |
 | light | masters.create-ledger | 0.7965 |
 | light | setup.company | 0.7970 |
@@ -162,35 +166,40 @@
 | dark | home.empty | 0.8001 |
 | light | home.loading | 0.8022 |
 | hc | review.empty | 0.8022 |
+| hc | gst.recon-empty | 0.8038 |
 | light | home.empty | 0.8046 |
 | hc | setup.backup | 0.8052 |
 | hc | setup.ai | 0.8052 |
 | light | bank.import-error | 0.8052 |
 | hc | day-book.empty | 0.8067 |
 | light | ask.offline-ai | 0.8077 |
-| hc | gst.recon-empty | 0.8078 |
 | dark | bank.empty | 0.8108 |
 | light | bank.empty | 0.8112 |
+| dark | gst.recon-locked | 0.8128 |
 | dark | ask.offline-ai | 0.8133 |
+| light | gst.recon-locked | 0.8135 |
 | dark | setup.gstin-error | 0.8141 |
 | hc | setup.welcome | 0.8147 |
 | light | setup.gstin-error | 0.8154 |
 | light | balance-sheet.loading | 0.8160 |
+| hc | gst.recon-error | 0.8173 |
 | dark | review.empty | 0.8206 |
 | hc | setup.keyboard | 0.8206 |
 | light | review.empty | 0.8236 |
 | dark | home.loading | 0.8256 |
-| dark | gst.recon-empty | 0.8280 |
+| light | gst.recon-empty | 0.8296 |
+| dark | gst.recon-empty | 0.8302 |
 | dark | balance-sheet.loading | 0.8311 |
-| light | gst.recon-empty | 0.8321 |
 | light | setup.backup | 0.8350 |
 | light | day-book.empty | 0.8360 |
 | dark | day-book.empty | 0.8367 |
 | dark | setup.backup | 0.8374 |
 | light | setup.welcome | 0.8417 |
+| dark | gst.recon-error | 0.8428 |
 | light | setup.keyboard | 0.8440 |
 | dark | setup.keyboard | 0.8444 |
 | dark | setup.welcome | 0.8473 |
+| light | gst.recon-error | 0.8476 |
 | light | setup.ai | 0.8483 |
 | dark | setup.ai | 0.8513 |
 | hc | setup.done | 0.8667 |
@@ -1517,6 +1526,18 @@ SSIM 0.7083
 </tr>
 </table>
 
+## hc / gst.recon
+
+SSIM 0.7086
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/hc/gst.recon.webp" width="480" alt="mock hc gst.recon"></td>
+<td><img src="app-captures/hc/gst.recon.webp" width="480" alt="app hc gst.recon"></td>
+</tr>
+</table>
+
 ## hc / setup.features
 
 SSIM 0.7087
@@ -1625,6 +1646,18 @@ SSIM 0.7321
 </tr>
 </table>
 
+## light / gst.recon
+
+SSIM 0.7321
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/gst.recon.webp" width="480" alt="mock light gst.recon"></td>
+<td><img src="app-captures/light/gst.recon.webp" width="480" alt="app light gst.recon"></td>
+</tr>
+</table>
+
 ## light / receipt.default
 
 SSIM 0.7344
@@ -1706,6 +1739,18 @@ SSIM 0.7374
 <tr>
 <td><img src="mock-v2/captures/states/dark/balance-sheet.group.webp" width="480" alt="mock dark balance-sheet.group"></td>
 <td><img src="app-captures/dark/balance-sheet.group.webp" width="480" alt="app dark balance-sheet.group"></td>
+</tr>
+</table>
+
+## dark / gst.recon
+
+SSIM 0.7383
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/dark/gst.recon.webp" width="480" alt="mock dark gst.recon"></td>
+<td><img src="app-captures/dark/gst.recon.webp" width="480" alt="app dark gst.recon"></td>
 </tr>
 </table>
 
@@ -1961,6 +2006,18 @@ SSIM 0.7837
 </tr>
 </table>
 
+## hc / gst.recon-locked
+
+SSIM 0.7901
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/hc/gst.recon-locked.webp" width="480" alt="mock hc gst.recon-locked"></td>
+<td><img src="app-captures/hc/gst.recon-locked.webp" width="480" alt="app hc gst.recon-locked"></td>
+</tr>
+</table>
+
 ## dark / setup.company
 
 SSIM 0.7954
@@ -2093,6 +2150,18 @@ SSIM 0.8022
 </tr>
 </table>
 
+## hc / gst.recon-empty
+
+SSIM 0.8038
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/hc/gst.recon-empty.webp" width="480" alt="mock hc gst.recon-empty"></td>
+<td><img src="app-captures/hc/gst.recon-empty.webp" width="480" alt="app hc gst.recon-empty"></td>
+</tr>
+</table>
+
 ## light / home.empty
 
 SSIM 0.8046
@@ -2165,18 +2234,6 @@ SSIM 0.8077
 </tr>
 </table>
 
-## hc / gst.recon-empty
-
-SSIM 0.8078
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/hc/gst.recon-empty.webp" width="480" alt="mock hc gst.recon-empty"></td>
-<td><img src="app-captures/hc/gst.recon-empty.webp" width="480" alt="app hc gst.recon-empty"></td>
-</tr>
-</table>
-
 ## dark / bank.empty
 
 SSIM 0.8108
@@ -2201,6 +2258,18 @@ SSIM 0.8112
 </tr>
 </table>
 
+## dark / gst.recon-locked
+
+SSIM 0.8128
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/dark/gst.recon-locked.webp" width="480" alt="mock dark gst.recon-locked"></td>
+<td><img src="app-captures/dark/gst.recon-locked.webp" width="480" alt="app dark gst.recon-locked"></td>
+</tr>
+</table>
+
 ## dark / ask.offline-ai
 
 SSIM 0.8133
@@ -2210,6 +2279,18 @@ SSIM 0.8133
 <tr>
 <td><img src="mock-v2/captures/states/dark/ask.offline-ai.webp" width="480" alt="mock dark ask.offline-ai"></td>
 <td><img src="app-captures/dark/ask.offline-ai.webp" width="480" alt="app dark ask.offline-ai"></td>
+</tr>
+</table>
+
+## light / gst.recon-locked
+
+SSIM 0.8135
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/gst.recon-locked.webp" width="480" alt="mock light gst.recon-locked"></td>
+<td><img src="app-captures/light/gst.recon-locked.webp" width="480" alt="app light gst.recon-locked"></td>
 </tr>
 </table>
 
@@ -2261,6 +2342,18 @@ SSIM 0.8160
 </tr>
 </table>
 
+## hc / gst.recon-error
+
+SSIM 0.8173
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/hc/gst.recon-error.webp" width="480" alt="mock hc gst.recon-error"></td>
+<td><img src="app-captures/hc/gst.recon-error.webp" width="480" alt="app hc gst.recon-error"></td>
+</tr>
+</table>
+
 ## dark / review.empty
 
 SSIM 0.8206
@@ -2309,9 +2402,21 @@ SSIM 0.8256
 </tr>
 </table>
 
+## light / gst.recon-empty
+
+SSIM 0.8296
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/gst.recon-empty.webp" width="480" alt="mock light gst.recon-empty"></td>
+<td><img src="app-captures/light/gst.recon-empty.webp" width="480" alt="app light gst.recon-empty"></td>
+</tr>
+</table>
+
 ## dark / gst.recon-empty
 
-SSIM 0.8280
+SSIM 0.8302
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -2330,18 +2435,6 @@ SSIM 0.8311
 <tr>
 <td><img src="mock-v2/captures/states/dark/balance-sheet.loading.webp" width="480" alt="mock dark balance-sheet.loading"></td>
 <td><img src="app-captures/dark/balance-sheet.loading.webp" width="480" alt="app dark balance-sheet.loading"></td>
-</tr>
-</table>
-
-## light / gst.recon-empty
-
-SSIM 0.8321
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/light/gst.recon-empty.webp" width="480" alt="mock light gst.recon-empty"></td>
-<td><img src="app-captures/light/gst.recon-empty.webp" width="480" alt="app light gst.recon-empty"></td>
 </tr>
 </table>
 
@@ -2405,6 +2498,18 @@ SSIM 0.8417
 </tr>
 </table>
 
+## dark / gst.recon-error
+
+SSIM 0.8428
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/dark/gst.recon-error.webp" width="480" alt="mock dark gst.recon-error"></td>
+<td><img src="app-captures/dark/gst.recon-error.webp" width="480" alt="app dark gst.recon-error"></td>
+</tr>
+</table>
+
 ## light / setup.keyboard
 
 SSIM 0.8440
@@ -2438,6 +2543,18 @@ SSIM 0.8473
 <tr>
 <td><img src="mock-v2/captures/states/dark/setup.welcome.webp" width="480" alt="mock dark setup.welcome"></td>
 <td><img src="app-captures/dark/setup.welcome.webp" width="480" alt="app dark setup.welcome"></td>
+</tr>
+</table>
+
+## light / gst.recon-error
+
+SSIM 0.8476
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/gst.recon-error.webp" width="480" alt="mock light gst.recon-error"></td>
+<td><img src="app-captures/light/gst.recon-error.webp" width="480" alt="app light gst.recon-error"></td>
 </tr>
 </table>
 
@@ -2503,7 +2620,7 @@ SSIM 0.8950
 
 ## Mock states with no app capture yet
 
-### light (25)
+### light (22)
 
 - `ask.result`
 - `ask.loading`
@@ -2522,16 +2639,13 @@ SSIM 0.8950
 - `quick-entry.unknown-ledger`
 - `quick-entry.loading`
 - `quick-entry.rejected`
-- `gst.recon`
 - `gst.recon-explain`
-- `gst.recon-error`
-- `gst.recon-locked`
 - `bank.ai-suggestions`
 - `bank.suggested-ledger`
 - `bank.offline-ai`
 - `masters.suggested-ledger`
 
-### dark (25)
+### dark (22)
 
 - `ask.result`
 - `ask.loading`
@@ -2550,16 +2664,13 @@ SSIM 0.8950
 - `quick-entry.unknown-ledger`
 - `quick-entry.loading`
 - `quick-entry.rejected`
-- `gst.recon`
 - `gst.recon-explain`
-- `gst.recon-error`
-- `gst.recon-locked`
 - `bank.ai-suggestions`
 - `bank.suggested-ledger`
 - `bank.offline-ai`
 - `masters.suggested-ledger`
 
-### hc (25)
+### hc (22)
 
 - `ask.result`
 - `ask.loading`
@@ -2578,10 +2689,7 @@ SSIM 0.8950
 - `quick-entry.unknown-ledger`
 - `quick-entry.loading`
 - `quick-entry.rejected`
-- `gst.recon`
 - `gst.recon-explain`
-- `gst.recon-error`
-- `gst.recon-locked`
 - `bank.ai-suggestions`
 - `bank.suggested-ledger`
 - `bank.offline-ai`

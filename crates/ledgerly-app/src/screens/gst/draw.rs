@@ -501,13 +501,15 @@ impl GstScreen {
 
     fn draw_recon(&self, ui: &mut Ui, want_scroll: bool, events: &mut Vec<UiEvent>) {
         if let Some(reason) = &self.import_error {
-            self.draw_import_error(ui, reason, events);
+            Self::draw_import_error(ui, reason, events);
             ui.add_space(SPACE_3);
         }
         let rows = match &self.recon {
             Feed::Loaded(rows) => rows,
             Feed::NotLoaded => {
-                self.draw_recon_empty(ui, events);
+                if self.import_error.is_none() {
+                    self.draw_recon_empty(ui, events);
+                }
                 return;
             }
             Feed::Unsupported(_) => {
@@ -520,6 +522,8 @@ impl GstScreen {
         };
         if rows.is_empty() {
             match &self.recon_file {
+                // After a refused file the mock shows the refusal alone, not the empty card.
+                None if self.import_error.is_some() => {}
                 None => self.draw_recon_empty(ui, events),
                 Some(name) => {
                     let text = format!("The 2B file {name} holds no documents.");
@@ -534,9 +538,10 @@ impl GstScreen {
         split(
             ui,
             |ui| self.draw_recon_table(ui, rows, &visible, want_scroll, events),
-            |ui| match selected.and_then(|i| rows.get(i).map(|r| (i, r))) {
-                Some((index, row)) => self.draw_recon_side(ui, index, row, &mut side),
-                None => {}
+            |ui| {
+                if let Some((index, row)) = selected.and_then(|i| rows.get(i).map(|r| (i, r))) {
+                    self.draw_recon_side(ui, index, row, &mut side);
+                }
             },
         );
         events.extend(side);
@@ -617,18 +622,15 @@ impl GstScreen {
         let c = recon_columns(rect);
         let font = egui::FontId::proportional(TEXT_BODY);
         let meta = egui::FontId::proportional(TEXT_META);
-        let left = CellPlace::Left(table::CELL_PAD_X);
-        table::paint_cell_text(ui, c[0], 1.0, &row.supplier, font.clone(), t.text, left);
-        let (top, bottom) = halves(c[1]);
-        table::paint_cell_text(ui, top, 1.0, &row.invoice_no, font.clone(), t.text, left);
-        table::paint_cell_text(
+        paint_wrapped(ui, c[0], 0.0, &row.supplier, font.clone(), t.text);
+        paint_wrapped(ui, c[1], 0.0, &row.invoice_no, font.clone(), t.text);
+        paint_wrapped(
             ui,
-            bottom,
-            1.0,
+            c[1],
+            LINE_H,
             &date_cell(row.portal_date),
             meta.clone(),
             t.text_3,
-            left,
         );
         let right = CellPlace::Right;
         table::paint_cell_text(
@@ -648,30 +650,24 @@ impl GstScreen {
         cell_row(ui, c[4], |ui| {
             badge(ui, status_kind(row), &status_text(row));
         });
-        let (top, bottom) = halves(c[5]);
         let locked = self.filed_on.is_some();
+        let badges = Rect::from_min_size(c[5].min + vec2(0.0, 12.0), vec2(c[5].width(), 20.0));
         match decision {
-            Some(action) => {
-                cell_row(ui, top, |ui| {
-                    badge(ui, action_kind(action), action.label());
-                    if locked {
-                        badge(ui, BadgeKind::Neutral, "Final");
-                    }
+            Some(action) => cell_row(ui, badges, |ui| {
+                badge(ui, action_kind(action), action.label());
+            }),
+            None => paint_wrapped(ui, c[5], 0.0, "No action", font, t.text_2),
+        }
+        if locked {
+            if decision.is_some() {
+                let second = badges.translate(vec2(0.0, 22.0));
+                cell_row(ui, second, |ui| {
+                    badge(ui, BadgeKind::Neutral, "Final");
                 });
             }
-            None => {
-                table::paint_cell_text(ui, top, 1.0, "No action", font, t.text_2, left);
-                if locked {
-                    cell_row(ui, top, |ui| {
-                        ui.add_space(70.0);
-                        badge(ui, BadgeKind::Neutral, "Final");
-                    });
-                }
-            }
-        }
-        if !locked {
+        } else {
             let text = format!("Suggested: {}", row.suggested.label());
-            table::paint_cell_text(ui, bottom, 1.0, &text, meta, t.text_3, left);
+            paint_wrapped(ui, c[5], LINE_H, &text, meta, t.text_3);
         }
     }
 
@@ -776,7 +772,7 @@ impl GstScreen {
 
     /// The refusal of a 2B file (the mock's `recon-error`, index.html:1693): what the engine
     /// said, that nothing changed, and a button to choose another file.
-    fn draw_import_error(&self, ui: &mut Ui, reason: &str, events: &mut Vec<UiEvent>) {
+    fn draw_import_error(ui: &mut Ui, reason: &str, events: &mut Vec<UiEvent>) {
         crate::ui::note::note_with_icon(ui, NoteKind::Bad, Icon::Alert, |ui, ink| {
             ui.label(
                 RichText::new(look::import_refusal(reason))
@@ -805,15 +801,15 @@ impl GstScreen {
 }
 
 /// Height of a row of the 2B table: two lines, as the mock's rows with their meta line.
-const RECON_ROW_H: f32 = T_ROW_HEIGHT + 14.0;
+const RECON_ROW_H: f32 = 70.0;
 /// Width of the IMS action column.
-const RECON_IMS_W: f32 = 150.0;
+const RECON_IMS_W: f32 = 89.0;
 /// Width of the Engine status column.
-const RECON_STATUS_W: f32 = 170.0;
+const RECON_STATUS_W: f32 = 138.0;
 /// Width of the 2B and Books amount columns.
-const RECON_AMOUNT_W: f32 = 104.0;
+const RECON_AMOUNT_W: f32 = 98.0;
 /// Width of the Invoice column.
-const RECON_INVOICE_W: f32 = 116.0;
+const RECON_INVOICE_W: f32 = 86.0;
 
 /// The Supplier, Invoice, 2B, Books, Engine status and IMS action cells of a line.
 #[allow(clippy::float_arithmetic, reason = "sharing a line between columns")]
@@ -830,14 +826,30 @@ fn recon_columns(line: Rect) -> [Rect; 6] {
     [supplier, invoice, portal, books, status, ims]
 }
 
-/// The top and bottom line of a two-line cell.
-#[allow(clippy::float_arithmetic, reason = "splitting a cell into two lines")]
-fn halves(cell: Rect) -> (Rect, Rect) {
-    let mid = cell.center().y;
-    (
-        Rect::from_min_max(cell.min, egui::pos2(cell.right(), mid + 3.0)),
-        Rect::from_min_max(egui::pos2(cell.left(), mid - 3.0), cell.max),
-    )
+/// One text line height of the wrapped cells of a 2B row.
+const LINE_H: f32 = 18.0;
+
+/// Paints `text` wrapped to the cell's width, the block centred in the row and pushed down by
+/// `skip` points (so a second block can sit under the first).
+#[allow(clippy::float_arithmetic, reason = "placing wrapped text in a cell")]
+fn paint_wrapped(
+    ui: &Ui,
+    cell: Rect,
+    skip: f32,
+    text: &str,
+    font: egui::FontId,
+    color: egui::Color32,
+) {
+    let width = cell.width() - 2.0 * table::CELL_PAD_X;
+    let galley = ui
+        .painter()
+        .layout(text.to_owned(), font, color, width.max(1.0));
+    let y = cell.top() + 12.0 + skip;
+    ui.painter().with_clip_rect(cell).galley(
+        egui::pos2(cell.left() + table::CELL_PAD_X, y),
+        galley,
+        color,
+    );
 }
 
 /// Lays `add` out left to right in `cell`, centred, with the table's cell padding.
@@ -928,7 +940,7 @@ fn lock_bar_card(ui: &mut Ui, lead: &str, rest: &str) {
                         ..egui::TextFormat::default()
                     },
                 );
-                ui.label(job);
+                ui.add(egui::Label::new(job).wrap());
             });
         });
 }
@@ -1387,7 +1399,7 @@ fn read_keys(ui: &Ui) -> Vec<GstCmd> {
         if i.consume_key(Modifiers::CTRL, Key::E) {
             out.push(GstCmd::ExportJson);
         }
-        if i.consume_key(Modifiers::CTRL, Key::O) {
+        if i.consume_key(Modifiers::COMMAND, Key::O) {
             out.push(GstCmd::ImportFile);
         }
         if i.consume_key(Modifiers::ALT, Key::F2) {

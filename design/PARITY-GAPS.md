@@ -16,9 +16,9 @@ new-company card (book icon, three buttons with icons, info note) follow the moc
 comes from `Api::home_figures` and `Api::home_nudges`.
 
 - **gap: GST cash payable is unsupported.** The mock shows 39,498.00 "after accepted ITC". The
-  engine has no GSTR-2B reader, so accepted credit is unknown; the tile keeps its slot and size
+  engine has no set-off, so cash payable cannot be worked out (the 2B reader exists since s11); the tile keeps its slot and size
   and says "Not supported yet" and "Needs GSTR-2B: not readable yet".
-- **gap: no IMS nudge.** "3 2B records have no IMS action" needs the 2B reader above.
+- **gap: no IMS nudge.** "3 2B records have no IMS action" is not wired yet (s11 records IMS actions; the nudge count is a later step).
 - **gap: GSTR-1 due date is the monthly one.** The 11th of the next month (CBIC Notification
   83/2020-Central Tax). Quarterly (QRMP) filers' 13th and holiday shifts are not modelled; no
   filing record is kept, so the nudge shows until the month passes. The count is of vouchers
@@ -181,20 +181,32 @@ comes from `Api::home_figures` and `Api::home_nudges`.
 
 ## GST returns (round of 2026-11-23)
 
-Captured states: `gst.gstr1`, `gst.gstr3b`, `gst.recon-empty`, `gst.gstr1-correction` (on
-Fictional Pumps, which sold pickaxes with no HSN). Not captured: `recon`, `recon-explain`,
-`recon-error` and `recon-locked`.
+Captured states: `gst.gstr1`, `gst.gstr3b`, `gst.recon`, `gst.recon-empty`, `gst.recon-error`,
+`gst.recon-locked`, `gst.gstr1-correction` (on Fictional Pumps, which sold pickaxes with no HSN).
+Not captured: `recon-explain` (AI).
 
-- **gap (s10): the 2B reconciliation is not wired, and the earlier note "no 2B reader" was
-  wrong.** `ledgerly-gst-formats` has a GSTR-2B parser and `ledgerly-gst::recon2b` a matcher, but
-  nothing in `ledgerly-api` or the screen calls them. Not built in s10 because: (1) the GSTR-2B
-  JSON shape is `pending observed` (rule A5): no authoritative public GSTN schema was found, so an
-  import would rest on third-party descriptions, and the screen cannot show a number from it; (2)
-  there is no store event for an imported 2B file or an IMS action (the `Event` enum is frozen;
-  file an interface request in `docs/interface-requests.md`); (3) there is no GSTR-3B filing
-  record, so `recon-locked` (a filed period) has nothing to read; (4) the sample has no October
-  purchases to match. So `recon`, `recon-error` and `recon-locked` stay uncaptured; the app shows
-  the honest "not supported yet" empty state. `recon-explain` is an AI state (see the AI section).
+- **closed (s11): the 2B reconciliation is built.** The Api imports a 2B file for a period,
+  lists the engine's rows (`reconcile_2b`), records IMS actions and marks a period's GSTR-3B
+  filed; three new store events keep them in the company file (old files open and verify, see
+  `crates/ledgerly-store/tests/s11_event_compat.rs`). Captured in light, dark and hc: `recon`
+  (4 rows, side card), `recon-empty`, `recon-error` (wrong GSTIN, refusal only) and
+  `recon-locked` (October final, lock bar). The sample now has October bills KP/2205 and VL/858
+  and 2B files for October and November; every earlier pinned figure holds.
+- **gap (s11): the GSTR-2B JSON shape is `pending observed`** (rule A5). No authoritative public
+  GSTN schema was found. The parser keeps its items[] shape; third-party descriptions of the
+  newer flat shape would be read as NotComparable, never as numbers. The sample 2B files are
+  ours, written to that shape, with fictional GSTINs.
+- **gap (s11): left out of the 2B tab because no public source was found.** "A record with no
+  action by 2B generation is deemed accepted", "a change now goes through an amendment in a
+  later month" (lock bar), "The file looks like a customer's 2B" and "Drop it here". Also not
+  built: Explain / X, Y Take suggestion and the bill-photo draft link (AI, see the AI section),
+  and purchase vouchers with no 2B document (books-only rows are not listed).
+- **by design (s11): extras and differences on the 2B tab.** A "Mark GSTR-3B filed" button sits in
+  the side card (the mock has no way to record a filing). The IMS cell stacks the badge over
+  "Suggested: X"; dates print dd-mm-yyyy; the top bar says "AI: not set up" as on every capture.
+  Row heights and column widths follow the mock; supplier names wrap to three lines.
+- **gap (s11): Command enum not used.** The new capabilities are `Api` methods, not `Command`
+  variants, because the frozen `Command` enum has no 2B or IMS variant.
 
 - **by design: the correction state is built from the sample (s9).** `gst.gstr1-correction` now
   runs on Godavari: Table 12 shows 5 records, 3,49,385.00 and Needs correction, selected with J / K,
@@ -225,8 +237,8 @@ Fictional Pumps, which sold pickaxes with no HSN). Not captured: `recon`, `recon
   on the sample (blocked credit under s.17(5) applied), but the cash payable of 39,498, which the
   Home tile also shows, cannot be computed. These are "Accepted
   in IMS", "No action yet: deemed accepted", "6.1 Payment of tax", "Left after using accepted
-  credit" and "Payable in cash". They need the 2B and IMS match (engine item E-3) and set-off
-  (engine item E-1). Ours draws 3.1(a), "In your books" (4(A)(5)) and the blocked or ineligible
+  credit" and "Payable in cash". The 2B and IMS match now exists (s11) but set-off (engine item E-1) does not, so these rows
+  stay unwired. Ours draws 3.1(a), "In your books" (4(A)(5)) and the blocked or ineligible
   credit, all from the engine's working.
 - **by design: a Cess column on GSTR-3B.** The mock has no cess column, but the engine works out
   cess, and a figure is never dropped.
@@ -235,18 +247,11 @@ Fictional Pumps, which sold pickaxes with no HSN). Not captured: `recon`, `recon
   you accepted in IMS" and the set-off order. Ours say what the engine does.
 - **by design: the period button opens a month picker (Alt+F2).** It lists the 12 months of the
   financial year; choosing one reloads the screen. The mock has no picker state, so its look is ours.
-- **deferred: importing a 2B file** (index.html:1692). The mock offers "Import 2B JSON Ctrl+O"
-  and "drop it here". There is no 2B reader (engine item E-3), so the empty state says so and
-  offers no import button and no key.
-- **deferred: Y Take suggestion and X Explain on the 2B tab** (index.html:1721). They need the
-  engine's match and explanation (E-3). The key bar offers A, R and P only when rows are loaded.
 - **deferred: the GSTR-3B key bar** (index.html:1721). The mock offers J / K, Enter and Ctrl+E
   there. Ours has no rows on that tab and exports only GSTR-1, so it offers just 1 2 3 and Esc.
 - **needs a decision: "monthly" in the subtitle.** It comes from the shell, which always opens
   one calendar month (`gst_return_period`), not from the registration. Quarterly filing (QRMP)
   is not modelled; the registration needs a filing frequency first.
-- **deferred: the match table's look.** The loaded 2B table still uses egui's grid inside a card.
-  It cannot be reached or captured until 2B import exists; restyle it then.
 - **gap: Re-apply masters and Export IMS action file.** The view model records both requests
   (`take_reapply_request`, `take_export_request`), but nothing in the shell takes them, so the
   buttons did nothing and are no longer drawn. Wire them to the shell before showing them again.

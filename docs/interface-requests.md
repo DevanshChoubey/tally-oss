@@ -285,6 +285,8 @@ things are missing from the engine and are left as gaps in `design/PARITY-GAPS.m
 
 ## S10 (GST reconciliation): store events for 2B imports and IMS actions, a 3B filing record (2026-11-25)
 
+DONE in s11 (branch s11/gst-2b): events `Gstr2bImported`, `ImsActionRecorded`, `Gstr3bFiled`, and Api methods `import_gstr2b`, `gstr2b_reconciliation`, `set_ims_action`, `mark_gstr3b_filed`. The 2B JSON shape is still `pending observed`.
+
 The GSTR-2B parser (`ledgerly-gst-formats::gstr2b`) and matcher (`ledgerly-gst::recon2b`) exist but
 the app cannot use them, so `gst.recon`, `gst.recon-error` and `gst.recon-locked` are not built
 (`design/PARITY-GAPS.md`, "GST returns"). Missing:

@@ -156,7 +156,7 @@ fn a_file_for_another_gstin_shows_the_refusal_and_keeps_nothing() {
     let f = open(false);
     let mut s = screen(&f, "November 2026", november());
     assert_eq!(s.recon_file(), None);
-    assert!(s.recon_rows().is_empty());
+    assert_eq!(s.recon_rows().len(), 0);
     // provenance: the mock's recon-error: "Not imported: this 2B file is for GSTIN X, not Y."
     let wrong = ledgerly_sample::GSTR2B_NOVEMBER.replace("27ZZZZZ0000Z1ZQ", "27ZZZZZ0005Z1ZL");
     let file = f.dir.path().join("other.json");

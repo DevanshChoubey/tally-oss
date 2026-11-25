@@ -334,7 +334,7 @@ impl GstScreen {
                 self.request_load(gstin, period);
             }
             OpDone::MarkFiled(Ok(Outcome::Unsupported(u))) => {
-                self.notice = Some(unsupported_text(&u))
+                self.notice = Some(unsupported_text(&u));
             }
             OpDone::MarkFiled(Err(message)) => self.notice = Some(message),
         }
@@ -472,7 +472,7 @@ impl GstScreen {
     fn apply_recon(&mut self, recon: Result<Outcome<Gstr2bReconciliation>, String>) {
         match recon {
             Ok(Outcome::Value(rec)) => {
-                self.recon_file = rec.file_name.clone();
+                self.recon_file.clone_from(&rec.file_name);
                 self.filed_on = rec.filed_on;
                 let rows: Result<Vec<ReconRow>, String> = rec.rows.iter().map(recon_row).collect();
                 match rows {
