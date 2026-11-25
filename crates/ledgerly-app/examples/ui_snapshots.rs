@@ -972,16 +972,17 @@ fn jadhav_form(state: &'static str, gstin: &'static str) -> Shot {
     shot(state, &[(Key::M, NONE), (Key::C, Modifiers::ALT)])
         .click(456.0, 263.0)
         .type_text("Jadhav Irrigation Services")
-        .click(995.0, 256.0)
-        .scroll(995.0, 400.0, -1200.0)
-        .click(959.0, 474.0)
-        .click(256.0, 326.0)
-        .click(472.0, 389.0)
+        .click(780.0, 257.0)
+        .scroll(780.0, 400.0, -1200.0)
+        .click(744.0, 474.0)
+        .click(902.0, 263.0)
+        .click(262.0, 330.0)
         // The credit days come before the GSTIN: its check line moves the rows below it.
-        .click(348.0, 389.0)
+        .click(995.0, 327.0)
         .type_text("30")
-        .click(456.0, 326.0)
+        .click(457.0, 327.0)
         .type_text(gstin)
+        .expect("Masters", None)
 }
 
 /// The mock's three lines of SI/0418: 25 rolls of lateral, 67 nozzle sets, 40 sprayers.

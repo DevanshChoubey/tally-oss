@@ -53,7 +53,7 @@ pub(super) fn with_view(base: &ReportParams, p: ViewParams, as_of: Date) -> Repo
 /// caller opens it, see `ReportViewScreen::drill`), and a stock item or a bill has no report yet.
 pub(super) fn drill_params(base: &ReportParams, key: &ViewKey) -> Result<ReportParams, Notice> {
     let kind = match key {
-        ViewKey::Group(group) => ReportKind::GroupSummary(*group),
+        ViewKey::Group(group) => ReportKind::GroupLedgers(*group),
         ViewKey::Ledger(ledger) => ReportKind::LedgerVouchers(*ledger),
         ViewKey::Voucher(_) => {
             return Err(Notice::Info(

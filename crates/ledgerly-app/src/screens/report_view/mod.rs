@@ -40,6 +40,7 @@
 pub mod balance;
 pub mod day_book;
 pub mod generic;
+mod ledger_side;
 mod model;
 mod remote;
 mod text;
@@ -223,6 +224,7 @@ fn look_of(kind: &ReportKind) -> Look {
         ReportKind::TrialBalance
         | ReportKind::ProfitAndLoss
         | ReportKind::GroupSummary(_)
+        | ReportKind::GroupLedgers(_)
         | ReportKind::LedgerVouchers(_)
         | ReportKind::Register(_)
         | ReportKind::Outstanding { .. }
@@ -238,6 +240,7 @@ fn look_of(kind: &ReportKind) -> Look {
 pub fn drill_title(title: &str, kind: &ReportKind) -> String {
     let prefix = match kind {
         ReportKind::GroupSummary(_) => "Group Summary: ",
+        ReportKind::GroupLedgers(_) => "Group Ledgers: ",
         ReportKind::LedgerVouchers(_) => "Ledger Vouchers: ",
         ReportKind::BalanceSheet
         | ReportKind::DayBook
@@ -258,6 +261,10 @@ pub fn drill_subtitle(as_of: ledgerly_core::Date) -> String {
 }
 
 /// Shows one report, with row selection, drill-down, the detail toggle and the period editor.
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "each flag is a separate one-frame request (scroll, export, print, alter) raised by a key or button and cleared after the frame"
+)]
 pub struct ReportViewScreen {
     report: ViewReport,
     source: ReportSource,
@@ -285,6 +292,10 @@ pub struct ReportViewScreen {
     open_wanted: Option<crate::keymap::Action>,
     /// The print in flight, and its save dialog (see [`PrintJob`]).
     print: PrintJob,
+    /// The side card of a ledger drill (group, GSTIN, credit days, open bills, Alter ledger).
+    side: ledger_side::LedgerSide,
+    /// Alter ledger was clicked; the masters screen opens after the frame.
+    alter_wanted: bool,
 }
 
 impl ReportViewScreen {
@@ -311,6 +322,8 @@ impl ReportViewScreen {
             print_wanted: false,
             open_wanted: None,
             print: PrintJob::default(),
+            side: ledger_side::LedgerSide::default(),
+            alter_wanted: false,
         })
     }
 
@@ -362,7 +375,25 @@ impl ReportViewScreen {
             print_wanted: false,
             open_wanted: None,
             print: PrintJob::default(),
+            side: ledger_side::LedgerSide::default(),
+            alter_wanted: false,
         })
+    }
+
+    /// Points the side card at the ledger a ledger drill shows (none for any other report), and
+    /// moves its open bills along.
+    fn follow_side(&mut self, ctx: &AppCtx) {
+        let (info, period) = match self.worker.as_ref() {
+            Some(run) => match (&run.engine.kind, ctx.books.as_ref()) {
+                (ReportKind::LedgerVouchers(id), Some(books)) => {
+                    (ledger_side::side_info(books, *id), run.engine.period)
+                }
+                _ => (None, run.engine.period),
+            },
+            None => return,
+        };
+        self.side.follow(info, period);
+        self.side.tick(ctx.api.as_ref());
     }
 
     /// Advances a worker-mode screen by one step: applies a finished report and sends a waiting
@@ -821,7 +852,9 @@ impl ReportViewScreen {
         self.worker
             .as_ref()
             .is_some_and(|run| match run.engine.kind {
-                ReportKind::GroupSummary(_) | ReportKind::LedgerVouchers(_) => true,
+                ReportKind::GroupSummary(_)
+                | ReportKind::GroupLedgers(_)
+                | ReportKind::LedgerVouchers(_) => true,
                 ReportKind::BalanceSheet
                 | ReportKind::DayBook
                 | ReportKind::TrialBalance
@@ -1024,10 +1057,27 @@ impl ReportViewScreen {
                 .rect;
             self.footer = Some(footer);
             let report = &self.report;
+            let side = &self.side;
+            let mut alter = false;
             let drawn = egui::CentralPanel::default()
                 .frame(egui::Frame::NONE)
-                .show(ui, |ui| generic::draw(ui, report, selected, scroll))
+                .show(ui, |ui| {
+                    if side.ledger().is_some() {
+                        let mut drawn = None;
+                        crate::screens::home::draw::split(
+                            ui,
+                            |ui| drawn = Some(generic::draw(ui, report, selected, scroll)),
+                            |ui| alter = side.draw(ui),
+                        );
+                        drawn.unwrap_or_else(|| generic::draw(ui, report, selected, scroll))
+                    } else {
+                        generic::draw(ui, report, selected, scroll)
+                    }
+                })
                 .inner;
+            if alter {
+                self.alter_wanted = true;
+            }
             self.selected_line = drawn.selected;
             drawn.events
         }
@@ -1322,7 +1372,26 @@ impl Screen for ReportViewScreen {
     fn ui(&mut self, ui: &mut Ui, ctx: &mut AppCtx) -> ScreenAction {
         self.tick(ctx.api.as_ref());
         self.poll_export();
-        let mut action = self.draw(ui);
+        self.follow_side(ctx);
+        let mut action = ScreenAction::Stay;
+        // Ctrl+Enter alters the ledger (index.html:1620); taken before the table reads Enter.
+        if self.side.ledger().is_some()
+            && ui
+                .ctx()
+                .input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::Enter))
+        {
+            self.alter_wanted = true;
+        }
+        if let ScreenAction::Push(screen) = self.draw(ui) {
+            action = ScreenAction::Push(screen);
+        }
+        if std::mem::take(&mut self.alter_wanted)
+            && let Some(ledger) = self.side.ledger()
+        {
+            action = ScreenAction::Push(Box::new(
+                crate::screens::masters::MastersScreen::altering_ledger(ledger),
+            ));
+        }
         if let Some(wanted) = self.open_wanted.take() {
             match crate::screens::ai_gate::open_voucher(wanted, ctx) {
                 Ok(open) => action = open,

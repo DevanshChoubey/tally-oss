@@ -86,7 +86,7 @@ pub use draft::{
     BankDraft, CostCentreDraft, GroupDraft, GstDraft, LedgerDraft, MasterDraft, PartyDraft,
     StockItemDraft, TaxDraft, TreeDraft, UNASSIGNED_ID, UnitDraft, creation_allowed, parse_rupees,
 };
-pub use form_ui::{address_id, line_ids};
+pub use form_ui::{address_id, line_ids, set_more_details};
 pub use list::{MasterRow, list_rows, snapshot_of};
 pub use look::filter_id;
 
@@ -388,6 +388,9 @@ pub struct MastersScreen {
     /// A ledger name to open the create form with, on the first frame that has books (the
     /// palette's `Create ledger "<name>"`).
     pending_create: Option<String>,
+    /// A ledger whose alter form opens as soon as the books are there (the ledger drill's Alter
+    /// ledger button).
+    pending_alter: Option<LedgerId>,
     /// Scroll the list to the cursor on the next frame (after J, K, Up or Down).
     scroll_to_selected: bool,
     /// The ledger list's Balance column, from the engine.
@@ -436,6 +439,7 @@ impl MastersScreen {
             commands: std::collections::VecDeque::new(),
             posting: None,
             pending_create: None,
+            pending_alter: None,
             scroll_to_selected: false,
             balances: balances::LedgerBalances::new(),
             balances_for: None,
@@ -456,6 +460,28 @@ impl MastersScreen {
         let mut screen = MastersScreen::with_kind(MasterKind::Ledger);
         screen.pending_create = Some(name.into());
         screen
+    }
+
+    /// A ledger list that opens the alter form of `ledger` as soon as the books are there (the
+    /// ledger drill's "Alter ledger", index.html:1620). A form that cannot open says why, as
+    /// Ctrl+Enter does.
+    #[must_use]
+    pub fn altering_ledger(ledger: LedgerId) -> Self {
+        let mut screen = MastersScreen::with_kind(MasterKind::Ledger);
+        screen.pending_alter = Some(ledger);
+        screen
+    }
+
+    /// Opens the alter form the screen was made for, if any, now that `books` are there.
+    fn start_pending_alter(&mut self, books: &Books) {
+        let Some(ledger) = self.pending_alter.take() else {
+            return;
+        };
+        self.select(MasterRef {
+            kind: MasterKind::Ledger,
+            id: ledger.0,
+        });
+        drop(self.begin_alter(books));
     }
 
     /// Opens the create form the screen was made for, if any, now that `books` are there.
@@ -1427,6 +1453,7 @@ impl MastersScreen {
 
     fn draw(&mut self, ui: &mut Ui, books: &Books) -> ScreenAction {
         self.start_pending_create(books);
+        self.start_pending_alter(books);
         let mut action = ScreenAction::Stay;
         let mut keys = read_keys(ui, self.mode_tag(), self.kind);
         let create_label = format!("Create {}", self.kind.label());
@@ -1553,25 +1580,32 @@ fn form_balance(form: &FormState, balances: &balances::LedgerBalances) -> Option
 /// The open bills card beside an altered bill-wise ledger (index.html:1806): each open line's
 /// name, date, open amount and age, as the engine's outstanding report gives them
 /// ([`bills::PartyBills`]).
-fn open_bills_card(ui: &mut Ui, party: &bills::PartyBills) {
+pub(crate) fn open_bills_card(ui: &mut Ui, party: &bills::PartyBills) {
     card(ui, |ui| {
         let t = tokens(ui);
         let h2 = bold_font(ui, TEXT_H2);
         ui.label(RichText::new("Open bills").font(h2).color(t.text));
         ui.add_space(SPACE_2);
-        let quiet = |ui: &mut Ui, text: &str| {
-            ui.label(RichText::new(text).size(TEXT_META).color(t.text_2));
-        };
-        match party.state() {
-            bills::BillsState::NotAsked => quiet(ui, OPEN_BILLS_LOADING),
-            bills::BillsState::Unsupported(why) => quiet(
-                ui,
-                &format!("Open bills are not shown: {why}. Nothing is estimated here."),
-            ),
-            bills::BillsState::Loaded(lines) if lines.is_empty() => quiet(ui, OPEN_BILLS_NONE),
-            bills::BillsState::Loaded(lines) => bills_table(ui, lines),
-        }
+        open_bills_body(ui, party);
     });
+}
+
+/// What the Open bills card holds under its heading: the engine's open lines, or why there are
+/// none to show. Also drawn in the ledger drill's side card.
+pub(crate) fn open_bills_body(ui: &mut Ui, party: &bills::PartyBills) {
+    let t = tokens(ui);
+    let quiet = |ui: &mut Ui, text: &str| {
+        ui.label(RichText::new(text).size(TEXT_META).color(t.text_2));
+    };
+    match party.state() {
+        bills::BillsState::NotAsked => quiet(ui, OPEN_BILLS_LOADING),
+        bills::BillsState::Unsupported(why) => quiet(
+            ui,
+            &format!("Open bills are not shown: {why}. Nothing is estimated here."),
+        ),
+        bills::BillsState::Loaded(lines) if lines.is_empty() => quiet(ui, OPEN_BILLS_NONE),
+        bills::BillsState::Loaded(lines) => bills_table(ui, lines),
+    }
 }
 
 /// The open lines in the `table.t` rules: name, date (secondary ink), amount, age badge.

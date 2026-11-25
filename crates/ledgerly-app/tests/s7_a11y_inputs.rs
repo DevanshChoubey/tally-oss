@@ -15,7 +15,7 @@ use std::collections::BTreeMap;
 
 use egui::accesskit::{Node, NodeId, Role, TreeUpdate};
 use egui::{Context, Event, Key, Modifiers, Pos2, RawInput, Rect, Ui, Vec2};
-use ledgerly_app::screens::masters::MastersScreen;
+use ledgerly_app::screens::masters::{MastersScreen, set_more_details};
 use ledgerly_app::screens::setup::SetupScreen;
 use ledgerly_app::screens::voucher_entry::VoucherEntryScreen;
 use ledgerly_app::shell::WelcomeScreen;
@@ -258,10 +258,40 @@ fn masters_ledger_form_fields_read_their_captions() {
         ai_tier: None,
     };
     let mut screen = MastersScreen::creating_ledger("Ramesh Kirana");
+    // The create form is the mock's compact one; Alias and Opening balance sit under "More details".
+    set_more_details(&ctx, true);
     let update = tree(&ctx, 3, |ui| {
         let _ = screen.ui(ui, &mut app);
     });
     assert_named(&update, &["Name", "Alias", "Opening balance"]);
+}
+
+#[test]
+fn masters_create_ledger_form_is_compact_until_more_details_is_opened() {
+    // provenance: design/mock-v2/index.html:1802-1812 (`create-ledger` state): the form shows
+    // Name, Under, Bill-wise (and GSTIN, State, Credit days for a party), with no Alias and no
+    // Opening balance. Derived: a new form names Name only among those inputs.
+    let ctx = context();
+    let b = fixture_books();
+    let mut app = AppCtx {
+        books: Some(b.clone()),
+        api: None,
+        lock_date: None,
+        ai_tier: None,
+    };
+    let mut screen = MastersScreen::creating_ledger("Ramesh Kirana");
+    let update = tree(&ctx, 3, |ui| {
+        let _ = screen.ui(ui, &mut app);
+    });
+    let have = text_inputs(&update);
+    assert!(
+        have.iter().any(|h| h == "Name"),
+        "Name is drawn; have {have:?}"
+    );
+    assert!(
+        !have.iter().any(|h| h == "Alias" || h == "Opening balance"),
+        "Alias and Opening balance wait under More details; have {have:?}"
+    );
 }
 
 #[test]

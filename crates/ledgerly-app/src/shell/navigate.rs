@@ -143,7 +143,9 @@ pub fn report_key(kind: &ReportKind) -> Option<String> {
         ReportKind::TrialBalance => plain("trial-balance"),
         ReportKind::BalanceSheet => plain("balance-sheet"),
         ReportKind::ProfitAndLoss => plain("profit-and-loss"),
-        ReportKind::GroupSummary(group) => Some(group_key(*group)),
+        ReportKind::GroupSummary(group) | ReportKind::GroupLedgers(group) => {
+            Some(group_key(*group))
+        }
         ReportKind::LedgerVouchers(ledger) => Some(ledger_key(*ledger)),
         ReportKind::DayBook => plain("day-book"),
         ReportKind::Register(_) => None,
@@ -180,7 +182,7 @@ pub fn report_from_key(key: &str) -> Option<ReportKind> {
         "integrity-certificate" => Some(ReportKind::Audit(AuditReportKind::IntegrityCertificate)),
         other => {
             if let Some(id) = parse_id(other, "group:") {
-                Some(ReportKind::GroupSummary(GroupId(id)))
+                Some(ReportKind::GroupLedgers(GroupId(id)))
             } else {
                 parse_id(other, "ledger:").map(|id| ReportKind::LedgerVouchers(LedgerId(id)))
             }
@@ -780,7 +782,9 @@ pub fn screen_for_key(key: &str, ctx: &AppCtx) -> Option<Result<Box<dyn Screen>,
 /// drills of `ledgerly-reports` do. Every other report opens condensed.
 fn opens_detailed(kind: &ReportKind) -> bool {
     match kind {
-        ReportKind::GroupSummary(_) | ReportKind::LedgerVouchers(_) => true,
+        ReportKind::GroupSummary(_)
+        | ReportKind::GroupLedgers(_)
+        | ReportKind::LedgerVouchers(_) => true,
         ReportKind::TrialBalance
         | ReportKind::BalanceSheet
         | ReportKind::ProfitAndLoss

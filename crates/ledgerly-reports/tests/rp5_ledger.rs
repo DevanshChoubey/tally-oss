@@ -32,7 +32,7 @@ use ledgerly_model::{
 };
 use ledgerly_reports::{
     Cell, ColumnSpec, Detail, DrillKey, Report, ReportError, ReportKind, ReportParams, RowKind,
-    ledger::{group_summary, ledger_vouchers},
+    ledger::{group_ledgers, group_summary, ledger_vouchers},
 };
 use time::macros::date;
 
@@ -592,4 +592,84 @@ fn group_summary_errors_and_unsupported() {
     let mut monthly = p.clone();
     monthly.columns = ColumnSpec::Monthly;
     assert!(unsupported_what(group_summary(&b, &monthly, GroupId(2))).contains("columns"));
+}
+
+fn gl(b: &Books, p: &ReportParams, group: u64) -> Report {
+    match group_ledgers(b, p, GroupId(group)).unwrap() {
+        Outcome::Value(r) => r,
+        Outcome::Unsupported(u) => panic!("unexpectedly unsupported: {u:?}"),
+    }
+}
+
+#[test]
+fn group_ledgers_gives_opening_debit_credit_and_closing_for_the_period() {
+    // provenance: derived — group 4 (Sundry Debtors), period 10 Apr to 30 Apr, cash_books():
+    //   Customer One: opening master Dr 100; voucher 1 (5 Apr, before the period) is Cr 500, so
+    //   the period opens at 100 - 500 = 400 Cr. Voucher 2 (10 Apr) is Dr 200: debit 200, no
+    //   credit; closing 400 Cr - 200 Dr = 200 Cr.
+    //   Customer Two: nothing anywhere: opens nil, no movement, closes nil, still listed (it is
+    //   a ledger of the group).
+    //   Group total closing = 200 Cr + nil = 200 Cr.
+    let b = cash_books();
+    let p = params(
+        ReportKind::GroupLedgers(GroupId(4)),
+        date!(2026 - 04 - 10),
+        date!(2026 - 04 - 30),
+    );
+    let r = gl(&b, &p, 4);
+    let heads: Vec<&str> = r.columns.iter().map(|c| c.label.as_str()).collect();
+    assert_eq!(heads, ["GSTIN", "Opening", "Debit", "Credit", "Closing"]);
+    assert_eq!(r.rows.len(), 3);
+    assert_eq!(r.rows[0].label, "Customer One");
+    assert_eq!(r.rows[0].key, Some(DrillKey::Ledger(LedgerId(CUST1))));
+    assert_eq!(amount(&r.rows[0].cells[1]), Some(SignedAmount::cr(rs(400))));
+    assert_eq!(amount(&r.rows[0].cells[2]), Some(SignedAmount::dr(rs(200))));
+    assert_eq!(amount(&r.rows[0].cells[3]), None);
+    assert_eq!(amount(&r.rows[0].cells[4]), Some(SignedAmount::cr(rs(200))));
+    assert_eq!(r.rows[1].label, "Customer Two");
+    assert_eq!(
+        amount(&r.rows[1].cells[1]),
+        Some(SignedAmount::dr(Paise::ZERO))
+    );
+    assert_eq!(
+        amount(&r.rows[1].cells[4]),
+        Some(SignedAmount::dr(Paise::ZERO))
+    );
+    assert_eq!(r.rows[2].kind, RowKind::Subtotal);
+    assert_eq!(amount(&r.rows[2].cells[4]), Some(SignedAmount::cr(rs(200))));
+}
+
+#[test]
+fn group_ledgers_rolls_sub_groups_up() {
+    // provenance: derived — group 2 (Current Assets), period 10 Apr to 30 Apr, cash_books():
+    //   Cash-in-Hand: opening Dr 1,000 + voucher 1 (5 Apr) Dr 500 = 1,500 Dr; period: voucher 2
+    //   (10 Apr) Cr 200, voucher 3 (20 Apr) Dr 50; debit 50, credit 200; closing 1,350 Dr.
+    //   Sundry Debtors: as the previous test: 400 Cr, debit 200, credit nil, 200 Cr.
+    //   Total closing 1,350 - 200 = 1,150 Dr.
+    let b = cash_books();
+    let p = params(
+        ReportKind::GroupLedgers(GroupId(2)),
+        date!(2026 - 04 - 10),
+        date!(2026 - 04 - 30),
+    );
+    let r = gl(&b, &p, 2);
+    assert_eq!(r.rows.len(), 3);
+    assert_eq!(r.rows[0].label, "Cash-in-Hand");
+    assert_eq!(r.rows[0].key, Some(DrillKey::Group(GroupId(3))));
+    assert_eq!(
+        amount(&r.rows[0].cells[1]),
+        Some(SignedAmount::dr(rs(1_500)))
+    );
+    assert_eq!(amount(&r.rows[0].cells[2]), Some(SignedAmount::dr(rs(50))));
+    assert_eq!(amount(&r.rows[0].cells[3]), Some(SignedAmount::cr(rs(200))));
+    assert_eq!(
+        amount(&r.rows[0].cells[4]),
+        Some(SignedAmount::dr(rs(1_350)))
+    );
+    assert_eq!(r.rows[1].label, "Sundry Debtors");
+    assert_eq!(amount(&r.rows[1].cells[4]), Some(SignedAmount::cr(rs(200))));
+    assert_eq!(
+        amount(&r.rows[2].cells[4]),
+        Some(SignedAmount::dr(rs(1_150)))
+    );
 }

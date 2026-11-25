@@ -38,6 +38,9 @@ pub enum ReportKind {
     ProfitAndLoss,
     /// Summary of one group.
     GroupSummary(GroupId),
+    /// The ledgers and sub-groups of one group with opening, debit, credit and closing for the
+    /// period (the drill from a balance sheet row).
+    GroupLedgers(GroupId),
     /// Vouchers of one ledger with running balance.
     LedgerVouchers(LedgerId),
     /// Day book.

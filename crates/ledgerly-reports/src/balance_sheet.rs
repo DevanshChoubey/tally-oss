@@ -220,6 +220,7 @@ fn check_kind(params: &ReportParams) -> Result<(), ReportError> {
         ReportKind::TrialBalance
         | ReportKind::ProfitAndLoss
         | ReportKind::GroupSummary(_)
+        | ReportKind::GroupLedgers(_)
         | ReportKind::LedgerVouchers(_)
         | ReportKind::DayBook
         | ReportKind::Register(_)

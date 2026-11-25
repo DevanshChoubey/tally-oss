@@ -14,7 +14,9 @@
 use std::collections::BTreeMap;
 
 use egui::{Event, Key, Modifiers, RawInput};
-use ledgerly_app::screens::masters::{MasterDraft, MastersScreen, PartyDraft, line_ids};
+use ledgerly_app::screens::masters::{
+    MasterDraft, MastersScreen, PartyDraft, line_ids, set_more_details,
+};
 use ledgerly_app::{AppCtx, Screen};
 use ledgerly_core::{CompanyId, StateCode};
 use ledgerly_model::{Address, Books, Company, EntityKind, Features, Masters, NegativeStockPolicy};
@@ -86,31 +88,34 @@ fn open_form() -> (egui::Context, MastersScreen, AppCtx) {
         panic!("Alt+C on ledgers opens a ledger form");
     };
     d.party = Some(PartyDraft::default());
+    // Alias and the address sit under "More details"; these tests walk them.
+    set_more_details(&ctx, true);
     frame(&ctx, &mut s, &mut app, RawInput::default());
     (ctx, s, app)
 }
 
 #[test]
 fn enter_in_a_one_line_field_moves_to_the_next_one() {
-    // provenance: index.html:1831, the masters form keys: "Enter" Next field. The ledger form's
-    // first two one-line fields are Name and Alias (index.html:1810: Name, then Alias). Derived:
-    // Enter from Name gives Alias the keyboard, the form stays open (Enter is not Save, which is
-    // Ctrl+A), and the name is not changed. Catches Enter only dropping the keyboard, as egui's
-    // one-line field does by default.
+    // provenance: index.html:1831, the masters form keys: "Enter" Next field. With the details
+    // open the one-line fields are Name, GSTIN, Alias, Opening balance (the compact form puts
+    // Under, a list, after Name, so Alias and Opening balance are the adjacent pair). Derived:
+    // Enter from Alias gives Opening balance the keyboard, the form stays open (Enter is not
+    // Save, which is Ctrl+A), and the alias is typed as given. Catches Enter only dropping the
+    // keyboard, as egui's one-line field does by default.
     let (ctx, mut s, mut app) = open_form();
     let lines = line_ids(&ctx);
-    assert!(lines.len() >= 2, "the form has at least Name and Alias");
-    ctx.memory_mut(|m| m.request_focus(lines[0]));
+    assert!(lines.len() >= 4, "the form has Name, GSTIN, Alias, Opening");
+    ctx.memory_mut(|m| m.request_focus(lines[2]));
     frame(&ctx, &mut s, &mut app, RawInput::default());
     frame(&ctx, &mut s, &mut app, typed("Ramesh"));
     frame(&ctx, &mut s, &mut app, key(Key::Enter, Modifiers::NONE));
     frame(&ctx, &mut s, &mut app, RawInput::default());
-    assert_eq!(ctx.memory(egui::Memory::focused), Some(lines[1]));
+    assert_eq!(ctx.memory(egui::Memory::focused), Some(lines[3]));
     assert!(s.is_form_open(), "Enter closed the form");
     let Some(MasterDraft::Ledger(d)) = s.draft() else {
         panic!("no ledger form");
     };
-    assert_eq!(d.name, "Ramesh");
+    assert_eq!(d.aliases, "Ramesh");
 }
 
 #[test]
@@ -162,13 +167,13 @@ fn enter_in_the_address_starts_a_new_line() {
 #[test]
 fn shift_enter_in_a_one_line_field_goes_back() {
     // provenance: the mock's entry keys pair "Enter Next field" with "Shift+Enter Previous"
-    // (index.html:1344). Derived: Shift+Enter from the second one-line field gives the first the
-    // keyboard. Catches Shift+Enter doing nothing or moving forward.
+    // (index.html:1344). Derived: Shift+Enter from Opening balance gives Alias (the field before it)
+    // the keyboard. Catches Shift+Enter doing nothing or moving forward.
     let (ctx, mut s, mut app) = open_form();
     let lines = line_ids(&ctx);
-    ctx.memory_mut(|m| m.request_focus(lines[1]));
+    ctx.memory_mut(|m| m.request_focus(lines[3]));
     frame(&ctx, &mut s, &mut app, RawInput::default());
     frame(&ctx, &mut s, &mut app, key(Key::Enter, Modifiers::SHIFT));
     frame(&ctx, &mut s, &mut app, RawInput::default());
-    assert_eq!(ctx.memory(egui::Memory::focused), Some(lines[0]));
+    assert_eq!(ctx.memory(egui::Memory::focused), Some(lines[2]));
 }

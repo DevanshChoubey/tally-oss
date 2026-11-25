@@ -36,6 +36,7 @@ fn live_detail(api: &Api, books: &Books, target: &PaletteTarget) -> Option<Strin
             ReportKind::TrialBalance
             | ReportKind::ProfitAndLoss
             | ReportKind::GroupSummary(_)
+            | ReportKind::GroupLedgers(_)
             | ReportKind::LedgerVouchers(_)
             | ReportKind::DayBook
             | ReportKind::Register(_)
@@ -59,6 +60,7 @@ fn live_detail(api: &Api, books: &Books, target: &PaletteTarget) -> Option<Strin
             | ReportKind::BalanceSheet
             | ReportKind::ProfitAndLoss
             | ReportKind::GroupSummary(_)
+            | ReportKind::GroupLedgers(_)
             | ReportKind::DayBook
             | ReportKind::Register(_)
             | ReportKind::Outstanding { .. }
