@@ -301,9 +301,15 @@ impl Mock {
                     from.day(),
                     crate::ui::format::month_abbrev(from.month())
                 );
+                // index.html `plScreen`: "... · Ledgerly's trading form, with sub-totals".
+                let form = "Ledgerly's trading form, with sub-totals";
                 match ledgerly_core::FinancialYear::containing(to) {
-                    Ok(fy) => format!("From {start} to {} \u{b7} FY {}", day(to), fy.label()),
-                    Err(_) => format!("From {start} to {}", day(to)),
+                    Ok(fy) => format!(
+                        "From {start} to {} \u{b7} FY {} \u{b7} {form}",
+                        day(to),
+                        fy.label()
+                    ),
+                    Err(_) => format!("From {start} to {} \u{b7} {form}", day(to)),
                 }
             }
             Mock::Audit(AuditTab::Integrity) => {
@@ -326,6 +332,7 @@ impl Mock {
             }
             Mock::Stock => vec![("J / K", "Move"), ("Enter", "Stock items"), ("Esc", "Back")],
             Mock::ProfitLoss => vec![
+                ("Alt+F1", "Groups or ledgers"),
                 ("Ctrl+P", "Print preview"),
                 ("Ctrl+E", "Export"),
                 ("Esc", "Back"),
@@ -391,6 +398,207 @@ pub(super) fn stock_summary(
             .to_vec(),
         rows,
         totals,
+        ..report
+    }
+}
+
+/// Heading of the debit amount column of the profit and loss.
+pub(super) const PL_DEBIT: &str = "Debit";
+/// Heading of the credit amount column of the profit and loss.
+pub(super) const PL_CREDIT: &str = "Credit";
+
+/// Which side of the two-sided account a cell stands on, and the cell without its provisional
+/// wrapper. `None` for a cell that is not an amount.
+fn pl_side(cell: &ViewCell) -> Option<(ledgerly_core::DrCr, ViewCell, bool)> {
+    match cell {
+        ViewCell::Amount(a) => Some((a.side, cell.clone(), false)),
+        ViewCell::Provisional { amount, .. } => {
+            Some((amount.side, ViewCell::Amount(*amount), true))
+        }
+        ViewCell::Signed(_)
+        | ViewCell::Qty(_)
+        | ViewCell::Text(_)
+        | ViewCell::Date(_)
+        | ViewCell::Empty
+        | ViewCell::Unsupported(_) => None,
+    }
+}
+
+/// The engine's total, which it states as a debit, as the same figure on the credit side: both
+/// sides come to it (the engine refuses to build the report otherwise), so only the side word
+/// changes, never the figure.
+fn as_credit(total: &ViewCell) -> ViewCell {
+    match total {
+        ViewCell::Amount(a) => ViewCell::Amount(ledgerly_core::SignedAmount::cr(a.amount)),
+        ViewCell::Signed(_)
+        | ViewCell::Qty(_)
+        | ViewCell::Text(_)
+        | ViewCell::Date(_)
+        | ViewCell::Empty
+        | ViewCell::Provisional { .. }
+        | ViewCell::Unsupported(_) => total.clone(),
+    }
+}
+
+/// One side's line of the two-sided account.
+struct PlEntry {
+    key: Option<ViewKey>,
+    label: String,
+    depth: u8,
+    kind: ViewRowKind,
+    cell: ViewCell,
+}
+
+/// The reasons the profit and loss is provisional, each once, in the order the lines come.
+#[must_use]
+pub(super) fn pl_provisional_reasons(report: &ViewReport) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for cell in report
+        .rows
+        .iter()
+        .flat_map(|r| r.cells.iter())
+        .chain(&report.totals)
+    {
+        if let ViewCell::Provisional { reason, .. } = cell
+            && !out.contains(reason)
+        {
+            out.push(reason.clone());
+        }
+    }
+    out
+}
+
+/// Pairs the collected left and right entries into rows, then the section's total row.
+fn flush_sides(
+    left: &mut Vec<PlEntry>,
+    right: &mut Vec<PlEntry>,
+    total: &mut Option<ViewCell>,
+    out: &mut Vec<ViewRow>,
+) {
+    let (mut lhs, mut rhs) = (
+        std::mem::take(left).into_iter(),
+        std::mem::take(right).into_iter(),
+    );
+    loop {
+        let (first, second) = (lhs.next(), rhs.next());
+        if first.is_none() && second.is_none() {
+            break;
+        }
+        let side_label =
+            |entry: &PlEntry| format!("{}{}", "  ".repeat(usize::from(entry.depth)), entry.label);
+        let cells = vec![
+            first.as_ref().map_or(ViewCell::Empty, |e| e.cell.clone()),
+            second
+                .as_ref()
+                .map_or(ViewCell::Empty, |e| ViewCell::Text(side_label(e))),
+            second.as_ref().map_or(ViewCell::Empty, |e| e.cell.clone()),
+        ];
+        let (key, label, depth, kind) = match (&first, &second) {
+            (Some(e), _) => (e.key.clone(), e.label.clone(), e.depth, e.kind),
+            (None, Some(e)) => (e.key.clone(), String::new(), 0, e.kind),
+            (None, None) => break,
+        };
+        out.push(ViewRow {
+            key,
+            label,
+            depth,
+            kind,
+            cells,
+        });
+    }
+    if let Some(t) = total.take() {
+        out.push(ViewRow {
+            key: None,
+            label: "Total".to_owned(),
+            depth: 0,
+            kind: ViewRowKind::Subtotal,
+            cells: vec![t.clone(), ViewCell::Text("Total".to_owned()), as_credit(&t)],
+        });
+    }
+}
+
+/// The profit and loss as the two-sided account: the trading account, then the profit and loss
+/// account, each with the debit side on the left and the credit side on the right and both sides
+/// totalled. The engine's amounts carry the side they stand on, its `Trading total` and `Profit
+/// and loss total` rows are the totals, and its `c/o` and `b/f` rows are the balancing lines, so
+/// this only places each line (rule C4). A provisional figure is drawn bare with "(provisional)"
+/// after its label; the reason is the banner's (see [`pl_provisional_reasons`]). A report that
+/// does not have the engine's rows is returned as it came.
+#[must_use]
+#[allow(
+    clippy::too_many_lines,
+    reason = "one pass over the engine's rows, one arm per row kind"
+)]
+pub(super) fn profit_loss(report: ViewReport) -> ViewReport {
+    let has = |label: &str| report.rows.iter().any(|r| r.label == label);
+    if !has("Trading total") || !has("Profit and loss total") {
+        return report;
+    }
+    let mut out: Vec<ViewRow> = Vec::new();
+    let mut left: Vec<PlEntry> = Vec::new();
+    let mut right: Vec<PlEntry> = Vec::new();
+    let mut total: Option<ViewCell> = None;
+    // The side of the last top-level line, which its ledgers follow.
+    let mut group_side = ledgerly_core::DrCr::Dr;
+    for row in &report.rows {
+        match (row.kind, row.label.as_str()) {
+            (ViewRowKind::Text, "Trading account") => out.push(row.clone()),
+            (ViewRowKind::Text, "Profit and loss account") => {
+                flush_sides(&mut left, &mut right, &mut total, &mut out);
+                out.push(row.clone());
+            }
+            (ViewRowKind::Subtotal, "Gross profit" | "Net profit") => {}
+            (ViewRowKind::Subtotal, "Trading total" | "Profit and loss total") => {
+                total = row.cells.first().and_then(pl_side).map(|(_, c, _)| c);
+            }
+            (
+                ViewRowKind::Item
+                | ViewRowKind::Group
+                | ViewRowKind::Ledger
+                | ViewRowKind::Voucher
+                | ViewRowKind::Bill
+                | ViewRowKind::Difference
+                | ViewRowKind::Subtotal
+                | ViewRowKind::Text,
+                _,
+            ) => {
+                let Some((side, cell, provisional)) = row.cells.first().and_then(pl_side) else {
+                    continue;
+                };
+                let side = if row.depth == 0 {
+                    group_side = side;
+                    side
+                } else {
+                    group_side
+                };
+                let label = if provisional {
+                    format!("{} (provisional)", row.label)
+                } else {
+                    row.label.clone()
+                };
+                let entry = PlEntry {
+                    key: row.key.clone(),
+                    label,
+                    depth: row.depth,
+                    kind: row.kind,
+                    cell,
+                };
+                match side {
+                    ledgerly_core::DrCr::Dr => left.push(entry),
+                    ledgerly_core::DrCr::Cr => right.push(entry),
+                }
+            }
+        }
+    }
+    flush_sides(&mut left, &mut right, &mut total, &mut out);
+    ViewReport {
+        columns: vec![
+            PL_DEBIT.to_owned(),
+            "Particulars".to_owned(),
+            PL_CREDIT.to_owned(),
+        ],
+        rows: out,
+        totals: Vec::new(),
         ..report
     }
 }
@@ -780,8 +988,172 @@ mod tests {
         assert_eq!(pl.page_title(), "Profit and loss");
         assert_eq!(
             pl.subtitle(as_of, period),
-            "From 1 Apr to 20 Nov 2026 \u{b7} FY 2026-27"
+            // provenance: index.html `plScreen` head: "From 1 Apr to 21 Nov 2026 · FY 2026-27 ·
+            // Ledgerly's trading form, with sub-totals" (the test's date is 20 Nov).
+            "From 1 Apr to 20 Nov 2026 \u{b7} FY 2026-27 \u{b7} Ledgerly's trading form, with sub-totals"
         );
+    }
+
+    fn cr(n: i64) -> ViewCell {
+        ViewCell::Amount(SignedAmount::cr(Paise::new(n * 100)))
+    }
+
+    fn dr(n: i64) -> ViewCell {
+        ViewCell::Amount(rs(n))
+    }
+
+    /// The engine's rows for the hand set of `rp4_profit_loss.rs` (opening stock 20,000, closing
+    /// stock 30,000, sales 1,00,000, purchases 60,000, freight 5,000, rent 10,000, interest
+    /// received 2,000), condensed.
+    fn hand_set_rows() -> Vec<ViewRow> {
+        let signed = |n: i64| ViewCell::Signed(Paise::new(n * 100));
+        vec![
+            row(
+                "Trading account",
+                0,
+                ViewRowKind::Text,
+                vec![ViewCell::Empty],
+            ),
+            row("Opening stock", 0, ViewRowKind::Item, vec![dr(20_000)]),
+            row("Purchase Accounts", 0, ViewRowKind::Group, vec![dr(60_000)]),
+            row("Direct Expenses", 0, ViewRowKind::Group, vec![dr(5_000)]),
+            row("Sales Accounts", 0, ViewRowKind::Group, vec![cr(100_000)]),
+            row("Closing stock", 0, ViewRowKind::Item, vec![cr(30_000)]),
+            row(
+                "Gross profit",
+                0,
+                ViewRowKind::Subtotal,
+                vec![signed(45_000)],
+            ),
+            row("Gross profit c/o", 0, ViewRowKind::Item, vec![dr(45_000)]),
+            row("Trading total", 0, ViewRowKind::Subtotal, vec![dr(130_000)]),
+            row(
+                "Profit and loss account",
+                0,
+                ViewRowKind::Text,
+                vec![ViewCell::Empty],
+            ),
+            row("Gross profit b/f", 0, ViewRowKind::Item, vec![cr(45_000)]),
+            row("Indirect Expenses", 0, ViewRowKind::Group, vec![dr(10_000)]),
+            row("Indirect Incomes", 0, ViewRowKind::Group, vec![cr(2_000)]),
+            row("Net profit", 0, ViewRowKind::Subtotal, vec![signed(37_000)]),
+            row("Net profit c/o", 0, ViewRowKind::Item, vec![dr(37_000)]),
+            row(
+                "Profit and loss total",
+                0,
+                ViewRowKind::Subtotal,
+                vec![dr(47_000)],
+            ),
+        ]
+    }
+
+    #[test]
+    fn the_profit_and_loss_is_drawn_as_two_sides_with_the_engines_totals() {
+        // provenance: derived. Trading account: debit side opening stock 20,000, purchases
+        // 60,000, direct expenses 5,000, gross profit c/o 45,000 (total 1,30,000); credit side
+        // sales 1,00,000 and closing stock 30,000 (total 1,30,000). Profit and loss account:
+        // debit side indirect expenses 10,000 and net profit c/o 37,000; credit side gross
+        // profit b/f 45,000 and indirect incomes 2,000; both 47,000. The totals are the
+        // engine's cells, copied.
+        let report = base(&[], hand_set_rows(), vec![signed_total()]);
+        let out = profit_loss(report);
+        assert_eq!(out.columns, vec!["Debit", "Particulars", "Credit"]);
+        let lines: Vec<(String, ViewCell, ViewCell, ViewCell)> = out
+            .rows
+            .iter()
+            .map(|r| {
+                (
+                    r.label.clone(),
+                    r.cells.first().cloned().unwrap_or(ViewCell::Empty),
+                    r.cells.get(1).cloned().unwrap_or(ViewCell::Empty),
+                    r.cells.get(2).cloned().unwrap_or(ViewCell::Empty),
+                )
+            })
+            .collect();
+        let e = ViewCell::Empty;
+        assert_eq!(
+            lines,
+            vec![
+                (
+                    "Trading account".to_owned(),
+                    e.clone(),
+                    e.clone(),
+                    e.clone()
+                ),
+                (
+                    "Opening stock".to_owned(),
+                    dr(20_000),
+                    text("Sales Accounts"),
+                    cr(100_000)
+                ),
+                (
+                    "Purchase Accounts".to_owned(),
+                    dr(60_000),
+                    text("Closing stock"),
+                    cr(30_000)
+                ),
+                (
+                    "Direct Expenses".to_owned(),
+                    dr(5_000),
+                    e.clone(),
+                    e.clone()
+                ),
+                (
+                    "Gross profit c/o".to_owned(),
+                    dr(45_000),
+                    e.clone(),
+                    e.clone()
+                ),
+                ("Total".to_owned(), dr(130_000), text("Total"), cr(130_000)),
+                (
+                    "Profit and loss account".to_owned(),
+                    e.clone(),
+                    e.clone(),
+                    e.clone()
+                ),
+                (
+                    "Indirect Expenses".to_owned(),
+                    dr(10_000),
+                    text("Gross profit b/f"),
+                    cr(45_000)
+                ),
+                (
+                    "Net profit c/o".to_owned(),
+                    dr(37_000),
+                    text("Indirect Incomes"),
+                    cr(2_000)
+                ),
+                ("Total".to_owned(), dr(47_000), text("Total"), cr(47_000)),
+            ]
+        );
+    }
+
+    fn signed_total() -> ViewCell {
+        ViewCell::Signed(Paise::new(3_700_000))
+    }
+
+    #[test]
+    fn a_provisional_line_is_drawn_bare_and_its_reason_goes_to_the_banner() {
+        // provenance: derived from index.html `plScreen` (a provisional stock puts one warning
+        // note over the figures, the figures stay bare) and the s9 balance sheet rule.
+        let mut rows = hand_set_rows();
+        rows[5].cells = vec![ViewCell::Provisional {
+            amount: SignedAmount::cr(Paise::new(3_000_000)),
+            reason: "item Steel pickaxe first went below zero".to_owned(),
+        }];
+        let report = base(&[], rows, vec![signed_total()]);
+        assert_eq!(
+            pl_provisional_reasons(&report),
+            vec!["item Steel pickaxe first went below zero"]
+        );
+        let out = profit_loss(report);
+        let closing = out
+            .rows
+            .iter()
+            .find(|r| matches!(r.cells.get(1), Some(ViewCell::Text(t)) if t.starts_with("Closing stock")))
+            .unwrap();
+        assert_eq!(closing.cells[1], text("Closing stock (provisional)"));
+        assert_eq!(closing.cells[2], cr(30_000));
     }
 
     #[test]

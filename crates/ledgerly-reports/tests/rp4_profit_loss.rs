@@ -1006,3 +1006,137 @@ fn a_credit_opening_on_a_stock_in_hand_ledger_is_unsupported() {
     .unwrap();
     assert!(out.is_unsupported(), "{out:?}");
 }
+
+// ---- the two-sided (horizontal) rows (session 12) ----
+//
+// Source: TallyPrime help, "How to View Profit and Loss Statement in TallyPrime"
+// (https://help.tallysolutions.com/profit-and-loss-statement-tally/, read 2026-11-25): the
+// horizontal form is the default; "Show with Gross Profit" splits the trading profit (cost of
+// sales and direct expenses), and indirect expenses are deducted from the gross profit to reach
+// the nett profit; Alt+F5 gives the detailed form. The help pages do not spell out the rows of the
+// horizontal form; the layout follows the owner's brief: debit side Opening stock, Purchase
+// Accounts, Direct Expenses, Gross profit c/o; credit side Sales Accounts, Closing stock; then
+// Gross profit b/f, Indirect Expenses, Indirect Incomes, Net profit. Each amount carries the side
+// it stands on, so a screen can put debits on the left and credits on the right.
+
+fn amount_of(r: &Report, label: &str) -> SignedAmount {
+    match cell(r, label) {
+        Cell::Amount(a) => a,
+        other => panic!("{label}: not an amount: {other:?}"),
+    }
+}
+
+#[test]
+fn the_trading_account_closes_with_the_gross_profit_carried_over_and_equal_totals() {
+    // provenance: derived — the hand set with opening 20,000 and closing 30,000. Debit side:
+    // opening 20,000 + purchases 60,000 + freight 5,000 = 85,000. Credit side: sales 100,000 +
+    // closing 30,000 = 130,000. Gross profit c/o 130,000 - 85,000 = 45,000 on the debit side, and
+    // both sides total 130,000.
+    let r = run(
+        &books_with(hand_postings()),
+        &params(Detail::Condensed),
+        rs(20_000),
+        rs(30_000),
+    );
+    assert_eq!(
+        amount_of(&r, "Gross profit c/o"),
+        SignedAmount::dr(rs(45_000))
+    );
+    assert_eq!(
+        amount_of(&r, "Trading total"),
+        SignedAmount::dr(rs(130_000))
+    );
+}
+
+#[test]
+fn the_profit_and_loss_account_brings_the_gross_profit_forward_and_carries_the_net_profit() {
+    // provenance: derived — credit side: gross profit b/f 45,000 + interest received 2,000 =
+    // 47,000. Debit side: rent 10,000 + net profit c/o 37,000 = 47,000 (net profit = 45,000 +
+    // 2,000 - 10,000 = 37,000, as the hand set's net profit test).
+    let r = run(
+        &books_with(hand_postings()),
+        &params(Detail::Condensed),
+        rs(20_000),
+        rs(30_000),
+    );
+    assert_eq!(
+        amount_of(&r, "Gross profit b/f"),
+        SignedAmount::cr(rs(45_000))
+    );
+    assert_eq!(
+        amount_of(&r, "Net profit c/o"),
+        SignedAmount::dr(rs(37_000))
+    );
+    assert_eq!(
+        amount_of(&r, "Profit and loss total"),
+        SignedAmount::dr(rs(47_000))
+    );
+}
+
+#[test]
+fn a_gross_loss_and_a_net_loss_stand_on_the_other_sides() {
+    // provenance: derived — sales 10,000, purchases 25,000, no stock. Debit side 25,000, credit
+    // side 10,000: gross loss c/o 15,000 on the credit side, both sides total 25,000. Next
+    // account: gross loss b/f 15,000 on the debit side, no indirect items, net loss c/o 15,000 on
+    // the credit side; both sides total 15,000.
+    let day = d(2026, Month::May, 2);
+    let reg = VoucherStatus::Regular;
+    let books = books_with(vec![
+        posting(1, SALES_L, day, SignedAmount::cr(rs(10_000)), reg),
+        posting(2, PURCHASES_L, day, SignedAmount::dr(rs(25_000)), reg),
+    ]);
+    let r = run(&books, &params(Detail::Condensed), rs(0), rs(0));
+    assert_eq!(
+        amount_of(&r, "Gross loss c/o"),
+        SignedAmount::cr(rs(15_000))
+    );
+    assert_eq!(amount_of(&r, "Trading total"), SignedAmount::dr(rs(25_000)));
+    assert_eq!(
+        amount_of(&r, "Gross loss b/f"),
+        SignedAmount::dr(rs(15_000))
+    );
+    assert_eq!(amount_of(&r, "Net loss c/o"), SignedAmount::cr(rs(15_000)));
+    assert_eq!(
+        amount_of(&r, "Profit and loss total"),
+        SignedAmount::dr(rs(15_000))
+    );
+}
+
+#[test]
+fn provisional_stock_marks_the_carried_rows_and_totals_provisional() {
+    // provenance: derived — rule A1/spec 6.4: a figure computed from provisional stock carries
+    // the reason; the hand set with a provisional closing stock of 30,000.
+    let books = books_with(hand_postings());
+    let reason = ProvisionalReason::NegativeStock {
+        item: StockItemId(1),
+        date: d(2026, Month::July, 4),
+    };
+    let close = Outcome::Value(vec![valuation(
+        1,
+        d(2026, Month::September, 30),
+        rs(30_000),
+        ValuationStatus::Provisional(reason),
+    )]);
+    let r = profit_loss(
+        &books,
+        &params(Detail::Condensed),
+        &opening_stock(rs(20_000)),
+        &close,
+    )
+    .unwrap()
+    .value()
+    .unwrap();
+    for label in [
+        "Gross profit c/o",
+        "Trading total",
+        "Gross profit b/f",
+        "Net profit c/o",
+        "Profit and loss total",
+    ] {
+        assert!(
+            matches!(cell(&r, label), Cell::Provisional { .. }),
+            "{label}: {:?}",
+            cell(&r, label)
+        );
+    }
+}

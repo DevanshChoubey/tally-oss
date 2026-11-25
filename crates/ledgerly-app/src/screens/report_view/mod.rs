@@ -1231,9 +1231,28 @@ impl ReportViewScreen {
             let report = self.shown();
             let side = &self.side;
             let mut alter = false;
+            // index.html `plScreen`: a provisional stock puts a warning note over the figures. The
+            // engine's reason (it names the item) is the note's text; the marked lines say which
+            // figures depend on it.
+            let reasons = if look == Look::Mock(mock::Mock::ProfitLoss) {
+                mock::pl_provisional_reasons(&self.report)
+            } else {
+                Vec::new()
+            };
             let drawn = egui::CentralPanel::default()
                 .frame(egui::Frame::NONE)
                 .show(ui, |ui| {
+                    if !reasons.is_empty() {
+                        note(
+                            ui,
+                            NoteKind::Warn,
+                            &format!(
+                                "Stock is provisional ({}). The figures that depend on it are marked (provisional).",
+                                reasons.join("; ")
+                            ),
+                        );
+                        ui.add_space(8.0);
+                    }
                     if side.ledger().is_some() {
                         let mut drawn = None;
                         crate::screens::home::draw::split(

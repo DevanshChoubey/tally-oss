@@ -949,12 +949,42 @@ Drawn to the mock in S12: `trial-balance.default`, `outstanding.receivables`,
 it (`report_view/mock.rs`); no figure is computed in the screen. The register report has no mock
 state yet and still draws the generic table.
 
-- **gap: profit and loss lays the trading form out differently.** The screen draws the engine's
-  trading account as one Particulars column (Opening stock, group totals with Dr/Cr words, Closing
-  stock, Gross profit, Net profit); the mock draws Income and Expenses tables with every expense
-  ledger listed. The figures are the mock's (Opening stock 9,12,000.00, net profit 16,96,569.70).
-  A period starting after the books' first day is `Unsupported` while a Stock-in-Hand ledger holds
-  an opening balance (the ledger does not state the stock on hand then).
+- **gap: the mock's profit and loss must change to the documented two-sided account (mock round).**
+  The accounting product's help ("How to View Profit and Loss Statement in TallyPrime",
+  https://help.tallysolutions.com/profit-and-loss-statement-tally/, read 2026-11-25) says the
+  horizontal form is the default, that Show with Gross Profit splits the trading profit (cost of
+  sales and direct expenses) and that indirect expenses are deducted from the gross profit to give
+  the nett profit, and that Alt+F5 (our Alt+F1) shows the detailed form. It does not spell out the
+  rows; those follow the owner's brief. The app now draws the trading account (debit side: Opening
+  stock, Purchase Accounts, Direct Expenses, Gross profit c/o; credit side: Sales Accounts,
+  Closing stock) with both sides totalled, then the profit and loss account (Gross profit b/f,
+  Indirect Expenses, Indirect Incomes, Net profit c/o) with both sides totalled; groups by
+  default, the ledgers under them with Alt+F1. The engine supplies the c/o and b/f lines and the
+  totals (`ledgerly-reports`, tested by hand derivation); the screen only places them. The mock's
+  `profit-and-loss.*` states draw Income and Expenses tables (with Discount received as income
+  beside Sales, one list of every expense ledger, Total income and Total expenses): the mock
+  must change to the two-sided form, and its subtitle keeps "Ledgerly's trading form, with
+  sub-totals". Until then the app differs from the mock in layout, by the documented form. Also
+  different: the line under Enter drills only the debit side's group when both sides have a row;
+  a provisional line says "(provisional)" after its label and one warning note over the table
+  gives the engine's reason (the mock's note adds a button to the stock items and names the
+  figure); a period starting after the books' first day is `Unsupported` while a Stock-in-Hand
+  ledger holds an opening balance.
+- **gap: the provisional states' figures differ from the mock's, by cause.** The mock overrides
+  the stock position only (`stockOverride`, pickaxe -30): its closing stock 13,57,859 changes while
+  sales stay 85,93,225. The app's fixture posts the real vouchers that make the stock negative (a
+  19 Nov sale of 174 pickaxes at 640 = 1,11,360 more sales, 87,04,585, and a 20 Nov purchase of
+  100 at 470 = 47,000 more purchases, 53,41,000), so sales, purchases and closing stock all move.
+  The mock's provisional state should either post those two vouchers or say it overrides the stock
+  only.
+- **by design: reports open at the last voucher's date, not today's.** The profit and loss and
+  the balance sheet read "to 20 Nov 2026" / "As at 20 Nov 2026" while the top bar says 21 Nov: the
+  period ends at the last voucher in the year (20 Nov), as the accounting product's reports do
+  ("generated as on the date of the last voucher entry",
+  https://help.tallysolutions.com/tally-prime/accounting-financial-reports/trial-balance-tally/,
+  read 2026-11-21; `shell/navigate.rs` `default_period`). No voucher is dated 21 Nov, so every
+  figure equals the mock's 21 Nov figure. The mock reads its own "today" (21 Nov); it should read
+  the last voucher date (20 Nov) on reports, as its own day book does.
 - **gap: no print preview, saved or failed state.** `profit-and-loss.print-preview`, `.print-saved`
   and `.print-failed` are not captured: the app has no in-app preview panel (see Print).
 - **gap: audit, edits after lock is a table here, Unsupported in the mock.** The engine returns an
