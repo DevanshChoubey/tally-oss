@@ -289,6 +289,18 @@ fn alt_f6_and_alt_f5_open_the_credit_and_debit_notes() {
     );
 }
 
+#[test]
+fn f4_on_home_opens_the_contra_form() {
+    // derived: F4 Contra, the keyboard shortcut page cited above.
+    let (trail, notice) = trail_after("f4_home", Key::F4, Modifiers::NONE);
+    assert_eq!(notice, None, "{trail:?}");
+    assert_eq!(
+        trail.get(1).map(String::as_str),
+        Some("Contra"),
+        "{trail:?}"
+    );
+}
+
 // ---- the item invoice screen's wording for purchases and notes ----------------------------------
 
 use ledgerly_app::screens::item_invoice::{
@@ -333,7 +345,7 @@ fn a_purchase_and_a_debit_note_name_the_supplier_and_the_bill() {
 fn a_typed_bill_date_is_read_and_a_wrong_one_is_refused() {
     // derived: the text "17-11-2026" is 17 November 2026 (day-month-year, as every date field of
     // the app); 31 November does not exist; nothing typed means no date (the field is optional,
-    // as TallyPrime's supplier invoice date is not demanded by the voucher).
+    // our own design choice: the voucher does not need the date to post).
     let fy = FinancialYear::april(2026).unwrap();
     let mut draft = InvoiceDraft::new(
         VoucherTypeId(1),

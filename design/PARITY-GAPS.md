@@ -502,11 +502,16 @@ Captures: `purchase.*`, `credit-note.*`, `debit-note.*` and `journal.*` (each `d
   reads "Supplier" on a purchase and a debit note.
 - **changed: F9, F7, Alt+F6 and Alt+F5 now open their forms with a company open.** F9 on Home
   said "not yet"; F7, Alt+F6 and Alt+F5 did nothing outside the palette.
-- **by design: a debit note goes back to the supplier.** The accounting product's debit note
-  records a purchase return. Under s.34(3) CGST Act the supplier issues a debit note when the
-  value rises; ours is the buyer's own voucher and is not a GST document, so it is not
-  reported in GSTR-1 as one (same source, read 2026-11-25). A GST debit note issued by the
-  company as supplier is not built.
+- **by design: a debit note goes back to the supplier.** The accounting product records a
+  purchase return as a Debit Note against the supplier, asking for the original invoice number
+  and date (help.tallysolutions.com/tally-prime/purchase-process/purchase-returns-tally/, read
+  2026-11-25); ours does the same. Under s.34(3) CGST Act it is the supplier who issues a GST
+  debit note when the value rises (taxguru.in page above, read 2026-11-25), so ours is the
+  buyer's own voucher. Whether the engine leaves such a note out of GSTR-1 was not checked in
+  this round; a GST debit note issued by the company as supplier is not built.
+- **gap: the notes keep the subtitle and mode button of an item invoice.** "Item invoice . tax
+  is recomputed by the GST engine on every keystroke" and the "Item invoice Ctrl+H" button
+  appear under the Credit Note and Debit Note titles.
 - **gap: eligible ITC is not shown on a purchase.** `ledgerly-gst` has `itc_eligibility`, but
   `Api::invoice_gst_with_bills` does not return it for a draft, and the UI must not compute it.
   The tax box shows the engine's tax lines only; a new API call is needed.

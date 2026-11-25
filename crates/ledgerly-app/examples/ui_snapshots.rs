@@ -1415,7 +1415,7 @@ fn light_shots() -> Vec<Shot> {
             .type_text("1500")
             .press(&[(Key::Enter, NONE), (Key::Enter, NONE)]),
         // Purchase entry (no mock state: modelled on `sales-invoice.default` and the form half of
-        // `purchase-bill.accepted`, index.html:402): Nilgiri Steel Traders' bill NST/1152 from
+        // `purchase-bill.accepted`, index.html:1488-1489): Nilgiri Steel Traders' bill NST/1152 from
         // Karnataka, delivered here (place 27, so IGST).
         invoice_line(
             invoice_line(
@@ -1533,11 +1533,16 @@ fn light_shots() -> Vec<Shot> {
             .press(&[(Key::Enter, NONE)])
             .type_text("Plant and")
             .press(&[(Key::Enter, NONE), (Key::Enter, NONE)])
-            .type_text("November depreciation, plant and machinery"),
-        // Ctrl+A on a journal with no lines: refused with the reason, nothing is saved.
+            .type_text("November depreciation, plant and machinery")
+            .expect("Journal", None),
+        // A debit of zero: Enter is refused with the reason, the keyboard stays on the amount.
         shot("journal.validation-error", &[(Key::F7, NONE)])
             .on(Fixture::Godavari)
-            .press(&[(Key::A, Modifiers::COMMAND)]),
+            .type_text("Depreciation")
+            .press(&[(Key::Enter, NONE)])
+            .type_text("0")
+            .press(&[(Key::Enter, NONE)])
+            .expect("Journal", None),
         // A blank line ends the lines; Enter on the narration asks to save.
         three_lines(godavari_invoice(
             "sales-invoice.save-confirm",
