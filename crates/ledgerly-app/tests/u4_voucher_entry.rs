@@ -279,9 +279,81 @@ fn division_rounds_to_the_nearest_paisa() {
     assert_eq!(eval_amount("100/3"), Ok(Paise::new(3_333)));
     // provenance: derived; 200/3 = 66.6666... rupees; nearest paisa is 66.67 = 6,667 paise.
     assert_eq!(eval_amount("200/3"), Ok(Paise::new(6_667)));
-    // provenance: derived; 0.005 rupee is exactly half a paisa; halves round away from zero
-    // (RoundingRule::HalfUpToPaise), so 1 paisa.
-    assert_eq!(eval_amount("0.005"), Ok(Paise::new(1)));
+}
+
+#[test]
+fn a_literal_with_more_than_two_decimals_is_refused_never_rounded() {
+    // provenance: derived; rupees have two decimal places (100 paise). A typed literal finer than
+    // a paisa cannot be what the user meant and silently rounding it books a different figure:
+    // "42000.0040000" (42000.00 with 40000 typed after it) used to read as 42,000.00. Each is
+    // refused with the text named; trailing zeros past two places are the same figure and pass.
+    for text in ["0.005", "42000.0040000", "1.234+1", "2*0.125", "(10.001)"] {
+        assert!(
+            matches!(eval_amount(text), Err(AmountError::TooManyDecimals { .. })),
+            "{text}: {:?}",
+            eval_amount(text)
+        );
+    }
+    // provenance: derived; 12.500 is 12.5 rupees = 1,250 paise; 7.00 is 700 paise.
+    assert_eq!(eval_amount("12.500"), Ok(Paise::new(1_250)));
+    assert_eq!(eval_amount("7.00"), Ok(Paise::new(700)));
+}
+
+/// Opens a journal with Rent debited 42,000 and the cursor on the second line's amount, which the
+/// screen prefilled with the 42,000.00 that balances.
+fn journal_on_prefilled_credit() -> (egui::Context, VoucherEntryScreen, AppCtx, Books) {
+    let books = books();
+    let mut s = open(&books, T_JOURNAL);
+    let m = &books.masters;
+    s.set_ledger_text(0, "rent");
+    s.submit(m);
+    s.set_amount_text(0, "42000");
+    s.submit(m);
+    s.set_ledger_text(1, "cash");
+    s.submit(m);
+    assert_eq!(s.focus(), Field::Amount(1));
+    assert_eq!(s.draft().rows.get(1).unwrap().amount_text, "42000.00");
+    let mut app = AppCtx {
+        books: Some(books.clone()),
+        api: None,
+        lock_date: None,
+        ai_tier: None,
+    };
+    let ctx = egui::Context::default();
+    for _ in 0..3 {
+        frame(&ctx, &mut s, &mut app, RawInput::default());
+    }
+    (ctx, s, app, books)
+}
+
+#[test]
+fn typing_over_a_prefilled_amount_replaces_it_and_the_short_journal_is_refused() {
+    // provenance: derived; the bug found in round s11: typing 40000 into the prefilled credit
+    // "42000.00" gave "42000.0040000", read as 42,000.00, so a journal meant to be 2,000.00 short
+    // saved balanced. With the prefill selected when the keyboard arrives, the first typed
+    // character replaces it: the line holds 40,000.00 = 4,000,000 paise, and Dr 42,000.00 against
+    // Cr 40,000.00 leaves 2,000.00 out (spec 5 invariant 1), so the journal is refused.
+    let (ctx, mut s, mut app, books) = journal_on_prefilled_credit();
+    let m = &books.masters;
+    frame(
+        &ctx,
+        &mut s,
+        &mut app,
+        RawInput {
+            events: vec![Event::Text("40000".to_owned())],
+            ..RawInput::default()
+        },
+    );
+    frame(&ctx, &mut s, &mut app, RawInput::default());
+    assert_eq!(s.draft().rows.get(1).unwrap().amount_text, "40000");
+    assert_eq!(
+        eval_amount(&s.draft().rows.get(1).unwrap().amount_text),
+        Ok(Paise::new(4_000_000))
+    );
+    s.submit(m);
+    s.save(m);
+    assert!(s.take_save_request().is_none(), "{:?}", s.error_text());
+    assert!(s.error_text().is_some());
 }
 
 #[test]

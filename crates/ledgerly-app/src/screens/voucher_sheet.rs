@@ -270,7 +270,7 @@ pub fn input(ui: &mut Ui, text: &mut String, spec: &InputSpec<'_>) -> Response {
             .max_rect(inner)
             .layout(Layout::left_to_right(Align::Center)),
     );
-    cell.add(
+    let response = cell.add(
         egui::TextEdit::singleline(text)
             .id(spec.id)
             .frame(Frame::NONE)
@@ -281,7 +281,33 @@ pub fn input(ui: &mut Ui, text: &mut String, spec: &InputSpec<'_>) -> Response {
             .align(align)
             .min_size(inner.size())
             .desired_width(inner.width()),
-    )
+    );
+    // A figure that is already there (the amount that balances a journal) is selected when the
+    // keyboard arrives, so the first typed character replaces it instead of appending to it.
+    // A click keeps the caret where it landed.
+    if spec.numeric {
+        // Focus can arrive between two frames, so it is noticed by comparing with the last frame.
+        let seen = spec.id.with("had-keyboard");
+        let was = ui.data_mut(|d| d.get_temp::<bool>(seen)).unwrap_or(false);
+        let now = response.has_focus();
+        ui.data_mut(|d| d.insert_temp(seen, now));
+        if now && !was && !ui.input(|i| i.pointer.any_pressed() || i.pointer.any_down()) {
+            select_all(ui.ctx(), response.id, text.chars().count());
+        }
+    }
+    response
+}
+
+/// Selects the whole of the text field `id`, which holds `chars` characters.
+fn select_all(ctx: &egui::Context, id: Id, chars: usize) {
+    let mut state = egui::text_edit::TextEditState::load(ctx, id).unwrap_or_default();
+    state
+        .cursor
+        .set_char_range(Some(egui::text::CCursorRange::two(
+            egui::text::CCursor::new(0),
+            egui::text::CCursor::new(chars),
+        )));
+    state.store(ctx, id);
 }
 
 /// One column of a line table.

@@ -529,15 +529,20 @@ Captures: `purchase.*`, `credit-note.*`, `debit-note.*` and `journal.*` (each `d
   year has none.
 - **data: CN/ and DN/ prefixes** were added to the sample company's two note types (the mock
   shows no note numbers); the sample has no notes yet, so the first reads CN/0001.
-- **bug (found s11, not fixed): an amount field keeps its prefilled text when it gets the
-  keyboard, so typing appends to it, and the evaluator rounds half-up to paise.** On a journal,
-  typing 40000 into the prefilled credit of 42000.00 gave "42000.0040000", which the evaluator
-  read as 42,000.00 (rounded, `eval_amount`), so a journal meant to be 2,000 short saved
-  balanced. The books are not wrong (the engine and the draft both refuse an unbalanced
-  voucher; `an_unbalanced_journal_is_refused_and_nothing_is_left_for_the_host`), but a typed
-  figure with more than two decimals is silently rounded and a typed amount can silently add to
-  the prefill. Needs a decision: select the prefilled amount on focus, and refuse a literal with
-  more than two decimals.
+- **by design: a prefilled amount is selected when the keyboard arrives; a literal finer than a
+  paisa is refused.** The balancing amount a journal, payment, receipt or contra offers on its
+  next line (and any prefilled figure on the invoice screens) is selected when the keyboard
+  reaches the field, so the first typed character replaces it; before, typing 40000 over
+  "42000.00" gave "42000.0040000", which `eval_amount` rounded to 42,000.00. `eval_amount` now
+  refuses a typed number with more than two decimal places (`AmountError::TooManyDecimals`);
+  results of arithmetic (`100/3`) are still rounded half up to paise, as documented. A mouse
+  click keeps the caret where it landed. Provenance: none. The public help pages read
+  (help.tallysolutions.com/tally-prime/accounting/payments-and-receipts-tally/, read 2026-11-25,
+  and the pre-allocation page found with it) say only "Enter the required Amount" and are silent
+  on typing over a prefilled amount, so this is a product choice made to prevent a wrong figure.
+- **changed: a credit or debit note's head says "Credit note" or "Debit note".** The subtitle
+  reads "Credit note · item mode; ..." and the mode button "Item mode" or "Accounting mode"; a
+  note is not an invoice (CGST Act s.34). A sale and a purchase keep "Item invoice".
 - **gap: the ledger list covers the reason.** On a journal line with the keyboard on an empty
   ledger, the list is drawn over the red notice, so `journal.validation-error` shows only the
   start of the reason ("voucher has ...").

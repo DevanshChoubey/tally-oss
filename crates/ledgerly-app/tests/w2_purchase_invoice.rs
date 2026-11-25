@@ -217,18 +217,31 @@ fn each_command_opens_its_invoice_in_accounting_mode_without_inventory() {
     // ledgerly-model seed_voucher_types.rs) and the screen title: "<type> invoice" for a purchase,
     // the bare type name for a note (CGST Act s.34 calls it a credit or debit note, not an
     // invoice; changed in s11). Derived: on a company with inventory off each opens in
-    // accounting invoice mode.
+    // accounting invoice mode; a note's head says "<Credit|Debit> note · accounting mode" (it is
+    // not an invoice; changed in s11).
     let (_api, books) = setup("w2_pur_inv_routes.ledgerly");
     let ctx = app(&books, None);
-    for (action, title) in [
-        (Action::NewPurchase, "Purchase invoice"),
-        (Action::NewCreditNote, "Credit Note"),
-        (Action::NewDebitNote, "Debit Note"),
+    for (action, title, head) in [
+        (
+            Action::NewPurchase,
+            "Purchase invoice",
+            "Accounting invoice",
+        ),
+        (
+            Action::NewCreditNote,
+            "Credit Note",
+            "Credit note \u{b7} accounting mode",
+        ),
+        (
+            Action::NewDebitNote,
+            "Debit Note",
+            "Debit note \u{b7} accounting mode",
+        ),
     ] {
         let screen = screen_for(&PaletteTarget::Command(action), &ctx).unwrap();
         assert_eq!(screen.title(), title);
         let subtitle = screen.subtitle().unwrap();
-        assert!(subtitle.starts_with("Accounting invoice"), "{subtitle}");
+        assert!(subtitle.starts_with(head), "{subtitle}");
     }
 }
 

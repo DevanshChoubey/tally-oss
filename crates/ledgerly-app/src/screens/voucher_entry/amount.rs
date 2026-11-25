@@ -28,6 +28,12 @@ pub enum AmountError {
         /// The text.
         text: String,
     },
+    /// A literal finer than a paisa, such as `0.005` or `42000.0040000`.
+    #[error("'{text}' has more than two decimal places; an amount is in rupees and paise")]
+    TooManyDecimals {
+        /// The literal.
+        text: String,
+    },
     /// The expression is incomplete or has a symbol in the wrong place.
     #[error("the amount is incomplete or has a stray symbol at character {at}")]
     Syntax {
@@ -228,6 +234,11 @@ impl Parser {
                 self.bump();
             }
             return match Decimal::from_str(&text) {
+                // A literal finer than a paisa is refused, never rounded: `42000.0040000` is what
+                // typing over a prefilled `42000.00` without selecting it gives.
+                Ok(value) if value.normalize().scale() > 2 => {
+                    Err(AmountError::TooManyDecimals { text })
+                }
                 Ok(value) => Ok(Operand::plain(value)),
                 Err(_) => Err(AmountError::BadNumber { text }),
             };
@@ -261,7 +272,8 @@ fn allowed_in_amount(c: char) -> bool {
 /// `+` or `-` is refused as ambiguous ([`AmountError::AmbiguousPercent`]), and a percentage that
 /// is not the operand of `*` or `/` (a lone `18%`) is refused ([`AmountError::LonePercent`]).
 /// Text over 256 characters or nested more than 64 deep is refused. The result is rounded
-/// to the nearest paisa, halves away from zero ([`RoundingRule::HalfUpToPaise`]). No floats are
+/// to the nearest paisa, halves away from zero ([`RoundingRule::HalfUpToPaise`]); a typed number
+/// with more than two decimal places is refused ([`AmountError::TooManyDecimals`]), not rounded. No floats are
 /// involved. A negative result is an error: the side (Dr or Cr) carries the sign.
 ///
 /// # Errors

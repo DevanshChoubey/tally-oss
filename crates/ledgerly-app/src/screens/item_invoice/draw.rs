@@ -1272,9 +1272,15 @@ impl ItemInvoiceScreen {
         let mut clicks: Option<Click> = None;
         let locked = self.locked_on();
         let subtitle = self.subtitle().unwrap_or_default();
-        let mode_label = match self.draft.mode {
-            InvoiceMode::Item => "Item invoice",
-            InvoiceMode::Accounting => "Accounting invoice",
+        let is_note = matches!(
+            self.draft.kind,
+            InvoiceKind::CreditNote | InvoiceKind::DebitNote
+        );
+        let mode_label = match (is_note, self.draft.mode) {
+            (false, InvoiceMode::Item) => "Item invoice",
+            (false, InvoiceMode::Accounting) => "Accounting invoice",
+            (true, InvoiceMode::Item) => "Item mode",
+            (true, InvoiceMode::Accounting) => "Accounting mode",
         };
         let number = self.extras.number.clone();
         page_head_numbered(
@@ -1449,11 +1455,24 @@ impl Screen for ItemInvoiceScreen {
     }
 
     fn subtitle(&self) -> Option<String> {
-        let text = match self.draft.mode {
-            InvoiceMode::Item => SUBTITLE,
-            InvoiceMode::Accounting => ACCOUNTING_SUBTITLE,
+        let note = match self.draft.kind {
+            InvoiceKind::Sales | InvoiceKind::Purchase => None,
+            InvoiceKind::CreditNote => Some("Credit note"),
+            InvoiceKind::DebitNote => Some("Debit note"),
         };
-        Some(text.to_owned())
+        let text = match (note, self.draft.mode) {
+            (None, InvoiceMode::Item) => SUBTITLE.to_owned(),
+            (None, InvoiceMode::Accounting) => ACCOUNTING_SUBTITLE.to_owned(),
+            (Some(name), InvoiceMode::Item) => {
+                format!(
+                    "{name} \u{b7} item mode; tax is recomputed by the GST engine on every keystroke"
+                )
+            }
+            (Some(name), InvoiceMode::Accounting) => format!(
+                "{name} \u{b7} accounting mode; ledgers under Particulars; tax is recomputed by the GST engine on every keystroke"
+            ),
+        };
+        Some(text)
     }
 
     fn keys(&self) -> Vec<KeyHint> {

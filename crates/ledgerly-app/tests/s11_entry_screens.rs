@@ -472,3 +472,36 @@ fn a_credit_note_is_titled_as_a_note_not_as_an_invoice() {
     let (trail, _) = trail_after("title_purchase", Key::F9, Modifiers::NONE);
     assert_eq!(trail.get(1).map(String::as_str), Some("Purchase invoice"));
 }
+
+/// The subtitle under the page title and the label of the mode button of the screen a key opens.
+fn head_after(name: &str, key: Key, modifiers: Modifiers) -> String {
+    let ctx = egui::Context::default();
+    let mut shell = ready(&ctx, setup(name, 0));
+    frame(&ctx, &mut shell, press(key, modifiers));
+    frame(&ctx, &mut shell, RawInput::default());
+    shell
+        .tabs_mut()
+        .active_stack_mut()
+        .and_then(ScreenStack::top_mut)
+        .and_then(|s| s.subtitle())
+        .unwrap_or_default()
+}
+
+#[test]
+fn a_note_does_not_wear_the_sales_item_invoice_subtitle() {
+    // derived: a credit note and a debit note are not invoices (CGST Act s.34 names them as
+    // notes), so the line under their title must not read "Item invoice"; it names the note and
+    // the mode (TallyPrime's Ctrl+H Change Mode applies to notes as it does to invoices,
+    // help.tallysolutions.com/sales-of-goods-services/, read 2026-11-23). The sale and the
+    // purchase keep the mock's "Item invoice" line (index.html:1282).
+    let credit = head_after("sub_credit", Key::F6, Modifiers::ALT);
+    assert!(credit.starts_with("Credit note"), "{credit}");
+    assert!(!credit.contains("Item invoice"), "{credit}");
+    let debit = head_after("sub_debit", Key::F5, Modifiers::ALT);
+    assert!(debit.starts_with("Debit note"), "{debit}");
+    let purchase = head_after("sub_purchase", Key::F9, Modifiers::NONE);
+    assert!(
+        purchase.starts_with("Item invoice") || purchase.starts_with("Accounting invoice"),
+        "{purchase}"
+    );
+}

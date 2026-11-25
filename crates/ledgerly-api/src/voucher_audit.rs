@@ -156,7 +156,10 @@ fn audit_of(records: &[AuditRecord], id: VoucherId) -> Option<VoucherAudit> {
             | Event::StatementImported(_)
             | Event::MatchConfirmed(_)
             | Event::AiProposalRecorded(_)
-            | Event::BankStatementStored { .. } => {}
+            | Event::BankStatementStored { .. }
+            | Event::Gstr2bImported { .. }
+            | Event::ImsActionRecorded { .. }
+            | Event::Gstr3bFiled { .. } => {}
         }
     }
     let (record, who_how) = posted?;
