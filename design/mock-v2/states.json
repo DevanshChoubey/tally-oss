@@ -635,6 +635,181 @@
    "hash": "screen=ai-settings&state=off",
    "title": "AI and privacy, off",
    "description": "AI off: every AI entry point hidden; rule checks and engine matching still work."
+  },
+  {
+   "id": "purchase.default",
+   "kind": "happy",
+   "hash": "screen=purchase&state=default",
+   "title": "Purchase, typed by hand",
+   "description": "F9 purchase with no bill photo: supplier bill, item lines and IGST computed by the engine (Nilgiri, Karnataka, inter-state)."
+  },
+  {
+   "id": "purchase.validation-error",
+   "kind": "validation-error",
+   "hash": "screen=purchase&state=validation-error",
+   "title": "Purchase, validation errors",
+   "description": "A missing quantity and an unknown item block saving; each error names its line and the fix."
+  },
+  {
+   "id": "credit-note.default",
+   "kind": "happy",
+   "hash": "screen=credit-note&state=default",
+   "title": "Credit note against SI/0412",
+   "description": "Sales return of 10 sets of brass nozzles to Shree Ganesh Traders: CGST and SGST reversed, reference to the invoice kept."
+  },
+  {
+   "id": "credit-note.validation-error",
+   "kind": "validation-error",
+   "hash": "screen=credit-note&state=validation-error",
+   "title": "Credit note, more than invoiced",
+   "description": "70 sets returned against 67 invoiced: a return cannot exceed the invoice, and the line says so."
+  },
+  {
+   "id": "debit-note.default",
+   "kind": "happy",
+   "hash": "screen=debit-note&state=default",
+   "title": "Debit note against NST/1145",
+   "description": "Purchase return to Nilgiri Steel: 2 bundles, IGST reversed on the purchase bill, Accept posts the note."
+  },
+  {
+   "id": "debit-note.validation-error",
+   "kind": "validation-error",
+   "hash": "screen=debit-note&state=validation-error",
+   "title": "Debit note, return not on the bill",
+   "description": "The return names MS angles, but the bill has no such line to link to; the note refuses to link."
+  },
+  {
+   "id": "journal.default",
+   "kind": "happy",
+   "hash": "screen=journal&state=default",
+   "title": "Journal, reclassify freight",
+   "description": "JV/0033 moves freight paid from Purchases to Freight inward: debits and credits both 1,840.00."
+  },
+  {
+   "id": "journal.validation-error",
+   "kind": "validation-error",
+   "hash": "screen=journal&state=validation-error",
+   "title": "Journal, does not balance",
+   "description": "Debits 1,840.00 against credits 1,480.00: the difference is shown and Save stays blocked."
+  },
+  {
+   "id": "contra.default",
+   "kind": "happy",
+   "hash": "screen=contra&state=default",
+   "title": "Contra, cash to bank",
+   "description": "CT/0022: 30,000.00 cash paid into the Saptagiri account; the cash balance after saving comes from the engine."
+  },
+  {
+   "id": "contra.validation-error",
+   "kind": "validation-error",
+   "hash": "screen=contra&state=validation-error",
+   "title": "Contra, no account and zero amount",
+   "description": "Neither account is picked and the amount is zero: both errors shown, Save blocked."
+  },
+  {
+   "id": "bank-chooser.default",
+   "kind": "happy",
+   "hash": "screen=bank-chooser&state=default",
+   "title": "Choose bank account",
+   "description": "Two bank accounts: balances per books and whether a statement is imported, with Enter to open the one selected."
+  },
+  {
+   "id": "start.recent",
+   "kind": "happy",
+   "hash": "screen=start&state=recent",
+   "title": "Start, recent companies",
+   "description": "The app opens with the recent company list (Godavari) and the create, import and open actions."
+  },
+  {
+   "id": "profit-and-loss.default",
+   "kind": "happy",
+   "hash": "screen=profit-and-loss&state=default",
+   "title": "Profit and loss",
+   "description": "Income and expenses from the books and the engine's closing stock; net profit equals the balance sheet's profit to date."
+  },
+  {
+   "id": "profit-and-loss.provisional",
+   "kind": "error",
+   "hash": "screen=profit-and-loss&state=provisional",
+   "title": "Profit and loss, provisional stock",
+   "description": "Negative stock makes the closing stock Provisional; the figure is marked and explained with a way to fix it."
+  },
+  {
+   "id": "profit-and-loss.print-preview",
+   "kind": "happy",
+   "hash": "screen=profit-and-loss&state=print-preview",
+   "title": "Profit and loss, print preview",
+   "description": "Ctrl+P shows the page as it will print, with Save as PDF; paper printing is not offered."
+  },
+  {
+   "id": "profit-and-loss.print-saved",
+   "kind": "happy",
+   "hash": "screen=profit-and-loss&state=print-saved",
+   "title": "Profit and loss, PDF saved",
+   "description": "The PDF is written and the screen says where, with an Open file action."
+  },
+  {
+   "id": "profit-and-loss.print-failed",
+   "kind": "error",
+   "hash": "screen=profit-and-loss&state=print-failed",
+   "title": "Profit and loss, PDF not saved",
+   "description": "The file is open in another program: nothing is written, and the screen says so and how to retry."
+  },
+  {
+   "id": "trial-balance.default",
+   "kind": "happy",
+   "hash": "screen=trial-balance&state=default",
+   "title": "Trial balance",
+   "description": "Every ledger with a balance, debit and credit columns totalling the same, checked by the engine."
+  },
+  {
+   "id": "outstanding.receivables",
+   "kind": "happy",
+   "hash": "screen=outstanding&state=receivables",
+   "title": "Bills receivable",
+   "description": "Open customer bills with bill date, due date from credit days, open amount and overdue days."
+  },
+  {
+   "id": "outstanding.payables",
+   "kind": "happy",
+   "hash": "screen=outstanding&state=payables",
+   "title": "Bills payable",
+   "description": "Open supplier bills, including the Kaveri and Nilgiri bills, with due dates and overdue days."
+  },
+  {
+   "id": "stock-summary.default",
+   "kind": "happy",
+   "hash": "screen=stock-summary&state=default",
+   "title": "Stock summary",
+   "description": "Each item with quantity from the stock engine, cost and value; the total is the balance sheet's closing stock."
+  },
+  {
+   "id": "stock-summary.provisional",
+   "kind": "error",
+   "hash": "screen=stock-summary&state=provisional",
+   "title": "Stock summary, provisional item",
+   "description": "Steel pickaxe shows minus 30 nos: its value is marked Provisional and counted as zero."
+  },
+  {
+   "id": "audit.default",
+   "kind": "happy",
+   "hash": "screen=audit&state=default",
+   "title": "Audit, edit log",
+   "description": "Who entered each November voucher and whether an AI draft was accepted; read-only."
+  },
+  {
+   "id": "audit.integrity",
+   "kind": "happy",
+   "hash": "screen=audit&state=integrity",
+   "title": "Audit, integrity certificate",
+   "description": "Vouchers checked against the log and the count of broken hash links."
+  },
+  {
+   "id": "audit.unsupported",
+   "kind": "error",
+   "hash": "screen=audit&state=unsupported",
+   "title": "Audit, edits after lock",
+   "description": "Not supported in this build: the report says so and gives the way to check instead."
   }
  ]
 }
