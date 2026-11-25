@@ -735,7 +735,16 @@ fn draw_ledger_more(ui: &mut Ui, d: &mut LedgerDraft, altering: bool) {
 /// columns wide, then the state (index.html:1804).
 fn draw_party_head(ui: &mut Ui, p: &mut PartyDraft) {
     fld(ui, 2, "GSTIN", |ui| {
-        input(ui, "GSTIN", &mut p.gstin);
+        let r = input(ui, "GSTIN", &mut p.gstin);
+        if matches!(check_gstin(&p.gstin), GstinCheck::Invalid(_)) {
+            let t = crate::ui::tokens(ui);
+            ui.painter().rect_stroke(
+                r.rect.expand(1.0),
+                crate::theme::RADIUS_S,
+                egui::Stroke::new(1.5, t.bad),
+                egui::StrokeKind::Outside,
+            );
+        }
         draw_gstin_check(ui, &p.gstin);
     });
     let states: Vec<(StateCode, String)> = StateCode::all()

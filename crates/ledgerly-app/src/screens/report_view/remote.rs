@@ -6,7 +6,8 @@
 //! kind fails to compile until it is shown (rule A2).
 
 use ledgerly_api::{
-    Api, Cell, Detail, DrillKey, Report, ReportKind, ReportParams, ReportRow, RowKind,
+    Api, AuditReportKind, Cell, Detail, DrillKey, Report, ReportKind, ReportParams, ReportRow,
+    RowKind,
 };
 use ledgerly_core::{Date, Outcome, StockItemId};
 
@@ -168,13 +169,21 @@ pub(super) fn mock_lines(
             Some(mock::stock_summary(view.clone(), &facts))
         }
         ReportKind::ProfitAndLoss => Some(mock::profit_loss(view.clone())),
+        ReportKind::Audit(AuditReportKind::EditLog | AuditReportKind::EditsAfterLock) => {
+            Some(mock::audit_log(view.clone()))
+        }
         ReportKind::BalanceSheet
         | ReportKind::GroupSummary(_)
         | ReportKind::GroupLedgers(_)
         | ReportKind::LedgerVouchers(_)
         | ReportKind::DayBook
         | ReportKind::Register(_)
-        | ReportKind::Audit(_) => None,
+        | ReportKind::Audit(
+            AuditReportKind::IntegrityCertificate
+            | AuditReportKind::ObjectHistory
+            | AuditReportKind::DeletedAltered
+            | AuditReportKind::BackDated,
+        ) => None,
     }
 }
 

@@ -10,6 +10,9 @@
 
 pub mod form;
 
+#[cfg(test)]
+mod s14_tests;
+
 use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, TryRecvError};
 
@@ -32,7 +35,7 @@ use crate::ui::badge::{BadgeKind, badge};
 use crate::ui::button::{ButtonKind, button};
 use crate::ui::icon::{self, ICON_SIZE, Icon, icon};
 use crate::ui::keycap;
-use crate::ui::note::{NoteKind, note};
+use crate::ui::note::NoteKind;
 use crate::ui::option_card::{OptionCard, option_grid};
 use crate::ui::probe::record_probe;
 use crate::ui::step_marker::{self, StepMarker};
@@ -682,6 +685,8 @@ impl SetupScreen {
         ui.input_mut(|i| {
             if i.consume_key(egui::Modifiers::NONE, Key::M) {
                 Some(MASTERS_KEY)
+            } else if i.consume_key(egui::Modifiers::NONE, Key::F8) {
+                Some(navigate::SALES_KEY)
             } else if i.consume_key(egui::Modifiers::NONE, Key::B) {
                 Some(navigate::BANK_RECON_KEY)
             } else {
@@ -786,7 +791,7 @@ impl SetupScreen {
         ui.horizontal_top(|ui| {
             ui.spacing_mut().item_spacing.x = FIELD_GAP_X;
             field(ui, span(col, 2), "GSTIN", |ui, w| {
-                crate::ui::a11y::text_edit(
+                let gstin_box = crate::ui::a11y::text_edit(
                     ui,
                     "GSTIN",
                     input(&mut self.gstin)
@@ -794,23 +799,16 @@ impl SetupScreen {
                         .desired_width(w),
                 );
                 self.fill_state_from_gstin();
+                let check = self.state.map(|s| check_gstin(&self.gstin, s));
+                if matches!(
+                    check,
+                    Some(GstinCheck::Invalid(_) | GstinCheck::Mismatch { .. })
+                ) {
+                    outline_bad(ui, gstin_box.rect);
+                }
                 self.gstin_hint(ui);
             });
-            field(ui, col, "State", |ui, w| {
-                let selected = self.state.map_or_else(
-                    || "Choose a state".to_owned(),
-                    |s| format!("{:02} {}", s.get(), s.name()),
-                );
-                egui::ComboBox::from_id_salt("setup-state")
-                    .width(w)
-                    .selected_text(selected)
-                    .show_ui(ui, |ui| {
-                        for state in StateCode::all() {
-                            let label = format!("{:02} {}", state.get(), state.name());
-                            ui.selectable_value(&mut self.state, Some(state), label);
-                        }
-                    });
-            });
+            field(ui, col, "State", |ui, w| self.draw_state_box(ui, w));
             field(ui, col, "GST filing", |ui, w| {
                 egui::ComboBox::from_id_salt("setup-filing")
                     .width(w)
@@ -823,6 +821,27 @@ impl SetupScreen {
             });
         });
         self.draw_company_dates(ui, col);
+    }
+
+    /// The State list of the company step, outlined in red when it disagrees with the GSTIN.
+    fn draw_state_box(&mut self, ui: &mut egui::Ui, w: f32) {
+        let selected = self.state.map_or_else(
+            || "Choose a state".to_owned(),
+            |s| format!("{:02} {}", s.get(), s.name()),
+        );
+        let state_box = egui::ComboBox::from_id_salt("setup-state")
+            .width(w)
+            .selected_text(selected)
+            .show_ui(ui, |ui| {
+                for state in StateCode::all() {
+                    let label = format!("{:02} {}", state.get(), state.name());
+                    ui.selectable_value(&mut self.state, Some(state), label);
+                }
+            });
+        let mismatch = self.state.map(|s| check_gstin(&self.gstin, s));
+        if matches!(mismatch, Some(GstinCheck::Mismatch { .. })) {
+            outline_bad(ui, state_box.response.rect);
+        }
     }
 
     /// The financial year, books date and file rows of the company step.
@@ -1062,11 +1081,14 @@ impl SetupScreen {
             });
         });
         ui.add_space(14.0);
-        note(
-            ui,
-            NoteKind::Info,
-            "Companies that keep books electronically must keep a daily backup on a server located in India. This firm is a partnership, but the habit is good. Ledgerly makes the file; where you copy it is your choice.",
-        );
+        crate::ui::note::note_with_icon(ui, NoteKind::Info, Icon::Info, |ui, ink| {
+            para(
+                ui,
+                "Companies that keep books electronically must keep a daily backup on a server located in India. This firm is a partnership, but the habit is good. Ledgerly makes the file; where you copy it is your choice.",
+                TEXT_META,
+                ink,
+            );
+        });
         if let Some(notice) = unsaved_notice(Step::Backup) {
             step_text(ui, notice);
         }
@@ -1105,7 +1127,7 @@ impl SetupScreen {
                 label: "Make your first invoice",
                 place: None,
                 key: "F8",
-                choice: None,
+                choice: Some(DoneChoice::Open(navigate::SALES_KEY)),
             },
             Launch {
                 glyph: Icon::Bank,
@@ -1381,6 +1403,17 @@ fn field(ui: &mut egui::Ui, width: f32, label: &str, add: impl FnOnce(&mut egui:
     });
 }
 
+/// The red outline of a field that fails its check (`.invalid`, index.html:236).
+fn outline_bad(ui: &egui::Ui, rect: egui::Rect) {
+    let t = tokens(ui);
+    ui.painter().rect_stroke(
+        rect,
+        crate::theme::RADIUS_S,
+        egui::Stroke::new(border_width(kind(ui)).max(1.5), t.bad),
+        egui::StrokeKind::Inside,
+    );
+}
+
 /// A single-line text box as the mock draws its inputs (`.fld input`, index.html:236): a 32 point
 /// box with 10 points of padding and the input size of text.
 fn input(text: &mut String) -> egui::TextEdit<'_> {
@@ -1438,6 +1471,10 @@ fn kind_label(kind: EntityKind) -> &'static str {
 impl Screen for SetupScreen {
     fn title(&self) -> String {
         SETUP_TITLE.to_owned()
+    }
+
+    fn shows_breadcrumbs(&self) -> bool {
+        false
     }
 
     /// The key bar's name (index.html:1891): the step's place among the seven.

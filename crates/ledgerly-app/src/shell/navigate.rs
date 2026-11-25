@@ -278,6 +278,8 @@ pub const BANK_RECON_KEY: &str = "bank-reconciliation";
 pub const REVIEW_KEY: &str = "review";
 /// The palette key of the Ask your books screen.
 pub const ASK_KEY: &str = "ask";
+/// The palette key of a new sales invoice (F8), for a launch that has no `Screen` in hand.
+pub const SALES_KEY: &str = "sales-invoice";
 /// The palette key of the Plain-words entry screen.
 pub const QUICK_ENTRY_KEY: &str = "quick-entry";
 /// The palette key of the Purchase from bill photo screen.
@@ -760,6 +762,7 @@ pub fn screen_for_key(key: &str, ctx: &AppCtx) -> Option<Result<Box<dyn Screen>,
             company_open(ctx, "Masters").map(|()| Box::new(MastersScreen::new()) as Box<dyn Screen>)
         }
         BANK_RECON_KEY => books_of(ctx).and_then(bank_entry_screen),
+        SALES_KEY => books_of(ctx).and_then(|b| sales_screen(b, today())),
         REVIEW_KEY => Ok(Box::new(ReviewScreen::default())),
         ASK_KEY => Ok(Box::new(AskScreen::default())),
         QUICK_ENTRY_KEY => Ok(Box::new(QuickEntryScreen::default())),

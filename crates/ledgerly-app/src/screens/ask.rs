@@ -76,11 +76,10 @@ impl AskReport {
         }
     }
 
-    /// The icon on the report's button. The mock's `clock` for receivables has no icon in the
-    /// app's set, so the calendar stands in (PARITY-GAPS).
+    /// The icon on the report's button, the mock's own (index.html:1242).
     fn icon(self) -> Icon {
         match self {
-            AskReport::Receivables => Icon::Cal,
+            AskReport::Receivables => Icon::Clock,
             AskReport::BalanceSheet => Icon::Scale,
             AskReport::DayBook => Icon::Book,
             AskReport::Gstr3b => Icon::Gst,
@@ -236,5 +235,17 @@ impl Screen for AskScreen {
             }
         }
         action
+    }
+}
+
+#[cfg(test)]
+mod s14_tests {
+    use super::AskReport;
+    use crate::ui::icon::Icon;
+
+    #[test]
+    fn receivables_has_the_mocks_clock() {
+        // provenance: index.html:1242 draws `Outstanding receivables` with the `clock` icon.
+        assert_eq!(AskReport::Receivables.icon(), Icon::Clock);
     }
 }
