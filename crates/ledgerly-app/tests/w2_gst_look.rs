@@ -267,3 +267,59 @@ fn enter_on_a_gstr1_row_opens_its_voucher() {
     };
     assert!(pushed.title().contains('3'), "{}", pushed.title());
 }
+
+// ---- a feed that is not loaded or unsupported is one card ---------------------------------------
+
+/// Every string painted in one frame of `s`.
+fn painted_text(s: &mut GstScreen) -> Vec<String> {
+    let ctx = egui::Context::default();
+    let mut app = AppCtx::default();
+    let out = ctx.run_ui(RawInput::default(), |ui| {
+        let _action = s.ui(ui, &mut app);
+    });
+    let mut texts = Vec::new();
+    for clipped in &out.shapes {
+        if let egui::epaint::Shape::Text(t) = &clipped.shape {
+            texts.push(t.galley.text().to_owned());
+        }
+    }
+    out.drop_without_applying_deltas();
+    texts
+}
+
+#[test]
+fn a_gstr1_feed_not_loaded_is_one_card_with_a_heading_and_the_message() {
+    // provenance: design/mock-v2/index.html `gstNotReady` (lines 2414-2423): one card with the
+    // heading "GSTR-1, <period>" and one message, no tiles, table head or side card.
+    let mut s = GstScreen::new("November 2026", None);
+    s.switch_tab(GstTab::Gstr1);
+    let texts = painted_text(&mut s);
+    assert!(
+        texts.iter().any(|t| t == "GSTR-1, November 2026"),
+        "{texts:?}"
+    );
+    assert!(
+        texts.iter().any(|t| t == "Not loaded for this period yet."),
+        "{texts:?}"
+    );
+    assert!(
+        !texts.iter().any(|t| t == "Voucher"),
+        "no table head: {texts:?}"
+    );
+}
+
+#[test]
+fn a_gstr3b_feed_not_loaded_is_one_card_with_a_heading_and_the_message() {
+    // provenance: the same mock function, "GSTR-3B working, <period>".
+    let mut s = GstScreen::new("November 2026", None);
+    s.switch_tab(GstTab::Gstr3b);
+    let texts = painted_text(&mut s);
+    assert!(
+        texts.iter().any(|t| t == "GSTR-3B working, November 2026"),
+        "{texts:?}"
+    );
+    assert!(
+        !texts.iter().any(|t| t == "Read this before filing"),
+        "no side card: {texts:?}"
+    );
+}

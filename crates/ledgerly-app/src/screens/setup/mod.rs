@@ -147,6 +147,9 @@ pub struct SetupScreen {
     picker: fn() -> Option<PathBuf>,
     /// The company file being opened, if any.
     open_job: Option<Receiver<Result<Api, String>>>,
+    /// Where an opened or created company is recorded for the Start screen. `None` records
+    /// nothing (tests, and the harness unless it asks).
+    recent_dir: Option<PathBuf>,
     /// A company file was opened: the next frame goes to its home screen.
     opened: bool,
     /// Continue was pressed on the Import card: the next frame opens the import screen.
@@ -313,6 +316,7 @@ impl SetupScreen {
             sample_base: default_sample_base(),
             picker: default_file_dialog,
             open_job: None,
+            recent_dir: None,
             opened: false,
             open_screen: None,
         }
@@ -322,6 +326,13 @@ impl SetupScreen {
     #[must_use]
     pub fn with_sample_base(mut self, base: PathBuf) -> Self {
         self.sample_base = base;
+        self
+    }
+
+    /// The same wizard recording the companies it opens or creates in the list in `dir`.
+    #[must_use]
+    pub fn with_recent_dir(mut self, dir: PathBuf) -> Self {
+        self.recent_dir = Some(dir);
         self
     }
 
@@ -415,9 +426,8 @@ impl SetupScreen {
         let Some(path) = (self.picker)() else {
             return;
         };
-        match spawn_file_job(move || {
-            Api::open(&path).map_err(|e| format!("The company file could not be opened: {e}"))
-        }) {
+        let dir = self.recent_dir.clone();
+        match spawn_file_job(move || crate::recent::open_and_record(&path, dir.as_deref())) {
             Ok(rx) => {
                 self.open_job = Some(rx);
                 self.notice = Some("Opening the company file...".to_owned());
@@ -495,8 +505,11 @@ impl SetupScreen {
             }
         };
         let (clock, ai, filing) = (self.clock, self.ai, self.filing);
+        let dir = self.recent_dir.clone();
         match spawn_file_job(move || {
-            form::create_company_with_filing(&path, &company, clock, ai, filing)
+            let made = form::create_company_with_filing(&path, &company, clock, ai, filing)?;
+            crate::recent::note_opened(&made.0, &path, dir.as_deref());
+            Ok(made)
         }) {
             Ok(rx) => {
                 self.job = Some(rx);

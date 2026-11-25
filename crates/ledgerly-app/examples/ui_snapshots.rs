@@ -285,7 +285,79 @@ fn traders() -> Company {
 
 /// A company with nothing in it but what a new file starts with (mock `masters.empty`).
 fn blank_company_file(dir: &Path) -> Api {
-    create_file(dir, "snapshot-blank.ledgerly", &traders())
+    // On the screens' clock (21 Nov 2026), not the epoch: an import forms its period from the
+    // books' beginning to the end of the current financial year.
+    let path = dir.join("snapshot-blank.ledgerly");
+    let _removed = std::fs::remove_file(&path);
+    Api::create(&path, &traders(), sample_clock()).unwrap()
+}
+
+/// A loopback server that answers the import's requests the way a running other app would: a
+/// small company (groups, three ledgers with opening balances, the Journal type and no vouchers).
+/// It runs for the life of the harness and returns the port it listens on, as text.
+fn fake_import_server_port() -> &'static str {
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+    use std::sync::OnceLock;
+    static PORT: OnceLock<String> = OnceLock::new();
+    PORT.get_or_init(|| {
+        // A fixed port when it is free, so the capture is the same on every run.
+        let listener = TcpListener::bind("127.0.0.1:39417")
+            .or_else(|_| TcpListener::bind("127.0.0.1:0"))
+            .unwrap();
+        let port = listener.local_addr().unwrap().port().to_string();
+        std::thread::spawn(move || {
+            for stream in listener.incoming() {
+                let Ok(mut stream) = stream else { continue };
+                let mut raw = Vec::new();
+                let mut buf = [0_u8; 4096];
+                while let Ok(n) = stream.read(&mut buf) {
+                    if n == 0 {
+                        break;
+                    }
+                    raw.extend_from_slice(&buf[..n]);
+                    let text = String::from_utf8_lossy(&raw).into_owned();
+                    if let Some((head, body)) = text.split_once("\r\n\r\n") {
+                        let want = head
+                            .lines()
+                            .find_map(|l| {
+                                l.to_ascii_lowercase()
+                                    .strip_prefix("content-length:")
+                                    .and_then(|v| v.trim().parse::<usize>().ok())
+                            })
+                            .unwrap_or(0);
+                        if body.len() >= want {
+                            break;
+                        }
+                    }
+                }
+                let request = String::from_utf8_lossy(&raw).into_owned();
+                let inner = if request.contains("SVFROMDATE") {
+                    ""
+                } else if request.contains("<ID>LedgerlyGroups</ID>") {
+                    "<GROUP NAME=\"Current Assets\"><GUID>g-ca</GUID><ALTERID>1</ALTERID><NAME>Current Assets</NAME></GROUP>\
+                     <GROUP NAME=\"Cash-in-Hand\"><GUID>g-cih</GUID><ALTERID>2</ALTERID><NAME>Cash-in-Hand</NAME><PARENT>Current Assets</PARENT></GROUP>"
+                } else if request.contains("<ID>LedgerlyLedgers</ID>") {
+                    "<LEDGER NAME=\"Cash\"><GUID>l-c</GUID><ALTERID>3</ALTERID><NAME>Cash</NAME><PARENT>Cash-in-Hand</PARENT><OPENINGBALANCE>-10000.00</OPENINGBALANCE></LEDGER>\
+                     <LEDGER NAME=\"Rent\"><GUID>l-r</GUID><ALTERID>3</ALTERID><NAME>Rent</NAME><PARENT>Indirect Expenses</PARENT><OPENINGBALANCE>0</OPENINGBALANCE></LEDGER>\
+                     <LEDGER NAME=\"Capital\"><GUID>l-k</GUID><ALTERID>3</ALTERID><NAME>Capital</NAME><PARENT>Capital Account</PARENT><OPENINGBALANCE>10000.00</OPENINGBALANCE></LEDGER>"
+                } else if request.contains("<ID>LedgerlyVoucherTypes</ID>") {
+                    "<VOUCHERTYPE NAME=\"Journal\"><GUID>vt-j</GUID><ALTERID>4</ALTERID><NAME>Journal</NAME></VOUCHERTYPE>"
+                } else {
+                    ""
+                };
+                let body = format!(
+                    "<ENVELOPE><HEADER><VERSION>1</VERSION><STATUS>1</STATUS></HEADER><BODY><DATA><COLLECTION>{inner}</COLLECTION></DATA></BODY></ENVELOPE>"
+                );
+                let reply = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: text/xml\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len()
+                );
+                let _written = stream.write_all(reply.as_bytes());
+            }
+        });
+        port
+    })
 }
 
 /// A fictional Maharashtra trader with a bank, two GST buyers and a few November vouchers.
@@ -333,6 +405,10 @@ enum Fixture {
     /// No company at all: the shell exactly as the app's `main` builds it
     /// (`Shell::cold_start`), with nothing opened. This is what a user sees on first launch.
     Cold,
+    /// The cold start after a company was opened before: the Start screen with its list. The
+    /// list is a real record of the sample company in a folder under the output folder; no
+    /// company is opened and the user's config folder is never touched.
+    ColdRecent,
 }
 
 impl Fixture {
@@ -346,7 +422,7 @@ impl Fixture {
             Fixture::Main => Some(company_file(dir)),
             Fixture::New => Some(new_company_file(dir)),
             Fixture::Blank => Some(blank_company_file(dir)),
-            Fixture::Cold => None,
+            Fixture::Cold | Fixture::ColdRecent => None,
         }
     }
 
@@ -368,7 +444,8 @@ impl Fixture {
                     | Fixture::Main
                     | Fixture::New
                     | Fixture::Blank
-                    | Fixture::Cold => None,
+                    | Fixture::Cold
+                    | Fixture::ColdRecent => None,
                 };
                 let mut shell = Shell::new(Box::new(GatewayScreen::new()));
                 let worker = ApiWorker::spawn(api).unwrap();
@@ -380,6 +457,25 @@ impl Fixture {
                 shell.app_ctx_mut().api = Some(worker);
                 submit::note_changed();
                 (shell, Stage::Warm, hold)
+            }
+            None if self == Fixture::ColdRecent => {
+                let config = dir.join("recent-config");
+                let _removed = std::fs::remove_dir_all(&config);
+                let (api, path) = ledgerly_sample::create_under(dir, sample_clock()).unwrap();
+                let entry = ledgerly_app::recent::describe(
+                    &api,
+                    &path,
+                    ledgerly_core::Date::from_calendar_date(2026, time::Month::November, 21)
+                        .unwrap(),
+                )
+                .expect("the sample's books are readable");
+                drop(api);
+                ledgerly_app::recent::record(&config, entry).unwrap();
+                (
+                    Shell::cold_start_with_recent(Some(config)),
+                    Stage::Home,
+                    None,
+                )
             }
             None => (Shell::cold_start(), Stage::Home, None),
         }
@@ -1809,7 +1905,7 @@ fn s13_shots() -> Vec<Shot> {
             .press(&[(Key::A, Modifiers::COMMAND)])
             .type_text("99999")
             .click(1054.0, 332.0)
-            .type_text("Godavari")
+            .type_text("Godavari Drip & Pump Works")
             .click(373.0, 375.0)
             .wait(20)
             .expect_bar("Import from another app", "Import from another app"),
@@ -1818,7 +1914,7 @@ fn s13_shots() -> Vec<Shot> {
             .then(&[(Key::Enter, NONE)])
             .on(Fixture::GodavariHeld)
             .click(1054.0, 332.0)
-            .type_text("Godavari")
+            .type_text("Godavari Drip & Pump Works")
             .click(373.0, 375.0)
             .wait(20)
             .expect_bar("Import from another app", "Import from another app"),
@@ -1826,7 +1922,22 @@ fn s13_shots() -> Vec<Shot> {
             .query("Import from another app")
             .then(&[(Key::Enter, NONE)])
             .click(1054.0, 332.0)
-            .type_text("Godavari")
+            .type_text("Godavari Drip & Pump Works")
+            .click(373.0, 375.0)
+            .wait(60)
+            .expect_bar("Import from another app", "Import from another app"),
+        shot("import.imported", &[palette])
+            .query("Import from another app")
+            .then(&[(Key::Enter, NONE)])
+            .on(Fixture::Blank)
+            .click(438.0, 332.0)
+            .press(&[(Key::A, Modifiers::COMMAND)])
+            .type_text("127.0.0.1")
+            .click(749.0, 332.0)
+            .press(&[(Key::A, Modifiers::COMMAND)])
+            .type_text(fake_import_server_port())
+            .click(1054.0, 332.0)
+            .type_text("Godavari Drip & Pump Works")
             .click(373.0, 375.0)
             .wait(60)
             .expect_bar("Import from another app", "Import from another app"),
@@ -1835,7 +1946,7 @@ fn s13_shots() -> Vec<Shot> {
             .then(&[(Key::Enter, NONE)])
             .on(Fixture::Blank)
             .click(1054.0, 332.0)
-            .type_text("Godavari")
+            .type_text("Godavari Drip & Pump Works")
             .click(373.0, 375.0)
             .wait(60)
             .expect_bar("Import from another app", "Import from another app"),
@@ -1846,6 +1957,9 @@ fn s13_shots() -> Vec<Shot> {
         )
         .on(Fixture::Cold)
         .expect_bar("Import from another app", "Import from another app"),
+        shot("start.recent", &[])
+            .on(Fixture::ColdRecent)
+            .expect("Start", Some("Godavari Drip & Pump Works")),
         shot("home.new-tab", &[new_tab]).expect("Home", None),
         // Ctrl+T and Ctrl+\ before any company is open.
         shot("setup.new-tab", &[new_tab]).on(Fixture::Cold),
