@@ -6,10 +6,10 @@ use std::collections::BTreeMap;
 use std::path::Path;
 use std::str::FromStr as _;
 
-use ledgerly_api::{Api, Command};
+use ledgerly_api::{Api, Command, ImsAction};
 use ledgerly_core::{
-    Clock, CompanyId, Date, Decimal, GroupId, Gstin, Hsn, LedgerId, Outcome, Paise, Qty, Rate,
-    RoundingRule, SignedAmount, StateCode, StockItemId, UnitId, UserId, VoucherId,
+    Clock, CompanyId, Date, Decimal, GroupId, Gstin, Hsn, LedgerId, Outcome, Paise, Period, Qty,
+    Rate, RoundingRule, SignedAmount, StateCode, StockItemId, UnitId, UserId, VoucherId,
     round_rupees_to_paise,
 };
 use ledgerly_model::seed_godowns::MAIN_LOCATION;
@@ -181,6 +181,7 @@ pub(crate) fn build(
     path: &Path,
     clock: Clock,
     negative_stock: NegativeStockPolicy,
+    with_2b: bool,
 ) -> Result<Built, SampleError> {
     let mut company = company(seed)?;
     company.negative_stock = negative_stock;
@@ -194,6 +195,9 @@ pub(crate) fn build(
     statements(seed, &mut api, &keys)?;
     let until = parse_date("lock_until", &seed.lock_until)?;
     run(&mut api, "locking the books", Command::LockPeriod(until))?;
+    if with_2b {
+        gstr2b_files(seed, &mut api)?;
+    }
     Ok(Built { api })
 }
 
@@ -919,4 +923,75 @@ fn statements(seed: &Seed, api: &mut Api, keys: &Keys) -> Result<(), SampleError
         }
     }
     Ok(())
+}
+
+/// Wraps an `Api` refusal of a 2B step.
+fn api_step<T>(
+    what: &str,
+    r: Result<Outcome<T>, ledgerly_api::ApiError>,
+) -> Result<T, SampleError> {
+    match r {
+        Ok(Outcome::Value(v)) => Ok(v),
+        Ok(Outcome::Unsupported(u)) => Err(SampleError::Unsupported {
+            what: u.what,
+            reason: u.reason,
+        }),
+        Err(source) => Err(SampleError::Api {
+            what: what.to_owned(),
+            source: Box::new(source),
+        }),
+    }
+}
+
+/// Imports the October and November 2B files, records the IMS actions the mock shows (Kaveri's
+/// November bill accepted; October's KP/2205 accepted and VL/858 rejected) and marks October's
+/// GSTR-3B filed on 20 Nov, which makes October final.
+fn gstr2b_files(seed: &Seed, api: &mut Api) -> Result<(), SampleError> {
+    let gstin = Gstin::parse(&seed.company.gstin)
+        .map_err(|e| value_error("company gstin", e.to_string()))?;
+    let period = |from: Date, to: Date| {
+        Period::new(from, to).map_err(|e| value_error("2B period", e.to_string()))
+    };
+    let oct = period(
+        parse_date("2B october", "2026-10-01")?,
+        parse_date("2B october", "2026-10-31")?,
+    )?;
+    let nov = period(
+        parse_date("2B november", "2026-11-01")?,
+        parse_date("2B november", "2026-11-30")?,
+    )?;
+    let kaveri = seed_gstin(seed, "kaveri")?;
+    let vardhaman = seed_gstin(seed, "vardhaman")?;
+    api_step(
+        "importing the October 2B file",
+        api.import_gstr2b(&gstin, oct, "gstr2b-oct-2026.json", crate::GSTR2B_OCTOBER),
+    )?;
+    api_step(
+        "importing the November 2B file",
+        api.import_gstr2b(&gstin, nov, "gstr2b-nov-2026.json", crate::GSTR2B_NOVEMBER),
+    )?;
+    let actions = [
+        (oct, kaveri.as_str(), "KP/2205", ImsAction::Accept),
+        (oct, vardhaman.as_str(), "VL/858", ImsAction::Reject),
+        (nov, kaveri.as_str(), "KP/2231", ImsAction::Accept),
+    ];
+    for (p, supplier, number, action) in actions {
+        api_step(
+            "recording an IMS action",
+            api.set_ims_action(&gstin, p, supplier, number, action),
+        )?;
+    }
+    api_step(
+        "marking October's GSTR-3B filed",
+        api.mark_gstr3b_filed(&gstin, oct, parse_date("3B filed on", "2026-11-20")?),
+    )
+}
+
+/// The GSTIN of the ledger the seed keys `key`.
+fn seed_gstin(seed: &Seed, key: &str) -> Result<String, SampleError> {
+    seed.ledger
+        .iter()
+        .find(|l| l.key == key)
+        .and_then(|l| l.gstin.clone())
+        .ok_or_else(|| value_error(format!("ledger {key}"), "has no GSTIN in the seed"))
 }

@@ -79,6 +79,46 @@ pub enum ApiError {
         /// The stored word.
         value: String,
     },
+    /// The 2B file is for another GSTIN than the company's. Nothing was imported.
+    #[error("this 2B file is for GSTIN {file}, not {company}")]
+    Gstr2bWrongGstin {
+        /// The GSTIN the file states.
+        file: String,
+        /// The company GSTIN the import was for.
+        company: String,
+    },
+    /// The 2B file is for another return period than the one chosen. Nothing was imported.
+    #[error("this 2B file is for {file}, not {wanted}")]
+    Gstr2bWrongPeriod {
+        /// The period the file states, as month and year.
+        file: String,
+        /// The period the import was for, as month and year.
+        wanted: String,
+    },
+    /// GSTR-3B for the period was marked filed, so its 2B file and IMS actions are final.
+    #[error(
+        "GSTR-3B for the period starting {period_start} was marked filed on {filed_on}; its 2B file and IMS actions are final"
+    )]
+    GstrPeriodFiled {
+        /// First day of the return period.
+        period_start: ledgerly_core::Date,
+        /// The day it was marked filed.
+        filed_on: ledgerly_core::Date,
+    },
+    /// No 2B file was imported for the period, so there is no document to act on.
+    #[error("no 2B file was imported for the period starting {period_start}")]
+    Gstr2bNotImported {
+        /// First day of the return period.
+        period_start: ledgerly_core::Date,
+    },
+    /// The imported 2B file has no such document.
+    #[error("the 2B file has no document {doc_number} from {supplier_gstin}")]
+    ImsDocumentNotInFile {
+        /// The supplier's GSTIN.
+        supplier_gstin: String,
+        /// The document number.
+        doc_number: String,
+    },
     /// The AI activity log could not be written to the chosen file.
     #[error("the AI activity log could not be written to {}: {source}", path.display())]
     AiLogWrite {

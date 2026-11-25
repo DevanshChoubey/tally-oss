@@ -1,0 +1,67 @@
+{
+ "data": {
+  "gstin": "27ZZZZZ0000Z1ZQ",
+  "rtnprd": "102026",
+  "version": "1.0",
+  "gendt": "14-11-2026",
+  "chksum": "sample",
+  "docdata": {
+   "b2b": [
+    {
+     "ctin": "29ZZZZZ0001Z1ZL",
+     "trdnm": "Kaveri Packaging Pvt Ltd",
+     "supprd": "102026",
+     "inv": [
+      {
+       "inum": "KP/2205",
+       "typ": "R",
+       "dt": "14-10-2026",
+       "val": 47200,
+       "pos": "27",
+       "rev": "N",
+       "itcavl": "Y",
+       "items": [
+        {
+         "num": 1,
+         "rt": 18,
+         "txval": 40000,
+         "igst": 7200,
+         "cgst": 0,
+         "sgst": 0,
+         "cess": 0
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "ctin": "27ZZZZZ0003Z1ZN",
+     "trdnm": "Vardhaman Logistics",
+     "supprd": "102026",
+     "inv": [
+      {
+       "inum": "VL/858",
+       "typ": "R",
+       "dt": "22-10-2026",
+       "val": 14160,
+       "pos": "27",
+       "rev": "N",
+       "itcavl": "Y",
+       "items": [
+        {
+         "num": 1,
+         "rt": 18,
+         "txval": 12000,
+         "igst": 0,
+         "cgst": 1080,
+         "sgst": 1080,
+         "cess": 0
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ }
+}
