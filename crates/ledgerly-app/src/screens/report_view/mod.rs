@@ -302,6 +302,9 @@ pub struct ReportViewScreen {
     /// A head button opens another report (the trial balance's "Profit and loss"): its palette
     /// key. The screen opens after the frame.
     goto: Option<&'static str>,
+    /// The banner's "Open stock items" button was pressed; the stock items master opens after the
+    /// frame.
+    stock_items_wanted: bool,
     /// A head button asked for what Enter does on the selected row.
     drill_wanted: bool,
     /// A voucher button of the empty day book was pressed; the voucher opens after the frame.
@@ -340,6 +343,7 @@ impl ReportViewScreen {
             export: Latest::default(),
             print_wanted: false,
             goto: None,
+            stock_items_wanted: false,
             drill_wanted: false,
             lines: None,
             open_wanted: None,
@@ -396,6 +400,7 @@ impl ReportViewScreen {
             export: Latest::default(),
             print_wanted: false,
             goto: None,
+            stock_items_wanted: false,
             drill_wanted: false,
             lines: None,
             open_wanted: None,
@@ -1261,10 +1266,9 @@ impl ReportViewScreen {
                 .frame(egui::Frame::NONE)
                 .show(ui, |ui| {
                     if let Some((lead, rest)) = &banner {
-                        // The profit and loss banner carries the "Open stock items" button
-                        // (index.html `plScreen`); the stock summary is already that list.
-                        let with_button = matches!(look, Look::Mock(mock::Mock::ProfitLoss));
-                        open_stock = draw_provisional_banner(ui, lead, rest, with_button);
+                        // Both banners carry the "Open stock items" button (index.html:1661
+                        // `plScreen`, index.html:2237 `stockScreen`).
+                        open_stock = draw_provisional_banner(ui, lead, rest, true);
                         ui.add_space(8.0);
                     }
                     if side.ledger().is_some() {
@@ -1284,11 +1288,17 @@ impl ReportViewScreen {
                 self.alter_wanted = true;
             }
             if open_stock {
-                self.goto = Some("stock-summary");
+                self.open_stock_items();
             }
             self.selected_line = drawn.selected;
             drawn.events
         }
+    }
+
+    /// The banner's "Open stock items" button: the next frame opens the stock items master (the
+    /// mock's `data-go` to `masters` / `items`).
+    pub fn open_stock_items(&mut self) {
+        self.stock_items_wanted = true;
     }
 
     /// The footnote under a table: the report's notes, and what the day book does not show yet.
@@ -1623,6 +1633,12 @@ impl Screen for ReportViewScreen {
                 crate::screens::masters::MastersScreen::altering_ledger(ledger),
             ));
         }
+        if std::mem::take(&mut self.stock_items_wanted) {
+            action =
+                ScreenAction::Push(Box::new(crate::screens::masters::MastersScreen::with_kind(
+                    crate::screens::masters::MasterKind::StockItem,
+                )));
+        }
         if let Some(key) = self.goto.take() {
             match crate::shell::navigate::open_target(
                 &crate::palette::PaletteTarget::Report(key.to_owned()),
@@ -1674,10 +1690,13 @@ fn draw_provisional_banner(ui: &mut Ui, lead: &str, rest: &str, with_button: boo
             0.0,
             egui::TextFormat::simple(egui::FontId::proportional(size), ink),
         );
-        ui.label(job);
-        if with_button {
-            clicked = button(ui, "Open stock items", None, ButtonKind::Secondary).clicked();
-        }
+        // The button sits at the end of the paragraph, as the mock's inline `<button>` does.
+        ui.horizontal_wrapped(|ui| {
+            ui.label(job);
+            if with_button {
+                clicked = button(ui, "Open stock items", None, ButtonKind::Secondary).clicked();
+            }
+        });
     });
     clicked
 }

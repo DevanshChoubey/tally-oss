@@ -1345,7 +1345,9 @@ fn a_kind_with_no_masters_names_the_kind_as_its_cursor() {
     // the kind it is showing ("Stock items", the tab label) for the capture harness to check
     // that it reached the empty list and not another kind's.
     let ctx = egui::Context::default();
-    let mut all = books();
+    // The company keeps inventory (a company without it is not offered the Stock items tab:
+    // s13_masters_inventory_off.rs), and has no stock item.
+    let mut all = books_all_features();
     all.masters.stock_items.clear();
     let mut app = app_with(all);
     let mut s = MastersScreen::new();
@@ -1391,7 +1393,9 @@ fn an_empty_list_draws_the_glyph_of_the_empty_state_in_the_tertiary_colour() {
     // opens with the `users` glyph, and `.empty .ico{color:var(--text-3)}` (index.html:169).
     let ctx = egui::Context::default();
     ledgerly_app::theme::apply(&ctx, ledgerly_app::theme::ThemeKind::Light);
-    let mut all = books();
+    // The company keeps inventory (a company without it is not offered the Stock items tab:
+    // s13_masters_inventory_off.rs), and has no stock item.
+    let mut all = books_all_features();
     all.masters.stock_items.clear();
     let mut app = app_with(all);
     let mut s = MastersScreen::new();

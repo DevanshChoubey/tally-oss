@@ -7,7 +7,7 @@
 //! inventing them (rule C4).
 
 use ledgerly_core::{Gstin, LedgerId, StockItemId};
-use ledgerly_model::{Ledger, Masters};
+use ledgerly_model::{Features, Ledger, Masters};
 
 use super::{MasterKind, MasterRef, list_rows};
 
@@ -26,6 +26,65 @@ pub const MORE_KINDS: [MasterKind; 8] = [
     MasterKind::CostCategory,
     MasterKind::CostCentre,
 ];
+
+/// The tabs a company shows: Stock items only when it keeps inventory.
+#[must_use]
+pub fn primary_kinds(features: &Features) -> Vec<MasterKind> {
+    PRIMARY_KINDS
+        .into_iter()
+        .filter(|k| kind_shown(*k, features))
+        .collect()
+}
+
+/// The kinds behind "More master kinds" that a company shows.
+#[must_use]
+pub fn more_kinds(features: &Features) -> Vec<MasterKind> {
+    MORE_KINDS
+        .into_iter()
+        .filter(|k| kind_shown(*k, features))
+        .collect()
+}
+
+/// Whether a company with `features` is offered `kind`. The inventory masters (units, stock
+/// groups, stock items, batches) and the godowns that hold the stock are offered only when the
+/// company keeps inventory (the help's Inventory Info menu shows only with "Maintain Accounts
+/// only" set to No).
+#[must_use]
+pub fn kind_shown(kind: MasterKind, features: &Features) -> bool {
+    match kind {
+        MasterKind::Unit
+        | MasterKind::StockGroup
+        | MasterKind::StockItem
+        | MasterKind::Godown
+        | MasterKind::Batch => features.inventory,
+        MasterKind::Group
+        | MasterKind::Ledger
+        | MasterKind::VoucherType
+        | MasterKind::CostCategory
+        | MasterKind::CostCentre => true,
+    }
+}
+
+/// The kind after `from` in the order of [`MasterKind::ALL`] (or before it, going back) that
+/// `features` offers; `from` itself at either end.
+#[must_use]
+pub fn step_shown(from: MasterKind, forward: bool, features: &Features) -> MasterKind {
+    let all = MasterKind::ALL;
+    let Some(pos) = all.iter().position(|k| *k == from) else {
+        return from;
+    };
+    let found = if forward {
+        all.iter()
+            .skip(pos.saturating_add(1))
+            .find(|k| kind_shown(**k, features))
+    } else {
+        all.iter()
+            .take(pos)
+            .rev()
+            .find(|k| kind_shown(**k, features))
+    };
+    found.copied().unwrap_or(from)
+}
 
 /// The tab index of `kind`, or `None` when the kind is behind "More master kinds" and no tab is
 /// selected.

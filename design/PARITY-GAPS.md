@@ -1070,9 +1070,9 @@ state yet and still draws the generic table.
   closed (s13, second round): only the Closing stock line wears the "Provisional" badge, as in the
   mock; the gross profit, net profit and totals that follow from it are plain figures and the
   banner (engine reason naming the item, quantity and voucher, dates like "19 Nov 2026") says so,
-  with the mock's "Open stock items" button (opens the stock summary; the mock's button opens the
-  stock items master, which is a list with no figures). Still different: the button sits under the
-  banner text, not inline with it; a period starting after the books' first day is `Unsupported` while a Stock-in-Hand
+  with the mock's "Open stock items" button (closed after s13: it opens the stock items master, as
+  the mock's does, and sits at the end of the paragraph; the stock summary's banner has it too, as
+  in the mock). Still different: a period starting after the books' first day is `Unsupported` while a Stock-in-Hand
   ledger holds an opening balance.
 - **gap: the provisional states' figures differ from the mock's, by cause.** The mock overrides
   the stock position only (`stockOverride`, pickaxe -30): its closing stock 13,57,859 changes while
@@ -1256,12 +1256,10 @@ Mismatches between the mock's totals and the engine's, and why:
   the "Lines as typed balance" hint sits below the notice. Still different: the keyboard is on the
   narration box in the capture (the mock's is unfocused).
 - **gap (s13): sales-invoice.period-locked.** Closed (s13, second round): the "1 thing to fix before
-  saving" note, the Locked badge on the date (the app's badge has a cross where the mock's has a
-  lock icon) and F2 as a keycap in the bar. Still different: the e-invoice cell reads "Not built
+  saving" note, the Locked badge on the date (now with the lock glyph, as the mock) and F2 as a keycap in the bar. Still different: the e-invoice cell reads "Not built
   yet" where the mock says "JSON ready (INV-01)": the engine API (`ledgerly-api`) does not report
   e-invoice JSON for an invoice (only the `ledgerly-gst-formats` writer exists, not wired to the
-  voucher), so claiming a file is ready would be a wrong statement; the third empty line is not
-  drawn (the app drops a blank trailing line when the keyboard leaves it); the party's balance
+  voucher), so claiming a file is ready would be a wrong statement; the party's balance
   line differs because the capture company's ledger balance is not the mock's.
 - **closed (s13): profit-and-loss.detailed** has an app capture (Alt+F1); it differs from the mock
   in the same two-sided layout points as the default state (bold group lines, the figures of the
@@ -1298,7 +1296,16 @@ Every mock state now has an app capture except the states below, each with its r
   yet: Import from the other program into this company ..." and "The other program is not running
   or not accepting connections on port 9000"); the mock's example texts name a "Memorandum" voucher
   type and a "connection refused" cause the app never says.
+- **closed (s13): a company without inventory was offered stock items.** The Stock items tab, the
+  inventory kinds under "More master kinds" (units, stock groups, godowns, batches), the "Create
+  stock item" button and Alt+Left/Right onto them are hidden when inventory is off, as the product
+  shows its Inventory Info menu only when "Maintain Accounts only" is No
+  (https://help.tallysolutions.com/docs/te9rel65/Creating_Masters/Inventory_Info/Inventory_Information.htm,
+  read 2026-11-25).
+- **closed (s13): an invoice's line list dropped its empty last row** when Enter on an empty item
+  ended the lines, for a sales invoice and a purchase bill. The row stays, as the mock draws one
+  (fewer than four lines), and is not saved. A credit note and a debit note drop it, as the mock does.
 - **difference: masters.create-item.** The form is captured from the sample company (a company with
-  no inventory refuses a stock item). The app keeps the Masters head and tabs above the form; the
+  no inventory is not offered stock items). The app keeps the Masters head and tabs above the form; the
   mock's page is titled "New stock item", with a note that a unit is needed before the item can be
   saved.

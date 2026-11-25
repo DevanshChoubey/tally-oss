@@ -342,8 +342,16 @@ impl ItemInvoiceScreen {
             if i == 0 {
                 return self.refuse("Enter at least one item.".to_owned());
             }
-            if i.saturating_add(1) == self.draft.rows.len() {
-                self.draft.rows.pop();
+            // On a sales invoice or purchase bill the empty entry row stays at the end of the
+            // list (the mock always draws one); `build_voucher` skips it, so what is saved does
+            // not change. The notes' states draw only their lines, so a note drops it.
+            match self.draft.kind {
+                InvoiceKind::Sales | InvoiceKind::Purchase => {}
+                InvoiceKind::CreditNote | InvoiceKind::DebitNote => {
+                    if i.saturating_add(1) == self.draft.rows.len() {
+                        self.draft.rows.pop();
+                    }
+                }
             }
             return Step::Goto(Field::Narration);
         }

@@ -59,7 +59,7 @@ pub mod view;
 
 use egui::{Align, Key, Layout, Modifiers, RichText, Ui};
 use ledgerly_core::{Date, LedgerId, Outcome, Period, StockItemId, Unsupported};
-use ledgerly_model::{Books, MasterSnapshot, Masters};
+use ledgerly_model::{Books, Features, MasterSnapshot, Masters};
 
 use command::command_for;
 use list::snapshot_name;
@@ -166,20 +166,6 @@ impl MasterKind {
             MasterKind::CostCategory => "Cost categories",
             MasterKind::CostCentre => "Cost centres",
         }
-    }
-
-    fn step(self, forward: bool) -> MasterKind {
-        let pos = MasterKind::ALL.iter().position(|k| *k == self).unwrap_or(0);
-        let next = if forward {
-            pos.saturating_add(1)
-        } else {
-            pos.saturating_sub(1)
-        };
-        MasterKind::ALL
-            .get(next)
-            .or_else(|| MasterKind::ALL.get(pos))
-            .copied()
-            .unwrap_or(self)
     }
 }
 
@@ -908,8 +894,14 @@ impl MastersScreen {
                 self.move_selection(&books.masters, Step::Down);
                 self.scroll_to_selected = true;
             }
-            KeyCmd::PrevKind => self.select_kind(self.kind.step(false)),
-            KeyCmd::NextKind => self.select_kind(self.kind.step(true)),
+            KeyCmd::PrevKind => {
+                let to = view::step_shown(self.kind, false, &books.company.features);
+                self.select_kind(to);
+            }
+            KeyCmd::NextKind => {
+                let to = view::step_shown(self.kind, true, &books.company.features);
+                self.select_kind(to);
+            }
             KeyCmd::Escape => return self.escape(),
         }
         ScreenAction::Stay
@@ -1151,16 +1143,15 @@ fn capitalised(kind: MasterKind) -> String {
 
 impl MastersScreen {
     /// The primary tabs (Ledgers, Stock items). A kind behind "More master kinds" selects no tab.
-    fn draw_tabs(&mut self, ui: &mut Ui) {
+    fn draw_tabs(&mut self, ui: &mut Ui, features: &Features) {
         let enabled = matches!(self.mode, Mode::List);
         let selected = view::primary_tab(self.kind).unwrap_or(view::PRIMARY_KINDS.len());
-        let labels: Vec<&str> = view::PRIMARY_KINDS.iter().map(|k| k.plural()).collect();
+        let kinds = view::primary_kinds(features);
+        let labels: Vec<&str> = kinds.iter().map(|k| k.plural()).collect();
         let mut chosen: Option<MasterKind> = None;
         ui.add_enabled_ui(enabled, |ui| {
             let response = tabs(ui, &labels, selected);
-            chosen = response
-                .clicked
-                .and_then(|i| view::PRIMARY_KINDS.get(i).copied());
+            chosen = response.clicked.and_then(|i| kinds.get(i).copied());
         });
         if let Some(kind) = chosen {
             self.select_kind(kind);
@@ -1170,7 +1161,7 @@ impl MastersScreen {
     /// The control for the eight kinds that live under Settings (decision 8). The mock has no
     /// such control; it sits in the page head beside Create so the list keeps the mock's place
     /// (design/PARITY-GAPS.md).
-    fn draw_more_kinds(&mut self, ui: &mut Ui) {
+    fn draw_more_kinds(&mut self, ui: &mut Ui, features: &Features) {
         let enabled = matches!(self.mode, Mode::List);
         let shown = if view::primary_tab(self.kind).is_some() {
             "More master kinds".to_owned()
@@ -1185,7 +1176,7 @@ impl MastersScreen {
             egui::ComboBox::from_id_salt("masters-more-kinds")
                 .selected_text(shown.as_str())
                 .show_ui(ui, |ui| {
-                    for kind in view::MORE_KINDS {
+                    for kind in view::more_kinds(features) {
                         if ui
                             .selectable_label(current == kind, kind.plural())
                             .clicked()
@@ -1466,6 +1457,12 @@ impl MastersScreen {
     fn draw(&mut self, ui: &mut Ui, books: &Books) -> ScreenAction {
         self.start_pending_create(books);
         self.start_pending_alter(books);
+        let features = &books.company.features;
+        // A company without inventory is not offered the inventory masters: a screen asked for
+        // one (a banner button, a palette entry) shows the ledgers instead.
+        if !view::kind_shown(self.kind, features) {
+            self.select_kind(MasterKind::Ledger);
+        }
         let mut action = ScreenAction::Stay;
         let mut keys = read_keys(ui, self.mode_tag(), self.kind);
         let create_label = format!("Create {}", self.kind.label());
@@ -1479,12 +1476,12 @@ impl MastersScreen {
                 ButtonKind::Primary,
             )
             .clicked();
-            self.draw_more_kinds(ui);
+            self.draw_more_kinds(ui, features);
         });
         if create {
             drop(self.begin_create(books));
         }
-        self.draw_tabs(ui);
+        self.draw_tabs(ui, features);
         ui.add_space(TABS_GAP);
         self.draw_notice(ui);
         match self.mode_tag() {

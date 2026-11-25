@@ -777,12 +777,13 @@ impl ItemInvoiceScreen {
                         // index.html:1359: a date on or before the lock date wears a "Locked"
                         // badge right after the value.
                         if let (true, Some(width)) = (locked, width) {
-                            crate::ui::badge::paint_badge(
+                            crate::ui::badge::paint_badge_with_icon(
                                 ui,
                                 field.rect.left() + DATE_TEXT_INSET + width + 8.0,
                                 field.rect.center().y,
                                 crate::ui::badge::BadgeKind::Bad,
                                 "Locked",
+                                Some(crate::ui::icon::Icon::Lock),
                             );
                         }
                     },

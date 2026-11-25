@@ -285,11 +285,28 @@ fn traders() -> Company {
 
 /// A company with nothing in it but what a new file starts with (mock `masters.empty`).
 fn blank_company_file(dir: &Path) -> Api {
+    blank_company_with(dir, &traders())
+}
+
+/// [`blank_company_file`] for a company that keeps inventory and has no stock item yet (mock
+/// `masters.items-empty`: a company without inventory is not offered the Stock items tab).
+fn blank_inventory_company_file(dir: &Path) -> Api {
+    let company = Company {
+        features: Features {
+            inventory: true,
+            ..traders().features
+        },
+        ..traders()
+    };
+    blank_company_with(dir, &company)
+}
+
+fn blank_company_with(dir: &Path, company: &Company) -> Api {
     // On the screens' clock (21 Nov 2026), not the epoch: an import forms its period from the
     // books' beginning to the end of the current financial year.
     let path = dir.join("snapshot-blank.ledgerly");
     let _removed = std::fs::remove_file(&path);
-    Api::create(&path, &traders(), sample_clock()).unwrap()
+    Api::create(&path, company, sample_clock()).unwrap()
 }
 
 /// A loopback server that answers the import's requests the way a running other app would: a
@@ -402,6 +419,8 @@ enum Fixture {
     New,
     /// A company just created, with no master and no voucher ([`blank_company_file`]).
     Blank,
+    /// [`Fixture::Blank`] with inventory on ([`blank_inventory_company_file`]).
+    BlankInventory,
     /// No company at all: the shell exactly as the app's `main` builds it
     /// (`Shell::cold_start`), with nothing opened. This is what a user sees on first launch.
     Cold,
@@ -422,6 +441,7 @@ impl Fixture {
             Fixture::Main => Some(company_file(dir)),
             Fixture::New => Some(new_company_file(dir)),
             Fixture::Blank => Some(blank_company_file(dir)),
+            Fixture::BlankInventory => Some(blank_inventory_company_file(dir)),
             Fixture::Cold | Fixture::ColdRecent => None,
         }
     }
@@ -444,6 +464,7 @@ impl Fixture {
                     | Fixture::Main
                     | Fixture::New
                     | Fixture::Blank
+                    | Fixture::BlankInventory
                     | Fixture::Cold
                     | Fixture::ColdRecent => None,
                 };
@@ -2086,7 +2107,7 @@ fn s13_shots() -> Vec<Shot> {
             .on(Fixture::Blank)
             .expect("Masters", Some("Ledgers")),
         shot("masters.items-empty", &[(Key::M, NONE)])
-            .on(Fixture::Blank)
+            .on(Fixture::BlankInventory)
             .seek_by(Key::ArrowRight, Modifiers::ALT, "Stock items")
             .expect("Masters", Some("Stock items")),
         shot("masters.create-item", &[(Key::M, NONE)])

@@ -2,6 +2,7 @@
 
 use egui::{Color32, Frame, Margin, Painter, Pos2, Response, RichText, Sense, Stroke, Ui, Vec2};
 
+use super::icon::{self, Icon};
 use super::{kind, tokens};
 use crate::theme::{RADIUS_XS, TEXT_CAP, ThemeKind, Tokens, border_width};
 
@@ -87,6 +88,19 @@ pub fn badge_width(ui: &Ui, text: &str) -> f32 {
 /// for lines a screen paints itself (a table row's label). Returns the badge's width so the
 /// caller can place what follows. It is the same badge as [`badge`], laid out by hand.
 pub fn paint_badge(ui: &Ui, left: f32, y: f32, kind_of: BadgeKind, text: &str) -> f32 {
+    paint_badge_with_icon(ui, left, y, kind_of, text, None)
+}
+
+/// [`paint_badge`] with the mock's own icon in place of the kind's glyph (`badge('Locked',
+/// 'b-bad','lock')` draws the lock, not the cross). `None` keeps the kind's glyph.
+pub fn paint_badge_with_icon(
+    ui: &Ui,
+    left: f32,
+    y: f32,
+    kind_of: BadgeKind,
+    text: &str,
+    icon: Option<Icon>,
+) -> f32 {
     let t = tokens(ui);
     let (bg, fg) = colors(kind_of, &t);
     let galley =
@@ -108,7 +122,15 @@ pub fn paint_badge(ui: &Ui, left: f32, y: f32, kind_of: BadgeKind, text: &str) -
         );
     }
     let icon_c = egui::pos2(rect.left() + pad + ICON / 2.0, y);
-    paint_icon(painter, icon_c, kind_of, fg);
+    match icon {
+        Some(glyph) => icon::paint(
+            painter,
+            egui::Rect::from_center_size(icon_c, Vec2::splat(ICON)),
+            glyph,
+            fg,
+        ),
+        None => paint_icon(painter, icon_c, kind_of, fg),
+    }
     painter.galley(
         egui::pos2(rect.left() + pad + ICON + 4.0, y - galley.size().y / 2.0),
         galley,

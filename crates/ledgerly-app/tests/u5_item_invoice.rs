@@ -911,11 +911,24 @@ fn enter_on_narration_saves_when_the_answer_is_current() {
     let b = books();
     let m = &b.masters;
     let (mut s, _) = answered(&b);
-    // Item(1) is blank: Enter drops it and goes to the narration.
+    // Item(1) is blank: Enter goes to the narration and the empty entry row stays at the end of
+    // the line list. provenance: derived from design/mock-v2/index.html (`SCREENS['sales-invoice']`
+    // render: a list of fewer than four lines always ends in one empty row, in every state, e.g.
+    // `period-locked` draws two lines and a third empty row). Only the first line is typed, so
+    // `build_voucher` below still carries one line: the empty row is not saved.
     assert_eq!(s.focus(), Field::Item(1));
     s.submit(m);
     assert_eq!(s.focus(), Field::Narration);
-    assert_eq!(s.draft().rows.len(), 1);
+    assert_eq!(s.draft().rows.len(), 2);
+    assert!(s.draft().rows[1].item_text.is_empty() && s.draft().rows[1].item.is_none());
+    assert_eq!(
+        s.draft()
+            .build_voucher(m, fy())
+            .unwrap()
+            .inventory_lines
+            .len(),
+        1
+    );
     // Two-step save (mock design/mock-v2/index.html sales-invoice save-confirm): the first Enter on
     // the narration asks for confirmation and does not save.
     s.submit(m);
@@ -1338,4 +1351,23 @@ fn a_save_carries_the_party_and_place_and_opens_no_party_list() {
     assert!(s.draft().rows.iter().all(|r| r.item.is_none()));
     assert_eq!(s.focus(), Field::Party);
     assert_eq!(s.pick_labels(m), Vec::<String>::new());
+}
+
+#[test]
+fn a_credit_or_debit_note_does_not_keep_an_empty_last_row() {
+    // provenance: derived from design/mock-v2/index.html `credit.default` and `debit.default`
+    // (line 2077): the note's states draw exactly the lines of the note (one line), with no empty
+    // row after them, unlike the sales invoice and purchase bill.
+    use ledgerly_app::screens::item_invoice::InvoiceKind;
+    for kind in [InvoiceKind::CreditNote, InvoiceKind::DebitNote] {
+        let b = books();
+        let m = &b.masters;
+        let mut s = open(&b, T_SALES);
+        fill(&mut s, m);
+        s.draft_mut().kind = kind;
+        assert_eq!(s.focus(), Field::Item(1));
+        s.submit(m);
+        assert_eq!(s.focus(), Field::Narration);
+        assert_eq!(s.draft().rows.len(), 1, "{kind:?}");
+    }
 }
