@@ -52,6 +52,24 @@ impl ApiWorker {
         })
     }
 
+    /// Makes the worker wait: every job queued after this call stays queued until the returned
+    /// [`Hold`] is dropped. The capture tool uses it to keep a screen in its "computing" state
+    /// long enough to photograph; nothing in the app calls it.
+    #[must_use]
+    pub fn hold(&self) -> Hold {
+        let (release, wait) = mpsc::channel::<()>();
+        let blocked: Job = Box::new(move |_api: &mut Api| {
+            // The sender is dropped when the hold ends, which ends the wait with an error; that
+            // is the signal, there is no value to read.
+            let _released = wait.recv();
+        });
+        if let Some(jobs) = &self.jobs {
+            // A send error means the thread has stopped; there is nothing left to hold.
+            let _stopped = jobs.send(blocked);
+        }
+        Hold { _release: release }
+    }
+
     /// Queues `job` and returns a ticket for its result. Never blocks.
     ///
     /// When the worker has stopped, the ticket reports [`Poll::Lost`].
@@ -82,6 +100,13 @@ impl Drop for ApiWorker {
             let _joined = thread.join();
         }
     }
+}
+
+/// A hold on the worker (see [`ApiWorker::hold`]). Dropping it lets the queued jobs run.
+#[derive(Debug)]
+pub struct Hold {
+    /// Dropped with the hold; the worker's wait ends when this side closes.
+    _release: Sender<()>,
 }
 
 /// The pending result of one job.

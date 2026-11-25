@@ -10,8 +10,8 @@ feature that is not built), **data** (the capture company lacks what the mock's 
 
 ## Home (round S9, 2026-11-25)
 
-Captured: `home.default`, `home.empty`, `home.ai-off`, `home.nudge-open` (light, dark, hc). Not
-captured: `home.loading`. The four tiles, the November bars, the review rows, the nudges and the
+Captured: `home.default`, `home.empty`, `home.ai-off`, `home.nudge-open`, `home.loading` (light,
+dark, hc). The four tiles, the November bars, the review rows, the nudges and the
 new-company card (book icon, three buttons with icons, info note) follow the mock; every figure
 comes from `Api::home_figures` and `Api::home_nudges`.
 
@@ -39,8 +39,11 @@ comes from `Api::home_figures` and `Api::home_nudges`.
 - **gap: the entry bar.** It says "not connected in this build" where the mock says "runs on this
   computer"; the greeting has no name and the "Start" card is dropped, by design.
 - **gap: new `Icon` variants** (Alert, Info, Clock, Camera) are drawn from the mock's paths.
-- **deferred: `home.loading` is not captured.** The skeleton shows only while a refresh waits on
-  the worker; the harness cannot hold it there.
+- **data: `home.loading` is taken with preset books (s10).** The capture holds the worker
+  (`ApiWorker::hold`) so the refresh never answers; the shell's company, lock date and books are
+  preset because the open-company answers would queue behind the hold. The tile and panel
+  heights are slightly taller than the mock's (the mock's skeleton is 84 px tiles, ours follow the
+  real tile); the AI chip reads "AI: not set up" (see the topbar entry).
 
 ## Palette (round of 2026-11-23, commit d4f0bcb)
 
@@ -137,11 +140,11 @@ comes from `Api::home_figures` and `Api::home_nudges`.
   screen never adds figures (rule C4). The mock's "Audit" bullets (created by, from an AI draft)
   need audit data the voucher view does not read. The subtitle is "Read-only. Esc goes back up"
   because "As at ..." means nothing for one voucher.
-- **deferred: `balance-sheet.loading` is not captured.** The card is built (a line saying it is
-  computing, then twelve placeholder bars; tested in `report_view::loading_card`) but the
-  computing state lasts a few frames on the capture company and the harness cannot hold the
-  worker. It has no clock icon (the icon set has none) and the key bar does not switch to
-  "Computing / Esc Cancel".
+- **data: `balance-sheet.loading` is taken with preset books (s10).** The worker is held so the
+  report's request never answers (the card, the clock icon, twelve bars and the key bar
+  "Computing / Esc Cancel" are real). Differences left: "As at 20 Nov" against the mock's 21 Nov
+  (the report reads the last voucher date, the mock the shown day), and the breadcrumb and
+  buttons follow the mock.
 
 ## Day book (round of 2026-11-23)
 
@@ -176,8 +179,18 @@ comes from `Api::home_figures` and `Api::home_nudges`.
 
 Captured states: `gst.gstr1`, `gst.gstr3b`, `gst.recon-empty`, `gst.gstr1-correction` (on
 Fictional Pumps, which sold pickaxes with no HSN). Not captured: `recon`, `recon-explain`,
-`recon-error` and `recon-locked`: they need a 2B file, which the app cannot read (no 2B reader,
-engine item E-3); `recon-explain` is an AI state.
+`recon-error` and `recon-locked`.
+
+- **gap (s10): the 2B reconciliation is not wired, and the earlier note "no 2B reader" was
+  wrong.** `ledgerly-gst-formats` has a GSTR-2B parser and `ledgerly-gst::recon2b` a matcher, but
+  nothing in `ledgerly-api` or the screen calls them. Not built in s10 because: (1) the GSTR-2B
+  JSON shape is `pending observed` (rule A5): no authoritative public GSTN schema was found, so an
+  import would rest on third-party descriptions, and the screen cannot show a number from it; (2)
+  there is no store event for an imported 2B file or an IMS action (the `Event` enum is frozen;
+  file an interface request in `docs/interface-requests.md`); (3) there is no GSTR-3B filing
+  record, so `recon-locked` (a filed period) has nothing to read; (4) the sample has no October
+  purchases to match. So `recon`, `recon-error` and `recon-locked` stay uncaptured; the app shows
+  the honest "not supported yet" empty state. `recon-explain` is an AI state (see the AI section).
 
 - **by design: the correction state is built from the sample (s9).** `gst.gstr1-correction` now
   runs on Godavari: Table 12 shows 5 records, 3,49,385.00 and Needs correction, selected with J / K,
@@ -245,7 +258,7 @@ engine item E-3); `recon-explain` is an AI state.
 
 Captured states: `masters.ledgers`, `masters.ledger-detail`, `masters.items`,
 `masters.create-ledger`, `masters.gstin-error` (the form filled by clicks and typed text). Not
-captured: `suggested-ledger` (needs bank matching to propose a ledger, which is not built).
+captured: `suggested-ledger` (an AI state: the assistant proposes the ledger; no in-app AI yet).
 
 - **gap: the create form is not the mock's compact one (s9-all).** The capture types the mock's
   values (Jadhav Metals, GSTIN, credit days) through the real form, which is longer than the
@@ -422,9 +435,12 @@ captured: `suggested-ledger` (needs bank matching to propose a ledger, which is 
 - **gap: the empty state's look.** `bank.empty` has the 36 px icon, the 420 px sentence and an
   Upload-icon button, and hides the tabs; the subtitle now carries the account number and month.
   Left: a File layout row under the card (functional) and the account name in the breadcrumb.
-- **deferred: `bank.import-error` is not captured.** The engine refuses a statement whose running
-  balances do not add up, but Import opens the system file dialog, which the capture harness
-  cannot drive. Needs a way to hand the screen a file without the dialog.
+- **closed (s10): `bank.import-error` is captured** (light, dark, hc) with the engine's whole
+  working (`balance_refusal`), through a scripted file in place of the native dialog. Left: the
+  app shows a "Change account" button and a longer breadcrumb the mock's state lacks; the AI chip
+  and the truncated company name differ in the topbar (all shots).
+- **gap (s10): `bank.suggested-ledger` needs the in-app assistant**, which is not built; not
+  captured.
 
 ## Payment and receipt (round s9, 2026-11-25)
 
@@ -858,8 +874,7 @@ reason names the item); no state to compare with, so nothing further was changed
 - **gap: create-ledger and ledger-detail field sets.** They follow the engine's fields, not the
   mock's; the sidebar hover highlight in captures is a capture artifact.
 - **by design: the keys note keeps the "Keys in use now" line**, which is true of the app.
-- **data: `bank.import-error` has no capture** (see the Bank section); `bank.default` shows the
-  empty state because the fixture has no statement.
+- **data: `bank.default` shows the empty state because the fixture has no statement.**
 - **gap: GST KPI tiles** are unboxed as in the mock but the light capture is pixel-identical to
   before; remaining GST difference is data (the fixture's rows).
 

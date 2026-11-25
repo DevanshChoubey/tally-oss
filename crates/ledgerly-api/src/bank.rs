@@ -38,13 +38,15 @@ use std::sync::OnceLock;
 use ledgerly_bank::BankError;
 use ledgerly_bank::brs::Brs;
 use ledgerly_bank::matcher::{Candidate, MatchRule, suggest_matches};
-use ledgerly_bank::statement::{BankStatement, check_statement_with_end, restore_statement};
+use ledgerly_bank::statement::{
+    BankStatement, StatementError, check_statement_with_end, restore_statement,
+};
 use ledgerly_bankfmt::csv::parse_csv_with_layout;
 use ledgerly_bankfmt::mt940::parse_mt940_with_end;
 use ledgerly_bankfmt::registry::{FileKind, builtin_registry};
 use ledgerly_bankfmt::xlsx::parse_xlsx;
 use ledgerly_bankfmt::{BankFmtError, ParsedStatement, RawLine, RawStatement};
-use ledgerly_core::{BankStatementId, Date, LedgerId, Outcome};
+use ledgerly_core::{BankStatementId, Date, LedgerId, Outcome, Paise};
 use ledgerly_model::{BankMatch, Books, MatchKind};
 use ledgerly_store::{AuditRecord, Event, StoredStatementLine};
 
@@ -410,6 +412,51 @@ fn parse_statement(file: &[u8], format_id: &str) -> Result<ParsedStatement, ApiE
         FileKind::Mt940 => parse_mt940_with_end(mt940_text(file)?)?,
     };
     Ok(parsed)
+}
+
+/// Why a statement file was refused for not adding up, with every figure of the working: what
+/// the file opens with, what its lines add, what that makes, what the file prints, and the gap.
+/// The screen shows these as they are; it adds nothing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct BalanceRefusal {
+    /// Opening balance stated in the file.
+    pub opening: Paise,
+    /// How many lines the file has.
+    pub lines: usize,
+    /// Deposits less withdrawals over all lines.
+    pub lines_net: Paise,
+    /// The opening balance plus the net of the lines.
+    pub computed_closing: Paise,
+    /// The closing balance the file prints.
+    pub stated_closing: Paise,
+    /// The printed closing balance less the computed one.
+    pub difference: Paise,
+}
+
+/// The working behind a refusal of `file` for a balance that does not add up, or `None` when
+/// `error` is some other refusal (a duplicate, a missing balance, a bad line, a break in the
+/// running balance), or the file cannot be read again in `format_id`.
+#[must_use]
+pub fn balance_refusal(file: &[u8], format_id: &str, error: &ApiError) -> Option<BalanceRefusal> {
+    let ApiError::StatementImport(StatementError::BalanceMismatch {
+        opening,
+        lines_net,
+        computed_closing,
+        stated_closing,
+    }) = error
+    else {
+        return None;
+    };
+    let lines = parse_statement(file, format_id).ok()?.raw.lines.len();
+    let difference = stated_closing.checked_sub(*computed_closing).ok()?;
+    Some(BalanceRefusal {
+        opening: *opening,
+        lines,
+        lines_net: *lines_net,
+        computed_closing: *computed_closing,
+        stated_closing: *stated_closing,
+        difference,
+    })
 }
 
 /// The text of an MT940 file.

@@ -543,6 +543,28 @@ fn the_same_file_cannot_be_imported_twice() {
 }
 
 #[test]
+fn a_balance_refusal_carries_the_whole_working_for_the_screen() {
+    let (_dir, _path, mut api) = setup();
+    let text = STATEMENT.replace(":62F:C260503INR2710,00", ":62F:C260503INR2711,00");
+    let error = api
+        .import_bank_statement(text.as_bytes(), MT940, BANK)
+        .unwrap_err();
+    let working = ledgerly_api::balance_refusal(text.as_bytes(), MT940, &error).unwrap();
+    // derived, from the statement text above: opening 1000,00 INR = 100_000 paise; the six
+    // `:61:` lines are +50_000 +120_000 -30_000 -45_000 -1_000 +77_000 = +171_000, so the file
+    // computes to 271_000; it prints 2711,00 = 271_100; the printed figure is 100 paise more.
+    assert_eq!(working.opening, Paise::new(100_000));
+    assert_eq!(working.lines, 6);
+    assert_eq!(working.lines_net, Paise::new(171_000));
+    assert_eq!(working.computed_closing, Paise::new(271_000));
+    assert_eq!(working.stated_closing, Paise::new(271_100));
+    assert_eq!(working.difference, Paise::new(100));
+    // A refusal for another reason has no such working.
+    let other = ApiError::UnknownBankFormat("x".to_owned());
+    assert!(ledgerly_api::balance_refusal(text.as_bytes(), MT940, &other).is_none());
+}
+
+#[test]
 fn a_statement_that_does_not_balance_is_refused_and_nothing_is_held() {
     let (_dir, _path, mut api) = setup();
     // The stated closing is 2711,00 instead of the derived 2710,00.

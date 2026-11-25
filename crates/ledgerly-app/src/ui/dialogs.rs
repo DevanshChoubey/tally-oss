@@ -4,11 +4,31 @@
 //! no test, capture or headless run can put a dialog on somebody's desktop: every function here
 //! answers "cancelled" (`None`) at once while they are off.
 
+use std::collections::VecDeque;
 use std::path::PathBuf;
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 /// Whether the real window has switched native file dialogs on.
 static SYSTEM_DIALOGS: AtomicBool = AtomicBool::new(false);
+
+/// Files that the next open dialogs answer with, in order, without raising a dialog. Empty in
+/// the app; the capture tool and tests fill it.
+static SCRIPTED_OPENS: Mutex<VecDeque<PathBuf>> = Mutex::new(VecDeque::new());
+
+/// Makes the next [`open_file`] answer `path` as if the user had chosen it, with no dialog. Each
+/// call answers one `open_file`. For the capture tool and tests, which cannot drive a native
+/// dialog; nothing in the app calls it.
+pub fn script_open_file(path: PathBuf) {
+    if let Ok(mut queue) = SCRIPTED_OPENS.lock() {
+        queue.push_back(path);
+    }
+}
+
+/// The next scripted answer, if there is one.
+fn next_scripted_open() -> Option<PathBuf> {
+    SCRIPTED_OPENS.lock().ok()?.pop_front()
+}
 
 /// Lets the app raise native file dialogs. Only the real window calls this.
 pub fn enable_system_dialogs() {
@@ -45,6 +65,9 @@ pub fn save_file(
 /// An open dialog: the path chosen, or `None` when cancelled (or dialogs are off).
 #[must_use]
 pub fn open_file(title: &str, filters: &[(&str, &[&str])]) -> Option<PathBuf> {
+    if let Some(scripted) = next_scripted_open() {
+        return Some(scripted);
+    }
     if !system_dialogs_enabled() {
         return None;
     }
@@ -53,4 +76,21 @@ pub fn open_file(title: &str, filters: &[(&str, &[&str])]) -> Option<PathBuf> {
         dialog = dialog.add_filter(*name, extensions);
     }
     dialog.pick_file()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_scripted_open_answers_once_and_then_dialogs_stay_off() {
+        // provenance: derived. Dialogs are off in tests, so an unscripted open is cancelled; a
+        // scripted one answers exactly one open with the given path, in the order scripted.
+        assert_eq!(open_file("t", &[]), None);
+        script_open_file(PathBuf::from("a.csv"));
+        script_open_file(PathBuf::from("b.csv"));
+        assert_eq!(open_file("t", &[]), Some(PathBuf::from("a.csv")));
+        assert_eq!(open_file("t", &[]), Some(PathBuf::from("b.csv")));
+        assert_eq!(open_file("t", &[]), None);
+    }
 }

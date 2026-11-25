@@ -88,3 +88,20 @@ fn a_ticket_from_a_dropped_worker_is_lost_or_ready_never_pending_forever() {
     drop(worker);
     assert_eq!(ticket.poll(), Poll::Ready(7));
 }
+
+#[test]
+fn a_held_worker_keeps_later_jobs_queued_until_the_hold_is_dropped() {
+    // provenance: derived. The capture tool needs a screen to stay "computing"; this is the
+    // contract it relies on: nothing queued behind a hold finishes while the hold lives, and
+    // everything finishes, in order, once it is dropped.
+    let worker = ApiWorker::spawn(api("held")).unwrap();
+    let hold = worker.hold();
+    let mut first = worker.run(|_api| 1_u8);
+    let mut second = worker.run(|_api| 2_u8);
+    std::thread::sleep(Duration::from_millis(150));
+    assert!(matches!(first.poll(), Poll::Pending), "ran while held");
+    assert!(matches!(second.poll(), Poll::Pending), "ran while held");
+    drop(hold);
+    assert_eq!(wait(&mut first), 1);
+    assert_eq!(wait(&mut second), 2);
+}

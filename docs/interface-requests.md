@@ -282,3 +282,16 @@ things are missing from the engine and are left as gaps in `design/PARITY-GAPS.m
 - Bank-line matching for payments (which statement line cleared each), for the dialog's bank-line
   row and check.
 - A GSTR-2B reader, for the "GST cash payable" tile (accepted input credit) and the IMS nudge.
+
+## S10 (GST reconciliation): store events for 2B imports and IMS actions, a 3B filing record (2026-11-25)
+
+The GSTR-2B parser (`ledgerly-gst-formats::gstr2b`) and matcher (`ledgerly-gst::recon2b`) exist but
+the app cannot use them, so `gst.recon`, `gst.recon-error` and `gst.recon-locked` are not built
+(`design/PARITY-GAPS.md`, "GST returns"). Missing:
+
+- A store event (and a schema migration) that records an imported 2B file for a period, so a
+  reconciliation survives a restart and the audit trail shows it. The `Event` enum is frozen.
+- A store event for an IMS action (accept, reject, pending) on a 2B record.
+- A GSTR-3B filing record for a period (filed on, by whom), so a filed period can lock the tab.
+- The JSON shape of GSTR-2B is `pending observed` (rule A5): a file exported from the GST portal,
+  with its date, is needed before the reader is trusted.

@@ -519,6 +519,17 @@ impl ReportViewScreen {
             .is_some_and(|run| run.want.is_some() || run.latest.is_pending())
     }
 
+    /// `true` while the worker is running a request and no report has arrived yet: the key bar
+    /// then says "Computing" and offers Esc to cancel (index.html:1579). A request that is only
+    /// waiting to be sent does not count.
+    fn is_computing(&self) -> bool {
+        self.report.rows.is_empty()
+            && self
+                .worker
+                .as_ref()
+                .is_some_and(|run| run.latest.is_pending())
+    }
+
     /// The report on show.
     #[must_use]
     pub fn report(&self) -> &ViewReport {
@@ -1105,20 +1116,32 @@ fn draw_loading(ui: &mut Ui) {
         .inner_margin(egui::Margin::symmetric(16, 14))
         .show(ui, |ui| {
             ui.set_min_width(ui.available_width());
+            // index.html:1579: a clock, the line, an Esc keycap, then the rest of the sentence.
             ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = crate::theme::SPACE_2;
+                crate::ui::icon::icon(ui, crate::ui::icon::Icon::Clock, t.text_2);
                 ui.label(
-                    egui::RichText::new(
-                        "Computing from all vouchers\u{2026} Esc cancels. The previous result is not shown as current.",
-                    )
-                    .size(crate::theme::TEXT_BODY)
-                    .color(t.text_2),
+                    egui::RichText::new("Computing from all vouchers\u{2026}")
+                        .size(crate::theme::TEXT_BODY)
+                        .color(t.text_2),
+                );
+                keycap(ui, "Esc");
+                ui.label(
+                    egui::RichText::new("cancels. The previous result is not shown as current.")
+                        .size(crate::theme::TEXT_BODY)
+                        .color(t.text_2),
                 );
             });
             ui.add_space(14.0);
             let width = ui.available_width();
             // index.html:1579: twelve rows, their widths cycling through LOADING_BARS.
             for i in 0..12_usize {
-                let pct = f32::from(LOADING_BARS.get(i % LOADING_BARS.len()).copied().unwrap_or(50));
+                let pct = f32::from(
+                    LOADING_BARS
+                        .get(i % LOADING_BARS.len())
+                        .copied()
+                        .unwrap_or(50),
+                );
                 crate::ui::skeleton::skeleton_bar(ui, width * pct / 100.0);
                 ui.add_space(crate::theme::SPACE_2);
             }
@@ -1258,7 +1281,18 @@ impl Screen for ReportViewScreen {
         self.origin.clone().unwrap_or_else(|| self.title())
     }
 
+    fn key_bar_name(&self) -> String {
+        if self.is_computing() {
+            // index.html:1579: while the report computes the bar says so and offers only Esc.
+            return "Computing".to_owned();
+        }
+        self.page_title()
+    }
+
     fn keys(&self) -> Vec<KeyHint> {
+        if self.is_computing() {
+            return vec![KeyHint::new("Esc", "Cancel")];
+        }
         match self.look() {
             Look::BalanceSheet => vec![
                 KeyHint::new("J / K", "Move"),
