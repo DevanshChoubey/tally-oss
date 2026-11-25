@@ -310,3 +310,93 @@ fn saving_an_empty_contra_names_both_problems() {
         Some("Pick the cash or bank account first.\nAn amount of zero cannot be posted.")
     );
 }
+
+/// The colour each text of the last frame is drawn in.
+fn coloured(s: &mut VoucherEntryScreen, b: &Books) -> Vec<(String, egui::Color32)> {
+    fn walk(shape: &Shape, out: &mut Vec<(String, egui::Color32)>) {
+        match shape {
+            Shape::Text(t) => {
+                if let Some(sec) = t.galley.job.sections.first() {
+                    out.push((t.galley.text().to_owned(), sec.format.color));
+                }
+            }
+            Shape::Vec(v) => v.iter().for_each(|x| walk(x, out)),
+            Shape::Noop
+            | Shape::Circle(_)
+            | Shape::Ellipse(_)
+            | Shape::LineSegment { .. }
+            | Shape::Path(_)
+            | Shape::Band(_)
+            | Shape::Rect(_)
+            | Shape::Mesh(_)
+            | Shape::QuadraticBezier(_)
+            | Shape::CubicBezier(_)
+            | Shape::Callback(_) => {}
+        }
+    }
+    let mut app = AppCtx {
+        books: Some(b.clone()),
+        api: None,
+        lock_date: None,
+        ai_tier: None,
+    };
+    let ctx = egui::Context::default();
+    let mut last = Vec::new();
+    for _ in 0..4 {
+        let input = RawInput {
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(1280.0, 800.0))),
+            ..RawInput::default()
+        };
+        let out = ctx.run_ui(input, |ui| {
+            let _stay = s.ui(ui, &mut app);
+        });
+        last.clear();
+        for c in &out.shapes {
+            walk(&c.shape, &mut last);
+        }
+        out.drop_without_applying_deltas();
+    }
+    last
+}
+
+#[test]
+fn the_short_side_of_an_unbalanced_journal_is_drawn_in_the_error_ink() {
+    // provenance: index.html:2057 (`SCREENS.journal`, validation-error): the credit amount
+    // 1,480.00 is drawn in `--bad` while the debit amount 1,840.00 is not; the credit side is the
+    // short one (derived by hand: 1,840.00 - 1,480.00 = 360.00 short on the credit side). When
+    // the entry balances no amount is red.
+    let b = books();
+    let mut s = journal(&b, "1480");
+    s.delete_line();
+    let shown = coloured(&mut s, &b);
+    let ink = |want: &str| {
+        shown
+            .iter()
+            .find(|(t, _)| t == want)
+            .map_or_else(|| panic!("{want} not drawn: {shown:?}"), |(_, c)| *c)
+    };
+    assert_ne!(ink("1,480.00"), ink("1,840.00"), "{shown:?}");
+    let mut ok = journal(&b, "1840");
+    ok.delete_line();
+    let shown = coloured(&mut ok, &b);
+    let all: Vec<_> = shown
+        .iter()
+        .filter(|(t, _)| t == "1,840.00")
+        .map(|(_, c)| *c)
+        .collect();
+    assert!(
+        all.len() >= 2 && all.windows(2).all(|w| w[0] == w[1]),
+        "{shown:?}"
+    );
+}
+
+#[test]
+fn a_contra_names_its_second_column_account() {
+    // provenance: index.html:2074 (`SCREENS.contra`): the heading reads "Account"; a journal's
+    // reads "Ledger" (index.html:2058).
+    let b = books();
+    let mut s = open(&b, T_CONTRA);
+    let _ = frame(&mut s, &b);
+    let names: Vec<&str> = s.heading_rects().iter().map(|(n, _)| *n).collect();
+    assert_eq!(names, ["#", "Account", "Dr / Cr", "Group", "Amount"]);
+}

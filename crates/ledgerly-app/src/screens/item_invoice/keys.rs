@@ -26,6 +26,12 @@ fn consume_exact(input: &mut InputState, key: Key, modifiers: Modifiers) -> bool
     input.events.len() != before
 }
 
+/// Consumes Alt+O, the purchase's "Bill photo" key (index.html:1990).
+pub(super) fn consume_alt_o(ui: &Ui) -> bool {
+    ui.ctx()
+        .input_mut(|i| consume_exact(i, Key::O, Modifiers::ALT))
+}
+
 /// The questions the screen is asking, which change what Y, N and Enter do.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) struct Prompt {

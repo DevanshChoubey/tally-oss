@@ -20,7 +20,8 @@ use crate::keymap::Action;
 use crate::screens::item_invoice::extras::BalanceShown;
 use crate::screens::voucher_sheet::{self as sheet, Col, InputSpec, Look, Total};
 use crate::theme::TEXT_BODY;
-use crate::ui::button::{ButtonKind, button};
+use crate::ui::button::{ButtonKind, button_icon};
+use crate::ui::icon::Icon;
 use crate::ui::note::{NoteKind, note};
 use crate::ui::page_head::page_head_numbered;
 use crate::ui::prov::ProvKind;
@@ -40,6 +41,15 @@ const SINGLE_COLS: [Col; 4] = [
 const DOUBLE_COLS: [Col; 5] = [
     Col::text("#", 36.0),
     Col::rest("Ledger"),
+    Col::text("Dr / Cr", 70.0),
+    Col::text("Group", 200.0),
+    Col::num("Amount", 170.0),
+];
+
+/// The contra's table: its second heading reads "Account" (index.html:2074).
+const CONTRA_COLS: [Col; 5] = [
+    Col::text("#", 36.0),
+    Col::rest("Account"),
     Col::text("Dr / Cr", 70.0),
     Col::text("Group", 200.0),
     Col::num("Amount", 170.0),
@@ -114,6 +124,24 @@ pub(super) fn text_field(
     numeric: bool,
     width: Option<f32>,
 ) -> Response {
+    text_field_ink(ui, cx, spec, text, look, numeric, width, false)
+}
+
+/// [`text_field`] with the text drawn in the error colour when `bad_ink`.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "text_field's own arguments and the ink"
+)]
+pub(super) fn text_field_ink(
+    ui: &mut Ui,
+    cx: &mut Cx<'_>,
+    spec: &FieldSpec,
+    text: &mut String,
+    look: Look,
+    numeric: bool,
+    width: Option<f32>,
+    bad_ink: bool,
+) -> Response {
     let response = sheet::input(
         ui,
         text,
@@ -123,6 +151,7 @@ pub(super) fn text_field(
             look,
             numeric,
             invalid: false,
+            bad_ink,
             width,
         },
     );
@@ -170,7 +199,7 @@ fn ledger_field(
 }
 
 /// The amount field of line `i`, with the value of a typed expression (`1200*18%`) beside it.
-fn amount_field(ui: &mut Ui, cx: &mut Cx<'_>, base: Id, i: usize, row: &mut DraftRow) {
+fn amount_field(ui: &mut Ui, cx: &mut Cx<'_>, base: Id, i: usize, row: &mut DraftRow, bad: bool) {
     let spec = FieldSpec {
         id: base.with(("amount", i)),
         field: Field::Amount(i),
@@ -196,9 +225,18 @@ fn amount_field(ui: &mut Ui, cx: &mut Cx<'_>, base: Id, i: usize, row: &mut Draf
         None
     };
     if let Some(mut shown) = committed {
-        text_field(ui, cx, &spec, &mut shown, Look::Cell, true, width);
+        text_field_ink(ui, cx, &spec, &mut shown, Look::Cell, true, width, bad);
     } else {
-        text_field(ui, cx, &spec, &mut row.amount_text, Look::Cell, true, width);
+        text_field_ink(
+            ui,
+            cx,
+            &spec,
+            &mut row.amount_text,
+            Look::Cell,
+            true,
+            width,
+            bad,
+        );
     }
     if let Some(paise) = entry {
         cell_text(ui, &format!("= {}", format_amount(paise)));
@@ -376,9 +414,24 @@ impl VoucherEntryScreen {
                         1,
                         |ui| sheet::caption(ui, "Mode", None),
                         |ui| {
-                            // The mock's mode is a choice among the instruments: the box takes
-                            // a typed start of a name (the keyboard path) and the arrow lists
-                            // them all.
+                            // The mock writes the mode as plain text (index.html:1405, "NEFT /
+                            // UPI"); it stays a field with a list. Until the keyboard is on it, a
+                            // chosen mode reads bare, as the date does; with the keyboard on it,
+                            // or while none is chosen, it is the box and the arrow lists them all.
+                            let plain = cx.focus != Field::Mode
+                                && parse_mode(&self.draft.mode_text).is_some();
+                            if plain {
+                                text_field(
+                                    ui,
+                                    cx,
+                                    &mode_spec,
+                                    &mut self.draft.mode_text,
+                                    Look::Cell,
+                                    false,
+                                    None,
+                                );
+                                return;
+                            }
                             ui.horizontal(|ui| {
                                 let room = (ui.available_width() - MODE_ARROW).max(60.0);
                                 text_field(
@@ -417,18 +470,35 @@ impl VoucherEntryScreen {
     /// one.
     fn draw_table(&mut self, ui: &mut Ui, base: Id, masters: &Masters, cx: &mut Cx<'_>) {
         let single = self.draft.is_single_entry();
+        let journal_like = match self.draft.kind {
+            EntryKind::Journal | EntryKind::Memorandum | EntryKind::ReversingJournal => true,
+            EntryKind::Contra | EntryKind::Payment | EntryKind::Receipt => false,
+        };
         let skip = usize::from(single);
         let focused_row = match self.focus {
             Field::Ledger(i) | Field::Amount(i) => Some(i),
             Field::Bill(_) => self.panel.map(|p| p.row),
             Field::Date | Field::Mode | Field::Narration => None,
         };
+        // The side that is short while the lines do not balance: its amounts are drawn in the
+        // error colour (the mock reddens the credit amount of its unbalanced journal,
+        // index.html:2057). The side comes from the draft's own balance check.
+        let short = match self.draft.balance() {
+            Ok(Balance::Needs { side, .. }) if journal_like => Some(side),
+            Ok(Balance::Needs { .. } | Balance::Balanced) | Err(_) => None,
+        };
         let rows = &mut self.draft.rows;
         let count = rows.len().saturating_sub(skip);
         // The list always ends with the empty line that says how to finish, as the mock draws it:
         // a drawn hint when the last line is filled, or the last line's own field when it is empty.
         let hint_row = count > 0 && rows.last().is_some_and(|r| !r.is_blank());
-        let cols: &[Col] = if single { &SINGLE_COLS } else { &DOUBLE_COLS };
+        let cols: &[Col] = if single {
+            &SINGLE_COLS
+        } else if self.draft.kind == EntryKind::Contra {
+            &CONTRA_COLS
+        } else {
+            &DOUBLE_COLS
+        };
         let rects = sheet::lines(
             ui,
             cols,
@@ -455,7 +525,7 @@ impl VoucherEntryScreen {
                         0 => cell_text(ui, &i.to_string()),
                         1 => ledger_field(ui, cx, base, i, row, ledger_hint, Look::Cell),
                         2 => cell_text(ui, group_name(masters, row).as_deref().unwrap_or("")),
-                        3 => amount_field(ui, cx, base, i, row),
+                        3 => amount_field(ui, cx, base, i, row, false),
                         _ => {}
                     }
                 } else {
@@ -478,7 +548,7 @@ impl VoucherEntryScreen {
                             }
                         }
                         3 => cell_text(ui, group_name(masters, row).as_deref().unwrap_or("")),
-                        4 => amount_field(ui, cx, base, i, row),
+                        4 => amount_field(ui, cx, base, i, row, short == Some(row.side)),
                         _ => {}
                     }
                 }
@@ -764,7 +834,14 @@ impl VoucherEntryScreen {
                 // The mock draws Save disabled while the debits and credits differ.
                 save_clicked = ui
                     .add_enabled_ui(!differ, |ui| {
-                        button(ui, "Save", save_key.as_deref(), ButtonKind::Primary).clicked()
+                        button_icon(
+                            ui,
+                            Some(Icon::Save),
+                            "Save",
+                            save_key.as_deref(),
+                            ButtonKind::Primary,
+                        )
+                        .clicked()
                     })
                     .inner;
             });

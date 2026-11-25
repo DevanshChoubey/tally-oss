@@ -156,8 +156,8 @@ impl InvoiceKind {
     #[must_use]
     pub fn party_label(self) -> &'static str {
         match self {
-            InvoiceKind::Sales | InvoiceKind::CreditNote => "Party",
-            InvoiceKind::Purchase | InvoiceKind::DebitNote => "Supplier",
+            InvoiceKind::Sales | InvoiceKind::CreditNote | InvoiceKind::DebitNote => "Party",
+            InvoiceKind::Purchase => "Supplier",
         }
     }
 
@@ -167,7 +167,8 @@ impl InvoiceKind {
         match self {
             InvoiceKind::Sales => "Buyer's order no.",
             InvoiceKind::Purchase => "Supplier bill no.",
-            InvoiceKind::CreditNote | InvoiceKind::DebitNote => "Original invoice no.",
+            InvoiceKind::CreditNote => "Against sales invoice",
+            InvoiceKind::DebitNote => "Against purchase bill",
         }
     }
 
@@ -651,7 +652,7 @@ impl ItemInvoiceScreen {
             NumberingMethod::Manual => true,
             NumberingMethod::Automatic | NumberingMethod::None => false,
         };
-        Ok(Outcome::Value(ItemInvoiceScreen {
+        let mut screen = ItemInvoiceScreen {
             type_name: vt.name.clone(),
             stock: if books.company.features.inventory {
                 Stock::Kept
@@ -690,7 +691,9 @@ impl ItemInvoiceScreen {
             creating: None,
             waiting: Vec::new(),
             shown: draw::Shown::default(),
-        }))
+        };
+        screen.focus = screen.first_field();
+        Ok(Outcome::Value(screen))
     }
 
     /// The invoice being entered.

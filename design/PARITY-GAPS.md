@@ -500,30 +500,12 @@ the selected one.
 - **gap (s12): the mock's mid-entry highlight.** The mock lilac-fills row 1 while the narration is
   filled; ours fills the row the keyboard is on, so with the keyboard on the narration no row is
   filled. Not changed: a highlight on a row without the keyboard would mislead.
-- **gap (s12): the bill-wise popup's table** keeps the shared popup styling (plain header, no
-  per-column rule) where the mock's popup has its own table look; the figures are the engine's.
-- **gap (s12): the Mode** is still a box with a list (see above), not the mock's read-only
-  "NEFT / UPI" text. The mock's text names two instruments the engine stores as one each.
+- **gap (s12): the Mode** is bare text once set (the mock's look) but a box with a list while empty or focused; the mock's "NEFT / UPI" names two instruments the engine stores as one each. The mock's text names two instruments the engine stores as one each.
 - **closed (s12): the overdraft total** "Balance after" is drawn in the bad colour in
   `payment.overdraft` ("-36,000.00"), through `Total.bad`.
 - **closed (s12): contra and journal** (see the next section): the Dr/Cr and Group columns, the
   Debit total / Credit total / Difference box from the engine (`LineTotals`), the Cash after
   figure, and the two validation notes.
-- **gap (s12): contra differences.** `contra.default` and `contra.validation-error` have the
-  mock's Dr / Cr and Group columns, Transfer and Cash after (engine) foot box, and amounts. They
-  differ in: the narration sits in the foot, where the mock puts it in the head beside the date;
-  the column reads "Ledger" where the mock reads "Account"; the subtitle says "every line has its
-  own Dr or Cr" (the mock: "pick the account once, then the amount"; ours lets each line choose
-  its side); the ghost "Next ledger" row is drawn, which the mock's contra lacks; the foot
-  sentence is ours ("Lines as typed balance ...") where the mock says "Balances after saving come
-  from the engine. Dr and Cr always match in a contra."; the Save button has no icon; the first
-  row is not lilac. No legal claim is added.
-
-## Purchase, credit note, debit note and journal entry (round s11, 2026-11-25)
-
-Captures: `purchase.*`, `credit-note.*`, `debit-note.*` and `journal.*` (each `default` and
-`validation-error`; light, dark, hc). They have mock states since round S12 (see below).
-
 - **mock states added (round S12, 2026-11-25).** The mock now has `purchase.default`,
   `purchase.validation-error`, `credit-note.default`, `credit-note.validation-error`,
   `debit-note.default`, `debit-note.validation-error`, `journal.default` and
@@ -552,9 +534,6 @@ Captures: `purchase.*`, `credit-note.*`, `debit-note.*` and `journal.*` (each `d
   debit note when the value rises (taxguru.in page above, read 2026-11-25), so ours is the
   buyer's own voucher. Whether the engine leaves such a note out of GSTR-1 was not checked in
   this round; a GST debit note issued by the company as supplier is not built.
-- **gap: the notes keep the subtitle and mode button of an item invoice.** "Item invoice . tax
-  is recomputed by the GST engine on every keystroke" and the "Item invoice Ctrl+H" button
-  appear under the Credit Note and Debit Note titles.
 - **gap: eligible ITC is not shown on a purchase.** `ledgerly-gst` has `itc_eligibility`, but
   `Api::invoice_gst_with_bills` does not return it for a draft, and the UI must not compute it.
   The tax box shows the engine's tax lines only; a new API call is needed.
@@ -585,12 +564,6 @@ Captures: `purchase.*`, `credit-note.*`, `debit-note.*` and `journal.*` (each `d
   360.00. Enter 360.00 more on the credit side to save."). Contra's foot shows Cash after from
   `Api::balance_change`. In `contra.validation-error` the capture clicks the narration so the
   ledger list does not cover the notice (a click now gives the capture window the keyboard).
-- **gap (s12): the journal and contra captures** differ from the mock in: no Reason field (the
-  voucher has only a narration; the mock's Reason is a second text box), the Group names keep the
-  sample's capitalisation ("Direct Expenses" where the mock reads "Direct expenses"), the Cr
-  amount is not drawn in the bad colour, the first row is not lilac when the keyboard is on
-  row 2, the Save button has no icon, the contra subtitle (above), and voucher numbers
-  (JV/0033 matches; CT/0022 is the engine's next number).
 - **gap: the journal's Balance column is empty** until a ledger's balance reaches the screen.
 - **closed (s12): purchase.default, credit-note.default capture data.** The captures enter the
   mock's data (NST/1150 of 21 Nov, 10 HDPE pipe coils at 2,050.00 and 100 PVC ball valves at
@@ -599,11 +572,6 @@ Captures: `purchase.*`, `credit-note.*`, `debit-note.*` and `journal.*` (each `d
   20,500 + 22,840 = 43,340; 18% = 7,801.20; 51,141.20 rounds to 51,141.00); credit note 5,050.00
   + 454.50 + 454.50 = 5,959.00. Voucher numbers now agree: the mock reads PB/0145 and CN/0001
   (changed in s12-mock-fixes).
-- **gap (s12): the item-invoice layout** is still the sales invoice's: a Date field and Place of
-  supply box on the head, "Item invoice" and "More details" buttons where the mock has "Bill
-  photo Alt+O", a Unit column, and the extra place-of-supply
-  note and the balance line under the narration. The mock's purchase read "29 Karnataka, inter-state" and now reads "27 Maharashtra, inter-state"
-  (s12-mock-fixes), as ours does. The layout is still not the mock's.
 - **mock changed (s12-mock-fixes): the credit and debit note states now use data and refusals the
   app can produce.** `credit-note.validation-error` and `debit-note.validation-error` show the app's
   refusal of an item line with no quantity ("Line 2: quantity: type a number.", tax and total Not
@@ -644,6 +612,38 @@ Captures: `purchase.*`, `credit-note.*`, `debit-note.*` and `journal.*` (each `d
   as a typed voucher by Rohan, so the audit edit log says "user 2" there.
 - **not done: `import.imported`** is not on this branch (it is in s12/mock-coverage); its wording
   must read "Imported from the other program's company ..." there.
+
+## Item invoices and entry leftovers (round s12 item-invoice-layout, 2026-11-25)
+
+Closed: `purchase.*`, `credit-note.*`, `debit-note.*` heads, columns, buttons and foot follow their
+mock states (no Date or Place box on a note's head, no Unit column, "Bill photo Alt+O" on a
+purchase, Save only on a note, "Note total", bare "Narration" caption, tax rows named "IGST 18%");
+the bill-wise popup table (right-aligned figures, header rule, selected row, "Left open" row); the
+journal's short side in the error ink and Save icons; contra's "Account" column.
+
+- **mock must change (documented behaviour wins; help pages read 2026-11-25):**
+  - Field order: a purchase asks Supplier invoice no., date, Party, ledger, Place; a note asks
+    Party, original invoice no. and date (help.tallysolutions.com/tally-prime/purchase-process/purchase-returns-tally/
+    and the credit-note page). The mock draws Party first on a purchase and puts Date in the head.
+    Ours has no Date step on a purchase or note (the voucher date is the session date).
+  - Journal: the mock's "Reason" text box does not exist in the documented journal voucher (only
+    Narration); ours has none. The mock should drop it.
+  - Contra: narration belongs in the foot, and each line has its own Dr/Cr; the mock puts narration
+    in the head and says "pick the account once". Ours keeps the documented layout with the mock's look.
+  - Credit note: the mock's "Reason" is a GST return-type picklist (01-07) in the product, not free text.
+  - Tax rows: the mock's combined "CGST and SGST 909.00" row is a sum the UI must not compute; ours
+    lists CGST 9% and SGST 9% from the engine. The mock's "inter-state" place label and the
+    "14 Nov, 67 sets invoiced" hint likewise need engine data (see below).
+- **gap: note data.** Credit-note shows Shree Ganesh Traders against SI/0412 with "Original invoice
+  date" and "Sales ledger" cells the engine needs but the mock omits; the debit note returns a
+  "Steel pickaxe" (the sample has no "MS angles"), so 1,890.00 differs from the mock's 2,360.00.
+  Voucher numbers CN/0001, DN/0001, PB/0145 and CT/0022 are the engine's next numbers.
+- **gap: the figures of the credit-note hint** ("14 Nov, 67 sets invoiced") are not shown: the
+  engine has no return-against-invoice quantity, so the UI cannot honestly draw them.
+- **gap: payment bill-wise amount cell** shows the typed text ("150000.00") without Indian grouping.
+- **gap: Group names** keep the sample's capitalisation ("Direct Expenses", "Purchase Accounts").
+- **gap: ghost "Next ledger" row** is drawn on the journal and contra (the keyboard path needs it).
+- **gap: first-row lilac** is not drawn when the keyboard is elsewhere (see the payment entry above).
 
 ## Sales invoice (round of 2026-11-23)
 

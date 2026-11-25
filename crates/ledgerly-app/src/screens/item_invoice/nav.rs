@@ -2,7 +2,10 @@
 
 use super::draft::{BillRow, InvoiceRow, ParticularRow, typed_amount};
 use super::picker::{ledger_hits, search_items};
-use super::{Field, InvoiceMode, ItemInvoiceScreen, Step, parse_decimal, parse_place, place_label};
+use super::{
+    Field, InvoiceKind, InvoiceMode, ItemInvoiceScreen, Step, parse_decimal, parse_place,
+    place_label,
+};
 use crate::screens::voucher_entry::{LedgerHit, format_entry_date, parse_entry_date};
 use ledgerly_model::Masters;
 
@@ -10,18 +13,60 @@ impl ItemInvoiceScreen {
     /// The fields in Enter order for the invoice as it stands. An accounting invoice has no
     /// sales or purchase ledger field (the sales FAQ: "The Sales ledger field will not appear"
     /// in accounting invoice mode) and has particulars where an item invoice has stock lines.
+    ///
+    /// The order of the head follows the accounting product's help pages (read 2026-11-25): a
+    /// purchase asks the supplier's invoice number and date first, then the party A/c name, then
+    /// the purchase ledger (help.tallysolutions.com/purchase-goods-services/); a credit or debit
+    /// note asks the party first, then the original invoice details, then the sales ledger
+    /// (help.tallysolutions.com/tally-prime/sales-process/sales-return-tally/ and
+    /// help.tallysolutions.com/tally-prime/purchase-process/purchase-returns-tally/). Those pages
+    /// show no date in the voucher body (the date is the screen's date, F2), so a purchase or a
+    /// note has no Date step: the Date box stays on the sheet for a click. A sale keeps its order.
     fn order(&self) -> Vec<Field> {
-        let mut order = vec![Field::Date];
+        let item = self.draft.mode == InvoiceMode::Item;
+        let dated = self.draft.kind.reference_date_label().is_some();
+        let mut head = match self.draft.kind {
+            InvoiceKind::Sales => vec![Field::Date],
+            InvoiceKind::Purchase | InvoiceKind::CreditNote | InvoiceKind::DebitNote => Vec::new(),
+        };
         if self.draft.number_required {
-            order.push(Field::Number);
+            head.push(Field::Number);
         }
+        let reference = |out: &mut Vec<Field>| {
+            out.push(Field::Reference);
+            if dated {
+                out.push(Field::ReferenceDate);
+            }
+        };
+        match self.draft.kind {
+            InvoiceKind::Sales => {
+                head.extend([Field::Party, Field::Place]);
+                if item {
+                    head.push(Field::Account);
+                }
+                reference(&mut head);
+            }
+            InvoiceKind::Purchase => {
+                reference(&mut head);
+                head.push(Field::Party);
+                if item {
+                    head.push(Field::Account);
+                }
+                head.push(Field::Place);
+            }
+            InvoiceKind::CreditNote | InvoiceKind::DebitNote => {
+                head.push(Field::Party);
+                reference(&mut head);
+                if item {
+                    head.push(Field::Account);
+                }
+                head.push(Field::Place);
+            }
+        }
+        let mut order = head;
+        order.extend(self.bill_fields());
         match self.draft.mode {
             InvoiceMode::Item => {
-                order.extend([Field::Party, Field::Place, Field::Account, Field::Reference]);
-                if self.draft.kind.reference_date_label().is_some() {
-                    order.push(Field::ReferenceDate);
-                }
-                order.extend(self.bill_fields());
                 let discount = self.discount_columns();
                 for i in 0..self.draft.rows.len() {
                     order.extend([Field::Item(i), Field::Qty(i), Field::Rate(i)]);
@@ -31,11 +76,6 @@ impl ItemInvoiceScreen {
                 }
             }
             InvoiceMode::Accounting => {
-                order.extend([Field::Party, Field::Place, Field::Reference]);
-                if self.draft.kind.reference_date_label().is_some() {
-                    order.push(Field::ReferenceDate);
-                }
-                order.extend(self.bill_fields());
                 for i in 0..self.draft.particulars.len() {
                     order.extend([Field::Ledger(i), Field::LedgerAmount(i)]);
                 }
@@ -43,6 +83,14 @@ impl ItemInvoiceScreen {
         }
         order.push(Field::Narration);
         order
+    }
+
+    /// The field the keyboard starts on: the first step of the Enter order, the party on a sale.
+    pub(super) fn first_field(&self) -> Field {
+        match self.draft.kind {
+            InvoiceKind::Sales | InvoiceKind::CreditNote | InvoiceKind::DebitNote => Field::Party,
+            InvoiceKind::Purchase => Field::Reference,
+        }
     }
 
     /// The bill reference fields in Enter order: none unless More details is open on a party that
@@ -215,7 +263,13 @@ impl ItemInvoiceScreen {
         match parse_entry_date(&self.draft.date_text, self.fy) {
             Ok(date) => {
                 self.draft.date_text = format_entry_date(date);
-                Step::Next
+                match self.draft.kind {
+                    InvoiceKind::Sales => Step::Next,
+                    // No Date step for these: Enter on the clicked box goes on to the head's start.
+                    InvoiceKind::Purchase | InvoiceKind::CreditNote | InvoiceKind::DebitNote => {
+                        Step::Goto(self.first_field())
+                    }
+                }
             }
             Err(e) => self.refuse(e.to_string()),
         }

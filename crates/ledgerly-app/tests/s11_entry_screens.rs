@@ -321,7 +321,18 @@ fn a_purchase_and_a_debit_note_name_the_supplier_and_the_bill() {
     // date of the original tax invoice" (taxguru.in/goods-and-service-tax/
     // credit-note-debit-note-section-34-rule-53-cgst-act-2017.html, read 2026-11-25).
     assert_eq!(InvoiceKind::Purchase.party_label(), "Supplier");
-    assert_eq!(InvoiceKind::DebitNote.party_label(), "Supplier");
+    // changed in s12: the mock's `noteScreen` (index.html:2006-2030) labels the debit note's
+    // party "Party" and its reference "Against purchase bill" (credit note: "Against sales
+    // invoice"); only the purchase (index.html:1966) says "Supplier".
+    assert_eq!(InvoiceKind::DebitNote.party_label(), "Party");
+    assert_eq!(
+        InvoiceKind::DebitNote.reference_label(),
+        "Against purchase bill"
+    );
+    assert_eq!(
+        InvoiceKind::CreditNote.reference_label(),
+        "Against sales invoice"
+    );
     assert_eq!(InvoiceKind::Sales.party_label(), "Party");
     assert_eq!(InvoiceKind::CreditNote.party_label(), "Party");
     assert_eq!(InvoiceKind::Purchase.reference_label(), "Supplier bill no.");
@@ -470,7 +481,7 @@ fn a_credit_note_is_titled_as_a_note_not_as_an_invoice() {
     let (trail, _) = trail_after("title_debit", Key::F5, Modifiers::ALT);
     assert_eq!(trail.get(1).map(String::as_str), Some("Debit Note"));
     let (trail, _) = trail_after("title_purchase", Key::F9, Modifiers::NONE);
-    assert_eq!(trail.get(1).map(String::as_str), Some("Purchase invoice"));
+    assert_eq!(trail.get(1).map(String::as_str), Some("Purchase"));
 }
 
 /// The subtitle under the page title and the label of the mode button of the screen a key opens.
