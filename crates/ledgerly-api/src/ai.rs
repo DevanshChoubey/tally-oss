@@ -154,7 +154,10 @@ impl Api {
                 | Event::PeriodLocked { .. }
                 | Event::StatementImported(_)
                 | Event::MatchConfirmed(_)
-                | Event::BankStatementStored { .. } => None,
+                | Event::BankStatementStored { .. }
+                | Event::Gstr2bImported { .. }
+                | Event::ImsActionRecorded { .. }
+                | Event::Gstr3bFiled { .. } => None,
             })
             .collect())
     }
@@ -204,7 +207,10 @@ fn tier_word(event: &Event) -> Option<&String> {
         | Event::StatementImported(_)
         | Event::MatchConfirmed(_)
         | Event::AiProposalRecorded(_)
-        | Event::BankStatementStored { .. } => None,
+        | Event::BankStatementStored { .. }
+        | Event::Gstr2bImported { .. }
+        | Event::ImsActionRecorded { .. }
+        | Event::Gstr3bFiled { .. } => None,
     }
 }
 

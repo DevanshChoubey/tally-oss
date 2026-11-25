@@ -74,7 +74,10 @@ impl Api {
             | Event::StatementImported(_)
             | Event::MatchConfirmed(_)
             | Event::AiProposalRecorded(_)
-            | Event::BankStatementStored { .. } => None,
+            | Event::BankStatementStored { .. }
+            | Event::Gstr2bImported { .. }
+            | Event::ImsActionRecorded { .. }
+            | Event::Gstr3bFiled { .. } => None,
         });
         match last {
             None => Ok(None),
