@@ -344,6 +344,11 @@ impl VoucherEntryScreen {
         }
     }
 
+    /// Picks the mode from the chooser; the draft keeps the instrument's label.
+    pub fn choose_mode(&mut self, kind: ledgerly_model::InstrumentKind) {
+        mode_label(kind).clone_into(&mut self.draft.mode_text);
+    }
+
     /// Enter: accepts the field that has the keyboard and moves on.
     pub fn submit(&mut self, masters: &Masters) {
         self.notice = None;
