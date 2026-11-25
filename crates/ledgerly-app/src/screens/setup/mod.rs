@@ -767,22 +767,7 @@ impl SetupScreen {
                     name.request_focus();
                 }
             });
-            field(ui, col, "Type", |ui, w| {
-                egui::ComboBox::from_id_salt("setup-kind")
-                    .width(w)
-                    .selected_text(kind_label(self.kind))
-                    .show_ui(ui, |ui| {
-                        for kind in [
-                            EntityKind::Company,
-                            EntityKind::Llp,
-                            EntityKind::Partnership,
-                            EntityKind::Proprietorship,
-                            EntityKind::Other,
-                        ] {
-                            ui.selectable_value(&mut self.kind, kind, kind_label(kind));
-                        }
-                    });
-            });
+            field(ui, col, "Type", |ui, w| self.draw_kind_box(ui, w));
             field(ui, col, "City", |ui, w| {
                 crate::ui::a11y::text_edit(ui, "City", input(&mut self.city).desired_width(w));
             });
@@ -809,18 +794,51 @@ impl SetupScreen {
                 self.gstin_hint(ui);
             });
             field(ui, col, "State", |ui, w| self.draw_state_box(ui, w));
-            field(ui, col, "GST filing", |ui, w| {
-                egui::ComboBox::from_id_salt("setup-filing")
-                    .width(w)
-                    .selected_text(self.filing.label())
-                    .show_ui(ui, |ui| {
-                        for filing in [GstFiling::Monthly, GstFiling::Quarterly] {
-                            ui.selectable_value(&mut self.filing, filing, filing.label());
-                        }
-                    });
-            });
+            field(ui, col, "GST filing", |ui, w| self.draw_filing_box(ui, w));
         });
         self.draw_company_dates(ui, col);
+    }
+
+    /// The entity type list of the company step.
+    fn draw_kind_box(&mut self, ui: &mut egui::Ui, w: f32) {
+        let kind_box = egui::ComboBox::from_id_salt("setup-kind")
+            .width(w)
+            .selected_text(kind_label(self.kind))
+            .show_ui(ui, |ui| {
+                for kind in [
+                    EntityKind::Company,
+                    EntityKind::Llp,
+                    EntityKind::Partnership,
+                    EntityKind::Proprietorship,
+                    EntityKind::Other,
+                ] {
+                    ui.selectable_value(&mut self.kind, kind, kind_label(kind));
+                }
+            });
+        crate::ui::a11y::name(
+            ui,
+            &kind_box.response,
+            egui::accesskit::Role::ComboBox,
+            "Type",
+        );
+    }
+
+    /// The GST filing list of the company step.
+    fn draw_filing_box(&mut self, ui: &mut egui::Ui, w: f32) {
+        let filing_box = egui::ComboBox::from_id_salt("setup-filing")
+            .width(w)
+            .selected_text(self.filing.label())
+            .show_ui(ui, |ui| {
+                for filing in [GstFiling::Monthly, GstFiling::Quarterly] {
+                    ui.selectable_value(&mut self.filing, filing, filing.label());
+                }
+            });
+        crate::ui::a11y::name(
+            ui,
+            &filing_box.response,
+            egui::accesskit::Role::ComboBox,
+            "GST filing",
+        );
     }
 
     /// The State list of the company step, outlined in red when it disagrees with the GSTIN.
@@ -838,6 +856,12 @@ impl SetupScreen {
                     ui.selectable_value(&mut self.state, Some(state), label);
                 }
             });
+        crate::ui::a11y::name(
+            ui,
+            &state_box.response,
+            egui::accesskit::Role::ComboBox,
+            "State",
+        );
         let mismatch = self.state.map(|s| check_gstin(&self.gstin, s));
         if matches!(mismatch, Some(GstinCheck::Mismatch { .. })) {
             outline_bad(ui, state_box.response.rect);

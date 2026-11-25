@@ -163,6 +163,15 @@ pub fn create_company(
     clock: Clock,
     ai: AiTier,
 ) -> Result<(Api, Option<String>), String> {
+    // The default file lives in `~/Documents/Ledgerly/`, which a new computer does not have yet.
+    if let Some(folder) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
+        std::fs::create_dir_all(folder).map_err(|e| {
+            format!(
+                "could not make the folder {} for the company file: {e}",
+                folder.display()
+            )
+        })?;
+    }
     let mut api = Api::create(path, company, clock).map_err(|e| e.to_string())?;
     let note = match api.set_ai_tier(ai) {
         Ok(Outcome::Value(())) => None,

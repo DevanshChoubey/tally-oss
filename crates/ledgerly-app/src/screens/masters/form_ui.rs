@@ -300,7 +300,15 @@ fn switch_row(ui: &mut Ui, span: u8, label: &str, value: &mut bool) {
             vec2(ui.available_width(), FIELD_HEIGHT),
             Layout::left_to_right(Align::Center),
             |ui| {
-                ui.checkbox(value, "On");
+                // The box reads "On"; a screen reader is told which field it switches.
+                let response = ui.checkbox(value, "On");
+                crate::ui::a11y::name_selected(
+                    ui,
+                    &response,
+                    egui::accesskit::Role::CheckBox,
+                    *value,
+                    label,
+                );
             },
         );
     });
@@ -342,7 +350,7 @@ fn choose_opt<T: Copy + PartialEq>(
         .and_then(|c| options.iter().find(|(v, _)| *v == c))
         .map_or(none_label, |(_, name)| name.as_str());
     fld(ui, span, label, |ui| {
-        egui::ComboBox::from_id_salt(salt)
+        let combo = egui::ComboBox::from_id_salt(salt)
             .selected_text(shown)
             .width(ui.available_width())
             .height(FIELD_HEIGHT * 8.0)
@@ -352,6 +360,7 @@ fn choose_opt<T: Copy + PartialEq>(
                     ui.selectable_value(&mut *current, Some(*value), name.as_str());
                 }
             });
+        crate::ui::a11y::name(ui, &combo.response, egui::accesskit::Role::ComboBox, label);
     });
 }
 
@@ -369,7 +378,7 @@ fn choose_one<T: Copy + PartialEq>(
         .find(|(v, _)| *v == *current)
         .map_or("", |(_, name)| *name);
     fld(ui, span, label, |ui| {
-        egui::ComboBox::from_id_salt(salt)
+        let combo = egui::ComboBox::from_id_salt(salt)
             .selected_text(shown)
             .width(ui.available_width())
             .show_ui(ui, |ui| {
@@ -377,6 +386,7 @@ fn choose_one<T: Copy + PartialEq>(
                     ui.selectable_value(&mut *current, *value, *name);
                 }
             });
+        crate::ui::a11y::name(ui, &combo.response, egui::accesskit::Role::ComboBox, label);
     });
 }
 

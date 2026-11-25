@@ -882,7 +882,12 @@ impl VoucherEntryScreen {
             }
         }
         self.draw_create_form(ui, masters);
-        self.focus_pending = false;
+        // The bill-wise popup's fields are drawn only once the engine has sent the open bills,
+        // some frames after Enter on the amount: the keyboard is asked for until they are there.
+        let waiting_for_bills = matches!(self.focus, Field::Bill(_))
+            && self.panel.is_some()
+            && self.open_bills().is_none();
+        self.focus_pending = waiting_for_bills;
         if save_clicked {
             self.save(masters);
         }

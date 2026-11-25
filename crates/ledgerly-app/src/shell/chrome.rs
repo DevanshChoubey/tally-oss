@@ -291,17 +291,29 @@ pub(super) fn key_bar(
             ui.add_space(ENTRY_GAP - KEY_GAP);
         }
         for (keys, label) in hints {
-            // The right end needs room; entries that do not fit are left out.
-            if ui.available_width() < RIGHT_END_WIDTH {
+            // The right end needs room; entries that do not fit are left out. The entry is
+            // measured in a hidden copy first, since its own width counts against the room.
+            let entry = |ui: &mut Ui| {
+                keycap::keycap(ui, keys);
+                ui.label(
+                    RichText::new(label.as_str())
+                        .size(TEXT_META)
+                        .color(t.text_2),
+                );
+                ui.add_space(ENTRY_GAP - KEY_GAP);
+            };
+            let mut probe = ui.new_child(
+                egui::UiBuilder::new()
+                    .max_rect(ui.available_rect_before_wrap())
+                    .layout(egui::Layout::left_to_right(egui::Align::Center))
+                    .invisible(),
+            );
+            probe.spacing_mut().item_spacing.x = KEY_GAP;
+            entry(&mut probe);
+            if ui.available_width() - probe.min_rect().width() < RIGHT_END_WIDTH {
                 break;
             }
-            keycap::keycap(ui, keys);
-            ui.label(
-                RichText::new(label.as_str())
-                    .size(TEXT_META)
-                    .color(t.text_2),
-            );
-            ui.add_space(ENTRY_GAP - KEY_GAP);
+            entry(ui);
         }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             ui.spacing_mut().item_spacing.x = KEY_GAP;
@@ -389,5 +401,91 @@ mod tab_strip_order {
             new.expect("New tab is drawn"),
         );
         assert!(close < new, "Close tab at {close}, New tab at {new}");
+    }
+}
+
+#[cfg(test)]
+mod key_bar_fit {
+    //! The key bar drops entries that do not fit instead of drawing over its right end.
+    //!
+    //! provenance: derived from the mock's key bar (`design/mock-v2/index.html`, `.keys`): its
+    //! entries and the right end ("Hold Alt or Ctrl for more", Ctrl+K, ?) never overlap. A cold
+    //! start of the release binary at 1280 points wide showed "Enter Open" drawn over "Hold Alt or
+    //! Ctrl for more" on Home (2026-11-26); the check is that no two texts on the bar overlap.
+    #![allow(clippy::expect_used, reason = "test code")]
+
+    use super::*;
+
+    fn text_rects(shapes: &[egui::epaint::ClippedShape]) -> Vec<(String, egui::Rect)> {
+        fn walk(shape: &egui::Shape, out: &mut Vec<(String, egui::Rect)>) {
+            match shape {
+                egui::Shape::Text(t) => {
+                    out.push((
+                        t.galley.text().to_owned(),
+                        t.galley.rect.translate(t.pos.to_vec2()),
+                    ));
+                }
+                egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
+                egui::Shape::Noop
+                | egui::Shape::Circle(_)
+                | egui::Shape::Ellipse(_)
+                | egui::Shape::LineSegment { .. }
+                | egui::Shape::Path(_)
+                | egui::Shape::Band(_)
+                | egui::Shape::Rect(_)
+                | egui::Shape::Mesh(_)
+                | egui::Shape::QuadraticBezier(_)
+                | egui::Shape::CubicBezier(_)
+                | egui::Shape::Callback(_) => {}
+            }
+        }
+        let mut out = Vec::new();
+        for clipped in shapes {
+            walk(&clipped.shape, &mut out);
+        }
+        out
+    }
+
+    #[test]
+    fn no_two_texts_of_the_bar_overlap_at_1280_points() {
+        let hints: Vec<(String, String)> = [
+            ("F8", "Sales"),
+            ("F5", "Payment"),
+            ("F6", "Receipt"),
+            ("B", "Balance sheet"),
+            ("D", "Day book"),
+            ("G", "GST returns"),
+            ("M", "Masters"),
+            ("Ctrl+K", "Palette"),
+            ("J / K", "Review list"),
+            ("Enter", "Open"),
+        ]
+        .iter()
+        .map(|(k, l)| ((*k).to_owned(), (*l).to_owned()))
+        .collect();
+        let ctx = egui::Context::default();
+        crate::theme::apply(&ctx, crate::theme::ThemeKind::Light);
+        let input = egui::RawInput {
+            screen_rect: Some(egui::Rect::from_min_size(
+                egui::Pos2::ZERO,
+                egui::vec2(1280.0, 32.0),
+            )),
+            ..egui::RawInput::default()
+        };
+        let mut texts = Vec::new();
+        for _ in 0..2 {
+            let out = ctx.run_ui(input.clone(), |ui| {
+                let t = crate::ui::tokens(ui);
+                key_bar(ui, "Home", &hints, None, &t);
+            });
+            texts = text_rects(&out.shapes);
+            out.drop_without_applying_deltas();
+        }
+        assert!(texts.len() > 4, "{texts:?}");
+        for (i, (a, ra)) in texts.iter().enumerate() {
+            for (b, rb) in texts.iter().skip(i + 1) {
+                assert!(!ra.intersects(*rb), "{a:?} {ra:?} overlaps {b:?} {rb:?}");
+            }
+        }
     }
 }

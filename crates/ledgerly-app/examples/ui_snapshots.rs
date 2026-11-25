@@ -757,9 +757,6 @@ struct Shot {
     company: Fixture,
 }
 
-/// Frames the harness waits after a wheel scroll before its next input.
-const SCROLL_SETTLE_FRAMES: u32 = 90;
-
 /// Frames the `setup.done` shot waits after its keys, so the background company file job can
 /// finish.
 const SETUP_SETTLE_FRAMES: u32 = 900;
@@ -776,12 +773,17 @@ enum Inject {
     Key(Key, Modifiers),
     /// Text typed into the focused field.
     Text(&'static str),
-    /// A primary click at a point of the 1280 x 800 window, for a widget no key reaches (a combo
-    /// box's list, a checkbox the form gives no key to).
-    Click(f32, f32),
-    /// The mouse wheel turned at a point by the given egui wheel delta in points: negative scrolls
-    /// the list under it down, positive up.
-    Scroll(f32, f32, f32),
+    /// A primary click at the middle of the one widget with this accessible name (the name a
+    /// screen reader is told), waited for up to [`REACH_FRAMES_MAX`] frames. A flow uses it for a
+    /// widget no key reaches, so a change to the layout cannot move the click. Panics when no
+    /// widget, or more than one, has the name.
+    ClickNamed(&'static str),
+    /// As `ClickNamed` for a row of a scrolling list: while no widget has the name, the wheel is
+    /// turned one notch down over the widget named by the second string (a row that is on screen),
+    /// until the row shows. The list is never scrolled by a fixed amount.
+    ClickNamedScrolling(&'static str, &'static str),
+    /// As `ClickNamed`, near the left end of the widget, for one whose middle a popup covers.
+    ClickNamedStart(&'static str),
     /// Nothing for this many frames, for an answer from the worker that the next input needs (the
     /// open bills of a bill-wise party arrive some frames after the amount's Enter).
     Wait(u32),
@@ -894,6 +896,12 @@ struct Expect {
 /// Frames a `Seek` or `Expect` waits for a worker-loaded screen before it gives up.
 const REACH_FRAMES_MAX: u32 = 300;
 
+/// Frames a list takes to settle after one notch of [`Inject::ClickNamedScrolling`].
+const NOTCH_SETTLE_FRAMES: u32 = 30;
+
+/// Points one wheel notch of [`Inject::ClickNamedScrolling`] turns a list (negative: down).
+const SCROLL_NOTCH: f32 = -150.0;
+
 /// J presses a `Seek` may make before it gives up (more than any list of the sample company).
 const SEEK_PRESSES_MAX: u32 = 200;
 
@@ -1000,15 +1008,24 @@ impl Shot {
         self
     }
 
-    /// The same shot with a click at (`x`, `y`) after what came before it.
-    fn click(mut self, x: f32, y: f32) -> Self {
-        self.after.push(Inject::Click(x, y));
+    /// The same shot with a click on the widget named `name` after what came before it (see
+    /// [`Inject::ClickNamed`]).
+    fn click_named(mut self, name: &'static str) -> Self {
+        self.after.push(Inject::ClickNamed(name));
         self
     }
 
-    /// The same shot with the wheel turned at (`x`, `y`) by `wheel` points (negative scrolls down).
-    fn scroll(mut self, x: f32, y: f32, wheel: f32) -> Self {
-        self.after.push(Inject::Scroll(x, y, wheel));
+    /// The same shot with a click near the left end of the widget named `name` (see
+    /// [`Inject::ClickNamedStart`]).
+    fn click_named_start(mut self, name: &'static str) -> Self {
+        self.after.push(Inject::ClickNamedStart(name));
+        self
+    }
+
+    /// The same shot with a click on the row `name` of a scrolling list, in which the row
+    /// `visible` is on screen (see [`Inject::ClickNamedScrolling`]).
+    fn click_named_scrolling(mut self, name: &'static str, visible: &'static str) -> Self {
+        self.after.push(Inject::ClickNamedScrolling(name, visible));
         self
     }
 
@@ -1039,6 +1056,8 @@ fn shot(state: &'static str, keys: &[(Key, Modifiers)]) -> Shot {
 
 const NONE: Modifiers = Modifiers::NONE;
 const ESC: (Key, Modifiers) = (Key::Escape, Modifiers::NONE);
+/// Shift+Enter: back to the previous field of an entry screen.
+const SHIFT_ENTER: (Key, Modifiers) = (Key::Enter, Modifiers::SHIFT);
 
 /// The title Home takes while its comparison dialog (`home.nudge-open`) is open.
 const HOME_COMPARE_TITLE: &str = "Compare vouchers";
@@ -1218,25 +1237,22 @@ fn invoice_line(shot: Shot, item: &'static str, qty: &'static str, rate: &'stati
         .press(&[enter])
 }
 
-/// The create-ledger form filled as the mock draws it (index.html:1790-1810), by clicks, since no
-/// key opens the Under list or ticks its boxes: Alt+C opens the form, the name is typed, Under is
-/// Sundry Debtors (the list is scrolled to its end, where the scroll stops, so the row is always
-/// at the same place), Bill-wise and Party details are on, `gstin` is typed and the credit days
-/// are 30. The clicks are at points of the 1280 x 800 window; the form's rows do not move until
-/// Party details adds the GSTIN row.
+/// The create-ledger form filled as the mock draws it (index.html:1790-1810), by clicks on the
+/// named widgets, since no key opens the Under list or ticks its boxes: Alt+C opens the form, the
+/// name is typed, Under is Sundry Debtors (the list is scrolled until the row shows), Bill-wise and
+/// Party details are on, the credit days are 30 and `gstin` is typed.
 fn jadhav_form(state: &'static str, gstin: &'static str) -> Shot {
     shot(state, &[(Key::M, NONE), (Key::C, Modifiers::ALT)])
-        .click(456.0, 263.0)
+        .click_named("Name")
         .type_text("Jadhav Irrigation Services")
-        .click(780.0, 257.0)
-        .scroll(780.0, 400.0, -1200.0)
-        .click(744.0, 474.0)
-        .click(902.0, 263.0)
-        .click(262.0, 330.0)
+        .click_named("Under")
+        .click_named_scrolling("Sundry Debtors", "Bank Accounts")
+        .click_named("Bill-wise")
+        .click_named("Party details")
         // The credit days come before the GSTIN: its check line moves the rows below it.
-        .click(995.0, 327.0)
+        .click_named("Credit days")
         .type_text("30")
-        .click(457.0, 327.0)
+        .click_named("GSTIN")
         .type_text(gstin)
         .expect("Masters", None)
 }
@@ -1330,7 +1346,9 @@ fn light_shots() -> Vec<Shot> {
     vec![
         shot("home.default", &[]),
         // The possible-double-payment nudge's Compare button (rule D-02) opens the comparison.
-        shot("home.nudge-open", &[]).click(1176.0, 570.0),
+        shot("home.nudge-open", &[])
+            .click_named("Compare")
+            .expect_bar("Home", "Compare vouchers"),
         // Recent needs a choice first: open the balance sheet from the palette, go back, and
         // reopen the palette on the empty query (index.html:1115 lists recents there).
         shot("palette.default", &[palette])
@@ -1463,9 +1481,11 @@ fn light_shots() -> Vec<Shot> {
             .type_text("6500")
             .press(&[(Key::Enter, NONE), (Key::Enter, NONE)])
             .type_text("Freight, Vardhaman Logistics, LR 4471")
-            // The mock stops mid-entry with the keyboard back on row 1 (narration filled), so a
-            // click returns to the first particular.
-            .click(384.0, 324.0),
+            // The mock stops mid-entry with the keyboard back on row 1 (narration filled):
+            // Shift+Enter steps back from the narration to the amount and then to the ledger of
+            // the first particular.
+            .press(&[SHIFT_ENTER, SHIFT_ENTER])
+            .expect("Payment", None),
         // The mock's bill allocation: 1,50,000 to Vardhaman Logistics against VL/861.
         shot("payment.bill-wise", &[(Key::F5, NONE)])
             .type_text("Saptagiri")
@@ -1491,15 +1511,20 @@ fn light_shots() -> Vec<Shot> {
             // The bill popup opens with the first bill filled in full once the worker has sent
             // the open bills; the mock pays 2,00,000 against NST/1102 and 50,000 against NST/1145.
             .wait(120)
-            .click(1127.0, 388.0)
+            // The keyboard is on the first bill's amount, which holds the offered default.
             .press(&[(Key::End, NONE)])
             .press(&[(Key::Backspace, NONE); 12])
             .type_text("200000")
-            .click(1127.0, 448.0)
+            // Enter goes to the second bill, whose amount is empty.
+            .press(&[(Key::Enter, NONE)])
             .type_text("50000")
-            // Enter accepts the details; Enter on the empty second line goes to the narration.
+            // Enter on the last bill accepts the details; Enter on the empty second line goes to
+            // the narration.
             .press(&[(Key::Enter, NONE), (Key::Enter, NONE)])
-            .type_text("RTGS to Nilgiri Steel Traders"),
+            .type_text("RTGS to Nilgiri Steel Traders")
+            // The mock keeps the keyboard on the first particular, as `payment.default`.
+            .press(&[SHIFT_ENTER, SHIFT_ENTER])
+            .expect("Payment", None),
         // Godavari has two bank accounts, so Bank Reconciliation opens the chooser first; the
         // mock's statement is Saptagiri's (the first row), so Enter on the chooser opens it.
         shot("bank-chooser.default", &[palette])
@@ -1582,11 +1607,9 @@ fn light_shots() -> Vec<Shot> {
         // it) and the mock's 24 Gujarat chosen against the GSTIN's 27. The list is scrolled to its
         // end (where the scroll stops) and back up, so 24 is always at the same row.
         setup_shot("setup.gstin-error", 0)
-            .click(950.0, 286.0)
-            .scroll(950.0, 400.0, -400.0)
-            .scroll(950.0, 400.0, -400.0)
-            .scroll(950.0, 400.0, 207.0)
-            .click(930.0, 337.0),
+            .click_named("State")
+            .click_named_scrolling("24 Gujarat", "01 Jammu and Kashmir")
+            .expect_bar("Company setup", "Setup, step 2 of 7"),
         // A company with masters and no voucher: Home as it opens (index.html home.empty).
         shot("home.empty", &[]).on(Fixture::New),
         // The worker is held, so the first refresh of the tiles never answers: the skeleton.
@@ -1642,7 +1665,7 @@ fn light_shots() -> Vec<Shot> {
             .query("Integrity Certificate")
             .then(&[(Key::Enter, NONE)])
             .expect_bar("Audit", "Audit")
-            .click(941.0, 127.0)
+            .click_named("Edit log")
             .wait(30)
             .expect_bar("Audit", "Audit"),
         shot("audit.integrity", &[palette])
@@ -1712,7 +1735,7 @@ fn light_shots() -> Vec<Shot> {
             invoice_line(
                 shot("sales-invoice.period-locked", &[(Key::F8, NONE)])
                     .on(Fixture::Godavari)
-                    .click(360.0, 215.0)
+                    .click_named("Date")
                     .press(&[(Key::End, NONE)])
                     .press(&[(Key::Backspace, NONE); 12])
                     .type_text("28-10-2026")
@@ -1899,7 +1922,7 @@ fn light_shots() -> Vec<Shot> {
             .press(&[(Key::A, Modifiers::COMMAND)])
             // A click on the narration takes the keyboard off the ledger field, so its list no
             // longer covers the notes.
-            .click(820.0, 413.0)
+            .click_named_start("Narration")
             .expect("Contra", None),
         // A blank line ends the lines; Enter on the narration asks to save.
         three_lines(godavari_invoice(
@@ -1966,10 +1989,10 @@ fn s13_shots() -> Vec<Shot> {
             .query("Import from another app")
             .then(&[(Key::Enter, NONE)])
             .on(Fixture::Blank)
-            .click(720.0, 308.0)
+            .click_named("Port")
             .press(&[(Key::A, Modifiers::COMMAND)])
             .type_text("99999")
-            .click(1040.0, 308.0)
+            .click_named("Company in the other app")
             .type_text("Godavari Drip & Pump Works")
             .press(&[(Key::Enter, NONE)])
             .wait(20)
@@ -1982,7 +2005,7 @@ fn s13_shots() -> Vec<Shot> {
             .query("Import from another app")
             .then(&[(Key::Enter, NONE)])
             .on(Fixture::GodavariHeld)
-            .click(1040.0, 308.0)
+            .click_named("Company in the other app")
             .type_text("Godavari Drip & Pump Works")
             .press(&[(Key::Enter, NONE)])
             .wait(20)
@@ -1990,7 +2013,7 @@ fn s13_shots() -> Vec<Shot> {
         shot("import.refused", &[palette])
             .query("Import from another app")
             .then(&[(Key::Enter, NONE)])
-            .click(1040.0, 308.0)
+            .click_named("Company in the other app")
             .type_text("Godavari Drip & Pump Works")
             .press(&[(Key::Enter, NONE)])
             .wait(60)
@@ -1999,13 +2022,13 @@ fn s13_shots() -> Vec<Shot> {
             .query("Import from another app")
             .then(&[(Key::Enter, NONE)])
             .on(Fixture::Blank)
-            .click(400.0, 308.0)
+            .click_named("Host")
             .press(&[(Key::A, Modifiers::COMMAND)])
             .type_text("127.0.0.1")
-            .click(720.0, 308.0)
+            .click_named("Port")
             .press(&[(Key::A, Modifiers::COMMAND)])
             .type_text(fake_import_server_port())
-            .click(1040.0, 308.0)
+            .click_named("Company in the other app")
             .type_text("Godavari Drip & Pump Works")
             .press(&[(Key::Enter, NONE)])
             .wait(60)
@@ -2014,7 +2037,7 @@ fn s13_shots() -> Vec<Shot> {
             .query("Import from another app")
             .then(&[(Key::Enter, NONE)])
             .on(Fixture::Blank)
-            .click(1040.0, 308.0)
+            .click_named("Company in the other app")
             .type_text("Godavari Drip & Pump Works")
             .press(&[(Key::Enter, NONE)])
             .wait(60)
@@ -2133,7 +2156,7 @@ fn s13_shots() -> Vec<Shot> {
             .query("Integrity Certificate")
             .then(&[(Key::Enter, NONE)])
             .expect_bar("Audit", "Audit")
-            .click(1195.0, 127.0)
+            .click_named("Edits after lock")
             .wait(60)
             .expect_bar("Audit", "Audit"),
         shot("masters.loading", &[(Key::M, NONE)]).on(Fixture::GodavariHeld),
@@ -2197,6 +2220,12 @@ struct Snapshots {
     reach_frames: u32,
     /// J presses the front `Seek` has made so far.
     seek_presses: u32,
+    /// The named widgets of the last frame, for [`Inject::ClickNamed`].
+    named: Vec<ledgerly_app::ui::capture::NamedRect>,
+    /// Where the wheel turns for the front `ClickNamedScrolling`, once its anchor row was found.
+    scroll_at: Option<egui::Pos2>,
+    /// True while the modifiers of an injected key are still reported as held.
+    modifiers_held: bool,
 }
 
 impl Snapshots {
@@ -2272,6 +2301,59 @@ impl Snapshots {
         );
     }
 
+    /// One step of a `ClickNamed`: the click once exactly one widget has the name, otherwise a
+    /// wait for the screen to draw it.
+    fn click_named_step(
+        &mut self,
+        name: &'static str,
+        scroll_over: Option<&'static str>,
+        at_start: bool,
+        raw_input: &mut egui::RawInput,
+    ) {
+        let found = if at_start {
+            ledgerly_app::ui::capture::find_named_start(&self.named, name)
+        } else {
+            ledgerly_app::ui::capture::find_named(&self.named, name)
+        };
+        match found {
+            Ok(pos) => {
+                self.inject.pop_front();
+                self.reach_frames = 0;
+                self.scroll_at = None;
+                self.gap = 6;
+                push_click(raw_input, pos);
+            }
+            Err(e) => {
+                self.reach_frames += 1;
+                assert!(
+                    self.reach_frames < REACH_FRAMES_MAX,
+                    "{}: {e}",
+                    self.shots[self.index].label(),
+                );
+                // A row of a list that has not scrolled to it yet: one notch, then a pause for
+                // the scroll to settle.
+                if let Some(over) = scroll_over
+                    && let Some(pos) = self
+                        .scroll_at
+                        .or_else(|| ledgerly_app::ui::capture::find_named(&self.named, over).ok())
+                {
+                    // The wheel stays where the anchor row was found, over the list, after
+                    // that row has itself scrolled out of view.
+                    self.scroll_at = Some(pos);
+                    raw_input.events.push(Event::PointerMoved(pos));
+                    raw_input.events.push(Event::MouseWheel {
+                        unit: egui::MouseWheelUnit::Point,
+                        delta: egui::vec2(0.0, SCROLL_NOTCH),
+                        phase: egui::TouchPhase::Move,
+                        source: egui::MouseWheelSource::Unknown,
+                        modifiers: Modifiers::NONE,
+                    });
+                    self.gap = NOTCH_SETTLE_FRAMES;
+                }
+            }
+        }
+    }
+
     /// Closes the open company and opens `company` on a new shell, as the start of the run does.
     fn reopen(&mut self, ctx: &egui::Context, company: Fixture) -> Stage {
         // Scroll offsets, open popups, collapsing headers and the focus live in the egui context,
@@ -2326,10 +2408,34 @@ impl Snapshots {
     }
 }
 
+/// A primary click at `pos`.
+fn push_click(raw_input: &mut egui::RawInput, pos: egui::Pos2) {
+    // The capture window has no window manager, so it is never given the keyboard; egui reports
+    // no widget as focused then, and a click could not move the keyboard. A click on a window is
+    // what gives it the keyboard.
+    raw_input.focused = true;
+    raw_input.events.push(Event::PointerMoved(pos));
+    for pressed in [true, false] {
+        raw_input.events.push(Event::PointerButton {
+            pos,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: Modifiers::NONE,
+        });
+    }
+}
+
 impl eframe::App for Snapshots {
     fn raw_input_hook(&mut self, _ctx: &egui::Context, raw_input: &mut egui::RawInput) {
         // No hover from the real pointer or an earlier click may reach a capture.
         ledgerly_app::ui::capture::park_pointer(raw_input);
+        if self.modifiers_held {
+            // The modifiers of the last injected key are let go a frame after it.
+            raw_input
+                .events
+                .push(Event::ModifiersChanged(Modifiers::NONE));
+            self.modifiers_held = false;
+        }
         if self.gap > 0 {
             self.gap -= 1;
             return;
@@ -2347,23 +2453,44 @@ impl eframe::App for Snapshots {
                 self.expect_step(expect);
                 return;
             }
+            Some(Inject::ClickNamed(name)) => {
+                self.click_named_step(name, None, false, raw_input);
+                return;
+            }
+            Some(Inject::ClickNamedScrolling(name, visible)) => {
+                self.click_named_step(name, Some(visible), false, raw_input);
+                return;
+            }
+            Some(Inject::ClickNamedStart(name)) => {
+                self.click_named_step(name, None, true, raw_input);
+                return;
+            }
             Some(_) | None => {}
         }
         if let Some(item) = self.inject.pop_front() {
             // A wheel scroll is animated over several frames; the next click waits for it to end.
             self.gap = match item {
-                Inject::Scroll(..) => SCROLL_SETTLE_FRAMES,
                 Inject::Wait(frames) => frames,
-                Inject::Seek(_) | Inject::SeekBy(..) | Inject::Expect(_) => 0,
+                Inject::Seek(_)
+                | Inject::SeekBy(..)
+                | Inject::Expect(_)
+                | Inject::ClickNamed(_)
+                | Inject::ClickNamedStart(_)
+                | Inject::ClickNamedScrolling(..) => 0,
                 Inject::HoldWorker
                 | Inject::Key(..)
                 | Inject::Text(_)
-                | Inject::Click(..)
                 | Inject::ScriptFile(_)
                 | Inject::ScriptSave(_) => 6,
             };
             match item {
                 Inject::Key(key, modifiers) => {
+                    // A real keyboard reports the held modifiers as state too, and some screens
+                    // read that state (Shift+Enter is "back" by `modifiers.shift`).
+                    if modifiers != Modifiers::NONE {
+                        raw_input.events.push(Event::ModifiersChanged(modifiers));
+                        self.modifiers_held = true;
+                    }
                     for pressed in [true, false] {
                         raw_input.events.push(Event::Key {
                             key,
@@ -2375,7 +2502,13 @@ impl eframe::App for Snapshots {
                     }
                 }
                 Inject::Text(text) => raw_input.events.push(Event::Text(text.to_owned())),
-                Inject::Wait(_) | Inject::Seek(_) | Inject::SeekBy(..) | Inject::Expect(_) => {}
+                Inject::Wait(_)
+                | Inject::Seek(_)
+                | Inject::SeekBy(..)
+                | Inject::Expect(_)
+                | Inject::ClickNamed(_)
+                | Inject::ClickNamedStart(_)
+                | Inject::ClickNamedScrolling(..) => {}
                 Inject::HoldWorker => {
                     self.held = self.shell.app_ctx_mut().api.as_ref().map(ApiWorker::hold);
                 }
@@ -2385,38 +2518,13 @@ impl eframe::App for Snapshots {
                 Inject::ScriptSave(target) => {
                     ledgerly_app::ui::dialogs::script_save_file(target.path(&self.out));
                 }
-                Inject::Scroll(x, y, wheel) => {
-                    raw_input.events.push(Event::PointerMoved(egui::pos2(x, y)));
-                    raw_input.events.push(Event::MouseWheel {
-                        unit: egui::MouseWheelUnit::Point,
-                        delta: egui::vec2(0.0, wheel),
-                        phase: egui::TouchPhase::Move,
-                        source: egui::MouseWheelSource::Unknown,
-                        modifiers: Modifiers::NONE,
-                    });
-                }
-                Inject::Click(x, y) => {
-                    // The capture window has no window manager, so it is never given the keyboard;
-                    // egui reports no widget as focused then, and a click could not move the
-                    // keyboard. A click on a window is what gives it the keyboard.
-                    raw_input.focused = true;
-                    let pos = egui::pos2(x, y);
-                    raw_input.events.push(Event::PointerMoved(pos));
-                    for pressed in [true, false] {
-                        raw_input.events.push(Event::PointerButton {
-                            pos,
-                            button: egui::PointerButton::Primary,
-                            pressed,
-                            modifiers: Modifiers::NONE,
-                        });
-                    }
-                }
             }
         }
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         self.shell.show(ui);
+        self.named = ledgerly_app::ui::capture::collect_named(ui.ctx());
         ui.ctx().request_repaint();
         self.frames += 1;
         match self.stage {
@@ -2576,6 +2684,9 @@ fn main() -> eframe::Result<()> {
         reach_frames: 0,
         seek_presses: 0,
         held,
+        named: Vec::new(),
+        modifiers_held: false,
+        scroll_at: None,
     };
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
@@ -2586,6 +2697,10 @@ fn main() -> eframe::Result<()> {
     eframe::run_native(
         "Ledgerly snapshots",
         options,
-        Box::new(|_cc| Ok(Box::new(app))),
+        Box::new(|cc| {
+            // Names the widgets, so a flow can click one by the name a screen reader is told.
+            cc.egui_ctx.enable_accesskit();
+            Ok(Box::new(app))
+        }),
     )
 }

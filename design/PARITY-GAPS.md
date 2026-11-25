@@ -174,6 +174,10 @@ Classes:
   amount's Enter and takes the keyboard, so the narration can only be typed after it; the mock's
   "NEFT, against VL/861" is a filled narration the app does not write for the user.
 - Fixed in s14: the `payment.default` capture ends mid-entry with the keyboard back on row 1, as the mock.
+- **DELIBERATE** `payment.overdraft` shows the same state as the mock (narration typed, the warning that
+  Mula Valley Co-op Bank goes below zero, shortfall 36,000.00); the warning's words differ: the mock
+  names a per-company policy (Block, Warn, Allow) and says "no overdraft limit in its master", but the
+  company has no such policy yet, so ours says so (a claim of a setting that does not exist would be false).
 - **DELIBERATE** the mid-entry lilac fill is not drawn for a row the keyboard is not on: it would mislead.
 - **DELIBERATE** the Mode is bare text once set but a box with a list while empty or focused; the
   mock's "NEFT / UPI" names two instruments the engine stores as one each.
@@ -299,3 +303,17 @@ Credit (`ledgerly_reports::print_text` places the engine's figures only).
   wrong picture.
 - **DELIBERATE** the open-company busy line ("Working on the company file...", `shell/welcome.rs`) has
   no mock state; the masters balance hint is hover text because the mock shows dashes.
+
+## Real launch path (cold start, `s15-cold-start-sheet.png`)
+
+Seen in the release binary under a nested X server with an empty config and data directory.
+
+- **DELIBERATE** the title bar shows today's date and "AI: not set up" on a cold start; the fixture
+  captures pin the date to 21 Nov 2026 and show "AI on this computer". Both are the app's real state.
+- **DELIBERATE** the key bar drops the hint that does not fit before it would overlap the right-hand
+  hint ("Enter Open" on Home at 1280 points; the mock shows it). The mock's bar is wider than the
+  app's text at that size; overlapping text would be worse than a missing hint.
+- **FIXED** the first company is created in `~/Documents/Ledgerly`, which did not exist on a new
+  machine (Finish failed with "No such file or directory"); the folder is now created first.
+- **FIXED** the bill-wise popup on Payment did not take the keyboard when the open bills arrived after
+  the popup opened.
