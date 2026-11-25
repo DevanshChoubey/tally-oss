@@ -540,6 +540,17 @@ pub fn mode_label(kind: InstrumentKind) -> &'static str {
     }
 }
 
+/// The instruments a mode can be, in the order the chooser lists them.
+pub const MODES: [InstrumentKind; 7] = [
+    InstrumentKind::Cheque,
+    InstrumentKind::Neft,
+    InstrumentKind::Rtgs,
+    InstrumentKind::Imps,
+    InstrumentKind::Upi,
+    InstrumentKind::Card,
+    InstrumentKind::Other,
+];
+
 /// Reads a typed mode: any start of the seven labels, in any case; `None` when it is empty or
 /// names none of them.
 #[must_use]
@@ -548,15 +559,7 @@ pub fn parse_mode(text: &str) -> Option<InstrumentKind> {
     if t.is_empty() {
         return None;
     }
-    [
-        InstrumentKind::Cheque,
-        InstrumentKind::Neft,
-        InstrumentKind::Rtgs,
-        InstrumentKind::Imps,
-        InstrumentKind::Upi,
-        InstrumentKind::Card,
-        InstrumentKind::Other,
-    ]
-    .into_iter()
-    .find(|k| mode_label(*k).to_lowercase().starts_with(&t))
+    MODES
+        .into_iter()
+        .find(|k| mode_label(*k).to_lowercase().starts_with(&t))
 }

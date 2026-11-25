@@ -5,12 +5,13 @@
 //! Dr / Cr switch. The type-ahead list floats under the field it belongs to.
 
 use egui::{Id, Key, Rect, Response, Ui};
+use ledgerly_core::SignedAmount;
 use ledgerly_model::Masters;
 
 use super::amount::eval_amount;
 use super::create::{FormAnswer, create_form_ui};
-use super::display::{format_amount, format_signed, side_label};
-use super::draft::{Balance, DraftRow, LedgerRef};
+use super::display::{format_amount, format_balance, format_signed, side_label};
+use super::draft::{Balance, DraftRow, LedgerRef, MODES, mode_label, parse_mode};
 use super::keys::{UiEvent, read_keys};
 use super::kind::EntryKind;
 use super::search::PickerItem;
@@ -44,6 +45,9 @@ const DOUBLE_COLS: [Col; 4] = [
 
 /// Room kept for the "= amount" aid beside a typed expression.
 const AID_WIDTH: f32 = 96.0;
+
+/// Room kept beside the Mode box for the arrow that opens the list of instruments.
+const MODE_ARROW: f32 = 52.0;
 
 /// Where parts of the screen were drawn in the last frame, for layout tests.
 #[derive(Debug, Clone, Default)]
@@ -177,7 +181,19 @@ fn amount_field(ui: &mut Ui, cx: &mut Cx<'_>, base: Id, i: usize, row: &mut Draf
         eval_amount(&row.amount_text).ok()
     };
     let width = entry.map(|_| (ui.available_width() - AID_WIDTH).max(80.0));
-    text_field(ui, cx, &spec, &mut row.amount_text, Look::Cell, true, width);
+    // Once the keyboard has left the line, a plain amount reads as the mock writes it
+    // (`6,500.00`): the parsed value, formatted. While it is edited, or when it does not parse,
+    // the typed text stays. The draft keeps what was typed.
+    let committed = if plain && cx.focus != spec.field && !row.amount_text.trim().is_empty() {
+        eval_amount(&row.amount_text).ok().map(format_amount)
+    } else {
+        None
+    };
+    if let Some(mut shown) = committed {
+        text_field(ui, cx, &spec, &mut shown, Look::Cell, true, width);
+    } else {
+        text_field(ui, cx, &spec, &mut row.amount_text, Look::Cell, true, width);
+    }
     if let Some(paise) = entry {
         cell_text(ui, &format!("= {}", format_amount(paise)));
     }
@@ -202,6 +218,16 @@ fn group_name(masters: &Masters, row: &DraftRow) -> Option<String> {
     }
 }
 
+/// An account number as the mock writes it (`XXXX 4471`): only the last four digits are shown.
+fn masked_account(number: &str) -> String {
+    let digits: Vec<char> = number.chars().filter(|c| !c.is_whitespace()).collect();
+    if digits.is_empty() {
+        return String::new();
+    }
+    let tail: String = digits.iter().skip(digits.len().saturating_sub(4)).collect();
+    format!("XXXX {tail}")
+}
+
 /// The titles of the open list.
 const LIST_CAPTION: &str = "Ledgers";
 
@@ -221,17 +247,46 @@ impl VoucherEntryScreen {
         }
     }
 
+    /// The line under the Account field (index.html:1394): the bank's masked account number, then
+    /// "balance now ... (engine)": the host's balance for the ledger, else the engine's answer for
+    /// the voucher as it stands. `None` while neither is known, so no figure is ever guessed.
+    fn account_hint(&self, masters: &Masters, held: Option<SignedAmount>) -> Option<String> {
+        let id = match self.draft.rows.first()?.ledger.as_ref()? {
+            LedgerRef::Chosen(id) => *id,
+            LedgerRef::Pending(_) => return None,
+        };
+        let now = held.or_else(|| {
+            let (account, voucher) = self.balance_request(masters)?;
+            match self.extras.balance_for(account, &voucher)? {
+                BalanceShown::Change(change) => Some(change.now),
+                BalanceShown::Missing(_) => None,
+            }
+        })?;
+        let number = masters
+            .ledgers
+            .get(&id)
+            .and_then(|l| l.bank.as_ref())
+            .map(|b| masked_account(&b.account_number))
+            .filter(|n| !n.is_empty());
+        let balance = format!("balance now \u{20b9}{} (engine)", format_signed(now));
+        Some(match number {
+            Some(n) => format!("{n} \u{b7} {balance}"),
+            None => balance,
+        })
+    }
+
     /// The head: the date, and for a single-entry voucher the account across two columns.
     #[expect(
         clippy::too_many_lines,
         reason = "one head row drawn left to right; splitting would only pass the same borrows around"
     )]
-    fn draw_head(&mut self, ui: &mut Ui, base: Id, cx: &mut Cx<'_>) {
+    fn draw_head(&mut self, ui: &mut Ui, base: Id, masters: &Masters, cx: &mut Cx<'_>) {
         let single = self.draft.is_single_entry();
         let account_balance = match self.draft.rows.first().and_then(|r| r.ledger.as_ref()) {
             Some(LedgerRef::Chosen(id)) => self.balances.get(id).copied(),
             Some(LedgerRef::Pending(_)) | None => None,
         };
+        let account_hint = self.account_hint(masters, account_balance);
         let date_spec = FieldSpec {
             id: base.with("date"),
             field: Field::Date,
@@ -290,10 +345,8 @@ impl VoucherEntryScreen {
                             );
                             // The line is always there, so the fields under it never move when a
                             // balance appears.
-                            let text = account_balance.map_or_else(String::new, |b| {
-                                format!("balance now {} (engine)", format_signed(b))
-                            });
-                            sheet::hint(ui, if text.is_empty() { " " } else { &text });
+                            let text = account_hint.as_deref().unwrap_or(" ");
+                            sheet::hint(ui, text);
                         },
                     );
                     fields.push(("Account", shown.response.rect));
@@ -309,15 +362,34 @@ impl VoucherEntryScreen {
                         1,
                         |ui| sheet::caption(ui, "Mode", None),
                         |ui| {
-                            text_field(
-                                ui,
-                                cx,
-                                &mode_spec,
-                                &mut self.draft.mode_text,
-                                Look::Boxed,
-                                false,
-                                None,
-                            );
+                            // The mock's mode is a choice among the instruments: the box takes
+                            // a typed start of a name (the keyboard path) and the arrow lists
+                            // them all.
+                            ui.horizontal(|ui| {
+                                let room = (ui.available_width() - MODE_ARROW).max(60.0);
+                                text_field(
+                                    ui,
+                                    cx,
+                                    &mode_spec,
+                                    &mut self.draft.mode_text,
+                                    Look::Boxed,
+                                    false,
+                                    Some(room),
+                                );
+                                egui::ComboBox::from_id_salt(base.with("mode-list"))
+                                    .selected_text("")
+                                    .width(24.0)
+                                    .show_ui(ui, |ui| {
+                                        for kind in MODES {
+                                            let label = mode_label(kind);
+                                            let on =
+                                                parse_mode(&self.draft.mode_text) == Some(kind);
+                                            if ui.selectable_label(on, label).clicked() {
+                                                self.choose_mode(kind);
+                                            }
+                                        }
+                                    });
+                            });
                         },
                     );
                     fields.push(("Mode", shown.response.rect));
@@ -491,9 +563,9 @@ impl VoucherEntryScreen {
         Some((
             vec![
                 (label.to_owned(), format_amount(total)),
-                ("Balance now".to_owned(), format_signed(change.now)),
+                ("Balance now".to_owned(), format_balance(change.now)),
             ],
-            format_signed(change.after),
+            format_balance(change.after),
         ))
     }
 
@@ -615,7 +687,7 @@ impl VoucherEntryScreen {
                 anchor: &mut anchor,
             };
             sheet::sheet(ui, |ui| {
-                self.draw_head(ui, base, &mut cx);
+                self.draw_head(ui, base, masters, &mut cx);
                 self.draw_table(ui, base, masters, &mut cx);
                 self.draw_foot(ui, base, masters, &mut cx);
             });
@@ -642,5 +714,19 @@ impl VoucherEntryScreen {
             ui.ctx().request_repaint();
         }
         action
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::masked_account;
+
+    // provenance: the mock writes the bank's account as `XXXX 4471` (index.html:537); the
+    // sample's number 99990004471 ends in those four digits. derived: the last four characters.
+    #[test]
+    fn an_account_number_shows_only_its_last_four_digits() {
+        assert_eq!(masked_account("99990004471"), "XXXX 4471");
+        assert_eq!(masked_account("12 34"), "XXXX 1234");
+        assert_eq!(masked_account(""), "");
     }
 }

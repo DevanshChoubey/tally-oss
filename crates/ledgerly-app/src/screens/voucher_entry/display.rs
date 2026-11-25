@@ -37,3 +37,34 @@ pub(super) fn format_signed(amount: SignedAmount) -> String {
         side_label(amount.side)
     )
 }
+
+/// A balance the way the mock's foot box writes it (`inr(now)`, index.html line 1409): the
+/// amount alone for a debit balance, a leading minus for a credit one. The side is not named; the
+/// account line above says Dr or Cr.
+pub(super) fn format_balance(amount: SignedAmount) -> String {
+    match amount.side {
+        DrCr::Cr if !amount.amount.is_zero() => format!("-{}", format_amount(amount.amount)),
+        DrCr::Cr | DrCr::Dr => format_amount(amount.amount),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // provenance: the mock's overdraft state (index.html payScreen, line 1409 and the capture
+    // payment.overdraft): a balance of 36,000 Cr after the payment is written -36,000.00, and the
+    // Saptagiri balance of 7,27,524.50 Dr is written 7,27,524.50. derived: lakh grouping is 3
+    // digits then pairs.
+    #[test]
+    fn the_foot_box_writes_a_debit_plain_and_a_credit_with_a_minus() {
+        assert_eq!(
+            format_balance(SignedAmount::dr(Paise::new(72_752_450))),
+            "7,27,524.50"
+        );
+        assert_eq!(
+            format_balance(SignedAmount::cr(Paise::new(3_600_000))),
+            "-36,000.00"
+        );
+    }
+}

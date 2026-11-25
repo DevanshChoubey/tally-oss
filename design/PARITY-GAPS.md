@@ -469,17 +469,26 @@ the selected one.
   (`Api::open_bills`); Enter accepts when the bills add up to the line, none typed means On
   Account. The overdraft note comes from `Api::balance_change` (Cr after). The Mode field is
   stored on the bank line (`BankAllocation.instrument`).
-- **gap: the overdraft shot's amounts.** `payment.overdraft` pays Nilgiri Steel Traders 2,50,000
-  (two bills, 2,00,000 and 50,000), which takes the bank into Cr from the sample's balances.
-  The amount reads "250000.00" while typed and the foot shows "36,000.00 Cr", where the mock
-  shows "2,50,000.00" and "-36,000.00".
+- **closed (s12): the amounts.** A committed amount reads with Indian grouping ("2,50,000.00");
+  while the keyboard is on the field the typed text stays. The foot box writes a debit balance
+  plain and a credit one with a minus ("-36,000.00") as the mock does (`inr(after)`), from the
+  engine's `Api::balance_change`. Remaining: the overdraft total is not drawn in the bad colour
+  the mock gives it (index.html:1409).
 - **gap: the popup shows its narration empty.** The mock draws the popup over a filled narration;
   here the narration is entered after the popup closes, so the shot with the popup open has none.
-- **by design: the Mode is a typed field** (NEFT, RTGS, UPI, Cheque ...) after a bank account, not
-  the mock's read-only "NEFT / UPI"; a cash account has none. No overdraft limit or block policy
-  exists, so saving is allowed and the note says so.
-- **gap: the account hint** under the Account field is not drawn in the capture (the balance sits
-  in the foot box); the mock's "XXXX 4471 · balance now ..." line is not built.
+- **changed (s12): the Mode is a box with a list of the seven instruments.** The mock draws a
+  read-only "NEFT / UPI"; here the box still takes a typed start of a name (the keyboard path) and
+  an arrow beside it lists Cheque, NEFT, RTGS, IMPS, UPI, Card and Other. The value stored is the
+  same `InstrumentKind` on the bank line. A cash account has none. No overdraft limit or block
+  policy exists, so saving is allowed and the note says so.
+- **closed (s12): the account hint** under the Account field reads "XXXX 4471 · balance now
+  ₹7,27,524.50 Dr (engine)": the bank's number masked to its last four digits, and the engine's
+  balance. It appears once a line makes a voucher the engine can answer for.
+- **gap (s12): the payment shot's end state.** The mock draws the screen mid-entry: row 1 lilac
+  and an empty "Next ledger, or Enter on empty to finish" row 2, narration filled. Our capture is
+  taken after Enter on the empty row, so row 2 is gone and the narration has the keyboard.
+- **gap (s12): the group reads "Direct Expenses"** (the sample's master) where the mock's reads
+  "Direct expenses"; the sample company's group names are shared with other screens.
 - **closed (s9): the number and the date.** The sample's voucher types carry the mock's prefixes
   (SI/, PB/, PY/, RC/, JV/, width 4) through `Command::AlterVoucherType`; titles read PY/0319.
   The date reads 21 Nov 2026 and rates 3,850.00 until the keyboard is on the field.
