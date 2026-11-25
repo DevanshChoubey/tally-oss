@@ -323,12 +323,16 @@ key = "disc"
 name = "Discount received"
 group = "IndirectIncomes"
 
-# The mock's "Opening stock" ledger (index.html:549, 9,12,000 Dr, expense nature): the stock on
-# hand on 1 Apr, expensed against the closing stock the engine adds to the profit.
+# The mock's "Opening stock" ledger (index.html:549, 9,12,000 Dr): the stock on hand on 1 Apr.
+# It is a ledger under Stock-in-Hand with the amount as its opening balance, the way the
+# accounting product enters opening stock by hand (TallyPrime help, "How to enter the opening and
+# closing stock manually?", https://help.tallysolutions.com/stock-items-faq/, read 2026-11-25).
+# The profit and loss shows it as the trading account's opening stock and the balance sheet
+# deducts it from the profit; an expense or income ledger cannot carry an opening balance.
 [[ledger]]
 key = "ostock"
 name = "Opening stock"
-group = "DirectExpenses"
+group = "StockInHand"
 opening_dr = "912000.00"
 
 [[item]]

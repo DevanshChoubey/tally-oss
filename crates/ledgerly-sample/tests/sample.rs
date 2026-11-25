@@ -128,7 +128,10 @@ fn balances_on_31_oct_are_the_mocks_opening_table() {
     // provenance: mock index.html:517-549, the `ob` column (balance on 1 Nov 2026, debit
     // positive, rupees). The vouchers dated before 1 Nov in the seed are invented to reach it.
     // Capital (index.html:518-519), IGST, Round off (index.html:529-530, 544: all nil on 1 Nov) and
-    // Opening stock (index.html:549, 9,12,000 Dr, an expense-nature ledger) are included.
+    // Opening stock (index.html:549, 9,12,000 Dr) are included. Opening stock is a ledger under
+    // Stock-in-Hand, the way the accounting product enters stock by hand (TallyPrime help
+    // https://help.tallysolutions.com/stock-items-faq/, read 2026-11-25), so the profit and loss
+    // can take it as opening stock.
     let mock: [(&str, &str); 41] = [
         ("Ananya Kulkarni, capital", "-1500000"),
         ("Rohan Deshpande, capital", "-500000"),
@@ -269,7 +272,8 @@ fn the_balance_sheet_carries_the_mocks_capital_profit_and_current_liabilities() 
     assert_eq!(net("capital"), -paise("2000000"));
     // provenance: derived. Profit = - (net debit of income and expense ledgers) + closing stock
     // (mock index.html:667-668). The P&L ledgers on 1 Nov sum to 1,36,999 credit (mock
-    // index.html:540-549, with Opening stock 9,12,000 as an expense). November adds sales
+    // index.html:540-549, with Opening stock 9,12,000 as an expense: the balance sheet deducts it
+    // from the profit as opening stock, which is the same figure). November adds sales
     // 89,000 + 87,000 + 1,30,085 + 9,640 + 37,500 = 3,53,225 credit and debits purchases
     // 64,000 + 1,00,000, rent 25,000, electricity 14,860, depreciation 15,333 and round off 0.30
     // (mock `balances()`), so the net credit is 1,36,999 + 3,53,225 - 2,19,193.30 = 2,71,030.70.
@@ -465,4 +469,35 @@ fn the_next_voucher_numbers_continue_the_seeded_series() {
     assert_eq!(next(BaseVoucherKind::Sales), "SI/0418");
     assert_eq!(next(BaseVoucherKind::Payment), "PY/0319");
     assert_eq!(next(BaseVoucherKind::Journal), "JV/0033");
+}
+
+#[test]
+fn the_profit_and_loss_computes_and_shows_the_opening_stock_in_the_trading_section() {
+    let (_dir, api) = sample();
+    let r = report(&api, ReportKind::ProfitAndLoss, date!(2026 - 11 - 21));
+    // provenance: mock index.html:549 (`ostock`, 9,12,000 Dr) and index.html:2128 (plRows lists
+    // "Opening stock" first among the expenses). The trading account's Opening stock row is a
+    // debit of 9,12,000.00.
+    let opening = r
+        .rows
+        .iter()
+        .find(|row| row.label == "Opening stock")
+        .unwrap();
+    assert_eq!(signed(&opening.cells[0]), 91_200_000);
+    // provenance: mock index.html:471 ("net profit equals the balance sheet's profit to date")
+    // and the balance sheet figure derived above: 16,96,569.70 = 1,69,656,970 paise.
+    let net = r.rows.iter().find(|row| row.label == "Net profit").unwrap();
+    assert_eq!(
+        match &net.cells[0] {
+            Cell::Signed(p) => p.get(),
+            other @ (Cell::Amount(_)
+            | Cell::Qty(_)
+            | Cell::Text(_)
+            | Cell::Date(_)
+            | Cell::Empty
+            | Cell::Provisional { .. }
+            | Cell::Unsupported(_)) => panic!("not a signed profit: {other:?}"),
+        },
+        169_656_970
+    );
 }

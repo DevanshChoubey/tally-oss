@@ -31,9 +31,20 @@
 //!
 //! Opening balances may be unbalanced (spec invariant 4). The difference is an explicit
 //! [`RowKind::Difference`] row on the short side, so both totals agree. Opening stock is not
-//! absorbed there: the profit row would be overstated by it (the frozen interface has no opening
-//! stock input to deduct), so books with opening stock are `Unsupported`. Postings that do not
-//! balance among themselves are corrupt input and an error, never absorbed.
+//! absorbed there. The one form of opening stock this report takes is the opening balance of a
+//! ledger under Stock-in-Hand (the accounting product's way of entering stock by hand: create a
+//! Stock-in-Hand ledger and enter the opening stock amount as its opening balance, TallyPrime
+//! help "Stock Items - FAQ", <https://help.tallysolutions.com/stock-items-faq/>, read
+//! 2026-11-25). It is stock on hand when the books began, so it is deducted from the cumulative
+//! profit and not shown as an asset (the closing stock row stands for the stock on hand now):
+//!
+//! ```text
+//! profit = - (net debit of every income and expense ledger) + closing stock - opening stock
+//! ```
+//!
+//! Books with item opening stock (an item with an opening quantity and rate) stay `Unsupported`:
+//! the item's value would be both an opening stock and part of the injected closing valuation.
+//! Postings that do not balance among themselves are corrupt input and an error, never absorbed.
 //!
 //! Closing stock is injected, never computed here: the valuation must be dated `params.as_of`.
 //! A provisional valuation makes the stock row, the profit row and both totals provisional.
@@ -44,10 +55,10 @@
 //! * a named scenario over memorandum or reversing-journal postings;
 //! * a primary group with no nature that holds a non-zero balance;
 //! * closing stock being `Unsupported`;
-//! * books with opening stock (an item with a non-zero opening quantity and rate), a stock
-//!   movement dated before `books_begin`, or a non-zero balance on a ledger under the
-//!   Stock-in-Hand group: the profit would be overstated, or the stock counted twice, with no
-//!   visible sign because the opening difference row absorbs the gap.
+//! * books with item opening stock (an item with a non-zero opening quantity and rate), a stock
+//!   movement dated before `books_begin`, or a ledger under the Stock-in-Hand group that is
+//!   posted to or has a credit opening balance: the profit would be overstated, or the stock
+//!   counted twice, with no visible sign because the opening difference row absorbs the gap.
 //!
 //! # Layout (s9)
 //!
@@ -208,10 +219,19 @@ pub fn balance_sheet(
     let stock = supported!(stock_total(books, closing_stock, params.as_of)?);
     let movement = supported!(movement_by_ledger(books, params)?);
     let (balances, opening_net) = closing_balances(books, &movement)?;
-    if let Some(unsupported) = unsupported_stock_books(books, &balances) {
+    if let Some(unsupported) = unsupported_stock_books(books) {
         return Ok(unsupported);
     }
-    build_report(books, params, &balances, opening_net, &stock)
+    let held = supported!(stock_in_hand_opening(books)?);
+    // The opening stock is deducted from the profit, so the ledgers that hold it are not also an
+    // asset: the closing stock row stands for the stock on hand.
+    let mut walked = balances;
+    for (id, ledger) in &books.masters.ledgers {
+        if under_stock_in_hand(books, ledger.group) {
+            walked.insert(*id, Paise::ZERO);
+        }
+    }
+    build_report(books, params, &walked, opening_net, &stock, held)
 }
 
 fn check_kind(params: &ReportParams) -> Result<(), ReportError> {
@@ -260,7 +280,7 @@ fn unsupported_params(params: &ReportParams) -> Option<Outcome<Report>> {
 }
 
 /// Whether `group` is the Stock-in-Hand group or sits under it.
-fn under_stock_in_hand(books: &Books, group: GroupId) -> bool {
+pub(crate) fn under_stock_in_hand(books: &Books, group: GroupId) -> bool {
     let mut current = Some(group);
     // The hop bound stops a cyclic chart; `check_all_placed` reports the cycle itself.
     for _ in 0..=books.masters.groups.len() {
@@ -280,14 +300,12 @@ fn under_stock_in_hand(books: &Books, group: GroupId) -> bool {
 
 /// Books whose stock cannot be folded into the profit correctly.
 ///
-/// The profit row is `-(income and expense net) + closing stock`. Opening stock, stock moved
-/// before the books begin, or a Stock-in-Hand ledger carrying a balance would each need an
-/// opening stock deduction (or would count the stock twice against the closing stock row); the
-/// opening difference row would hide the error, so the report says `Unsupported` instead.
-fn unsupported_stock_books(
-    books: &Books,
-    balances: &BTreeMap<LedgerId, Paise>,
-) -> Option<Outcome<Report>> {
+/// The profit row is `-(income and expense net) + closing stock - opening stock`. Item opening
+/// stock, or stock moved before the books begin, would need an opening stock the engine does not
+/// get for them (the item's value would also sit inside the closing valuation); the opening
+/// difference row would hide the error, so the report says `Unsupported` instead. The opening
+/// balance of a Stock-in-Hand ledger is the supported opening stock ([`stock_in_hand_opening`]).
+fn unsupported_stock_books(books: &Books) -> Option<Outcome<Report>> {
     for item in books.masters.stock_items.values() {
         let valued = item
             .opening
@@ -316,19 +334,46 @@ fn unsupported_stock_books(
             ),
         ));
     }
-    for (id, ledger) in &books.masters.ledgers {
-        let balance = balances.get(id).copied().unwrap_or(Paise::ZERO);
-        if !balance.is_zero() && under_stock_in_hand(books, ledger.group) {
-            return Some(Outcome::unsupported(
-                "balance sheet: balance on a Stock-in-Hand ledger",
+    None
+}
+
+/// The opening stock held on Stock-in-Hand ledgers: the sum of their opening balances, debit
+/// positive, or why it cannot be stated.
+///
+/// The accounting product enters stock by hand as the opening balance of a ledger under
+/// Stock-in-Hand, and such an account cannot be used in transactions (TallyPrime help "Stock
+/// Items - FAQ", <https://help.tallysolutions.com/stock-items-faq/>, and "Accounting - FAQ",
+/// <https://help.tallysolutions.com/tally-prime/accounting-and-inventory/accounting-faq/>, both
+/// read 2026-11-25). So a posting to such a ledger, or a credit opening balance, is
+/// `Unsupported`: it is not stock on hand when the books began.
+pub(crate) fn stock_in_hand_opening(books: &Books) -> Result<Outcome<Paise>, ReportError> {
+    let mut total = Paise::ZERO;
+    for ledger in books.masters.ledgers.values() {
+        if !under_stock_in_hand(books, ledger.group) {
+            continue;
+        }
+        if books.postings.iter().any(|p| p.ledger == ledger.id) {
+            return Ok(Outcome::unsupported(
+                "stock-in-hand ledger with postings",
                 format!(
-                    "ledger '{}' under Stock-in-Hand has a balance; closing stock is injected, so it would be counted twice",
+                    "ledger '{}' under Stock-in-Hand is posted to; only its opening balance is stock, so the stock would be counted twice",
                     ledger.name
                 ),
             ));
         }
+        let opening = signed_amount(ledger.opening, "opening")?;
+        if opening.is_negative() {
+            return Ok(Outcome::unsupported(
+                "stock-in-hand ledger with a credit opening",
+                format!(
+                    "ledger '{}' under Stock-in-Hand has a credit opening balance; stock on hand cannot be a credit",
+                    ledger.name
+                ),
+            ));
+        }
+        total = total.checked_add(opening)?;
     }
-    None
+    Ok(Outcome::Value(total))
 }
 
 /// The reason line for a stock item that went below zero: the item's name, or its number when
@@ -835,12 +880,17 @@ fn build_report(
     balances: &BTreeMap<LedgerId, Paise>,
     opening_net: Paise,
     stock: &StockTotal,
+    opening_stock: Paise,
 ) -> Result<Outcome<Report>, ReportError> {
     let mut st = supported!(walk_primaries(books, balances, params.detail, stock)?);
     let provisional = stock.provisional.as_deref();
 
-    // Cumulative profit as a debit-positive figure: income and expense net less closing stock.
-    let profit_dr = st.profit_net.checked_sub(stock.value)?;
+    // Cumulative profit as a debit-positive figure: income and expense net, less closing stock,
+    // plus the opening stock held on Stock-in-Hand ledgers.
+    let profit_dr = st
+        .profit_net
+        .checked_sub(stock.value)?
+        .checked_add(opening_stock)?;
     if !profit_dr.is_zero() {
         let cell = figure(profit_dr, provisional)?;
         st.add_by_sign(PROFIT_LABEL, RowKind::Item, profit_dr, cell)?;

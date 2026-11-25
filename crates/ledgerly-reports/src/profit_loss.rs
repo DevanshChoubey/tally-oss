@@ -20,12 +20,23 @@
 //! dated otherwise is an error. A provisional valuation makes every figure derived from it
 //! provisional, with the reason.
 //!
+//! Opening stock entered by hand is the opening balance of a ledger under Stock-in-Hand (TallyPrime
+//! help "Stock Items - FAQ", <https://help.tallysolutions.com/stock-items-faq/>, read
+//! 2026-11-25: create a Stock-in-Hand ledger and enter the opening stock amount; the manually
+//! entered opening and closing stock are displayed in the Profit & Loss account). It is stock on
+//! hand when the books began, so it is added to the opening stock of a period that starts on
+//! `books_begin`. For a later period the opening stock is what is on hand then, which the ledger
+//! does not say, so such a report is `Unsupported` while a Stock-in-Hand ledger holds an opening
+//! balance.
+//!
 //! # What is not computed (returns `Unsupported`)
 //!
 //! * comparative or monthly columns, filters and `exceptions_only` (not implemented yet);
 //! * a non-zero opening balance on an Income/Expense ledger (no defined period split);
 //! * a group of nature Asset or Liability flagged `affects_gross_profit`, or a primary group
 //!   with no nature;
+//! * a Stock-in-Hand ledger that is posted to or has a credit opening balance, and a period that
+//!   starts after `books_begin` while a Stock-in-Hand ledger holds an opening balance;
 //! * either stock input being `Unsupported`.
 //!
 //! The scenario filter is applied here from the documented meaning of [`Scenario`] because the
@@ -38,7 +49,7 @@ use ledgerly_core::{Date, GroupId, LedgerId, Outcome, Paise, SignedAmount};
 use ledgerly_model::{Books, Group, Ledger, Nature, Posting, Scenario, VoucherStatus};
 use ledgerly_stock::{ProvisionalReason, StockValuation, ValuationStatus};
 
-use crate::balance_sheet::negative_stock_reason;
+use crate::balance_sheet::{negative_stock_reason, stock_in_hand_opening};
 use crate::{
     Cell, ColumnHeader, ColumnSpec, Detail, DrillKey, Report, ReportError, ReportFilter,
     ReportKind, ReportParams, ReportRow, RowKind,
@@ -119,6 +130,20 @@ pub fn profit_loss(
         day_before,
         "opening stock"
     )?);
+    let mut opening = opening;
+    let held = supported!(stock_in_hand_opening(books)?);
+    if !held.is_zero() {
+        if from != books.company.books_begin {
+            return Ok(Outcome::unsupported(
+                "profit and loss: opening stock after the books begin",
+                format!(
+                    "a Stock-in-Hand ledger holds the stock on hand at {}; the opening stock of a period starting {from} is not stated by it",
+                    books.company.books_begin
+                ),
+            ));
+        }
+        opening.value = opening.value.checked_add(held)?;
+    }
     let closing = supported!(stock_total(
         books,
         closing_stock,

@@ -19,7 +19,7 @@ use ledgerly_core::{
 };
 use ledgerly_model::{
     Address, Books, Company, EntityKind, Features, Group, Ledger, Masters, Nature,
-    NegativeStockPolicy, Posting, Scenario, VoucherStatus,
+    NegativeStockPolicy, Posting, ReservedGroup, Scenario, VoucherStatus,
 };
 use ledgerly_reports::profit_loss::profit_loss;
 use ledgerly_reports::{
@@ -869,4 +869,140 @@ proptest! {
         prop_assert_eq!(cell(&r, "Gross profit"), Cell::Signed(Paise::new(gp)));
         prop_assert_eq!(cell(&r, "Net profit"), Cell::Signed(Paise::new(np)));
     }
+}
+
+// ---- Stock-in-Hand ledger opening balance as opening stock (session 12) ----
+//
+// Source: TallyPrime help, "Stock Items - FAQ", "How to enter the opening and closing stock
+// manually?" (https://help.tallysolutions.com/stock-items-faq/, read 2026-11-25): create a
+// Stock-in-Hand ledger and enter the opening stock amount as its opening balance; the manually
+// entered opening and closing stock balances are displayed in the Profit & Loss account. And
+// "Accounting - FAQ" (https://help.tallysolutions.com/tally-prime/accounting-and-inventory/accounting-faq/,
+// read 2026-11-25): accounts under Stock-in-Hand cannot be used in any transactions, so only their
+// opening and closing balances are maintained.
+
+const STOCK_G: u64 = 9;
+const STOCK_L: u64 = 18;
+
+fn books_with_stock_in_hand(postings: Vec<Posting>, opening: SignedAmount) -> Books {
+    let mut books = books_with(postings);
+    let mut g = group(
+        STOCK_G,
+        "Stock-in-Hand",
+        Some(CURRENT_ASSETS_G),
+        None,
+        false,
+    );
+    g.reserved = Some(ReservedGroup::StockInHand);
+    books.masters.groups.insert(g.id, g);
+    let mut l = ledger(STOCK_L, "Opening stock", STOCK_G);
+    l.opening = opening;
+    books.masters.ledgers.insert(l.id, l);
+    books
+}
+
+#[test]
+fn a_stock_in_hand_ledger_opening_is_opening_stock_for_a_period_from_the_books_begin() {
+    // provenance: derived — the hand set (GP 45,000 with opening 20,000, closing 30,000) with a
+    // Stock-in-Hand ledger opening of 5,000 added to an injected opening valuation of 20,000:
+    // opening stock 25,000, so GP = 100,000 + 30,000 - 25,000 - 60,000 - 5,000 = 40,000.00
+    // rupees = 4,000,000 paise (the same figure as `opening_stock_comes_from_the_injected_valuation`).
+    let books = books_with_stock_in_hand(hand_postings(), SignedAmount::dr(rs(5_000)));
+    let r = run(&books, &params(Detail::Condensed), rs(20_000), rs(30_000));
+    assert_eq!(
+        cell(&r, "Opening stock"),
+        Cell::Amount(SignedAmount::dr(rs(25_000)))
+    );
+    assert_eq!(
+        cell(&r, "Gross profit"),
+        Cell::Signed(Paise::new(4_000_000))
+    );
+}
+
+#[test]
+fn a_stock_in_hand_ledger_opening_alone_is_the_opening_stock_row() {
+    // provenance: derived — opening 9,000 on the ledger, nothing injected: the Opening stock row
+    // is 9,000.00 = 900,000 paise and GP = 100,000 + 0 - 9,000 - 60,000 - 5,000 = 26,000.00
+    // = 2,600,000 paise.
+    let books = books_with_stock_in_hand(hand_postings(), SignedAmount::dr(rs(9_000)));
+    let r = run(&books, &params(Detail::Condensed), rs(0), rs(0));
+    assert_eq!(
+        cell(&r, "Opening stock"),
+        Cell::Amount(SignedAmount::dr(rs(9_000)))
+    );
+    assert_eq!(
+        cell(&r, "Gross profit"),
+        Cell::Signed(Paise::new(2_600_000))
+    );
+}
+
+#[test]
+fn a_stock_in_hand_opening_is_unsupported_for_a_period_after_the_books_begin() {
+    // provenance: derived — the ledger's opening is the stock on hand when the books began. The
+    // opening stock of a later period is what is on hand then, which the ledger's start-of-books
+    // balance does not say, so the report must not show either figure.
+    let books = books_with_stock_in_hand(hand_postings(), SignedAmount::dr(rs(9_000)));
+    let mut p = params(Detail::Condensed);
+    p.period = Period::new(d(2026, Month::July, 1), d(2026, Month::September, 30)).unwrap();
+    let open = Outcome::Value(vec![valuation(
+        1,
+        d(2026, Month::June, 30),
+        rs(0),
+        ValuationStatus::Final,
+    )]);
+    let out = profit_loss(&books, &p, &open, &closing_stock(rs(0))).unwrap();
+    assert!(out.is_unsupported(), "{out:?}");
+}
+
+#[test]
+fn a_zero_stock_in_hand_ledger_does_not_stop_a_later_period() {
+    // provenance: derived — a Stock-in-Hand ledger opening at nil adds nothing to opening stock
+    // in any period, so a period after the books begin is still computed: Opening 0, GP as the
+    // hand set with no opening stock and no closing stock: 100,000 - 60,000 - 5,000 = 35,000.
+    let books = books_with_stock_in_hand(hand_postings(), SignedAmount::dr(Paise::ZERO));
+    let mut p = params(Detail::Condensed);
+    p.period = Period::new(d(2026, Month::April, 1), d(2026, Month::September, 30)).unwrap();
+    let r = run(&books, &p, rs(0), rs(0));
+    assert_eq!(
+        cell(&r, "Gross profit"),
+        Cell::Signed(Paise::new(3_500_000))
+    );
+}
+
+#[test]
+fn a_posting_to_a_stock_in_hand_ledger_is_unsupported() {
+    // provenance: derived — accounts under Stock-in-Hand cannot be used in transactions (help
+    // page above), so a posting there is not a stock figure this report can place.
+    let mut postings = hand_postings();
+    postings.push(posting(
+        8,
+        STOCK_L,
+        d(2026, Month::June, 15),
+        SignedAmount::dr(rs(1_000)),
+        VoucherStatus::Regular,
+    ));
+    let books = books_with_stock_in_hand(postings, SignedAmount::dr(rs(9_000)));
+    let out = profit_loss(
+        &books,
+        &params(Detail::Condensed),
+        &opening_stock(rs(0)),
+        &closing_stock(rs(0)),
+    )
+    .unwrap();
+    assert!(out.is_unsupported(), "{out:?}");
+}
+
+#[test]
+fn a_credit_opening_on_a_stock_in_hand_ledger_is_unsupported() {
+    // provenance: derived — stock on hand cannot be negative value; a credit opening is not an
+    // opening stock figure and must not be shown as one.
+    let books = books_with_stock_in_hand(hand_postings(), SignedAmount::cr(rs(9_000)));
+    let out = profit_loss(
+        &books,
+        &params(Detail::Condensed),
+        &opening_stock(rs(0)),
+        &closing_stock(rs(0)),
+    )
+    .unwrap();
+    assert!(out.is_unsupported(), "{out:?}");
 }

@@ -949,15 +949,14 @@ Drawn to the mock in S12: `trial-balance.default`, `outstanding.receivables`,
 it (`report_view/mock.rs`); no figure is computed in the screen. The register report has no mock
 state yet and still draws the generic table.
 
-- **gap: profit and loss shows the engine's refusal, not figures.** The sample's "Opening stock"
-  ledger has an opening balance on an expense ledger, which the engine's profit and loss refuses
-  ("how it splits across periods is not defined"). The mock shows 85,93,225.00 sales and a net
-  result. `profit-and-loss.default` and `.provisional` therefore show the mock's head, buttons and
-  keys and a red note with the engine's reason. Closing it needs the engine to split an opening
-  balance across periods (a reports task, not an app one).
+- **gap: profit and loss lays the trading form out differently.** The screen draws the engine's
+  trading account as one Particulars column (Opening stock, group totals with Dr/Cr words, Closing
+  stock, Gross profit, Net profit); the mock draws Income and Expenses tables with every expense
+  ledger listed. The figures are the mock's (Opening stock 9,12,000.00, net profit 16,96,569.70).
+  A period starting after the books' first day is `Unsupported` while a Stock-in-Hand ledger holds
+  an opening balance (the ledger does not state the stock on hand then).
 - **gap: no print preview, saved or failed state.** `profit-and-loss.print-preview`, `.print-saved`
-  and `.print-failed` are not captured: Print preview (Ctrl+P) starts the engine's print, which
-  refuses for the same reason as above, and the app has no in-app preview panel (see Print).
+  and `.print-failed` are not captured: the app has no in-app preview panel (see Print).
 - **gap: audit, edits after lock is a table here, Unsupported in the mock.** The engine returns an
   `EditsAfterLock` table; the mock's `audit.unsupported` says it is unsupported. The tab opens and
   shows what the engine gives; no capture is taken (it would not match the mock's claim). The
@@ -1034,9 +1033,9 @@ Mismatches between the mock's totals and the engine's, and why:
 - **closed (s9): capital, profit, IGST and Opening stock now match the mock.** Capital account
   20,00,000.00, Profit and loss 16,96,569.70 and Current liabilities 10,72,967.30 come out of the
   engine (tested in `ledgerly-sample/tests/sample.rs`). Three seed items had caused the old gap:
-  the mock's Opening stock ledger (9,12,000.00 Dr, an expense-nature ledger under Direct expenses,
-  now seeded as an opening balance), the October IGST input credit on the stock bill RP/5398
-  (2,74,164.36, now set off by a journal against IGST collected in October's receipts, so IGST is
+  the mock's Opening stock ledger (9,12,000.00 Dr, now seeded as an opening balance on a ledger
+  under Stock-in-Hand since s12; it was an expense-nature ledger under Direct expenses), the
+  October IGST input credit on the stock bill RP/5398 (2,74,164.36, now set off by a journal against IGST collected in October's receipts, so IGST is
   nil on 1 Nov as in the mock and 9,150.00 Dr on 21 Nov) and that bill's round off (0.36, now
   cleared in the same journal). Capital is no longer the balancing figure: the partners' opening
   capital is 24,00,000 and 11,00,000 less drawings of 9,00,000 and 6,00,000. The stock items still

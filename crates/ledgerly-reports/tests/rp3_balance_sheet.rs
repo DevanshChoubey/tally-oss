@@ -1037,10 +1037,15 @@ fn stock_moved_before_books_begin_is_unsupported() {
 }
 
 #[test]
-fn balance_on_a_stock_in_hand_ledger_is_unsupported() {
-    // provenance: derived — a ledger under Stock-in-Hand holding Rs 1,000 plus an injected closing
-    // stock of Rs 1,000 would show the stock twice, so the report says Unsupported.
-    let mut books = books_with_openings(vec![], &[(CASH, SignedAmount::dr(rs(1_000)))]);
+fn a_posting_to_a_stock_in_hand_ledger_is_unsupported() {
+    // provenance: derived — a ledger under Stock-in-Hand that moves after the books begin would
+    // show the stock twice next to the injected closing stock (session 12: its opening balance
+    // alone is opening stock, see `stock_in_hand_opening_is_deducted_from_the_profit`; accounts
+    // under Stock-in-Hand cannot be used in transactions, TallyPrime help "Accounting - FAQ",
+    // https://help.tallysolutions.com/tally-prime/accounting-and-inventory/accounting-faq/,
+    // read 2026-11-25). Opening Rs 1,000 on the stock ledger, a journal of Rs 500 into it, and
+    // an injected closing stock of Rs 1,000.
+    let mut books = books_with_openings(vec![], &[(CASH, SignedAmount::cr(rs(1_000)))]);
     let mut g = group(12, "Stock-in-Hand", Some(4), None);
     g.reserved = Some(ReservedGroup::StockInHand);
     books.masters.groups.insert(g.id, g);
@@ -1054,13 +1059,65 @@ fn balance_on_a_stock_in_hand_ledger_is_unsupported() {
         .get_mut(&LedgerId(29))
         .unwrap()
         .opening = SignedAmount::dr(rs(1_000));
-    books
-        .masters
-        .ledgers
-        .get_mut(&LedgerId(CASH))
-        .unwrap()
-        .opening = SignedAmount::cr(rs(1_000));
+    books.postings = pair(1, june(), 29, CASH, rs(500));
     let out = balance_sheet(&books, &params(Detail::Condensed), &stock(rs(1_000))).unwrap();
+    assert!(out.is_unsupported());
+}
+
+/// Books with Capital Cr 5,000, a Stock-in-Hand ledger "Opening Stock" and Cash holding the rest
+/// of the opening, plus Rs 1,500 of cash sales.
+fn books_with_opening_stock_ledger(stock_opening: SignedAmount, cash_opening: Paise) -> Books {
+    let mut books = books_with_openings(
+        vec![],
+        &[
+            (CAPITAL, SignedAmount::cr(rs(5_000))),
+            (CASH, SignedAmount::dr(cash_opening)),
+        ],
+    );
+    let mut g = group(12, "Stock-in-Hand", Some(4), None);
+    g.reserved = Some(ReservedGroup::StockInHand);
+    books.masters.groups.insert(g.id, g);
+    let mut l = ledger(29, "Opening Stock", 12);
+    l.opening = stock_opening;
+    books.masters.ledgers.insert(l.id, l);
+    books.postings = pair(1, june(), CASH, SALES, rs(1_500));
+    books
+}
+
+#[test]
+fn stock_in_hand_opening_is_deducted_from_the_profit() {
+    // provenance: derived (accounting identity; the manually entered opening stock is the
+    // Stock-in-Hand ledger's opening balance, TallyPrime help "Stock Items - FAQ",
+    // https://help.tallysolutions.com/stock-items-faq/, read 2026-11-25).
+    // Opening: Capital Cr 5,000 = Stock-in-Hand Dr 2,000 + Cash Dr 3,000. Cash sales 1,500.
+    // Closing stock 2,500. Profit = sales 1,500 + closing 2,500 - opening 2,000 = 2,000 Cr.
+    // Liabilities: Capital 5,000 + profit 2,000 = 7,000. Assets: Cash 3,000 + 1,500 = 4,500,
+    // closing stock 2,500 = 7,000. Both columns 7,000.
+    let books = books_with_opening_stock_ledger(SignedAmount::dr(rs(2_000)), rs(3_000));
+    let r = run(&books, &params(Detail::Condensed), &stock(rs(2_500)));
+    assert_eq!(row(&r, "Profit and Loss A/c").cells[0], cr(rs(2_000)));
+    // Current Assets 7,000 = Cash 4,500 + closing stock 2,500 (the opening stock is not an asset).
+    assert_eq!(row(&r, "Current Assets").cells[1], dr(rs(7_000)));
+    assert_eq!(total_amounts(&r), (rs(7_000), rs(7_000)));
+}
+
+#[test]
+fn stock_in_hand_opening_with_no_closing_stock_is_a_loss() {
+    // provenance: derived — as above with closing stock nil: profit = 1,500 - 2,000 = -500, a
+    // loss of 500 shown on the assets side. Liabilities: Capital 5,000. Assets: Cash 4,500 +
+    // loss 500 = 5,000.
+    let books = books_with_opening_stock_ledger(SignedAmount::dr(rs(2_000)), rs(3_000));
+    let r = run(&books, &params(Detail::Condensed), &no_stock());
+    assert_eq!(row(&r, "Profit and Loss A/c").cells[1], dr(rs(500)));
+    assert_eq!(total_amounts(&r), (rs(5_000), rs(5_000)));
+}
+
+#[test]
+fn a_credit_opening_on_a_stock_in_hand_ledger_is_unsupported() {
+    // provenance: derived — stock on hand has no credit balance; shown as an opening stock it
+    // would be a wrong number. Capital Cr 5,000 and Stock-in-Hand Cr 2,000 against Cash Dr 7,000.
+    let books = books_with_opening_stock_ledger(SignedAmount::cr(rs(2_000)), rs(7_000));
+    let out = balance_sheet(&books, &params(Detail::Condensed), &stock(rs(2_500))).unwrap();
     assert!(out.is_unsupported());
 }
 
