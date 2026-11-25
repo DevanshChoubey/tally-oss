@@ -995,18 +995,36 @@ fn godavari_bill(
     reference_date: &'static str,
 ) -> Shot {
     let enter = (Key::Enter, NONE);
-    start
-        .expect(title, None)
-        .type_text(party)
-        .press(&[enter])
-        .type_text(place)
-        .press(&[enter])
-        .type_text(ledger)
-        .press(&[enter])
-        .type_text(reference)
-        .press(&[enter])
-        .type_text(reference_date)
-        .press(&[enter])
+    let start = start.expect(title, None);
+    // The Enter order of the head follows the help pages (see `ItemInvoiceScreen::order`): a
+    // purchase asks the supplier's invoice number and date, then the party, the purchase ledger
+    // and the place; a note asks the party, the original invoice number and date, the ledger and
+    // the place.
+    if title == "Purchase" {
+        start
+            .type_text(reference)
+            .press(&[enter])
+            .type_text(reference_date)
+            .press(&[enter])
+            .type_text(party)
+            .press(&[enter])
+            .type_text(ledger)
+            .press(&[enter])
+            .type_text(place)
+            .press(&[enter])
+    } else {
+        start
+            .type_text(party)
+            .press(&[enter])
+            .type_text(reference)
+            .press(&[enter])
+            .type_text(reference_date)
+            .press(&[enter])
+            .type_text(ledger)
+            .press(&[enter])
+            .type_text(place)
+            .press(&[enter])
+    }
 }
 
 /// One line typed into the keyboard's current line: item, quantity, rate, and Enter on the rate
@@ -1477,7 +1495,7 @@ fn light_shots() -> Vec<Shot> {
             invoice_line(
                 godavari_bill(
                     purchase_start("purchase.default"),
-                    "Purchase invoice",
+                    "Purchase",
                     "Nilgiri",
                     "27",
                     "Purchases",
@@ -1498,7 +1516,7 @@ fn light_shots() -> Vec<Shot> {
         invoice_line(
             godavari_bill(
                 purchase_start("purchase.validation-error"),
-                "Purchase invoice",
+                "Purchase",
                 "Nilgiri",
                 "27",
                 "Purchases",

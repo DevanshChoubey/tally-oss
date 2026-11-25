@@ -222,11 +222,7 @@ fn each_command_opens_its_invoice_in_accounting_mode_without_inventory() {
     let (_api, books) = setup("w2_pur_inv_routes.ledgerly");
     let ctx = app(&books, None);
     for (action, title, head) in [
-        (
-            Action::NewPurchase,
-            "Purchase invoice",
-            "Accounting invoice",
-        ),
+        (Action::NewPurchase, "Purchase", "Accounting invoice"),
         (
             Action::NewCreditNote,
             "Credit Note",
@@ -279,14 +275,19 @@ fn open_purchase(books: &Books) -> ItemInvoiceScreen {
 /// Patil Services, place 27, Maintenance Charges for 10,000.00; leaves the keyboard on the
 /// blank second particular.
 fn fill(s: &mut ItemInvoiceScreen, m: &ledgerly_model::Masters) {
-    s.set_party_text("patil");
-    s.submit(m);
-    "27".clone_into(&mut s.draft_mut().place_text);
-    s.submit(m);
-    // The supplier's bill number, then its date (both optional); a purchase asks for the date
-    // since s11.
+    // changed in s12: a purchase asks the supplier's invoice number and date first, then the
+    // party A/c name (help.tallysolutions.com/purchase-goods-services/, read 2026-11-25: "Supplier
+    // Invoice No. and Date", then "Party A/c name"), then the place of supply (the Party Details
+    // that follow the party); both bill fields are optional.
+    assert_eq!(s.focus(), Field::Reference);
     s.submit(m);
     assert_eq!(s.focus(), Field::ReferenceDate);
+    s.submit(m);
+    assert_eq!(s.focus(), Field::Party);
+    s.set_party_text("patil");
+    s.submit(m);
+    assert_eq!(s.focus(), Field::Place);
+    "27".clone_into(&mut s.draft_mut().place_text);
     s.submit(m);
     assert_eq!(s.focus(), Field::Ledger(0));
     s.set_particular_text(0, "maint");

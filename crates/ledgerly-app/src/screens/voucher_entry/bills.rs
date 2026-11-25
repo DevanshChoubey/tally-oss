@@ -99,8 +99,10 @@ impl VoucherEntryScreen {
         (name, this)
     }
 
-    /// The table of open bills: type, bill, date, open amount and the part settled, with a line
-    /// under each saying what is left open on it.
+    /// The table of open bills drawn as the mock's `table.t` (index.html:1427-1429): a heading
+    /// line with a rule under it (Open and This payment right-aligned), one selected line per bill
+    /// (the soft fill, the accent bar at its left, a rule under it) and, under each, a quiet line
+    /// "Left open on ... after saving" with the figure in the last column.
     #[expect(
         clippy::too_many_lines,
         reason = "one table drawn row by row; splitting would only pass the same borrows around"
@@ -114,97 +116,153 @@ impl VoucherEntryScreen {
         open: &[OpenBill],
         this: &str,
     ) {
+        use crate::ui::table::{
+            CELL_PAD_X, RowState, T_HEAD_HEIGHT, T_ROW_HEIGHT, paint_head_rule, paint_row,
+        };
+        use egui::{Align, Align2, FontId, Layout, Rect, UiBuilder, vec2};
         let t = tokens(ui);
-        egui::Grid::new(base.with("bill-grid"))
-            .num_columns(5)
-            .spacing([12.0, 4.0])
-            .show(ui, |ui| {
-                for head in ["Type", "Bill", "Date", "Open"] {
-                    ui.label(
-                        RichText::new(head)
-                            .font(bold_font(ui, TEXT_CAP))
-                            .color(t.text_3),
-                    );
-                }
-                ui.label(
-                    RichText::new(format!("This {this}"))
-                        .font(bold_font(ui, TEXT_CAP))
-                        .color(t.text_3),
+        let total = ui.available_width();
+        // Type, Bill, Date, Open, This payment (the last two hold figures).
+        let widths = [
+            66.0_f32,
+            82.0,
+            96.0,
+            84.0,
+            total - 66.0 - 82.0 - 96.0 - 84.0,
+        ];
+        let x_of = |c: usize| widths.iter().take(c).sum::<f32>();
+        let heads = ["Type", "Bill", "Date", "Open"];
+        let this_head = format!("This {this}");
+        let (head, _) = ui.allocate_exact_size(vec2(total, T_HEAD_HEIGHT), egui::Sense::hover());
+        for c in 0..5 {
+            let label = if c < 4 {
+                heads.get(c).copied().unwrap_or("")
+            } else {
+                this_head.as_str()
+            };
+            let numeric = c >= 3;
+            let (x, align) = if numeric {
+                (
+                    head.left() + x_of(c) + widths.get(c).copied().unwrap_or(0.0) - CELL_PAD_X,
+                    Align2::RIGHT_CENTER,
+                )
+            } else {
+                (head.left() + x_of(c) + CELL_PAD_X, Align2::LEFT_CENTER)
+            };
+            ui.painter().text(
+                egui::pos2(x, head.center().y),
+                align,
+                label,
+                bold_font(ui, TEXT_CAP),
+                t.text_3,
+            );
+        }
+        paint_head_rule(ui, head);
+        for (k, bill) in open.iter().enumerate() {
+            let (line, _) = ui.allocate_exact_size(vec2(total, T_ROW_HEIGHT), egui::Sense::hover());
+            paint_row(
+                ui,
+                line,
+                RowState {
+                    selected: true,
+                    hovered: false,
+                    sub: false,
+                },
+            );
+            let text_at = |ui: &Ui, c: usize, text: &str, ink: egui::Color32| {
+                ui.painter().text(
+                    egui::pos2(line.left() + x_of(c) + CELL_PAD_X, line.center().y),
+                    Align2::LEFT_CENTER,
+                    text,
+                    FontId::proportional(TEXT_BODY),
+                    ink,
                 );
-                ui.end_row();
-                for (k, bill) in open.iter().enumerate() {
-                    ui.label(para_text("Against", TEXT_BODY, t.text));
-                    ui.label(para_text(&bill.name, TEXT_BODY, t.text));
-                    ui.label(para_text(
-                        &crate::ui::format::date(bill.date),
-                        TEXT_BODY,
-                        t.text_2,
-                    ));
-                    ui.label(para_text(
-                        &format_amount(bill.open.amount),
-                        TEXT_BODY,
-                        t.text,
-                    ));
-                    let Some(r) = self.draft.rows.get_mut(row) else {
-                        return;
-                    };
-                    let at = if let Some(at) = r.bills.iter().position(|b| b.name == bill.name) {
-                        at
-                    } else {
-                        r.bills.push(BillDraft {
-                            name: bill.name.clone(),
-                            amount_text: String::new(),
-                        });
-                        r.bills.len().saturating_sub(1)
-                    };
-                    let spec = FieldSpec {
-                        id: base.with(("bill-amount", k)),
-                        field: Field::Bill(k),
-                        name: "Settled against bill",
-                        hint: "0.00",
-                    };
-                    if let Some(b) = r.bills.get_mut(at) {
+            };
+            text_at(ui, 0, "Against", t.text);
+            text_at(ui, 1, &bill.name, t.text);
+            text_at(ui, 2, &crate::ui::format::date(bill.date), t.text_2);
+            ui.painter().text(
+                egui::pos2(line.left() + x_of(4) - CELL_PAD_X, line.center().y),
+                Align2::RIGHT_CENTER,
+                format_amount(bill.open.amount),
+                FontId::proportional(TEXT_BODY),
+                t.text,
+            );
+            let Some(r) = self.draft.rows.get_mut(row) else {
+                return;
+            };
+            let at = if let Some(at) = r.bills.iter().position(|b| b.name == bill.name) {
+                at
+            } else {
+                r.bills.push(BillDraft {
+                    name: bill.name.clone(),
+                    amount_text: String::new(),
+                });
+                r.bills.len().saturating_sub(1)
+            };
+            let spec = FieldSpec {
+                id: base.with(("bill-amount", k)),
+                field: Field::Bill(k),
+                name: "Settled against bill",
+                hint: "0.00",
+            };
+            let cell = Rect::from_min_size(
+                egui::pos2(line.left() + x_of(4), line.top() + 2.0),
+                vec2(widths[4] - 4.0, T_ROW_HEIGHT - 5.0),
+            );
+            if let Some(b) = r.bills.get_mut(at) {
+                ui.scope_builder(
+                    UiBuilder::new()
+                        .max_rect(cell)
+                        .layout(Layout::left_to_right(Align::Center)),
+                    |ui| {
                         text_field(
                             ui,
                             cx,
                             &spec,
                             &mut b.amount_text,
-                            Look::Boxed,
+                            Look::Cell,
                             true,
-                            Some(110.0),
+                            Some(cell.width()),
                         );
-                    }
-                    ui.end_row();
-                    let left = self
-                        .draft
-                        .rows
-                        .get(row)
-                        .and_then(|r| r.bills.iter().find(|b| b.name == bill.name))
-                        .and_then(|b| eval_amount(&b.amount_text).ok())
-                        .and_then(|part| bill.open.amount.checked_sub(part).ok());
-                    // The mock's note runs across the first four columns (colspan 4), so it is
-                    // painted from the first cell without asking the column for its width.
-                    let (rect, _) = ui.allocate_exact_size(
-                        egui::vec2(1.0, crate::ui::line_height(TEXT_CAP)),
-                        egui::Sense::hover(),
-                    );
-                    ui.painter().text(
-                        rect.left_center(),
-                        egui::Align2::LEFT_CENTER,
-                        format!("Left open on {} after saving", bill.name),
-                        egui::FontId::proportional(TEXT_CAP),
-                        t.text_3,
-                    );
-                    ui.label("");
-                    ui.label("");
-                    ui.label("");
-                    ui.label(para_text(
-                        &left.map_or_else(String::new, format_amount),
-                        TEXT_CAP,
-                        t.text_3,
-                    ));
-                    ui.end_row();
-                }
-            });
+                    },
+                );
+            }
+            let left = self
+                .draft
+                .rows
+                .get(row)
+                .and_then(|r| r.bills.iter().find(|b| b.name == bill.name))
+                .and_then(|b| eval_amount(&b.amount_text).ok())
+                .and_then(|part| bill.open.amount.checked_sub(part).ok());
+            let (quiet, _) =
+                ui.allocate_exact_size(vec2(total, T_ROW_HEIGHT), egui::Sense::hover());
+            paint_row(
+                ui,
+                quiet,
+                RowState {
+                    selected: false,
+                    hovered: false,
+                    sub: false,
+                },
+            );
+            ui.painter().text(
+                egui::pos2(quiet.left() + CELL_PAD_X, quiet.center().y),
+                Align2::LEFT_CENTER,
+                format!("Left open on {} after saving", bill.name),
+                FontId::proportional(TEXT_BODY),
+                t.text_2,
+            );
+            ui.painter().text(
+                egui::pos2(
+                    quiet.left() + x_of(4) + widths[4] - CELL_PAD_X,
+                    quiet.center().y,
+                ),
+                Align2::RIGHT_CENTER,
+                left.map_or_else(String::new, format_amount),
+                FontId::proportional(TEXT_BODY),
+                t.text_2,
+            );
+        }
     }
 }

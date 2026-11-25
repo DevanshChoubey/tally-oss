@@ -227,6 +227,9 @@ pub struct InputSpec<'a> {
     pub numeric: bool,
     /// Outlined in the error colour (`input.invalid`).
     pub invalid: bool,
+    /// The text is drawn in the error colour, with no outline (the mock's `style="color:var(--bad)"`
+    /// on an amount, index.html:2057).
+    pub bad_ink: bool,
     /// Width in points; `None` fills what is left of the line.
     pub width: Option<f32>,
 }
@@ -276,7 +279,7 @@ pub fn input(ui: &mut Ui, text: &mut String, spec: &InputSpec<'_>) -> Response {
             .frame(Frame::NONE)
             .margin(Margin::ZERO)
             .font(FontId::proportional(TEXT_INPUT))
-            .text_color(t.text)
+            .text_color(if spec.bad_ink { t.bad } else { t.text })
             .hint_text(RichText::new(spec.hint).size(TEXT_INPUT).color(t.text_3))
             .align(align)
             .min_size(inner.size())
