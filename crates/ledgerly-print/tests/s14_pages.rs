@@ -24,6 +24,8 @@ fn report(rows: usize) -> ReportPage {
             .map(|n| vec![format!("Row {n}"), "1,00.00".to_owned()])
             .collect(),
         notes: Vec::new(),
+        aligns: Vec::new(),
+        styles: Vec::new(),
     }
 }
 

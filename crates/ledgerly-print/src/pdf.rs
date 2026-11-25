@@ -1161,17 +1161,34 @@ mod page {
             cols: &[Column<'_>],
             rows: &[Vec<String>],
         ) -> Result<(), PrintError> {
+            self.table_styled(cols, rows, &[])
+        }
+
+        /// As [`Canvas::table`], with `bold_rows` saying which rows print bold (none when empty,
+        /// otherwise one entry per row).
+        pub(super) fn table_styled(
+            &mut self,
+            cols: &[Column<'_>],
+            rows: &[Vec<String>],
+            bold_rows: &[bool],
+        ) -> Result<(), PrintError> {
+            if !bold_rows.is_empty() && bold_rows.len() != rows.len() {
+                return Err(PrintError::Render {
+                    reason: "the table has a different number of row styles than rows".to_owned(),
+                });
+            }
             let widths = self.column_widths(cols);
             let heading: Vec<String> = cols.iter().map(|c| c.title.to_owned()).collect();
-            self.table_row(cols, &widths, &heading, true)?;
-            for row in rows {
+            self.table_row(cols, &widths, &heading, true, false)?;
+            for (n, row) in rows.iter().enumerate() {
+                let bold = bold_rows.get(n).copied().unwrap_or(false);
                 if row.len() != cols.len() {
                     return Err(PrintError::Render {
                         reason: "a table row has a different number of cells than columns"
                             .to_owned(),
                     });
                 }
-                self.table_row(cols, &widths, row, false)?;
+                self.table_row(cols, &widths, row, false, bold)?;
             }
             Ok(())
         }
@@ -1182,11 +1199,13 @@ mod page {
             widths: &[i32],
             cells: &[String],
             heading: bool,
+            bold_row: bool,
         ) -> Result<(), PrintError> {
+            let bold = heading || bold_row;
             let wrapped: Vec<Vec<String>> = cells
                 .iter()
                 .zip(widths)
-                .map(|(t, w)| wrap(t, w.saturating_sub(PAD.saturating_mul(2)), TABLE, heading))
+                .map(|(t, w)| wrap(t, w.saturating_sub(PAD.saturating_mul(2)), TABLE, bold))
                 .collect();
             let lines = wrapped.iter().map(Vec::len).max().unwrap_or(1);
             let height = to_i32(lines)
@@ -1197,7 +1216,7 @@ mod page {
             let broke = self.ensure(height.saturating_add(leading(TABLE)));
             if broke && !heading {
                 let titles: Vec<String> = cols.iter().map(|c| c.title.to_owned()).collect();
-                self.table_row(cols, widths, &titles, true)?;
+                self.table_row(cols, widths, &titles, true, false)?;
             }
             let mut x0 = MARGIN;
             for ((col, width), lines) in cols.iter().zip(widths).zip(&wrapped) {
@@ -1208,9 +1227,9 @@ mod page {
                         Align::Right => x0
                             .saturating_add(*width)
                             .saturating_sub(PAD)
-                            .saturating_sub(text_width(line, TABLE, heading)),
+                            .saturating_sub(text_width(line, TABLE, bold)),
                     };
-                    push_text(&mut self.current, x, baseline, TABLE, heading, line)?;
+                    push_text(&mut self.current, x, baseline, TABLE, bold, line)?;
                     baseline = baseline.saturating_add(leading(TABLE));
                 }
                 x0 = x0.saturating_add(*width);
@@ -1587,6 +1606,31 @@ pub struct ReportPage {
     pub rows: Vec<Vec<String>>,
     /// Notes printed under the table.
     pub notes: Vec<String>,
+    /// How each column aligns. Empty means the label column on the left and every other column
+    /// on the right; otherwise one entry per heading.
+    pub aligns: Vec<ColumnAlign>,
+    /// How each row is drawn. Empty means every row plain; otherwise one entry per row.
+    pub styles: Vec<RowStyle>,
+}
+
+/// Which edge a report column's text sits against.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ColumnAlign {
+    /// Against the left edge.
+    Left,
+    /// Against the right edge (figures).
+    Right,
+}
+
+/// How a report row is drawn.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RowStyle {
+    /// An ordinary line.
+    Plain,
+    /// A section heading: bold.
+    Band,
+    /// A total: bold.
+    Total,
 }
 
 /// Renders a report as an A4 PDF: the company, title and period, then the table, with the
@@ -1611,17 +1655,41 @@ pub fn render_report_pages(page: &ReportPage) -> Result<PrintedDocument, PrintEr
     canvas.paragraph(&page.title, BODY, true)?;
     canvas.paragraph(&page.period, BODY, false)?;
     canvas.skip(8);
+    if !page.aligns.is_empty() && page.aligns.len() != page.headings.len() {
+        return Err(PrintError::Render {
+            reason: "the report has a different number of column alignments than headings"
+                .to_owned(),
+        });
+    }
     let columns: Vec<Column<'_>> = page
         .headings
         .iter()
         .enumerate()
-        .map(|(n, heading)| Column {
-            title: heading.as_str(),
-            weight: if n == 0 { 4 } else { 2 },
-            align: if n == 0 { Align::Left } else { Align::Right },
+        .map(|(n, heading)| {
+            let explicit = page.aligns.get(n).copied();
+            let align = match explicit {
+                Some(ColumnAlign::Left) => Align::Left,
+                None if n == 0 => Align::Left,
+                Some(ColumnAlign::Right) | None => Align::Right,
+            };
+            let weight = match (explicit, n) {
+                (None, 0) => 4,
+                (None | Some(ColumnAlign::Right), _) => 2,
+                (Some(ColumnAlign::Left), _) => 3,
+            };
+            Column {
+                title: heading.as_str(),
+                weight,
+                align,
+            }
         })
         .collect();
-    canvas.table(&columns, &page.rows)?;
+    let bold: Vec<bool> = page
+        .styles
+        .iter()
+        .map(|s| !matches!(s, RowStyle::Plain))
+        .collect();
+    canvas.table_styled(&columns, &page.rows, &bold)?;
     for note in &page.notes {
         canvas.skip(6);
         canvas.paragraph(&format!("Note: {note}"), BODY, false)?;

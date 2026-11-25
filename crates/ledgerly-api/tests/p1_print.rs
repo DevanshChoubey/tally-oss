@@ -318,3 +318,95 @@ fn a_document_that_cannot_print_is_unsupported_with_the_same_reason() {
         other => panic!("expected Unsupported, got {other:?}"),
     }
 }
+
+/// The printed text of `kind` after one payment of 9,12,000 rupees (Dr Rent, Cr Cash).
+fn printed_after_big_payment(kind: ReportKind) -> Vec<String> {
+    let (_dir, _path, mut api) = setup();
+    value(api.execute(Command::PostVoucher(payment(
+        1,
+        date!(2026 - 06 - 01),
+        912_000,
+    ))));
+    let Ok(Outcome::Value(pdf)) = api.print_report(&report_params(kind)) else {
+        panic!("the report should print");
+    };
+    texts(&pdf)
+}
+
+fn none_ungrouped_or_minus(t: &[String]) {
+    for s in t {
+        assert!(!s.contains("912000"), "ungrouped figure {s:?} in {t:?}");
+        assert!(!s.starts_with('-'), "bare minus {s:?} in {t:?}");
+    }
+}
+
+#[test]
+fn a_printed_trial_balance_groups_digits_the_indian_way_and_has_no_minus() {
+    // Card S14 follow-up. Hand derivation (Indian grouping, the screen's form): the payment
+    // moves 9,12,000 rupees, so the Debit column holds Rent 9,12,000.00, the Credit column holds
+    // Cash 9,12,000.00 (bare, its own side), and both totals are 9,12,000.00. Before the fix the
+    // page printed the CSV text: 912000.00 and -912000.00.
+    let t = printed_after_big_payment(ReportKind::TrialBalance);
+    none_ungrouped_or_minus(&t);
+    let n = t.iter().filter(|s| *s == "9,12,000.00").count();
+    assert!(
+        n >= 4,
+        "expected the figure on both sides and in both totals, saw {n} in {t:?}"
+    );
+    assert!(t.iter().any(|s| s == "Debit") && t.iter().any(|s| s == "Credit"));
+}
+
+#[test]
+fn a_printed_profit_and_loss_is_the_two_sided_account() {
+    // Card S14 follow-up. Hand derivation: no sales and no stock, so the trading account is
+    // empty; the profit and loss account has Indirect Expenses 9,12,000.00 on the debit side and
+    // the loss Net loss c/o 9,12,000.00 on the credit side; each side totals 9,12,000.00. The
+    // page is two-sided: headings Particulars, Debit, Particulars, Credit, the two section
+    // names, and a Total on each side of each section (four).
+    let t = printed_after_big_payment(ReportKind::ProfitAndLoss);
+    none_ungrouped_or_minus(&t);
+    for want in [
+        "Debit",
+        "Credit",
+        "Trading account",
+        "Profit and loss account",
+        "Net loss c/o",
+        "9,12,000.00",
+    ] {
+        assert!(
+            t.iter().any(|s| s.trim() == want),
+            "missing {want:?} in {t:?}"
+        );
+    }
+    assert_eq!(t.iter().filter(|s| *s == "Particulars").count(), 2);
+    assert_eq!(t.iter().filter(|s| *s == "Total").count(), 4, "{t:?}");
+    // The engine's sign note is about signed figures, which the two-sided page does not print.
+    assert!(
+        !t.iter().any(|s| s.contains("positive for a profit")),
+        "{t:?}"
+    );
+}
+
+#[test]
+fn a_printed_balance_sheet_writes_dr_and_cr_where_a_figure_is_off_its_side() {
+    // Card S14 follow-up. Hand derivation: Cash is paid out of with no opening balance, so it is
+    // a credit balance of 9,12,000.00 under Assets, off the assets' usual debit side, so it keeps
+    // `Cr`; the loss of 9,12,000.00 is a debit balance, placed under Assets (the engine's
+    // placement of a debit), on the usual side, so it prints bare. Assets net to nothing and the
+    // liabilities side is empty, so both totals are 0.00. Never a bare minus.
+    let t = printed_after_big_payment(ReportKind::BalanceSheet);
+    none_ungrouped_or_minus(&t);
+    for want in [
+        "Liabilities",
+        "Assets",
+        "9,12,000.00 Cr",
+        "9,12,000.00",
+        "0.00",
+    ] {
+        assert!(
+            t.iter().any(|s| s.trim() == want),
+            "missing {want:?} in {t:?}"
+        );
+    }
+    assert_eq!(t.iter().filter(|s| *s == "Total").count(), 2, "{t:?}");
+}

@@ -6,9 +6,11 @@
 
 use ledgerly_core::{Outcome, VoucherId};
 use ledgerly_print::TAX_INVOICE_A4;
-use ledgerly_print::pdf::{PrintedDocument, ReportPage, render_invoice_pages, render_report_pages};
+use ledgerly_print::pdf::{
+    ColumnAlign, PrintedDocument, ReportPage, RowStyle, render_invoice_pages, render_report_pages,
+};
 use ledgerly_print::template::{PrintError, load_template};
-use ledgerly_reports::export::report_text;
+use ledgerly_reports::print_text::{PrintAlign, PrintRowStyle, print_text};
 use ledgerly_reports::{ReportKind, ReportParams};
 
 use crate::error::ApiError;
@@ -112,14 +114,31 @@ impl Api {
             Outcome::Value(books) => books.company.name.clone(),
             Outcome::Unsupported(u) => return Ok(Outcome::Unsupported(u)),
         };
-        let text = report_text(&report)?;
+        let text = print_text(&report)?;
         let page = ReportPage {
             company,
             title: report.title.clone(),
             period: format!("{} to {}", dmy(p.period.from()), dmy(p.period.to())),
             headings: text.headings,
-            rows: text.rows,
+            rows: text.rows.iter().map(|r| r.cells.clone()).collect(),
             notes: text.notes,
+            aligns: text
+                .aligns
+                .iter()
+                .map(|a| match a {
+                    PrintAlign::Left => ColumnAlign::Left,
+                    PrintAlign::Right => ColumnAlign::Right,
+                })
+                .collect(),
+            styles: text
+                .rows
+                .iter()
+                .map(|r| match r.style {
+                    PrintRowStyle::Plain => RowStyle::Plain,
+                    PrintRowStyle::Band => RowStyle::Band,
+                    PrintRowStyle::Total => RowStyle::Total,
+                })
+                .collect(),
         };
         match render_report_pages(&page) {
             Ok(doc) => Ok(Outcome::Value(doc)),

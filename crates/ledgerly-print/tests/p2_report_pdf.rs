@@ -62,6 +62,8 @@ fn page(rows: Vec<Vec<String>>) -> ReportPage {
         headings: vec!["Particulars".to_owned(), "As on 30-06-2026".to_owned()],
         rows,
         notes: Vec::new(),
+        aligns: Vec::new(),
+        styles: Vec::new(),
     }
 }
 
@@ -132,4 +134,88 @@ fn a_row_with_the_wrong_number_of_cells_is_an_error_not_a_shifted_figure() {
         }
         other => panic!("expected a Render error for a short row, got {other:?}"),
     }
+}
+
+#[test]
+fn a_two_sided_page_puts_each_figure_under_its_own_heading_and_totals_are_bold() {
+    // Card S14 follow-up. Derived from the layout rules: with explicit alignments a Right
+    // column's text ends at the column's right edge (so the Debit figure ends left of the Credit
+    // figure's column start), a Left column's text starts at its left edge, and a Total row is
+    // bold, so its text is drawn bold while the plain row's is not.
+    use ledgerly_print::pdf::{ColumnAlign, PageItem, RowStyle, render_report_pages};
+    let p = ReportPage {
+        company: "Test Traders".to_owned(),
+        title: "Profit and loss".to_owned(),
+        period: "01-04-2026 to 20-11-2026".to_owned(),
+        headings: ["Particulars", "Debit", "Particulars", "Credit"]
+            .map(str::to_owned)
+            .to_vec(),
+        rows: vec![
+            vec![
+                "Rent".to_owned(),
+                "9,12,000.00".to_owned(),
+                String::new(),
+                String::new(),
+            ],
+            vec![
+                "Total".to_owned(),
+                "9,12,000.00".to_owned(),
+                "Total".to_owned(),
+                "9,12,000.00".to_owned(),
+            ],
+        ],
+        notes: Vec::new(),
+        aligns: vec![
+            ColumnAlign::Left,
+            ColumnAlign::Right,
+            ColumnAlign::Left,
+            ColumnAlign::Right,
+        ],
+        styles: vec![RowStyle::Plain, RowStyle::Total],
+    };
+    let doc = render_report_pages(&p).unwrap();
+    let items = &doc.pages[0].items;
+    let find = |want: &str, bold: bool| {
+        items.iter().find_map(|i| match i {
+            PageItem::Text {
+                text,
+                bold: b,
+                x,
+                width,
+                ..
+            } if text == want && *b == bold => Some((*x, *width)),
+            PageItem::Text { .. } | PageItem::Rule { .. } | PageItem::Fill { .. } => None,
+        })
+    };
+    assert!(find("Rent", false).is_some(), "plain row text is not bold");
+    assert!(find("Total", true).is_some(), "total row text is bold");
+    // The plain row's figure is not bold; the total row's figure is.
+    assert!(find("9,12,000.00", false).is_some());
+    assert!(find("9,12,000.00", true).is_some());
+    // The two Particulars headings are in different columns, left to right.
+    let xs: Vec<i32> = items
+        .iter()
+        .filter_map(|i| match i {
+            PageItem::Text {
+                text,
+                x,
+                bold: true,
+                ..
+            } if text == "Particulars" => Some(*x),
+            PageItem::Text { .. } | PageItem::Rule { .. } | PageItem::Fill { .. } => None,
+        })
+        .collect();
+    assert_eq!(xs.len(), 2, "{xs:?}");
+    assert!(xs[0] < xs[1]);
+}
+
+#[test]
+fn a_report_with_the_wrong_number_of_alignments_or_styles_is_an_error() {
+    use ledgerly_print::pdf::{ColumnAlign, RowStyle};
+    let mut p = page(vec![vec!["Cash".to_owned(), "1.00".to_owned()]]);
+    p.aligns = vec![ColumnAlign::Left];
+    assert!(matches!(render_report(&p), Err(PrintError::Render { .. })));
+    p.aligns = Vec::new();
+    p.styles = vec![RowStyle::Plain, RowStyle::Total];
+    assert!(matches!(render_report(&p), Err(PrintError::Render { .. })));
 }

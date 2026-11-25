@@ -11,6 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Ctrl+P on a report or an invoice opens a print preview of the pages the print engine laid out;
   Save as PDF there writes the same PDF as before, and Esc closes the preview.
+- Printed reports use Indian digit grouping and Dr/Cr instead of a minus; the profit and loss prints
+  as the two-sided account and the balance sheet as one vertical statement.
 - Balance sheet: the default view lists each group with its sub-groups, and Alt+F1 adds ledgers.
 - Day book: Entered by, Origin and the narration are shown.
 - GSTR-1: a table per section of the return (records, taxable value, tax, status); the tiles count

@@ -980,12 +980,21 @@ financial year starts. The model supports that (`Company::books_begin`), so it i
   has no page-range output; the card states the paper and destination as facts, not options.
   The preview scrolls (wheel, arrows, PageUp/PageDown, unadvertised on the key bar as the mock
   shows only Ctrl+P and Esc) and has no zoom.
-- **difference: the printed page is not the mock's page.** The mock's paper repeats the on-screen
-  T-form with Indian digit grouping and Dr/Cr columns. The PDF the engine writes is a flat table
-  of the engine's print text (`report_text`): ungrouped figures such as 912000.00, a minus sign
-  for a credit, the report's own title (for profit and loss, "Profit and loss account"). The
-  preview shows exactly that, since it must be the PDF; fixing it means changing the print
-  layout in `ledgerly-print`, which is outside this card.
+- **fixed (S14 follow-up): the printed page is the mock's page.** Printed reports use Indian digit
+  grouping (9,12,000.00) and the screens' Dr/Cr rule (a figure on its column's own side prints
+  bare, any other keeps Dr or Cr, never a bare minus on an amount). Profit and loss prints as the
+  two-sided account (Particulars, Debit, Particulars, Credit; Trading account and Profit and loss
+  account bands; Gross profit c/o and b/f, Net profit c/o; a Total on each side of each section,
+  the credit total being the engine's total with only the side word changed). The balance sheet
+  prints as one vertical statement (Liabilities, total, Assets, total) and the trial balance as
+  Debit and Credit columns. The text is built by `ledgerly_reports::print_text` and only places
+  and formats the engine's figures. The help pages (profit-and-loss-statement-tally,
+  tally/balance-sheet-tally, tally/trial-balance-tally, read 2026-11-26) describe these as
+  screens and give no separate print layout, so the page follows the screens and the mock.
+  The invoice already printed Indian grouping and the amount in words. Remaining difference: the
+  mock's vertical rule between the two sides and its tinted section bands are not drawn (the
+  print layout has horizontal rules and bold only); the balance sheet's mock heading is a rupee
+  sign, which the ASCII-only font cannot print, so the column says "Amount".
 - **difference: the preview is not drawn in the PDF's face.** The PDF uses Helvetica, which the
   app does not embed; the preview sets each text in the app's font inside the box the engine gave
   it (shrunk if wider), so column ends match the PDF and glyph shapes differ slightly.
