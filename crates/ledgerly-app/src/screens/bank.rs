@@ -310,10 +310,21 @@ pub(super) struct LineState {
     status: LineStatus,
 }
 
+/// A request from inside a frame to open another screen.
+#[derive(Debug, Clone, Copy)]
+enum SettingsRequest {
+    /// Open AI and privacy.
+    Open,
+}
+
 /// The bank reconciliation screen.
 #[derive(Debug)]
 pub struct BankScreen {
     ledger_name: String,
+    /// The company's AI tier as of the last frame; with `Off` the side says so.
+    ai_tier: Option<crate::AiTier>,
+    /// Set in the frame the AI-off note's AI and privacy button is clicked.
+    settings_requested: Option<SettingsRequest>,
     statement: BankStatementId,
     lines: Vec<LineState>,
     suggestions: Vec<SuggestionView>,
@@ -417,6 +428,8 @@ impl BankScreen {
         }
         Ok(BankScreen {
             ledger_name: ledger_name.to_owned(),
+            ai_tier: None,
+            settings_requested: None,
             statement,
             lines: lines
                 .into_iter()
@@ -908,7 +921,13 @@ impl Screen for BankScreen {
             .books
             .as_ref()
             .is_some_and(|books| crate::shell::navigate::bank_ledger_count(books) > 1);
+        self.ai_tier = ctx.ai_tier;
         self.draw(ui);
+        if self.settings_requested.take().is_some()
+            && let Ok(action) = crate::screens::ai_gate::open_settings(ctx)
+        {
+            return action;
+        }
         if std::mem::take(&mut self.switch_requested)
             && self.can_switch
             && let Some(books) = ctx.books.as_ref()

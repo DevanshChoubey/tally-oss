@@ -5,7 +5,7 @@
 use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, TryRecvError};
 
-use egui::{Key, Modifiers, RichText, Sense, vec2};
+use egui::{Key, Modifiers, Rect, RichText, Sense, vec2};
 use ledgerly_api::Api;
 
 use crate::recent::{self, RecentCompany};
@@ -13,6 +13,7 @@ use crate::shell::navigate::{self, IMPORT_KEY};
 use crate::shell::{GatewayScreen, KeyHint, hand_over, spawn_file_job};
 use crate::theme::{RADIUS_S, TEXT_BODY, TEXT_H1, TEXT_META};
 use crate::ui::button::{ButtonKind, button};
+use crate::ui::icon::{self, Icon};
 use crate::ui::{bold_font, card::card, para, tokens};
 use crate::{AppCtx, Screen, ScreenAction};
 
@@ -209,13 +210,7 @@ impl StartScreen {
                 ui.set_width(ui.available_width().min(760.0));
                 card(ui, |ui| {
                     let t = tokens(ui);
-                    ui.horizontal(|ui| {
-                        ui.set_width(ui.available_width());
-                        ui.label(RichText::new("Ledgerly").font(bold_font(ui, TEXT_H1)));
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            para(ui, "Saved on this computer", TEXT_META, t.text_3);
-                        });
-                    });
+                    draw_title_row(ui, &t);
                     ui.add_space(12.0);
                     ui.label(RichText::new("Recent companies").font(bold_font(ui, TEXT_BODY)));
                     ui.add_space(6.0);
@@ -333,4 +328,29 @@ impl Screen for StartScreen {
             }
         }
     }
+}
+
+/// The mock's `.spread` row: the name at the left, the meta text and a check at the right, painted
+/// in place on one row.
+fn draw_title_row(ui: &mut egui::Ui, t: &crate::theme::Tokens) {
+    let (row, _) = ui.allocate_exact_size(vec2(ui.available_width(), 32.0), Sense::hover());
+    ui.painter().text(
+        row.left_center(),
+        egui::Align2::LEFT_CENTER,
+        "Ledgerly",
+        bold_font(ui, TEXT_H1),
+        t.text,
+    );
+    let check = Rect::from_center_size(
+        egui::pos2(row.right() - 7.0, row.center().y),
+        vec2(14.0, 14.0),
+    );
+    icon::paint(ui.painter(), check, Icon::Check, t.text_3);
+    ui.painter().text(
+        egui::pos2(check.left() - 6.0, row.center().y),
+        egui::Align2::RIGHT_CENTER,
+        "Saved on this computer",
+        egui::FontId::proportional(TEXT_META),
+        t.text_3,
+    );
 }

@@ -959,13 +959,13 @@ const NAV = [
  ['Compliance',[['gst','GST returns','gst',''],['bank','Bank reconciliation','bank','']]],
  ['Settings',[['ai-settings','AI and privacy','shield',''],['keys','Keyboard map','kbd','?'],['setup','Company setup','building','']]]];
 function renderShell(p,def,state){
-  const tier=aiTier(p); const t=TIER[tier]; const setup=p.screen==='setup'&&!['done'].includes(state);
+  const tier=aiTier(p); const t=TIER[tier]; const setup=p.screen==='setup'&&!['done'].includes(state); const noCompany=p.screen==='start'; /* the start screen is drawn before a company is open: the chip says so, with no lock */
   $('#top').innerHTML=`
    <span class="brand"><svg viewBox="0 0 24 24" aria-hidden="true"><rect width="24" height="24" rx="6" fill="var(--accent)"/><path d="M8 6v11h9" stroke="var(--on-accent)" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/><path d="M12 6.5h5M12 11h5" stroke="var(--on-accent)" stroke-width="2" stroke-linecap="round" opacity=".75"/></svg>Ledgerly</span>
    ${setup?`<span class="chip">${ic('building')}<b>New company</b></span>`:`
-   <button class="chip" data-cmd="company" title="Switch company (F3)">${ic('building')}<b>${esc(CO.short)}</b> FY ${CO.fy} ${kb('F3')}</button>
+   <button class="chip" data-cmd="company" title="Switch company (F3)">${ic('building')}${noCompany?'<b>No company open</b>':`<b>${esc(CO.short)}</b> FY ${CO.fy}`} ${kb('F3')}</button>
    <button class="chip" data-cmd="date" title="Change date or period (F2)">${ic('cal')}<b>Sat, 21 Nov 2026</b> ${kb('F2')}</button>
-   <span class="chip lock" title="Period lock: no create, alter or delete on or before this date">${ic('lock')}Locked to ${fmtDate(CO.lock)}</span>`}
+   ${noCompany?'':`<span class="chip lock" title="Period lock: no create, alter or delete on or before this date">${ic('lock')}Locked to ${fmtDate(CO.lock)}</span>`}`}
    <button class="chip search" data-cmd="palette" aria-label="Open command palette"><span>${ic('search')}Search, jump, ask or type an entry</span><span>${kb('Ctrl+K')}</span></button>
    <button class="chip aichip" data-tier="${tier}" data-go="${hashFor('ai-settings',tier==='off'?'off':tier)}" title="${esc(t.tip)}">${ic(t.icon)}${esc(t.label)}</button>
    <button class="iconbtn" data-cmd="theme" title="Theme: light, dark, high contrast (Ctrl+Shift+L)" aria-label="Switch theme">${ic(document.documentElement.dataset.theme==='light'?'sun':'contrast')}</button>
@@ -2186,7 +2186,7 @@ SCREENS.start = {title:'Start',default:'recent',
   return `<div class="card pad" style="max-width:760px;margin:40px auto 0"><div class="spread"><h1 style="margin:0">Ledgerly</h1><span class="meta">Saved on this computer ${ic('check')}</span></div>
    <h2 style="margin:20px 0 8px">Recent companies</h2>
    <table class="t" id="rc"><thead><tr><th>Company</th><th>Financial year</th><th>Last opened</th></tr></thead><tbody>
-    <tr class="sel" data-row="godavari" data-go="${hashFor('home')}"><td><b>Godavari Drip &amp; Pump Works</b><div class="meta">Partnership firm · Pune, Maharashtra</div></td><td class="t2">2026-27</td><td class="t2">21 Nov 2026</td></tr></tbody></table>
+    <tr class="sel" data-row="godavari" data-go="${hashFor('home')}"><td><b>Godavari Drip &amp; Pump Works</b><div class="meta">Partnership firm · Maharashtra</div></td><td class="t2">2026-27</td><td class="t2">21 Nov 2026</td></tr></tbody></table>
    <div class="actions" style="margin-top:16px"><button class="btn primary" data-go="${hashFor('home')}">Open selected ${kb('Enter')}</button><button class="btn" data-go="${hashFor('setup')}">Create company ${kb('Ctrl+N')}</button><button class="btn" data-go="${hashFor('import')}">Import from another app</button><button class="btn" data-cmd="open-file">Open a file</button></div></div>`;
  },
  key(k){return listKeys('#rc',k)},

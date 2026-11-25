@@ -769,6 +769,9 @@ enum Inject {
     /// count of key presses, so a change to the row order cannot move a capture to another row.
     /// Panics when the row is not reached.
     Seek(&'static str),
+    /// As `Seek`, pressing `key` with `modifiers` in place of J (a kind tab list that has no rows
+    /// to walk, such as the masters kinds on Alt+Right).
+    SeekBy(Key, Modifiers, &'static str),
     /// Writes a file and makes the next open-file dialog answer with it, since no native dialog
     /// can be driven here ([`ledgerly_app::ui::dialogs::script_open_file`]). The key that opens the
     /// dialog goes in after it.
@@ -908,6 +911,12 @@ impl Shot {
     /// The same shot with the cursor moved to the row labelled `label` after what came before it.
     fn seek(mut self, label: &'static str) -> Self {
         self.after.push(Inject::Seek(label));
+        self
+    }
+
+    /// As [`Shot::seek`], pressing `key` with `modifiers` until the cursor label is `label`.
+    fn seek_by(mut self, key: Key, modifiers: Modifiers, label: &'static str) -> Self {
+        self.after.push(Inject::SeekBy(key, modifiers, label));
         self
     }
 
@@ -1888,75 +1897,91 @@ fn s13_shots() -> Vec<Shot> {
             .query("Import from another app")
             .then(&[(Key::Enter, NONE)])
             .on(Fixture::Blank)
-            .expect_bar("Import from another app", "Import from another app"),
+            .expect_in(
+                "Import from another app",
+                "Import from another app",
+                "Import in one step",
+            ),
         // Field and button positions are from the capture of import.default (1280 x 800).
         shot("import.validation-error", &[palette])
             .query("Import from another app")
             .then(&[(Key::Enter, NONE)])
             .on(Fixture::Blank)
-            .click(373.0, 375.0)
+            .press(&[(Key::Enter, NONE)])
             .wait(20)
-            .expect_bar("Import from another app", "Import from another app"),
+            .expect_in(
+                "Import from another app",
+                "Import from another app",
+                "Error: enter the name of the company in the other app",
+            ),
         shot("import.port-error", &[palette])
             .query("Import from another app")
             .then(&[(Key::Enter, NONE)])
             .on(Fixture::Blank)
-            .click(749.0, 332.0)
+            .click(720.0, 308.0)
             .press(&[(Key::A, Modifiers::COMMAND)])
             .type_text("99999")
-            .click(1054.0, 332.0)
+            .click(1040.0, 308.0)
             .type_text("Godavari Drip & Pump Works")
-            .click(373.0, 375.0)
+            .press(&[(Key::Enter, NONE)])
             .wait(20)
-            .expect_bar("Import from another app", "Import from another app"),
+            .expect_in(
+                "Import from another app",
+                "Import from another app",
+                "Error: \"99999\" is not a port number (1 to 65535)",
+            ),
         shot("import.running", &[palette])
             .query("Import from another app")
             .then(&[(Key::Enter, NONE)])
             .on(Fixture::GodavariHeld)
-            .click(1054.0, 332.0)
+            .click(1040.0, 308.0)
             .type_text("Godavari Drip & Pump Works")
-            .click(373.0, 375.0)
+            .press(&[(Key::Enter, NONE)])
             .wait(20)
-            .expect_bar("Import from another app", "Import from another app"),
+            .expect_in("Import from another app", "Importing", "Importing..."),
         shot("import.refused", &[palette])
             .query("Import from another app")
             .then(&[(Key::Enter, NONE)])
-            .click(1054.0, 332.0)
+            .click(1040.0, 308.0)
             .type_text("Godavari Drip & Pump Works")
-            .click(373.0, 375.0)
+            .press(&[(Key::Enter, NONE)])
             .wait(60)
-            .expect_bar("Import from another app", "Import from another app"),
+            .expect_in("Import from another app", "Import from another app", "Not supported yet: Import from the other program into this company (the company already holds data, or a period is locked. An import needs a new company file, so that nothing is merged or overwritten. Nothing was imported)"),
         shot("import.imported", &[palette])
             .query("Import from another app")
             .then(&[(Key::Enter, NONE)])
             .on(Fixture::Blank)
-            .click(438.0, 332.0)
+            .click(400.0, 308.0)
             .press(&[(Key::A, Modifiers::COMMAND)])
             .type_text("127.0.0.1")
-            .click(749.0, 332.0)
+            .click(720.0, 308.0)
             .press(&[(Key::A, Modifiers::COMMAND)])
             .type_text(fake_import_server_port())
-            .click(1054.0, 332.0)
+            .click(1040.0, 308.0)
             .type_text("Godavari Drip & Pump Works")
-            .click(373.0, 375.0)
+            .press(&[(Key::Enter, NONE)])
             .wait(60)
-            .expect_bar("Import from another app", "Import from another app"),
+            .expect_in("Import from another app", "Import from another app", "Imported from the other program's company \"Godavari Drip & Pump Works\": 6 events committed."),
         shot("import.failed", &[palette])
             .query("Import from another app")
             .then(&[(Key::Enter, NONE)])
             .on(Fixture::Blank)
-            .click(1054.0, 332.0)
+            .click(1040.0, 308.0)
             .type_text("Godavari Drip & Pump Works")
-            .click(373.0, 375.0)
+            .press(&[(Key::Enter, NONE)])
             .wait(60)
-            .expect_bar("Import from another app", "Import from another app"),
+            .expect_in("Import from another app", "Import from another app", "Error: could not import \"Godavari Drip & Pump Works\" from the other app at localhost:9000: The other program is not running or not accepting connections on port 9000"),
         // Right from Create is the Import card (never Down, which reaches Open).
         shot(
             "import.no-company",
             &[(Key::ArrowRight, NONE), (Key::Enter, NONE)],
         )
         .on(Fixture::Cold)
-        .expect_bar("Import from another app", "Import from another app"),
+        .expect_in(
+            "Import from another app",
+            "Import from another app",
+            "No company is open yet.",
+        ),
         shot("start.recent", &[])
             .on(Fixture::ColdRecent)
             .expect("Start", Some("Godavari Drip & Pump Works")),
@@ -2044,30 +2069,17 @@ fn s13_shots() -> Vec<Shot> {
             .expect_bar("Audit", "Audit"),
         shot("masters.loading", &[(Key::M, NONE)]).on(Fixture::GodavariHeld),
         shot("masters.no-match", &[(Key::M, NONE)]).type_text("zzqx"),
-        shot("masters.empty", &[(Key::M, NONE)]).on(Fixture::Blank),
-        shot(
-            "masters.items-empty",
-            &[
-                (Key::M, NONE),
-                (Key::ArrowRight, Modifiers::ALT),
-                (Key::ArrowRight, Modifiers::ALT),
-                (Key::ArrowRight, Modifiers::ALT),
-                (Key::ArrowRight, Modifiers::ALT),
-            ],
-        )
-        .on(Fixture::Blank),
-        shot(
-            "masters.create-item",
-            &[
-                (Key::M, NONE),
-                (Key::ArrowRight, Modifiers::ALT),
-                (Key::ArrowRight, Modifiers::ALT),
-                (Key::ArrowRight, Modifiers::ALT),
-                (Key::ArrowRight, Modifiers::ALT),
-            ],
-        )
-        .on(Fixture::Blank)
-        .press(&[(Key::C, Modifiers::ALT)]),
+        shot("masters.empty", &[(Key::M, NONE)])
+            .on(Fixture::Blank)
+            .expect("Masters", Some("Ledgers")),
+        shot("masters.items-empty", &[(Key::M, NONE)])
+            .on(Fixture::Blank)
+            .seek_by(Key::ArrowRight, Modifiers::ALT, "Stock items")
+            .expect("Masters", Some("Stock items")),
+        shot("masters.create-item", &[(Key::M, NONE)])
+            .seek_by(Key::ArrowRight, Modifiers::ALT, "Brass nozzle set (6 pc)")
+            .press(&[(Key::C, Modifiers::ALT)])
+            .expect_bar("Masters", "Stock item"),
     ]
 }
 
@@ -2121,7 +2133,13 @@ struct Snapshots {
 impl Snapshots {
     /// One step of a `Seek`: done when the cursor is on `label`, otherwise one J press (after
     /// the screen had time to load its rows).
-    fn seek_step(&mut self, label: &'static str, raw_input: &mut egui::RawInput) {
+    fn seek_step(
+        &mut self,
+        label: &'static str,
+        key: Key,
+        modifiers: Modifiers,
+        raw_input: &mut egui::RawInput,
+    ) {
         let state = self.shots[self.index].label();
         let cursor = self.shell.top_cursor_label();
         if cursor.as_deref() == Some(label) {
@@ -2144,11 +2162,11 @@ impl Snapshots {
         );
         for pressed in [true, false] {
             raw_input.events.push(Event::Key {
-                key: Key::J,
+                key,
                 physical_key: None,
                 pressed,
                 repeat: false,
-                modifiers: Modifiers::NONE,
+                modifiers,
             });
         }
         self.seek_presses += 1;
@@ -2249,7 +2267,11 @@ impl eframe::App for Snapshots {
         }
         match self.inject.front().copied() {
             Some(Inject::Seek(label)) => {
-                self.seek_step(label, raw_input);
+                self.seek_step(label, Key::J, Modifiers::NONE, raw_input);
+                return;
+            }
+            Some(Inject::SeekBy(key, modifiers, label)) => {
+                self.seek_step(label, key, modifiers, raw_input);
                 return;
             }
             Some(Inject::Expect(expect)) => {
@@ -2263,7 +2285,7 @@ impl eframe::App for Snapshots {
             self.gap = match item {
                 Inject::Scroll(..) => SCROLL_SETTLE_FRAMES,
                 Inject::Wait(frames) => frames,
-                Inject::Seek(_) | Inject::Expect(_) => 0,
+                Inject::Seek(_) | Inject::SeekBy(..) | Inject::Expect(_) => 0,
                 Inject::Key(..)
                 | Inject::Text(_)
                 | Inject::Click(..)
@@ -2283,7 +2305,7 @@ impl eframe::App for Snapshots {
                     }
                 }
                 Inject::Text(text) => raw_input.events.push(Event::Text(text.to_owned())),
-                Inject::Wait(_) | Inject::Seek(_) | Inject::Expect(_) => {}
+                Inject::Wait(_) | Inject::Seek(_) | Inject::SeekBy(..) | Inject::Expect(_) => {}
                 Inject::ScriptFile(file) => {
                     ledgerly_app::ui::dialogs::script_open_file(file.write(&self.out));
                 }

@@ -1773,3 +1773,62 @@ mod loading_card {
         );
     }
 }
+
+#[cfg(test)]
+mod saved_pdf_note {
+    //! A saved PDF is announced as the mock's `profit-and-loss.print-saved` does.
+    //!
+    //! provenance: design/mock-v2/index.html, state `profit-and-loss.print-saved`: a green note
+    //! that leads with "PDF saved." and offers an "Open file" button.
+
+    use super::*;
+
+    fn painted(saved: bool) -> Vec<String> {
+        fn walk(shape: &egui::Shape, out: &mut Vec<String>) {
+            match shape {
+                egui::Shape::Text(t) => out.push(t.galley.text().to_owned()),
+                egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
+                egui::Shape::Noop
+                | egui::Shape::Circle(_)
+                | egui::Shape::Ellipse(_)
+                | egui::Shape::LineSegment { .. }
+                | egui::Shape::Path(_)
+                | egui::Shape::Band(_)
+                | egui::Shape::Rect(_)
+                | egui::Shape::Mesh(_)
+                | egui::Shape::QuadraticBezier(_)
+                | egui::Shape::CubicBezier(_)
+                | egui::Shape::Callback(_) => {}
+            }
+        }
+        let ctx = egui::Context::default();
+        let out = ctx.run_ui(egui::RawInput::default(), |ui| {
+            let _clicked = draw_info(ui, "Saved PDF to /books/pl.pdf.", saved);
+        });
+        let mut texts = Vec::new();
+        for clipped in &out.shapes {
+            walk(&clipped.shape, &mut texts);
+        }
+        out.drop_without_applying_deltas();
+        texts
+    }
+
+    #[test]
+    fn a_saved_pdf_leads_with_pdf_saved_and_offers_open_file() {
+        let texts = painted(true);
+        assert!(texts.iter().any(|t| t == "PDF saved."), "{texts:?}");
+        assert!(texts.iter().any(|t| t == "Open file"), "{texts:?}");
+        assert!(
+            texts
+                .iter()
+                .any(|t| t.contains("It was written to /books/pl.pdf.")),
+            "{texts:?}"
+        );
+    }
+
+    #[test]
+    fn any_other_note_has_no_open_file_button() {
+        let texts = painted(false);
+        assert!(!texts.iter().any(|t| t == "Open file"), "{texts:?}");
+    }
+}

@@ -1338,3 +1338,73 @@ fn shift_y_does_not_confirm_a_master_delete() {
     frame(&ctx, &mut s, &mut app, key(Key::Y, Modifiers::NONE));
     assert_eq!(s.take_requests().len(), 1);
 }
+
+#[test]
+fn a_kind_with_no_masters_names_the_kind_as_its_cursor() {
+    // provenance: derived; with no stock item there is no row to point at, so the screen names
+    // the kind it is showing ("Stock items", the tab label) for the capture harness to check
+    // that it reached the empty list and not another kind's.
+    let ctx = egui::Context::default();
+    let mut all = books();
+    all.masters.stock_items.clear();
+    let mut app = app_with(all);
+    let mut s = MastersScreen::new();
+    frame(&ctx, &mut s, &mut app, RawInput::default());
+    s.select_kind(MasterKind::StockItem);
+    frame(&ctx, &mut s, &mut app, RawInput::default());
+    assert_eq!(s.cursor_label(&app).as_deref(), Some("Stock items"));
+}
+
+/// Every path shape's stroke colour in `shapes`.
+fn path_colours(shapes: &[egui::epaint::ClippedShape]) -> Vec<egui::Color32> {
+    fn walk(shape: &egui::Shape, out: &mut Vec<egui::Color32>) {
+        match shape {
+            egui::Shape::Path(p) => {
+                if let egui::epaint::ColorMode::Solid(c) = p.stroke.color {
+                    out.push(c);
+                }
+            }
+            egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
+            egui::Shape::Noop
+            | egui::Shape::Circle(_)
+            | egui::Shape::Ellipse(_)
+            | egui::Shape::LineSegment { .. }
+            | egui::Shape::Band(_)
+            | egui::Shape::Rect(_)
+            | egui::Shape::Text(_)
+            | egui::Shape::Mesh(_)
+            | egui::Shape::QuadraticBezier(_)
+            | egui::Shape::CubicBezier(_)
+            | egui::Shape::Callback(_) => {}
+        }
+    }
+    let mut out = Vec::new();
+    for clipped in shapes {
+        walk(&clipped.shape, &mut out);
+    }
+    out
+}
+
+#[test]
+fn an_empty_list_draws_the_glyph_of_the_empty_state_in_the_tertiary_colour() {
+    // provenance: design/mock-v2/index.html:1878, state `masters.items-empty`: the empty card
+    // opens with the `users` glyph, and `.empty .ico{color:var(--text-3)}` (index.html:169).
+    let ctx = egui::Context::default();
+    ledgerly_app::theme::apply(&ctx, ledgerly_app::theme::ThemeKind::Light);
+    let mut all = books();
+    all.masters.stock_items.clear();
+    let mut app = app_with(all);
+    let mut s = MastersScreen::new();
+    frame(&ctx, &mut s, &mut app, RawInput::default());
+    s.select_kind(MasterKind::StockItem);
+    let out = ctx.run_ui(RawInput::default(), |ui| {
+        let _ = s.ui(ui, &mut app);
+    });
+    let colours = path_colours(&out.shapes);
+    out.drop_without_applying_deltas();
+    let tertiary = ledgerly_app::theme::tokens(ledgerly_app::theme::ThemeKind::Light).text_3;
+    assert!(
+        colours.contains(&tertiary),
+        "no glyph in the tertiary colour among {colours:?}"
+    );
+}

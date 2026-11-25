@@ -1236,11 +1236,11 @@ Every mock state now has an app capture except the states below, each with its r
   `bank.suggested-ledger`, `masters.suggested-ledger`. The features need a model that the app does
   not run; building a screen for them would show a look with nothing behind it.
 - **difference: start.recent.** Captured: the recent list is kept in the user's config folder
-  (`recent.rs`) and the Start screen shows it. The mock draws a full company chrome (company chip,
-  lock chip, AI chip) with no company open; the app draws "No company open" and "AI: not set up",
-  which is true. The Start card lists the state, not the city ("Partnership firm · Maharashtra"),
-  because the company file holds no city field; "Saved on this computer" sits next to the heading,
-  not at the right edge; the table head is not a table with a selected-row bar.
+  (`recent.rs`) and the Start screen shows it. The mock's start chrome now says "No company open"
+  with no lock chip, as the app does, and its card lists the state, not the city, because the
+  company file holds no city field. Left: the sidebar has no review count and its foot reads the
+  app version, and the AI chip says "AI: not set up" where the mock says "AI on this computer",
+  because no company is open to ask.
 - **no real cause: gst.gstr1-unsupported, gst.gstr1-failed, audit.failed,
   profit-and-loss.print-error.** The sample books never make the engine refuse these (GSTR-3B for
   October 2026 is Unsupported and is captured as `gst.gstr3b-unsupported`). A capture would need an
@@ -1249,11 +1249,14 @@ Every mock state now has an app capture except the states below, each with its r
   save dialog and shows "PDF saved" or the failure; there is no page-as-printed screen, and
   building one means changing the shared `report_view` code that another branch is editing. The
   PDF is written in one step, so there is no busy moment to capture.
-- **difference: masters.empty and masters.items-empty.** The app keeps the filter box and shows the
-  empty message without the card and icon the mock draws.
-- **difference: import screens.** The stepper, the card chrome and the key bar ("Enter Import the
-  company") differ from the mock.
-- **difference: home.gst-unsupported.** The tile says "Not supported yet" in the normal colour,
-  not the bad colour.
-- **difference: bank.offline-ai.** Captured with AI off. The app shows the matcher's lines and the
-  match card but not the mock's "AI is off for this company" note with the AI and privacy link.
+- **difference: masters.empty and masters.items-empty.** The card, the glyph and the plus on the
+  button now match. The app keeps the filter box and the "More master kinds" menu above the empty
+  card; the mock hides them.
+- **difference: import.refused, import.failed.** The app's text is the engine's own ("Not supported
+  yet: Import from the other program into this company ..." and "The other program is not running
+  or not accepting connections on port 9000"); the mock's example texts name a "Memorandum" voucher
+  type and a "connection refused" cause the app never says.
+- **difference: masters.create-item.** The form is captured from the sample company (a company with
+  no inventory refuses a stock item). The app keeps the Masters head and tabs above the form; the
+  mock's page is titled "New stock item", with a note that a unit is needed before the item can be
+  saved.
