@@ -8,7 +8,7 @@ use ledgerly_core::{
 };
 use ledgerly_model::{
     BankAllocation, BillAllocation, BillRefKind, InstrumentKind, Ledger, LedgerLine, Masters,
-    Voucher, VoucherError, VoucherMode, VoucherStatus,
+    Voucher, VoucherError, VoucherMode, VoucherStatus, validate::LineTotals,
 };
 use thiserror::Error;
 
@@ -71,7 +71,7 @@ impl DraftRow {
         }
     }
 
-    fn is_blank(&self) -> bool {
+    pub(super) fn is_blank(&self) -> bool {
         self.ledger.is_none()
             && self.ledger_text.trim().is_empty()
             && self.amount_text.trim().is_empty()
@@ -344,40 +344,55 @@ impl VoucherDraft {
         fy: FinancialYear,
         books_begin: Date,
     ) -> Result<Outcome<Voucher>, DraftError> {
+        let (date, lines) = match self.build_lines(masters, fy, books_begin)? {
+            Outcome::Value(built) => built,
+            Outcome::Unsupported(u) => return Ok(Outcome::Unsupported(u)),
+        };
+        let totals = LineTotals::of(&lines).map_err(DraftError::Voucher)?;
+        // Entry-aid check on the typed lines so the user hears about it before the host is asked
+        // to post; `validate_voucher` (ledgerly-model, spec 5 invariant 1) and the engine decide
+        // for real when the voucher is posted. The sums are the model's own ([`LineTotals`]).
+        if totals.debit != totals.credit {
+            return Err(VoucherError::Unbalanced {
+                dr: totals.debit,
+                cr: totals.credit,
+            }
+            .into());
+        }
+        Ok(Outcome::Value(self.voucher_with(date, lines)))
+    }
+
+    /// The ledger lines of the draft and its date, with no check that they balance: what the foot
+    /// box of a journal totals while the lines are still being typed.
+    ///
+    /// # Errors
+    /// The errors of [`VoucherDraft::build_voucher`] except the balance check.
+    pub fn build_lines(
+        &self,
+        masters: &Masters,
+        fy: FinancialYear,
+        books_begin: Date,
+    ) -> Result<Outcome<(Date, Vec<LedgerLine>)>, DraftError> {
         let date = parse_entry_date(&self.date_text, fy)?;
         if date < books_begin {
             return Err(VoucherError::BeforeBooksBegin { date, books_begin }.into());
         }
         let mut lines = Vec::new();
-        let mut dr = Paise::ZERO;
-        let mut cr = Paise::ZERO;
         for (i, row) in self
             .rows
             .iter()
             .enumerate()
             .filter(|(i, r)| !r.is_blank() || (*i == 0 && self.is_single_entry()))
         {
-            let line = match self.line_for(masters, i, row)? {
-                Outcome::Value(line) => line,
+            match self.line_for(masters, i, row)? {
+                Outcome::Value(line) => lines.push(line),
                 Outcome::Unsupported(u) => return Ok(Outcome::Unsupported(u)),
-            };
-            match line.amount.side {
-                DrCr::Dr => dr = dr.checked_add(line.amount.amount)?,
-                DrCr::Cr => cr = cr.checked_add(line.amount.amount)?,
             }
-            lines.push(line);
         }
         if lines.is_empty() {
             return Err(VoucherError::Empty.into());
         }
-        // Entry-aid check on the typed lines so the user hears about it before the host is asked
-        // to post; `validate_voucher` (ledgerly-model, spec 5 invariant 1) and the engine decide
-        // for real when the voucher is posted. To be replaced by `money_ops::sum` and dropped in
-        // favour of the engine's answer once those exist (docs/interface-requests.md).
-        if dr != cr {
-            return Err(VoucherError::Unbalanced { dr, cr }.into());
-        }
-        Ok(Outcome::Value(self.voucher_with(date, lines)))
+        Ok(Outcome::Value((date, lines)))
     }
 
     /// The model line for the non-blank row `index`.

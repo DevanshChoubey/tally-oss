@@ -418,6 +418,7 @@ fn tax_box(ui: &mut Ui, block: &GstBlock) {
             label: "Invoice total",
             value: &total,
             tag: Some(ProvKind::Engine),
+            bad: false,
         }),
     );
     sheet::words(ui, &amount_in_words(block.invoice_total));
@@ -898,6 +899,7 @@ impl ItemInvoiceScreen {
                 label: "Invoice total",
                 value: &dash,
                 tag: None,
+                bad: false,
             }),
         );
         ui.add_space(8.0);

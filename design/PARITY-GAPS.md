@@ -474,8 +474,7 @@ the selected one.
 - **closed (s12): the amounts.** A committed amount reads with Indian grouping ("2,50,000.00");
   while the keyboard is on the field the typed text stays. The foot box writes a debit balance
   plain and a credit one with a minus ("-36,000.00") as the mock does (`inr(after)`), from the
-  engine's `Api::balance_change`. Remaining: the overdraft total is not drawn in the bad colour
-  the mock gives it (index.html:1409).
+  engine's `Api::balance_change`. The overdraft total is in the bad colour (below).
 - **gap: the popup shows its narration empty.** The mock draws the popup over a filled narration;
   here the narration is entered after the popup closes, so the shot with the popup open has none.
 - **changed (s12): the Mode is a box with a list of the seven instruments.** The mock draws a
@@ -494,14 +493,36 @@ the selected one.
 - **closed (s9): the number and the date.** The sample's voucher types carry the mock's prefixes
   (SI/, PB/, PY/, RC/, JV/, width 4) through `Command::AlterVoucherType`; titles read PY/0319.
   The date reads 21 Nov 2026 and rates 3,850.00 until the keyboard is on the field.
-- **gap: contra and journal differ from their mock states.** The mock now has `contra.default`,
-  `contra.validation-error`, `journal.default` and `journal.validation-error` (round S12). Ours
-  still follows the shared voucher sheet and is not yet redrawn to them.
+- **closed (s12): the Next-ledger hint row.** A payment, receipt, contra or journal whose last
+  line is filled ends the list with a ghost row "Next ledger, or Enter on empty to finish"
+  (tested), and the payment and receipt captures show it. They still end with the keyboard on the
+  narration (the mock's keyboard stays on row 1).
+- **gap (s12): the mock's mid-entry highlight.** The mock lilac-fills row 1 while the narration is
+  filled; ours fills the row the keyboard is on, so with the keyboard on the narration no row is
+  filled. Not changed: a highlight on a row without the keyboard would mislead.
+- **gap (s12): the bill-wise popup's table** keeps the shared popup styling (plain header, no
+  per-column rule) where the mock's popup has its own table look; the figures are the engine's.
+- **gap (s12): the Mode** is still a box with a list (see above), not the mock's read-only
+  "NEFT / UPI" text. The mock's text names two instruments the engine stores as one each.
+- **closed (s12): the overdraft total** "Balance after" is drawn in the bad colour in
+  `payment.overdraft` ("-36,000.00"), through `Total.bad`.
+- **closed (s12): contra and journal** (see the next section): the Dr/Cr and Group columns, the
+  Debit total / Credit total / Difference box from the engine (`LineTotals`), the Cash after
+  figure, and the two validation notes.
+- **gap (s12): contra differences.** `contra.default` and `contra.validation-error` have the
+  mock's Dr / Cr and Group columns, Transfer and Cash after (engine) foot box, and amounts. They
+  differ in: the narration sits in the foot, where the mock puts it in the head beside the date;
+  the column reads "Ledger" where the mock reads "Account"; the subtitle says "every line has its
+  own Dr or Cr" (the mock: "pick the account once, then the amount"; ours lets each line choose
+  its side); the ghost "Next ledger" row is drawn, which the mock's contra lacks; the foot
+  sentence is ours ("Lines as typed balance ...") where the mock says "Balances after saving come
+  from the engine. Dr and Cr always match in a contra."; the Save button has no icon; the first
+  row is not lilac. No legal claim is added.
 
 ## Purchase, credit note, debit note and journal entry (round s11, 2026-11-25)
 
 Captures: `purchase.*`, `credit-note.*`, `debit-note.*` and `journal.*` (each `default` and
-`validation-error`; light, dark, hc). None has a mock state of its own, so none has an SSIM score.
+`validation-error`; light, dark, hc). They have mock states since round S12 (see below).
 
 - **mock states added (round S12, 2026-11-25).** The mock now has `purchase.default`,
   `purchase.validation-error`, `credit-note.default`, `credit-note.validation-error`,
@@ -556,10 +577,44 @@ Captures: `purchase.*`, `credit-note.*`, `debit-note.*` and `journal.*` (each `d
 - **changed: a credit or debit note's head says "Credit note" or "Debit note".** The subtitle
   reads "Credit note · item mode; ..." and the mode button "Item mode" or "Accounting mode"; a
   note is not an invoice (CGST Act s.34). A sale and a purchase keep "Item invoice".
-- **gap: the ledger list covers the reason.** On a journal line with the keyboard on an empty
-  ledger, the list is drawn over the red notice, so `journal.validation-error` shows only the
-  start of the reason ("voucher has ...").
+- **closed (s12): the journal and contra entry states.** `journal.default`,
+  `journal.validation-error`, `contra.default` and `contra.validation-error` follow the mock:
+  Ledger, Dr / Cr, Group and Amount columns; the foot box shows Debit total, Credit total and
+  Difference from `LineTotals` (ledgerly-model, never summed in the UI); Save is disabled while
+  the totals differ; the notice says by how much and on which side ("Debit and credit differ by
+  360.00. Enter 360.00 more on the credit side to save."). Contra's foot shows Cash after from
+  `Api::balance_change`. In `contra.validation-error` the capture clicks the narration so the
+  ledger list does not cover the notice (a click now gives the capture window the keyboard).
+- **gap (s12): the journal and contra captures** differ from the mock in: no Reason field (the
+  voucher has only a narration; the mock's Reason is a second text box), the Group names keep the
+  sample's capitalisation ("Direct Expenses" where the mock reads "Direct expenses"), the Cr
+  amount is not drawn in the bad colour, the first row is not lilac when the keyboard is on
+  row 2, the Save button has no icon, the contra subtitle (above), and voucher numbers
+  (JV/0033 matches; CT/0022 is the engine's next number).
 - **gap: the journal's Balance column is empty** until a ledger's balance reaches the screen.
+- **closed (s12): purchase.default, credit-note.default capture data.** The captures enter the
+  mock's data (NST/1150 of 21 Nov, 10 HDPE pipe coils at 2,050.00 and 100 PVC ball valves at
+  228.40; credit note of 10 brass nozzle sets at 505.00 against SI/0412) and the engine gives the
+  mock's figures: taxable 43,340.00, IGST 7,801.20, round off -0.20, total 51,141.00 (derived:
+  20,500 + 22,840 = 43,340; 18% = 7,801.20; 51,141.20 rounds to 51,141.00); credit note 5,050.00
+  + 454.50 + 454.50 = 5,959.00. Voucher numbers differ: PB/0145 where the mock reads PB/0146,
+  CN/0001 where it reads CN/0007 (the sample has no earlier notes).
+- **gap (s12): the item-invoice layout** is still the sales invoice's: a Date field and Place of
+  supply box on the head, "Item invoice" and "More details" buttons where the mock has "Bill
+  photo Alt+O", a Unit column, and the extra place-of-supply
+  note and the balance line under the narration. The mock's purchase shows "29 Karnataka,
+  inter-state" as the place; with place 29 the engine (supplier in 29) would charge CGST and SGST,
+  so the mock's label looks wrong and ours shows 27 Maharashtra, with IGST, like the mock's
+  tax. Not changed to the mock's layout in this round.
+- **STOPPED (s12): `credit-note.validation-error`.** The mock's error is "70 sets returned, but
+  SI/0412 has 67 sets". The engine has no rule comparing a return with the invoice it names, so
+  no honest capture of it exists; ours shows the app's own refusal of an item with no quantity.
+  Needs an engine rule (the return line linked to the invoice line, `docs/interface-requests.md`).
+- **STOPPED (s12): `debit-note.default` and `debit-note.validation-error`.** The mock returns 2
+  bundles of "MS angles" against bill NST/1145 (2,000.00 + 360.00 = 2,360.00). The sample company
+  has no such item and NST/1145 is a taxed purchase with no item lines, so the same input cannot
+  be entered; the validation error needs a bill-line link the engine does not have. The
+  debit-note booking and the rule 53 footer sentence are unconfirmed and are not drawn.
 
 ## Sales invoice (round of 2026-11-23)
 

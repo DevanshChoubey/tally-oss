@@ -88,13 +88,16 @@ impl Screen for VoucherEntryScreen {
                 Action::NewReceipt,
                 "single entry: pick the cash or bank account once, then the ledgers",
             ),
+            // The mock's contra subtitle (index.html:2075) says "pick the account once", which is
+            // not how this screen works (each line has its own account), so only its first half
+            // is kept.
             EntryKind::Contra => (
                 Action::NewContra,
-                "double entry: every line has its own Dr or Cr",
+                "cash and bank transfers \u{b7} every line has its own Dr or Cr",
             ),
             EntryKind::Journal => (
                 Action::NewJournal,
-                "double entry: every line has its own Dr or Cr",
+                "debit and credit lines, no cash or bank account set once \u{b7} the entry must balance before it saves",
             ),
             EntryKind::Memorandum | EntryKind::ReversingJournal => return None,
         };
@@ -172,16 +175,24 @@ impl VoucherEntryScreen {
         Some((*ledger, date))
     }
 
-    /// The account and the voucher the balance box asks about: a single-entry voucher whose
-    /// account is picked and whose lines build.
+    /// The account and the voucher the balance box asks about: for a single-entry voucher the
+    /// account line, for a contra the credited account (the cash or bank the money leaves), once
+    /// the lines build.
     pub(super) fn balance_request(
         &self,
         masters: &ledgerly_model::Masters,
     ) -> Option<(ledgerly_core::LedgerId, ledgerly_model::Voucher)> {
-        if !self.draft.is_single_entry() {
+        let account_row = if self.draft.is_single_entry() {
+            self.draft.rows.first()?
+        } else if self.draft.kind == EntryKind::Contra {
+            self.draft
+                .rows
+                .iter()
+                .find(|r| r.side == ledgerly_core::DrCr::Cr && r.ledger.is_some())?
+        } else {
             return None;
-        }
-        let account = match self.draft.rows.first()?.ledger {
+        };
+        let account = match account_row.ledger {
             Some(LedgerRef::Chosen(id)) => id,
             Some(LedgerRef::Pending(_)) | None => return None,
         };

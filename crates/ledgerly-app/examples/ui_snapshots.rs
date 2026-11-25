@@ -1097,8 +1097,15 @@ fn audit_shots() -> Vec<Shot> {
 
 /// The registry: every light shot of [`light_shots`], then a dark and a high-contrast copy of each
 /// one the mock has a capture of in that theme (`design/mock-v2/captures/states/<theme>/`).
-/// Prefixes of the app-only states (no mock state exists): they are taken in all three themes.
-const NO_MOCK_THEMED: [&str; 4] = ["purchase.", "journal.", "credit-note.", "debit-note."];
+/// Prefixes of the entry states whose figures come from the engine one answer after another
+/// (voucher number, tax, balance): the capture waits longer for them.
+const ENGINE_SETTLED: [&str; 5] = [
+    "purchase.",
+    "journal.",
+    "credit-note.",
+    "debit-note.",
+    "contra.",
+];
 
 fn shots() -> Vec<Shot> {
     let light = light_shots();
@@ -1109,11 +1116,9 @@ fn shots() -> Vec<Shot> {
             light
                 .iter()
                 .filter(|s| {
-                    NO_MOCK_THEMED.iter().any(|p| s.state.starts_with(p))
-                        || mock
-                            .join(theme.dir())
-                            .join(format!("{}.webp", s.state))
-                            .is_file()
+                    mock.join(theme.dir())
+                        .join(format!("{}.webp", s.state))
+                        .is_file()
                 })
                 .map(|s| s.clone().themed(theme)),
         );
@@ -1513,9 +1518,10 @@ fn light_shots() -> Vec<Shot> {
             .press(&[(Key::Enter, NONE)])
             .type_text("1500")
             .press(&[(Key::Enter, NONE), (Key::Enter, NONE)]),
-        // Purchase entry (no mock state: modelled on `sales-invoice.default` and the form half of
-        // `purchase-bill.accepted`, index.html:1488-1489): Nilgiri Steel Traders' bill NST/1152 from
-        // Karnataka, delivered here (place 27, so IGST).
+        // The mock's `purchase.default` (index.html:1960-1990): Nilgiri Steel Traders' bill NST/1150
+        // of 21 Nov 2026, 10 HDPE pipe coils at 2,050.00 and 100 PVC ball valves at 228.40, hand
+        // typed. The mock labels the place of supply "29 Karnataka, inter-state"; the engine takes
+        // the place typed here (27, delivered in Maharashtra), so the tax is IGST either way.
         invoice_line(
             invoice_line(
                 godavari_bill(
@@ -1524,19 +1530,19 @@ fn light_shots() -> Vec<Shot> {
                     "Nilgiri",
                     "27",
                     "Purchases",
-                    "NST/1152",
-                    "22-11-2026",
+                    "NST/1150",
+                    "21-11-2026",
                 ),
-                "Steel pickaxe",
-                "50",
-                "900",
+                "HDPE",
+                "10",
+                "2050",
             ),
-            "Hand sprayer",
-            "10",
-            "1450",
+            "PVC ball",
+            "100",
+            "228.40",
         )
         .press(&[(Key::Enter, NONE)])
-        .type_text("Bill NST/1152 dated 22 Nov 2026"),
+        .type_text("Hand-typed, Nilgiri quote 19 Nov"),
         // A line with an item and no quantity, then Ctrl+A: the save is refused with the reason.
         invoice_line(
             godavari_bill(
@@ -1545,17 +1551,17 @@ fn light_shots() -> Vec<Shot> {
                 "Nilgiri",
                 "27",
                 "Purchases",
-                "NST/1152",
-                "22-11-2026",
+                "NST/1150",
+                "21-11-2026",
             ),
-            "Steel pickaxe",
-            "50",
-            "900",
+            "HDPE",
+            "10",
+            "2050",
         )
-        .type_text("Hand sprayer")
+        .type_text("PVC ball")
         .press(&[(Key::Enter, NONE), (Key::A, Modifiers::COMMAND)]),
-        // Credit note (no mock state; modelled on `sales-invoice.default`): two rolls of drip
-        // lateral returned by Shree Ganesh Traders against SI/0412.
+        // The mock's `credit-note.default` (index.html:2004): 10 sets of brass nozzles (6 pc)
+        // returned by Shree Ganesh Traders against SI/0412 of 14 Nov, at the invoiced 505.00.
         invoice_line(
             godavari_bill(
                 shot("credit-note.default", &[(Key::F6, Modifiers::ALT)]).on(Fixture::Godavari),
@@ -1566,12 +1572,15 @@ fn light_shots() -> Vec<Shot> {
                 "SI/0412",
                 "14-11-2026",
             ),
-            "Drip lateral",
-            "2",
-            "3850",
+            "Brass nozzle",
+            "10",
+            "505",
         )
         .press(&[(Key::Enter, NONE)])
-        .type_text("Two rolls returned, damaged in transit"),
+        .type_text("Returned 10 sets, damaged in transit"),
+        // STOPPED against the mock's `credit-note.validation-error` (70 returned against 67
+        // invoiced): the engine has no rule that compares a return with the invoice it names, so
+        // this is the app's own refusal (an item with no quantity), not the mock's error.
         invoice_line(
             godavari_bill(
                 shot("credit-note.validation-error", &[(Key::F6, Modifiers::ALT)])
@@ -1589,7 +1598,10 @@ fn light_shots() -> Vec<Shot> {
         )
         .type_text("Brass nozzle")
         .press(&[(Key::Enter, NONE), (Key::A, Modifiers::COMMAND)]),
-        // Debit note (no mock state): two pickaxes of bill NST/1145 sent back to Nilgiri Steel Traders.
+        // STOPPED against the mock's `debit-note.default` and `.validation-error`: the mock returns
+        // 2 bundles of MS angles, an item the sample company does not have, and a return must link
+        // to a bill line, which the engine does not do. This is the app's own debit note.
+        // Debit note: two pickaxes of bill NST/1145 sent back to Nilgiri Steel Traders.
         invoice_line(
             godavari_bill(
                 shot("debit-note.default", &[(Key::F5, Modifiers::ALT)]).on(Fixture::Godavari),
@@ -1623,25 +1635,59 @@ fn light_shots() -> Vec<Shot> {
         )
         .type_text("Hand sprayer")
         .press(&[(Key::Enter, NONE), (Key::A, Modifiers::COMMAND)]),
-        // Journal (no mock state): November depreciation, Dr Depreciation, Cr Plant and machinery.
+        // The mock's journal (`journal.default`): freight paid was booked as Purchases and is moved
+        // to Freight inward, 1,840.00 on both sides. The credit line's amount is the prefilled
+        // balancing one.
         shot("journal.default", &[(Key::F7, NONE)])
             .on(Fixture::Godavari)
-            .type_text("Depreciation")
+            .type_text("Freight inward")
             .press(&[(Key::Enter, NONE)])
-            .type_text("42000")
+            .type_text("1840")
             .press(&[(Key::Enter, NONE)])
-            .type_text("Plant and")
+            .type_text("Purchases")
             .press(&[(Key::Enter, NONE), (Key::Enter, NONE)])
-            .type_text("November depreciation, plant and machinery")
+            .type_text("Freight inward on the Nilgiri consignment, moved from Purchases")
             .expect("Journal", None),
-        // A debit of zero: Enter is refused with the reason, the keyboard stays on the amount.
+        // The mock's `journal.validation-error`: the credit is typed as 1,480.00 against the
+        // debit of 1,840.00. The prefilled third line is deleted (Ctrl+D) and Ctrl+A is refused
+        // with the difference.
         shot("journal.validation-error", &[(Key::F7, NONE)])
             .on(Fixture::Godavari)
-            .type_text("Depreciation")
+            .type_text("Freight inward")
             .press(&[(Key::Enter, NONE)])
-            .type_text("0")
+            .type_text("1840")
             .press(&[(Key::Enter, NONE)])
+            .type_text("Purchases")
+            .press(&[(Key::Enter, NONE)])
+            // The prefilled amount ("1840.00") is cleared, then 1480 typed in its place.
+            .wait(30)
+            .press(&[(Key::End, NONE)])
+            .press(&[(Key::Backspace, NONE); 8])
+            .type_text("1480")
+            .press(&[(Key::Enter, NONE)])
+            .wait(30)
+            .press(&[(Key::D, Modifiers::COMMAND)])
+            .press(&[(Key::A, Modifiers::COMMAND)])
             .expect("Journal", None),
+        // The mock's `contra.default`: 30,000.00 of cash paid into the Saptagiri account.
+        shot("contra.default", &[(Key::F4, NONE)])
+            .on(Fixture::Godavari)
+            .type_text("Saptagiri")
+            .press(&[(Key::Enter, NONE)])
+            .type_text("30000")
+            .press(&[(Key::Enter, NONE)])
+            .type_text("Cash")
+            .press(&[(Key::Enter, NONE), (Key::Enter, NONE)])
+            .type_text("Cash deposited into the Saptagiri account")
+            .expect("Contra", None),
+        // The mock's `contra.validation-error`: nothing picked, nothing typed, Ctrl+A.
+        shot("contra.validation-error", &[(Key::F4, NONE)])
+            .on(Fixture::Godavari)
+            .press(&[(Key::A, Modifiers::COMMAND)])
+            // A click on the narration takes the keyboard off the ledger field, so its list no
+            // longer covers the notes.
+            .click(800.0, 373.0)
+            .expect("Contra", None),
         // A blank line ends the lines; Enter on the narration asks to save.
         three_lines(godavari_invoice(
             "sales-invoice.save-confirm",
@@ -1889,6 +1935,10 @@ impl eframe::App for Snapshots {
                     });
                 }
                 Inject::Click(x, y) => {
+                    // The capture window has no window manager, so it is never given the keyboard;
+                    // egui reports no widget as focused then, and a click could not move the
+                    // keyboard. A click on a window is what gives it the keyboard.
+                    raw_input.focused = true;
                     let pos = egui::pos2(x, y);
                     raw_input.events.push(Event::PointerMoved(pos));
                     for pressed in [true, false] {
@@ -1964,7 +2014,7 @@ impl eframe::App for Snapshots {
                 } else if self.shots[self.index].state.starts_with("sales-invoice.")
                     || self.shots[self.index].state.starts_with("payment.")
                     || self.shots[self.index].state.starts_with("receipt.")
-                    || NO_MOCK_THEMED
+                    || ENGINE_SETTLED
                         .iter()
                         .any(|p| self.shots[self.index].state.starts_with(p))
                 {
