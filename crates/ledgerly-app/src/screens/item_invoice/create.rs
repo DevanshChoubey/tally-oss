@@ -42,6 +42,7 @@ impl CreateFor {
             | Field::Number
             | Field::Place
             | Field::Reference
+            | Field::ReferenceDate
             | Field::Item(_)
             | Field::Qty(_)
             | Field::Rate(_)

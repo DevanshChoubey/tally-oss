@@ -13,7 +13,8 @@ use super::draft::line_amount;
 use super::extras::BalanceShown;
 use super::keys::{Prompt, read_keys};
 use super::{
-    Field, GstBlock, GstResult, GstStatus, InvoiceMode, ItemInvoiceScreen, Notice, UiEvent,
+    Field, GstBlock, GstResult, GstStatus, InvoiceKind, InvoiceMode, ItemInvoiceScreen, Notice,
+    UiEvent,
 };
 use crate::screen::KeyHint;
 use crate::screens::voucher_entry::parse_entry_date;
@@ -30,8 +31,8 @@ use crate::ui::{format, para_text, tokens};
 use crate::{AppCtx, Screen, ScreenAction};
 use egui::{Frame, Id, Margin, Rect, Response, RichText, Ui};
 use ledgerly_api::Command;
-use ledgerly_core::LedgerId;
 use ledgerly_core::format::amount_in_words;
+use ledgerly_core::{LedgerId, StateCode};
 use ledgerly_model::{Masters, Voucher};
 
 /// The one-line purpose under the page title of an item invoice (index.html:1282). The screen asks
@@ -179,6 +180,7 @@ fn row_of(field: Field) -> Option<usize> {
         | Field::Place
         | Field::Account
         | Field::Reference
+        | Field::ReferenceDate
         | Field::Ledger(_)
         | Field::LedgerAmount(_)
         | Field::BillKind(_)
@@ -431,6 +433,7 @@ fn list_caption(focus: Field) -> &'static str {
         | Field::Number
         | Field::Place
         | Field::Reference
+        | Field::ReferenceDate
         | Field::Qty(_)
         | Field::Rate(_)
         | Field::Discount(_)
@@ -667,14 +670,28 @@ impl ItemInvoiceScreen {
                     },
                 );
                 note_field(label, shown.response.rect);
-                let shown = sheet::fld(
-                    ui,
-                    total,
-                    1,
-                    |ui| sheet::caption(ui, "e-Invoice", None),
-                    |ui| sheet::read_only(ui, |ui| einvoice_cell(ui, masters, party)),
-                );
-                note_field("e-Invoice", shown.response.rect);
+                if let Some(label) = kind.reference_date_label() {
+                    let shown = sheet::fld(
+                        ui,
+                        total,
+                        1,
+                        |ui| sheet::caption(ui, label, None),
+                        |ui| {
+                            let s = spec("ref-date", label, Field::ReferenceDate, "dd-mm-yyyy");
+                            text_field(ui, cx, &s, &mut self.draft.reference_date_text, BOXED);
+                        },
+                    );
+                    note_field(label, shown.response.rect);
+                } else {
+                    let shown = sheet::fld(
+                        ui,
+                        total,
+                        1,
+                        |ui| sheet::caption(ui, "e-Invoice", None),
+                        |ui| sheet::read_only(ui, |ui| einvoice_cell(ui, masters, party)),
+                    );
+                    note_field("e-Invoice", shown.response.rect);
+                }
             });
             if required {
                 sheet::head_row(ui, |ui| {
@@ -814,6 +831,7 @@ impl ItemInvoiceScreen {
             | Field::Place
             | Field::Account
             | Field::Reference
+            | Field::ReferenceDate
             | Field::Item(_)
             | Field::Qty(_)
             | Field::Rate(_)
@@ -922,47 +940,21 @@ impl ItemInvoiceScreen {
         block: &GstBlock,
     ) -> Option<(String, &'static str, String)> {
         let place = super::parse_place(&self.draft.place_text).ok()?;
-        let _ = masters;
+        let supplier = self
+            .draft
+            .party
+            .and_then(|p| masters.ledgers.get(&p))
+            .and_then(|l| l.party.as_ref())
+            .and_then(|d| d.state);
         let heads: Vec<&str> = block.heads.iter().map(|h| h.head.as_str()).collect();
-        let rates = format!(
-            " Rates come from the item masters and rule pack {}.",
-            block.pack_version
-        );
-        if heads.contains(&"IGST") {
-            Some((
-                format!(
-                    "Place of supply {} ({}), you are in {} ({}). ",
-                    place.name(),
-                    place.get(),
-                    self.home_state.name(),
-                    self.home_state.get()
-                ),
-                "IGST applies.",
-                rates,
-            ))
-        } else if heads.contains(&"CGST") && (heads.contains(&"SGST") || heads.contains(&"UTGST")) {
-            let second = if heads.contains(&"SGST") {
-                "SGST"
-            } else {
-                "UTGST"
-            };
-            let bold: &'static str = if second == "SGST" {
-                "Tax splits into CGST and SGST."
-            } else {
-                "Tax splits into CGST and UTGST."
-            };
-            Some((
-                format!(
-                    "Place of supply and your state are both {} ({}). ",
-                    place.name(),
-                    place.get()
-                ),
-                bold,
-                rates,
-            ))
-        } else {
-            None
-        }
+        place_note_parts(
+            self.draft.kind,
+            &heads,
+            place,
+            self.home_state,
+            supplier,
+            &block.pack_version,
+        )
     }
 
     /// The voucher a computed answer belongs to, with the engine's accounting lines on it: what
@@ -1450,7 +1442,10 @@ impl ItemInvoiceScreen {
 
 impl Screen for ItemInvoiceScreen {
     fn title(&self) -> String {
-        format!("{} invoice", self.type_name)
+        match self.draft.kind {
+            InvoiceKind::Sales | InvoiceKind::Purchase => format!("{} invoice", self.type_name),
+            InvoiceKind::CreditNote | InvoiceKind::DebitNote => self.type_name.clone(),
+        }
     }
 
     fn subtitle(&self) -> Option<String> {
@@ -1622,5 +1617,68 @@ impl ItemInvoiceScreen {
             }
             CommandReply::Failed(reason) => self.save_failed(&reason),
         }
+    }
+}
+
+/// The three parts of the note under the narration (lead, bold sentence, the rest): which tax
+/// applies, from the engine's own `heads`, and the states that decide it.
+///
+/// A sale (and a credit note) is supplied by the company, so the company's own state is the
+/// supplier's. A purchase (and a debit note) is supplied by the party, whose state is
+/// `supplier`; without it there is nothing honest to say, so no note is made.
+#[must_use]
+pub fn place_note_parts(
+    kind: InvoiceKind,
+    heads: &[&str],
+    place: StateCode,
+    home: StateCode,
+    supplier: Option<StateCode>,
+    pack_version: &str,
+) -> Option<(String, &'static str, String)> {
+    let rates = format!(" Rates come from the item masters and rule pack {pack_version}.");
+    let (inter, intra) = match kind {
+        InvoiceKind::Sales | InvoiceKind::CreditNote => (
+            format!(
+                "Place of supply {} ({}), you are in {} ({}). ",
+                place.name(),
+                place.get(),
+                home.name(),
+                home.get()
+            ),
+            format!(
+                "Place of supply and your state are both {} ({}). ",
+                place.name(),
+                place.get()
+            ),
+        ),
+        InvoiceKind::Purchase | InvoiceKind::DebitNote => {
+            let supplier = supplier?;
+            (
+                format!(
+                    "Supplier in {} ({}), place of supply {} ({}). ",
+                    supplier.name(),
+                    supplier.get(),
+                    place.name(),
+                    place.get()
+                ),
+                format!(
+                    "Supplier and place of supply are both {} ({}). ",
+                    place.name(),
+                    place.get()
+                ),
+            )
+        }
+    };
+    if heads.contains(&"IGST") {
+        Some((inter, "IGST applies.", rates))
+    } else if heads.contains(&"CGST") && (heads.contains(&"SGST") || heads.contains(&"UTGST")) {
+        let bold: &'static str = if heads.contains(&"SGST") {
+            "Tax splits into CGST and SGST."
+        } else {
+            "Tax splits into CGST and UTGST."
+        };
+        Some((intra, bold, rates))
+    } else {
+        None
     }
 }

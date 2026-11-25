@@ -18,6 +18,9 @@ impl ItemInvoiceScreen {
         match self.draft.mode {
             InvoiceMode::Item => {
                 order.extend([Field::Party, Field::Place, Field::Account, Field::Reference]);
+                if self.draft.kind.reference_date_label().is_some() {
+                    order.push(Field::ReferenceDate);
+                }
                 order.extend(self.bill_fields());
                 let discount = self.discount_columns();
                 for i in 0..self.draft.rows.len() {
@@ -29,6 +32,9 @@ impl ItemInvoiceScreen {
             }
             InvoiceMode::Accounting => {
                 order.extend([Field::Party, Field::Place, Field::Reference]);
+                if self.draft.kind.reference_date_label().is_some() {
+                    order.push(Field::ReferenceDate);
+                }
                 order.extend(self.bill_fields());
                 for i in 0..self.draft.particulars.len() {
                     order.extend([Field::Ledger(i), Field::LedgerAmount(i)]);
@@ -60,6 +66,7 @@ impl ItemInvoiceScreen {
             | Field::Place
             | Field::Account
             | Field::Reference
+            | Field::ReferenceDate
             | Field::Item(_)
             | Field::Qty(_)
             | Field::Rate(_)
@@ -97,6 +104,7 @@ impl ItemInvoiceScreen {
             | Field::Place
             | Field::Account
             | Field::Reference
+            | Field::ReferenceDate
             | Field::Item(_)
             | Field::Qty(_)
             | Field::Rate(_)
@@ -140,6 +148,7 @@ impl ItemInvoiceScreen {
         self.notice = None;
         let step = match self.focus {
             Field::Date => self.submit_date(),
+            Field::ReferenceDate => self.submit_reference_date(),
             Field::Party => self.submit_party(masters),
             Field::Account => self.submit_account(masters),
             Field::Place => self.submit_place(),
@@ -179,6 +188,7 @@ impl ItemInvoiceScreen {
             | Field::Party
             | Field::Place
             | Field::Reference
+            | Field::ReferenceDate
             | Field::Item(_)
             | Field::Qty(_)
             | Field::Rate(_)
@@ -205,6 +215,18 @@ impl ItemInvoiceScreen {
         match parse_entry_date(&self.draft.date_text, self.fy) {
             Ok(date) => {
                 self.draft.date_text = format_entry_date(date);
+                Step::Next
+            }
+            Err(e) => self.refuse(e.to_string()),
+        }
+    }
+
+    fn submit_reference_date(&mut self) -> Step {
+        match self.draft.reference_date(self.fy) {
+            Ok(date) => {
+                if let Some(date) = date {
+                    self.draft.reference_date_text = format_entry_date(date);
+                }
                 Step::Next
             }
             Err(e) => self.refuse(e.to_string()),
@@ -303,6 +325,7 @@ impl ItemInvoiceScreen {
             | Field::Place
             | Field::Account
             | Field::Reference
+            | Field::ReferenceDate
             | Field::Item(_)
             | Field::Discount(_)
             | Field::Amount(_)

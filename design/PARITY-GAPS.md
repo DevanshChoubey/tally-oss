@@ -476,6 +476,59 @@ the selected one.
 - **gap: contra and journal** have no mock state; they got the number in the title, the crumb and
   the date look only.
 
+## Purchase, credit note, debit note and journal entry (round s11, 2026-11-25)
+
+Captures: `purchase.*`, `credit-note.*`, `debit-note.*` and `journal.*` (each `default` and
+`validation-error`; light, dark, hc). None has a mock state of its own, so none has an SSIM score.
+
+- **no mock state: what each screen was modelled on.** The mock's `purchase-bill.*` states are
+  all the AI bill-photo path. **Purchase** copies the layout of `sales-invoice.default` and the
+  form half of `purchase-bill.accepted` (index.html:1488-1489) and `manualPurchase()`
+  (index.html:1504): Supplier, Supplier bill no., Bill date, Place of supply, item rows, the GST
+  block from the engine. **Credit note** and **debit note** follow `sales-invoice.default` with
+  "Original invoice no." and "Original invoice date" where a sale shows the e-Invoice cell.
+  **Journal** follows `payment.default` (the shared voucher sheet): the mock has no journal.
+- **changed: a purchase asks for the bill date, a note for the original invoice's date.** The new
+  `Field::ReferenceDate` follows the reference number in the Enter order and is optional
+  (a blank is stored as none; a wrong date is refused). Rule 53(1A)(vi) CGST Rules asks a note
+  for "the serial number and date of the corresponding tax invoice"
+  (taxguru.in/goods-and-service-tax/credit-note-debit-note-section-34-rule-53-cgst-act-2017.html,
+  read 2026-11-25). A sale keeps the e-Invoice cell in that slot.
+- **changed: place note names the supplier on a purchase and a debit note.** IGST Act s.7 and
+  s.8: a supply is inter-State when the supplier's location and the place of supply differ; on a
+  purchase the supplier is the party ("Supplier in Karnataka (29), place of supply Maharashtra
+  (27). IGST applies."). Without the supplier's state no note is made.
+- **changed: a note is titled "Credit Note" or "Debit Note", not "... invoice";** the party field
+  reads "Supplier" on a purchase and a debit note.
+- **changed: F9, F7, Alt+F6 and Alt+F5 now open their forms with a company open.** F9 on Home
+  said "not yet"; F7, Alt+F6 and Alt+F5 did nothing outside the palette.
+- **by design: a debit note goes back to the supplier.** The accounting product's debit note
+  records a purchase return. Under s.34(3) CGST Act the supplier issues a debit note when the
+  value rises; ours is the buyer's own voucher and is not a GST document, so it is not
+  reported in GSTR-1 as one (same source, read 2026-11-25). A GST debit note issued by the
+  company as supplier is not built.
+- **gap: eligible ITC is not shown on a purchase.** `ledgerly-gst` has `itc_eligibility`, but
+  `Api::invoice_gst_with_bills` does not return it for a draft, and the UI must not compute it.
+  The tax box shows the engine's tax lines only; a new API call is needed.
+- **gap: the balance line can say "balance not shown".** The API answers Unsupported (never
+  zero) when the trial balance has no row for the ledger; a supplier with no posting yet in the
+  year has none.
+- **data: CN/ and DN/ prefixes** were added to the sample company's two note types (the mock
+  shows no note numbers); the sample has no notes yet, so the first reads CN/0001.
+- **bug (found s11, not fixed): an amount field keeps its prefilled text when it gets the
+  keyboard, so typing appends to it, and the evaluator rounds half-up to paise.** On a journal,
+  typing 40000 into the prefilled credit of 42000.00 gave "42000.0040000", which the evaluator
+  read as 42,000.00 (rounded, `eval_amount`), so a journal meant to be 2,000 short saved
+  balanced. The books are not wrong (the engine and the draft both refuse an unbalanced
+  voucher; `an_unbalanced_journal_is_refused_and_nothing_is_left_for_the_host`), but a typed
+  figure with more than two decimals is silently rounded and a typed amount can silently add to
+  the prefill. Needs a decision: select the prefilled amount on focus, and refuse a literal with
+  more than two decimals.
+- **gap: the ledger list covers the reason.** On a journal line with the keyboard on an empty
+  ledger, the list is drawn over the red notice, so `journal.validation-error` shows only the
+  start of the reason ("voucher has ...").
+- **gap: the journal's Balance column is empty** until a ledger's balance reaches the screen.
+
 ## Sales invoice (round of 2026-11-23)
 
 - **by design: a company without inventory gets an accounting invoice.** F8, the sidebar's Sales

@@ -4,8 +4,8 @@ use super::{InvoiceError, InvoiceKind, InvoiceMode, parse_decimal, parse_place};
 use crate::screens::voucher_entry::{UNASSIGNED_VOUCHER_ID, eval_amount, parse_entry_date};
 use ledgerly_api::PartyBill;
 use ledgerly_core::{
-    Decimal, DrCr, FinancialYear, GodownId, LedgerId, MoneyError, Paise, Qty, Rate, RoundingRule,
-    SignedAmount, StockItemId, Unsupported, VoucherTypeId, round_rupees_to_paise,
+    Date, Decimal, DrCr, FinancialYear, GodownId, LedgerId, MoneyError, Paise, Qty, Rate,
+    RoundingRule, SignedAmount, StockItemId, Unsupported, VoucherTypeId, round_rupees_to_paise,
 };
 use ledgerly_model::{
     BillRefKind, GodownAllocation, InventoryLine, LedgerLine, Masters, Voucher, VoucherMode,
@@ -211,6 +211,8 @@ pub struct InvoiceDraft {
     pub account_text: String,
     /// Supplier invoice number, original invoice number or order reference.
     pub reference_text: String,
+    /// Supplier bill date or original invoice date, as typed (purchase, credit and debit notes).
+    pub reference_date_text: String,
     /// How the invoice is entered.
     pub mode: InvoiceMode,
     /// The stock lines (item invoice).
@@ -245,6 +247,7 @@ impl InvoiceDraft {
             account: None,
             account_text: String::new(),
             reference_text: String::new(),
+            reference_date_text: String::new(),
             mode: InvoiceMode::Item,
             rows: vec![InvoiceRow::default()],
             particulars: vec![ParticularRow::default()],
@@ -320,6 +323,17 @@ impl InvoiceDraft {
         Ok(out)
     }
 
+    /// The typed reference date: `None` when nothing is typed.
+    ///
+    /// # Errors
+    /// [`InvoiceError::Date`] when the text is not a date.
+    pub fn reference_date(&self, fy: FinancialYear) -> Result<Option<Date>, InvoiceError> {
+        if self.reference_date_text.trim().is_empty() {
+            return Ok(None);
+        }
+        Ok(Some(parse_entry_date(&self.reference_date_text, fy)?))
+    }
+
     /// The voucher to hand to the tax engine: the header and the inventory lines (item invoice)
     /// or the particulars (accounting invoice), and nothing else. The party line, the tax lines
     /// and the stored GST are the engine's to produce.
@@ -332,6 +346,7 @@ impl InvoiceDraft {
         fy: FinancialYear,
     ) -> Result<Voucher, InvoiceError> {
         let date = parse_entry_date(&self.date_text, fy)?;
+        let reference_date = self.reference_date(fy)?;
         if self.number_required && self.number_text.trim().is_empty() {
             return Err(InvoiceError::Missing {
                 field: "voucher number",
@@ -373,7 +388,7 @@ impl InvoiceDraft {
             place_of_supply: Some(place),
             reverse_charge: false,
             reference: nonblank(&self.reference_text),
-            reference_date: None,
+            reference_date,
             narration: self.narration.trim().to_owned(),
             ledger_lines,
             inventory_lines,

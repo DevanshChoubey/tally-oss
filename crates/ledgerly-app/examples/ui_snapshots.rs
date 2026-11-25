@@ -950,6 +950,38 @@ fn godavari_invoice(
     s.press(&[enter])
 }
 
+/// The purchase form as a user reaches it from Home: F9.
+fn purchase_start(state: &'static str) -> Shot {
+    shot(state, &[(Key::F9, NONE)]).on(Fixture::Godavari)
+}
+
+/// An item invoice head on Godavari, opened by `start`, whose top screen is titled `title`:
+/// `party` and `place` typed, `ledger` as the sales or purchase ledger and `reference` as the
+/// supplier's or original invoice number dated `reference_date`, so the keyboard is on the first item.
+fn godavari_bill(
+    start: Shot,
+    title: &'static str,
+    party: &'static str,
+    place: &'static str,
+    ledger: &'static str,
+    reference: &'static str,
+    reference_date: &'static str,
+) -> Shot {
+    let enter = (Key::Enter, NONE);
+    start
+        .expect(title, None)
+        .type_text(party)
+        .press(&[enter])
+        .type_text(place)
+        .press(&[enter])
+        .type_text(ledger)
+        .press(&[enter])
+        .type_text(reference)
+        .press(&[enter])
+        .type_text(reference_date)
+        .press(&[enter])
+}
+
 /// One line typed into the keyboard's current line: item, quantity, rate, and Enter on the rate
 /// goes on to the next line (the discount column is hidden).
 fn invoice_line(shot: Shot, item: &'static str, qty: &'static str, rate: &'static str) -> Shot {
@@ -1038,6 +1070,9 @@ fn audit_shots() -> Vec<Shot> {
 
 /// The registry: every light shot of [`light_shots`], then a dark and a high-contrast copy of each
 /// one the mock has a capture of in that theme (`design/mock-v2/captures/states/<theme>/`).
+/// Prefixes of the app-only states (no mock state exists): they are taken in all three themes.
+const NO_MOCK_THEMED: [&str; 4] = ["purchase.", "journal.", "credit-note.", "debit-note."];
+
 fn shots() -> Vec<Shot> {
     let light = light_shots();
     let mock = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../design/mock-v2/captures/states");
@@ -1047,9 +1082,11 @@ fn shots() -> Vec<Shot> {
             light
                 .iter()
                 .filter(|s| {
-                    mock.join(theme.dir())
-                        .join(format!("{}.webp", s.state))
-                        .is_file()
+                    NO_MOCK_THEMED.iter().any(|p| s.state.starts_with(p))
+                        || mock
+                            .join(theme.dir())
+                            .join(format!("{}.webp", s.state))
+                            .is_file()
                 })
                 .map(|s| s.clone().themed(theme)),
         );
@@ -1377,6 +1414,130 @@ fn light_shots() -> Vec<Shot> {
             .press(&[(Key::Enter, NONE)])
             .type_text("1500")
             .press(&[(Key::Enter, NONE), (Key::Enter, NONE)]),
+        // Purchase entry (no mock state: modelled on `sales-invoice.default` and the form half of
+        // `purchase-bill.accepted`, index.html:402): Nilgiri Steel Traders' bill NST/1152 from
+        // Karnataka, delivered here (place 27, so IGST).
+        invoice_line(
+            invoice_line(
+                godavari_bill(
+                    purchase_start("purchase.default"),
+                    "Purchase invoice",
+                    "Nilgiri",
+                    "27",
+                    "Purchases",
+                    "NST/1152",
+                    "22-11-2026",
+                ),
+                "Steel pickaxe",
+                "50",
+                "900",
+            ),
+            "Hand sprayer",
+            "10",
+            "1450",
+        )
+        .press(&[(Key::Enter, NONE)])
+        .type_text("Bill NST/1152 dated 22 Nov 2026"),
+        // A line with an item and no quantity, then Ctrl+A: the save is refused with the reason.
+        invoice_line(
+            godavari_bill(
+                purchase_start("purchase.validation-error"),
+                "Purchase invoice",
+                "Nilgiri",
+                "27",
+                "Purchases",
+                "NST/1152",
+                "22-11-2026",
+            ),
+            "Steel pickaxe",
+            "50",
+            "900",
+        )
+        .type_text("Hand sprayer")
+        .press(&[(Key::Enter, NONE), (Key::A, Modifiers::COMMAND)]),
+        // Credit note (no mock state; modelled on `sales-invoice.default`): two rolls of drip
+        // lateral returned by Shree Ganesh Traders against SI/0412.
+        invoice_line(
+            godavari_bill(
+                shot("credit-note.default", &[(Key::F6, Modifiers::ALT)]).on(Fixture::Godavari),
+                "Credit Note",
+                "Shree Ganesh",
+                "27",
+                "Sales",
+                "SI/0412",
+                "14-11-2026",
+            ),
+            "Drip lateral",
+            "2",
+            "3850",
+        )
+        .press(&[(Key::Enter, NONE)])
+        .type_text("Two rolls returned, damaged in transit"),
+        invoice_line(
+            godavari_bill(
+                shot("credit-note.validation-error", &[(Key::F6, Modifiers::ALT)])
+                    .on(Fixture::Godavari),
+                "Credit Note",
+                "Shree Ganesh",
+                "27",
+                "Sales",
+                "SI/0412",
+                "14-11-2026",
+            ),
+            "Drip lateral",
+            "2",
+            "3850",
+        )
+        .type_text("Brass nozzle")
+        .press(&[(Key::Enter, NONE), (Key::A, Modifiers::COMMAND)]),
+        // Debit note (no mock state): two pickaxes of bill NST/1145 sent back to Nilgiri Steel Traders.
+        invoice_line(
+            godavari_bill(
+                shot("debit-note.default", &[(Key::F5, Modifiers::ALT)]).on(Fixture::Godavari),
+                "Debit Note",
+                "Nilgiri",
+                "27",
+                "Purchases",
+                "NST/1145",
+                "20-11-2026",
+            ),
+            "Steel pickaxe",
+            "2",
+            "900",
+        )
+        .press(&[(Key::Enter, NONE)])
+        .type_text("Two pickaxes returned, handles cracked"),
+        invoice_line(
+            godavari_bill(
+                shot("debit-note.validation-error", &[(Key::F5, Modifiers::ALT)])
+                    .on(Fixture::Godavari),
+                "Debit Note",
+                "Nilgiri",
+                "27",
+                "Purchases",
+                "NST/1145",
+                "20-11-2026",
+            ),
+            "Steel pickaxe",
+            "2",
+            "900",
+        )
+        .type_text("Hand sprayer")
+        .press(&[(Key::Enter, NONE), (Key::A, Modifiers::COMMAND)]),
+        // Journal (no mock state): November depreciation, Dr Depreciation, Cr Plant and machinery.
+        shot("journal.default", &[(Key::F7, NONE)])
+            .on(Fixture::Godavari)
+            .type_text("Depreciation")
+            .press(&[(Key::Enter, NONE)])
+            .type_text("42000")
+            .press(&[(Key::Enter, NONE)])
+            .type_text("Plant and")
+            .press(&[(Key::Enter, NONE), (Key::Enter, NONE)])
+            .type_text("November depreciation, plant and machinery"),
+        // Ctrl+A on a journal with no lines: refused with the reason, nothing is saved.
+        shot("journal.validation-error", &[(Key::F7, NONE)])
+            .on(Fixture::Godavari)
+            .press(&[(Key::A, Modifiers::COMMAND)]),
         // A blank line ends the lines; Enter on the narration asks to save.
         three_lines(godavari_invoice(
             "sales-invoice.save-confirm",
@@ -1699,6 +1860,9 @@ impl eframe::App for Snapshots {
                 } else if self.shots[self.index].state.starts_with("sales-invoice.")
                     || self.shots[self.index].state.starts_with("payment.")
                     || self.shots[self.index].state.starts_with("receipt.")
+                    || NO_MOCK_THEMED
+                        .iter()
+                        .any(|p| self.shots[self.index].state.starts_with(p))
                 {
                     // The engine answers tax, the voucher number and the balance one after the
                     // other, each only once the one before it has settled.

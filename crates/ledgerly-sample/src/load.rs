@@ -198,14 +198,16 @@ pub(crate) fn build(
 }
 
 /// The number series of the sample company's voucher types: a prefix and four digits, as its
-/// vouchers' numbers read (SI/0417, PY/0318). A type not listed keeps the seeded bare counter.
-const SERIES: [(BaseVoucherKind, &str); 6] = [
+/// vouchers' numbers read (SI/0417, PY/0318; the credit and debit notes' CN/ and DN/ are the sample's own, the mock shows none). A type not listed keeps the seeded bare counter.
+const SERIES: [(BaseVoucherKind, &str); 8] = [
     (BaseVoucherKind::Sales, "SI/"),
     (BaseVoucherKind::Purchase, "PB/"),
     (BaseVoucherKind::Payment, "PY/"),
     (BaseVoucherKind::Receipt, "RC/"),
     (BaseVoucherKind::Journal, "JV/"),
     (BaseVoucherKind::Contra, "CT/"),
+    (BaseVoucherKind::CreditNote, "CN/"),
+    (BaseVoucherKind::DebitNote, "DN/"),
 ];
 
 /// Gives the sample's voucher types their prefixes and the four-digit width.
