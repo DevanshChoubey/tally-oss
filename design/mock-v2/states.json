@@ -683,7 +683,7 @@
    "kind": "loading",
    "hash": "screen=profit-and-loss&state=print-busy",
    "title": "Profit and loss, preparing the PDF",
-   "description": "Ctrl+P was pressed and the PDF is being rendered; the save dialog opens when it is ready. The app shows no text here; the line is a proposal (PARITY-GAPS)."
+   "description": "Ctrl+P was pressed and the PDF is being rendered; the preview opens when it is ready."
   },
   {
    "id": "trial-balance.loading",

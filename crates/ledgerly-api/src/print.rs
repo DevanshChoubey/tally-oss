@@ -6,9 +6,11 @@
 
 use ledgerly_core::{Outcome, VoucherId};
 use ledgerly_print::TAX_INVOICE_A4;
-use ledgerly_print::pdf::{ReportPage, render_invoice, render_report};
+use ledgerly_print::pdf::{
+    ColumnAlign, PrintedDocument, ReportPage, RowStyle, render_invoice_pages, render_report_pages,
+};
 use ledgerly_print::template::{PrintError, load_template};
-use ledgerly_reports::export::report_text;
+use ledgerly_reports::print_text::{PrintAlign, PrintRowStyle, print_text};
 use ledgerly_reports::{ReportKind, ReportParams};
 
 use crate::error::ApiError;
@@ -25,6 +27,18 @@ impl Api {
     /// when the built-in template fails to load or the renderer fails on a voucher it should
     /// print, and [`ApiError::Stale`] after a saved change whose reload failed.
     pub fn print_voucher(&self, id: VoucherId) -> Result<Outcome<Vec<u8>>, ApiError> {
+        Ok(self.print_voucher_document(id)?.map(|doc| doc.pdf))
+    }
+
+    /// As [`Api::print_voucher`], with the pages the PDF was written from, so a preview shows
+    /// the engine's own layout.
+    ///
+    /// # Errors
+    /// As [`Api::print_voucher`].
+    pub fn print_voucher_document(
+        &self,
+        id: VoucherId,
+    ) -> Result<Outcome<PrintedDocument>, ApiError> {
         let books = match self.cached_books()? {
             Outcome::Value(books) => books,
             Outcome::Unsupported(u) => return Ok(Outcome::Unsupported(u)),
@@ -40,8 +54,8 @@ impl Api {
             ));
         };
         let template = load_template(TAX_INVOICE_A4)?;
-        match render_invoice(&template, voucher, books, gst) {
-            Ok(bytes) => Ok(Outcome::Value(bytes)),
+        match render_invoice_pages(&template, voucher, books, gst) {
+            Ok(doc) => Ok(Outcome::Value(doc)),
             Err(PrintError::Unsupported { reason }) => Ok(Outcome::unsupported(
                 format!("print voucher {}", id.0),
                 reason,
@@ -61,6 +75,18 @@ impl Api {
     /// The errors of [`Api::report`], [`ApiError::Report`] when the report cannot be turned into
     /// print text, [`ApiError::Print`] for a renderer failure, and [`ApiError::Stale`].
     pub fn print_report(&self, p: &ReportParams) -> Result<Outcome<Vec<u8>>, ApiError> {
+        Ok(self.print_report_document(p)?.map(|doc| doc.pdf))
+    }
+
+    /// As [`Api::print_report`], with the pages the PDF was written from, so a preview shows
+    /// the engine's own layout.
+    ///
+    /// # Errors
+    /// As [`Api::print_report`].
+    pub fn print_report_document(
+        &self,
+        p: &ReportParams,
+    ) -> Result<Outcome<PrintedDocument>, ApiError> {
         let printable = match &p.kind {
             ReportKind::TrialBalance
             | ReportKind::BalanceSheet
@@ -88,17 +114,34 @@ impl Api {
             Outcome::Value(books) => books.company.name.clone(),
             Outcome::Unsupported(u) => return Ok(Outcome::Unsupported(u)),
         };
-        let text = report_text(&report)?;
+        let text = print_text(&report)?;
         let page = ReportPage {
             company,
             title: report.title.clone(),
             period: format!("{} to {}", dmy(p.period.from()), dmy(p.period.to())),
             headings: text.headings,
-            rows: text.rows,
+            rows: text.rows.iter().map(|r| r.cells.clone()).collect(),
             notes: text.notes,
+            aligns: text
+                .aligns
+                .iter()
+                .map(|a| match a {
+                    PrintAlign::Left => ColumnAlign::Left,
+                    PrintAlign::Right => ColumnAlign::Right,
+                })
+                .collect(),
+            styles: text
+                .rows
+                .iter()
+                .map(|r| match r.style {
+                    PrintRowStyle::Plain => RowStyle::Plain,
+                    PrintRowStyle::Band => RowStyle::Band,
+                    PrintRowStyle::Total => RowStyle::Total,
+                })
+                .collect(),
         };
-        match render_report(&page) {
-            Ok(bytes) => Ok(Outcome::Value(bytes)),
+        match render_report_pages(&page) {
+            Ok(doc) => Ok(Outcome::Value(doc)),
             Err(PrintError::Unsupported { reason }) => Ok(Outcome::unsupported(
                 format!("print {}", report.title),
                 reason,

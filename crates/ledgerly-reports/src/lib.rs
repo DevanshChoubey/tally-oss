@@ -9,6 +9,7 @@ pub mod ledger;
 mod model;
 pub mod outstanding;
 pub mod params;
+pub mod print_text;
 pub mod profit_loss;
 pub mod registers;
 mod stock_reason;

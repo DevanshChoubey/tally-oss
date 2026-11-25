@@ -641,6 +641,13 @@ fn a_long_invoice_continues_on_new_pages_with_the_heading_repeated() {
     assert!((2..=pages).contains(&headings));
     assert_eq!(t.iter().filter(|s| *s == "Widget").count(), 120);
     assert!(has(&t, "1,41,600.00"));
+    // derived: 1,41,600 is read in the Indian system, one lakh forty-one thousand six hundred
+    // (not "one hundred forty-one thousand").
+    assert!(
+        t.iter()
+            .any(|s| s.contains("One Lakh") && s.contains("Thousand Six Hundred")),
+        "amount in words missing in {t:?}"
+    );
 }
 
 #[test]

@@ -45,8 +45,8 @@ Classes:
 
 ## Balance sheet and drills (`balance-sheet.*`)
 
-- **NOT BUILT** Export has no PDF (the mock offers "PDF, XLSX or CSV", index.html:1624); PDF comes
-  with report printing, which another round is building.
+- **NOT BUILT** Export has no PDF (the mock offers "PDF, XLSX or CSV", index.html:1624); the print
+  preview's Save as PDF writes it, the export dialog does not offer it.
 - **FIX** Export of the balance sheet writes the engine's primary-groups-only condensed report, not
   the sub-group view on screen.
 - **FIX** the audit screen's own table still uses `TableBuilder` (`screens/audit.rs`); every other
@@ -70,8 +70,6 @@ Classes:
   and Loss Statement in TallyPrime" (help.tallysolutions.com/profit-and-loss-statement-tally/, read
   2026-11-25); the mock draws Income and Expenses and must change to the two-sided form.
 - **DELIBERATE** reports open at the last voucher's date, 20 Nov (the Trial Balance page above).
-- **NOT BUILT** `profit-and-loss.print-preview`, `.print-saved`, `.print-failed` and `*.print-busy`:
-  another agent is building the preview.
 - **DELIBERATE** `audit.unsupported` is a table here: the engine returns an `EditsAfterLock` table;
   capturing the mock's claim would be a wrong picture.
 - **DELIBERATE** the audit edit log lists the engine's audit events (Seq, Date, Time, User, Action,
@@ -236,13 +234,31 @@ Classes:
   first address line because `Address` has no city field.
 - **DELIBERATE** the mock's sample is prefilled and the wizard starts blank; refusals are a toast.
 
-## Print (card P1; another agent owns the preview)
+## Print (`*.print-preview`, `*.print-busy`, `*.print-saved`, `*.print-failed`)
 
-- **NOT BUILT** in-app print preview and configuration; printing to a device; the trial balance,
-  balance sheet, profit and loss and day book; any voucher but sales invoices, credit notes and
+Ctrl+P (or the Print preview button) prepares the PDF on the worker, shows the pages the print
+engine laid out with the mock's card (paper, pages, destination, Save as PDF, Close), and Save writes
+the same bytes. Flow per "How to Print Invoices/Reports in TallyPrime"
+(help.tallysolutions.com/print-invoices-reports/, read 2026-11-25): print, preview, then print.
+Printed reports use Indian digit grouping and the screens' Dr/Cr rule; profit and loss prints as the
+two-sided account, the balance sheet as one vertical statement, the trial balance as Debit and
+Credit (`ledgerly_reports::print_text` places the engine's figures only).
+
+- **NOT BUILT** print configuration: printer, paper size, Pages to Print (F10), margin, page start
+  number, "Set Preview as Default" (help.tallysolutions.com/configure-for-print-export-share/, read
+  2026-11-26). The engine writes one A4 PDF (A5 by template) and has no page-range output; the card
+  states paper and destination as facts. The preview scrolls and has no zoom.
+- **NOT BUILT** printing to a device; the day book; any voucher but sales invoices, credit notes and
   debit notes; a UPI QR (no UPI address is held).
-- **DELIBERATE** printed text is plain ASCII (the print crate refuses other characters); Ctrl+P is
-  not on the key bars, as the mock's (index.html:1634).
+- **NOT BUILT** the mock has no preview state for an invoice; the same card and key bar are used
+  there and no capture exists (reported to the mock round).
+- **DELIBERATE** the preview sets each text in the app's font inside the box the engine gave it
+  (shrunk if wider): the PDF uses Helvetica, which the app does not embed.
+- **DELIBERATE** the printed page has horizontal rules and bold only: the mock's vertical rule
+  between the two sides and tinted section bands are not drawn; the balance sheet's rupee-sign
+  heading prints "Amount" because the print font is ASCII-only (the print crate refuses other
+  characters).
+- **DELIBERATE** Ctrl+P is not on the key bars, as the mock's (index.html:1634).
 
 ## Accessibility, themes, keys
 
