@@ -1,16 +1,18 @@
 //! Print jobs for the report and voucher screens (card P1, spec section 11 M5).
 //!
-//! The PDF comes from `ledgerly-api` (which asks `ledgerly-print`) on the API worker. The save
-//! dialog opens on the UI thread, as Export's does, and the file is written on a file thread
-//! (`shell::spawn_file_job`), so the window never waits on the disk. The UI draws no PDF.
+//! The PDF and the pages it was written from come from `ledgerly-api` (which asks
+//! `ledgerly-print`) on the API worker. Ctrl+P shows the pages in the print preview
+//! ([`crate::screens::print_preview`]); saving from the preview opens the save dialog on the UI
+//! thread, as Export's does, and writes the preview's own bytes on a file thread
+//! (`shell::spawn_file_job`), so the window never waits on the disk. The UI lays nothing out.
 //!
-//! Printing to a device and the print preview are not built: see `design/PARITY-GAPS.md`.
+//! Printing to a device is not built: see `design/PARITY-GAPS.md`.
 
 use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{Receiver, TryRecvError};
 
-use ledgerly_api::Api;
+use ledgerly_api::{Api, PrintedDocument};
 use ledgerly_core::Outcome;
 
 use crate::screens::report_view::{Notice, export_file_name};
@@ -21,8 +23,9 @@ use crate::worker::ApiWorker;
 /// Opens the save dialog for a PDF: given the suggested file name, the path chosen, or `None`.
 pub type SavePicker = Box<dyn FnMut(&str) -> Option<PathBuf>>;
 
-/// What a print run brings back: the PDF bytes, or the engine's refusal, or an error text.
-type Rendered = Result<Outcome<Vec<u8>>, String>;
+/// What a print run brings back: the document (PDF and pages), or the engine's refusal, or an
+/// error text.
+type Rendered = Result<Outcome<PrintedDocument>, String>;
 
 /// The system save dialog, offering PDF.
 fn save_pdf_dialog(suggested: &str) -> Option<PathBuf> {
@@ -43,8 +46,8 @@ pub fn pdf_file_name(title: &str) -> String {
 #[must_use]
 pub fn print_notice(title: &str, done: &Rendered) -> Notice {
     match done {
-        Ok(Outcome::Value(bytes)) => {
-            Notice::Info(format!("{title} is ready: {} bytes of PDF.", bytes.len()))
+        Ok(Outcome::Value(doc)) => {
+            Notice::Info(format!("{title} is ready: {} bytes of PDF.", doc.pdf.len()))
         }
         Ok(Outcome::Unsupported(u)) => {
             Notice::Error(format!("{title} was not printed. {}", unsupported_text(u)))
@@ -78,13 +81,17 @@ fn write_pdf(path: &Path, bytes: &[u8]) -> Result<(), String> {
     })
 }
 
-/// One print at a time for a screen: the render on the worker, then the save.
+/// One print at a time for a screen: the render on the worker, the preview, then the save.
 pub struct PrintJob {
     title: String,
     render: Latest<Rendered>,
     picker: SavePicker,
     writing: Option<Receiver<Result<PathBuf, String>>>,
     saved: Option<PathBuf>,
+    /// The document the preview shows, once the worker has produced it.
+    preview: Option<PrintedDocument>,
+    /// Save was asked for in the preview; the dialog opens on the next tick.
+    save_wanted: bool,
 }
 
 impl fmt::Debug for PrintJob {
@@ -112,7 +119,38 @@ impl PrintJob {
             picker,
             writing: None,
             saved: None,
+            preview: None,
+            save_wanted: false,
         }
+    }
+
+    /// Replaces the save dialog.
+    pub fn set_picker(&mut self, picker: SavePicker) {
+        self.picker = picker;
+    }
+
+    /// The document the print preview shows, when it is open.
+    #[must_use]
+    pub fn preview(&self) -> Option<&PrintedDocument> {
+        self.preview.as_ref()
+    }
+
+    /// Closes the preview without saving (Esc). Nothing is written.
+    pub fn close_preview(&mut self) {
+        self.preview = None;
+        self.save_wanted = false;
+    }
+
+    /// Asks to save the previewed PDF (Ctrl+P in the preview, or its Save as PDF button): the
+    /// save dialog opens on the next [`PrintJob::tick`].
+    pub fn request_save(&mut self) {
+        self.save_wanted = self.preview.is_some();
+    }
+
+    /// `true` while the PDF is being rendered.
+    #[must_use]
+    pub fn is_rendering(&self) -> bool {
+        self.render.is_pending()
     }
 
     /// The PDF this job last saved, when there is one.
@@ -137,18 +175,22 @@ impl PrintJob {
     }
 
     /// Starts `job` on the worker for the report or voucher titled `title`. A print already
-    /// running is dropped, as a newer request replaces it.
+    /// running is dropped, as a newer request replaces it, and an open preview is closed.
     pub fn start<F>(&mut self, worker: &ApiWorker, title: &str, job: F)
     where
-        F: FnOnce(&mut Api) -> Result<Outcome<Vec<u8>>, ledgerly_api::ApiError> + Send + 'static,
+        F: FnOnce(&mut Api) -> Result<Outcome<PrintedDocument>, ledgerly_api::ApiError>
+            + Send
+            + 'static,
     {
+        self.close_preview();
         title.clone_into(&mut self.title);
         self.render
             .start(worker, move |api| job(api).map_err(|e| e.to_string()));
     }
 
-    /// Moves the job on: when the PDF is ready, opens the save dialog and starts the write;
-    /// when a write finishes, says where it went. Returns the notice to show, if any.
+    /// Moves the job on: when the document is ready, opens the preview; when save was asked for,
+    /// opens the save dialog and starts the write of the previewed bytes; when a write
+    /// finishes, says where it went. Returns the notice to show, if any.
     pub fn tick(&mut self) -> Option<Notice> {
         if let Some(outcome) = self.writing.as_ref().map(Receiver::try_recv) {
             match outcome {
@@ -173,12 +215,18 @@ impl PrintJob {
             }
             return None;
         }
+        if std::mem::take(&mut self.save_wanted) && self.preview.is_some() {
+            let suggested = pdf_file_name(&self.title);
+            // A cancelled dialog leaves the preview open.
+            let path = (self.picker)(&suggested)?;
+            let doc = self.preview.take()?;
+            return self.save(&path, doc.pdf);
+        }
         match self.render.poll() {
             None => None,
-            Some(Done::Ready(Ok(Outcome::Value(bytes)))) => {
-                let suggested = pdf_file_name(&self.title);
-                let path = (self.picker)(&suggested)?;
-                self.save(&path, bytes)
+            Some(Done::Ready(Ok(Outcome::Value(doc)))) => {
+                self.preview = Some(doc);
+                None
             }
             Some(Done::Ready(other)) => Some(print_notice(&self.title, &other)),
             Some(Done::Lost) => Some(Notice::Error(format!(

@@ -962,13 +962,33 @@ financial year starts. The model supports that (`Company::books_begin`), so it i
 
 ## Print (card P1, round of 2026-11-24)
 
-- **gap: no in-app print preview or configuration.** TallyPrime's flow is Ctrl+P (Current),
-  then C (configure), I (preview), P (print), as read on "How to Print Invoices/Reports in
-  TallyPrime" (help.tallysolutions.com/print-invoices-reports/, read 2026-11-24, last updated
-  2026-11-20). The mock now has `profit-and-loss.print-preview`, `print-saved` and `print-failed`
-  (round S12); it offers Save as PDF only, as the app does. Ours saves a PDF to a file chosen in a save dialog,
-  and an "Open PDF" button then opens it in the system's PDF viewer (xdg-open, open or start).
-  That viewer is the preview until an in-app preview exists.
+- **fixed (S14): Ctrl+P opens a print preview.** On every report that prints and on the voucher
+  screen, Ctrl+P (or the Print preview button) prepares the PDF on the worker (the page shows
+  "Preparing the PDF. The preview opens when it is ready." meanwhile), then shows the pages the
+  print engine laid out, with the mock's card at the right (paper, page count, destination, Save
+  as PDF Ctrl+P, Close Esc). The pages are drawn from the same render that wrote the PDF
+  (`ledgerly_print::pdf::render_*_pages`), and Save writes those bytes; Esc closes. The flow
+  follows "How to Print Invoices/Reports in TallyPrime" (help.tallysolutions.com/
+  print-invoices-reports/, read 2026-11-25, last updated 2026-11-20): print, preview, then print.
+  States: `profit-and-loss.print-preview`, `.print-busy`, `.print-saved`, `.print-failed`.
+  The mock has no preview state for an invoice; the same card and key bar are used there and no
+  capture exists for it.
+- **gap: no print configuration.** The help page's configuration (C) offers the printer and
+  its paper size, and the Print screen's Pages to Print (F10) and "Set Preview as Default" are
+  described on its sibling page (help.tallysolutions.com/configure-for-print-export-share/,
+  read 2026-11-26, last updated 2026-11-20; it also offers a margin and a page start number). None is built, because our engine writes one A4 PDF (A5 by template) and
+  has no page-range output; the card states the paper and destination as facts, not options.
+  The preview scrolls (wheel, arrows, PageUp/PageDown, unadvertised on the key bar as the mock
+  shows only Ctrl+P and Esc) and has no zoom.
+- **difference: the printed page is not the mock's page.** The mock's paper repeats the on-screen
+  T-form with Indian digit grouping and Dr/Cr columns. The PDF the engine writes is a flat table
+  of the engine's print text (`report_text`): ungrouped figures such as 912000.00, a minus sign
+  for a credit, the report's own title (for profit and loss, "Profit and loss account"). The
+  preview shows exactly that, since it must be the PDF; fixing it means changing the print
+  layout in `ledgerly-print`, which is outside this card.
+- **difference: the preview is not drawn in the PDF's face.** The PDF uses Helvetica, which the
+  app does not embed; the preview sets each text in the app's font inside the box the engine gave
+  it (shrunk if wider), so column ends match the PDF and glyph shapes differ slightly.
 - **gap: no printing to a device.** Ours writes PDF files only. The Alt+P > Configuration
   printer and paper setup is not built.
 - **gap: some reports cannot be printed.** Trial balance, balance sheet, profit and loss, day book
@@ -1089,8 +1109,6 @@ state yet and still draws the generic table.
   read 2026-11-21; `shell/navigate.rs` `default_period`). No voucher is dated 21 Nov, so every
   figure equals the mock's 21 Nov figure. The mock reads its own "today" (21 Nov); it should read
   the last voucher date (20 Nov) on reports, as its own day book does.
-- **gap: no print preview, saved or failed state.** `profit-and-loss.print-preview`, `.print-saved`
-  and `.print-failed` are not captured: the app has no in-app preview panel (see Print).
 - **gap: audit, edits after lock is a table here, Unsupported in the mock.** The engine returns an
   `EditsAfterLock` table; the mock's `audit.unsupported` says it is unsupported. The tab opens and
   shows what the engine gives; no capture is taken (it would not match the mock's claim). The
@@ -1196,10 +1214,6 @@ Mismatches between the mock's totals and the engine's, and why:
 
 ## Round S12b: states the app reaches (2026-11-25)
 
-- **gap: the print busy line.** The app shows no text while a PDF is prepared: `print_job.rs`
-  `is_busy` only keeps the frame repainting. The mock state `profit-and-loss.print-busy` shows
-  "Preparing the PDF. The save dialog opens when it is ready." That line is a proposal, not a copy
-  of the app. Decide whether the app should show it.
 - **by design: the print error is the app's words.** `print_job.rs` `print_notice` gives
   "{title} was not printed: {reason}". The mock's `profit-and-loss.print-error` uses that form with a
   sample reason ("the store is closed").
@@ -1285,10 +1299,6 @@ Every mock state now has an app capture except the states below, each with its r
   profit-and-loss.print-error.** The sample books never make the engine refuse these (GSTR-3B for
   October 2026 is Unsupported and is captured as `gst.gstr3b-unsupported`). A capture would need an
   invented failure, which would be a wrong picture of the product.
-- **not built: print preview** (`*.print-preview`, `*.print-busy`). Ctrl+P writes the PDF through a
-  save dialog and shows "PDF saved" or the failure; there is no page-as-printed screen, and
-  building one means changing the shared `report_view` code that another branch is editing. The
-  PDF is written in one step, so there is no busy moment to capture.
 - **difference: masters.empty and masters.items-empty.** The card, the glyph and the plus on the
   button now match. The app keeps the filter box and the "More master kinds" menu above the empty
   card; the mock hides them.

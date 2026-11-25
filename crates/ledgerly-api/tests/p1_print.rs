@@ -275,3 +275,46 @@ fn a_balance_sheet_and_a_trial_balance_print_as_pdfs_that_name_the_company() {
         }
     }
 }
+
+#[test]
+fn a_report_document_is_the_same_pdf_with_the_pages_it_was_written_from() {
+    // Card S14. An identity check between two entry points of one render, not a copied figure:
+    // the bytes equal `print_report`'s, and the first page's text starts with the company's
+    // name written in `company()` above, then the report's title (Derived: report layout in
+    // `ledgerly_print::pdf::render_report`: company, title, period, then the table).
+    let (_dir, _path, api) = setup();
+    let params = report_params(ReportKind::DayBook);
+    let Ok(Outcome::Value(pdf)) = api.print_report(&params) else {
+        panic!("the day book should print");
+    };
+    let Ok(Outcome::Value(doc)) = api.print_report_document(&params) else {
+        panic!("the day book document should print");
+    };
+    assert_eq!(doc.pdf, pdf);
+    // An empty day book is a heading and no rows: one page (derived, as `s14_pages`).
+    assert_eq!(doc.pages.len(), 1);
+    let first = doc.pages[0]
+        .items
+        .iter()
+        .find_map(|i| match i {
+            ledgerly_api::PageItem::Text { text, .. } => Some(text.as_str()),
+            ledgerly_api::PageItem::Rule { .. } | ledgerly_api::PageItem::Fill { .. } => None,
+        })
+        .unwrap();
+    assert_eq!(first, "Test Traders");
+}
+
+#[test]
+fn a_document_that_cannot_print_is_unsupported_with_the_same_reason() {
+    // Derived: the refusals of `print_report` and `print_voucher` are the document's too.
+    let (_dir, _path, mut api) = setup();
+    match api.print_report_document(&report_params(ReportKind::StockSummary)) {
+        Ok(Outcome::Unsupported(u)) => assert!(u.reason.contains("CSV"), "{:?}", u.reason),
+        other => panic!("expected Unsupported, got {other:?}"),
+    }
+    value(api.execute(Command::PostVoucher(payment(1, date!(2026 - 06 - 01), 500))));
+    match api.print_voucher_document(VoucherId(1)) {
+        Ok(Outcome::Unsupported(u)) => assert!(u.reason.contains("GST"), "{:?}", u.reason),
+        other => panic!("expected Unsupported, got {other:?}"),
+    }
+}

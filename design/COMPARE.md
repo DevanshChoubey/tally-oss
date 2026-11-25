@@ -1,6 +1,6 @@
 # App against mock
 
-354 app captures are paired with a mock capture of the same theme and state id. SSIM is 1 for identical images; lower is a bigger difference, and the list runs worst first.
+360 app captures are paired with a mock capture of the same theme and state id. SSIM is 1 for identical images; lower is a bigger difference, and the list runs worst first.
 
 | Theme | State | SSIM |
 | --- | --- | --- |
@@ -12,7 +12,7 @@
 | hc | bank.default | 0.4966 |
 | hc | profit-and-loss.provisional | 0.5009 |
 | hc | audit.default | 0.5030 |
-| hc | profit-and-loss.print-failed | 0.5091 |
+| hc | profit-and-loss.print-failed | 0.5090 |
 | hc | day-book.month | 0.5094 |
 | hc | balance-sheet.provisional | 0.5160 |
 | hc | masters.loading | 0.5166 |
@@ -34,6 +34,7 @@
 | hc | ai-settings.local | 0.5533 |
 | dark | home.nudge-open | 0.5637 |
 | hc | trial-balance.default | 0.5691 |
+| dark | profit-and-loss.print-preview | 0.5716 |
 | hc | import.imported | 0.5720 |
 | hc | masters.ledgers | 0.5753 |
 | light | home.gst-unsupported | 0.5756 |
@@ -43,9 +44,11 @@
 | hc | home.ai-off | 0.5785 |
 | dark | home.gst-unsupported | 0.5790 |
 | hc | palette.search | 0.5813 |
+| hc | profit-and-loss.print-preview | 0.5825 |
+| hc | profit-and-loss.print-busy | 0.5839 |
 | light | palette.entry | 0.5862 |
 | light | palette.ask | 0.5890 |
-| hc | profit-and-loss.print-saved | 0.5915 |
+| hc | profit-and-loss.print-saved | 0.5904 |
 | hc | sales-invoice.item-list | 0.5916 |
 | hc | import.port-error | 0.5924 |
 | hc | import.validation-error | 0.5934 |
@@ -107,19 +110,21 @@
 | hc | purchase.default | 0.6458 |
 | hc | sales-invoice.b2c | 0.6468 |
 | hc | import.default | 0.6475 |
+| light | profit-and-loss.print-preview | 0.6486 |
 | dark | sales-invoice.default | 0.6502 |
+| light | profit-and-loss.print-busy | 0.6505 |
 | dark | trial-balance.default | 0.6510 |
 | dark | palette.search | 0.6519 |
 | dark | purchase-bill.offline-ai | 0.6543 |
+| light | profit-and-loss.print-failed | 0.6543 |
 | dark | profit-and-loss.detailed | 0.6545 |
 | light | keys.standard | 0.6546 |
-| light | profit-and-loss.print-failed | 0.6550 |
 | light | balance-sheet.detailed | 0.6556 |
 | dark | keys.standard | 0.6557 |
 | dark | sales-invoice.gst-inter-state | 0.6557 |
 | light | palette.default | 0.6565 |
+| dark | profit-and-loss.print-failed | 0.6569 |
 | hc | payment.overdraft | 0.6571 |
-| dark | profit-and-loss.print-failed | 0.6575 |
 | hc | credit-note.validation-error | 0.6581 |
 | hc | bank.brs | 0.6585 |
 | dark | stock-summary.provisional | 0.6590 |
@@ -130,6 +135,7 @@
 | light | sales-invoice.b2c | 0.6613 |
 | hc | debit-note.validation-error | 0.6618 |
 | light | balance-sheet.default | 0.6633 |
+| dark | profit-and-loss.print-busy | 0.6646 |
 | hc | balance-sheet.voucher | 0.6647 |
 | light | keys.classic | 0.6648 |
 | dark | keys.classic | 0.6651 |
@@ -171,13 +177,13 @@
 | dark | import.default | 0.6977 |
 | dark | palette.commands | 0.6980 |
 | light | masters.no-match | 0.6987 |
+| light | profit-and-loss.print-saved | 0.6989 |
 | light | profit-and-loss.default | 0.6992 |
-| light | profit-and-loss.print-saved | 0.6999 |
 | dark | balance-sheet.default | 0.7009 |
 | light | gst.gstr3b | 0.7014 |
 | light | import.running | 0.7014 |
+| dark | profit-and-loss.print-saved | 0.7022 |
 | dark | outstanding.receivables | 0.7027 |
-| dark | profit-and-loss.print-saved | 0.7032 |
 | hc | credit-note.default | 0.7034 |
 | light | import.default | 0.7051 |
 | light | purchase.default | 0.7062 |
@@ -457,7 +463,7 @@ SSIM 0.5030
 
 ## hc / profit-and-loss.print-failed
 
-SSIM 0.5091
+SSIM 0.5090
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -719,6 +725,18 @@ SSIM 0.5691
 </tr>
 </table>
 
+## dark / profit-and-loss.print-preview
+
+SSIM 0.5716
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/dark/profit-and-loss.print-preview.webp" width="480" alt="mock dark profit-and-loss.print-preview"></td>
+<td><img src="app-captures/dark/profit-and-loss.print-preview.webp" width="480" alt="app dark profit-and-loss.print-preview"></td>
+</tr>
+</table>
+
 ## hc / import.imported
 
 SSIM 0.5720
@@ -827,6 +845,30 @@ SSIM 0.5813
 </tr>
 </table>
 
+## hc / profit-and-loss.print-preview
+
+SSIM 0.5825
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/hc/profit-and-loss.print-preview.webp" width="480" alt="mock hc profit-and-loss.print-preview"></td>
+<td><img src="app-captures/hc/profit-and-loss.print-preview.webp" width="480" alt="app hc profit-and-loss.print-preview"></td>
+</tr>
+</table>
+
+## hc / profit-and-loss.print-busy
+
+SSIM 0.5839
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/hc/profit-and-loss.print-busy.webp" width="480" alt="mock hc profit-and-loss.print-busy"></td>
+<td><img src="app-captures/hc/profit-and-loss.print-busy.webp" width="480" alt="app hc profit-and-loss.print-busy"></td>
+</tr>
+</table>
+
 ## light / palette.entry
 
 SSIM 0.5862
@@ -853,7 +895,7 @@ SSIM 0.5890
 
 ## hc / profit-and-loss.print-saved
 
-SSIM 0.5915
+SSIM 0.5904
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1595,6 +1637,18 @@ SSIM 0.6475
 </tr>
 </table>
 
+## light / profit-and-loss.print-preview
+
+SSIM 0.6486
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/profit-and-loss.print-preview.webp" width="480" alt="mock light profit-and-loss.print-preview"></td>
+<td><img src="app-captures/light/profit-and-loss.print-preview.webp" width="480" alt="app light profit-and-loss.print-preview"></td>
+</tr>
+</table>
+
 ## dark / sales-invoice.default
 
 SSIM 0.6502
@@ -1604,6 +1658,18 @@ SSIM 0.6502
 <tr>
 <td><img src="mock-v2/captures/states/dark/sales-invoice.default.webp" width="480" alt="mock dark sales-invoice.default"></td>
 <td><img src="app-captures/dark/sales-invoice.default.webp" width="480" alt="app dark sales-invoice.default"></td>
+</tr>
+</table>
+
+## light / profit-and-loss.print-busy
+
+SSIM 0.6505
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/profit-and-loss.print-busy.webp" width="480" alt="mock light profit-and-loss.print-busy"></td>
+<td><img src="app-captures/light/profit-and-loss.print-busy.webp" width="480" alt="app light profit-and-loss.print-busy"></td>
 </tr>
 </table>
 
@@ -1643,6 +1709,18 @@ SSIM 0.6543
 </tr>
 </table>
 
+## light / profit-and-loss.print-failed
+
+SSIM 0.6543
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/profit-and-loss.print-failed.webp" width="480" alt="mock light profit-and-loss.print-failed"></td>
+<td><img src="app-captures/light/profit-and-loss.print-failed.webp" width="480" alt="app light profit-and-loss.print-failed"></td>
+</tr>
+</table>
+
 ## dark / profit-and-loss.detailed
 
 SSIM 0.6545
@@ -1664,18 +1742,6 @@ SSIM 0.6546
 <tr>
 <td><img src="mock-v2/captures/states/light/keys.standard.webp" width="480" alt="mock light keys.standard"></td>
 <td><img src="app-captures/light/keys.standard.webp" width="480" alt="app light keys.standard"></td>
-</tr>
-</table>
-
-## light / profit-and-loss.print-failed
-
-SSIM 0.6550
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/light/profit-and-loss.print-failed.webp" width="480" alt="mock light profit-and-loss.print-failed"></td>
-<td><img src="app-captures/light/profit-and-loss.print-failed.webp" width="480" alt="app light profit-and-loss.print-failed"></td>
 </tr>
 </table>
 
@@ -1727,6 +1793,18 @@ SSIM 0.6565
 </tr>
 </table>
 
+## dark / profit-and-loss.print-failed
+
+SSIM 0.6569
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/dark/profit-and-loss.print-failed.webp" width="480" alt="mock dark profit-and-loss.print-failed"></td>
+<td><img src="app-captures/dark/profit-and-loss.print-failed.webp" width="480" alt="app dark profit-and-loss.print-failed"></td>
+</tr>
+</table>
+
 ## hc / payment.overdraft
 
 SSIM 0.6571
@@ -1736,18 +1814,6 @@ SSIM 0.6571
 <tr>
 <td><img src="mock-v2/captures/states/hc/payment.overdraft.webp" width="480" alt="mock hc payment.overdraft"></td>
 <td><img src="app-captures/hc/payment.overdraft.webp" width="480" alt="app hc payment.overdraft"></td>
-</tr>
-</table>
-
-## dark / profit-and-loss.print-failed
-
-SSIM 0.6575
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/dark/profit-and-loss.print-failed.webp" width="480" alt="mock dark profit-and-loss.print-failed"></td>
-<td><img src="app-captures/dark/profit-and-loss.print-failed.webp" width="480" alt="app dark profit-and-loss.print-failed"></td>
 </tr>
 </table>
 
@@ -1868,6 +1934,18 @@ SSIM 0.6633
 <tr>
 <td><img src="mock-v2/captures/states/light/balance-sheet.default.webp" width="480" alt="mock light balance-sheet.default"></td>
 <td><img src="app-captures/light/balance-sheet.default.webp" width="480" alt="app light balance-sheet.default"></td>
+</tr>
+</table>
+
+## dark / profit-and-loss.print-busy
+
+SSIM 0.6646
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/dark/profit-and-loss.print-busy.webp" width="480" alt="mock dark profit-and-loss.print-busy"></td>
+<td><img src="app-captures/dark/profit-and-loss.print-busy.webp" width="480" alt="app dark profit-and-loss.print-busy"></td>
 </tr>
 </table>
 
@@ -2363,6 +2441,18 @@ SSIM 0.6987
 </tr>
 </table>
 
+## light / profit-and-loss.print-saved
+
+SSIM 0.6989
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/profit-and-loss.print-saved.webp" width="480" alt="mock light profit-and-loss.print-saved"></td>
+<td><img src="app-captures/light/profit-and-loss.print-saved.webp" width="480" alt="app light profit-and-loss.print-saved"></td>
+</tr>
+</table>
+
 ## light / profit-and-loss.default
 
 SSIM 0.6992
@@ -2372,18 +2462,6 @@ SSIM 0.6992
 <tr>
 <td><img src="mock-v2/captures/states/light/profit-and-loss.default.webp" width="480" alt="mock light profit-and-loss.default"></td>
 <td><img src="app-captures/light/profit-and-loss.default.webp" width="480" alt="app light profit-and-loss.default"></td>
-</tr>
-</table>
-
-## light / profit-and-loss.print-saved
-
-SSIM 0.6999
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/light/profit-and-loss.print-saved.webp" width="480" alt="mock light profit-and-loss.print-saved"></td>
-<td><img src="app-captures/light/profit-and-loss.print-saved.webp" width="480" alt="app light profit-and-loss.print-saved"></td>
 </tr>
 </table>
 
@@ -2423,6 +2501,18 @@ SSIM 0.7014
 </tr>
 </table>
 
+## dark / profit-and-loss.print-saved
+
+SSIM 0.7022
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/dark/profit-and-loss.print-saved.webp" width="480" alt="mock dark profit-and-loss.print-saved"></td>
+<td><img src="app-captures/dark/profit-and-loss.print-saved.webp" width="480" alt="app dark profit-and-loss.print-saved"></td>
+</tr>
+</table>
+
 ## dark / outstanding.receivables
 
 SSIM 0.7027
@@ -2432,18 +2522,6 @@ SSIM 0.7027
 <tr>
 <td><img src="mock-v2/captures/states/dark/outstanding.receivables.webp" width="480" alt="mock dark outstanding.receivables"></td>
 <td><img src="app-captures/dark/outstanding.receivables.webp" width="480" alt="app dark outstanding.receivables"></td>
-</tr>
-</table>
-
-## dark / profit-and-loss.print-saved
-
-SSIM 0.7032
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/dark/profit-and-loss.print-saved.webp" width="480" alt="mock dark profit-and-loss.print-saved"></td>
-<td><img src="app-captures/dark/profit-and-loss.print-saved.webp" width="480" alt="app dark profit-and-loss.print-saved"></td>
 </tr>
 </table>
 
@@ -4609,7 +4687,7 @@ SSIM 0.8950
 
 ## Mock states with no app capture yet
 
-### light (27)
+### light (25)
 
 - `ask.result`
 - `ask.loading`
@@ -4634,12 +4712,10 @@ SSIM 0.8950
 - `masters.suggested-ledger`
 - `profit-and-loss.print-error`
 - `gst.gstr1-failed`
-- `profit-and-loss.print-busy`
 - `audit.failed`
 - `gst.gstr1-unsupported`
-- `profit-and-loss.print-preview`
 
-### dark (27)
+### dark (25)
 
 - `ask.result`
 - `ask.loading`
@@ -4664,12 +4740,10 @@ SSIM 0.8950
 - `masters.suggested-ledger`
 - `profit-and-loss.print-error`
 - `gst.gstr1-failed`
-- `profit-and-loss.print-busy`
 - `audit.failed`
 - `gst.gstr1-unsupported`
-- `profit-and-loss.print-preview`
 
-### hc (27)
+### hc (25)
 
 - `ask.result`
 - `ask.loading`
@@ -4694,10 +4768,8 @@ SSIM 0.8950
 - `masters.suggested-ledger`
 - `profit-and-loss.print-error`
 - `gst.gstr1-failed`
-- `profit-and-loss.print-busy`
 - `audit.failed`
 - `gst.gstr1-unsupported`
-- `profit-and-loss.print-preview`
 
 ## App captures with no mock capture
 

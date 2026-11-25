@@ -799,6 +799,10 @@ enum Inject {
     ScriptFile(ScriptedFile),
     /// Makes the next save dialog answer with a path (see [`SaveTarget`]).
     ScriptSave(SaveTarget),
+    /// Holds the API worker from now on: every job asked after this stays queued until the shot
+    /// ends. A flow takes it after its screen has loaded, so the next request (Ctrl+P on a
+    /// report) stays "preparing" for the photograph (`profit-and-loss.print-busy`).
+    HoldWorker,
     /// Panics unless the top screen is the expected one (see [`Expect`]). Every flow that drills
     /// or picks a row ends in one, so a capture of the wrong screen stops the run.
     Expect(Expect),
@@ -986,6 +990,13 @@ impl Shot {
     /// The same shot with the next save dialog answering `target`, after what came before it.
     fn script_save(mut self, target: SaveTarget) -> Self {
         self.after.push(Inject::ScriptSave(target));
+        self
+    }
+
+    /// The same shot with the API worker held after what came before it (see
+    /// [`Inject::HoldWorker`]).
+    fn hold_worker(mut self) -> Self {
+        self.after.push(Inject::HoldWorker);
         self
     }
 
@@ -2051,10 +2062,29 @@ fn s13_shots() -> Vec<Shot> {
             .expect_bar("Profit and loss", "Profit and loss")
             .press(&[(Key::F1, Modifiers::ALT)])
             .expect_bar("Profit and loss", "Profit and loss"),
+        // Ctrl+P opens the preview of the engine's pages; Ctrl+P there saves, so the saved and
+        // failed states are two presses, with the preview's key bar between them.
+        shot("profit-and-loss.print-preview", &[palette])
+            .query("Profit and Loss")
+            .then(&[(Key::Enter, NONE)])
+            .expect_bar("Profit and loss", "Profit and loss")
+            .press(&[(Key::P, Modifiers::COMMAND)])
+            .expect_bar("Profit and loss", "Print preview"),
+        // The worker is held once the report is up, so the PDF stays "preparing".
+        shot("profit-and-loss.print-busy", &[palette])
+            .query("Profit and Loss")
+            .then(&[(Key::Enter, NONE)])
+            .expect_bar("Profit and loss", "Profit and loss")
+            .hold_worker()
+            .press(&[(Key::P, Modifiers::COMMAND)])
+            .wait(30)
+            .expect_bar("Profit and loss", "Profit and loss"),
         shot("profit-and-loss.print-saved", &[palette])
             .query("Profit and Loss")
             .then(&[(Key::Enter, NONE)])
             .expect_bar("Profit and loss", "Profit and loss")
+            .press(&[(Key::P, Modifiers::COMMAND)])
+            .expect_bar("Profit and loss", "Print preview")
             .script_save(SaveTarget::Writable)
             .press(&[(Key::P, Modifiers::COMMAND)])
             .wait(120)
@@ -2063,6 +2093,8 @@ fn s13_shots() -> Vec<Shot> {
             .query("Profit and Loss")
             .then(&[(Key::Enter, NONE)])
             .expect_bar("Profit and loss", "Profit and loss")
+            .press(&[(Key::P, Modifiers::COMMAND)])
+            .expect_bar("Profit and loss", "Print preview")
             .script_save(SaveTarget::MissingFolder)
             .press(&[(Key::P, Modifiers::COMMAND)])
             .wait(120)
@@ -2320,7 +2352,8 @@ impl eframe::App for Snapshots {
                 Inject::Scroll(..) => SCROLL_SETTLE_FRAMES,
                 Inject::Wait(frames) => frames,
                 Inject::Seek(_) | Inject::SeekBy(..) | Inject::Expect(_) => 0,
-                Inject::Key(..)
+                Inject::HoldWorker
+                | Inject::Key(..)
                 | Inject::Text(_)
                 | Inject::Click(..)
                 | Inject::ScriptFile(_)
@@ -2340,6 +2373,9 @@ impl eframe::App for Snapshots {
                 }
                 Inject::Text(text) => raw_input.events.push(Event::Text(text.to_owned())),
                 Inject::Wait(_) | Inject::Seek(_) | Inject::SeekBy(..) | Inject::Expect(_) => {}
+                Inject::HoldWorker => {
+                    self.held = self.shell.app_ctx_mut().api.as_ref().map(ApiWorker::hold);
+                }
                 Inject::ScriptFile(file) => {
                     ledgerly_app::ui::dialogs::script_open_file(file.write(&self.out));
                 }

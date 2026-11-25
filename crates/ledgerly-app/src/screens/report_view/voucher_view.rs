@@ -38,7 +38,7 @@ use crate::ui::page_head::page_head;
 use crate::ui::table::{self, CellPlace, RowState, T_HEAD_HEIGHT, T_ROW_HEIGHT};
 use crate::ui::{bold_font, kind, tokens};
 use crate::worker::ApiWorker;
-use crate::{AppCtx, Screen, ScreenAction};
+use crate::{AppCtx, KeyHint, Screen, ScreenAction};
 use ledgerly_core::Outcome;
 
 /// Why a voucher could not be shown.
@@ -355,6 +355,47 @@ const AMOUNT_W: f32 = 170.0;
 const ITEM_COLS: [f32; 3] = [110.0, 112.0, 150.0];
 
 impl VoucherViewScreen {
+    /// Replaces the save dialog the print opens.
+    pub fn set_print_picker(&mut self, picker: crate::screens::print_job::SavePicker) {
+        self.print.set_picker(picker);
+    }
+
+    /// The pages the print preview shows, when it is open.
+    #[must_use]
+    pub fn print_preview(&self) -> Option<&ledgerly_api::PrintedDocument> {
+        self.print.preview()
+    }
+
+    /// `true` while the PDF is being prepared (the busy note is on screen).
+    #[must_use]
+    pub fn is_print_rendering(&self) -> bool {
+        self.print.is_rendering()
+    }
+
+    /// The notice about the last print, when there is one.
+    #[must_use]
+    pub fn notice(&self) -> Option<&Notice> {
+        self.notice.as_ref()
+    }
+
+    /// The print preview in place of the voucher: the page head, then the engine's pages and the
+    /// card that saves them (the same preview as every report).
+    fn draw_print_preview(&mut self, ui: &mut Ui) -> ScreenAction {
+        use crate::screens::print_preview::{PreviewAction, show};
+        page_head(ui, &self.page_title(), self.subtitle().as_deref(), |_| {});
+        let action = match self.print.preview() {
+            Some(doc) => show(ui, doc),
+            None => PreviewAction::None,
+        };
+        match action {
+            PreviewAction::Save => self.print.request_save(),
+            PreviewAction::Close => self.print.close_preview(),
+            PreviewAction::None => {}
+        }
+        ui.ctx().request_repaint();
+        ScreenAction::Stay
+    }
+
     /// A screen for voucher `id`. It reads the voucher from the shared books each frame.
     #[must_use]
     pub fn new(id: VoucherId) -> Self {
@@ -740,17 +781,43 @@ impl Screen for VoucherViewScreen {
         Some("Read-only. Esc goes back up".to_owned())
     }
 
+    fn key_bar_name(&self) -> String {
+        if self.print.preview().is_some() {
+            return "Print preview".to_owned();
+        }
+        self.page_title()
+    }
+
+    fn keys(&self) -> Vec<KeyHint> {
+        if self.print.preview().is_some() {
+            // index.html:2272: the preview's key bar.
+            return vec![
+                KeyHint::new("Ctrl+P", "Save as PDF"),
+                KeyHint::new("Esc", "Close"),
+            ];
+        }
+        Vec::new()
+    }
+
     fn sidebar_title(&self) -> String {
         self.origin.clone().unwrap_or_else(|| self.title())
     }
 
     fn ui(&mut self, ui: &mut Ui, ctx: &mut AppCtx) -> ScreenAction {
+        let was_previewing = self.print.preview().is_some();
         if let Some(note) = self.print.tick() {
             self.notice = Some(note);
+        }
+        if !was_previewing && self.print.preview().is_some() {
+            // The preview opens on a clean page: an older note is not about this print.
+            self.notice = None;
         }
         self.tick_detail(ctx.api.as_ref());
         if self.detail.is_pending() {
             ui.ctx().request_repaint();
+        }
+        if self.print.preview().is_some() {
+            return self.draw_print_preview(ui);
         }
         // Ctrl+P prints the voucher (spec 11 M5). The PDF comes from the API worker.
         if ui
@@ -767,9 +834,12 @@ impl Screen for VoucherViewScreen {
                     let id = self.id;
                     let title = format!("Voucher {}", id.0);
                     self.print
-                        .start(handle, &title, move |api| api.print_voucher(id));
+                        .start(handle, &title, move |api| api.print_voucher_document(id));
                 }
             }
+        }
+        if self.print.is_rendering() {
+            crate::screens::print_preview::draw_busy(ui);
         }
         if let Some(note) = &self.notice {
             ui.label(note.text());

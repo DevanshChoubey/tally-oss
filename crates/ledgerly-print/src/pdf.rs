@@ -839,6 +839,66 @@ mod page {
         size.saturating_add(size / 4).saturating_add(1)
     }
 
+    /// A document as printed: the PDF and the pages it was written from.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub struct PrintedDocument {
+        /// The PDF bytes.
+        pub pdf: Vec<u8>,
+        /// The pages, in order.
+        pub pages: Vec<PageLayout>,
+    }
+
+    /// One page of a [`PrintedDocument`]. All values are whole points from the top-left.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub struct PageLayout {
+        /// Page width.
+        pub width: i32,
+        /// Page height.
+        pub height: i32,
+        /// What is drawn, in drawing order.
+        pub items: Vec<PageItem>,
+    }
+
+    /// One thing drawn on a page, as written into the PDF.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub enum PageItem {
+        /// A line of text in Helvetica (bold or regular).
+        Text {
+            /// Left edge.
+            x: i32,
+            /// Baseline, from the top of the page.
+            baseline: i32,
+            /// Font size.
+            size: i32,
+            /// Bold face.
+            bold: bool,
+            /// The text.
+            text: String,
+            /// The width the layout gave the text (right-aligned text ends at `x + width`).
+            width: i32,
+        },
+        /// A horizontal rule.
+        Rule {
+            /// Left end.
+            x1: i32,
+            /// Right end.
+            x2: i32,
+            /// Height from the top of the page.
+            y: i32,
+        },
+        /// A filled rectangle (a module of the QR code).
+        Fill {
+            /// Left edge.
+            x: i32,
+            /// Top edge.
+            y: i32,
+            /// Width.
+            w: i32,
+            /// Height.
+            h: i32,
+        },
+    }
+
     /// One drawing operation on a page. Positions are in points from the top-left.
     enum Op {
         Text {
@@ -859,6 +919,39 @@ mod page {
             w: i32,
             h: i32,
         },
+    }
+
+    impl Op {
+        /// The public view of this operation.
+        fn item(&self) -> PageItem {
+            match self {
+                Self::Text {
+                    x,
+                    baseline,
+                    size,
+                    bold,
+                    text,
+                } => PageItem::Text {
+                    x: *x,
+                    baseline: *baseline,
+                    size: *size,
+                    bold: *bold,
+                    text: text.clone(),
+                    width: text_width(text, *size, *bold),
+                },
+                Self::Rule { x1, x2, y } => PageItem::Rule {
+                    x1: *x1,
+                    x2: *x2,
+                    y: *y,
+                },
+                Self::Fill { x, y, w, h } => PageItem::Fill {
+                    x: *x,
+                    y: *y,
+                    w: *w,
+                    h: *h,
+                },
+            }
+        }
     }
 
     /// How a table column aligns its text.
@@ -1127,8 +1220,9 @@ mod page {
             Ok(())
         }
 
-        /// Adds the page numbers and writes the document.
-        pub(super) fn finish(mut self) -> Result<Vec<u8>, PrintError> {
+        /// Adds the page numbers and writes the document, returning the PDF with the pages it was
+        /// written from.
+        pub(super) fn finish(mut self) -> Result<PrintedDocument, PrintError> {
             self.done.push(std::mem::take(&mut self.current));
             let total = self.done.len();
             let baseline = self.height.saturating_sub(MARGIN);
@@ -1140,7 +1234,17 @@ mod page {
                 let x = centre.saturating_sub(text_width(&label, TABLE, false) / 2);
                 push_text(ops, x, baseline, TABLE, false, &label)?;
             }
-            write_pdf(self.width, self.height, &self.done)
+            let pdf = write_pdf(self.width, self.height, &self.done)?;
+            let pages = self
+                .done
+                .iter()
+                .map(|ops| PageLayout {
+                    width: self.width,
+                    height: self.height,
+                    items: ops.iter().map(Op::item).collect(),
+                })
+                .collect();
+            Ok(PrintedDocument { pdf, pages })
         }
     }
 
@@ -1245,6 +1349,7 @@ use qrcode::{Color, QrCode};
 use crate::template::{Block, BlockBody, ItemColumn, PrintError, Slot, TaxColumn, Template};
 use data::{Invoice, unsupported};
 use page::{Align, BODY, Canvas, Column};
+pub use page::{PageItem, PageLayout, PrintedDocument};
 
 /// Size of one QR module in points.
 const QR_MODULE: i32 = 3;
@@ -1277,6 +1382,20 @@ pub fn render_invoice(
     render_invoice_with_upi(t, v, books, gst, None)
 }
 
+/// Like [`render_invoice`], with the pages as laid out: the PDF is the same bytes.
+///
+/// # Errors
+///
+/// As [`render_invoice`].
+pub fn render_invoice_pages(
+    t: &Template,
+    v: &Voucher,
+    books: &Books,
+    gst: &StoredGst,
+) -> Result<PrintedDocument, PrintError> {
+    render_invoice_with_upi_pages(t, v, books, gst, None)
+}
+
 /// Like [`render_invoice`], with the payee a `upi_qr` block pays to.
 ///
 /// # Errors
@@ -1289,6 +1408,21 @@ pub fn render_invoice_with_upi(
     gst: &StoredGst,
     upi: Option<&UpiPayee<'_>>,
 ) -> Result<Vec<u8>, PrintError> {
+    render_invoice_with_upi_pages(t, v, books, gst, upi).map(|doc| doc.pdf)
+}
+
+/// Like [`render_invoice_with_upi`], with the pages as laid out.
+///
+/// # Errors
+///
+/// As [`render_invoice_with_upi`].
+pub fn render_invoice_with_upi_pages(
+    t: &Template,
+    v: &Voucher,
+    books: &Books,
+    gst: &StoredGst,
+    upi: Option<&UpiPayee<'_>>,
+) -> Result<PrintedDocument, PrintError> {
     let invoice = Invoice::new(books, v, gst)?;
     let (width_mm, height_mm) = t.page.millimetres();
     let mut canvas = Canvas::new(mm_to_points(width_mm), mm_to_points(height_mm));
@@ -1463,6 +1597,15 @@ pub struct ReportPage {
 /// nothing else), and [`PrintError::Render`] when a row does not have one cell per heading, so a
 /// figure is never printed under the wrong heading.
 pub fn render_report(page: &ReportPage) -> Result<Vec<u8>, PrintError> {
+    render_report_pages(page).map(|doc| doc.pdf)
+}
+
+/// Like [`render_report`], with the pages as laid out: the PDF is the same bytes, and the pages
+/// are what it was written from (the print preview draws them).
+///
+/// # Errors
+/// As [`render_report`].
+pub fn render_report_pages(page: &ReportPage) -> Result<PrintedDocument, PrintError> {
     let mut canvas = Canvas::new(mm_to_points(210), mm_to_points(297));
     canvas.paragraph(&page.company, BODY, true)?;
     canvas.paragraph(&page.title, BODY, true)?;

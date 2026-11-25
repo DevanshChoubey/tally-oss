@@ -492,6 +492,23 @@ impl ReportViewScreen {
         self.export_picker = picker;
     }
 
+    /// Replaces the save dialog the print opens.
+    pub fn set_print_picker(&mut self, picker: crate::screens::print_job::SavePicker) {
+        self.print.set_picker(picker);
+    }
+
+    /// The pages the print preview shows, when it is open.
+    #[must_use]
+    pub fn print_preview(&self) -> Option<&ledgerly_api::PrintedDocument> {
+        self.print.preview()
+    }
+
+    /// `true` while the PDF is being prepared (the busy note is on screen).
+    #[must_use]
+    pub fn is_print_rendering(&self) -> bool {
+        self.print.is_rendering()
+    }
+
     /// Starts a print of the report on the worker when Ctrl+P was pressed. Reports have no print
     /// layout yet, so the engine answers `Unsupported` and its reason is shown as the notice.
     fn run_print_request(&mut self, worker: Option<&ApiWorker>) {
@@ -508,8 +525,9 @@ impl ReportViewScreen {
         };
         let params = run.engine.clone();
         let title = self.report.title.clone();
-        self.print
-            .start(handle, &title, move |api| api.print_report(&params));
+        self.print.start(handle, &title, move |api| {
+            api.print_report_document(&params)
+        });
     }
 
     /// `true` while an export is being written.
@@ -1086,7 +1104,12 @@ impl ReportViewScreen {
             self.export_wanted = true;
         }
         if print {
-            self.print_wanted = true;
+            // The head's button is "Print preview": while the preview is open it closes it.
+            if self.print.preview().is_some() {
+                self.print.close_preview();
+            } else {
+                self.print_wanted = true;
+            }
         }
         if goto {
             self.goto = Some("profit-and-loss");
@@ -1131,6 +1154,9 @@ impl ReportViewScreen {
     }
 
     fn draw(&mut self, ui: &mut Ui) -> ScreenAction {
+        if self.print.preview().is_some() {
+            return self.draw_print_preview(ui);
+        }
         let keys = read_keys(ui.ctx(), self.period_edit.is_some(), self.look());
         let mut action = ScreenAction::Stay;
         for cmd in &keys {
@@ -1140,6 +1166,9 @@ impl ReportViewScreen {
         }
         let look = self.look();
         self.draw_head(ui, look);
+        if self.print.is_rendering() {
+            crate::screens::print_preview::draw_busy(ui);
+        }
         if self.report.columns.is_empty()
             && self.report.rows.is_empty()
             && !self.is_loading()
@@ -1209,6 +1238,26 @@ impl ReportViewScreen {
             ui.ctx().request_repaint();
         }
         action
+    }
+
+    /// The print preview in place of the report: the page head as on the report, then the
+    /// engine's pages and the card that saves them (the mock's `profit-and-loss.print-preview`).
+    fn draw_print_preview(&mut self, ui: &mut Ui) -> ScreenAction {
+        let look = self.look();
+        self.draw_head(ui, look);
+        self.footer = None;
+        self.selected_line = None;
+        let action = match self.print.preview() {
+            Some(doc) => crate::screens::print_preview::show(ui, doc),
+            None => crate::screens::print_preview::PreviewAction::None,
+        };
+        match action {
+            crate::screens::print_preview::PreviewAction::Save => self.print.request_save(),
+            crate::screens::print_preview::PreviewAction::Close => self.print.close_preview(),
+            crate::screens::print_preview::PreviewAction::None => {}
+        }
+        ui.ctx().request_repaint();
+        ScreenAction::Stay
     }
 
     /// The generic table, or the empty day book's card, with the footnote under it.
@@ -1565,6 +1614,9 @@ impl Screen for ReportViewScreen {
     }
 
     fn key_bar_name(&self) -> String {
+        if self.print.preview().is_some() {
+            return "Print preview".to_owned();
+        }
         if self.is_computing() {
             // index.html:1579: while the report computes the bar says so and offers only Esc.
             return "Computing".to_owned();
@@ -1576,6 +1628,13 @@ impl Screen for ReportViewScreen {
     }
 
     fn keys(&self) -> Vec<KeyHint> {
+        if self.print.preview().is_some() {
+            // index.html:2272: the preview's key bar.
+            return vec![
+                KeyHint::new("Ctrl+P", "Save as PDF"),
+                KeyHint::new("Esc", "Close"),
+            ];
+        }
         if self.is_computing() {
             return vec![KeyHint::new("Esc", "Cancel")];
         }
@@ -1660,8 +1719,13 @@ impl Screen for ReportViewScreen {
             }
         }
         self.run_export_request(ctx.api.as_ref());
+        let was_previewing = self.print.preview().is_some();
         if let Some(note) = self.print.tick() {
             self.notice = Some(note);
+        }
+        if !was_previewing && self.print.preview().is_some() {
+            // The preview opens on a clean page: an older note is not about this print.
+            self.notice = None;
         }
         self.run_print_request(ctx.api.as_ref());
         if self.is_exporting() || self.print.is_busy() {

@@ -50,7 +50,7 @@ state and the mock does not; the reason is in the last column.
 | Start screen with recent companies (cold.start-open-selected) | start.recent | |
 | Profit and loss, default and detailed | profit-and-loss.default, profit-and-loss.detailed | Trading account then profit and loss, groups (ledgers in detailed, Alt+F1); nett profit 16,96,569.70 equals the balance sheet's profit to date |
 | Profit and loss, provisional stock | profit-and-loss.provisional | Pickaxe below zero on 19 Nov, back to 70; closing stock marked Provisional |
-| Print preview (Ctrl+P) | profit-and-loss.print-preview | Save as PDF only; paper printing is not built |
+| Print preview (Ctrl+P) | profit-and-loss.print-preview | The engine's own pages and a card with Save as PDF; paper printing is not built; the same preview serves every report and the invoice, which has no mock state |
 | PDF saved | profit-and-loss.print-saved | |
 | PDF not saved (file open elsewhere) | profit-and-loss.print-failed | |
 | Trial balance | trial-balance.default | The sample's ledgers (CGST, SGST, IGST as one ledger each), engine group names, total 1,25,33,742.30 |
@@ -145,8 +145,9 @@ loaded and unsupported, masters empty and loading variants.
   against Tally.
 - Tally print preview and the edit log: no page URL was reachable from the pages read, so the
   print and audit states are not checked against Tally's help. They follow the app's own behaviour.
-- Print busy (`profit-and-loss.print-busy`): the line "Preparing the PDF." is a proposal. The app
-  shows no text while a PDF is prepared.
+- Print busy (`profit-and-loss.print-busy`): the line "Preparing the PDF. The preview opens when it
+  is ready." is the app's own wording (S14; the mock said the save dialog opens, which Ctrl+P no
+  longer does). The app shows the same line.
 - Audit: the integrity certificate's zero broken links is the mock's sample state, not a computed
   result.
 
