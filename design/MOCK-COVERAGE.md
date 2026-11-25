@@ -36,31 +36,31 @@ state and the mock does not; the reason is in the last column.
 
 | App screen or state | Mock state (new) | Notes |
 |---|---|---|
-| Purchase, typed by hand (F9 without the bill reader), default | purchase.default | Supplier Nilgiri Steel, IGST, total 51,141.00 (hand check in the code) |
+| Purchase, typed by hand (F9 without the bill reader), default | purchase.default | Supplier Nilgiri Steel (29), place of supply 27 Maharashtra, IGST, PB/0145, total 51,141.00 (hand check in the code) |
 | Purchase, validation errors | purchase.validation-error | Missing quantity and unknown item, from the app's wording |
-| Credit note, default | credit-note.default | CN against SI/0412, CGST and SGST, total 5,959.00 |
-| Credit note, validation error | credit-note.validation-error | 70 returned against 67 invoiced |
-| Debit note, default | debit-note.default | Purchase return against NST/1145, total 2,360.00 |
-| Debit note, validation error | debit-note.validation-error | Return with no matching bill line |
+| Credit note, default | credit-note.default | CN/0001 against SI/0412, CGST and SGST, total 5,959.00 |
+| Credit note, validation error | credit-note.validation-error | Line with an item and no quantity (the app's refusal); tax Not computed |
+| Debit note, default | debit-note.default | DN/0001, 2 HDPE coils back to Rupa Polymers against RP/5398 (PB/0125), IGST 738.00, total 4,838.00 |
+| Debit note, validation error | debit-note.validation-error | Line with an item and no quantity (the app's refusal) |
 | Journal, default | journal.default | JV/0033, 1,840.00 both sides |
 | Journal, does not balance | journal.validation-error | Difference 360.00 shown, Save blocked |
 | Contra, default | contra.default | CT/0022, 30,000.00 cash to bank |
 | Contra, validation errors | contra.validation-error | No account picked, zero amount (app wording) |
 | Bank account chooser | bank-chooser.default | Two accounts, balances from the engine |
 | Start screen with recent companies (cold.start-open-selected) | start.recent | |
-| Profit and loss, default | profit-and-loss.default | Net profit equals balance sheet profit to date |
-| Profit and loss, provisional stock | profit-and-loss.provisional | Steel pickaxe -30 nos |
+| Profit and loss, default and detailed | profit-and-loss.default, profit-and-loss.detailed | Trading account then profit and loss, groups (ledgers in detailed, Alt+F1); nett profit 16,96,569.70 equals the balance sheet's profit to date |
+| Profit and loss, provisional stock | profit-and-loss.provisional | Pickaxe below zero on 19 Nov, back to 70; closing stock marked Provisional |
 | Print preview (Ctrl+P) | profit-and-loss.print-preview | Save as PDF only; paper printing is not built |
 | PDF saved | profit-and-loss.print-saved | |
 | PDF not saved (file open elsewhere) | profit-and-loss.print-failed | |
-| Trial balance | trial-balance.default | |
+| Trial balance | trial-balance.default | The sample's ledgers (CGST, SGST, IGST as one ledger each), engine group names, total 1,25,33,742.30 |
 | Outstanding receivables | outstanding.receivables | Due from credit days; overdue from the engine |
 | Outstanding payables | outstanding.payables | |
 | Stock summary | stock-summary.default | Total equals closing stock on the balance sheet |
-| Stock summary, provisional item | stock-summary.provisional | |
-| Audit, edit log | audit.default | |
+| Stock summary, provisional item | stock-summary.provisional | Quantity 70, value 32,900.00 kept and marked Provisional |
+| Audit, edit log | audit.default | The engine's shape: Seq, Date, Time, User, Action, Object, Reason, Field, Before, After; 14 posted vouchers, 1 to 20 Nov |
 | Audit, integrity certificate | audit.integrity | |
-| Audit, edits after lock (Unsupported) | audit.unsupported | The app maps this report to None |
+| Audit, edits after lock | audit.unsupported | State id kept; the engine returns a table, empty here (the lock was recorded after every voucher) |
 
 ## Still MISSING
 
@@ -78,12 +78,19 @@ state and the mock does not; the reason is in the last column.
 
 ## Open items for the designs above
 
-- Rule 53(1A) of the CGST Rules: the research of 2026-11-25 read the particulars list from a
-  commentary; the official CBIC text was not reachable. The credit and debit note footers say
-  "rule 53" and need checking against the CBIC text before the wording is final.
-- Debit notes: s.34(3) puts the debit note with the supplier. The purchase-return booking in
-  debit-note.default follows the mock's own rule (Dr supplier, Cr purchases and input tax). Its
-  GST treatment for the buyer needs a GST adviser's check before the app is built to match.
+- Rule 53(1A) of the CGST Rules: the credit note footer cites it from the taxguru commentary
+  (read 2026-11-25), not the CBIC text. The debit note footer no longer says anything about
+  rule 53 or input tax reversal: the page read says nothing about a buyer's reversal.
+- Debit notes: s.34(3) puts a GST debit note with the supplier. The purchase-return booking in
+  debit-note.default (a note to the supplier at the bill's rate, IGST by the engine) needs a GST
+  adviser's check before the app's GST treatment is final.
+- Voucher numbers shown in the mock are the sample's next numbers: PB/0145, CN/0001, DN/0001,
+  JV/0033, CT/0022 (the engine counts from the highest number of each type).
+- Profit and loss layout: the page https://help.tallysolutions.com/profit-and-loss-statement-tally/
+  (read 2026-11-25) documents the horizontal form, "Show with Gross Profit" and a detailed view;
+  the group order inside each side follows the owner's brief of 2026-11-25.
+- import.imported (neutral wording instead of the other product's name) is not on this branch:
+  that state is added by s12/mock-coverage.
 - Tally voucher fields (credit note reference, journal and contra rules) were found only as search
   snippets, not full pages. The layouts here follow the app's own forms and the GST rule, not a
   field-by-field copy of any other product.
