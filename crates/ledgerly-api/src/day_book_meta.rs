@@ -78,6 +78,25 @@ impl Api {
     }
 }
 
+impl Api {
+    /// The stored name of the signed-in user (the actor of this Api), or `None` when the
+    /// directory holds no name for them. A user the directory does not name has no name: nothing
+    /// is made up here.
+    ///
+    /// # Errors
+    /// [`ApiError::Store`] when the log cannot be read.
+    pub fn actor_name(&self) -> Result<Option<String>, ApiError> {
+        let user = match self.actor() {
+            Actor::User(user) => *user,
+            Actor::Import { on_behalf_of, .. } | Actor::Assistant { on_behalf_of, .. } => {
+                *on_behalf_of
+            }
+        };
+        let records = read_all(self.store())?;
+        Ok(stored_name(&records, user))
+    }
+}
+
 /// How a voucher came to be entered, from the actor of its `VoucherPosted` record.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EntryOrigin {

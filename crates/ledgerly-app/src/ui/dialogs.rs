@@ -25,9 +25,25 @@ pub fn script_open_file(path: PathBuf) {
     }
 }
 
+/// Paths that the next save dialogs answer with, in order, without raising a dialog.
+static SCRIPTED_SAVES: Mutex<VecDeque<PathBuf>> = Mutex::new(VecDeque::new());
+
+/// Makes the next [`save_file`] answer `path` as if the user had chosen it, with no dialog. Each
+/// call answers one `save_file`. For the capture tool and tests; nothing in the app calls it.
+pub fn script_save_file(path: PathBuf) {
+    if let Ok(mut queue) = SCRIPTED_SAVES.lock() {
+        queue.push_back(path);
+    }
+}
+
 /// The next scripted answer, if there is one.
 fn next_scripted_open() -> Option<PathBuf> {
     SCRIPTED_OPENS.lock().ok()?.pop_front()
+}
+
+/// The next scripted save answer, if there is one.
+fn next_scripted_save() -> Option<PathBuf> {
+    SCRIPTED_SAVES.lock().ok()?.pop_front()
 }
 
 /// Lets the app raise native file dialogs. Only the real window calls this.
@@ -49,6 +65,9 @@ pub fn save_file(
     suggested: Option<&str>,
     filters: &[(&str, &[&str])],
 ) -> Option<PathBuf> {
+    if let Some(scripted) = next_scripted_save() {
+        return Some(scripted);
+    }
     if !system_dialogs_enabled() {
         return None;
     }
@@ -92,5 +111,23 @@ mod tests {
         assert_eq!(open_file("t", &[]), Some(PathBuf::from("a.csv")));
         assert_eq!(open_file("t", &[]), Some(PathBuf::from("b.csv")));
         assert_eq!(open_file("t", &[]), None);
+    }
+
+    #[test]
+    fn a_scripted_save_answers_once_and_then_dialogs_stay_off() {
+        // provenance: derived. Dialogs are off in tests, so an unscripted save is cancelled; a
+        // scripted one answers exactly one save with the given path, in the order scripted.
+        assert_eq!(save_file("t", Some("x.pdf"), &[]), None);
+        script_save_file(PathBuf::from("a.pdf"));
+        script_save_file(PathBuf::from("b.pdf"));
+        assert_eq!(
+            save_file("t", Some("x.pdf"), &[]),
+            Some(PathBuf::from("a.pdf"))
+        );
+        assert_eq!(
+            save_file("t", Some("x.pdf"), &[]),
+            Some(PathBuf::from("b.pdf"))
+        );
+        assert_eq!(save_file("t", Some("x.pdf"), &[]), None);
     }
 }

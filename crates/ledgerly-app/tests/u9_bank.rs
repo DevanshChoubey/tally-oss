@@ -657,3 +657,61 @@ fn in_the_manual_panel_space_chooses_and_enter_confirms() {
     assert_eq!(m.kind, MatchKind::Manual);
     assert_eq!(m.statement_lines, vec![1]);
 }
+
+// ---- AI off ----------------------------------------------------------------------------------
+
+/// The text of every galley the screen paints with `tier` stored for the company.
+fn painted_with_tier(tier: Option<ledgerly_app::AiTier>) -> Vec<String> {
+    fn walk(shape: &egui::Shape, out: &mut Vec<String>) {
+        match shape {
+            egui::Shape::Text(t) => out.push(t.galley.text().to_owned()),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
+            egui::Shape::Noop
+            | egui::Shape::Circle(_)
+            | egui::Shape::Ellipse(_)
+            | egui::Shape::LineSegment { .. }
+            | egui::Shape::Path(_)
+            | egui::Shape::Band(_)
+            | egui::Shape::Rect(_)
+            | egui::Shape::Mesh(_)
+            | egui::Shape::QuadraticBezier(_)
+            | egui::Shape::CubicBezier(_)
+            | egui::Shape::Callback(_) => {}
+        }
+    }
+    let ctx = egui::Context::default();
+    let mut s = screen();
+    let mut app = AppCtx {
+        ai_tier: tier,
+        ..AppCtx::default()
+    };
+    let out = ctx.run_ui(RawInput::default(), |ui| {
+        let _ = s.ui(ui, &mut app);
+    });
+    let mut text = Vec::new();
+    for clipped in &out.shapes {
+        walk(&clipped.shape, &mut text);
+    }
+    out.drop_without_applying_deltas();
+    text
+}
+
+#[test]
+fn with_ai_off_the_side_says_what_still_runs_and_offers_ai_and_privacy() {
+    // provenance: design/mock-v2/index.html:1830, state `bank.offline-ai`: the side holds a note,
+    // "AI is off for this company. Exact and Rule matching still run: they are deterministic
+    // engine code. Leftover lines wait for you.", with an "AI and privacy" button.
+    let off = painted_with_tier(Some(ledgerly_app::AiTier::Off)).join("\n");
+    assert!(
+        off.contains("AI is off for this company."),
+        "no AI-off note in: {off}"
+    );
+    assert!(off.contains("Exact and Rule matching still run: they are deterministic engine code."));
+    assert!(off.contains("Leftover lines wait for you."));
+    assert!(off.contains("AI and privacy"));
+    let local = painted_with_tier(Some(ledgerly_app::AiTier::Local)).join("\n");
+    assert!(
+        !local.contains("AI is off for this company."),
+        "the note shows for the local tier"
+    );
+}

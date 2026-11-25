@@ -546,6 +546,22 @@ impl Shell {
         Self::new(Box::new(SetupScreen::default()))
     }
 
+    /// The shell the real app starts with: the Start screen when the list in `recent_dir` has
+    /// companies, otherwise company setup. Companies opened from setup are recorded in the list.
+    /// A list that cannot be read is treated as no list.
+    #[must_use]
+    pub fn cold_start_with_recent(recent_dir: Option<std::path::PathBuf>) -> Self {
+        let Some(dir) = recent_dir else {
+            return Self::cold_start();
+        };
+        match crate::recent::load(&dir) {
+            Ok(entries) if !entries.is_empty() => Self::new(Box::new(
+                crate::screens::start::StartScreen::new(dir, entries),
+            )),
+            Ok(_) | Err(_) => Self::new(Box::new(SetupScreen::default().with_recent_dir(dir))),
+        }
+    }
+
     /// Chooses the theme; it is applied on the next frame.
     pub fn set_theme(&mut self, theme: ThemeKind) {
         self.theme = theme;
@@ -895,7 +911,9 @@ pub fn run() -> eframe::Result<()> {
         Box::new(|_cc| {
             // The real window is the one place a native file dialog may open.
             crate::screens::setup::enable_system_dialogs();
-            Ok(Box::new(Shell::cold_start()))
+            Ok(Box::new(Shell::cold_start_with_recent(
+                crate::recent::default_dir(),
+            )))
         }),
     )
 }

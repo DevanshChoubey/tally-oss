@@ -76,6 +76,17 @@ pub(super) fn tab_strip(ui: &mut Ui, tabs_set: &Tabs, t: &Tokens) -> Vec<ChromeC
             cmds.push(ChromeCmd::SelectTab(index));
         }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            if button_icon(
+                ui,
+                Some(Icon::Plus),
+                "New tab",
+                Some("Ctrl+T"),
+                ButtonKind::Secondary,
+            )
+            .clicked()
+            {
+                cmds.push(ChromeCmd::NewTab);
+            }
             if tabs_set.len() > 1
                 && button_icon(
                     ui,
@@ -87,17 +98,6 @@ pub(super) fn tab_strip(ui: &mut Ui, tabs_set: &Tabs, t: &Tokens) -> Vec<ChromeC
                 .clicked()
             {
                 cmds.push(ChromeCmd::CloseActiveTab);
-            }
-            if button_icon(
-                ui,
-                Some(Icon::Plus),
-                "New tab",
-                Some("Ctrl+T"),
-                ButtonKind::Secondary,
-            )
-            .clicked()
-            {
-                cmds.push(ChromeCmd::NewTab);
             }
         });
     });
@@ -322,3 +322,72 @@ pub(super) fn key_bar(
 
 /// Room kept free at the right of the key bar for [`KEY_BAR_RIGHT`] and the hold hint, in points.
 const RIGHT_END_WIDTH: f32 = 330.0;
+
+#[cfg(test)]
+mod tab_strip_order {
+    //! The tab strip's buttons read "Close tab" then "New tab" from left to right.
+    //!
+    //! provenance: design/mock-v2/index.html (the tab strip, `Close tab Ctrl+W` before
+    //! `New tab Ctrl+T` inside the right-hand span).
+    #![allow(clippy::expect_used, reason = "test code")]
+
+    use super::*;
+    use crate::AppCtx;
+    use crate::ScreenAction;
+    use crate::screen::Screen;
+
+    struct Leaf;
+    impl Screen for Leaf {
+        fn title(&self) -> String {
+            "Leaf".to_owned()
+        }
+        fn ui(&mut self, _ui: &mut Ui, _ctx: &mut AppCtx) -> ScreenAction {
+            ScreenAction::Stay
+        }
+    }
+
+    fn x_of(shapes: &[egui::epaint::ClippedShape], label: &str) -> Option<f32> {
+        fn walk(shape: &egui::Shape, label: &str, out: &mut Option<f32>) {
+            match shape {
+                egui::Shape::Text(t) if t.galley.text() == label => *out = Some(t.pos.x),
+                egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, label, out)),
+                egui::Shape::Text(_)
+                | egui::Shape::Noop
+                | egui::Shape::Circle(_)
+                | egui::Shape::Ellipse(_)
+                | egui::Shape::LineSegment { .. }
+                | egui::Shape::Path(_)
+                | egui::Shape::Band(_)
+                | egui::Shape::Rect(_)
+                | egui::Shape::Mesh(_)
+                | egui::Shape::QuadraticBezier(_)
+                | egui::Shape::CubicBezier(_)
+                | egui::Shape::Callback(_) => {}
+            }
+        }
+        let mut found = None;
+        for clipped in shapes {
+            walk(&clipped.shape, label, &mut found);
+        }
+        found
+    }
+
+    #[test]
+    fn close_tab_is_left_of_new_tab() {
+        let mut tabs = Tabs::new(Box::new(Leaf));
+        tabs.open(Box::new(Leaf));
+        let ctx = egui::Context::default();
+        let out = ctx.run_ui(egui::RawInput::default(), |ui| {
+            let t = crate::ui::tokens(ui);
+            let _cmds = tab_strip(ui, &tabs, &t);
+        });
+        let close = x_of(&out.shapes, "Close tab");
+        let new = x_of(&out.shapes, "New tab");
+        out.drop_without_applying_deltas();
+        let (close, new) = (
+            close.expect("Close tab is drawn"),
+            new.expect("New tab is drawn"),
+        );
+        assert!(close < new, "Close tab at {close}, New tab at {new}");
+    }
+}

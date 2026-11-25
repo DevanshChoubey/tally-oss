@@ -11,7 +11,7 @@
 use egui::{Pos2, RawInput, Rect, Vec2};
 use ledgerly_app::screens::home::{
     AiPanel, AttentionItem, AttentionKind, HomeBody, HomeData, HomeScreen, HomeTarget, Kpi,
-    ai_panel, body, date_line, greeting, panel_row_is_wide, sub_line, tile_columns,
+    ai_panel, body, date_line, greeting, greeting_for, panel_row_is_wide, sub_line, tile_columns,
 };
 use ledgerly_app::shell::AiTier;
 use ledgerly_app::{AppCtx, Screen};
@@ -417,4 +417,19 @@ fn after_a_frame_home_greets_and_the_key_bar_still_says_home() {
         line.ends_with("\u{b7} FY 2026-27 \u{b7} books locked to 31 Mar 2026"),
         "line {line}"
     );
+}
+
+#[test]
+fn the_greeting_names_the_user_by_first_name_when_a_name_is_stored() {
+    // provenance: derived from the mock's Home head (design/mock-v2/index.html line 1132:
+    // "Good afternoon, Ananya") with the sample user "Ananya K." (ledgerly-sample/src/load.rs):
+    // the first word of the stored name follows the comma.
+    assert_eq!(
+        greeting_for(14, Some("Ananya K.")),
+        "Good afternoon, Ananya"
+    );
+    assert_eq!(greeting_for(8, Some("Rohan D.")), "Good morning, Rohan");
+    // No stored name: the plain greeting, never an invented name.
+    assert_eq!(greeting_for(14, None), "Good afternoon");
+    assert_eq!(greeting_for(14, Some("  ")), "Good afternoon");
 }

@@ -258,6 +258,13 @@ pub fn gate_note(ui: &mut Ui, feature: Feature, gate: &Gate) -> bool {
             NoteKind::Info
         }
     };
+    settings_note(ui, kind_of, gate_icon(gate), &text, gate.offers_settings())
+}
+
+/// Draws a note across the width with `icon`, `text` and, when `offer` is set, the AI and privacy
+/// button after the text. Returns `true` in the frame the button is clicked. [`gate_note`] and
+/// the bank screen's AI-off note (index.html:1830) share it.
+pub fn settings_note(ui: &mut Ui, kind_of: NoteKind, glyph: Icon, text: &str, offer: bool) -> bool {
     let t = tokens(ui);
     let (bg, fg, edge) = note_colors(kind_of, &t);
     let mut clicked = false;
@@ -269,10 +276,10 @@ pub fn gate_note(ui: &mut Ui, feature: Feature, gate: &Gate) -> bool {
         .show(ui, |ui| {
             ui.set_width(ui.available_width());
             ui.horizontal_wrapped(|ui| {
-                icon(ui, gate_icon(gate), fg);
+                icon(ui, glyph, fg);
                 ui.add_space(4.0);
-                ui.label(para_text(&text, TEXT_META, fg));
-                if gate.offers_settings() {
+                ui.label(para_text(text, TEXT_META, fg));
+                if offer {
                     clicked = button(ui, SETTINGS_BUTTON, None, ButtonKind::Secondary).clicked();
                 }
             });

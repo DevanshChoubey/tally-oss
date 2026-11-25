@@ -16,14 +16,12 @@ use super::wizard::ImportWizard;
 use crate::theme::{RADIUS_M, RADIUS_S, TEXT_BODY, TEXT_H2, TEXT_META, border_width};
 use crate::ui::badge::{BadgeKind, badge};
 use crate::ui::button::{ButtonKind, button, button_icon, style_combo};
-use crate::ui::card::card;
 use crate::ui::icon::Icon;
 use crate::ui::note::{NoteKind, note};
 use crate::ui::page_head::page_head;
-use crate::ui::step_marker::{self, MARKER_SIZE, StepMarker};
 use crate::ui::{a11y, bold_font, kind, para, tokens};
 use crate::worker::ApiWorker;
-use crate::{AppCtx, Screen, ScreenAction};
+use crate::{AppCtx, KeyHint, Screen, ScreenAction};
 
 // ---------------------------------------------------------------------------------------------
 // Display helpers
@@ -205,6 +203,35 @@ impl Screen for ImportScreen {
         "Import from another app".to_owned()
     }
 
+    fn key_bar_name(&self) -> String {
+        if self.direct.state == DirectState::Running {
+            "Importing".to_owned()
+        } else {
+            self.title()
+        }
+    }
+
+    fn keys(&self) -> Vec<KeyHint> {
+        if self.direct.state == DirectState::Running {
+            return vec![KeyHint::new("Esc", "Back")];
+        }
+        vec![
+            KeyHint::new("Enter", "Import the company"),
+            KeyHint::new("Esc", "Back"),
+        ]
+    }
+
+    fn cursor_label(&self, ctx: &AppCtx) -> Option<String> {
+        if let Some(text) = self.direct.state.text() {
+            return text.lines().next().map(str::to_owned);
+        }
+        Some(if ctx.api.is_none() {
+            "No company is open yet.".to_owned()
+        } else {
+            "Import in one step".to_owned()
+        })
+    }
+
     fn ui(&mut self, ui: &mut Ui, ctx: &mut AppCtx) -> ScreenAction {
         self.tick();
         if self.direct.state == DirectState::Running {
@@ -217,6 +244,15 @@ impl Screen for ImportScreen {
         {
             clicks.push(Click::Escape);
         }
+        let can_import =
+            self.wizard.step() == Step::Detect && self.direct.state != DirectState::Running;
+        let enter = can_import
+            && ui
+                .ctx()
+                .input_mut(|i| i.consume_key(Modifiers::NONE, Key::Enter));
+        if enter {
+            self.direct.start(ctx.api.as_ref());
+        }
         let width = ui.available_width().min(COLUMN_MAX_WIDTH);
         ui.vertical(|ui| {
             ui.set_max_width(width);
@@ -226,11 +262,9 @@ impl Screen for ImportScreen {
                 Some("Bring your masters and vouchers in from another accounting app. Everything is read on this computer, and a report shows what moved."),
                 |_| {},
             );
-            card(ui, |ui| {
+            {
                 ui.set_width(ui.available_width());
                 draw_steps(ui, &self.wizard);
-                ui.add_space(6.0);
-                rule(ui);
                 ui.add_space(14.0);
                 let no_company = ctx.api.is_none();
                 match self.wizard.step() {
@@ -266,7 +300,7 @@ impl Screen for ImportScreen {
                     ui.add_space(12.0);
                     note(ui, NoteKind::Bad, text);
                 }
-            });
+            }
         });
         let mut action = ScreenAction::Stay;
         for click in clicks {
@@ -294,59 +328,42 @@ fn rule(ui: &mut Ui) {
     ui.painter().rect_filled(rect, 0.0, t.border);
 }
 
-/// The step line: a marker and the step's name for each of the five steps, a hairline joining
-/// them, as the setup wizard's rail marks its steps (check for passed, accent for the current).
+/// The step line: each step's number in bold and its name, in a row with 18 px between them, as
+/// the mock's `SCREENS.import` draws them (an ordered list, the current step marked). The
+/// current step is in the ink colour, the others in `text-2`.
 #[expect(clippy::float_arithmetic, reason = "laying five steps along a row")]
-#[expect(clippy::cast_precision_loss, reason = "five steps, exact in f32")]
 fn draw_steps(ui: &mut Ui, wizard: &ImportWizard) {
     let t = tokens(ui);
-    let bw = border_width(kind(ui));
-    let (rect, _) = ui.allocate_exact_size(egui::vec2(ui.available_width(), 34.0), Sense::hover());
-    let seg = rect.width() / Step::ALL.len() as f32;
+    let (rect, _) = ui.allocate_exact_size(egui::vec2(ui.available_width(), 22.0), Sense::hover());
+    let mut x = rect.left();
     for (i, step) in Step::ALL.iter().enumerate() {
-        let (marker, ink, font) = match step.cmp(&wizard.step()) {
-            std::cmp::Ordering::Less => (
-                StepMarker::Passed,
-                t.text_2,
-                egui::FontId::proportional(TEXT_BODY),
-            ),
-            std::cmp::Ordering::Equal => {
-                (StepMarker::Current, t.accent_ink, bold_font(ui, TEXT_BODY))
-            }
-            std::cmp::Ordering::Greater => (
-                StepMarker::Ahead,
-                t.text_2,
-                egui::FontId::proportional(TEXT_BODY),
-            ),
-        };
-        let x0 = rect.left() + seg * i as f32;
-        let center = egui::pos2(x0 + MARKER_SIZE / 2.0, rect.center().y);
-        step_marker::paint(ui, center, marker, &step_number(*step).to_string());
-        let label_rect = ui.painter().text(
-            egui::pos2(center.x + MARKER_SIZE / 2.0 + 8.0, rect.center().y),
+        let current = *step == wizard.step();
+        let ink = if current { t.text } else { t.text_2 };
+        let number = ui.painter().text(
+            egui::pos2(x, rect.center().y),
             egui::Align2::LEFT_CENTER,
-            step.label(),
-            font,
+            step_number(*step).to_string(),
+            bold_font(ui, TEXT_BODY),
             ink,
         );
-        let next_marker = x0 + seg;
-        if i + 1 < Step::ALL.len() && next_marker - label_rect.right() > 28.0 {
-            ui.painter().hline(
-                (label_rect.right() + 10.0)..=(next_marker - 10.0),
-                rect.center().y,
-                Stroke::new(bw, t.border),
-            );
-        }
+        let label = ui.painter().text(
+            egui::pos2(number.right() + 4.0, rect.center().y),
+            egui::Align2::LEFT_CENTER,
+            step.label(),
+            egui::FontId::proportional(TEXT_BODY),
+            ink,
+        );
         let name = format!("Step {} of {}: {}", i + 1, Step::ALL.len(), step.label());
         let r = ui.interact(
             egui::Rect::from_min_max(
-                egui::pos2(x0, rect.top()),
-                egui::pos2(label_rect.right(), rect.bottom()),
+                egui::pos2(x, rect.top()),
+                egui::pos2(label.right(), rect.bottom()),
             ),
             ui.scope_id().with(("import-step", i)),
             Sense::hover(),
         );
-        a11y::name_selected(ui, &r, egui::Role::ListItem, *step == wizard.step(), &name);
+        a11y::name_selected(ui, &r, egui::Role::ListItem, current, &name);
+        x = label.right() + 18.0;
     }
 }
 

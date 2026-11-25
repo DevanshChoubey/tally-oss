@@ -111,6 +111,8 @@ impl BankScreen {
     pub fn worker(ledger_name: &str, ledger: LedgerId, as_of: Date) -> Self {
         BankScreen {
             ledger_name: ledger_name.to_owned(),
+            ai_tier: None,
+            settings_requested: None,
             statement: BankStatementId(0),
             lines: Vec::new(),
             suggestions: Vec::new(),

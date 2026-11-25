@@ -179,9 +179,21 @@ impl GstScreen {
         ui.add_space(SPACE_3);
     }
 
+    /// A feed that is not loaded, or is unsupported, is one card: the heading and the reason.
+    fn draw_feed_card<T>(&self, ui: &mut Ui, name: &str, feed: &Feed<T>) {
+        crate::ui::card::card(ui, |ui| {
+            title(ui, &format!("{name}, {}", self.period_label));
+            draw_not_ready(ui, feed);
+        });
+    }
+
     // ---- GSTR-1 ------------------------------------------------------------------------------
 
     fn draw_gstr1(&self, ui: &mut Ui, want_scroll: bool, events: &mut Vec<UiEvent>) {
+        if !matches!(self.gstr1, Feed::Loaded(_)) {
+            self.draw_feed_card(ui, "GSTR-1", &self.gstr1);
+            return;
+        }
         self.draw_tiles(ui, events);
         ui.add_space(SPACE_3);
         let mut side = Vec::new();
@@ -449,6 +461,10 @@ impl GstScreen {
     // ---- GSTR-3B -----------------------------------------------------------------------------
 
     fn draw_gstr3b(&self, ui: &mut Ui, events: &mut Vec<UiEvent>) {
+        if !matches!(self.gstr3b, Feed::Loaded(_)) {
+            self.draw_feed_card(ui, "GSTR-3B working", &self.gstr3b);
+            return;
+        }
         let mut side = Vec::new();
         split(
             ui,

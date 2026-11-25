@@ -71,7 +71,7 @@ use crate::theme::{SPACE_2, SPACE_3, TEXT_H2, TEXT_META};
 use crate::ui::badge::BadgeKind;
 use crate::ui::button::{ButtonKind, button, button_icon};
 use crate::ui::card::card;
-use crate::ui::empty::empty_state;
+use crate::ui::empty::empty_state_with_icon;
 use crate::ui::icon::Icon;
 use crate::ui::note::{NoteKind, note};
 use crate::ui::page_head::page_head;
@@ -1286,7 +1286,19 @@ impl MastersScreen {
             let title = format!("No {} yet", self.kind.plural().to_lowercase());
             let sentence = format!("Create the first {} with Alt+C.", self.kind.label());
             let label = format!("Create {}", self.kind.label());
-            if empty_state(ui, &title, &sentence, Some((label.as_str(), "Alt+C"))) {
+            // The mock's `.card > .empty`: the users glyph over the title, a plus on the button.
+            let create = card(ui, |ui| {
+                ui.set_width(ui.available_width());
+                empty_state_with_icon(
+                    ui,
+                    Some(Icon::Users),
+                    &title,
+                    &sentence,
+                    Some((Some(Icon::Plus), label.as_str(), "Alt+C")),
+                )
+            })
+            .inner;
+            if create {
                 drop(self.begin_create(books));
             }
         } else {
@@ -1809,8 +1821,14 @@ fn plain_cells(rows: &[MasterRow]) -> Vec<Vec<look::Cell>> {
 
 impl Screen for MastersScreen {
     fn cursor_label(&self, ctx: &AppCtx) -> Option<String> {
+        let Some(selected) = self.selected else {
+            // No row to point at: name the kind shown, so a harness can tell an empty list of
+            // this kind from another kind's.
+            return (ctx.books.is_some() && matches!(self.mode, Mode::List))
+                .then(|| self.kind.plural().to_owned());
+        };
         let books = ctx.books.as_ref()?;
-        let snapshot = snapshot_of(&books.masters, self.selected?)?;
+        let snapshot = snapshot_of(&books.masters, selected)?;
         Some(snapshot_name(&snapshot).to_owned())
     }
 

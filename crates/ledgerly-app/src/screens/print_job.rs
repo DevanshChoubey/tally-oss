@@ -53,14 +53,28 @@ pub fn print_notice(title: &str, done: &Rendered) -> Notice {
     }
 }
 
+/// Says why the PDF at `path` was not written, in the mock's words (`profit-and-loss.print-failed`):
+/// the lead "The PDF was not saved", the system's reason without its error code, and that nothing
+/// was written.
+#[must_use]
+pub fn write_failure(path: &Path, error: &std::io::Error) -> String {
+    let reason = error.to_string();
+    let reason = reason
+        .rsplit_once(" (os error ")
+        .map_or(reason.as_str(), |(text, _code)| text);
+    format!(
+        "The PDF was not saved: \"{}\" could not be written ({reason}). Nothing was written.",
+        path.display()
+    )
+}
+
 /// Writes `bytes` to `path` whole or not at all: a `.part` file, then a rename.
 fn write_pdf(path: &Path, bytes: &[u8]) -> Result<(), String> {
     let part = path.with_extension("pdf.part");
-    std::fs::write(&part, bytes)
-        .map_err(|e| format!("\"{}\" was not written: {e}", path.display()))?;
+    std::fs::write(&part, bytes).map_err(|e| write_failure(path, &e))?;
     std::fs::rename(&part, path).map_err(|e| {
         let _ = std::fs::remove_file(&part);
-        format!("\"{}\" was not written: {e}", path.display())
+        write_failure(path, &e)
     })
 }
 
@@ -230,6 +244,22 @@ mod tests {
     use ledgerly_core::{Outcome, Unsupported};
 
     use super::*;
+
+    #[test]
+    fn a_failed_write_says_what_failed_why_and_that_nothing_was_written() {
+        // provenance: derived from the mock's wording, "The PDF was not saved. ... Nothing was
+        // written." (index.html, profit-and-loss.print-failed); the reason is the system's own,
+        // with the trailing "(os error N)" code dropped as it means nothing to the reader.
+        let missing = std::io::Error::from_raw_os_error(2);
+        let said = write_failure(Path::new("/a/b.pdf"), &missing);
+        assert!(said.starts_with("The PDF was not saved: "), "{said}");
+        assert!(said.contains("\"/a/b.pdf\""), "{said}");
+        assert!(!said.contains("os error"), "{said}");
+        assert!(said.ends_with("Nothing was written."), "{said}");
+        let other = std::io::Error::other("the disk is full");
+        let said = write_failure(Path::new("c.pdf"), &other);
+        assert!(said.contains("the disk is full"), "{said}");
+    }
 
     #[test]
     fn the_pdf_name_follows_the_title_and_is_safe_for_a_file_system() {

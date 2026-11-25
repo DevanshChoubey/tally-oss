@@ -1122,9 +1122,6 @@ state yet and still draws the generic table.
   and "Bank Accounts" where the mock says "Capital account", "Duties and taxes" and "Secured
   loans" (the sample's chart differs from the mock's: its bank balances are bank ledgers, not a
   term loan). The mock's 2,39,820.00 creditors are not in the sample.
-- **gap: start.recent is not built.** The cold Start screen with a recent-companies table needs a
-  recent-companies store (a file kept per user, with the last opened time) and its screen; neither
-  exists. The cold start still shows the first-run card.
 
 ## Masters, GST, keys (round of 2026-11-24, card S8)
 
@@ -1269,3 +1266,39 @@ Mismatches between the mock's totals and the engine's, and why:
 - **closed (s13): profit-and-loss.detailed** has an app capture (Alt+F1); it differs from the mock
   in the same two-sided layout points as the default state (bold group lines, the figures of the
   capture company).
+
+## Round S13: capture coverage (2026-11-25)
+
+Every mock state now has an app capture except the states below, each with its reason.
+
+- **not built (AI features that do not run):** `ask.result`, `ask.loading`, `ask.low-confidence`,
+  `ask.unsupported`; `purchase-bill.reading`, `.proposal`, `.low-confidence`, `.mismatch`,
+  `.duplicate`, `.cloud-consent`, `.error`, `.accepted`; `quick-entry.proposal`, `.hinglish`,
+  `.unknown-ledger`, `.loading`, `.rejected`; `gst.recon-explain`; `bank.ai-suggestions`,
+  `bank.suggested-ledger`, `masters.suggested-ledger`. The features need a model that the app does
+  not run; building a screen for them would show a look with nothing behind it.
+- **difference: start.recent.** Captured: the recent list is kept in the user's config folder
+  (`recent.rs`) and the Start screen shows it. The mock's start chrome now says "No company open"
+  with no lock chip, as the app does, and its card lists the state, not the city, because the
+  company file holds no city field. Left: the sidebar has no review count and its foot reads the
+  app version, and the AI chip says "AI: not set up" where the mock says "AI on this computer",
+  because no company is open to ask.
+- **no real cause: gst.gstr1-unsupported, gst.gstr1-failed, audit.failed,
+  profit-and-loss.print-error.** The sample books never make the engine refuse these (GSTR-3B for
+  October 2026 is Unsupported and is captured as `gst.gstr3b-unsupported`). A capture would need an
+  invented failure, which would be a wrong picture of the product.
+- **not built: print preview** (`*.print-preview`, `*.print-busy`). Ctrl+P writes the PDF through a
+  save dialog and shows "PDF saved" or the failure; there is no page-as-printed screen, and
+  building one means changing the shared `report_view` code that another branch is editing. The
+  PDF is written in one step, so there is no busy moment to capture.
+- **difference: masters.empty and masters.items-empty.** The card, the glyph and the plus on the
+  button now match. The app keeps the filter box and the "More master kinds" menu above the empty
+  card; the mock hides them.
+- **difference: import.refused, import.failed.** The app's text is the engine's own ("Not supported
+  yet: Import from the other program into this company ..." and "The other program is not running
+  or not accepting connections on port 9000"); the mock's example texts name a "Memorandum" voucher
+  type and a "connection refused" cause the app never says.
+- **difference: masters.create-item.** The form is captured from the sample company (a company with
+  no inventory refuses a stock item). The app keeps the Masters head and tabs above the form; the
+  mock's page is titled "New stock item", with a note that a unit is needed before the item can be
+  saved.

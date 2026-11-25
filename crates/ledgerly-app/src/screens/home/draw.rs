@@ -520,8 +520,8 @@ fn tile(ui: &mut Ui, index: usize, view: &KpiView) -> egui::Response {
         } else {
             ui.label(
                 RichText::new(view.value_text.as_str())
-                    .font(bold_font(ui, TEXT_H2))
-                    .color(t.text_2),
+                    .font(bold_font(ui, TEXT_BODY))
+                    .color(t.bad),
             );
         }
         ui.add_space(2.0);
@@ -602,4 +602,61 @@ pub(crate) fn title(ui: &mut Ui, text: &str) {
     ui.label(RichText::new(text).font(font).color(t.text));
     // `.card h2{margin-bottom:10px}`.
     ui.add_space(10.0);
+}
+
+#[cfg(test)]
+mod unsupported_tile {
+    //! An unsupported tile figure is in the error colour, as the mock's `home.gst-unsupported`.
+    //!
+    //! provenance: design/mock-v2/index.html line 1135: the figure of a tile with no value is
+    //! `color:var(--bad)` at the body size.
+
+    use super::*;
+    use crate::theme::{self, ThemeKind};
+
+    fn figure_colour(supported: bool) -> Option<egui::Color32> {
+        fn walk(shape: &egui::Shape, text: &str, out: &mut Option<egui::Color32>) {
+            match shape {
+                egui::Shape::Text(t) if t.galley.text() == text => {
+                    *out = t.galley.job.sections.first().map(|s| s.format.color);
+                }
+                egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, text, out)),
+                egui::Shape::Text(_)
+                | egui::Shape::Noop
+                | egui::Shape::Circle(_)
+                | egui::Shape::Ellipse(_)
+                | egui::Shape::LineSegment { .. }
+                | egui::Shape::Path(_)
+                | egui::Shape::Band(_)
+                | egui::Shape::Rect(_)
+                | egui::Shape::Mesh(_)
+                | egui::Shape::QuadraticBezier(_)
+                | egui::Shape::CubicBezier(_)
+                | egui::Shape::Callback(_) => {}
+            }
+        }
+        let view = KpiView {
+            label: "GST cash payable".to_owned(),
+            value_text: "Not supported yet".to_owned(),
+            footnote_text: "not readable yet".to_owned(),
+            supported,
+        };
+        let ctx = egui::Context::default();
+        theme::apply(&ctx, ThemeKind::Light);
+        let out = ctx.run_ui(egui::RawInput::default(), |ui| {
+            let _ = tile(ui, 0, &view);
+        });
+        let mut found = None;
+        for clipped in &out.shapes {
+            walk(&clipped.shape, "Not supported yet", &mut found);
+        }
+        out.drop_without_applying_deltas();
+        found
+    }
+
+    #[test]
+    fn the_unsupported_words_are_drawn_in_the_bad_colour() {
+        let bad = theme::tokens(ThemeKind::Light).bad;
+        assert_eq!(figure_colour(false), Some(bad));
+    }
 }

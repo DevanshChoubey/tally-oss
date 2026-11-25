@@ -993,7 +993,13 @@ impl ReportViewScreen {
         match &self.notice {
             Some(Notice::Error(s)) => draw_error(ui, s),
             Some(Notice::Info(s)) => {
-                ui.label(format!("Note: {s}"));
+                let text = s.clone();
+                let saved = self.print.saved_path().is_some();
+                if draw_info(ui, &text, saved)
+                    && let Some(note) = self.print.open_saved()
+                {
+                    self.notice = Some(note);
+                }
             }
             None => {}
         }
@@ -1637,12 +1643,6 @@ impl Screen for ReportViewScreen {
                 Err(why) => self.notice = Some(Notice::Error(why)),
             }
         }
-        if self.print.saved_path().is_some()
-            && button(ui, "Open PDF", None, ButtonKind::Secondary).clicked()
-            && let Some(note) = self.print.open_saved()
-        {
-            self.notice = Some(note);
-        }
         self.run_export_request(ctx.api.as_ref());
         if let Some(note) = self.print.tick() {
             self.notice = Some(note);
@@ -1682,6 +1682,34 @@ fn draw_provisional_banner(ui: &mut Ui, lead: &str, rest: &str, with_button: boo
     clicked
 }
 
+/// The green note over a report after something went right (an export, a saved PDF). A saved PDF
+/// gets the mock's "PDF saved." lead and an Open file button; the return is `true` when it was
+/// clicked (the mock's `profit-and-loss.print-saved`).
+fn draw_info(ui: &mut Ui, text: &str, saved_pdf: bool) -> bool {
+    let mut open = false;
+    let (lead, rest) = match text.strip_prefix("Saved PDF to ") {
+        Some(path) if saved_pdf => ("PDF saved.", format!("It was written to {path}")),
+        Some(_) | None => ("", text.to_owned()),
+    };
+    crate::ui::note::note_with_icon(ui, NoteKind::Ok, Icon::Check, |ui, ink| {
+        ui.horizontal_wrapped(|ui| {
+            if !lead.is_empty() {
+                ui.label(
+                    egui::RichText::new(lead)
+                        .font(crate::ui::bold_font(ui, crate::theme::TEXT_META))
+                        .color(ink),
+                );
+            }
+            ui.label(para_text(&rest, crate::theme::TEXT_META, ink));
+            if saved_pdf {
+                open = button(ui, "Open file", None, ButtonKind::Secondary).clicked();
+            }
+        });
+    });
+    ui.add_space(8.0);
+    open
+}
+
 /// The red note over a report the engine refused or could not run: the words the engine gave,
 /// with the lead sentence in bold (the mock's `audit.unsupported`).
 fn draw_error(ui: &mut Ui, text: &str) {
@@ -1693,12 +1721,14 @@ fn draw_error(ui: &mut Ui, text: &str) {
         ),
     };
     crate::ui::note::note_with_icon(ui, NoteKind::Bad, Icon::Alert, |ui, ink| {
-        ui.label(
-            egui::RichText::new(lead)
-                .font(crate::ui::bold_font(ui, crate::theme::TEXT_META))
-                .color(ink),
-        );
-        ui.label(para_text(&rest, crate::theme::TEXT_META, ink));
+        ui.horizontal_wrapped(|ui| {
+            ui.label(
+                egui::RichText::new(lead)
+                    .font(crate::ui::bold_font(ui, crate::theme::TEXT_META))
+                    .color(ink),
+            );
+            ui.label(para_text(&rest, crate::theme::TEXT_META, ink));
+        });
     });
     ui.add_space(8.0);
 }
@@ -1779,5 +1809,64 @@ mod loading_card {
             drawn.iter().all(|t| !t.contains("Loading the report")),
             "texts drawn: {drawn:?}"
         );
+    }
+}
+
+#[cfg(test)]
+mod saved_pdf_note {
+    //! A saved PDF is announced as the mock's `profit-and-loss.print-saved` does.
+    //!
+    //! provenance: design/mock-v2/index.html, state `profit-and-loss.print-saved`: a green note
+    //! that leads with "PDF saved." and offers an "Open file" button.
+
+    use super::*;
+
+    fn painted(saved: bool) -> Vec<String> {
+        fn walk(shape: &egui::Shape, out: &mut Vec<String>) {
+            match shape {
+                egui::Shape::Text(t) => out.push(t.galley.text().to_owned()),
+                egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
+                egui::Shape::Noop
+                | egui::Shape::Circle(_)
+                | egui::Shape::Ellipse(_)
+                | egui::Shape::LineSegment { .. }
+                | egui::Shape::Path(_)
+                | egui::Shape::Band(_)
+                | egui::Shape::Rect(_)
+                | egui::Shape::Mesh(_)
+                | egui::Shape::QuadraticBezier(_)
+                | egui::Shape::CubicBezier(_)
+                | egui::Shape::Callback(_) => {}
+            }
+        }
+        let ctx = egui::Context::default();
+        let out = ctx.run_ui(egui::RawInput::default(), |ui| {
+            let _clicked = draw_info(ui, "Saved PDF to /books/pl.pdf.", saved);
+        });
+        let mut texts = Vec::new();
+        for clipped in &out.shapes {
+            walk(&clipped.shape, &mut texts);
+        }
+        out.drop_without_applying_deltas();
+        texts
+    }
+
+    #[test]
+    fn a_saved_pdf_leads_with_pdf_saved_and_offers_open_file() {
+        let texts = painted(true);
+        assert!(texts.iter().any(|t| t == "PDF saved."), "{texts:?}");
+        assert!(texts.iter().any(|t| t == "Open file"), "{texts:?}");
+        assert!(
+            texts
+                .iter()
+                .any(|t| t.contains("It was written to /books/pl.pdf.")),
+            "{texts:?}"
+        );
+    }
+
+    #[test]
+    fn any_other_note_has_no_open_file_button() {
+        let texts = painted(false);
+        assert!(!texts.iter().any(|t| t == "Open file"), "{texts:?}");
     }
 }

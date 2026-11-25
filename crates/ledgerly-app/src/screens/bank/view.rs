@@ -13,9 +13,11 @@ use egui_extras::Column;
 
 use super::import;
 use super::{
-    BankScreen, BrsRow, BrsRowKind, Flow, LineState, LineStatus, PAGE_TITLE, SuggestionView, Tab,
-    brs_line_height, confidence_label, format_flow, format_line_date, kind_label, status_label,
+    BankScreen, BrsRow, BrsRowKind, Flow, LineState, LineStatus, PAGE_TITLE, SettingsRequest,
+    SuggestionView, Tab, brs_line_height, confidence_label, format_flow, format_line_date,
+    kind_label, status_label,
 };
+use crate::screens::ai_gate::settings_note;
 use crate::screens::wire::unsupported_text;
 use crate::theme::{RADIUS_M, TEXT_BODY, border_width, shadow_1};
 use crate::ui::badge::{BadgeKind, badge};
@@ -48,6 +50,8 @@ const LINE_HEIGHT: f32 = 46.0;
 /// One key or click the frame produced. Applied after the frame is drawn.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum UiEvent {
+    /// The AI-off note's AI and privacy button was clicked.
+    OpenSettings,
     /// Focus a statement line by its index.
     Focus(usize),
     /// Accept the suggestion on a statement line by its index.
@@ -289,6 +293,7 @@ impl BankScreen {
             UiEvent::Import => self.choose_statement_file(),
             UiEvent::Layout(id) => self.set_import_layout(id),
             UiEvent::ChangeAccount => self.switch_requested = true,
+            UiEvent::OpenSettings => self.settings_requested = Some(SettingsRequest::Open),
         }
     }
 
@@ -496,6 +501,14 @@ impl BankScreen {
 
     /// The card beside the table: the focused line, its suggestion and the actions on it.
     fn draw_focus(&self, ui: &mut Ui, events: &mut Vec<UiEvent>) {
+        // With AI off the side is the mock's note, not a card (index.html:1830); the manual match
+        // panel still opens as a card, since matching by hand needs no AI.
+        if self.ai_tier == Some(crate::AiTier::Off) && !self.is_manual_open() {
+            if settings_note(ui, NoteKind::Info, Icon::Off, AI_OFF_NOTE, true) {
+                events.push(UiEvent::OpenSettings);
+            }
+            return;
+        }
         card(ui, |ui| {
             let Some(line) = self.line_at(self.focus_index()) else {
                 return;
@@ -839,6 +852,9 @@ fn paint_statement_line(ui: &Ui, rect: Rect, row: &BrsRow) {
         CellPlace::Right,
     );
 }
+
+/// What the side says with AI off: what still runs and what waits (index.html:1830).
+const AI_OFF_NOTE: &str = "AI is off for this company. Exact and Rule matching still run: they are deterministic engine code. Leftover lines wait for you.";
 
 #[cfg(test)]
 mod a11y_names {

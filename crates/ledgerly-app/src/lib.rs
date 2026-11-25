@@ -10,6 +10,7 @@ mod screen;
 
 pub mod keymap;
 pub mod palette;
+pub mod recent;
 pub mod screens;
 pub mod shell;
 pub mod theme;
