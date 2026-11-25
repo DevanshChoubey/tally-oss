@@ -23,6 +23,7 @@ mod report;
 mod review;
 mod search;
 mod tally_import;
+mod voucher_audit;
 mod voucher_gst;
 
 pub use ai::{AiLogEntry, AiTier};
@@ -32,6 +33,7 @@ pub use command::{Command, CommandResult, CreatedId};
 pub use gst_filing::GstFiling;
 // Report types the app names when it builds and reads reports (card W7). The app depends on this
 // crate only, so the report model is re-exported here instead of adding a manifest dependency.
+pub use day_book_meta::EntryOrigin;
 pub use error::ApiError;
 pub use facade::Api;
 pub use gst::{
@@ -46,6 +48,7 @@ pub use ledgerly_gst::compute::GstBreakup;
 pub use ledgerly_model::{
     Address, Books, Company, EntityKind, Features, NegativeStockPolicy, Voucher,
 };
+pub use ledgerly_reports::outstanding::days_overdue;
 pub use ledgerly_reports::{
     AuditReportKind, Cell, ColumnHeader, ColumnSpec, Detail, DrillKey, Report, ReportFilter,
     ReportKind, ReportParams, ReportRow, RowKind,
@@ -57,6 +60,7 @@ pub use nudges::{DuplicatePayment, Gstr1Due, HomeNudges, PaymentRef, gstr1_next_
 pub use report::ExportFormat;
 pub use search::{MatchedOn, SearchHit};
 pub use tally_import::ImportSummary;
+pub use voucher_audit::{ChangeKind, VoucherAudit, VoucherChange, VoucherDetail};
 pub use voucher_gst::{InvoiceGst, PartyBill, RateRow};
 
 pub use ledgerly_bank::brs::Brs;

@@ -23,20 +23,23 @@
 //! silently.
 
 use egui::{Frame, Key, Margin, Modifiers, Rect, RichText, Sense, Stroke, Ui, pos2, vec2};
-use ledgerly_core::{Date, DrCr, SignedAmount, VoucherId, format::format_inr};
-use ledgerly_model::{Books, VoucherStatus};
+use ledgerly_api::{ChangeKind, EntryOrigin, VoucherDetail};
+use ledgerly_core::{Date, DrCr, Paise, Qty, Rate, SignedAmount, VoucherId, format::format_inr};
+use ledgerly_model::{Books, InventoryLine, VoucherStatus};
 use thiserror::Error;
 
 use super::Notice;
-use super::text::date_text;
 use crate::screens::print_job::PrintJob;
+use crate::screens::wire::{Done, Latest, unsupported_text};
 use crate::theme::{RADIUS_M, TEXT_BODY, TEXT_H2, TEXT_META, border_width, shadow_1};
 use crate::ui::badge::{BadgeKind, badge};
 use crate::ui::button::{ButtonKind, button};
 use crate::ui::page_head::page_head;
 use crate::ui::table::{self, CellPlace, RowState, T_HEAD_HEIGHT, T_ROW_HEIGHT};
 use crate::ui::{bold_font, kind, tokens};
+use crate::worker::ApiWorker;
 use crate::{AppCtx, Screen, ScreenAction};
+use ledgerly_core::Outcome;
 
 /// Why a voucher could not be shown.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
@@ -54,6 +57,22 @@ pub enum VoucherViewError {
         voucher: u64,
         /// The ledger id that is missing.
         ledger: u64,
+    },
+    /// A stock line names an item that is not in the masters.
+    #[error("voucher {voucher} has a stock line for item {item}, which is not in the books")]
+    UnknownItem {
+        /// The voucher id.
+        voucher: u64,
+        /// The stock item id that is missing.
+        item: u64,
+    },
+    /// A stock line names a unit that is not in the masters.
+    #[error("voucher {voucher} has a stock line in unit {unit}, which is not in the books")]
+    UnknownUnit {
+        /// The voucher id.
+        voucher: u64,
+        /// The unit id that is missing.
+        unit: u64,
     },
     /// The voucher's type is not in the masters.
     #[error("voucher {voucher} has voucher type {type_id}, which is not in the books")]
@@ -91,8 +110,90 @@ pub struct VoucherView {
     pub narration: String,
     /// The ledger lines in stored order.
     pub lines: Vec<VoucherViewLine>,
-    /// Parts of the voucher this screen cannot show yet, in words.
-    pub not_shown: Vec<String>,
+    /// The stock item lines in stored order (empty for a voucher with no items).
+    pub items: Vec<VoucherViewItem>,
+}
+
+/// One stock item line of a voucher, as stored.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VoucherViewItem {
+    /// The item's name.
+    pub name: String,
+    /// The quantity, in `unit`.
+    pub qty: Qty,
+    /// The unit's symbol.
+    pub unit: String,
+    /// The rate per `unit`, in rupees.
+    pub rate: Rate,
+    /// The line amount, as stored (never recomputed from quantity and rate here).
+    pub amount: Paise,
+}
+
+/// The quantity, rate and amount of an item line as the Item table shows them (index.html:1626):
+/// `25 roll`, `3,850.00`, `96,250.00`. The digits are the stored ones; this adds commas, a unit
+/// and trailing zeros only.
+#[must_use]
+pub fn item_texts(item: &VoucherViewItem) -> (String, String, String) {
+    let rate = item.rate.0.to_string();
+    (
+        format!("{} {}", item.qty.0.normalize(), item.unit),
+        crate::ui::format::grouped_text(&rate).unwrap_or(rate),
+        format_inr(item.amount),
+    )
+}
+
+/// `text` ended with one full stop: a name such as "Ananya K." already ends with one.
+fn sentence(mut text: String) -> String {
+    if !text.ends_with('.') {
+        text.push('.');
+    }
+    text
+}
+
+/// The Audit card's bullets for a voucher (index.html:1629): who created it and how, what changed
+/// it since, whether the period is locked, then the log record. Every fact is the audit log's.
+#[must_use]
+pub fn audit_lines(detail: &VoucherDetail) -> Vec<String> {
+    let lock = if detail.period_locked() {
+        "Period locked."
+    } else {
+        "Alter is allowed: the period is open."
+    };
+    let Some(audit) = &detail.audit else {
+        return vec![
+            "The audit log holds no record of who entered this voucher.".to_owned(),
+            lock.to_owned(),
+        ];
+    };
+    let day = crate::ui::format::date(audit.posted_at.date());
+    let by = &audit.entered_by;
+    let created = match audit.origin {
+        EntryOrigin::Typed => format!("Created {day} by {by}, typed by hand."),
+        EntryOrigin::AiDraft => {
+            sentence(format!("Created {day} from an AI draft, accepted by {by}"))
+        }
+        EntryOrigin::Imported => format!("Created {day} by {by}, through an import."),
+    };
+    let mut lines = vec![created];
+    if audit.changes.is_empty() {
+        lines.push(format!("Not altered since. {lock}"));
+    } else {
+        for change in &audit.changes {
+            let word = match change.kind {
+                ChangeKind::Altered => "Altered",
+                ChangeKind::Cancelled => "Cancelled",
+            };
+            lines.push(sentence(format!(
+                "{word} {} by {}",
+                crate::ui::format::date(change.at.date()),
+                change.by
+            )));
+        }
+        lines.push(lock.to_owned());
+    }
+    let short: String = audit.hash.chars().take(12).collect();
+    lines.push(format!("Audit log entry {}, hash {short}.", audit.event.0));
+    lines
 }
 
 /// The status as words.
@@ -146,13 +247,11 @@ pub fn voucher_view(books: &Books, id: VoucherId) -> Result<VoucherView, Voucher
             })
         })
         .collect::<Result<Vec<_>, VoucherViewError>>()?;
-    let mut not_shown = Vec::new();
-    if !voucher.inventory_lines.is_empty() {
-        not_shown.push("Stock item lines are not shown on this screen yet.".to_owned());
-    }
-    if voucher.gst.is_some() {
-        not_shown.push("GST details are not shown on this screen yet.".to_owned());
-    }
+    let items = voucher
+        .inventory_lines
+        .iter()
+        .map(|line| item_of(books, id, line))
+        .collect::<Result<Vec<_>, VoucherViewError>>()?;
     Ok(VoucherView {
         type_name,
         number: voucher.number.clone(),
@@ -161,7 +260,40 @@ pub fn voucher_view(books: &Books, id: VoucherId) -> Result<VoucherView, Voucher
         party,
         narration: voucher.narration.clone(),
         lines,
-        not_shown,
+        items,
+    })
+}
+
+/// The display line of one stock item line.
+fn item_of(
+    books: &Books,
+    voucher: VoucherId,
+    line: &InventoryLine,
+) -> Result<VoucherViewItem, VoucherViewError> {
+    let name = books
+        .masters
+        .stock_items
+        .get(&line.item)
+        .map(|i| i.name.clone())
+        .ok_or(VoucherViewError::UnknownItem {
+            voucher: voucher.0,
+            item: line.item.0,
+        })?;
+    let unit = books
+        .masters
+        .units
+        .get(&line.unit)
+        .map(|u| u.symbol.clone())
+        .ok_or(VoucherViewError::UnknownUnit {
+            voucher: voucher.0,
+            unit: line.unit.0,
+        })?;
+    Ok(VoucherViewItem {
+        name,
+        qty: line.qty,
+        unit,
+        rate: line.rate,
+        amount: line.amount,
     })
 }
 
@@ -187,6 +319,17 @@ pub fn posting_columns(amount: SignedAmount) -> (String, String) {
     }
 }
 
+/// What the screen holds of the engine's totals and audit facts.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(super) enum DetailState {
+    /// Not asked yet, or the answer is on its way.
+    Loading,
+    /// The engine's answer.
+    Ready(VoucherDetail),
+    /// The engine could not give it; the text says why.
+    Unavailable(String),
+}
+
 /// The read-only voucher screen.
 #[derive(Debug)]
 pub struct VoucherViewScreen {
@@ -200,7 +343,16 @@ pub struct VoucherViewScreen {
     /// The voucher's number and page title, once the books have been read (the breadcrumb is
     /// asked for without the books).
     shown: std::cell::RefCell<Option<(String, String)>>,
+    /// The totals and audit facts, asked of the engine on the worker.
+    detail: Latest<Result<Outcome<VoucherDetail>, String>>,
+    detail_state: DetailState,
+    asked: bool,
 }
+
+/// The width of the Debit and Credit columns of the posting table (index.html:1621, `.num`).
+const AMOUNT_W: f32 = 170.0;
+/// The Item table's Qty, Rate and Amount columns.
+const ITEM_COLS: [f32; 3] = [110.0, 112.0, 150.0];
 
 impl VoucherViewScreen {
     /// A screen for voucher `id`. It reads the voucher from the shared books each frame.
@@ -212,6 +364,9 @@ impl VoucherViewScreen {
             print: PrintJob::default(),
             notice: None,
             shown: std::cell::RefCell::new(None),
+            detail: Latest::default(),
+            detail_state: DetailState::Loading,
+            asked: false,
         }
     }
 
@@ -228,9 +383,41 @@ impl VoucherViewScreen {
         self.id
     }
 
-    /// The voucher as the mock's two cards (index.html:1612-1630): the voucher and its postings
-    /// on the left, what this screen cannot do on the right.
-    fn draw_view(ui: &mut Ui, view: &VoucherView) {
+    /// Takes a finished answer, and asks the worker the first time it can.
+    fn tick_detail(&mut self, worker: Option<&ApiWorker>) {
+        match self.detail.poll() {
+            Some(Done::Ready(Ok(Outcome::Value(d)))) => self.detail_state = DetailState::Ready(d),
+            Some(Done::Ready(Ok(Outcome::Unsupported(u)))) => {
+                self.detail_state = DetailState::Unavailable(unsupported_text(&u));
+            }
+            Some(Done::Ready(Err(e))) => self.detail_state = DetailState::Unavailable(e),
+            Some(Done::Lost) => {
+                self.detail_state = DetailState::Unavailable(
+                    "the background worker stopped before the audit log was read".to_owned(),
+                );
+            }
+            None => {}
+        }
+        if self.asked {
+            return;
+        }
+        let Some(handle) = worker else {
+            self.detail_state = DetailState::Unavailable(
+                "no company file is open, so the audit log cannot be read".to_owned(),
+            );
+            self.asked = true;
+            return;
+        };
+        self.asked = true;
+        let id = self.id;
+        self.detail.start(handle, move |api| {
+            api.voucher_detail(id).map_err(|e| e.to_string())
+        });
+    }
+
+    /// The voucher as the mock's two cards (index.html:1612-1630): the voucher, its items and
+    /// postings on the left, the Audit card on the right.
+    fn draw_view(&self, ui: &mut Ui, view: &VoucherView) {
         let gap = 12.0;
         let total = ui.available_width();
         // `.g-main`: minmax(0, 1.55fr) minmax(320px, 1fr).
@@ -240,10 +427,10 @@ impl VoucherViewScreen {
             ui.spacing_mut().item_spacing = vec2(gap, 0.0);
             let down = egui::Layout::top_down(egui::Align::Min);
             ui.allocate_ui_with_layout(vec2(left, 0.0), down, |ui| {
-                Self::draw_voucher_card(ui, view, left);
+                self.draw_voucher_card(ui, view, left);
             });
             ui.allocate_ui_with_layout(vec2(right, 0.0), down, |ui| {
-                Self::draw_notes_card(ui, view);
+                self.draw_audit_card(ui);
             });
         });
     }
@@ -258,14 +445,14 @@ impl VoucherViewScreen {
             .shadow(shadow_1(k))
     }
 
-    fn draw_voucher_card(ui: &mut Ui, view: &VoucherView, width: f32) {
+    fn draw_voucher_card(&self, ui: &mut Ui, view: &VoucherView, width: f32) {
         let t = tokens(ui);
         Self::card_frame(ui).show(ui, |ui| {
             ui.set_width(width - 2.0);
             ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
             // `.vhead`: four fields in a row, 16 px around, a rule under.
             let number = view.number.as_deref().unwrap_or("(no number yet)");
-            let date = date_text(view.date);
+            let date = crate::ui::format::date(view.date);
             Frame::new().inner_margin(Margin::same(16)).show(ui, |ui| {
                 ui.set_width(width - 34.0);
                 ui.spacing_mut().item_spacing = vec2(16.0, 12.0);
@@ -277,32 +464,33 @@ impl VoucherViewScreen {
                         ("Date", date.as_str()),
                     ] {
                         ui.allocate_ui(vec2(cell, 0.0), |ui| {
+                            ui.set_min_width(cell);
                             field(ui, label, |ui| {
                                 ui.label(RichText::new(value).size(TEXT_BODY).color(t.text));
                             });
                         });
                     }
                     ui.allocate_ui(vec2(cell, 0.0), |ui| {
+                        ui.set_min_width(cell);
                         field(ui, "Status", |ui| {
-                            let kind_of = if view.status == "Regular" {
-                                BadgeKind::Ok
+                            let (kind_of, word) = if view.status == "Regular" {
+                                (BadgeKind::Ok, "Posted")
                             } else {
-                                BadgeKind::Warn
+                                (BadgeKind::Warn, view.status)
                             };
-                            badge(ui, kind_of, view.status);
+                            badge(ui, kind_of, word);
                         });
                     });
                 });
-                if let Some(party) = view.party.as_deref() {
-                    field(ui, "Party", |ui| {
-                        ui.label(RichText::new(party).size(TEXT_BODY).color(t.text));
-                    });
-                }
             });
             let (rule, _) = ui.allocate_exact_size(vec2(width - 2.0, 1.0), Sense::hover());
             ui.painter()
                 .hline(rule.x_range(), rule.center().y, Stroke::new(1.0, t.border));
-            Self::draw_postings(ui, view, width - 2.0);
+            if !view.items.is_empty() {
+                Self::draw_items(ui, view, width - 2.0);
+                ui.add_space(8.0);
+            }
+            self.draw_postings(ui, view, width - 2.0);
             if !view.narration.is_empty() {
                 Frame::new()
                     .inner_margin(Margin::symmetric(16, 10))
@@ -317,73 +505,151 @@ impl VoucherViewScreen {
         });
     }
 
-    /// The ledger lines, one per posting, in the Debit or Credit column of their side. No total
-    /// is drawn: the screen never adds figures.
-    fn draw_postings(ui: &mut Ui, view: &VoucherView, width: f32) {
+    /// A heading line: `label` on the left, `heads` over the right-hand columns.
+    fn paint_head(ui: &mut Ui, width: f32, label: &str, heads: &[(&str, f32)], engine: bool) {
         let t = tokens(ui);
-        let amount_w = 150.0_f32.min(width / 3.0);
-        let split = |rect: Rect| {
-            let credit = Rect::from_min_max(pos2(rect.right() - amount_w, rect.top()), rect.max);
-            let debit = Rect::from_min_max(
-                pos2(credit.left() - amount_w, rect.top()),
-                pos2(credit.left(), rect.bottom()),
-            );
-            let label = Rect::from_min_max(rect.min, pos2(debit.left(), rect.bottom()));
-            (label, debit, credit)
-        };
         let (head, _) = ui.allocate_exact_size(vec2(width, T_HEAD_HEIGHT), Sense::hover());
         table::paint_head_rule(ui, head);
-        let (label, debit, credit) = split(head);
         let font = bold_font(ui, TEXT_META);
+        let (left, cols) = split_columns(head, &heads.iter().map(|h| h.1).collect::<Vec<_>>());
         table::paint_cell_text(
             ui,
-            label,
+            left,
             1.0,
-            "Ledger posting",
+            label,
             font.clone(),
             t.text_3,
             CellPlace::Left(table::CELL_PAD_X),
         );
-        table::paint_cell_text(
-            ui,
-            debit,
-            1.0,
-            "Debit",
-            font.clone(),
-            t.text_3,
-            CellPlace::Right,
-        );
-        table::paint_cell_text(ui, credit, 1.0, "Credit", font, t.text_3, CellPlace::Right);
-        for line in &view.lines {
-            let (rect, _) = ui.allocate_exact_size(vec2(width, T_ROW_HEIGHT), Sense::hover());
-            table::paint_row(
-                ui,
-                rect,
-                RowState {
-                    selected: false,
-                    hovered: false,
-                    sub: false,
-                },
-            );
-            let (label, debit, credit) = split(rect);
-            let font = egui::FontId::proportional(TEXT_BODY);
+        if engine {
+            table::paint_engine_tag(ui, left, label, &font);
+        }
+        for ((text, _), rect) in heads.iter().zip(cols) {
             table::paint_cell_text(
                 ui,
-                label,
+                rect,
                 1.0,
-                &line.ledger,
+                text,
                 font.clone(),
-                t.text,
-                CellPlace::Left(table::CELL_PAD_X),
+                t.text_3,
+                CellPlace::Right,
             );
-            let (dr, cr) = posting_columns(line.amount);
-            table::paint_cell_text(ui, debit, 1.0, &dr, font.clone(), t.text, CellPlace::Right);
-            table::paint_cell_text(ui, credit, 1.0, &cr, font, t.text, CellPlace::Right);
         }
     }
 
-    /// The right-hand card: what the screen is (read-only) and what it leaves out.
-    fn draw_notes_card(ui: &mut Ui, view: &VoucherView) {
+    /// One body line: `label` on the left and `cells` in the right-hand columns.
+    fn paint_line(ui: &mut Ui, width: f32, label: &str, cells: &[(String, f32)]) {
+        let t = tokens(ui);
+        let (rect, _) = ui.allocate_exact_size(vec2(width, T_ROW_HEIGHT), Sense::hover());
+        table::paint_row(
+            ui,
+            rect,
+            RowState {
+                selected: false,
+                hovered: false,
+                sub: false,
+            },
+        );
+        let (left, cols) = split_columns(rect, &cells.iter().map(|c| c.1).collect::<Vec<_>>());
+        let font = egui::FontId::proportional(TEXT_BODY);
+        table::paint_cell_text(
+            ui,
+            left,
+            1.0,
+            label,
+            font.clone(),
+            t.text,
+            CellPlace::Left(table::CELL_PAD_X),
+        );
+        for ((text, _), rect) in cells.iter().zip(cols) {
+            table::paint_cell_text(ui, rect, 1.0, text, font.clone(), t.text, CellPlace::Right);
+        }
+    }
+
+    /// The Item table (index.html:1613): item, quantity with its unit, rate and amount as stored.
+    fn draw_items(ui: &mut Ui, view: &VoucherView, width: f32) {
+        let [qty_w, rate_w, amount_w] = ITEM_COLS;
+        Self::paint_head(
+            ui,
+            width,
+            "Item",
+            &[("Qty", qty_w), ("Rate", rate_w), ("Amount", amount_w)],
+            false,
+        );
+        for item in &view.items {
+            let (qty, rate, amount) = item_texts(item);
+            Self::paint_line(
+                ui,
+                width,
+                &item.name,
+                &[(qty, qty_w), (rate, rate_w), (amount, amount_w)],
+            );
+        }
+    }
+
+    /// The ledger lines, one per posting, in the Debit or Credit column of their side, then the
+    /// engine's totals of the two sides (never added here).
+    fn draw_postings(&self, ui: &mut Ui, view: &VoucherView, width: f32) {
+        Self::paint_head(
+            ui,
+            width,
+            "Ledger posting",
+            &[("Debit", AMOUNT_W), ("Credit", AMOUNT_W)],
+            true,
+        );
+        for line in &view.lines {
+            let (dr, cr) = posting_columns(line.amount);
+            Self::paint_line(ui, width, &line.ledger, &[(dr, AMOUNT_W), (cr, AMOUNT_W)]);
+        }
+        let t = tokens(ui);
+        match &self.detail_state {
+            DetailState::Ready(detail) => {
+                let (rect, _) =
+                    ui.allocate_exact_size(vec2(width, table::T_TOTAL_HEIGHT), Sense::hover());
+                table::paint_total_rules(ui, rect);
+                let font = bold_font(ui, TEXT_BODY);
+                let (left, cols) = split_columns(rect, &[AMOUNT_W, AMOUNT_W]);
+                table::paint_cell_text(
+                    ui,
+                    left,
+                    3.0,
+                    "Total",
+                    font.clone(),
+                    t.text,
+                    CellPlace::Left(table::CELL_PAD_X),
+                );
+                for (total, cell) in [detail.debit_total, detail.credit_total]
+                    .into_iter()
+                    .zip(cols)
+                {
+                    table::paint_cell_text(
+                        ui,
+                        cell,
+                        3.0,
+                        &format_inr(total),
+                        font.clone(),
+                        t.text,
+                        CellPlace::Right,
+                    );
+                }
+            }
+            DetailState::Loading => {}
+            DetailState::Unavailable(why) => {
+                Frame::new()
+                    .inner_margin(Margin::symmetric(16, 10))
+                    .show(ui, |ui| {
+                        ui.label(
+                            RichText::new(format!("Total not shown: {why}."))
+                                .size(TEXT_META)
+                                .color(t.text_2),
+                        );
+                    });
+            }
+        }
+    }
+
+    /// The right-hand Audit card (index.html:1629): the audit log's facts about this voucher.
+    fn draw_audit_card(&self, ui: &mut Ui) {
         let t = tokens(ui);
         Self::card_frame(ui).show(ui, |ui| {
             ui.set_width(ui.available_width());
@@ -393,16 +659,25 @@ impl VoucherViewScreen {
                     ui.set_width(ui.available_width());
                     ui.spacing_mut().item_spacing = vec2(0.0, 6.0);
                     ui.label(
-                        RichText::new("Read-only")
+                        RichText::new("Audit")
                             .font(bold_font(ui, TEXT_H2))
                             .color(t.text),
                     );
                     ui.add_space(4.0);
-                    let lines = view.not_shown.iter().map(String::as_str).chain([
-                        "Display only. Altering a voucher from a report is not available yet.",
-                    ]);
+                    let mut lines = match &self.detail_state {
+                        DetailState::Ready(detail) => audit_lines(detail),
+                        DetailState::Loading => vec!["Reading the audit log.".to_owned()],
+                        DetailState::Unavailable(why) => vec![format!(
+                            "The audit log could not be read: {why}. Nothing is guessed here."
+                        )],
+                    };
+                    lines.push(
+                        "Read-only here. Altering a voucher from a report is not available yet."
+                            .to_owned(),
+                    );
                     for line in lines {
                         ui.horizontal_top(|ui| {
+                            ui.spacing_mut().item_spacing.x = 8.0;
                             ui.label(RichText::new("\u{2022}").color(t.text_2));
                             ui.add(
                                 egui::Label::new(
@@ -415,6 +690,25 @@ impl VoucherViewScreen {
                 });
         });
     }
+}
+
+/// Splits `rect` into the label area and right-aligned columns of `widths` (the last width is the
+/// rightmost column).
+fn split_columns(rect: Rect, widths: &[f32]) -> (Rect, Vec<Rect>) {
+    let mut right = rect.right();
+    let mut cols = Vec::with_capacity(widths.len());
+    for w in widths.iter().rev() {
+        cols.push(Rect::from_min_max(
+            pos2(right - w, rect.top()),
+            pos2(right, rect.bottom()),
+        ));
+        right -= w;
+    }
+    cols.reverse();
+    (
+        Rect::from_min_max(rect.min, pos2(right, rect.bottom())),
+        cols,
+    )
 }
 
 /// One field of the voucher head (`.fld`): its label in the meta style, then the value.
@@ -454,6 +748,10 @@ impl Screen for VoucherViewScreen {
         if let Some(note) = self.print.tick() {
             self.notice = Some(note);
         }
+        self.tick_detail(ctx.api.as_ref());
+        if self.detail.is_pending() {
+            ui.ctx().request_repaint();
+        }
         // Ctrl+P prints the voucher (spec 11 M5). The PDF comes from the API worker.
         if ui
             .ctx()
@@ -492,7 +790,7 @@ impl Screen for VoucherViewScreen {
                     let number = view.number.clone().unwrap_or_else(|| title.clone());
                     *self.shown.borrow_mut() = Some((number, title.clone()));
                     page_head(ui, &title, self.subtitle().as_deref(), |_| {});
-                    Self::draw_view(ui, &view);
+                    self.draw_view(ui, &view);
                 }
                 Err(e) => {
                     ui.label(e.to_string());

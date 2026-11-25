@@ -75,29 +75,52 @@ impl Api {
     }
 }
 
+/// How a voucher came to be entered, from the actor of its `VoucherPosted` record.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EntryOrigin {
+    /// A user typed it.
+    Typed,
+    /// The assistant drafted it and a person accepted the draft.
+    AiDraft,
+    /// An import job posted it.
+    Imported,
+}
+
+impl EntryOrigin {
+    /// The word the day book's Origin column shows.
+    #[must_use]
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Typed => "Typed",
+            Self::AiDraft => "AI draft",
+            Self::Imported => "Imported",
+        }
+    }
+}
+
 /// Entered by and origin of one voucher.
-struct Entry {
-    by: String,
-    origin: &'static str,
+pub(crate) struct Entry {
+    pub(crate) by: String,
+    pub(crate) origin: EntryOrigin,
 }
 
 fn who(records: &[AuditRecord], user: UserId) -> String {
     stored_name(records, user).unwrap_or_else(|| format!("User {}", user.0))
 }
 
-fn entry(records: &[AuditRecord], actor: &Actor) -> Entry {
+pub(crate) fn entry(records: &[AuditRecord], actor: &Actor) -> Entry {
     match actor {
         Actor::User(user) => Entry {
             by: who(records, *user),
-            origin: "Typed",
+            origin: EntryOrigin::Typed,
         },
         Actor::Import { on_behalf_of, .. } => Entry {
             by: who(records, *on_behalf_of),
-            origin: "Imported",
+            origin: EntryOrigin::Imported,
         },
         Actor::Assistant { on_behalf_of, .. } => Entry {
             by: who(records, *on_behalf_of),
-            origin: "AI draft",
+            origin: EntryOrigin::AiDraft,
         },
     }
 }
@@ -134,7 +157,10 @@ pub(crate) fn annotate(
             .get(id)
             .map_or(Cell::Empty, |v| Cell::Text(v.narration.clone()));
         let (by, origin) = match posted.get(id) {
-            Some(e) => (Cell::Text(e.by.clone()), Cell::Text(e.origin.to_owned())),
+            Some(e) => (
+                Cell::Text(e.by.clone()),
+                Cell::Text(e.origin.label().to_owned()),
+            ),
             None => (Cell::Empty, Cell::Empty),
         };
         row.cells.extend([narration, by, origin]);

@@ -76,8 +76,8 @@ pub use text::{
     period_text,
 };
 pub use voucher_view::{
-    VoucherView, VoucherViewError, VoucherViewLine, VoucherViewScreen, posting_columns,
-    voucher_title, voucher_view,
+    VoucherView, VoucherViewError, VoucherViewItem, VoucherViewLine, VoucherViewScreen,
+    audit_lines, item_texts, posting_columns, voucher_title, voucher_view,
 };
 
 /// Rows moved by Page Up and Page Down.

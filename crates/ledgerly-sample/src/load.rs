@@ -24,6 +24,7 @@ use ledgerly_model::{
     VoucherStatus,
 };
 use ledgerly_store::Actor;
+use time::UtcOffset;
 use time::format_description::well_known::Iso8601;
 
 use crate::SampleError;
@@ -190,7 +191,7 @@ pub(crate) fn build(
     })?;
     let keys = masters(seed, &mut api)?;
     number_series(&mut api)?;
-    vouchers(seed, &mut api, &keys)?;
+    vouchers(seed, &mut api, &keys, clock)?;
     statements(seed, &mut api, &keys)?;
     let until = parse_date("lock_until", &seed.lock_until)?;
     run(&mut api, "locking the books", Command::LockPeriod(until))?;
@@ -865,7 +866,10 @@ fn actor_of(v: &VoucherSeed) -> Result<Actor, SampleError> {
     })
 }
 
-fn vouchers(seed: &Seed, api: &mut Api, keys: &Keys) -> Result<(), SampleError> {
+/// Posts the seed's vouchers, each stamped at noon (UTC+05:30) on its own date, as if entered the
+/// day it is dated, so the audit card of a sample voucher reads "Created <voucher date>". The
+/// company's own `clock` stamps everything after them.
+fn vouchers(seed: &Seed, api: &mut Api, keys: &Keys, clock: Clock) -> Result<(), SampleError> {
     for (_, id, name) in USERS {
         api.set_user_name(UserId(id), name)
             .map_err(|e| value_error("users", e.to_string()))?;
@@ -883,6 +887,7 @@ fn vouchers(seed: &Seed, api: &mut Api, keys: &Keys) -> Result<(), SampleError> 
             SectionSeed::History => {}
         }
         let built = build_voucher(api, keys, n, v)?;
+        api.set_clock(entered_at(&format!("voucher {}", v.number), built.date)?);
         api.set_actor(actor_of(v)?);
         run(
             api,
@@ -891,7 +896,18 @@ fn vouchers(seed: &Seed, api: &mut Api, keys: &Keys) -> Result<(), SampleError> 
         )?;
     }
     api.set_actor(Actor::User(UserId(1)));
+    api.set_clock(clock);
     Ok(())
+}
+
+/// The clock that stamps a voucher dated `date`: noon, UTC+05:30.
+fn entered_at(field: &str, date: Date) -> Result<Clock, SampleError> {
+    let offset = UtcOffset::from_hms(5, 30, 0).map_err(|e| value_error(field, e.to_string()))?;
+    let at = date
+        .with_hms(12, 0, 0)
+        .map_err(|e| value_error(field, e.to_string()))?
+        .assume_offset(offset);
+    Ok(Clock::Fixed(at))
 }
 
 fn statements(seed: &Seed, api: &mut Api, keys: &Keys) -> Result<(), SampleError> {

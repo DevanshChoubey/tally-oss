@@ -211,3 +211,23 @@ pub enum CellPlace {
     /// Ending at the line's right padding.
     Right,
 }
+
+/// The small "engine" tag after a label (`prov('eng','engine')`).
+pub fn paint_engine_tag(ui: &Ui, rect: Rect, label: &str, font: &FontId) {
+    let t = tokens(ui);
+    let label_width = ui
+        .painter()
+        .layout_no_wrap(label.to_owned(), font.clone(), t.text)
+        .size()
+        .x;
+    let tag_font = FontId::proportional(crate::theme::TEXT_META - 2.0);
+    let galley = ui
+        .painter()
+        .layout_no_wrap("engine".to_owned(), tag_font, t.ok);
+    let pad = vec2(6.0, 2.0);
+    let size = galley.size() + pad * 2.0;
+    let left = rect.left() + CELL_PAD_X + label_width + 8.0;
+    let tag = Rect::from_min_size(pos2(left, rect.center().y - size.y / 2.0), size);
+    ui.painter().rect_filled(tag, 3.0, t.ok_soft);
+    ui.painter().galley(tag.min + pad, galley, t.ok);
+}

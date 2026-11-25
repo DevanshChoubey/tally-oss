@@ -747,30 +747,10 @@ fn refusal_table(ui: &mut Ui, w: &ledgerly_api::BalanceRefusal, ink: egui::Color
             CellPlace::Left(table::CELL_PAD_X),
         );
         if engine {
-            paint_engine_tag(ui, rect, &label, &font);
+            table::paint_engine_tag(ui, rect, &label, &font);
         }
         table::paint_cell_text(ui, rect, rule, &amount, font, ink, CellPlace::Right);
     }
-}
-
-/// The small "engine" tag after a label (`prov('eng','engine')`).
-fn paint_engine_tag(ui: &mut Ui, rect: Rect, label: &str, font: &FontId) {
-    let t = tokens(ui);
-    let label_width = ui
-        .painter()
-        .layout_no_wrap(label.to_owned(), font.clone(), t.text)
-        .size()
-        .x;
-    let tag_font = FontId::proportional(crate::theme::TEXT_META - 2.0);
-    let galley = ui
-        .painter()
-        .layout_no_wrap("engine".to_owned(), tag_font, t.ok);
-    let pad = vec2(6.0, 2.0);
-    let size = galley.size() + pad * 2.0;
-    let left = rect.left() + table::CELL_PAD_X + label_width + 8.0;
-    let tag = Rect::from_min_size(pos2(left, rect.center().y - size.y / 2.0), size);
-    ui.painter().rect_filled(tag, 3.0, t.ok_soft);
-    ui.painter().galley(tag.min + pad, galley, t.ok);
 }
 
 /// Width of the amount column of the reconciliation statement (as the balance sheet's).

@@ -151,7 +151,7 @@ fn a_voucher_is_titled_by_its_number() {
         party: None,
         narration: String::new(),
         lines: Vec::new(),
-        not_shown: Vec::new(),
+        items: Vec::new(),
     };
     assert_eq!(voucher_title(&view(Some("SI/0412"))), "Voucher SI/0412");
     assert_eq!(voucher_title(&view(None)), "Voucher (no number yet)");

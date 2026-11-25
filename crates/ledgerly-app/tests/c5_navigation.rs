@@ -648,7 +648,7 @@ fn the_voucher_display_shows_the_stored_lines_and_no_total() {
             ("Capital", DrCr::Cr, 10_000_000)
         ]
     );
-    assert_eq!(view.not_shown, Vec::<String>::new());
+    assert_eq!(view.items, Vec::new());
 }
 
 #[test]
