@@ -337,6 +337,9 @@ pub struct BankScreen {
     import_layout: &'static str,
     /// Why the last import was refused or the file could not be read. Cleared by the next import.
     import_notice: Option<String>,
+    /// The engine's working when the last import was refused because the file does not add up.
+    /// Cleared by the next import.
+    import_working: Option<ledgerly_api::BalanceRefusal>,
     /// The masked account number shown after the ledger name (`XXXX 4471`), when known.
     account: Option<String>,
     /// Whether the company has another bank ledger to switch to; set by the host each frame.
@@ -441,6 +444,7 @@ impl BankScreen {
             run: None,
             import_layout: import::DEFAULT_LAYOUT,
             import_notice: None,
+            import_working: None,
             account: None,
             can_switch: false,
             switch_requested: false,
@@ -812,6 +816,11 @@ impl BankScreen {
     /// Why the last import was refused, until the next import attempt.
     pub(super) fn import_notice(&self) -> Option<&str> {
         self.import_notice.as_deref()
+    }
+
+    /// The working behind the last refusal, when the file did not add up.
+    pub fn import_working(&self) -> Option<&ledgerly_api::BalanceRefusal> {
+        self.import_working.as_ref()
     }
 }
 

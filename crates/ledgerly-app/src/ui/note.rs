@@ -4,6 +4,7 @@
 
 use egui::{Color32, Frame, Margin, Response, Stroke, Ui};
 
+use super::icon::{Icon, icon_sized};
 use super::{kind, para, tokens};
 use crate::theme::{RADIUS_S, TEXT_META, ThemeKind, Tokens, border_width};
 
@@ -57,6 +58,45 @@ pub fn note(ui: &mut Ui, kind_of: NoteKind, text: &str) -> Response {
         .inner_margin(Margin::symmetric(PAD_X, PAD_Y))
         .show(ui, |ui| {
             para(ui, text, TEXT_META, fg);
+        })
+        .response
+}
+
+/// Size of the icon at the left of an alert note, in points.
+const ALERT_ICON_SIZE: f32 = 16.0;
+
+/// Gap between the icon and the text of an alert note (`.note{gap:10px}`).
+const ALERT_GAP: f32 = 10.0;
+
+/// A note of `kind_of` with `icon` at its left and `add` drawing the content beside it, over the
+/// whole width (the mock's `.note` holding an icon and a `div`). `add` receives the note's text
+/// colour. The content is the caller's: this draws the frame, the icon and the layout only.
+pub fn note_with_icon(
+    ui: &mut Ui,
+    kind_of: NoteKind,
+    icon: Icon,
+    add: impl FnOnce(&mut Ui, Color32),
+) -> Response {
+    let t = tokens(ui);
+    let k = kind(ui);
+    let (bg, fg, edge) = colors(kind_of, &t);
+    let outline = if k == ThemeKind::HighContrast {
+        Stroke::new(border_width(k), fg)
+    } else {
+        Stroke::new(border_width(k), edge)
+    };
+    Frame::new()
+        .fill(bg)
+        .stroke(outline)
+        .corner_radius(RADIUS_S)
+        .inner_margin(Margin::symmetric(PAD_X, PAD_Y))
+        .show(ui, |ui| {
+            ui.set_min_width(ui.available_width());
+            ui.horizontal_top(|ui| {
+                ui.spacing_mut().item_spacing.x = ALERT_GAP;
+                icon_sized(ui, icon, fg, ALERT_ICON_SIZE);
+                ui.vertical(|ui| add(ui, fg));
+            });
         })
         .response
 }

@@ -49,8 +49,17 @@ pub(super) struct Loaded {
 type LoadAnswer = Result<Outcome<Option<Loaded>>, String>;
 type BrsAnswer = (Date, Result<Outcome<Brs>, String>);
 type ConfirmAnswer = (BankMatch, Result<Outcome<()>, String>);
-/// The new statement's id, or the text of the refusal.
-type ImportAnswer = Result<Outcome<BankStatementId>, String>;
+/// The new statement's id, or why the file was refused.
+type ImportAnswer = Result<Outcome<BankStatementId>, ImportFailure>;
+
+/// Why an import was refused: the words, and the engine's working when the file did not add up.
+#[derive(Debug)]
+pub(super) struct ImportFailure {
+    /// What went wrong, for the plain notice.
+    text: String,
+    /// Opening, lines, computed and printed closing balance, when that is the reason.
+    working: Option<ledgerly_api::BalanceRefusal>,
+}
 
 /// A statement file the user picked, waiting for the worker to import it.
 #[derive(Debug)]
@@ -136,6 +145,7 @@ impl BankScreen {
             }),
             import_layout: import::DEFAULT_LAYOUT,
             import_notice: None,
+            import_working: None,
             account: None,
             can_switch: false,
             switch_requested: false,
@@ -192,6 +202,7 @@ impl BankScreen {
     /// picked earlier and not yet sent is replaced.
     pub(super) fn queue_import(&mut self, bytes: Vec<u8>, layout: &'static str) {
         self.import_notice = None;
+        self.import_working = None;
         if let Some(run) = self.run.as_mut() {
             run.import_pending = Some(PendingImport { bytes, layout });
         }
@@ -258,13 +269,17 @@ impl BankScreen {
         match answer {
             Ok(Outcome::Value(_)) => {
                 self.import_notice = None;
+                self.import_working = None;
                 self.notice = None;
                 if let Some(run) = self.run.as_mut() {
                     run.want_load = true;
                 }
             }
             Ok(Outcome::Unsupported(u)) => self.import_notice = Some(unsupported_text(&u)),
-            Err(text) => self.import_notice = Some(text),
+            Err(failure) => {
+                self.import_notice = Some(failure.text);
+                self.import_working = failure.working;
+            }
         }
     }
 
@@ -448,7 +463,10 @@ impl BankScreen {
         let ledger = run.ledger;
         run.import.start(handle, move |api| {
             api.import_bank_statement(&bytes, layout, ledger)
-                .map_err(|e| e.to_string())
+                .map_err(|e| ImportFailure {
+                    working: ledgerly_api::balance_refusal(&bytes, layout, &e),
+                    text: e.to_string(),
+                })
         });
     }
 

@@ -254,3 +254,60 @@ fn the_empty_state_has_no_tabs_and_a_narrow_sentence() {
         "the sentence runs {width} wide, the mock's column is 420"
     );
 }
+
+/// A refused import shows the engine's whole working, not only a sentence.
+/// Provenance: `derived`. The statement below opens at 1000,00 (`:60F:`), has two lines, credit
+/// 500,00 and debit 100,00, so the lines net +400,00 and the file computes to 1400,00; it prints
+/// 1500,00, so the printed closing is 100,00 more. In paise: 100,000, +40,000, 140,000, 150,000,
+/// 10,000.
+#[test]
+fn a_refused_import_draws_the_working_the_engine_found() {
+    let statement = "{1:F01TESTINBBAXXX0000000000}{2:O9400000000000TESTINBBXXXX00000000000000000000N}{4:\r\n\
+:20:STMT0002\r\n\
+:25:0123456789\r\n\
+:28C:00001/001\r\n\
+:60F:C260401INR1000,00\r\n\
+:61:260405C500,00NTRFNONREF//BK1\r\n\
+:61:260412D100,00NTRFNONREF//BK2\r\n\
+:62F:C260412INR1500,00\r\n\
+-}\r\n";
+    let dir = PathBuf::from(env!("CARGO_TARGET_TMPDIR"));
+    let file = dir.join("w2_refused_import.mt940");
+    std::fs::write(&file, statement).unwrap();
+    let worker = ApiWorker::spawn(setup_without_statement("w2_refused_import.ledgerly")).unwrap();
+    let mut app = AppCtx {
+        api: Some(worker),
+        ..AppCtx::default()
+    };
+    let mut screen = BankScreen::worker("Bank Current Account", BANK, date!(2026 - 04 - 30));
+    let ctx = egui::Context::default();
+    let _first = settle(&ctx, &mut screen, &mut app);
+    assert!(screen.import_working().is_none());
+
+    ledgerly_app::ui::dialogs::script_open_file(file);
+    let mut input = RawInput::default();
+    input.events.push(egui::Event::Key {
+        key: egui::Key::O,
+        physical_key: Some(egui::Key::O),
+        pressed: true,
+        repeat: false,
+        modifiers: egui::Modifiers::COMMAND,
+    });
+    let out = ctx.run_ui(input, |ui| {
+        let _action = screen.ui(ui, &mut app);
+    });
+    out.drop_without_applying_deltas();
+    let text = settle(&ctx, &mut screen, &mut app);
+
+    let working = screen.import_working().expect("the refusal has a working");
+    assert_eq!(working.opening, ledgerly_core::Paise::new(100_000));
+    assert_eq!(working.lines, 2);
+    assert_eq!(working.lines_net, ledgerly_core::Paise::new(40_000));
+    assert_eq!(working.computed_closing, ledgerly_core::Paise::new(140_000));
+    assert_eq!(working.stated_closing, ledgerly_core::Paise::new(150_000));
+    assert_eq!(working.difference, ledgerly_core::Paise::new(10_000));
+    assert!(
+        text.contains("Not imported: the file does not add up."),
+        "the refusal title is missing: {text}"
+    );
+}

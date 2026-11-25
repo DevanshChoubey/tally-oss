@@ -24,11 +24,11 @@ use crate::ui::card::card;
 use crate::ui::empty::empty_state_with_icon;
 use crate::ui::format;
 use crate::ui::icon::Icon;
-use crate::ui::note::{NoteKind, note};
+use crate::ui::note::{NoteKind, note, note_with_icon};
 use crate::ui::page_head::page_head;
 use crate::ui::table::{self, CellPlace, RowState};
 use crate::ui::tabs::tabs;
-use crate::ui::{bold_font, kind, tokens};
+use crate::ui::{bold_font, kind, para, tokens};
 use ledgerly_core::{Outcome, VoucherId};
 use ledgerly_model::MatchKind;
 
@@ -173,6 +173,12 @@ impl BankScreen {
         }
         let mut events = Vec::new();
         self.draw_head(ui, &mut events);
+        // index.html:1738: a file that does not add up shows the head and the working, nothing
+        // else: the statement the screen held before is not shown beside a refusal.
+        if let Some(working) = self.import_working().copied() {
+            draw_balance_refusal(ui, &working);
+            return;
+        }
         // index.html:1737: with no statement the mock shows the head and one card, no tab strip.
         if !self.shows_empty_state() {
             self.draw_tabs(ui, &mut events);
@@ -628,6 +634,143 @@ impl BankScreen {
             Err(text) => self.import_notice = Some(text),
         }
     }
+}
+
+/// Width of the refusal's working table (`max-width:520px`, index.html:1738).
+const REFUSAL_TABLE_WIDTH: f32 = 520.0;
+
+/// The refusal for a file that does not add up (the mock's `bank.import-error`): a red note with
+/// the working, every figure from the engine's [`ledgerly_api::BalanceRefusal`].
+fn draw_balance_refusal(ui: &mut Ui, working: &ledgerly_api::BalanceRefusal) {
+    note_with_icon(ui, NoteKind::Bad, Icon::Alert, |ui, ink| {
+        ui.label(
+            egui::RichText::new("Not imported: the file does not add up.")
+                .font(bold_font(ui, crate::theme::TEXT_META))
+                .color(ink),
+        );
+        ui.add_space(8.0);
+        refusal_table(ui, working, ink);
+        ui.add_space(8.0);
+        para(
+            ui,
+            "A line is probably missing from the export, or the file was cut. Download the statement again for the full period. Nothing was imported.",
+            crate::theme::TEXT_META,
+            ink,
+        );
+    });
+}
+
+/// How a row of the refusal's working looks.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum WorkingRow {
+    /// A plain line.
+    Plain,
+    /// The computed closing balance, with the total rules.
+    Total,
+    /// The difference, in bold.
+    Strong,
+}
+
+/// The working's rows, from the engine's figures: label, amount, look, and whether the label
+/// carries the engine tag.
+fn refusal_rows(w: &ledgerly_api::BalanceRefusal) -> Vec<(String, String, WorkingRow, bool)> {
+    vec![
+        (
+            "Opening balance in the file".to_owned(),
+            format::amount(w.opening),
+            WorkingRow::Plain,
+            false,
+        ),
+        (
+            format!("Plus deposits, less withdrawals ({} lines)", w.lines),
+            format::amount(w.lines_net),
+            WorkingRow::Plain,
+            true,
+        ),
+        (
+            "Closing balance, computed".to_owned(),
+            format::amount(w.computed_closing),
+            WorkingRow::Total,
+            false,
+        ),
+        (
+            "Closing balance printed in the file".to_owned(),
+            format::amount(w.stated_closing),
+            WorkingRow::Plain,
+            false,
+        ),
+        (
+            "Difference".to_owned(),
+            format::amount(w.difference),
+            WorkingRow::Strong,
+            false,
+        ),
+    ]
+}
+
+/// The working as a `table.t` in the note's ink: rules in the border colour, the computed line
+/// with the total's rules.
+fn refusal_table(ui: &mut Ui, w: &ledgerly_api::BalanceRefusal, ink: egui::Color32) {
+    let width = ui.available_width().min(REFUSAL_TABLE_WIDTH);
+    for (label, amount, look, engine) in refusal_rows(w) {
+        let height = match look {
+            WorkingRow::Total => table::T_TOTAL_HEIGHT,
+            WorkingRow::Plain | WorkingRow::Strong => table::T_ROW_HEIGHT,
+        };
+        let (rect, _) = ui.allocate_exact_size(vec2(width, height), Sense::hover());
+        let (rule, bold) = match look {
+            WorkingRow::Plain => {
+                table::paint_cell_rule(ui, rect);
+                (1.0, false)
+            }
+            WorkingRow::Total => {
+                table::paint_total_rules(ui, rect);
+                (3.0, true)
+            }
+            WorkingRow::Strong => {
+                table::paint_cell_rule(ui, rect);
+                (1.0, true)
+            }
+        };
+        let font = if bold {
+            bold_font(ui, TEXT_BODY)
+        } else {
+            FontId::proportional(TEXT_BODY)
+        };
+        table::paint_cell_text(
+            ui,
+            rect,
+            rule,
+            &label,
+            font.clone(),
+            ink,
+            CellPlace::Left(table::CELL_PAD_X),
+        );
+        if engine {
+            paint_engine_tag(ui, rect, &label, &font);
+        }
+        table::paint_cell_text(ui, rect, rule, &amount, font, ink, CellPlace::Right);
+    }
+}
+
+/// The small "engine" tag after a label (`prov('eng','engine')`).
+fn paint_engine_tag(ui: &mut Ui, rect: Rect, label: &str, font: &FontId) {
+    let t = tokens(ui);
+    let label_width = ui
+        .painter()
+        .layout_no_wrap(label.to_owned(), font.clone(), t.text)
+        .size()
+        .x;
+    let tag_font = FontId::proportional(crate::theme::TEXT_META - 2.0);
+    let galley = ui
+        .painter()
+        .layout_no_wrap("engine".to_owned(), tag_font, t.ok);
+    let pad = vec2(6.0, 2.0);
+    let size = galley.size() + pad * 2.0;
+    let left = rect.left() + table::CELL_PAD_X + label_width + 8.0;
+    let tag = Rect::from_min_size(pos2(left, rect.center().y - size.y / 2.0), size);
+    ui.painter().rect_filled(tag, 3.0, t.ok_soft);
+    ui.painter().galley(tag.min + pad, galley, t.ok);
 }
 
 /// Width of the amount column of the reconciliation statement (as the balance sheet's).

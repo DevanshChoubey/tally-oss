@@ -27,6 +27,7 @@ mod voucher_gst;
 
 pub use ai::{AiLogEntry, AiTier};
 pub use balance::BalanceChange;
+pub use bank::{BalanceRefusal, balance_refusal};
 pub use command::{Command, CommandResult, CreatedId};
 pub use gst_filing::GstFiling;
 // Report types the app names when it builds and reads reports (card W7). The app depends on this
