@@ -208,14 +208,18 @@ fn the_3b_table_has_the_mocks_columns_and_cess() {
 // ---- the 2B and IMS tab before anything is imported ---------------------------------------------
 
 #[test]
-fn the_empty_2b_tab_says_what_is_missing_and_offers_no_import() {
-    // provenance: index.html:1692: an empty-state card with a title and one sentence. The mock's
-    // "Import 2B JSON Ctrl+O" button needs a 2B reader this version does not have (engine item
-    // E-3), so the sentence says so and no key or button is offered (design/PARITY-GAPS.md).
+fn the_empty_2b_tab_says_what_to_download_and_offers_the_import() {
+    // provenance: index.html:1692 (the mock's recon-empty): the title is "No 2B file for
+    // November yet", the sentence names Returns, GSTR-2B and the period, and says the file is
+    // chosen with Ctrl+O and that nothing is sent anywhere. The "Drop it here" words are left
+    // out because the screen takes no dropped files (design/PARITY-GAPS.md).
     let (title, sentence) = look::recon_empty("November 2026");
-    assert_eq!(title, "No 2B file for November 2026");
-    assert!(sentence.contains("E-3"), "{sentence}");
-    assert!(!sentence.contains("Ctrl+O"), "{sentence}");
+    assert_eq!(title, "No 2B file for November yet");
+    assert!(sentence.contains("GSTR-2B"), "{sentence}");
+    assert!(sentence.contains("November 2026"), "{sentence}");
+    assert!(sentence.contains("Ctrl+O"), "{sentence}");
+    assert!(sentence.contains("nothing is sent anywhere"), "{sentence}");
+    assert!(!sentence.contains("E-3"), "{sentence}");
 }
 
 // ---- Enter opens the voucher --------------------------------------------------------------------

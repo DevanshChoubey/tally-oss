@@ -24,6 +24,13 @@ pub use error::SampleError;
 /// The seed text.
 const SEED: &str = include_str!("../assets/godavari.toml");
 
+/// The November 2026 GSTR-2B file of the sample company (fictional; the document shape is
+/// `pending observed`, see `design/PARITY-GAPS.md`).
+pub const GSTR2B_NOVEMBER: &str = include_str!("../assets/gstr2b-nov-2026.json");
+
+/// The October 2026 GSTR-2B file of the sample company (fictional, same shape).
+pub const GSTR2B_OCTOBER: &str = include_str!("../assets/gstr2b-oct-2026.json");
+
 /// The seed version this build reads.
 const SEED_VERSION: u32 = 1;
 
@@ -77,7 +84,7 @@ pub fn path_under(base: &Path) -> PathBuf {
 /// [`SampleError`] when the seed is bad, or the API or the engine refuses a step.
 pub fn create(path: &Path, clock: Clock) -> Result<Api, SampleError> {
     let seed = parsed()?;
-    Ok(load::build(&seed, path, clock, NegativeStockPolicy::Block)?.api)
+    Ok(load::build(&seed, path, clock, NegativeStockPolicy::Block, true)?.api)
 }
 
 /// Builds the sample company as [`create`] does, but with the company's negative-stock policy set
@@ -89,7 +96,18 @@ pub fn create(path: &Path, clock: Clock) -> Result<Api, SampleError> {
 /// As [`create`].
 pub fn create_allowing_negative_stock(path: &Path, clock: Clock) -> Result<Api, SampleError> {
     let seed = parsed()?;
-    Ok(load::build(&seed, path, clock, NegativeStockPolicy::Allow)?.api)
+    Ok(load::build(&seed, path, clock, NegativeStockPolicy::Allow, true)?.api)
+}
+
+/// Builds the sample company as [`create`] does, but with no 2B file imported and no IMS action
+/// or filing recorded, so a screenshot harness can show the 2B screen's empty state and import
+/// one. The books are the same.
+///
+/// # Errors
+/// As [`create`].
+pub fn create_without_2b(path: &Path, clock: Clock) -> Result<Api, SampleError> {
+    let seed = parsed()?;
+    Ok(load::build(&seed, path, clock, NegativeStockPolicy::Block, false)?.api)
 }
 
 /// Builds the sample company in a throwaway file under `base`, replacing one a last run left,

@@ -13,7 +13,9 @@ pub mod schema;
 pub mod stock_load;
 pub mod verify;
 
-pub use event::{Actor, AuditMeta, AuditRecord, CommitReceipt, Event, StoredStatementLine};
+pub use event::{
+    Actor, AuditMeta, AuditRecord, CommitReceipt, Event, StoredImsAction, StoredStatementLine,
+};
 pub use sqlite::SqliteStore;
 
 use ledgerly_core::{EventSeq, Period, VoucherId};

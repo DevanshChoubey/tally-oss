@@ -20,8 +20,8 @@ use egui::{
 use super::look::{self, Line3b};
 use super::worker::Figures;
 use super::{
-    Bucket, ExceptionItem, Feed, GstCmd, GstScreen, GstTab, ImsAction, ReconRow, UiEvent,
-    amount_cell, difference_cell, section_bucket,
+    Bucket, ExceptionItem, Feed, GstCmd, GstScreen, GstTab, ImsAction, MatchState, ReconRow,
+    UiEvent, amount_cell, date_cell, section_bucket,
 };
 use crate::ScreenAction;
 use crate::screens::home::draw::{split, title};
@@ -500,10 +500,16 @@ impl GstScreen {
     // ---- 2B and IMS --------------------------------------------------------------------------
 
     fn draw_recon(&self, ui: &mut Ui, want_scroll: bool, events: &mut Vec<UiEvent>) {
+        if let Some(reason) = &self.import_error {
+            Self::draw_import_error(ui, reason, events);
+            ui.add_space(SPACE_3);
+        }
         let rows = match &self.recon {
             Feed::Loaded(rows) => rows,
             Feed::NotLoaded => {
-                self.draw_recon_empty(ui);
+                if self.import_error.is_none() {
+                    self.draw_recon_empty(ui, events);
+                }
                 return;
             }
             Feed::Unsupported(_) => {
@@ -514,62 +520,220 @@ impl GstScreen {
                 return;
             }
         };
-        self.draw_recon_chips(ui, events);
-        ui.add_space(SPACE_3);
+        if rows.is_empty() {
+            match &self.recon_file {
+                // After a refused file the mock shows the refusal alone, not the empty card.
+                None if self.import_error.is_some() => {}
+                None => self.draw_recon_empty(ui, events),
+                Some(name) => {
+                    let text = format!("The 2B file {name} holds no documents.");
+                    note(ui, NoteKind::Info, &text);
+                }
+            }
+            return;
+        }
         let visible = self.visible_recon();
-        crate::ui::card::card(ui, |ui| {
-            ui.set_min_width(ui.available_width());
-            egui::Grid::new("gst-recon").striped(true).show(ui, |ui| {
-                for head in [
-                    "Match",
-                    "Supplier",
-                    "Invoice",
-                    "Taxable, books",
-                    "Taxable, 2B",
-                    "Tax, books",
-                    "Tax, 2B",
-                    "Difference",
-                    "IMS action",
-                ] {
-                    ui.weak(head);
+        let selected = self.focused_index();
+        let mut side = Vec::new();
+        split(
+            ui,
+            |ui| self.draw_recon_table(ui, rows, &visible, want_scroll, events),
+            |ui| {
+                if let Some((index, row)) = selected.and_then(|i| rows.get(i).map(|r| (i, r))) {
+                    self.draw_recon_side(ui, index, row, &mut side);
                 }
-                ui.end_row();
-                for (pos, &index) in visible.iter().enumerate() {
-                    let Some(row) = rows.get(index) else {
-                        continue;
-                    };
-                    let focused = pos == self.focus;
-                    select_cell(
-                        ui,
-                        focused && want_scroll,
-                        focused,
-                        pos,
-                        row.state.label(),
-                        events,
-                    );
-                    ui.vertical(|ui| {
-                        ui.label(row.supplier.as_str());
-                        ui.weak(row.gstin.as_str());
-                    });
-                    ui.vertical(|ui| {
-                        ui.label(row.invoice_no.as_str());
-                        ui.weak(row.dates_text());
-                    });
-                    ui.label(amount_cell(row.taxable_books));
-                    ui.label(amount_cell(row.taxable_2b));
-                    ui.label(amount_cell(row.tax_books));
-                    ui.label(amount_cell(row.tax_2b));
-                    ui.label(difference_cell(row.difference));
-                    self.draw_ims_cell(ui, index, row, events);
-                    ui.end_row();
+            },
+        );
+        events.extend(side);
+    }
+
+    /// The table of the 2B documents: Supplier, Invoice, 2B, Books, Engine status, IMS action.
+    fn draw_recon_table(
+        &self,
+        ui: &mut Ui,
+        rows: &[ReconRow],
+        visible: &[usize],
+        want_scroll: bool,
+        events: &mut Vec<UiEvent>,
+    ) {
+        table_card(ui, |ui| {
+            let width = ui.available_width();
+            let (head, _) = ui.allocate_exact_size(vec2(width, T_HEAD_HEIGHT), Sense::hover());
+            let c = recon_columns(head);
+            paint_heads(
+                ui,
+                head,
+                &[
+                    (c[0], "Supplier"),
+                    (c[1], "Invoice"),
+                    (c[4], "Engine status"),
+                    (c[5], "IMS action"),
+                ],
+                &[(c[2], "2B"), (c[3], "Books")],
+            );
+            for (pos, &index) in visible.iter().enumerate() {
+                let Some(row) = rows.get(index) else {
+                    continue;
+                };
+                let (rect, response) =
+                    ui.allocate_exact_size(vec2(width, RECON_ROW_H), Sense::click());
+                let state = RowState {
+                    selected: pos == self.focus,
+                    hovered: response.hovered(),
+                    sub: false,
+                };
+                self.paint_recon_row(ui, rect, row, self.decision(index), state);
+                crate::ui::a11y::name(
+                    ui,
+                    &response,
+                    egui::accesskit::Role::Row,
+                    &crate::ui::a11y::join(&[
+                        row.supplier.as_str(),
+                        row.invoice_no.as_str(),
+                        amount_cell(row.total_2b).as_str(),
+                        amount_cell(row.total_books).as_str(),
+                        status_text(row).as_str(),
+                        self.decision(index).map_or("No action", ImsAction::label),
+                    ]),
+                );
+                if state.selected && want_scroll {
+                    response.scroll_to_me(None);
                 }
-            });
+                if response.clicked() {
+                    events.push(UiEvent::Focus(pos));
+                }
+                if response.double_clicked() {
+                    events.push(UiEvent::Drill(pos));
+                }
+            }
         });
     }
 
-    /// The empty state of the 2B and IMS tab (the mock's `.empty` in a card, index.html:1692),
-    /// without the import button: this version cannot read a 2B file.
-    fn draw_recon_empty(&self, ui: &mut Ui) {
+    fn paint_recon_row(
+        &self,
+        ui: &mut Ui,
+        rect: Rect,
+        row: &ReconRow,
+        decision: Option<ImsAction>,
+        state: RowState,
+    ) {
+        let t = tokens(ui);
+        table::paint_row(ui, rect, state);
+        let c = recon_columns(rect);
+        let font = egui::FontId::proportional(TEXT_BODY);
+        let meta = egui::FontId::proportional(TEXT_META);
+        paint_wrapped(ui, c[0], 0.0, &row.supplier, font.clone(), t.text);
+        paint_wrapped(ui, c[1], 0.0, &row.invoice_no, font.clone(), t.text);
+        paint_wrapped(
+            ui,
+            c[1],
+            LINE_H,
+            &date_cell(row.portal_date),
+            meta.clone(),
+            t.text_3,
+        );
+        let right = CellPlace::Right;
+        table::paint_cell_text(
+            ui,
+            c[2],
+            1.0,
+            &amount_cell(row.total_2b),
+            font.clone(),
+            t.text,
+            right,
+        );
+        let (books_text, books_color) = match row.total_books {
+            Some(_) => (amount_cell(row.total_books), t.text),
+            None => ("none".to_owned(), t.text_3),
+        };
+        table::paint_cell_text(ui, c[3], 1.0, &books_text, font.clone(), books_color, right);
+        cell_row(ui, c[4], |ui| {
+            badge(ui, status_kind(row), &status_text(row));
+        });
+        let locked = self.filed_on.is_some();
+        let badges = Rect::from_min_size(c[5].min + vec2(0.0, 12.0), vec2(c[5].width(), 20.0));
+        match decision {
+            Some(action) => cell_row(ui, badges, |ui| {
+                badge(ui, action_kind(action), action.label());
+            }),
+            None => paint_wrapped(ui, c[5], 0.0, "No action", font, t.text_2),
+        }
+        if locked {
+            if decision.is_some() {
+                let second = badges.translate(vec2(0.0, 22.0));
+                cell_row(ui, second, |ui| {
+                    badge(ui, BadgeKind::Neutral, "Final");
+                });
+            }
+        } else {
+            let text = format!("Suggested: {}", row.suggested.label());
+            paint_wrapped(ui, c[5], LINE_H, &text, meta, t.text_3);
+        }
+    }
+
+    /// The card beside the table: the selected document, what the engine found and the three
+    /// actions. When GSTR-3B was marked filed it is the lock bar instead.
+    fn draw_recon_side(
+        &self,
+        ui: &mut Ui,
+        index: usize,
+        row: &ReconRow,
+        events: &mut Vec<UiEvent>,
+    ) {
+        let t = tokens(ui);
+        if let Some(filed) = self.filed_on {
+            let (lead, rest) = look::lock_words(&self.period_label, &date_long(filed));
+            lock_bar_card(ui, &lead, &rest);
+            return;
+        }
+        crate::ui::card::card(ui, |ui| {
+            title(ui, &format!("{} \u{00B7} {}", row.supplier, row.invoice_no));
+            let line = match (row.state, row.total_2b, row.total_books, row.difference) {
+                (MatchState::ValueDiffers, Some(b2), Some(bk), Some(d)) => format!(
+                    "2B shows {}; your books show {}. Difference {} (engine).",
+                    amount_cell(Some(b2)),
+                    amount_cell(Some(bk)),
+                    amount_cell(Some(d))
+                ),
+                _ => status_text(row),
+            };
+            para(ui, &line, TEXT_BODY, t.text_2);
+            ui.add_space(SPACE_3);
+            ui.horizontal(|ui| {
+                for action in ImsAction::ALL {
+                    let key = match action {
+                        ImsAction::Accept => "A",
+                        ImsAction::Reject => "R",
+                        ImsAction::Pending => "P",
+                    };
+                    if button(ui, action.label(), Some(key), ButtonKind::Secondary).clicked() {
+                        events.push(UiEvent::Decide(index, action));
+                    }
+                }
+            });
+            ui.add_space(SPACE_3);
+            para(
+                ui,
+                "IMS actions are yours. Ledgerly records them and lists them for you to apply on the portal.",
+                TEXT_META,
+                t.text_3,
+            );
+            ui.add_space(SPACE_3);
+            if button(ui, "Mark GSTR-3B filed", None, ButtonKind::Secondary).clicked() {
+                events.push(UiEvent::MarkFiled);
+            }
+            ui.add_space(4.0);
+            para(
+                ui,
+                "Mark it once you have filed on the portal. The period's IMS actions then lock.",
+                TEXT_META,
+                t.text_3,
+            );
+        });
+    }
+
+    /// The empty state of the 2B and IMS tab (the mock's `recon-empty`, index.html:1692).
+    fn draw_recon_empty(&self, ui: &mut Ui, events: &mut Vec<UiEvent>) {
         let (heading, sentence) = look::recon_empty(&self.period_label);
         crate::ui::card::card(ui, |ui| {
             ui.set_min_width(ui.available_width());
@@ -590,65 +754,195 @@ impl GstScreen {
                     ui.set_max_width(420.0);
                     ui.label(RichText::new(sentence).size(TEXT_BODY).color(t.text_2));
                 });
+                ui.add_space(SPACE_3);
+                let import = button_icon(
+                    ui,
+                    Some(Icon::Upload),
+                    "Import 2B JSON",
+                    Some("Ctrl+O"),
+                    ButtonKind::Primary,
+                );
+                if import.clicked() {
+                    events.push(UiEvent::ImportFile);
+                }
                 ui.add_space(SPACE_6 + 10.0);
             });
         });
     }
 
-    /// The filter chips of the match table: every bucket and the rows still needing an action.
-    fn draw_recon_chips(&self, ui: &mut Ui, events: &mut Vec<UiEvent>) {
-        let Some(total) = self.item_count(GstTab::Reconciliation) else {
-            return;
-        };
-        ui.horizontal(|ui| {
-            if ui
-                .selectable_label(self.bucket_filter.is_none(), format!("All {total}"))
-                .clicked()
-            {
-                events.push(UiEvent::Filter(None));
-            }
-            for bucket in Bucket::ALL {
-                let n = self
-                    .bucket_count(GstTab::Reconciliation, bucket)
-                    .unwrap_or(0);
-                let text = format!("{} {n}", bucket.label());
-                if ui
-                    .selectable_label(self.bucket_filter == Some(bucket), text)
-                    .clicked()
-                {
-                    events.push(UiEvent::Filter(Some(bucket)));
-                }
-            }
-            let text = format!("Open actions {}", self.open_count());
-            if ui.selectable_label(self.open_only, text).clicked() {
-                events.push(UiEvent::OpenOnly(!self.open_only));
+    /// The refusal of a 2B file (the mock's `recon-error`, index.html:1693): what the engine
+    /// said, that nothing changed, and a button to choose another file.
+    fn draw_import_error(ui: &mut Ui, reason: &str, events: &mut Vec<UiEvent>) {
+        crate::ui::note::note_with_icon(ui, NoteKind::Bad, Icon::Alert, |ui, ink| {
+            ui.label(
+                RichText::new(look::import_refusal(reason))
+                    .font(bold_font(ui, TEXT_META))
+                    .color(ink),
+            );
+            para(
+                ui,
+                "Nothing was imported or changed. Download the file again for this company's GSTIN.",
+                TEXT_META,
+                ink,
+            );
+            ui.add_space(8.0);
+            let again = button_icon(
+                ui,
+                Some(Icon::Upload),
+                "Choose another file",
+                None,
+                ButtonKind::Secondary,
+            );
+            if again.clicked() {
+                events.push(UiEvent::ImportFile);
             }
         });
     }
+}
 
-    fn draw_ims_cell(&self, ui: &mut Ui, index: usize, row: &ReconRow, events: &mut Vec<UiEvent>) {
-        if !row.in_2b() {
-            ui.weak("Ask supplier to file");
-            return;
-        }
-        let decision = self.decision(index);
-        ui.horizontal(|ui| {
-            for action in ImsAction::ALL {
-                if ui
-                    .selectable_label(decision == Some(action), action.label())
-                    .clicked()
-                {
-                    events.push(UiEvent::Decide(index, action));
-                }
-            }
-            if decision.is_none() {
-                ui.weak(format!(
-                    "suggested: {}, not confirmed",
-                    row.suggested.label()
-                ));
-            }
-        });
+/// Height of a row of the 2B table: two lines, as the mock's rows with their meta line.
+const RECON_ROW_H: f32 = 70.0;
+/// Width of the IMS action column.
+const RECON_IMS_W: f32 = 89.0;
+/// Width of the Engine status column.
+const RECON_STATUS_W: f32 = 138.0;
+/// Width of the 2B and Books amount columns.
+const RECON_AMOUNT_W: f32 = 98.0;
+/// Width of the Invoice column.
+const RECON_INVOICE_W: f32 = 86.0;
+
+/// The Supplier, Invoice, 2B, Books, Engine status and IMS action cells of a line.
+#[allow(clippy::float_arithmetic, reason = "sharing a line between columns")]
+fn recon_columns(line: Rect) -> [Rect; 6] {
+    let cell = |from: f32, to: f32| {
+        Rect::from_min_max(egui::pos2(from, line.top()), egui::pos2(to, line.bottom()))
+    };
+    let ims = cell(line.right() - RECON_IMS_W, line.right());
+    let status = cell(ims.left() - RECON_STATUS_W, ims.left());
+    let books = cell(status.left() - RECON_AMOUNT_W, status.left());
+    let portal = cell(books.left() - RECON_AMOUNT_W, books.left());
+    let invoice = cell(portal.left() - RECON_INVOICE_W, portal.left());
+    let supplier = cell(line.left(), invoice.left());
+    [supplier, invoice, portal, books, status, ims]
+}
+
+/// One text line height of the wrapped cells of a 2B row.
+const LINE_H: f32 = 18.0;
+
+/// Paints `text` wrapped to the cell's width, the block centred in the row and pushed down by
+/// `skip` points (so a second block can sit under the first).
+#[allow(clippy::float_arithmetic, reason = "placing wrapped text in a cell")]
+fn paint_wrapped(
+    ui: &Ui,
+    cell: Rect,
+    skip: f32,
+    text: &str,
+    font: egui::FontId,
+    color: egui::Color32,
+) {
+    let width = cell.width() - 2.0 * table::CELL_PAD_X;
+    let galley = ui
+        .painter()
+        .layout(text.to_owned(), font, color, width.max(1.0));
+    let y = cell.top() + 12.0 + skip;
+    ui.painter().with_clip_rect(cell).galley(
+        egui::pos2(cell.left() + table::CELL_PAD_X, y),
+        galley,
+        color,
+    );
+}
+
+/// Lays `add` out left to right in `cell`, centred, with the table's cell padding.
+fn cell_row(ui: &mut Ui, cell: Rect, add: impl FnOnce(&mut Ui)) {
+    let inner = cell.shrink2(vec2(table::CELL_PAD_X, 0.0));
+    let mut child = ui.new_child(
+        UiBuilder::new()
+            .max_rect(inner)
+            .layout(Layout::left_to_right(Align::Center)),
+    );
+    child.spacing_mut().item_spacing = vec2(4.0, 0.0);
+    add(&mut child);
+}
+
+/// The words of the Engine status badge: the engine's state, and how it paired the document.
+fn status_text(row: &ReconRow) -> String {
+    let word = match row.state {
+        MatchState::ValueDiffers => "Differs",
+        MatchState::DateDiffers => "Date differs",
+        MatchState::Matched
+        | MatchState::NotInBooks
+        | MatchState::PossibleDuplicate
+        | MatchState::NotIn2b
+        | MatchState::NotComparable => row.state.label(),
+    };
+    match row.level {
+        Some(level) => format!("{word} \u{00B7} {level}"),
+        None => word.to_owned(),
     }
+}
+
+fn status_kind(row: &ReconRow) -> BadgeKind {
+    match row.state {
+        MatchState::Matched => BadgeKind::Ok,
+        MatchState::ValueDiffers
+        | MatchState::DateDiffers
+        | MatchState::PossibleDuplicate
+        | MatchState::NotComparable => BadgeKind::Warn,
+        MatchState::NotInBooks | MatchState::NotIn2b => BadgeKind::Bad,
+    }
+}
+
+fn action_kind(action: ImsAction) -> BadgeKind {
+    match action {
+        ImsAction::Accept => BadgeKind::Ok,
+        ImsAction::Reject => BadgeKind::Bad,
+        ImsAction::Pending => BadgeKind::Warn,
+    }
+}
+
+/// `20 Nov 2026`, for a sentence.
+fn date_long(date: ledgerly_core::Date) -> String {
+    crate::ui::format::date(date)
+}
+
+/// The lock bar (`.lockbar`): the lock icon, the lead in bold and the rest, on the soft red.
+fn lock_bar_card(ui: &mut Ui, lead: &str, rest: &str) {
+    let t = tokens(ui);
+    Frame::new()
+        .fill(t.bad_soft)
+        .corner_radius(RADIUS_M)
+        .inner_margin(Margin::symmetric(16, 10))
+        .show(ui, |ui| {
+            ui.set_min_width(ui.available_width());
+            ui.horizontal_top(|ui| {
+                ui.spacing_mut().item_spacing.x = 10.0;
+                icon::icon(ui, Icon::Lock, t.bad);
+                let mut job = egui::text::LayoutJob::default();
+                job.wrap.max_width = ui.available_width();
+                let line = crate::ui::line_height(TEXT_META);
+                job.append(
+                    lead,
+                    0.0,
+                    egui::TextFormat {
+                        font_id: bold_font(ui, TEXT_META),
+                        color: t.bad,
+                        line_height: Some(line),
+                        ..egui::TextFormat::default()
+                    },
+                );
+                job.append(
+                    &format!(" {rest}"),
+                    0.0,
+                    egui::TextFormat {
+                        font_id: egui::FontId::proportional(TEXT_META),
+                        color: t.bad,
+                        line_height: Some(line),
+                        ..egui::TextFormat::default()
+                    },
+                );
+                ui.add(egui::Label::new(job).wrap());
+            });
+        });
 }
 
 // ---- pieces -------------------------------------------------------------------------------------
@@ -1012,28 +1306,6 @@ fn figure_columns(line: Rect) -> (Rect, Rect) {
     (label, amount)
 }
 
-/// The first cell of a match row: click selects, double click opens, and the selected row
-/// scrolls into view when `scroll` is set.
-fn select_cell(
-    ui: &mut Ui,
-    scroll: bool,
-    focused: bool,
-    pos: usize,
-    label: &str,
-    events: &mut Vec<UiEvent>,
-) {
-    let r = ui.selectable_label(focused, label);
-    if r.clicked() {
-        events.push(UiEvent::Focus(pos));
-    }
-    if r.double_clicked() {
-        events.push(UiEvent::Drill(pos));
-    }
-    if scroll {
-        r.scroll_to_me(None);
-    }
-}
-
 /// Says why a feed shows no table.
 fn draw_not_ready<T>(ui: &mut Ui, feed: &Feed<T>) {
     let t = tokens(ui);
@@ -1126,6 +1398,9 @@ fn read_keys(ui: &Ui) -> Vec<GstCmd> {
         }
         if i.consume_key(Modifiers::CTRL, Key::E) {
             out.push(GstCmd::ExportJson);
+        }
+        if i.consume_key(Modifiers::COMMAND, Key::O) {
+            out.push(GstCmd::ImportFile);
         }
         if i.consume_key(Modifiers::ALT, Key::F2) {
             out.push(GstCmd::PickPeriod);

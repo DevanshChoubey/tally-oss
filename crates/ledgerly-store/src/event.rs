@@ -82,6 +82,58 @@ pub enum Event {
         /// The lines in file order.
         lines: Vec<StoredStatementLine>,
     },
+    /// A GSTR-2B file downloaded from the GST portal was imported for a return period (round
+    /// s11). The file text is kept whole, so the reconciliation is rebuilt from it each time the
+    /// company file is opened. A later import for the same GSTIN and period replaces the earlier
+    /// one in the reconciliation; both stay in the log.
+    Gstr2bImported {
+        /// The company GSTIN the file was imported for, as the file states it.
+        gstin: String,
+        /// First day of the return period.
+        period_start: Date,
+        /// File name the user chose, for the audit trail.
+        file_name: String,
+        /// Lower-case hex SHA-256 of the file text.
+        file_hash: String,
+        /// The file text, exactly as imported.
+        json: String,
+    },
+    /// The user's IMS action on one 2B document (round s11). The last event for a document, in
+    /// sequence order, is the action in force. Ledgerly records the action; it does not send it
+    /// to the portal.
+    ImsActionRecorded {
+        /// The company GSTIN.
+        gstin: String,
+        /// First day of the return period of the 2B file.
+        period_start: Date,
+        /// The supplier's GSTIN as written in the 2B file.
+        supplier_gstin: String,
+        /// The document number as written in the 2B file.
+        doc_number: String,
+        /// What the user chose.
+        action: StoredImsAction,
+    },
+    /// The user marked GSTR-3B filed for a return period (round s11). IMS actions for the period
+    /// are then final.
+    Gstr3bFiled {
+        /// The company GSTIN.
+        gstin: String,
+        /// First day of the return period.
+        period_start: Date,
+        /// The day the user says the return was filed.
+        filed_on: Date,
+    },
+}
+
+/// An action on a record in the GST portal's Invoice Management System, as stored.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum StoredImsAction {
+    /// Accept the document.
+    Accept,
+    /// Reject the document.
+    Reject,
+    /// Keep the document pending.
+    Pending,
 }
 
 /// One bank statement line as stored by `Event::BankStatementStored`. Balances are credit

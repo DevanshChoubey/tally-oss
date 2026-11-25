@@ -147,6 +147,9 @@ impl Replay {
             | Event::PeriodLocked { .. }
             | Event::StatementImported(_)
             | Event::BankStatementStored { .. }
+            | Event::Gstr2bImported { .. }
+            | Event::ImsActionRecorded { .. }
+            | Event::Gstr3bFiled { .. }
             | Event::AiProposalRecorded(_) => Ok(()),
         }
     }

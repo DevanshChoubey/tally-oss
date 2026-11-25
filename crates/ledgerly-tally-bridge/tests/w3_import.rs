@@ -268,6 +268,9 @@ fn imported_events_match_a_hand_derivation_of_the_fixture() {
             | Event::PeriodLocked { .. }
             | Event::StatementImported(_)
             | Event::BankStatementStored { .. }
+            | Event::Gstr2bImported { .. }
+            | Event::ImsActionRecorded { .. }
+            | Event::Gstr3bFiled { .. }
             | Event::MatchConfirmed(_)
             | Event::AiProposalRecorded(_) => None,
         })
@@ -292,6 +295,9 @@ fn imported_events_match_a_hand_derivation_of_the_fixture() {
             | Event::PeriodLocked { .. }
             | Event::StatementImported(_)
             | Event::BankStatementStored { .. }
+            | Event::Gstr2bImported { .. }
+            | Event::ImsActionRecorded { .. }
+            | Event::Gstr3bFiled { .. }
             | Event::MatchConfirmed(_)
             | Event::AiProposalRecorded(_) => None,
         })

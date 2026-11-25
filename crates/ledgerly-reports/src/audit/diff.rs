@@ -94,6 +94,9 @@ pub(super) fn changes_of(rec: &AuditRecord) -> Result<Vec<Change>, ReportError> 
         | Event::PeriodLocked { .. }
         | Event::StatementImported(_)
         | Event::BankStatementStored { .. }
+        | Event::Gstr2bImported { .. }
+        | Event::ImsActionRecorded { .. }
+        | Event::Gstr3bFiled { .. }
         | Event::MatchConfirmed(_)
         | Event::AiProposalRecorded(_) => {}
     }

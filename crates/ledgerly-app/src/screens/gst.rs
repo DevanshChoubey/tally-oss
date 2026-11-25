@@ -220,6 +220,8 @@ pub enum MatchState {
     PossibleDuplicate,
     /// In the books but the supplier has not filed it yet.
     NotIn2b,
+    /// A voucher fits by number, but one side has no tax split, so nothing is compared.
+    NotComparable,
 }
 
 impl MatchState {
@@ -233,6 +235,7 @@ impl MatchState {
             MatchState::NotInBooks => "Not in books",
             MatchState::PossibleDuplicate => "Possible duplicate",
             MatchState::NotIn2b => "Not in 2B yet",
+            MatchState::NotComparable => "Not comparable",
         }
     }
 
@@ -244,7 +247,8 @@ impl MatchState {
             | MatchState::ValueDiffers
             | MatchState::DateDiffers
             | MatchState::NotInBooks
-            | MatchState::PossibleDuplicate => true,
+            | MatchState::PossibleDuplicate
+            | MatchState::NotComparable => true,
             MatchState::NotIn2b => false,
         }
     }
@@ -281,6 +285,15 @@ pub struct ReconRow {
     pub suggested: ImsAction,
     /// The purchase voucher in the books, when there is one.
     pub voucher: Option<VoucherId>,
+    /// Taxable value plus tax in the books, from the engine (the mock's "Books" column).
+    pub total_books: Option<Paise>,
+    /// Taxable value plus tax in 2B, from the engine (the mock's "2B" column).
+    pub total_2b: Option<Paise>,
+    /// The action recorded in the company file for this document, when one was.
+    pub stored_action: Option<ImsAction>,
+    /// The match level the engine reached, as a word for the status badge (for example
+    /// `Exact`, `Rule`), when it has one.
+    pub level: Option<&'static str>,
 }
 
 impl ReconRow {
@@ -367,6 +380,12 @@ pub enum ActionError {
         /// Invoice number.
         invoice_no: String,
     },
+    /// The period's GSTR-3B was marked filed, so its IMS actions are final.
+    #[error("GSTR-3B for this period was filed on {filed_on}; its IMS actions are final")]
+    Final {
+        /// The day it was marked filed, as dd-mm-yyyy.
+        filed_on: String,
+    },
 }
 
 /// A command from the keyboard.
@@ -388,6 +407,8 @@ pub enum GstCmd {
     ExportJson,
     /// Open or close the return-period picker (Alt+F2).
     PickPeriod,
+    /// Choose a 2B file to import (Ctrl+O).
+    ImportFile,
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -430,6 +451,12 @@ pub struct GstScreen {
     gstr1: Feed<Vec<ExceptionItem>>,
     gstr3b: Feed<Vec<ExceptionItem>>,
     recon: Feed<Vec<ReconRow>>,
+    /// The name of the 2B file imported for the period; `None` when there is none.
+    recon_file: Option<String>,
+    /// The day GSTR-3B for the period was marked filed; the period's actions are final then.
+    filed_on: Option<Date>,
+    /// Why the last 2B file was refused (the mock's `recon-error`), until another is chosen.
+    import_error: Option<String>,
     /// The user's confirmed action per reconciliation row, parallel to `recon`.
     decisions: Vec<Option<ImsAction>>,
     /// Confirmed actions kept while the reconciliation feed is not loaded, so that a refresh
@@ -496,13 +523,14 @@ pub(super) fn section_bucket(b: ledgerly_api::Bucket) -> Bucket {
 enum UiEvent {
     Tab(GstTab),
     Filter(Option<Bucket>),
-    OpenOnly(bool),
     Focus(usize),
     Section(usize),
     OpenSection(usize),
     Drill(usize),
     Decide(usize, ImsAction),
     ExportJson,
+    ImportFile,
+    MarkFiled,
     PeriodPicker,
     ChoosePeriod(usize),
     ToggleVouchers,
@@ -520,6 +548,9 @@ impl GstScreen {
             gstr1: Feed::NotLoaded,
             gstr3b: Feed::NotLoaded,
             recon: Feed::NotLoaded,
+            recon_file: None,
+            filed_on: None,
+            import_error: None,
             decisions: Vec::new(),
             held: Vec::new(),
             bucket_filter: None,
@@ -583,6 +614,33 @@ impl GstScreen {
         parts.push(self.period_label.clone());
         parts.push("monthly".to_owned());
         parts.join(" \u{00B7} ")
+    }
+
+    /// The reconciliation rows on show, as the engine gave them; empty until they are loaded.
+    #[must_use]
+    pub fn recon_rows(&self) -> &[ReconRow] {
+        match &self.recon {
+            Feed::Loaded(rows) => rows,
+            Feed::NotLoaded | Feed::Unsupported(_) => &[],
+        }
+    }
+
+    /// The name of the 2B file imported for the period, `None` when none was.
+    #[must_use]
+    pub fn recon_file(&self) -> Option<&str> {
+        self.recon_file.as_deref()
+    }
+
+    /// The day GSTR-3B for the period was marked filed, `None` when it was not.
+    #[must_use]
+    pub fn filed_on(&self) -> Option<Date> {
+        self.filed_on
+    }
+
+    /// Why the last 2B file was refused, `None` when none was or another was chosen since.
+    #[must_use]
+    pub fn import_error(&self) -> Option<&str> {
+        self.import_error.as_deref()
     }
 
     /// The message under the table, when there is one.
@@ -791,7 +849,7 @@ impl GstScreen {
             GstCmd::Prev => self.picker = Some(at.saturating_sub(1)),
             GstCmd::Open => self.choose_period(at),
             GstCmd::Close | GstCmd::PickPeriod => self.picker = None,
-            GstCmd::SwitchTab(_) | GstCmd::Decide(_) | GstCmd::ExportJson => {}
+            GstCmd::SwitchTab(_) | GstCmd::Decide(_) | GstCmd::ExportJson | GstCmd::ImportFile => {}
         }
     }
 
@@ -809,6 +867,10 @@ impl GstScreen {
         self.period_label = crate::shell::navigate::return_label(period);
         self.gstr1 = Feed::NotLoaded;
         self.gstr3b = Feed::NotLoaded;
+        self.recon = Feed::NotLoaded;
+        self.recon_file = None;
+        self.filed_on = None;
+        self.import_error = None;
         self.clear_sections();
         self.figures1 = Figures::default();
         self.figures3b = Figures::default();
@@ -865,6 +927,7 @@ impl GstScreen {
                     .map(|row| {
                         if row.in_2b() {
                             remembered_for(&before, &row.gstin, &row.invoice_no)
+                                .or(row.stored_action)
                         } else {
                             None
                         }
@@ -1068,6 +1131,11 @@ impl GstScreen {
         let Some(r) = rows.get(row) else {
             return Err(ActionError::NoSuchRow { row });
         };
+        if let Some(filed) = self.filed_on {
+            return Err(ActionError::Final {
+                filed_on: date_cell(Some(filed)),
+            });
+        }
         if !r.in_2b() {
             return Err(ActionError::NotIn2b {
                 supplier: r.supplier.clone(),
@@ -1079,6 +1147,8 @@ impl GstScreen {
         };
         if *slot != Some(action) {
             *slot = Some(action);
+            self.run
+                .queue_action(r.gstin.clone(), r.invoice_no.clone(), action);
             self.bump();
         }
         self.clamp_focus();
@@ -1159,8 +1229,13 @@ impl GstScreen {
                     Feed::Loaded(rows) => rows.get(row).map(|r| r.invoice_no.clone()),
                     Feed::NotLoaded | Feed::Unsupported(_) => None,
                 };
+                let kept = if self.run.has_scope() {
+                    "Saved in your company file"
+                } else {
+                    "Saved here only"
+                };
                 self.notice = Some(format!(
-                    "{}: {}. Saved here only; nothing is uploaded to IMS.",
+                    "{}: {}. {kept}; nothing is uploaded to IMS.",
                     invoice.unwrap_or_default(),
                     action.past()
                 ));
@@ -1229,6 +1304,7 @@ impl GstScreen {
             GstCmd::Open => self.open_focused(),
             GstCmd::Close => return ScreenAction::Pop,
             GstCmd::ExportJson => self.request_json_export(),
+            GstCmd::ImportFile => self.request_import(),
         }
         ScreenAction::Stay
     }
@@ -1237,7 +1313,6 @@ impl GstScreen {
         match event {
             UiEvent::Tab(tab) => self.switch_tab(tab),
             UiEvent::Filter(bucket) => self.set_bucket_filter(bucket),
-            UiEvent::OpenOnly(on) => self.set_open_only(on),
             UiEvent::Focus(pos) => self.focus = pos,
             UiEvent::Section(pos) => self.section_focus = pos,
             UiEvent::OpenSection(pos) => {
@@ -1250,6 +1325,8 @@ impl GstScreen {
             }
             UiEvent::Decide(row, action) => self.decide_with_notice(row, action),
             UiEvent::ExportJson => self.request_json_export(),
+            UiEvent::ImportFile => self.request_import(),
+            UiEvent::MarkFiled => self.request_mark_filed(),
             UiEvent::PeriodPicker => {
                 if self.picker.is_some() {
                     self.picker = None;
@@ -1285,6 +1362,18 @@ fn is_open(row: &ReconRow, decision: Option<ImsAction>) -> bool {
 
 impl Screen for GstScreen {
     fn cursor_label(&self, _ctx: &AppCtx) -> Option<String> {
+        if let Some(at) = self.picker {
+            return self
+                .months()
+                .get(at)
+                .map(|m| crate::shell::navigate::return_label(*m));
+        }
+        if self.tab == GstTab::Reconciliation {
+            return self
+                .focused_index()
+                .and_then(|i| self.recon_rows().get(i))
+                .map(|r| r.invoice_no.clone());
+        }
         self.selected_section().map(|s| s.code.to_owned())
     }
 

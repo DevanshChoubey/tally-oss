@@ -73,7 +73,7 @@ use ledgerly_core::{
     VoucherTypeId,
 };
 use ledgerly_model::{Books, MasterSnapshot, Voucher};
-use ledgerly_store::{Actor, AuditRecord, Event};
+use ledgerly_store::{Actor, AuditRecord, Event, StoredImsAction};
 use time::OffsetDateTime;
 
 mod certificate;
@@ -112,6 +112,8 @@ enum ObjectKey {
     PeriodLock,
     Statement(BankStatementId),
     AiProposal(EventSeq),
+    /// A GST return period of one registration (a 2B import, an IMS action, a filing).
+    GstReturn(String),
 }
 
 /// One record ready to become rows.
@@ -241,6 +243,9 @@ fn vouchers_of(event: &Event) -> Vec<&Voucher> {
         | Event::PeriodLocked { .. }
         | Event::StatementImported(_)
         | Event::BankStatementStored { .. }
+        | Event::Gstr2bImported { .. }
+        | Event::ImsActionRecorded { .. }
+        | Event::Gstr3bFiled { .. }
         | Event::MatchConfirmed(_)
         | Event::AiProposalRecorded(_) => Vec::new(),
     }
@@ -323,6 +328,10 @@ fn master_key(s: &MasterSnapshot) -> (ObjectKey, String) {
 }
 
 /// Object key, object label and action text of a record.
+#[allow(
+    clippy::too_many_lines,
+    reason = "one exhaustive match over every event kind, with no catch-all arm"
+)]
 fn describe(rec: &AuditRecord, books: &Books) -> (ObjectKey, String, String) {
     match &rec.event {
         Event::MasterCreated(snap) => {
@@ -363,6 +372,39 @@ fn describe(rec: &AuditRecord, books: &Books) -> (ObjectKey, String, String) {
             format!("bank statement {}", matched.statement.0),
             "Confirmed bank match".to_owned(),
         ),
+        Event::Gstr2bImported {
+            gstin,
+            period_start,
+            file_name,
+            ..
+        } => (
+            gst_return_key(gstin, *period_start),
+            gst_return_label(gstin, *period_start),
+            format!("Imported GSTR-2B file {file_name}"),
+        ),
+        Event::ImsActionRecorded {
+            gstin,
+            period_start,
+            supplier_gstin,
+            doc_number,
+            action,
+        } => (
+            gst_return_key(gstin, *period_start),
+            gst_return_label(gstin, *period_start),
+            format!(
+                "Recorded IMS action {} on {doc_number} of {supplier_gstin}",
+                ims_action_word(*action)
+            ),
+        ),
+        Event::Gstr3bFiled {
+            gstin,
+            period_start,
+            filed_on,
+        } => (
+            gst_return_key(gstin, *period_start),
+            gst_return_label(gstin, *period_start),
+            format!("Marked GSTR-3B filed on {filed_on}"),
+        ),
         Event::AiProposalRecorded(proposal) => (
             ObjectKey::AiProposal(rec.seq),
             format!("assistant proposal by {}", proposal.model),
@@ -372,6 +414,26 @@ fn describe(rec: &AuditRecord, books: &Books) -> (ObjectKey, String, String) {
                 "Assistant proposal not accepted".to_owned()
             },
         ),
+    }
+}
+
+fn gst_return_key(gstin: &str, period_start: Date) -> ObjectKey {
+    ObjectKey::GstReturn(format!("{gstin} {period_start}"))
+}
+
+fn gst_return_label(gstin: &str, period_start: Date) -> String {
+    format!(
+        "GST return {gstin} for {:04}-{:02}",
+        period_start.year(),
+        u8::from(period_start.month())
+    )
+}
+
+fn ims_action_word(action: StoredImsAction) -> &'static str {
+    match action {
+        StoredImsAction::Accept => "Accept",
+        StoredImsAction::Reject => "Reject",
+        StoredImsAction::Pending => "Pending",
     }
 }
 
@@ -399,6 +461,7 @@ fn row_kind(key: &ObjectKey) -> RowKind {
         | ObjectKey::Setting(_)
         | ObjectKey::PeriodLock
         | ObjectKey::Statement(_)
+        | ObjectKey::GstReturn(_)
         | ObjectKey::AiProposal(_) => RowKind::Text,
     }
 }
@@ -419,6 +482,7 @@ fn drill_key(key: &ObjectKey) -> Option<DrillKey> {
         | ObjectKey::Setting(_)
         | ObjectKey::PeriodLock
         | ObjectKey::Statement(_)
+        | ObjectKey::GstReturn(_)
         | ObjectKey::AiProposal(_) => None,
     }
 }
@@ -635,6 +699,9 @@ fn deleted_altered(
             | Event::PeriodLocked { .. }
             | Event::StatementImported(_)
             | Event::BankStatementStored { .. }
+            | Event::Gstr2bImported { .. }
+            | Event::ImsActionRecorded { .. }
+            | Event::Gstr3bFiled { .. }
             | Event::MatchConfirmed(_)
             | Event::AiProposalRecorded(_) => false,
         };

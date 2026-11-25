@@ -1,0 +1,121 @@
+{
+ "data": {
+  "gstin": "27ZZZZZ0000Z1ZQ",
+  "rtnprd": "112026",
+  "version": "1.0",
+  "gendt": "21-11-2026",
+  "chksum": "sample",
+  "docdata": {
+   "b2b": [
+    {
+     "ctin": "29ZZZZZ0001Z1ZL",
+     "trdnm": "Kaveri Packaging Pvt Ltd",
+     "supprd": "112026",
+     "inv": [
+      {
+       "inum": "KP/2231",
+       "typ": "R",
+       "dt": "08-11-2026",
+       "val": 75520,
+       "pos": "27",
+       "rev": "N",
+       "itcavl": "Y",
+       "items": [
+        {
+         "num": 1,
+         "rt": 18,
+         "txval": 64000,
+         "igst": 11520,
+         "cgst": 0,
+         "sgst": 0,
+         "cess": 0
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "ctin": "29ZZZZZ0002Z1ZK",
+     "trdnm": "Nilgiri Steel Traders",
+     "supprd": "112026",
+     "inv": [
+      {
+       "inum": "NST/1145",
+       "typ": "R",
+       "dt": "20-11-2026",
+       "val": 120950,
+       "pos": "27",
+       "rev": "N",
+       "itcavl": "Y",
+       "items": [
+        {
+         "num": 1,
+         "rt": 18,
+         "txval": 102500,
+         "igst": 18450,
+         "cgst": 0,
+         "sgst": 0,
+         "cess": 0
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "ctin": "27ZZZZZ0003Z1ZN",
+     "trdnm": "Vardhaman Logistics",
+     "supprd": "112026",
+     "inv": [
+      {
+       "inum": "VL/889",
+       "typ": "R",
+       "dt": "11-11-2026",
+       "val": 14160,
+       "pos": "27",
+       "rev": "N",
+       "itcavl": "Y",
+       "items": [
+        {
+         "num": 1,
+         "rt": 18,
+         "txval": 12000,
+         "igst": 0,
+         "cgst": 1080,
+         "sgst": 1080,
+         "cess": 0
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "ctin": "24ZZZZZ0004Z1ZS",
+     "trdnm": "Rupa Polymers",
+     "supprd": "112026",
+     "inv": [
+      {
+       "inum": "RP/5521",
+       "typ": "R",
+       "dt": "17-11-2026",
+       "val": 80240,
+       "pos": "27",
+       "rev": "N",
+       "itcavl": "Y",
+       "items": [
+        {
+         "num": 1,
+         "rt": 18,
+         "txval": 68000,
+         "igst": 12240,
+         "cgst": 0,
+         "sgst": 0,
+         "cess": 0
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ }
+}

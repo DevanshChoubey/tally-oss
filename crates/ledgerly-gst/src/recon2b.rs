@@ -118,6 +118,7 @@ struct PortalDoc {
     number: String,
     norm: Option<String>,
     date: Date,
+    taxable: Option<Paise>,
     tax: Option<Paise>,
 }
 
@@ -129,6 +130,7 @@ struct BookDoc {
     number: Option<String>,
     norm: Option<String>,
     date: Date,
+    taxable: Option<Paise>,
     tax: Option<Paise>,
 }
 
@@ -221,6 +223,24 @@ fn voucher_tax(v: &ledgerly_model::Voucher) -> Result<Option<Paise>, GstError> {
     Ok(Some(total))
 }
 
+/// Taxable value stored on a voucher: the taxable value of its IGST and CGST lines (a CGST line
+/// and its SGST or UTGST twin carry the same value, so only one of the pair is counted). `None`
+/// when the voucher has no stored GST or no such line, because then no taxable value is known.
+fn voucher_taxable(v: &ledgerly_model::Voucher) -> Result<Option<Paise>, GstError> {
+    let Some(gst) = &v.gst else {
+        return Ok(None);
+    };
+    let mut total = Paise::ZERO;
+    let mut any = false;
+    for line in &gst.lines {
+        if matches!(line.kind, TaxLedgerKind::Igst | TaxLedgerKind::Cgst) {
+            total = total.checked_add(line.taxable)?;
+            any = true;
+        }
+    }
+    Ok(any.then_some(total))
+}
+
 /// The books side: regular vouchers as candidates, cancelled ones kept apart.
 fn book_docs(books: &Books) -> Result<(Vec<BookDoc>, Vec<BookDoc>), GstError> {
     let mut active = Vec::new();
@@ -262,6 +282,7 @@ fn book_docs(books: &Books) -> Result<(Vec<BookDoc>, Vec<BookDoc>), GstError> {
             norm: v.reference.as_deref().and_then(normalise),
             number: v.reference.clone(),
             date: v.reference_date.unwrap_or(v.date),
+            taxable: voucher_taxable(v)?,
             tax: voucher_tax(v)?,
         });
     }
@@ -269,9 +290,9 @@ fn book_docs(books: &Books) -> Result<(Vec<BookDoc>, Vec<BookDoc>), GstError> {
 }
 
 fn portal_doc(ctin: &str, d: &InwardDoc) -> Result<PortalDoc, GstError> {
-    let tax = match d.tax_totals()? {
-        Outcome::Value(t) => Some(t.checked_total_tax()?),
-        Outcome::Unsupported(_) => None,
+    let (taxable, tax) = match d.tax_totals()? {
+        Outcome::Value(t) => (Some(t.taxable), Some(t.checked_total_tax()?)),
+        Outcome::Unsupported(_) => (None, None),
     };
     Ok(PortalDoc {
         supplier: ctin.to_owned(),
@@ -279,6 +300,7 @@ fn portal_doc(ctin: &str, d: &InwardDoc) -> Result<PortalDoc, GstError> {
         number: d.number.clone(),
         norm: normalise(&d.number),
         date: d.date,
+        taxable,
         tax,
     })
 }
@@ -393,22 +415,20 @@ fn cancelled_twin(doc: &PortalDoc, cancelled: &[BookDoc]) -> Option<VoucherId> {
         .map(|b| b.id)
 }
 
-/// Matches the portal's GSTR-2B documents against the books and suggests an IMS action for each.
-///
-/// Returns one [`ReconLine`] per portal document, in [`portal_documents`] order, all with
-/// `confirmed == false`. `tolerance` is the largest tax difference, in paise, still reported as
-/// [`MatchLevel::Tolerance`].
-///
-/// # Errors
-/// [`GstError::Invalid`] when `gstin` is not the GSTIN the statement was downloaded for, or the
-/// tolerance is negative; [`GstError::NotFound`] when a voucher refers to a voucher type or party
-/// ledger that does not exist; [`GstError::Money`] on arithmetic overflow.
-pub fn match_2b(
+/// Everything the matcher worked out, for [`match_2b`] and [`reconcile_2b`].
+struct Analysis {
+    docs: Vec<PortalDoc>,
+    active: Vec<BookDoc>,
+    cancelled: Vec<BookDoc>,
+    result: Assignment,
+}
+
+fn analyse(
     books: &Books,
     gstin: &Gstin,
     data: &Gstr2b,
     tolerance: Paise,
-) -> Result<Vec<ReconLine>, GstError> {
+) -> Result<Analysis, GstError> {
     if !same_gstin(&data.gstin, gstin.as_str()) {
         return Err(GstError::Invalid {
             field: "gstin".to_owned(),
@@ -430,23 +450,32 @@ pub fn match_2b(
         .collect::<Result<Vec<_>, _>>()?;
     let (active, cancelled) = book_docs(books)?;
     let result = assign(&docs, &active, tolerance)?;
-    let mut lines = Vec::with_capacity(docs.len());
-    for (i, doc) in docs.iter().enumerate() {
-        let hit = result.matched.get(i).copied().flatten();
+    Ok(Analysis {
+        docs,
+        active,
+        cancelled,
+        result,
+    })
+}
+
+fn lines_of(a: &Analysis) -> Vec<ReconLine> {
+    let mut lines = Vec::with_capacity(a.docs.len());
+    for (i, doc) in a.docs.iter().enumerate() {
+        let hit = a.result.matched.get(i).copied().flatten();
         let line = if let Some((j, level)) = hit {
             ReconLine {
                 portal_index: i,
-                voucher: active.get(j).map(|b| b.id),
+                voucher: a.active.get(j).map(|b| b.id),
                 level,
                 suggested: suggestion_for(level),
                 confirmed: false,
             }
         } else {
-            let ambiguous = result.ambiguous.get(i).copied().unwrap_or(false);
+            let ambiguous = a.result.ambiguous.get(i).copied().unwrap_or(false);
             let twin = if ambiguous {
                 None
             } else {
-                cancelled_twin(doc, &cancelled)
+                cancelled_twin(doc, &a.cancelled)
             };
             ReconLine {
                 portal_index: i,
@@ -462,5 +491,213 @@ pub fn match_2b(
         };
         lines.push(line);
     }
-    Ok(lines)
+    lines
+}
+
+/// Matches the portal's GSTR-2B documents against the books and suggests an IMS action for each.
+///
+/// Returns one [`ReconLine`] per portal document, in [`portal_documents`] order, all with
+/// `confirmed == false`. `tolerance` is the largest tax difference, in paise, still reported as
+/// [`MatchLevel::Tolerance`].
+///
+/// # Errors
+/// [`GstError::Invalid`] when `gstin` is not the GSTIN the statement was downloaded for, or the
+/// tolerance is negative; [`GstError::NotFound`] when a voucher refers to a voucher type or party
+/// ledger that does not exist; [`GstError::Money`] on arithmetic overflow.
+pub fn match_2b(
+    books: &Books,
+    gstin: &Gstin,
+    data: &Gstr2b,
+    tolerance: Paise,
+) -> Result<Vec<ReconLine>, GstError> {
+    Ok(lines_of(&analyse(books, gstin, data, tolerance)?))
+}
+
+/// How the portal document compares with the books, for the screen's "Engine status" column.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ReconState {
+    /// Same voucher, same taxable value and tax, same date.
+    Matched,
+    /// A voucher with the same supplier and number, but the taxable value or the tax differs.
+    ValueDiffers,
+    /// A voucher with equal amounts, but the date differs.
+    DateDiffers,
+    /// No voucher of the books fits the document.
+    NotInBooks,
+    /// More than one voucher fits the document, so none is chosen.
+    PossibleDuplicate,
+    /// A voucher fits by number, but one side has no tax split, so the amounts cannot be compared.
+    NotComparable,
+}
+
+/// The amounts and date of one side of a reconciliation row.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DocAmounts {
+    /// The document date: the voucher's reference date (or voucher date), or the 2B date.
+    pub date: Date,
+    /// Taxable value, `None` when this side has no tax split.
+    pub taxable: Option<Paise>,
+    /// Total tax (IGST, CGST, SGST/UTGST and cess), `None` when this side has no tax split.
+    pub tax: Option<Paise>,
+    /// Taxable value plus tax, `None` when either is unknown.
+    pub total: Option<Paise>,
+}
+
+/// One row of the 2B reconciliation: the matcher's line and the amounts it was made from.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReconEntry {
+    /// The matcher's line (level, suggestion, voucher).
+    pub line: ReconLine,
+    /// How the document compares with the books.
+    pub state: ReconState,
+    /// The books side, `None` when no voucher is paired.
+    pub books: Option<DocAmounts>,
+    /// The 2B side.
+    pub portal: DocAmounts,
+    /// 2B total less books total, `None` unless both are known.
+    pub difference: Option<Paise>,
+}
+
+/// Rows for the reconciliation screen: [`match_2b`]'s lines with the amounts and a state each.
+///
+/// A document the matcher leaves unmatched is still paired with a voucher of the same supplier
+/// that carries the same number (after normalisation), when exactly one such voucher is free:
+/// that is a document whose value differs, not one that is missing from the books. Several such
+/// vouchers make the document a possible duplicate and none is chosen. A pair is `Matched` only
+/// when taxable value, tax and date are all equal; amounts are never compared when one side has
+/// no tax split ([`ReconState::NotComparable`]).
+///
+/// The rows follow the portal documents. Vouchers of the books that no document names are not
+/// listed.
+///
+/// # Errors
+/// As [`match_2b`].
+pub fn reconcile_2b(
+    books: &Books,
+    gstin: &Gstin,
+    data: &Gstr2b,
+    tolerance: Paise,
+) -> Result<Vec<ReconEntry>, GstError> {
+    let analysis = analyse(books, gstin, data, tolerance)?;
+    let lines = lines_of(&analysis);
+    let used: Vec<VoucherId> = lines
+        .iter()
+        .filter(|l| l.level != MatchLevel::Unmatched)
+        .filter_map(|l| l.voucher)
+        .collect();
+    let mut out = Vec::with_capacity(lines.len());
+    for line in lines {
+        let doc = analysis
+            .docs
+            .get(line.portal_index)
+            .ok_or_else(|| GstError::NotFound {
+                what: format!("portal document {}", line.portal_index),
+            })?;
+        let portal = amounts(doc.date, doc.taxable, doc.tax)?;
+        let ambiguous = analysis
+            .result
+            .ambiguous
+            .get(line.portal_index)
+            .copied()
+            .unwrap_or(false);
+        let (line, book) = if line.level != MatchLevel::Unmatched {
+            let book = line
+                .voucher
+                .and_then(|id| analysis.active.iter().find(|b| b.id == id));
+            (line, book)
+        } else if ambiguous || line.voucher.is_some() {
+            // Ambiguous, or the document names a cancelled voucher: nothing is paired.
+            (line, None)
+        } else {
+            let free: Vec<&BookDoc> = analysis
+                .active
+                .iter()
+                .filter(|b| {
+                    !used.contains(&b.id)
+                        && same_gstin(&doc.supplier, &b.supplier)
+                        && kind_pairs(doc.kind, b.kind)
+                        && doc.norm.is_some()
+                        && doc.norm == b.norm
+                })
+                .collect();
+            match free.as_slice() {
+                [only] => (
+                    ReconLine {
+                        voucher: Some(only.id),
+                        ..line
+                    },
+                    Some(*only),
+                ),
+                _ => (line, None),
+            }
+        };
+        let (state, books_side) = match book {
+            Some(b) => {
+                let side = amounts(b.date, b.taxable, b.tax)?;
+                (pair_state(&portal, &side), Some(side))
+            }
+            None if ambiguous || many_free(&analysis, doc, &used) => {
+                (ReconState::PossibleDuplicate, None)
+            }
+            None => (ReconState::NotInBooks, None),
+        };
+        let difference = match (portal.total, books_side.and_then(|b| b.total)) {
+            (Some(p), Some(b)) => Some(p.checked_sub(b)?),
+            _ => None,
+        };
+        out.push(ReconEntry {
+            line,
+            state,
+            books: books_side,
+            portal,
+            difference,
+        });
+    }
+    Ok(out)
+}
+
+/// `true` when more than one free voucher carries the document's number.
+fn many_free(analysis: &Analysis, doc: &PortalDoc, used: &[VoucherId]) -> bool {
+    analysis
+        .active
+        .iter()
+        .filter(|b| {
+            !used.contains(&b.id)
+                && same_gstin(&doc.supplier, &b.supplier)
+                && kind_pairs(doc.kind, b.kind)
+                && doc.norm.is_some()
+                && doc.norm == b.norm
+        })
+        .count()
+        > 1
+}
+
+fn amounts(date: Date, taxable: Option<Paise>, tax: Option<Paise>) -> Result<DocAmounts, GstError> {
+    let total = match (taxable, tax) {
+        (Some(a), Some(b)) => Some(a.checked_add(b)?),
+        _ => None,
+    };
+    Ok(DocAmounts {
+        date,
+        taxable,
+        tax,
+        total,
+    })
+}
+
+fn pair_state(portal: &DocAmounts, book: &DocAmounts) -> ReconState {
+    match (portal.taxable, portal.tax, book.taxable, book.tax) {
+        (Some(pt), Some(px), Some(bt), Some(bx)) => {
+            if pt == bt && px == bx {
+                if portal.date == book.date {
+                    ReconState::Matched
+                } else {
+                    ReconState::DateDiffers
+                }
+            } else {
+                ReconState::ValueDiffers
+            }
+        }
+        _ => ReconState::NotComparable,
+    }
 }

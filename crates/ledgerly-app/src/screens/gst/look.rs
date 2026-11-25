@@ -69,17 +69,49 @@ pub fn gstr3b_lines(w: &Gstr3bWorking) -> Vec<Line3b> {
     ]
 }
 
-/// The title and sentence of the 2B and IMS tab when no 2B file has been read for
-/// `period_label`. This version cannot read one, so the sentence says so and offers no import.
+/// The month word of a period label such as `November 2026`.
+#[must_use]
+pub fn month_word(period_label: &str) -> &str {
+    period_label
+        .split_whitespace()
+        .next()
+        .unwrap_or(period_label)
+}
+
+/// The title and sentence of the 2B and IMS tab when no 2B file has been imported for
+/// `period_label` (the mock's `recon-empty`, index.html:1692). The mock's "Drop it here" is
+/// left out: the screen takes no dropped files.
 #[must_use]
 pub fn recon_empty(period_label: &str) -> (String, String) {
+    let month = month_word(period_label);
     (
-        format!("No 2B file for {period_label}"),
-        "Reading the GSTR-2B file from the GST portal is not built in this version (engine item \
-         E-3), so there is nothing to match against your purchase vouchers yet. Nothing is sent \
-         anywhere."
-            .to_owned(),
+        format!("No 2B file for {month} yet"),
+        format!(
+            "On the GST portal, open Returns, then GSTR-2B, choose {period_label} and download \
+             the JSON. Press Ctrl+O to choose it. The engine matches it to your purchase \
+             vouchers; nothing is sent anywhere."
+        ),
     )
+}
+
+/// The words of the lock bar of a period whose GSTR-3B was marked filed (the mock's
+/// `recon-locked`, index.html:1702): the bold lead and the rest. The mock's closing sentence
+/// about an amendment in a later month is left out: no published GST source for it was found.
+#[must_use]
+pub fn lock_words(period_label: &str, filed_on: &str) -> (String, String) {
+    let month = month_word(period_label);
+    (
+        format!("{month} is final."),
+        format!(
+            "You marked GSTR-3B for {month} filed on {filed_on}, so these IMS actions are read-only."
+        ),
+    )
+}
+
+/// The first line of the refusal note for a 2B file the engine did not take.
+#[must_use]
+pub fn import_refusal(reason: &str) -> String {
+    format!("Not imported: {reason}.")
 }
 
 /// The line under the GSTR-1 section table (the mock's "Taxable value agrees with GSTR-3B table
