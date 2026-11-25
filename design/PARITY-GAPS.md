@@ -414,9 +414,10 @@ captured: `suggested-ledger` (an AI state: the assistant proposes the ledger; no
   (the mock's account, with the sample's imported statement of 11 lines, amounts equal to the
   mock's), `bank.empty` is Mula Valley Co-op (no statement), all on Godavari. The subtitle reads
   "name, XXXX 4471, November 2026" as the mock's does.
-- **gap: the chooser has no mock state.** The mock names one account (Saptagiri) and never asks.
-  `bank.chooser` (light only) is ours: the page head and one card in the reconciliation
-  statement's `table.t` style. It is captured with no mock to compare with.
+- **gap: the chooser differs from its mock state.** The mock now has `bank-chooser.default` (added
+  in round S12, 2026-11-25): one table of the two bank accounts with balances from the engine and
+  the statement status. Ours (`bank.chooser`, light only) is the page head and one card in the
+  reconciliation statement's `table.t` style, not yet redrawn to the mock's table.
 - **by design: the key that changes account is C, not F4.** F4 is Contra in this app (the shell's
   voucher keys). The head carries a "Change account" button with the C keycap; the mock's head has
   only Import statement and Reconciliation statement, so the head differs by that button when the
@@ -482,21 +483,22 @@ the selected one.
 - **closed (s9): the number and the date.** The sample's voucher types carry the mock's prefixes
   (SI/, PB/, PY/, RC/, JV/, width 4) through `Command::AlterVoucherType`; titles read PY/0319.
   The date reads 21 Nov 2026 and rates 3,850.00 until the keyboard is on the field.
-- **gap: contra and journal** have no mock state; they got the number in the title, the crumb and
-  the date look only.
+- **gap: contra and journal differ from their mock states.** The mock now has `contra.default`,
+  `contra.validation-error`, `journal.default` and `journal.validation-error` (round S12). Ours
+  still follows the shared voucher sheet and is not yet redrawn to them.
 
 ## Purchase, credit note, debit note and journal entry (round s11, 2026-11-25)
 
 Captures: `purchase.*`, `credit-note.*`, `debit-note.*` and `journal.*` (each `default` and
 `validation-error`; light, dark, hc). None has a mock state of its own, so none has an SSIM score.
 
-- **no mock state: what each screen was modelled on.** The mock's `purchase-bill.*` states are
-  all the AI bill-photo path. **Purchase** copies the layout of `sales-invoice.default` and the
-  form half of `purchase-bill.accepted` (index.html:1488-1489) and `manualPurchase()`
-  (index.html:1504): Supplier, Supplier bill no., Bill date, Place of supply, item rows, the GST
-  block from the engine. **Credit note** and **debit note** follow `sales-invoice.default` with
-  "Original invoice no." and "Original invoice date" where a sale shows the e-Invoice cell.
-  **Journal** follows `payment.default` (the shared voucher sheet): the mock has no journal.
+- **mock states added (round S12, 2026-11-25).** The mock now has `purchase.default`,
+  `purchase.validation-error`, `credit-note.default`, `credit-note.validation-error`,
+  `debit-note.default`, `debit-note.validation-error`, `journal.default` and
+  `journal.validation-error`. Ours is still built from the sales invoice and the shared voucher
+  sheet, so the differences below stay until the app round redraws it to these states. The
+  earlier note said these were modelled on `sales-invoice.default` and `payment.default`; that
+  is now the old basis, not the target.
 - **changed: a purchase asks for the bill date, a note for the original invoice's date.** The new
   `Field::ReferenceDate` follows the reference number in the Enter order and is optional
   (a blank is stored as none; a wrong date is refused). Rule 53(1A)(vi) CGST Rules asks a note
@@ -860,7 +862,8 @@ financial year starts. The model supports that (`Company::books_begin`), so it i
 - **gap: no in-app print preview or configuration.** TallyPrime's flow is Ctrl+P (Current),
   then C (configure), I (preview), P (print), as read on "How to Print Invoices/Reports in
   TallyPrime" (help.tallysolutions.com/print-invoices-reports/, read 2026-11-24, last updated
-  2026-11-20). The mock has no print state. Ours saves a PDF to a file chosen in a save dialog,
+  2026-11-20). The mock now has `profit-and-loss.print-preview`, `print-saved` and `print-failed`
+  (round S12); it offers Save as PDF only, as the app does. Ours saves a PDF to a file chosen in a save dialog,
   and an "Open PDF" button then opens it in the system's PDF viewer (xdg-open, open or start).
   That viewer is the preview until an in-app preview exists.
 - **gap: no printing to a device.** Ours writes PDF files only. The Alt+P > Configuration
@@ -937,9 +940,11 @@ design (setup section).
 
 ## Reports not in the mock (S8)
 
-The mock has no state for the profit and loss, trial balance, outstanding, stock summary or
-register reports, so they have no capture to compare. They draw as the generic table, which now
-shares the drill levels' fixes (bare Debit and Credit figures, footnote style).
+The mock now has states for the profit and loss (`profit-and-loss.*`), trial balance
+(`trial-balance.default`), outstanding bills (`outstanding.receivables`, `outstanding.payables`)
+and stock summary (`stock-summary.*`), added in round S12. The register report has no mock state
+yet. Ours still draws the generic table, which shares the drill levels' fixes (bare Debit and
+Credit figures, footnote style), so it differs from these states until the app round redraws it.
 s9: the profit and loss and trial balance run over the new sample seed through the same engine
 reports the balance sheet uses (Opening stock now sits under Direct Expenses, the provisional
 reason names the item); no state to compare with, so nothing further was changed.
@@ -1014,3 +1019,46 @@ Mismatches between the mock's totals and the engine's, and why:
 - **by design: UQC codes.** Units map to the GST portal's UQC codes from the portal's published
   list as the author remembers it (roll ROL, set SET, nos NOS), and the coil unit maps to OTH;
   the list was not re-read for this card.
+
+## Round S12b: states the app reaches (2026-11-25)
+
+- **gap: the print busy line.** The app shows no text while a PDF is prepared: `print_job.rs`
+  `is_busy` only keeps the frame repainting. The mock state `profit-and-loss.print-busy` shows
+  "Preparing the PDF. The save dialog opens when it is ready." That line is a proposal, not a copy
+  of the app. Decide whether the app should show it.
+- **by design: the print error is the app's words.** `print_job.rs` `print_notice` gives
+  "{title} was not printed: {reason}". The mock's `profit-and-loss.print-error` uses that form with a
+  sample reason ("the store is closed").
+- **gap: the import wizard is not connected.** `import/view.rs:198` sets
+  `STEP_BY_STEP_CONNECTED = false`. The app disables the step-by-step controls and says so. The mock
+  shows the same (`import.default`). The choose-company, pull, map and reconcile steps have no mock
+  state, because no UI path opens them. See MOCK-COVERAGE.md, "Still MISSING".
+- **by design: the import summary counts are sample data.** The text is `ImportSummary`'s Display
+  (`ledgerly-api/src/tally_import.rs`). The counts come from the mock's sample company, and the
+  sample error and refusal texts are illustrative.
+- **gap: the stock item form is a separate screen.** The app's empty state for stock items offers
+  Create stock item (Alt+C). The mock's `masters.create-item` shows the same fields (Name, Alias,
+  Under, Unit, Valuation, HSN/SAC, Track batches) but no working Save. Validation (a unit is needed)
+  is not wired.
+- **gap: the masters balance hint is hover text only.** `masters/balances.rs` LOADING_HINT and
+  FAILED_HINT sit on the heading. The mock shows dashes and does not show hover text in captures.
+- **by design: rail resets on navigation in the mock.** The app keeps the rail until it is toggled
+  again (`shell/mod.rs` `rail: bool`). The mock sets the rail from each hash, so a navigation
+  folds it back out.
+- **by design: the new-tab title.** The second tab of the same screen is "Company setup 2" (the
+  app's `unique_tab_labels`). The mock's tab strip uses the same rule.
+- **by design: the GST tile text.** "Needs GSTR-2B" and "not readable yet" come from
+  `screens/home/kpi.rs` (GST_REASON). The mock's home.gst-unsupported shows the tile with those
+  words in place of the figure.
+- **by design: GST not-loaded and unsupported texts.** "Not loaded for this period yet." and
+  "Not supported yet: what (reason)" come from `gst/draw.rs` and `wire.rs`. The sample reasons
+  ("no verified rule pack", "rate pack pending") are the app's test fixtures, not engine output.
+- **gap: the masters "Not supported yet" notice.** `masters.rs` line 2068 shows it after a masters
+  action returns Unsupported. The mock has no state for it, because the sample engine never refuses
+  a masters action. See MOCK-COVERAGE.md.
+- **gap: the open-company busy line.** `shell/welcome.rs` shows "Working on the company file..."
+  while a company opens. `WelcomeScreen` is built only by `Shell::with_welcome`, which the tests call
+  and the app does not. The mock has no state for it.
+- **data: the credit and debit note footers.** The credit note footer cites CGST Rules r.53(1A)(g).
+  The debit note footer no longer cites s.34(3); the debit note is a buyer's return, and its GST
+  basis is an open item in MOCK-COVERAGE.md.

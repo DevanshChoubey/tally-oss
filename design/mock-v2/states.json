@@ -635,6 +635,391 @@
    "hash": "screen=ai-settings&state=off",
    "title": "AI and privacy, off",
    "description": "AI off: every AI entry point hidden; rule checks and engine matching still work."
+  },
+  {
+   "id": "masters.create-item",
+   "kind": "happy",
+   "hash": "screen=masters&state=create-item",
+   "title": "Masters, new stock item",
+   "description": "The stock item form: name, alias, under, unit, valuation, HSN/SAC and batches; Save needs a unit."
+  },
+  {
+   "id": "home.new-tab",
+   "kind": "happy",
+   "hash": "screen=home&state=default&tabs=2",
+   "title": "Home, new tab with a company open",
+   "description": "Ctrl+T with a company open opens Home in a second tab; the tab strip shows both, New tab and Close tab."
+  },
+  {
+   "id": "profit-and-loss.print-error",
+   "kind": "error",
+   "hash": "screen=profit-and-loss&state=print-error",
+   "title": "Profit and loss, not printed",
+   "description": "The PDF could not be made from the engine answer; the reason is said in words, the report stays on screen and nothing is written."
+  },
+  {
+   "id": "gst.gstr1-failed",
+   "kind": "error",
+   "hash": "screen=gst&state=gstr1-failed",
+   "title": "GSTR-1, sections could not be built",
+   "description": "The engine could not build the GSTR-1 sections; the error is said in words and no table is shown."
+  },
+  {
+   "id": "home.gst-unsupported",
+   "kind": "error",
+   "hash": "screen=home&state=gst-unsupported",
+   "title": "Home, GST tile not readable",
+   "description": "The GST cash payable tile says Needs GSTR-2B and not readable yet; no figure is shown."
+  },
+  {
+   "id": "profit-and-loss.loading",
+   "kind": "loading",
+   "hash": "screen=profit-and-loss&state=loading",
+   "title": "Profit and loss, computing",
+   "description": "Report computing; Esc cancels; the last result is not shown as current."
+  },
+  {
+   "id": "profit-and-loss.print-busy",
+   "kind": "loading",
+   "hash": "screen=profit-and-loss&state=print-busy",
+   "title": "Profit and loss, preparing the PDF",
+   "description": "Ctrl+P was pressed and the PDF is being rendered; the save dialog opens when it is ready. The app shows no text here; the line is a proposal (PARITY-GAPS)."
+  },
+  {
+   "id": "trial-balance.loading",
+   "kind": "loading",
+   "hash": "screen=trial-balance&state=loading",
+   "title": "Trial balance, computing",
+   "description": "Report computing; Esc cancels; no ledger figure is shown before the engine answers."
+  },
+  {
+   "id": "outstanding.loading",
+   "kind": "loading",
+   "hash": "screen=outstanding&state=loading",
+   "title": "Outstanding receivables, computing",
+   "description": "Bill-wise report computing; Esc cancels; the last result is not shown as current."
+  },
+  {
+   "id": "stock-summary.loading",
+   "kind": "loading",
+   "hash": "screen=stock-summary&state=loading",
+   "title": "Stock summary, computing",
+   "description": "Quantities and values computing from the stock engine; no figure is shown before it answers."
+  },
+  {
+   "id": "audit.loading",
+   "kind": "loading",
+   "hash": "screen=audit&state=loading",
+   "title": "Audit, reading the log",
+   "description": "The audit log is being read; nothing from it is shown yet."
+  },
+  {
+   "id": "audit.failed",
+   "kind": "error",
+   "hash": "screen=audit&state=failed",
+   "title": "Audit, log could not be read",
+   "description": "The log could not be read (company file open elsewhere); the failure is said in words and nothing is shown from it."
+  },
+  {
+   "id": "gst.gstr1-not-loaded",
+   "kind": "empty",
+   "hash": "screen=gst&state=gstr1-not-loaded",
+   "title": "GSTR-1, not loaded for this period",
+   "description": "Feed not loaded: says Not loaded for this period yet and shows no sections."
+  },
+  {
+   "id": "gst.gstr3b-not-loaded",
+   "kind": "empty",
+   "hash": "screen=gst&state=gstr3b-not-loaded",
+   "title": "GSTR-3B, not loaded for this period",
+   "description": "Feed not loaded: says Not loaded for this period yet and shows no table."
+  },
+  {
+   "id": "gst.gstr1-unsupported",
+   "kind": "error",
+   "hash": "screen=gst&state=gstr1-unsupported",
+   "title": "GSTR-1, not supported in this build",
+   "description": "The engine refuses the GSTR-1 feed; the reason is said in words (Not supported yet: what, reason)."
+  },
+  {
+   "id": "gst.gstr3b-unsupported",
+   "kind": "error",
+   "hash": "screen=gst&state=gstr3b-unsupported",
+   "title": "GSTR-3B, not supported in this build",
+   "description": "The engine refuses the GSTR-3B liability; the reason is said in words, and no cash figure is shown."
+  },
+  {
+   "id": "masters.empty",
+   "kind": "empty",
+   "hash": "screen=masters&state=empty",
+   "title": "Masters, no ledgers yet",
+   "description": "A new company with no ledgers: the empty state offers Create ledger (Alt+C)."
+  },
+  {
+   "id": "masters.items-empty",
+   "kind": "empty",
+   "hash": "screen=masters&state=items-empty",
+   "title": "Masters, no stock items yet",
+   "description": "No stock items: the empty state offers Create stock item (Alt+C); that form is not in the mock."
+  },
+  {
+   "id": "masters.loading",
+   "kind": "loading",
+   "hash": "screen=masters&state=loading",
+   "title": "Masters, balances loading",
+   "description": "Ledger names are listed; the balance column shows dashes until the engine returns the balances."
+  },
+  {
+   "id": "masters.no-match",
+   "kind": "empty",
+   "hash": "screen=masters&state=no-match",
+   "title": "Masters, filter matches nothing",
+   "description": "The filter has no match: the line says No ledgers matches, with the filter text."
+  },
+  {
+   "id": "import.default",
+   "kind": "happy",
+   "hash": "screen=import&state=default",
+   "title": "Import from another app",
+   "description": "One-step import with host, port and company; the step-by-step panel shows as not connected."
+  },
+  {
+   "id": "import.no-company",
+   "kind": "empty",
+   "hash": "screen=import&state=no-company",
+   "title": "Import, no company open",
+   "description": "No company is open: says to create one first, offers Back to setup, and the form is disabled."
+  },
+  {
+   "id": "import.validation-error",
+   "kind": "validation-error",
+   "hash": "screen=import&state=validation-error",
+   "title": "Import, company name missing",
+   "description": "The company name is empty; the reason is said in words and nothing is imported."
+  },
+  {
+   "id": "import.port-error",
+   "kind": "validation-error",
+   "hash": "screen=import&state=port-error",
+   "title": "Import, port not a number in range",
+   "description": "Port 99999 is outside 1 to 65535; the reason is said in words."
+  },
+  {
+   "id": "import.running",
+   "kind": "loading",
+   "hash": "screen=import&state=running",
+   "title": "Import, running",
+   "description": "Importing; the button is disabled and the form stays as typed."
+  },
+  {
+   "id": "import.imported",
+   "kind": "happy",
+   "hash": "screen=import&state=imported",
+   "title": "Import, finished with a summary",
+   "description": "The engine reports the company read, the events committed and any warnings (sample counts)."
+  },
+  {
+   "id": "import.refused",
+   "kind": "error",
+   "hash": "screen=import&state=refused",
+   "title": "Import, refused as not supported",
+   "description": "The engine refuses a voucher type; the refusal names what and why."
+  },
+  {
+   "id": "import.failed",
+   "kind": "error",
+   "hash": "screen=import&state=failed",
+   "title": "Import, failed with a reason",
+   "description": "The other app could not be read; the error names the company, the host and port, and the cause. Nothing is written."
+  },
+  {
+   "id": "setup.new-tab",
+   "kind": "happy",
+   "hash": "screen=setup&state=welcome&tabs=2",
+   "title": "Cold start, new tab",
+   "description": "Ctrl+T with no company open opens a second Company setup tab; the tab strip shows both and New tab and Close tab."
+  },
+  {
+   "id": "setup.rail",
+   "kind": "happy",
+   "hash": "screen=setup&state=welcome&rail=1",
+   "title": "Cold start, sidebar collapsed to the rail",
+   "description": "Ctrl+\\ folds the sidebar to its 60 px rail: icons only, labels hidden."
+  },
+  {
+   "id": "purchase.default",
+   "kind": "happy",
+   "hash": "screen=purchase&state=default",
+   "title": "Purchase, typed by hand",
+   "description": "F9 purchase with no bill photo: supplier bill, item lines and IGST computed by the engine (Nilgiri, Karnataka, inter-state)."
+  },
+  {
+   "id": "purchase.validation-error",
+   "kind": "validation-error",
+   "hash": "screen=purchase&state=validation-error",
+   "title": "Purchase, validation errors",
+   "description": "A missing quantity and an unknown item block saving; each error names its line and the fix."
+  },
+  {
+   "id": "credit-note.default",
+   "kind": "happy",
+   "hash": "screen=credit-note&state=default",
+   "title": "Credit note against SI/0412",
+   "description": "Sales return of 10 sets of brass nozzles to Shree Ganesh Traders: CGST and SGST reversed, reference to the invoice kept."
+  },
+  {
+   "id": "credit-note.validation-error",
+   "kind": "validation-error",
+   "hash": "screen=credit-note&state=validation-error",
+   "title": "Credit note, more than invoiced",
+   "description": "70 sets returned against 67 invoiced: a return cannot exceed the invoice, and the line says so."
+  },
+  {
+   "id": "debit-note.default",
+   "kind": "happy",
+   "hash": "screen=debit-note&state=default",
+   "title": "Debit note against NST/1145",
+   "description": "Purchase return to Nilgiri Steel: 2 bundles, IGST reversed on the purchase bill, Accept posts the note."
+  },
+  {
+   "id": "debit-note.validation-error",
+   "kind": "validation-error",
+   "hash": "screen=debit-note&state=validation-error",
+   "title": "Debit note, return not on the bill",
+   "description": "The return names MS angles, but the bill has no such line to link to; the note refuses to link."
+  },
+  {
+   "id": "journal.default",
+   "kind": "happy",
+   "hash": "screen=journal&state=default",
+   "title": "Journal, reclassify freight",
+   "description": "JV/0033 moves freight paid from Purchases to Freight inward: debits and credits both 1,840.00."
+  },
+  {
+   "id": "journal.validation-error",
+   "kind": "validation-error",
+   "hash": "screen=journal&state=validation-error",
+   "title": "Journal, does not balance",
+   "description": "Debits 1,840.00 against credits 1,480.00: the difference is shown and Save stays blocked."
+  },
+  {
+   "id": "contra.default",
+   "kind": "happy",
+   "hash": "screen=contra&state=default",
+   "title": "Contra, cash to bank",
+   "description": "CT/0022: 30,000.00 cash paid into the Saptagiri account; the cash balance after saving comes from the engine."
+  },
+  {
+   "id": "contra.validation-error",
+   "kind": "validation-error",
+   "hash": "screen=contra&state=validation-error",
+   "title": "Contra, no account and zero amount",
+   "description": "Neither account is picked and the amount is zero: both errors shown, Save blocked."
+  },
+  {
+   "id": "bank-chooser.default",
+   "kind": "happy",
+   "hash": "screen=bank-chooser&state=default",
+   "title": "Choose bank account",
+   "description": "Two bank accounts: balances per books and whether a statement is imported, with Enter to open the one selected."
+  },
+  {
+   "id": "start.recent",
+   "kind": "happy",
+   "hash": "screen=start&state=recent",
+   "title": "Start, recent companies",
+   "description": "The app opens with the recent company list (Godavari) and the create, import and open actions."
+  },
+  {
+   "id": "profit-and-loss.default",
+   "kind": "happy",
+   "hash": "screen=profit-and-loss&state=default",
+   "title": "Profit and loss",
+   "description": "Income and expenses from the books and the engine's closing stock; net profit equals the balance sheet's profit to date."
+  },
+  {
+   "id": "profit-and-loss.provisional",
+   "kind": "error",
+   "hash": "screen=profit-and-loss&state=provisional",
+   "title": "Profit and loss, provisional stock",
+   "description": "Negative stock makes the closing stock Provisional; the figure is marked and explained with a way to fix it."
+  },
+  {
+   "id": "profit-and-loss.print-preview",
+   "kind": "happy",
+   "hash": "screen=profit-and-loss&state=print-preview",
+   "title": "Profit and loss, print preview",
+   "description": "Ctrl+P shows the page as it will print, with Save as PDF; paper printing is not offered."
+  },
+  {
+   "id": "profit-and-loss.print-saved",
+   "kind": "happy",
+   "hash": "screen=profit-and-loss&state=print-saved",
+   "title": "Profit and loss, PDF saved",
+   "description": "The PDF is written and the screen says where, with an Open file action."
+  },
+  {
+   "id": "profit-and-loss.print-failed",
+   "kind": "error",
+   "hash": "screen=profit-and-loss&state=print-failed",
+   "title": "Profit and loss, PDF not saved",
+   "description": "The file is open in another program: nothing is written, and the screen says so and how to retry."
+  },
+  {
+   "id": "trial-balance.default",
+   "kind": "happy",
+   "hash": "screen=trial-balance&state=default",
+   "title": "Trial balance",
+   "description": "Every ledger with a balance, debit and credit columns totalling the same, checked by the engine."
+  },
+  {
+   "id": "outstanding.receivables",
+   "kind": "happy",
+   "hash": "screen=outstanding&state=receivables",
+   "title": "Bills receivable",
+   "description": "Open customer bills with bill date, due date from credit days, open amount and overdue days."
+  },
+  {
+   "id": "outstanding.payables",
+   "kind": "happy",
+   "hash": "screen=outstanding&state=payables",
+   "title": "Bills payable",
+   "description": "Open supplier bills, including the Kaveri and Nilgiri bills, with due dates and overdue days."
+  },
+  {
+   "id": "stock-summary.default",
+   "kind": "happy",
+   "hash": "screen=stock-summary&state=default",
+   "title": "Stock summary",
+   "description": "Each item with quantity from the stock engine, cost and value; the total is the balance sheet's closing stock."
+  },
+  {
+   "id": "stock-summary.provisional",
+   "kind": "error",
+   "hash": "screen=stock-summary&state=provisional",
+   "title": "Stock summary, provisional item",
+   "description": "Steel pickaxe shows minus 30 nos: its value is marked Provisional and counted as zero."
+  },
+  {
+   "id": "audit.default",
+   "kind": "happy",
+   "hash": "screen=audit&state=default",
+   "title": "Audit, edit log",
+   "description": "Who entered each November voucher and whether an AI draft was accepted; read-only."
+  },
+  {
+   "id": "audit.integrity",
+   "kind": "happy",
+   "hash": "screen=audit&state=integrity",
+   "title": "Audit, integrity certificate",
+   "description": "Vouchers checked against the log and the count of broken hash links."
+  },
+  {
+   "id": "audit.unsupported",
+   "kind": "error",
+   "hash": "screen=audit&state=unsupported",
+   "title": "Audit, edits after lock",
+   "description": "Not supported in this build: the report says so and gives the way to check instead."
   }
  ]
 }
