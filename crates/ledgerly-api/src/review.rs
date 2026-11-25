@@ -17,10 +17,11 @@ use std::collections::BTreeMap;
 use ledgerly_bank::matcher::Candidate;
 use ledgerly_bank::statement::BankStatement;
 use ledgerly_bankfmt::RawLine;
-use ledgerly_core::{BankStatementId, LedgerId, Outcome, Paise};
+use ledgerly_core::{BankStatementId, Date, LedgerId, Outcome, Paise};
 
 use crate::error::ApiError;
 use crate::facade::Api;
+use crate::nudges::DuplicatePayment;
 
 /// A source of proposals that the Review queue names.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -70,6 +71,9 @@ pub struct ReviewItem {
 pub struct ReviewQueue {
     /// The proposals, grouped by bank ledger in ledger order, then in the matcher's order.
     pub items: Vec<ReviewItem>,
+    /// The possible duplicate payments rule D-02 finds, oldest second payment first. Empty both
+    /// when there are none and when D-02 could not run (then `unlisted` names it).
+    pub duplicates: Vec<DuplicatePayment>,
     /// The sources the engine cannot list, each with its reason. Empty only when every source is
     /// connected.
     pub unlisted: Vec<UnlistedSource>,
@@ -81,7 +85,7 @@ impl ReviewQueue {
     #[must_use]
     pub fn count(&self) -> Option<usize> {
         if self.unlisted.is_empty() {
-            Some(self.items.len())
+            Some(self.items.len() + self.duplicates.len())
         } else {
             None
         }
@@ -105,7 +109,7 @@ fn not_connected(source: ReviewSource) -> &'static str {
             "the engine does not suggest new ledgers for unexplained bank lines yet"
         }
         ReviewSource::DuplicateCheck => {
-            "rule D-02 flags possible duplicate payments as nudges on Home; the queue does not list them as rows yet"
+            "rule D-02 could not be run over the books, so no possible duplicate payments are listed"
         }
         ReviewSource::Gstr2bExplanation => {
             "there is no GSTR-2B reader or IMS reconciliation yet (engine item E-3)"
@@ -114,11 +118,10 @@ fn not_connected(source: ReviewSource) -> &'static str {
 }
 
 /// The sources listed in the queue's fixed order when they are not connected.
-const NOT_CONNECTED: [ReviewSource; 5] = [
+const NOT_CONNECTED: [ReviewSource; 4] = [
     ReviewSource::BillDraft,
     ReviewSource::PlainWordsDraft,
     ReviewSource::NewLedgerSuggestion,
-    ReviewSource::DuplicateCheck,
     ReviewSource::Gstr2bExplanation,
 ];
 
@@ -133,6 +136,15 @@ impl Api {
     /// Whatever [`Api::bank_suggestions`] returns as an error (the stored statements cannot be
     /// read, or the session no longer holds a statement).
     pub fn review_queue(&self) -> Result<ReviewQueue, ApiError> {
+        self.review_queue_on(self.clock_date())
+    }
+
+    /// [`Api::review_queue`] as it stands on `today`: rule D-02 counts a post-dated payment only
+    /// from its own date, so it needs the day.
+    ///
+    /// # Errors
+    /// The same as [`Api::review_queue`].
+    pub fn review_queue_on(&self, today: Date) -> Result<ReviewQueue, ApiError> {
         let mut newest: BTreeMap<LedgerId, (BankStatementId, &BankStatement)> = BTreeMap::new();
         for (id, statement) in self.held()? {
             newest.insert(statement.ledger(), (*id, statement));
@@ -164,7 +176,25 @@ impl Api {
                 }
             }
         }
-        Ok(ReviewQueue { items, unlisted })
+        let duplicates = match self.duplicate_payments_on(today)? {
+            Outcome::Value(found) => found,
+            Outcome::Unsupported(u) => {
+                unlisted.push(UnlistedSource {
+                    source: ReviewSource::DuplicateCheck,
+                    reason: format!(
+                        "{}: {}",
+                        not_connected(ReviewSource::DuplicateCheck),
+                        u.reason
+                    ),
+                });
+                Vec::new()
+            }
+        };
+        Ok(ReviewQueue {
+            items,
+            duplicates,
+            unlisted,
+        })
     }
 }
 

@@ -156,6 +156,11 @@ impl Api {
         self.clock = clock;
     }
 
+    /// Today's date by the company's clock (UTC), for calls that need a day and were not given one.
+    pub(crate) fn clock_date(&self) -> Date {
+        self.clock.now().date()
+    }
+
     /// Runs a command: the engine computes its events on the cached books, the events are
     /// committed, and the cache is reloaded.
     ///

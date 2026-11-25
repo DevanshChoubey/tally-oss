@@ -581,8 +581,9 @@ impl HomeScreen {
         let today = crate::shell::navigate::today();
         self.latest
             .start(handle, move |api| home_load(api, as_of, today));
-        self.review_latest
-            .start(handle, |api| api.review_queue().map_err(|e| e.to_string()));
+        self.review_latest.start(handle, move |api| {
+            api.review_queue_on(today).map_err(|e| e.to_string())
+        });
     }
 
     /// What the screen shows now.

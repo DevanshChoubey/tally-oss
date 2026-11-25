@@ -221,8 +221,9 @@ fn the_queue_lists_the_bank_match_of_the_newest_statement() {
 #[test]
 fn the_sources_the_engine_cannot_list_are_named_with_reasons() {
     // provenance: derived. The mock's kinds are bill drafts, plain-words drafts, bank matches,
-    // ledger suggestions, duplicate checks and 2B explanations. Five have no engine list; the
-    // bank match list is connected, so it is not named as unlisted.
+    // ledger suggestions, duplicate checks and 2B explanations. Since s11 the duplicate check
+    // (rule D-02) is listed too, so four have no engine list; the bank match list and the
+    // duplicate list are connected, so neither is named as unlisted.
     let api = setup("w4_review_named.ledgerly", true);
     let queue = api.review_queue().unwrap();
     let sources: Vec<ReviewSource> = queue.unlisted.iter().map(|u| u.source).collect();
@@ -232,7 +233,6 @@ fn the_sources_the_engine_cannot_list_are_named_with_reasons() {
             ReviewSource::BillDraft,
             ReviewSource::PlainWordsDraft,
             ReviewSource::NewLedgerSuggestion,
-            ReviewSource::DuplicateCheck,
             ReviewSource::Gstr2bExplanation,
         ]
     );
@@ -245,12 +245,12 @@ fn a_company_with_no_statement_lists_nothing_and_still_names_the_sources() {
     let api = setup("w4_review_empty.ledgerly", false);
     let queue = api.review_queue().unwrap();
     assert_eq!(queue.items, Vec::new());
-    assert_eq!(queue.unlisted.len(), 5);
+    assert_eq!(queue.unlisted.len(), 4);
 }
 
 #[test]
 fn the_count_is_withheld_while_any_source_is_unlisted() {
-    // provenance: derived. Five sources are not connected, so the queue cannot say how many
+    // provenance: derived. Four sources are not connected, so the queue cannot say how many
     // proposals are open; the badge rule gives no count (`None`), never the listed rows alone.
     let api = setup("w4_review_count.ledgerly", true);
     let queue = api.review_queue().unwrap();

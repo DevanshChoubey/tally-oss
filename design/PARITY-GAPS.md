@@ -33,9 +33,18 @@ comes from `Api::home_figures` and `Api::home_nudges`.
   `Api::home_nudges`); the seed's PY/0304 narration was set to "City Power, October bill" so that
   it can fire on Godavari.
 - **gap: review rows.** No age ("2 min ago"): the engine's `ReviewItem` carries no created time.
-  Every row shows the bank icon because every listed proposal is a bank match (the camera and
-  other kinds come from sources that are not listed yet, and are named in the footer note). The
-  review queue does not list duplicates. J/K/Enter on Home open the generic queue, not the row.
+  Rows are bank matches (bank icon) and rule D-02 possible duplicates (alert icon, "Rule D-02 ·
+  15 days apart"). The kinds that need the in-app AI stay out and are named in the "Not connected
+  yet" card: bill-photo drafts, plain-words drafts, new-ledger suggestions, 2B explanations.
+  The sidebar count stays withheld while those are unlisted. J/K/Enter on Home open the generic
+  queue, not the row.
+- **gap: review decisions (s11).** Y and Ctrl+A accept the highlighted row (the mock's Ctrl+A is
+  the same as Y; it is not "accept all"). A bank match goes to `confirm_bank_match`, which checks
+  it again; a Rule suggestion is refused by the engine and says why; a duplicate has nothing to
+  post, so Y explains the two ways out. N and Alt+D hide the row for this session only: the
+  engine stores no rejection, and the notice says so (the mock says "Rejected" with an optional
+  reason). Feedback is a note above the table, not a toast. Enter on a duplicate opens the day
+  book, not the two vouchers side by side.
 - **gap: the entry bar.** It says "not connected in this build" where the mock says "runs on this
   computer"; the greeting has no name and the "Start" card is dropped, by design.
 - **gap: new `Icon` variants** (Alert, Info, Clock, Camera) are drawn from the mock's paths.
@@ -91,11 +100,10 @@ comes from `Api::home_figures` and `Api::home_nudges`.
   credit days copied from the master, Open bills from the engine's outstanding report, Alter ledger
   (Ctrl+Enter). Still different: the group drill's period is the financial year, so Opening is
   0.00 Dr; Opening and Closing keep the Dr/Cr word; Particulars is the engine's counter-ledger
-  text, not the voucher narration, and rows do not wrap; the Open bills badge reads "31-60 days"
-  plus a clipped overdue tail instead of "37 days overdue" (the badge text is pinned by
-  `tests/w2_masters_bills.rs`); the sample GSTINs are fake. The ledger drill has no Audit card and
-  the voucher read-only view (Item table, Ledger posting, Audit) is not rebuilt: the voucher view
-  still shows the posting lines only. Closed in the S8 round (tested in
+  text, not the voucher narration, and rows do not wrap; the Open bills badge now reads "36 days
+  overdue" in full (days from the engine's ageing rule, as at the report date, 20 Nov; the mock
+  shows 37 for its 21 Nov); the sample GSTINs are fake. The mock's ledger drill has no Audit card,
+  so none was added. Closed in the S8 round (tested in
   `tests/s8_report_parity.rs`): the drill titles and crumbs read as the group or ledger name
   ("Sundry Debtors"), the subtitle is "As at ... Enter goes deeper, Esc goes back up", Debit and
   Credit figures drop the Dr/Cr word, the repeated Particulars column is not drawn twice, and the
@@ -137,13 +145,14 @@ comes from `Api::home_figures` and `Api::home_nudges`.
   from the mock's "Steel pickaxe 2.5 kg shows -30 nos": the date is ISO and the quantity is not
   in the reason. The stock summary's own reason (`stock_summary/valuation.rs`, pinned by
   `rp9_stock_summary.rs` as "item 1") is unchanged.
-- **gap: the voucher view has no item lines, tax, total or audit card.** `balance-sheet.voucher`
-  is now two cards: the header fields (Type, Number, Date, Status, Party) over the ledger lines in
-  Debit and Credit columns, and a "Read-only" card. The mock's item table and tax lines need the
-  stock lines and GST the screen does not show yet (it says so in the card). No Total row: the
-  screen never adds figures (rule C4). The mock's "Audit" bullets (created by, from an AI draft)
-  need audit data the voucher view does not read. The subtitle is "Read-only. Esc goes back up"
-  because "As at ..." means nothing for one voucher.
+- **gap: the voucher view (s11).** Item table, Ledger posting with a bold Total row (from
+  `Api::voucher_detail`, checked sums) and an Audit card (who entered it, when, how, alterations,
+  period lock, audit log entry and hash) are built. Still different: the Party field is dropped;
+  the Audit card says nothing about AI draft names or edit counts (the log does not keep them),
+  adds a log-entry/hash bullet and a "Read-only here" bullet that the mock lacks; tax lines show
+  as ledger lines, not a separate block; the subtitle is "Read-only. Esc goes back up" (no
+  "As at"); the breadcrumb has an extra "Current Assets" level; Alter and cancel keys are not
+  built. Sample vouchers are stamped at noon on their own date.
 - **data: `balance-sheet.loading` is taken with preset books (s10).** The worker is held so the
   report's request never answers (the card, the clock icon, twelve bars and the key bar
   "Computing / Esc Cancel" are real). Differences left: "As at 20 Nov" against the mock's 21 Nov
@@ -300,11 +309,6 @@ captured: `suggested-ledger` (an AI state: the assistant proposes the ledger; no
   "(provisional)", with the engine's reason on hover.
 - **by design: stock is over the stock summary's opening period**, the financial year to its
   last voucher, as the stock summary report opens.
-- **by design: an open bill's badge names the outstanding report's bucket, not a day count**
-  (index.html:1806: `x.overdue+' days overdue'`). The card is the party's rows of the engine's
-  detailed outstanding report (`screens/masters/bills.rs`), which ages a bill into "0-30 days",
-  "31-60 days", "61-90 days" or "Over 90 days"; the screen counts no days itself (rule C4), so
-  the badge says "61-90 days overdue". A day count needs the engine to give one.
 - **by design: open amounts carry their side** ("1,18,000.00 Dr"). The mock's amounts are bare;
   a party's bills can be on either side, so ours keep "Dr" or "Cr".
 - **by design: the card has lines the mock does not show.** A bill with no due date shows a

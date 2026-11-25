@@ -4,7 +4,7 @@
 //! Provenance. The company is the one of `c3_bank_worker.rs`: a bank ledger with a debit opening
 //! of Rs 1,000.00, a customer, one receipt of Rs 500.00 on 5 Apr 2026 into the bank, and an MT940
 //! statement with one credit of 500,00 on 5 Apr. The one proposal is therefore the exact match of
-//! that line to that voucher, derived by hand (same amount, same day). The five not-connected
+//! that line to that voucher, derived by hand (same amount, same day). The four not-connected
 //! sources are named in `ledgerly-api/src/review.rs`.
 //!
 //! Tally citation, read 2026-11-23: the "Display Optional Vouchers" page under Exception
@@ -24,7 +24,9 @@ use std::time::Duration;
 
 use ledgerly_api::{Api, ApiError, Command, CommandResult, ReviewSource};
 use ledgerly_app::screens::home::HomeScreen;
-use ledgerly_app::screens::review::{EmptyView, ReviewScreen, badge, empty_view, rows};
+use ledgerly_app::screens::review::{
+    Decision, EmptyView, ReviewScreen, badge, empty_view, reject_notice, rows,
+};
 use ledgerly_app::worker::ApiWorker;
 use ledgerly_core::{
     Clock, CompanyId, GroupId, LedgerId, Outcome, Paise, SignedAmount, StateCode, VoucherId,
@@ -219,7 +221,7 @@ fn the_rows_come_from_the_engine_proposal() {
     let row = &panel.rows[0];
     assert_eq!(row.kind, "Bank match");
     assert_eq!(row.amount, Some(Paise::new(50_000)));
-    assert_eq!(row.ledger, BANK);
+    assert_eq!(row.ledger, Some(BANK));
     assert!(row.what.ends_with("voucher 1"), "what = {}", row.what);
     assert!(row.source.contains("line 4"), "source = {}", row.source);
     assert_eq!(screen.opens(), Some(BANK));
@@ -227,7 +229,7 @@ fn the_rows_come_from_the_engine_proposal() {
 
 #[test]
 fn the_count_is_withheld_and_matches_the_rows_when_every_source_is_listed() {
-    // provenance: derived. While five sources are unlisted the count is `None` (never a partial
+    // provenance: derived. While four sources are unlisted the count is `None` (never a partial
     // number). With those removed from the answer, the count is the row count: one.
     let api = setup("w4_app_count.ledgerly", true);
     let mut queue = api.review_queue().unwrap();
@@ -236,7 +238,7 @@ fn the_count_is_withheld_and_matches_the_rows_when_every_source_is_listed() {
     load_queue(&mut screen, &worker);
     let panel = screen.panel().unwrap();
     assert_eq!(panel.count, None);
-    assert_eq!(panel.not_connected.len(), 5);
+    assert_eq!(panel.not_connected.len(), 4);
 
     queue.unlisted.clear();
     assert_eq!(badge(&queue), Some(1));
@@ -258,7 +260,7 @@ fn j_and_k_move_the_selection_within_the_rows() {
 
 #[test]
 fn a_company_with_nothing_to_review_names_the_sources_it_cannot_list() {
-    // provenance: derived. No statement and no receipt: no rows. The five unlisted sources are
+    // provenance: derived. No statement and no receipt: no rows. The four unlisted sources are
     // named, so the empty state does not claim the mock's "Nothing to review" wording.
     let api = setup("w4_app_empty.ledgerly", false);
     let queue = api.review_queue().unwrap();
@@ -329,8 +331,9 @@ fn the_queue_is_a_table_beside_the_how_decisions_work_card() {
     // provenance: the mock's `SCREENS.review` (design/mock-v2/index.html) and its capture
     // `captures/states/light/review.default.webp`: a table with the columns Proposal, Source,
     // Confidence and Amount beside a card titled "How decisions work". The keys listed there are
-    // the ones this screen has (Enter, J, K, Esc); Y, N and Ctrl+A are not built, so they are not
-    // listed. Catches the plain stack of labels the screen drew before 2026-11-25.
+    // the ones this screen has. Since s11 Y, Ctrl+A, N and Alt+D are built (see the tests below),
+    // so the card lists them as the mock does. Catches the plain stack of labels the screen drew
+    // before 2026-11-25.
     use ledgerly_app::{AppCtx, Screen};
     let worker = ApiWorker::spawn(setup("w4_app_look.ledgerly", true)).unwrap();
     let mut screen = ReviewScreen::default();
@@ -362,10 +365,59 @@ fn the_queue_is_a_table_beside_the_how_decisions_work_card() {
             "missing {wanted:?} in {text:?}"
         );
     }
-    for unbuilt in ["Accept", "Reject"] {
+    for built in ["Accept", "Reject"] {
         assert!(
-            !text.iter().any(|t| t.contains(unbuilt)),
-            "{unbuilt} is not built, so the card must not offer it: {text:?}"
+            text.iter().any(|t| t.starts_with(built)),
+            "{built} is built, so the card must offer it: {text:?}"
         );
     }
+}
+
+/// Ticks the screen until `done` holds, bounded.
+fn tick_until(screen: &mut ReviewScreen, worker: &ApiWorker, done: impl Fn(&ReviewScreen) -> bool) {
+    for _ in 0..2000 {
+        screen.tick(Some(worker));
+        if done(screen) {
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    panic!("the screen did not reach the wanted state within the bound");
+}
+
+#[test]
+fn accepting_the_exact_match_confirms_it_and_the_row_leaves_the_queue() {
+    // provenance: derived. The one proposal is the exact match of statement line 4 (50_000 paise,
+    // 5 Apr) to voucher 1. The engine confirms it (sets the bank date on the voucher's bank
+    // line), after which the matcher has nothing left to suggest, so the reloaded queue is empty.
+    let worker = ApiWorker::spawn(setup("s11_review_accept.ledgerly", true)).unwrap();
+    let mut screen = ReviewScreen::default();
+    load_queue(&mut screen, &worker);
+    assert_eq!(screen.panel().unwrap().rows.len(), 1);
+    screen.decide(Decision::Accept, Some(&worker));
+    tick_until(&mut screen, &worker, |s| {
+        s.panel().is_some_and(|p| p.rows.is_empty())
+    });
+    let notice = screen.notice().unwrap();
+    assert!(notice.starts_with("Accepted"), "notice = {notice}");
+}
+
+#[test]
+fn rejecting_hides_the_row_for_the_session_and_says_so() {
+    // provenance: derived. N removes the one row and nothing is sent to the engine (so the
+    // statement is still unmatched). A reload of the queue still lists the proposal, because the
+    // engine keeps no rejection, but the screen keeps it hidden for the session.
+    let worker = ApiWorker::spawn(setup("s11_review_reject.ledgerly", true)).unwrap();
+    let mut screen = ReviewScreen::default();
+    load_queue(&mut screen, &worker);
+    let row = screen.panel().unwrap().rows[0].clone();
+    screen.decide(Decision::Reject, Some(&worker));
+    assert_eq!(screen.panel().unwrap().rows.len(), 0);
+    assert_eq!(screen.notice(), Some(reject_notice(&row).as_str()));
+    screen.request_load();
+    for _ in 0..50 {
+        screen.tick(Some(&worker));
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    assert_eq!(screen.panel().unwrap().rows.len(), 0);
 }

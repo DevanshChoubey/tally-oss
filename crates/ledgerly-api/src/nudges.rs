@@ -139,6 +139,20 @@ impl Api {
         })
     }
 
+    /// Rule D-02's pairs as of `today`, for the Review queue (the same pairs Home raises).
+    ///
+    /// # Errors
+    /// [`ApiError::Stale`] after a saved change whose reload failed.
+    pub(crate) fn duplicate_payments_on(
+        &self,
+        today: Date,
+    ) -> Result<Outcome<Vec<DuplicatePayment>>, ApiError> {
+        Ok(match self.cached_books()? {
+            Outcome::Value(books) => duplicate_payments(books, today, self.lock_date()),
+            Outcome::Unsupported(u) => Outcome::Unsupported(u),
+        })
+    }
+
     /// The GSTR-1 nudge, when the company has a single regular registration with GST on.
     fn gstr1_due(&self, books: &Books, today: Date) -> Option<Gstr1Due> {
         let gstin = single_regular_gstin(books)?;

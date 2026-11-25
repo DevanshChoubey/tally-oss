@@ -6,22 +6,25 @@
 //! answer into text; the screen only draws them and moves the selection.
 //!
 //! What a row opens: Enter opens the bank reconciliation of the row's bank ledger, where the
-//! matcher's suggestion is listed. It does not yet select the suggestion's line, and accepting
-//! happens there (`Api::confirm_bank_match`), so Y and N are not on this screen.
+//! matcher's suggestion is listed, or, for a possible duplicate (rule D-02), the day book. It does
+//! not yet select the suggestion's line.
 //!
-//! The sidebar count is withheld while any source is not connected ([`badge`]): today every
-//! source but bank matches is unlisted, so the count stays off.
+//! The sidebar count is withheld while any source is not connected ([`badge`]): bank matches and
+//! duplicates are listed, the others are not, so the count stays off.
 //!
 //! Keys (the mock's `keys()`, `index.html` `SCREENS.review`): J and K (or the arrows) move,
-//! Enter opens the row's bank ledger, Esc goes back (the shell). Y, N and Ctrl+A are not built.
+//! Enter opens the row, Y or Ctrl+A accepts the highlighted row, N or Alt+D rejects it, Esc goes
+//! back (the shell). Accepting a bank match sends it to `Api::confirm_bank_match`, which checks
+//! it again; accepting a duplicate has nothing to post and says so. Rejecting hides the row for
+//! this session only, because the engine keeps no record of a rejection.
 
-use egui::{Key, Ui};
-use ledgerly_api::{ReviewItem, ReviewQueue, ReviewSource};
-use ledgerly_core::{LedgerId, Paise};
+use egui::{Event, InputState, Key, Modifiers, Ui};
+use ledgerly_api::{Candidate, DuplicatePayment, ReviewItem, ReviewQueue, ReviewSource};
+use ledgerly_core::{BankStatementId, LedgerId, Outcome, Paise};
 
 use crate::screen::{KeyHint, ScreenAction};
 use crate::screens::home::draw::{split, title};
-use crate::screens::wire::{Done, Latest};
+use crate::screens::wire::{Done, Latest, unsupported_text};
 use crate::ui::conf::{Confidence, conf};
 use crate::ui::format;
 use crate::ui::icon::Icon;
@@ -58,8 +61,50 @@ pub struct QueueRow {
     pub confidence: Confidence,
     /// The amount of the line, when the proposal covers exactly one line.
     pub amount: Option<Paise>,
-    /// The bank ledger the row opens.
-    pub ledger: LedgerId,
+    /// The bank ledger the row opens; a duplicate row has none (it opens the day book).
+    pub ledger: Option<LedgerId>,
+    /// What the row is made of, which says what accepting it would send to the engine.
+    pub origin: RowOrigin,
+    /// A key that names the proposal, so a session-only rejection survives a reload of the queue.
+    pub key: String,
+}
+
+/// What a queue row stands for.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RowOrigin {
+    /// A bank-match suggestion: accepting sends this statement and candidate to the engine.
+    Bank {
+        /// The stored statement the suggestion came from.
+        statement: BankStatementId,
+        /// The matcher's suggestion, unchanged.
+        candidate: Candidate,
+    },
+    /// A possible duplicate payment (rule D-02): there is nothing to accept, only two vouchers to
+    /// compare in the day book.
+    Duplicate,
+}
+
+/// A decision on the highlighted row.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Decision {
+    /// Y or Ctrl+A.
+    Accept,
+    /// N or Alt+D.
+    Reject,
+}
+
+/// What accepting a row does.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Verdict {
+    /// Send the matcher's suggestion to `Api::confirm_bank_match`; the engine re-checks it.
+    Confirm {
+        /// The stored statement.
+        statement: BankStatementId,
+        /// The suggestion.
+        candidate: Box<Candidate>,
+    },
+    /// Nothing is sent: say this instead.
+    Say(String),
 }
 
 /// The queue as the screen shows it: its rows, its not-connected sources and its count.
@@ -129,14 +174,89 @@ pub fn row_of(item: &ReviewItem) -> QueueRow {
         ),
         confidence: level,
         amount: item.amount,
-        ledger: item.ledger,
+        ledger: Some(item.ledger),
+        origin: RowOrigin::Bank {
+            statement: item.statement,
+            candidate: item.candidate.clone(),
+        },
+        key: format!(
+            "bank:{}:{:?}:{:?}",
+            item.statement.0, candidate.statement_lines, candidate.vouchers
+        ),
+    }
+}
+
+/// The name of a payment in the queue's words: its number, or "Voucher N" ("voucher N" inside a
+/// sentence) when it has none.
+fn payment_name(p: &ledgerly_api::PaymentRef, starts_sentence: bool) -> String {
+    let word = if starts_sentence {
+        "Voucher"
+    } else {
+        "voucher"
+    };
+    p.number
+        .clone()
+        .unwrap_or_else(|| format!("{word} {}", p.id.0))
+}
+
+/// The row for one possible duplicate payment (rule D-02).
+#[must_use]
+pub fn duplicate_row(pair: &DuplicatePayment) -> QueueRow {
+    let days = if pair.days_apart == 1 { "day" } else { "days" };
+    QueueRow {
+        kind: "Possible duplicate",
+        what: format!(
+            "{} on {} repeats {} on {}: same ledger ({}), amount and narration.",
+            payment_name(&pair.second, true),
+            format::date(pair.second.date),
+            payment_name(&pair.first, false),
+            format::date(pair.first.date),
+            pair.ledger
+        ),
+        source: format!("Rule D-02 \u{b7} {} {days} apart", pair.days_apart),
+        confidence: Confidence::Rule,
+        amount: Some(pair.amount),
+        ledger: None,
+        origin: RowOrigin::Duplicate,
+        key: format!("duplicate:{}:{}", pair.first.id.0, pair.second.id.0),
+    }
+}
+
+/// What accepting `row` does.
+#[must_use]
+pub fn accept_verdict(row: &QueueRow) -> Verdict {
+    match &row.origin {
+        RowOrigin::Bank {
+            statement,
+            candidate,
+        } => Verdict::Confirm {
+            statement: *statement,
+            candidate: Box::new(candidate.clone()),
+        },
+        RowOrigin::Duplicate => Verdict::Say(
+            "Nothing to accept: this is a warning, not a draft. Open it (Enter) to compare the two payments in the day book and cancel the second one, or press N if both are right."
+                .to_owned(),
+        ),
+    }
+}
+
+/// The words shown after a rejection of `row`.
+#[must_use]
+pub fn reject_notice(row: &QueueRow) -> String {
+    match row.origin {
+        RowOrigin::Bank { .. } | RowOrigin::Duplicate => "Rejected for this session. Nothing was posted or changed. Ledgerly keeps no record of a rejection yet, so it returns the next time the queue is opened.".to_owned(),
     }
 }
 
 /// The rows of the queue, in order.
 #[must_use]
 pub fn rows(queue: &ReviewQueue) -> Vec<QueueRow> {
-    queue.items.iter().map(row_of).collect()
+    queue
+        .items
+        .iter()
+        .map(row_of)
+        .chain(queue.duplicates.iter().map(duplicate_row))
+        .collect()
 }
 
 /// One line per source that is not connected: its name, then the engine's reason.
@@ -201,6 +321,12 @@ pub struct ReviewScreen {
     selected: usize,
     /// A request to load (or reload) the queue, not yet sent to the worker.
     want: bool,
+    /// The accept that is running on the worker, with the text of the row it is for.
+    confirm: Latest<Result<Outcome<()>, String>>,
+    /// Keys of the rows rejected in this session; they stay hidden when the queue is read again.
+    dismissed: Vec<String>,
+    /// What the last decision did, with its tone.
+    notice: Option<(NoteKind, String)>,
 }
 
 impl ReviewScreen {
@@ -237,13 +363,76 @@ impl ReviewScreen {
         self.selected = next;
     }
 
+    /// Applies a decision to the highlighted row. Accepting a bank match sends it to the engine
+    /// through `worker`; rejecting hides the row for this session.
+    pub fn decide(&mut self, decision: Decision, worker: Option<&ApiWorker>) {
+        let Some(row) = self
+            .panel
+            .as_ref()
+            .and_then(|p| p.rows.get(self.selected))
+            .cloned()
+        else {
+            return;
+        };
+        match decision {
+            Decision::Reject => {
+                self.dismissed.push(row.key.clone());
+                if let Some(panel) = self.panel.as_mut() {
+                    panel.rows.retain(|r| r.key != row.key);
+                }
+                self.clamp_selection();
+                self.notice = Some((NoteKind::Info, reject_notice(&row)));
+            }
+            Decision::Accept => match accept_verdict(&row) {
+                Verdict::Say(text) => self.notice = Some((NoteKind::Info, text)),
+                Verdict::Confirm {
+                    statement,
+                    candidate,
+                } => {
+                    let Some(handle) = worker else {
+                        self.notice = Some((
+                            NoteKind::Bad,
+                            "No company is open, so nothing can be accepted.".to_owned(),
+                        ));
+                        return;
+                    };
+                    self.notice = Some((
+                        NoteKind::Info,
+                        "Accepting: the engine checks the match again before it saves it."
+                            .to_owned(),
+                    ));
+                    self.confirm.start(handle, move |api| {
+                        api.confirm_bank_match(statement, &candidate)
+                            .map(|out| out.map(|_| ()))
+                            .map_err(|e| e.to_string())
+                    });
+                }
+            },
+        }
+    }
+
+    /// The line the last decision left, when there is one.
+    #[must_use]
+    pub fn notice(&self) -> Option<&str> {
+        self.notice.as_ref().map(|(_, text)| text.as_str())
+    }
+
+    /// Keeps the highlight on a row after rows were removed.
+    fn clamp_selection(&mut self) {
+        let last = self
+            .panel
+            .as_ref()
+            .map_or(0, |p| p.rows.len().saturating_sub(1));
+        self.selected = self.selected.min(last);
+    }
+
     /// The bank ledger that Enter would open (the highlighted row's ledger), if any row exists.
     #[must_use]
     pub fn opens(&self) -> Option<LedgerId> {
         self.panel
             .as_ref()
             .and_then(|p| p.rows.get(self.selected))
-            .map(|r| r.ledger)
+            .and_then(|r| r.ledger)
     }
 
     /// Advances the load by one step: shows a finished answer, then sends a waiting request.
@@ -251,19 +440,40 @@ impl ReviewScreen {
         match self.latest.poll() {
             Some(Done::Ready(Ok(queue))) => {
                 self.error = None;
-                self.panel = Some(panel(&queue));
-                self.empty = if queue.items.is_empty() {
-                    Some(empty_view(&queue))
-                } else {
-                    None
-                };
-                self.selected = self.selected.min(queue.items.len().saturating_sub(1));
+                let mut shown = panel(&queue);
+                shown.rows.retain(|r| !self.dismissed.contains(&r.key));
+                self.panel = Some(shown);
+                self.empty = Some(empty_view(&queue));
+                self.clamp_selection();
             }
             Some(Done::Ready(Err(e))) => self.error = Some(e),
             Some(Done::Lost) => {
                 self.error = Some(
                     "The background worker stopped, so the queue could not be read.".to_owned(),
                 );
+            }
+            None => {}
+        }
+        match self.confirm.poll() {
+            Some(Done::Ready(Ok(Outcome::Value(())))) => {
+                crate::shell::submit::note_changed();
+                self.notice = Some((
+                    NoteKind::Ok,
+                    "Accepted. The engine checked the match again and saved it; the bank line is matched to its voucher.".to_owned(),
+                ));
+                self.want = true;
+            }
+            Some(Done::Ready(Ok(Outcome::Unsupported(u)))) => {
+                self.notice = Some((NoteKind::Warn, unsupported_text(&u)));
+            }
+            Some(Done::Ready(Err(e))) => {
+                self.notice = Some((NoteKind::Bad, format!("Not accepted: {e}")));
+            }
+            Some(Done::Lost) => {
+                self.notice = Some((
+                    NoteKind::Bad,
+                    "The background worker stopped, so nothing was accepted.".to_owned(),
+                ));
             }
             None => {}
         }
@@ -275,21 +485,36 @@ impl ReviewScreen {
             self.error = Some("No company is open, so there is no queue to show.".to_owned());
             return;
         };
-        self.latest
-            .start(handle, |api| api.review_queue().map_err(|e| e.to_string()));
+        self.latest.start(handle, |api| {
+            api.review_queue_on(crate::shell::navigate::today())
+                .map_err(|e| e.to_string())
+        });
     }
 
-    /// The Enter action: opens the highlighted row's bank ledger on the screen stack.
+    /// The Enter action: opens the highlighted row. A bank match opens its bank ledger; a
+    /// possible duplicate opens the day book, where both payments can be compared.
     fn open_selected(&mut self, ctx: &AppCtx) -> ScreenAction {
-        let Some(ledger) = self.opens() else {
+        let Some(row) = self
+            .panel
+            .as_ref()
+            .and_then(|p| p.rows.get(self.selected))
+            .cloned()
+        else {
             return ScreenAction::Stay;
         };
-        let Some(books) = ctx.books.as_ref() else {
-            self.error = Some("No company is open, so the bank ledger cannot open.".to_owned());
-            return ScreenAction::Stay;
+        let opened = match (row.ledger, ctx.books.as_ref()) {
+            (Some(ledger), Some(books)) => crate::shell::navigate::bank_screen(books, ledger)
+                .map(|s| Box::new(s) as Box<dyn Screen>),
+            (None, _) => {
+                crate::shell::navigate::open_report(ledgerly_api::ReportKind::DayBook, ctx)
+            }
+            (Some(_), None) => {
+                self.error = Some("No company is open, so the bank ledger cannot open.".to_owned());
+                return ScreenAction::Stay;
+            }
         };
-        match crate::shell::navigate::bank_screen(books, ledger) {
-            Ok(screen) => ScreenAction::Push(Box::new(screen)),
+        match opened {
+            Ok(screen) => ScreenAction::Push(screen),
             Err(e) => {
                 self.error = Some(e.to_string());
                 ScreenAction::Stay
@@ -373,10 +598,14 @@ impl ReviewScreen {
                         .wrap(),
                     );
                 });
-                let icon: Cell<'_> = Box::new(|ui| {
+                let glyph = match row.origin {
+                    RowOrigin::Bank { .. } => Icon::Bank,
+                    RowOrigin::Duplicate => Icon::Alert,
+                };
+                let icon: Cell<'_> = Box::new(move |ui| {
                     let t = crate::ui::tokens(ui);
                     ui.add_space(2.0);
-                    crate::ui::icon::icon(ui, Icon::Bank, t.text_2);
+                    crate::ui::icon::icon(ui, glyph, t.text_2);
                 });
                 let confidence: Cell<'_> = Box::new(move |ui| {
                     conf(ui, row.confidence);
@@ -471,22 +700,27 @@ impl ReviewScreen {
     }
 }
 
-/// The card beside the table (the mock's "How decisions work"), limited to the keys this screen
-/// has: Y, N and Ctrl+A are not built, and accepting happens on the bank screen.
+/// The card beside the table (the mock's "How decisions work"), worded for what each key does
+/// today.
 fn draw_how_decisions_work(ui: &mut Ui) {
     let t = crate::ui::tokens(ui);
     card(ui, |ui| {
         title(ui, "How decisions work");
-        let lines: [(&[&str], &str); 3] = [
+        let lines: [(&[&str], &str); 5] = [
+            (
+                &["Y", "Ctrl+A"],
+                "Accept. A bank match is checked again by the engine before it is saved; a failed check blocks it. A duplicate warning has nothing to post.",
+            ),
             (
                 &["Enter"],
-                "Open in context: the bank reconciliation of the proposal's account, where the matcher's suggestion is listed.",
+                "Open in context: the bank reconciliation of the proposal's account, or the day book for a possible duplicate.",
+            ),
+            (
+                &["N", "Alt+D"],
+                "Reject for this session. Nothing is posted; the engine keeps no record of it yet.",
             ),
             (&["J", "K"], "Next and previous."),
-            (
-                &["Esc"],
-                "Back. Nothing is posted from this list; accepting a match happens in the bank reconciliation.",
-            ),
+            (&["Esc"], "Back."),
         ];
         for (keys, what) in lines {
             ui.horizontal_top(|ui| {
@@ -507,7 +741,7 @@ fn draw_how_decisions_work(ui: &mut Ui) {
         }
         para(
             ui,
-            "Amounts in this list are the bank line as imported, never a total computed here.",
+            "Amounts in this list are the bank line as imported or the payment as posted, never a total computed here.",
             crate::theme::TEXT_META,
             t.text_2,
         );
@@ -532,7 +766,9 @@ impl Screen for ReviewScreen {
         [
             ("", "Review queue"),
             ("J / K", "Move"),
+            ("Y", "Accept"),
             ("Enter", "Open to edit"),
+            ("N", "Reject"),
             ("Esc", "Back"),
         ]
         .iter()
@@ -548,13 +784,23 @@ impl Screen for ReviewScreen {
         if self.latest.is_pending() {
             ui.ctx().request_repaint();
         }
-        let (down, up, enter) = ui.input(|i| {
+        let (down, up, enter, accept, reject) = ui.input_mut(|i| {
             (
                 i.key_pressed(Key::J) || i.key_pressed(Key::ArrowDown),
                 i.key_pressed(Key::K) || i.key_pressed(Key::ArrowUp),
                 i.key_pressed(Key::Enter),
+                consume_exact(i, Key::Y, Modifiers::NONE)
+                    | consume_exact(i, Key::A, Modifiers::CTRL),
+                consume_exact(i, Key::N, Modifiers::NONE)
+                    | consume_exact(i, Key::D, Modifiers::ALT),
             )
         });
+        if accept {
+            self.decide(Decision::Accept, ctx.api.as_ref());
+        }
+        if reject {
+            self.decide(Decision::Reject, ctx.api.as_ref());
+        }
         if down {
             self.move_by(1);
         }
@@ -570,6 +816,10 @@ impl Screen for ReviewScreen {
         if let Some(error) = self.error.clone() {
             note(ui, NoteKind::Bad, &error);
         }
+        if let Some((kind, text)) = self.notice.clone() {
+            note(ui, kind, &text);
+            ui.add_space(crate::theme::SPACE_3);
+        }
         match self.panel.clone() {
             // An error is on screen already; "loading" beside it would say the opposite.
             None if self.error.is_some() => {}
@@ -580,6 +830,20 @@ impl Screen for ReviewScreen {
         }
         action
     }
+}
+
+/// Consumes the press of exactly `key` with exactly `modifiers` held, and reports whether there
+/// was one (egui's `consume_key` also accepts extra Alt or Shift).
+fn consume_exact(input: &mut InputState, key: Key, modifiers: Modifiers) -> bool {
+    let before = input.events.len();
+    input.events.retain(|event| {
+        !matches!(
+            event,
+            Event::Key { key: pressed_key, modifiers: held, pressed: true, .. }
+                if *pressed_key == key && held.matches_exact(modifiers)
+        )
+    });
+    input.events.len() != before
 }
 
 /// A bold label for a card heading.
@@ -597,6 +861,7 @@ mod tests {
         // state; one unlisted source means the empty wording would claim more than the engine lists.
         let connected = ReviewQueue {
             items: Vec::new(),
+            duplicates: Vec::new(),
             unlisted: Vec::new(),
         };
         assert_eq!(empty_view(&connected), EmptyView::Nothing);
