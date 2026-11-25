@@ -72,8 +72,8 @@
 | light | sales-invoice.validation-error | 0.6369 |
 | dark | sales-invoice.item-list | 0.6395 |
 | dark | sales-invoice.validation-error | 0.6422 |
+| hc | payment.overdraft | 0.6444 |
 | dark | sales-invoice.gst-inter-state | 0.6452 |
-| hc | payment.overdraft | 0.6455 |
 | dark | balance-sheet.provisional | 0.6499 |
 | dark | palette.search | 0.6514 |
 | dark | purchase-bill.offline-ai | 0.6543 |
@@ -104,10 +104,10 @@
 | light | ai-settings.off | 0.6872 |
 | dark | gst.gstr1-correction | 0.6893 |
 | dark | ai-settings.off | 0.6917 |
-| hc | receipt.default | 0.6932 |
-| hc | payment.bill-wise | 0.6949 |
+| hc | receipt.default | 0.6931 |
+| hc | payment.bill-wise | 0.6948 |
+| hc | payment.default | 0.6953 |
 | dark | balance-sheet.detailed | 0.6955 |
-| hc | payment.default | 0.6961 |
 | dark | sales-invoice.saved | 0.6964 |
 | dark | palette.commands | 0.6974 |
 | dark | balance-sheet.default | 0.7009 |
@@ -123,29 +123,29 @@
 | hc | home.loading | 0.7220 |
 | light | balance-sheet.voucher | 0.7229 |
 | light | balance-sheet.group | 0.7284 |
-| light | payment.overdraft | 0.7310 |
-| dark | payment.overdraft | 0.7321 |
+| light | payment.overdraft | 0.7291 |
+| dark | payment.overdraft | 0.7301 |
 | light | gst.recon | 0.7321 |
 | dark | balance-sheet.voucher | 0.7325 |
-| light | receipt.default | 0.7344 |
+| light | receipt.default | 0.7342 |
+| light | payment.bill-wise | 0.7361 |
 | dark | balance-sheet.ledger | 0.7362 |
-| light | payment.bill-wise | 0.7363 |
 | hc | day-book.default | 0.7368 |
 | light | balance-sheet.ledger | 0.7371 |
 | hc | masters.ledger-detail | 0.7373 |
 | dark | balance-sheet.group | 0.7374 |
 | dark | gst.recon | 0.7383 |
-| dark | receipt.default | 0.7406 |
-| dark | payment.bill-wise | 0.7428 |
+| dark | receipt.default | 0.7404 |
+| dark | payment.bill-wise | 0.7426 |
 | light | purchase-bill.offline-ai | 0.7449 |
 | hc | bank.import-error | 0.7478 |
 | hc | masters.create-ledger | 0.7521 |
 | light | day-book.default | 0.7562 |
+| light | payment.default | 0.7574 |
+| dark | payment.default | 0.7588 |
 | hc | home.empty | 0.7590 |
-| light | payment.default | 0.7591 |
 | light | setup.features | 0.7592 |
 | hc | balance-sheet.loading | 0.7601 |
-| dark | payment.default | 0.7605 |
 | hc | masters.gstin-error | 0.7626 |
 | hc | ask.offline-ai | 0.7641 |
 | dark | day-book.default | 0.7656 |
@@ -1022,6 +1022,18 @@ SSIM 0.6422
 </tr>
 </table>
 
+## hc / payment.overdraft
+
+SSIM 0.6444
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/hc/payment.overdraft.webp" width="480" alt="mock hc payment.overdraft"></td>
+<td><img src="app-captures/hc/payment.overdraft.webp" width="480" alt="app hc payment.overdraft"></td>
+</tr>
+</table>
+
 ## dark / sales-invoice.gst-inter-state
 
 SSIM 0.6452
@@ -1031,18 +1043,6 @@ SSIM 0.6452
 <tr>
 <td><img src="mock-v2/captures/states/dark/sales-invoice.gst-inter-state.webp" width="480" alt="mock dark sales-invoice.gst-inter-state"></td>
 <td><img src="app-captures/dark/sales-invoice.gst-inter-state.webp" width="480" alt="app dark sales-invoice.gst-inter-state"></td>
-</tr>
-</table>
-
-## hc / payment.overdraft
-
-SSIM 0.6455
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/hc/payment.overdraft.webp" width="480" alt="mock hc payment.overdraft"></td>
-<td><img src="app-captures/hc/payment.overdraft.webp" width="480" alt="app hc payment.overdraft"></td>
 </tr>
 </table>
 
@@ -1408,7 +1408,7 @@ SSIM 0.6917
 
 ## hc / receipt.default
 
-SSIM 0.6932
+SSIM 0.6931
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1420,13 +1420,25 @@ SSIM 0.6932
 
 ## hc / payment.bill-wise
 
-SSIM 0.6949
+SSIM 0.6948
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
 <tr>
 <td><img src="mock-v2/captures/states/hc/payment.bill-wise.webp" width="480" alt="mock hc payment.bill-wise"></td>
 <td><img src="app-captures/hc/payment.bill-wise.webp" width="480" alt="app hc payment.bill-wise"></td>
+</tr>
+</table>
+
+## hc / payment.default
+
+SSIM 0.6953
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/hc/payment.default.webp" width="480" alt="mock hc payment.default"></td>
+<td><img src="app-captures/hc/payment.default.webp" width="480" alt="app hc payment.default"></td>
 </tr>
 </table>
 
@@ -1439,18 +1451,6 @@ SSIM 0.6955
 <tr>
 <td><img src="mock-v2/captures/states/dark/balance-sheet.detailed.webp" width="480" alt="mock dark balance-sheet.detailed"></td>
 <td><img src="app-captures/dark/balance-sheet.detailed.webp" width="480" alt="app dark balance-sheet.detailed"></td>
-</tr>
-</table>
-
-## hc / payment.default
-
-SSIM 0.6961
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/hc/payment.default.webp" width="480" alt="mock hc payment.default"></td>
-<td><img src="app-captures/hc/payment.default.webp" width="480" alt="app hc payment.default"></td>
 </tr>
 </table>
 
@@ -1636,7 +1636,7 @@ SSIM 0.7284
 
 ## light / payment.overdraft
 
-SSIM 0.7310
+SSIM 0.7291
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1648,7 +1648,7 @@ SSIM 0.7310
 
 ## dark / payment.overdraft
 
-SSIM 0.7321
+SSIM 0.7301
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1684,13 +1684,25 @@ SSIM 0.7325
 
 ## light / receipt.default
 
-SSIM 0.7344
+SSIM 0.7342
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
 <tr>
 <td><img src="mock-v2/captures/states/light/receipt.default.webp" width="480" alt="mock light receipt.default"></td>
 <td><img src="app-captures/light/receipt.default.webp" width="480" alt="app light receipt.default"></td>
+</tr>
+</table>
+
+## light / payment.bill-wise
+
+SSIM 0.7361
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/payment.bill-wise.webp" width="480" alt="mock light payment.bill-wise"></td>
+<td><img src="app-captures/light/payment.bill-wise.webp" width="480" alt="app light payment.bill-wise"></td>
 </tr>
 </table>
 
@@ -1703,18 +1715,6 @@ SSIM 0.7362
 <tr>
 <td><img src="mock-v2/captures/states/dark/balance-sheet.ledger.webp" width="480" alt="mock dark balance-sheet.ledger"></td>
 <td><img src="app-captures/dark/balance-sheet.ledger.webp" width="480" alt="app dark balance-sheet.ledger"></td>
-</tr>
-</table>
-
-## light / payment.bill-wise
-
-SSIM 0.7363
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/light/payment.bill-wise.webp" width="480" alt="mock light payment.bill-wise"></td>
-<td><img src="app-captures/light/payment.bill-wise.webp" width="480" alt="app light payment.bill-wise"></td>
 </tr>
 </table>
 
@@ -1780,7 +1780,7 @@ SSIM 0.7383
 
 ## dark / receipt.default
 
-SSIM 0.7406
+SSIM 0.7404
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1792,7 +1792,7 @@ SSIM 0.7406
 
 ## dark / payment.bill-wise
 
-SSIM 0.7428
+SSIM 0.7426
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1850,6 +1850,30 @@ SSIM 0.7562
 </tr>
 </table>
 
+## light / payment.default
+
+SSIM 0.7574
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/payment.default.webp" width="480" alt="mock light payment.default"></td>
+<td><img src="app-captures/light/payment.default.webp" width="480" alt="app light payment.default"></td>
+</tr>
+</table>
+
+## dark / payment.default
+
+SSIM 0.7588
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/dark/payment.default.webp" width="480" alt="mock dark payment.default"></td>
+<td><img src="app-captures/dark/payment.default.webp" width="480" alt="app dark payment.default"></td>
+</tr>
+</table>
+
 ## hc / home.empty
 
 SSIM 0.7590
@@ -1859,18 +1883,6 @@ SSIM 0.7590
 <tr>
 <td><img src="mock-v2/captures/states/hc/home.empty.webp" width="480" alt="mock hc home.empty"></td>
 <td><img src="app-captures/hc/home.empty.webp" width="480" alt="app hc home.empty"></td>
-</tr>
-</table>
-
-## light / payment.default
-
-SSIM 0.7591
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/light/payment.default.webp" width="480" alt="mock light payment.default"></td>
-<td><img src="app-captures/light/payment.default.webp" width="480" alt="app light payment.default"></td>
 </tr>
 </table>
 
@@ -1895,18 +1907,6 @@ SSIM 0.7601
 <tr>
 <td><img src="mock-v2/captures/states/hc/balance-sheet.loading.webp" width="480" alt="mock hc balance-sheet.loading"></td>
 <td><img src="app-captures/hc/balance-sheet.loading.webp" width="480" alt="app hc balance-sheet.loading"></td>
-</tr>
-</table>
-
-## dark / payment.default
-
-SSIM 0.7605
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/dark/payment.default.webp" width="480" alt="mock dark payment.default"></td>
-<td><img src="app-captures/dark/payment.default.webp" width="480" alt="app dark payment.default"></td>
 </tr>
 </table>
 

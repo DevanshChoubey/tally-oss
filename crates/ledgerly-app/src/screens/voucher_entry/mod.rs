@@ -48,8 +48,8 @@ pub use amount::{AmountError, eval_amount};
 pub(crate) use create::{FormAnswer, check_new_ledger, create_form_ui};
 pub use date::{EntryDateError, format_entry_date, parse_entry_date};
 pub use draft::{
-    Balance, BillDraft, DraftError, DraftRow, LedgerRef, UNASSIGNED_VOUCHER_ID, VoucherDraft,
-    mode_label, parse_mode,
+    Balance, BillDraft, DraftError, DraftRow, LedgerRef, MODES, UNASSIGNED_VOUCHER_ID,
+    VoucherDraft, mode_label, parse_mode,
 };
 pub use kind::EntryKind;
 pub(crate) use post::{created_ledger, new_ledger};
