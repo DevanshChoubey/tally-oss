@@ -10,10 +10,17 @@
 //!   GSTR-3B. A GSTR-1 table this screen does not draw is named in [`Figures::notes`], never
 //!   dropped silently (rule A9 in spirit: nothing disappears without a word).
 
-use ledgerly_api::{Api, Bucket as ApiBucket, BucketedVoucher, Gstr1Return, Gstr3bWorking};
-use ledgerly_core::{Gstin, Outcome, Paise, Period, Unsupported};
+use std::collections::VecDeque;
 
-use super::{Bucket, ExceptionItem, Feed, GstScreen, GstTab, date_cell};
+use ledgerly_api::{
+    Api, Bucket as ApiBucket, BucketedVoucher, Gstr1Return, Gstr2bReconciliation, Gstr3bWorking,
+    MatchLevel, ReconState,
+};
+use ledgerly_core::{Date, Gstin, Outcome, Paise, Period, Unsupported};
+
+use super::{
+    Bucket, ExceptionItem, Feed, GstScreen, GstTab, ImsAction, MatchState, ReconRow, date_cell,
+};
 use crate::screens::wire::{Done, Latest, unsupported_text};
 use crate::worker::ApiWorker;
 
@@ -40,6 +47,26 @@ pub struct Figures {
 struct GstAnswer {
     gstr1: Result<Outcome<Gstr1Return>, String>,
     gstr3b: Result<Outcome<Gstr3bWorking>, String>,
+    recon: Result<Outcome<Gstr2bReconciliation>, String>,
+}
+
+/// A change to the company file the screen asks the worker for, one at a time.
+#[derive(Debug)]
+enum Op {
+    /// IMS actions the user chose, in the order chosen.
+    Actions(Vec<(Gstin, String, ImsAction)>),
+    /// A 2B file the user picked: its name and text.
+    Import(String, String),
+    /// Mark GSTR-3B for the period filed on this day.
+    MarkFiled(Date),
+}
+
+/// What an [`Op`] came to.
+#[derive(Debug)]
+enum OpDone {
+    Actions(Vec<String>),
+    Import(Result<Outcome<usize>, String>, String),
+    MarkFiled(Result<Outcome<()>, String>),
 }
 
 /// The load a worker-mode screen has asked for and the call that is running.
@@ -56,16 +83,37 @@ pub(super) struct GstRun {
     export: Latest<Result<Outcome<String>, String>>,
     /// The file name the JSON is saved under, fixed when the call starts.
     export_name: String,
+    /// Actions chosen and not yet handed to the worker.
+    actions: Vec<(Gstin, String, ImsAction)>,
+    /// Changes waiting for the worker, oldest first.
+    queue: VecDeque<Op>,
+    /// The change running on the worker.
+    op: Latest<OpDone>,
 }
 
 fn fetch(api: &Api, gstin: &Gstin, period: Period) -> GstAnswer {
     GstAnswer {
         gstr1: api.gstr1(gstin, period).map_err(|e| e.to_string()),
         gstr3b: api.gstr3b(gstin, period).map_err(|e| e.to_string()),
+        recon: api
+            .gstr2b_reconciliation(gstin, period)
+            .map_err(|e| e.to_string()),
     }
 }
 
 impl GstRun {
+    /// `true` once a return was asked for, so changes can be kept in the company file.
+    pub(super) fn has_scope(&self) -> bool {
+        self.scope.is_some()
+    }
+
+    /// Notes an IMS action to be kept in the company file.
+    pub(super) fn queue_action(&mut self, supplier: Gstin, number: String, action: ImsAction) {
+        if self.scope.is_some() {
+            self.actions.push((supplier, number, action));
+        }
+    }
+
     /// The period last asked for.
     pub(super) fn requested_period(&self) -> Option<Period> {
         self.scope.as_ref().map(|(_, period)| *period)
@@ -125,6 +173,13 @@ impl GstScreen {
         self.run.want.is_some() || self.run.latest.is_pending()
     }
 
+    /// `true` while a change (an IMS action, an import, a filing mark) waits for the worker or
+    /// runs on it.
+    #[must_use]
+    pub fn has_pending_changes(&self) -> bool {
+        !self.run.actions.is_empty() || !self.run.queue.is_empty() || self.run.op.is_pending()
+    }
+
     /// Why the last load failed (an error, not an unsupported return), when it did.
     #[must_use]
     pub fn load_error(&self) -> Option<&str> {
@@ -157,6 +212,134 @@ impl GstScreen {
         }
     }
 
+    /// Asks the user for a 2B file (Ctrl+O, or the button) and queues it for import. A cancelled
+    /// dialog does nothing. The file is read here; the engine reads and checks it on the worker.
+    pub(super) fn request_import(&mut self) {
+        if self.run.scope.is_none() {
+            self.notice = Some("No company is open, so no 2B file can be imported.".to_owned());
+            return;
+        }
+        if let Some(filed) = self.filed_on {
+            self.notice = Some(format!(
+                "GSTR-3B for this period was filed on {}; its 2B file is final.",
+                date_cell(Some(filed))
+            ));
+            return;
+        }
+        let Some(path) = crate::ui::dialogs::open_file("Import 2B JSON", &[("GSTR-2B", &["json"])])
+        else {
+            return;
+        };
+        let name = path.file_name().map_or_else(
+            || "2B file".to_owned(),
+            |n| n.to_string_lossy().into_owned(),
+        );
+        match std::fs::read_to_string(&path) {
+            Ok(text) => self.run.queue.push_back(Op::Import(name, text)),
+            Err(e) => self.notice = Some(format!("The file could not be read: {e}.")),
+        }
+    }
+
+    /// Marks GSTR-3B for the period filed today. Final: the period's actions lock.
+    pub(super) fn request_mark_filed(&mut self) {
+        if self.run.scope.is_none() {
+            self.notice = Some("No company is open, so nothing can be marked filed.".to_owned());
+            return;
+        }
+        self.run
+            .queue
+            .push_back(Op::MarkFiled(crate::shell::navigate::today()));
+    }
+
+    /// Shows a finished change and starts the next one waiting.
+    fn tick_ops(&mut self, worker: Option<&ApiWorker>) {
+        match self.run.op.poll() {
+            Some(Done::Ready(done)) => self.apply_done(done),
+            Some(Done::Lost) => {
+                self.notice =
+                    Some("The background worker stopped before the change was saved.".to_owned());
+            }
+            None => {}
+        }
+        if !self.run.actions.is_empty() {
+            let actions = std::mem::take(&mut self.run.actions);
+            self.run.queue.push_back(Op::Actions(actions));
+        }
+        if self.run.op.is_pending() {
+            return;
+        }
+        let Some(op) = self.run.queue.pop_front() else {
+            return;
+        };
+        let (Some(handle), Some((gstin, period))) = (worker, self.run.scope.clone()) else {
+            self.notice = Some("No company is open, so nothing was saved.".to_owned());
+            return;
+        };
+        self.run.op.start(handle, move |api| match op {
+            Op::Actions(list) => OpDone::Actions(
+                list.into_iter()
+                    .filter_map(|(supplier, number, action)| {
+                        api.set_ims_action(
+                            &gstin,
+                            period,
+                            supplier.as_str(),
+                            &number,
+                            to_engine(action),
+                        )
+                        .err()
+                        .map(|e| format!("{number}: {e}"))
+                    })
+                    .collect(),
+            ),
+            Op::Import(name, text) => OpDone::Import(
+                api.import_gstr2b(&gstin, period, &name, &text)
+                    .map_err(|e| e.to_string()),
+                name,
+            ),
+            Op::MarkFiled(day) => OpDone::MarkFiled(
+                api.mark_gstr3b_filed(&gstin, period, day)
+                    .map_err(|e| e.to_string()),
+            ),
+        });
+    }
+
+    fn apply_done(&mut self, done: OpDone) {
+        let Some((gstin, period)) = self.run.scope.clone() else {
+            return;
+        };
+        match done {
+            OpDone::Actions(failed) => {
+                if !failed.is_empty() {
+                    self.notice = Some(format!(
+                        "An IMS action was not saved: {}.",
+                        failed.join("; ")
+                    ));
+                    self.request_load(gstin, period);
+                }
+            }
+            OpDone::Import(Ok(Outcome::Value(count)), name) => {
+                self.import_error = None;
+                self.notice = Some(format!(
+                    "Imported {name}: {count} document(s). Nothing was sent anywhere."
+                ));
+                self.request_load(gstin, period);
+            }
+            OpDone::Import(Ok(Outcome::Unsupported(u)), _) => {
+                self.import_error = Some(unsupported_text(&u));
+            }
+            OpDone::Import(Err(message), _) => self.import_error = Some(message),
+            OpDone::MarkFiled(Ok(Outcome::Value(()))) => {
+                self.notice =
+                    Some("GSTR-3B marked filed. This period's IMS actions are final.".to_owned());
+                self.request_load(gstin, period);
+            }
+            OpDone::MarkFiled(Ok(Outcome::Unsupported(u))) => {
+                self.notice = Some(unsupported_text(&u))
+            }
+            OpDone::MarkFiled(Err(message)) => self.notice = Some(message),
+        }
+    }
+
     /// Advances the load by one step: shows a finished answer, then sends a waiting request to
     /// `worker`. With no worker the request is dropped and the screen says no company is open.
     pub fn tick(&mut self, worker: Option<&ApiWorker>) {
@@ -169,6 +352,7 @@ impl GstScreen {
             None => {}
         }
         self.tick_export(worker);
+        self.tick_ops(worker);
         let Some((gstin, period)) = self.run.want.take() else {
             return;
         };
@@ -261,6 +445,7 @@ impl GstScreen {
                 self.run.error = Some(format!("GSTR-1: {message}"));
             }
         }
+        self.apply_recon(answer.recon);
         match answer.gstr3b {
             Ok(Outcome::Value(working)) => {
                 self.set_gstr3b(Feed::Loaded(Vec::new()));
@@ -279,6 +464,88 @@ impl GstScreen {
                 self.run.error = Some(format!("GSTR-3B: {message}"));
             }
         }
+    }
+}
+
+impl GstScreen {
+    /// Shows the reconciliation the engine returned: its rows, the file and the filing day.
+    fn apply_recon(&mut self, recon: Result<Outcome<Gstr2bReconciliation>, String>) {
+        match recon {
+            Ok(Outcome::Value(rec)) => {
+                self.recon_file = rec.file_name.clone();
+                self.filed_on = rec.filed_on;
+                let rows: Result<Vec<ReconRow>, String> = rec.rows.iter().map(recon_row).collect();
+                match rows {
+                    Ok(rows) => self.set_recon(Feed::Loaded(rows)),
+                    Err(message) => self.set_recon(failed("The 2B reconciliation", &message)),
+                }
+            }
+            Ok(Outcome::Unsupported(u)) => self.set_recon(Feed::Unsupported(u)),
+            Err(message) => self.set_recon(failed("The 2B reconciliation", &message)),
+        }
+    }
+}
+
+/// The screen's row for one reconciliation row the engine returned. Nothing is computed here.
+fn recon_row(r: &ledgerly_api::Gstr2bRow) -> Result<ReconRow, String> {
+    let gstin = Gstin::parse(&r.supplier_gstin).map_err(|e| {
+        format!(
+            "the 2B file names the supplier GSTIN {} of document {}, which is not a valid GSTIN ({e})",
+            r.supplier_gstin, r.doc_number
+        )
+    })?;
+    let (state, bucket, level) = match r.state {
+        ReconState::Matched => (
+            MatchState::Matched,
+            Bucket::Ready,
+            Some(match r.level {
+                MatchLevel::Exact => "Exact",
+                MatchLevel::Normalised => "Normalised",
+                MatchLevel::Tolerance => "Tolerance",
+                MatchLevel::Unmatched => "Rule",
+            }),
+        ),
+        ReconState::ValueDiffers => (MatchState::ValueDiffers, Bucket::Mismatch, Some("Rule")),
+        ReconState::DateDiffers => (MatchState::DateDiffers, Bucket::Mismatch, Some("Rule")),
+        ReconState::NotInBooks => (MatchState::NotInBooks, Bucket::NeedsCorrection, None),
+        ReconState::PossibleDuplicate => (MatchState::PossibleDuplicate, Bucket::Mismatch, None),
+        ReconState::NotComparable => (MatchState::NotComparable, Bucket::Mismatch, Some("Rule")),
+    };
+    Ok(ReconRow {
+        supplier: r.supplier_name.clone(),
+        gstin,
+        invoice_no: r.doc_number.clone(),
+        books_date: r.books.map(|b| b.date),
+        portal_date: Some(r.portal.date),
+        taxable_books: r.books.and_then(|b| b.taxable),
+        taxable_2b: r.portal.taxable,
+        tax_books: r.books.and_then(|b| b.tax),
+        tax_2b: r.portal.tax,
+        difference: r.difference,
+        state,
+        bucket,
+        suggested: from_engine(r.suggested),
+        voucher: r.voucher,
+        total_books: r.books.and_then(|b| b.total),
+        total_2b: r.portal.total,
+        stored_action: r.action.map(from_engine),
+        level,
+    })
+}
+
+fn to_engine(action: ImsAction) -> ledgerly_api::ImsAction {
+    match action {
+        ImsAction::Accept => ledgerly_api::ImsAction::Accept,
+        ImsAction::Reject => ledgerly_api::ImsAction::Reject,
+        ImsAction::Pending => ledgerly_api::ImsAction::Pending,
+    }
+}
+
+fn from_engine(action: ledgerly_api::ImsAction) -> ImsAction {
+    match action {
+        ledgerly_api::ImsAction::Accept => ImsAction::Accept,
+        ledgerly_api::ImsAction::Reject => ImsAction::Reject,
+        ledgerly_api::ImsAction::Pending => ImsAction::Pending,
     }
 }
 

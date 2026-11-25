@@ -53,6 +53,10 @@ fn row(
         bucket,
         suggested,
         voucher: voucher.map(VoucherId),
+        total_books: Some(Paise::new(146_320_000)),
+        total_2b: Some(Paise::new(146_320_000)),
+        stored_action: None,
+        level: None,
     }
 }
 
