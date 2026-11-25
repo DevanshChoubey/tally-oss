@@ -49,8 +49,12 @@ const WELCOME_NOTE: &str =
     "Totals stay hidden until there is data. Ledgerly never shows a zero it did not compute.";
 /// Relative widths of the bars in a skeleton KPI card.
 const KPI_BAR_WIDTHS: [f32; 3] = [0.5, 0.8, 0.4];
-/// Relative widths of the bars in a skeleton panel; the first `rows` are used.
-const PANEL_BAR_WIDTHS: [f32; 6] = [0.9, 0.7, 0.85, 0.6, 0.75, 0.5];
+/// Relative widths of the bars in the left skeleton panel (index.html:1045).
+const LEFT_PANEL_BAR_WIDTHS: [f32; 6] = [0.9, 0.7, 0.85, 0.6, 0.75, 0.5];
+/// Relative widths of the bars in the right skeleton panel (index.html:1045).
+const RIGHT_PANEL_BAR_WIDTHS: [f32; 5] = [0.8, 0.6, 0.9, 0.7, 0.5];
+/// The margin above, between and below the skeleton bars (`.skel{margin:12px 0}`).
+const SKELETON_GAP: f32 = 12.0;
 
 /// Draws the page head: the title, the company line and, when there are figures, the two
 /// actions. The loading and new-company bodies show no actions. `new_line` is the line under
@@ -302,9 +306,11 @@ pub(super) fn skeleton(ui: &mut Ui) {
         &mut |col: &mut Ui, _index: usize, _item: &()| {
             card(col, |col| {
                 let width = col.available_width();
+                // `.skel{margin:12px 0}` in a padded card: 12 above, between and below the bars.
+                col.add_space(SKELETON_GAP);
                 for fraction in KPI_BAR_WIDTHS {
                     skeleton_bar(col, width * fraction);
-                    col.add_space(SPACE_2);
+                    col.add_space(SKELETON_GAP);
                 }
             });
         },
@@ -312,8 +318,8 @@ pub(super) fn skeleton(ui: &mut Ui) {
     ui.add_space(SPACE_3);
     split(
         ui,
-        |left| skeleton_panel(left, 6),
-        |right| skeleton_panel(right, 5),
+        |left| skeleton_panel(left, &LEFT_PANEL_BAR_WIDTHS),
+        |right| skeleton_panel(right, &RIGHT_PANEL_BAR_WIDTHS),
     );
 }
 
@@ -458,13 +464,15 @@ pub(super) fn ghost(ui: &mut Ui, label: &str, chevron: bool) -> egui::Response {
     response
 }
 
-/// The skeleton of one lower panel, with `rows` bars.
-fn skeleton_panel(ui: &mut Ui, rows: usize) {
+/// The skeleton of one lower panel: one bar for each of `widths`, as fractions of the card.
+fn skeleton_panel(ui: &mut Ui, widths: &[f32]) {
     card(ui, |ui| {
+        ui.set_min_width(ui.available_width());
         let width = ui.available_width();
-        for fraction in PANEL_BAR_WIDTHS.iter().take(rows) {
+        ui.add_space(SKELETON_GAP);
+        for fraction in widths {
             skeleton_bar(ui, width * fraction);
-            ui.add_space(SPACE_2);
+            ui.add_space(SKELETON_GAP);
         }
     });
 }

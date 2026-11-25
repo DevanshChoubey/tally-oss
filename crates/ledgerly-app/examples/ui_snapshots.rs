@@ -36,7 +36,7 @@ use egui::{Event, Key, Modifiers};
 use ledgerly_api::{Api, Command};
 use ledgerly_app::shell::{GatewayScreen, ScreenStack, Shell, submit};
 use ledgerly_app::theme::ThemeKind;
-use ledgerly_app::worker::ApiWorker;
+use ledgerly_app::worker::{ApiWorker, Hold};
 use ledgerly_core::{
     Clock, CompanyId, Date, Decimal, GroupId, Gstin, Hsn, LedgerId, Paise, Qty, Rate, SignedAmount,
     StateCode, StockItemId, UnitId, VoucherId, gstin_check_character,
@@ -309,6 +309,12 @@ enum Fixture {
     /// Capture-only: the sample's own books are untouched, and its company is made with the
     /// negative-stock policy Allow so the sale can post.
     GodavariShortStock,
+    /// The sample company with its API worker held ([`ApiWorker::hold`]): the books are given to
+    /// the shell up front, so the title bar and the side rail are as in any shot, and every
+    /// figure a screen asks the worker for stays "loading" for the whole shot. This is how
+    /// `home.loading` and `balance-sheet.loading` are photographed; the hold is dropped before the
+    /// next shot opens its company.
+    GodavariHeld,
     /// Fictional Traders ([`company_file`]): the shots whose key paths or typed names need its
     /// data, or that show a state the sample does not have.
     Main,
@@ -324,7 +330,7 @@ impl Fixture {
     /// for [`Fixture::Cold`], which opens nothing.
     fn open(self, dir: &Path) -> Option<Api> {
         match self {
-            Fixture::Godavari => Some(godavari_company_file(dir)),
+            Fixture::Godavari | Fixture::GodavariHeld => Some(godavari_company_file(dir)),
             Fixture::GodavariShortStock => Some(godavari_short_stock_file(dir)),
             Fixture::Main => Some(company_file(dir)),
             Fixture::New => Some(new_company_file(dir)),
@@ -333,16 +339,35 @@ impl Fixture {
     }
 
     /// The shell this fixture starts with and the stage the harness continues at: a company's
-    /// shell waits for its books ([`Stage::Warm`]); the cold start has none to wait for.
-    fn shell(self, dir: &Path) -> (Shell, Stage) {
+    /// shell waits for its books ([`Stage::Warm`]); the cold start has none to wait for. The
+    /// third value is the hold on the worker, for the fixture that keeps screens loading.
+    fn shell(self, dir: &Path) -> (Shell, Stage, Option<Hold>) {
         match self.open(dir) {
             Some(api) => {
+                let held_lock = api.lock_date();
+                let held_books = match self {
+                    Fixture::GodavariHeld => match api.books() {
+                        Ok(ledgerly_core::Outcome::Value(books)) => Some(books.clone()),
+                        other => panic!("no books to hand the shell: {other:?}"),
+                    },
+                    Fixture::Godavari
+                    | Fixture::GodavariShortStock
+                    | Fixture::Main
+                    | Fixture::New
+                    | Fixture::Cold => None,
+                };
                 let mut shell = Shell::new(Box::new(GatewayScreen::new()));
-                shell.app_ctx_mut().api = Some(ApiWorker::spawn(api).unwrap());
+                let worker = ApiWorker::spawn(api).unwrap();
+                let hold = held_books.map(|books| {
+                    shell.app_ctx_mut().books = Some(books);
+                    shell.app_ctx_mut().lock_date = held_lock;
+                    worker.hold()
+                });
+                shell.app_ctx_mut().api = Some(worker);
                 submit::note_changed();
-                (shell, Stage::Warm)
+                (shell, Stage::Warm, hold)
             }
-            None => (Shell::cold_start(), Stage::Home),
+            None => (Shell::cold_start(), Stage::Home, None),
         }
     }
 }
@@ -626,9 +651,44 @@ enum Inject {
     /// count of key presses, so a change to the row order cannot move a capture to another row.
     /// Panics when the row is not reached.
     Seek(&'static str),
+    /// Writes a file and makes the next open-file dialog answer with it, since no native dialog
+    /// can be driven here ([`ledgerly_app::ui::dialogs::script_open_file`]). The key that opens the
+    /// dialog goes in after it.
+    ScriptFile(ScriptedFile),
     /// Panics unless the top screen is the expected one (see [`Expect`]). Every flow that drills
     /// or picks a row ends in one, so a capture of the wrong screen stops the run.
     Expect(Expect),
+}
+
+/// A file a flow hands to the next open-file dialog.
+#[derive(Clone, Copy)]
+enum ScriptedFile {
+    /// The sample's November statement with its printed closing balance 640.00 too high, so the
+    /// file does not add up (the mock's `bank.import-error`).
+    StatementThatDoesNotAdd,
+}
+
+impl ScriptedFile {
+    /// Writes the file under `dir` and returns its path.
+    fn write(self, dir: &Path) -> PathBuf {
+        let dir = dir.join("scripted-files");
+        std::fs::create_dir_all(&dir).unwrap();
+        match self {
+            ScriptedFile::StatementThatDoesNotAdd => {
+                let sample = include_str!("../../ledgerly-sample/assets/saptagiri-nov-2026.mt940");
+                // The file prints 8,23,305.50 and its lines add to exactly that; printing
+                // 8,23,945.50 makes the printed figure 640.00 more than the lines give.
+                let broken = sample.replace(":62F:C261120INR823305,50", ":62F:C261120INR823945,50");
+                assert_ne!(
+                    broken, sample,
+                    "the sample statement no longer prints that closing"
+                );
+                let path = dir.join("saptagiri-nov-2026-cut.mt940");
+                std::fs::write(&path, broken).unwrap();
+                path
+            }
+        }
+    }
 }
 
 /// What the screen a flow reached must be. The harness waits for it to settle, then panics with
@@ -704,6 +764,16 @@ impl Shot {
     }
 
     /// As [`Shot::expect`], also requiring the key bar name `key_bar`.
+    fn expect_bar(mut self, title: &'static str, key_bar: &'static str) -> Self {
+        self.after.push(Inject::Expect(Expect {
+            title,
+            key_bar: Some(key_bar),
+            cursor: None,
+        }));
+        self
+    }
+
+    /// As [`Shot::expect_bar`], also requiring the cursor row.
     fn expect_in(
         mut self,
         title: &'static str,
@@ -715,6 +785,12 @@ impl Shot {
             key_bar: Some(key_bar),
             cursor: Some(cursor),
         }));
+        self
+    }
+
+    /// The same shot with `file` handed to the next open-file dialog, after what came before it.
+    fn script_file(mut self, file: ScriptedFile) -> Self {
+        self.after.push(Inject::ScriptFile(file));
         self
     }
 
@@ -1138,6 +1214,18 @@ fn light_shots() -> Vec<Shot> {
         shot("bank.default", &[palette])
             .query("Bank Reconciliation")
             .then(&[(Key::Enter, NONE), (Key::Enter, NONE)]),
+        // Import statement (Ctrl+O) is handed a copy of the sample's statement whose printed
+        // closing balance is 640.00 too high: the engine refuses it and the screen shows why.
+        shot("bank.import-error", &[palette])
+            .query("Bank Reconciliation")
+            .then(&[(Key::Enter, NONE)])
+            .seek("Saptagiri Commercial Bank A/c")
+            .press(&[(Key::Enter, NONE)])
+            .expect("Bank reconciliation: Saptagiri Commercial Bank A/c", None)
+            .script_file(ScriptedFile::StatementThatDoesNotAdd)
+            .press(&[(Key::O, Modifiers::COMMAND)])
+            .wait(60)
+            .expect("Bank reconciliation: Saptagiri Commercial Bank A/c", None),
         shot("bank.brs", &[palette])
             .query("Bank Reconciliation")
             .then(&[(Key::Enter, NONE), (Key::Enter, NONE), (Key::B, NONE)]),
@@ -1202,6 +1290,14 @@ fn light_shots() -> Vec<Shot> {
             .click(930.0, 337.0),
         // A company with masters and no voucher: Home as it opens (index.html home.empty).
         shot("home.empty", &[]).on(Fixture::New),
+        // The worker is held, so the first refresh of the tiles never answers: the skeleton.
+        shot("home.loading", &[])
+            .on(Fixture::GodavariHeld)
+            .expect("Home", None),
+        // The report's request waits behind the hold: the computing card.
+        shot("balance-sheet.loading", &[(Key::B, NONE)])
+            .on(Fixture::GodavariHeld)
+            .expect_bar("Balance sheet", "Computing"),
         // Godavari with a late sale that takes the pickaxe 30 nos below zero, so closing stock is
         // provisional (the mock's `pick: -30`).
         shot("balance-sheet.provisional", &[(Key::B, NONE)]).on(Fixture::GodavariShortStock),
@@ -1329,6 +1425,9 @@ enum Stage {
 }
 
 struct Snapshots {
+    /// The hold on the worker of a [`Fixture::GodavariHeld`] shot. Declared first so that it is
+    /// dropped before the shell it belongs to, or the worker thread would never end.
+    held: Option<Hold>,
     shell: Shell,
     out: PathBuf,
     shots: Vec<Shot>,
@@ -1424,8 +1523,11 @@ impl Snapshots {
             m.reset_areas();
             m.stop_text_input();
         });
-        let (shell, stage) = company.shell(&self.out);
+        // The hold goes first: the old shell's worker thread ends only once it is released.
+        self.held = None;
+        let (shell, stage, held) = company.shell(&self.out);
         self.shell = shell;
+        self.held = held;
         self.company = company;
         // The setup wizard never overwrites a company file; a shot that created one leaves none.
         let _removed = std::fs::remove_file(SETUP_FILE);
@@ -1491,7 +1593,7 @@ impl eframe::App for Snapshots {
                 Inject::Scroll(..) => SCROLL_SETTLE_FRAMES,
                 Inject::Wait(frames) => frames,
                 Inject::Seek(_) | Inject::Expect(_) => 0,
-                Inject::Key(..) | Inject::Text(_) | Inject::Click(..) => 6,
+                Inject::Key(..) | Inject::Text(_) | Inject::Click(..) | Inject::ScriptFile(_) => 6,
             };
             match item {
                 Inject::Key(key, modifiers) => {
@@ -1507,6 +1609,9 @@ impl eframe::App for Snapshots {
                 }
                 Inject::Text(text) => raw_input.events.push(Event::Text(text.to_owned())),
                 Inject::Wait(_) | Inject::Seek(_) | Inject::Expect(_) => {}
+                Inject::ScriptFile(file) => {
+                    ledgerly_app::ui::dialogs::script_open_file(file.write(&self.out));
+                }
                 Inject::Scroll(x, y, wheel) => {
                     raw_input.events.push(Event::PointerMoved(egui::pos2(x, y)));
                     raw_input.events.push(Event::MouseWheel {
@@ -1676,7 +1781,7 @@ fn main() -> eframe::Result<()> {
     assert!(!entries.is_empty(), "no entry matches --only {only:?}");
     std::fs::create_dir_all(&out).unwrap();
     let company = entries[0].company;
-    let (shell, stage) = company.shell(&out);
+    let (shell, stage, held) = company.shell(&out);
     let app = Snapshots {
         shell,
         out,
@@ -1690,6 +1795,7 @@ fn main() -> eframe::Result<()> {
         company,
         reach_frames: 0,
         seek_presses: 0,
+        held,
     };
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
