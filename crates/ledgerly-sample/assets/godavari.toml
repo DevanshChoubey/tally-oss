@@ -553,6 +553,57 @@ cr = [{ ledger = "saptagiri", amount = "1973016.00", cleared_days = 2 }]
 
 [[voucher]]
 section = "history"
+kind = "purchase"
+mode = "taxed"
+date = "2026-10-14"
+number = "PB/0124"
+reference = "KP/2205"
+party = "kaveri"
+narration = "Cartons, bill KP/2205, paid in October"
+dr = [{ ledger = "purch", amount = "40000.00" }]
+cr = []
+
+[[voucher]]
+section = "history"
+kind = "purchase"
+mode = "taxed"
+date = "2026-10-22"
+number = "PB/0126"
+reference = "VL/858"
+party = "vardhaman"
+narration = "Packing and carriage, bill VL/858, paid in October"
+dr = [{ ledger = "purch", amount = "12000.00" }]
+cr = []
+
+[[voucher]]
+section = "history"
+kind = "payment"
+date = "2026-10-18"
+number = "PY/0302"
+narration = "Kaveri Packaging, bill KP/2205 paid in full"
+dr = [{ ledger = "kaveri", amount = "47200.00", against = "KP/2205" }]
+cr = [{ ledger = "saptagiri", amount = "47200.00", cleared_days = 2 }]
+
+[[voucher]]
+section = "history"
+kind = "payment"
+date = "2026-10-26"
+number = "PY/0303"
+narration = "Vardhaman Logistics, bill VL/858 paid in full"
+dr = [{ ledger = "vardhaman", amount = "14160.00", against = "VL/858" }]
+cr = [{ ledger = "saptagiri", amount = "14160.00", cleared_days = 2 }]
+
+[[voucher]]
+section = "history"
+kind = "journal"
+date = "2026-10-31"
+number = "JV/0029"
+narration = "October bills KP/2205 and VL/858 were inside the April to October summary (PY/0305), whose purchases carried their tax; moves the tax to the GST ledgers (invented history)"
+dr = [{ ledger = "purch", amount = "9360.00" }]
+cr = [{ ledger = "igst", amount = "7200.00" }, { ledger = "cgst", amount = "1080.00" }, { ledger = "sgst", amount = "1080.00" }]
+
+[[voucher]]
+section = "history"
 kind = "payment"
 date = "2026-10-28"
 number = "PY/0304"
@@ -566,8 +617,8 @@ kind = "payment"
 date = "2026-10-31"
 number = "PY/0305"
 narration = "April to October running costs, summary (invented history)"
-dr = [{ ledger = "purch", amount = "3016698.00" }, { ledger = "freight", amount = "34000.00" }, { ledger = "salaries", amount = "1410000.00" }, { ledger = "rent", amount = "175000.00" }, { ledger = "elec", amount = "81540.00" }, { ledger = "bankch", amount = "6820.00" }, { ledger = "welfare", amount = "38600.00" }, { ledger = "interest", amount = "61250.00" }]
-cr = [{ ledger = "saptagiri", amount = "4805508.00", cleared_days = 2 }, { ledger = "disc", amount = "18400.00" }]
+dr = [{ ledger = "purch", amount = "2955338.00" }, { ledger = "freight", amount = "34000.00" }, { ledger = "salaries", amount = "1410000.00" }, { ledger = "rent", amount = "175000.00" }, { ledger = "elec", amount = "81540.00" }, { ledger = "bankch", amount = "6820.00" }, { ledger = "welfare", amount = "38600.00" }, { ledger = "interest", amount = "61250.00" }]
+cr = [{ ledger = "saptagiri", amount = "4744148.00", cleared_days = 2 }, { ledger = "disc", amount = "18400.00" }]
 
 [[voucher]]
 section = "history"
