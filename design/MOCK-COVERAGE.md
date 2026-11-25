@@ -47,12 +47,12 @@ state and the mock does not; the reason is in the last column.
 | Contra, default | contra.default | CT/0022, 30,000.00 cash to bank |
 | Contra, validation errors | contra.validation-error | No account picked, zero amount (app wording) |
 | Bank account chooser | bank-chooser.default | Two accounts, balances from the engine |
-| Start screen with recent companies (cold.start-open-selected) | start.recent | |
-| Profit and loss, default | profit-and-loss.default | Net profit equals balance sheet profit to date |
+| Start screen with recent companies (cold.start-open-selected) | start.recent | Not built (no recent-companies store); PARITY-GAPS, Reports |
+| Profit and loss, default | profit-and-loss.default | Shows the engine's refusal for the sample (opening balance on an expense ledger); PARITY-GAPS |
 | Profit and loss, provisional stock | profit-and-loss.provisional | Steel pickaxe -30 nos |
-| Print preview (Ctrl+P) | profit-and-loss.print-preview | Save as PDF only; paper printing is not built |
-| PDF saved | profit-and-loss.print-saved | |
-| PDF not saved (file open elsewhere) | profit-and-loss.print-failed | |
+| Print preview (Ctrl+P) | profit-and-loss.print-preview | Not captured: no in-app preview, and the sample's profit and loss is refused |
+| PDF saved | profit-and-loss.print-saved | Not captured, as above |
+| PDF not saved (file open elsewhere) | profit-and-loss.print-failed | Not captured, as above |
 | Trial balance | trial-balance.default | |
 | Outstanding receivables | outstanding.receivables | Due from credit days; overdue from the engine |
 | Outstanding payables | outstanding.payables | |
@@ -60,7 +60,7 @@ state and the mock does not; the reason is in the last column.
 | Stock summary, provisional item | stock-summary.provisional | |
 | Audit, edit log | audit.default | |
 | Audit, integrity certificate | audit.integrity | |
-| Audit, edits after lock (Unsupported) | audit.unsupported | The app maps this report to None |
+| Audit, edits after lock (Unsupported) | audit.unsupported | Not captured: the engine returns a table for this report, the mock says Unsupported; PARITY-GAPS |
 
 ## Added in S12b (30 states)
 

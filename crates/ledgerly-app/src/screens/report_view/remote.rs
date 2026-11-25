@@ -8,11 +8,11 @@
 use ledgerly_api::{
     Api, Cell, Detail, DrillKey, Report, ReportKind, ReportParams, ReportRow, RowKind,
 };
-use ledgerly_core::{Date, Outcome};
+use ledgerly_core::{Date, Outcome, StockItemId};
 
 use super::{
     Notice, ReportToken, ViewCell, ViewDetail, ViewError, ViewKey, ViewParams, ViewReport, ViewRow,
-    ViewRowKind,
+    ViewRowKind, mock,
 };
 use crate::screens::wire::unsupported_message;
 
@@ -107,6 +107,74 @@ pub(super) fn run_report(
             }
             Ok(Outcome::Value(view))
         }
+    }
+}
+
+/// The lines the mock draws for the trial balance, the outstanding bills and the stock summary,
+/// made from what the engine returned (see `mock.rs`); `None` for any other report, or when the
+/// engine's detailed report cannot be had. The screen keeps the engine's own report as it is and
+/// draws these lines.
+pub(super) fn mock_lines(
+    api: &Api,
+    params: &ReportParams,
+    view: &ViewReport,
+) -> Option<ViewReport> {
+    match &params.kind {
+        ReportKind::TrialBalance | ReportKind::Outstanding { .. } => {
+            // The mock lists ledgers and bills, which only the detailed report holds.
+            let detailed = if view.params.detail == ViewDetail::Detailed {
+                view.clone()
+            } else {
+                let asked = ReportParams {
+                    detail: Detail::Detailed,
+                    ..params.clone()
+                };
+                match api.report(&asked) {
+                    Ok(Outcome::Value(report)) => view_report(&report),
+                    Ok(Outcome::Unsupported(_)) | Err(_) => return None,
+                }
+            };
+            Some(match &params.kind {
+                ReportKind::Outstanding { receivable } => mock::outstanding(detailed, *receivable),
+                ReportKind::TrialBalance
+                | ReportKind::BalanceSheet
+                | ReportKind::ProfitAndLoss
+                | ReportKind::GroupSummary(_)
+                | ReportKind::GroupLedgers(_)
+                | ReportKind::LedgerVouchers(_)
+                | ReportKind::DayBook
+                | ReportKind::Register(_)
+                | ReportKind::StockSummary
+                | ReportKind::Audit(_) => mock::trial_balance(detailed),
+            })
+        }
+        ReportKind::StockSummary => {
+            let books = match api.books() {
+                Ok(Outcome::Value(books)) => Some(books),
+                Ok(Outcome::Unsupported(_)) | Err(_) => None,
+            };
+            let facts = |id: StockItemId| {
+                let books = books.as_ref()?;
+                let item = books.masters.stock_items.get(&id)?;
+                let unit = books.masters.units.get(&item.unit)?;
+                Some(mock::ItemFacts {
+                    hsn: item
+                        .hsn
+                        .as_ref()
+                        .map_or_else(|| "none".to_owned(), |h| h.as_str().to_owned()),
+                    unit: unit.symbol.clone(),
+                })
+            };
+            Some(mock::stock_summary(view.clone(), &facts))
+        }
+        ReportKind::BalanceSheet
+        | ReportKind::ProfitAndLoss
+        | ReportKind::GroupSummary(_)
+        | ReportKind::GroupLedgers(_)
+        | ReportKind::LedgerVouchers(_)
+        | ReportKind::DayBook
+        | ReportKind::Register(_)
+        | ReportKind::Audit(_) => None,
     }
 }
 
