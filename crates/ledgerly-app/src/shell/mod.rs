@@ -624,10 +624,10 @@ impl Shell {
                 cmds.extend(chrome::tab_strip(ui, &self.tabs, t));
             }
             // The root screen has no breadcrumbs (`phead(null, ..)` on Home in the mock).
-            if trail.len() > 1 {
+            let top = self.tabs.active_stack_mut().and_then(ScreenStack::top_mut);
+            if trail.len() > 1 && top.as_ref().is_none_or(|s| s.shows_breadcrumbs()) {
                 cmds.extend(chrome::breadcrumbs(ui, trail, t));
             }
-            let top = self.tabs.active_stack_mut().and_then(ScreenStack::top_mut);
             if let Some(screen) = top {
                 screen_action = screen.ui(ui, &mut self.app_ctx);
             }

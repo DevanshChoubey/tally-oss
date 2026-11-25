@@ -569,6 +569,34 @@ impl MastersScreen {
         }
     }
 
+    /// Whether Save is blocked: the open ledger form's GSTIN is filled in and fails its check
+    /// (index.html `masters.gstin-error` disables Save while the GSTIN is wrong).
+    #[must_use]
+    pub fn save_is_blocked(&self) -> bool {
+        match self.draft() {
+            Some(MasterDraft::Ledger(d)) => d.party.as_ref().is_some_and(|p| {
+                matches!(view::check_gstin(&p.gstin), view::GstinCheck::Invalid(_))
+            }),
+            Some(
+                MasterDraft::Group(_)
+                | MasterDraft::Unit(_)
+                | MasterDraft::StockGroup(_)
+                | MasterDraft::StockItem(_)
+                | MasterDraft::Godown(_)
+                | MasterDraft::CostCategory(_)
+                | MasterDraft::CostCentre(_),
+            )
+            | None => false,
+        }
+    }
+
+    /// Whether the open form is a new stock item, which the mock draws as its own page
+    /// (index.html `masters.create-item`).
+    fn is_new_stock_item(&self) -> bool {
+        matches!(&self.mode, Mode::Form(f)
+            if f.editing.is_none() && matches!(f.draft, MasterDraft::StockItem(_)))
+    }
+
     /// The id of the master the open form alters; `None` for a create form or no form.
     #[must_use]
     pub fn editing(&self) -> Option<u64> {
@@ -1002,6 +1030,11 @@ const NOT_AVAILABLE: &str = "\u{2014}";
 /// The header tooltip of a column whose figures the engine does not supply to this screen yet.
 const NOT_AVAILABLE_HINT: &str = "Not available yet: the engine does not give this screen this figure. Nothing is estimated here.";
 /// What the form's foot says when it has a GSTIN field (index.html:1812).
+const UNIT_FOOT: &str = "A unit is needed before the item can be saved.";
+
+/// The subtitle of the new stock item page (index.html `masters.create-item`).
+const NEW_ITEM_SUBTITLE: &str = "Creating a stock item posts nothing. Esc goes back to the list.";
+
 const GSTIN_FOOT: &str =
     "The check character is verified on this computer. Ledgerly does not look the GSTIN up online.";
 /// What the open bills card says before the engine's answer.
@@ -1318,13 +1351,16 @@ impl MastersScreen {
                 | MasterDraft::StockGroup(_)
                 | MasterDraft::Godown(_)
                 | MasterDraft::CostCategory(_)
-                | MasterDraft::CostCentre(_)
-                | MasterDraft::StockItem(_) => None,
+                | MasterDraft::CostCentre(_) => None,
+                MasterDraft::StockItem(d) => d.unit.is_none().then_some(UNIT_FOOT),
             };
             // An altered ledger shows its closing balance as the engine gave it (index.html:1805).
             let balance = form_balance(form, &self.balances);
             let balance = balance.as_deref();
             let party_bills = &self.bills;
+            let blocked = matches!(&form.draft, MasterDraft::Ledger(d)
+                if d.party.as_ref().is_some_and(|p|
+                    matches!(view::check_gstin(&p.gstin), view::GstinCheck::Invalid(_))));
             let draft = &mut form.draft;
             // A form with every section on is taller than the window, so it scrolls and Save
             // stays in reach.
@@ -1336,7 +1372,15 @@ impl MastersScreen {
                         crate::screens::home::draw::split(
                             ui,
                             |ui| {
-                                clicks = sheet(ui, &books.masters, draft, editing, foot, balance);
+                                clicks = sheet(
+                                    ui,
+                                    &books.masters,
+                                    draft,
+                                    editing,
+                                    foot,
+                                    balance,
+                                    blocked,
+                                );
                             },
                             |ui| open_bills_card(ui, party_bills),
                         );
@@ -1347,7 +1391,15 @@ impl MastersScreen {
                             Layout::top_down(Align::Min),
                             |ui| {
                                 ui.set_width(width);
-                                clicks = sheet(ui, &books.masters, draft, editing, foot, balance);
+                                clicks = sheet(
+                                    ui,
+                                    &books.masters,
+                                    draft,
+                                    editing,
+                                    foot,
+                                    balance,
+                                    blocked,
+                                );
                             },
                         );
                     }
@@ -1467,6 +1519,22 @@ impl MastersScreen {
         let mut keys = read_keys(ui, self.mode_tag(), self.kind);
         let create_label = format!("Create {}", self.kind.label());
         let mut create = false;
+        if self.is_new_stock_item() {
+            page_head(ui, "New stock item", Some(NEW_ITEM_SUBTITLE), |_| {});
+            ui.add_space(TABS_GAP);
+            self.draw_notice(ui);
+            self.draw_form_panel(ui, books);
+            for cmd in &keys {
+                let next = self.handle_key(books, cmd);
+                if matches!(action, ScreenAction::Stay) {
+                    action = next;
+                }
+            }
+            if !keys.is_empty() {
+                ui.ctx().request_repaint();
+            }
+            return action;
+        }
         page_head(ui, "Masters", Some(SUBTITLE), |ui| {
             create = button_icon(
                 ui,
@@ -1517,6 +1585,7 @@ fn sheet(
     editing: Option<u64>,
     foot: Option<&str>,
     balance: Option<&str>,
+    blocked: bool,
 ) -> FormClicks {
     let t = tokens(ui);
     let k = crate::ui::kind(ui);
@@ -1561,14 +1630,18 @@ fn sheet(
                             },
                         );
                         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                            clicks.save = button_icon(
-                                ui,
-                                Some(Icon::Save),
-                                "Save",
-                                Some("Ctrl+A"),
-                                ButtonKind::Primary,
-                            )
-                            .clicked();
+                            clicks.save = ui
+                                .add_enabled_ui(!blocked, |ui| {
+                                    button_icon(
+                                        ui,
+                                        Some(Icon::Save),
+                                        "Save",
+                                        Some("Ctrl+A"),
+                                        ButtonKind::Primary,
+                                    )
+                                    .clicked()
+                                })
+                                .inner;
                             clicks.cancel =
                                 button(ui, "Cancel", Some("Esc"), ButtonKind::Secondary).clicked();
                         });
@@ -1845,7 +1918,11 @@ impl Screen for MastersScreen {
     }
 
     fn page_title(&self) -> String {
-        "Masters".to_owned()
+        if self.is_new_stock_item() {
+            "New stock item".to_owned()
+        } else {
+            "Masters".to_owned()
+        }
     }
 
     fn subtitle(&self) -> Option<String> {

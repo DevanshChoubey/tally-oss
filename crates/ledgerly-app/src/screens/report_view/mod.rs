@@ -145,6 +145,8 @@ enum KeyCmd {
 struct TableEvents {
     clicked: Option<usize>,
     opened: Option<usize>,
+    /// The provisional banner's "Open stock items" button was clicked.
+    open_stock: bool,
 }
 
 /// The save dialog Export opens: given the suggested file name, the path chosen, or `None` when
@@ -1029,6 +1031,8 @@ impl ReportViewScreen {
             mock::Mock::Trial | mock::Mock::Stock | mock::Mock::ProfitLoss => Vec::new(),
         };
         let (mut export, mut print, mut goto, mut drill) = (false, false, false, false);
+        let mut detail = false;
+        let detail_switch = self.detail_switch();
         let mut clicked = None;
         let sub = subtitle.unwrap_or_default().to_owned();
         let t = crate::ui::tokens(ui);
@@ -1061,6 +1065,8 @@ impl ReportViewScreen {
                             .clicked();
                     }
                     mock::Mock::ProfitLoss => {
+                        // index.html:2234: Detailed (Alt+F1), Print preview, Export; the head
+                        // is laid out right to left, so Detailed is drawn last.
                         export = button_icon(
                             ui,
                             Some(Icon::Upload),
@@ -1077,6 +1083,8 @@ impl ReportViewScreen {
                             ButtonKind::Secondary,
                         )
                         .clicked();
+                        detail = button(ui, detail_switch, Some("Alt+F1"), ButtonKind::Secondary)
+                            .clicked();
                     }
                     mock::Mock::Outstanding { .. } | mock::Mock::Audit(_) => {}
                 }
@@ -1093,6 +1101,9 @@ impl ReportViewScreen {
         }
         if drill {
             self.drill_wanted = true;
+        }
+        if detail {
+            self.toggle_detail();
         }
         if let Some(i) = clicked {
             let kind = match m {
@@ -1191,6 +1202,9 @@ impl ReportViewScreen {
                 })
                 .inner;
             self.footer = Some(foot);
+            if events.open_stock {
+                self.open_stock_items();
+            }
             events
         } else {
             self.draw_plain(ui, look, selected, scroll)
@@ -1543,7 +1557,7 @@ impl Screen for ReportViewScreen {
                 // The period asked for, not the one the report carries: the audit reports carry
                 // the whole calendar.
                 let asked = self.worker.as_ref().map_or(period, |run| run.engine.period);
-                Some(m.subtitle(as_of, asked))
+                Some(m.subtitle(as_of, asked, self.report.params.detail))
             }
             Look::Generic if self.is_drill_level() => {
                 let as_of = self
@@ -1674,7 +1688,12 @@ impl Screen for ReportViewScreen {
 /// The amber note over a report with provisional figures: an alert icon, the lead sentence in bold
 /// and the rest (the mock's `.note.warn`).
 /// Returns whether its "Open stock items" button (drawn only with `with_button`) was clicked.
-fn draw_provisional_banner(ui: &mut Ui, lead: &str, rest: &str, with_button: bool) -> bool {
+pub(super) fn draw_provisional_banner(
+    ui: &mut Ui,
+    lead: &str,
+    rest: &str,
+    with_button: bool,
+) -> bool {
     let mut clicked = false;
     crate::ui::note::note_with_icon(ui, NoteKind::Warn, Icon::Alert, |ui, ink| {
         // One paragraph: the lead in bold, the rest after it on the same line (the mock's `<b>`).

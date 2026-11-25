@@ -28,7 +28,7 @@ use crate::theme::{RADIUS_M, RADIUS_S, TEXT_BODY, TEXT_INPUT, TEXT_META, border_
 use crate::ui::button::{ButtonKind, button};
 use crate::ui::icon::{self as icons, ICON_SIZE, Icon, icon};
 use crate::ui::note::{NoteKind, colors as note_colors};
-use crate::ui::{kind, para_text, tokens};
+use crate::ui::{bold_font, kind, tokens};
 use crate::{AppCtx, ScreenAction, worker::ApiWorker};
 
 /// The three assistant features of spec 6.8 that have a screen.
@@ -261,6 +261,17 @@ pub fn gate_note(ui: &mut Ui, feature: Feature, gate: &Gate) -> bool {
     settings_note(ui, kind_of, gate_icon(gate), &text, gate.offers_settings())
 }
 
+/// Splits a note's text into its bold lead and the rest (the mock bolds the first clause,
+/// index.html:1133, 1241): up to the first comma (the comma stays plain) or the first full stop
+/// (kept in the lead).
+fn lead_split(text: &str) -> (&str, &str) {
+    match text.find([',', '.']) {
+        Some(at) if text[at..].starts_with('.') => text.split_at(at + 1),
+        Some(at) => text.split_at(at),
+        None => (text, ""),
+    }
+}
+
 /// Draws a note across the width with `icon`, `text` and, when `offer` is set, the AI and privacy
 /// button after the text. Returns `true` in the frame the button is clicked. [`gate_note`] and
 /// the bank screen's AI-off note (index.html:1830) share it.
@@ -278,7 +289,16 @@ pub fn settings_note(ui: &mut Ui, kind_of: NoteKind, glyph: Icon, text: &str, of
             ui.horizontal_wrapped(|ui| {
                 icon(ui, glyph, fg);
                 ui.add_space(4.0);
-                ui.label(para_text(text, TEXT_META, fg));
+                // One label, so the text stays one run for a screen reader; the lead is bold.
+                let (lead, rest) = lead_split(text);
+                let mut job = egui::text::LayoutJob::default();
+                let bold = bold_font(ui, TEXT_META);
+                job.append(lead, 0.0, egui::TextFormat::simple(bold, fg));
+                if !rest.is_empty() {
+                    let plain = FontId::proportional(TEXT_META);
+                    job.append(rest, 0.0, egui::TextFormat::simple(plain, fg));
+                }
+                ui.label(job);
                 if offer {
                     clicked = button(ui, SETTINGS_BUTTON, None, ButtonKind::Secondary).clicked();
                 }
@@ -376,4 +396,28 @@ pub fn launch_tile(ui: &mut Ui, which: Icon, label: &str, width: f32, height: f3
     let text_at = rect.left_center() + vec2(2.0 * TILE_PAD_X + ICON_SIZE, -galley.size().y / 2.0);
     painter.galley(text_at, galley, t.text);
     response
+}
+
+#[cfg(test)]
+mod s14_tests {
+    use super::lead_split;
+
+    #[test]
+    fn the_first_clause_is_the_bold_lead() {
+        // provenance: index.html:1241 bolds "AI is off for this company" and leaves ", so
+        // questions cannot be turned into queries." plain; index.html:1133 bolds the whole first
+        // sentence "AI is off for this company." including its full stop.
+        assert_eq!(
+            lead_split("AI is off for this company, so questions cannot be turned into queries. x"),
+            (
+                "AI is off for this company",
+                ", so questions cannot be turned into queries. x"
+            )
+        );
+        assert_eq!(
+            lead_split("Bill reading is off for this company. Type the bill."),
+            ("Bill reading is off for this company.", " Type the bill.")
+        );
+        assert_eq!(lead_split("no clause end"), ("no clause end", ""));
+    }
 }

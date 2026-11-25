@@ -47,6 +47,9 @@ pub fn label_heading(report: &ViewReport) -> &'static str {
     } else if columns.first().is_some_and(|c| c == super::mock::TB_GROUP) {
         // index.html `trial-balance.default`: Ledger, Group, Debit, Credit.
         "Ledger"
+    } else if columns.first().is_some_and(|c| c == "Date") && columns.iter().any(|c| c == "User") {
+        // `audit.default`: Seq, Date, Time, User, Action, Object (see `mock::audit_log`).
+        "Seq"
     } else if columns.iter().any(|c| c == "Open Dr") {
         // `outstanding.receivables`: Customer, Bill, Bill date, Due, Open, Overdue.
         "Customer"
@@ -277,6 +280,8 @@ pub fn column_cell_text(heading: &str, cell: &ViewCell) -> String {
 /// (see [`line_name`]); a long reason in the cell was cut off where the figure belongs.
 fn drawn_cell_text(heading: &str, cell: &ViewCell) -> String {
     match cell {
+        // The mock writes a date as "15 Sep 2026" (`fmtDate`), not as the export's 15-Sep-2026.
+        ViewCell::Date(d) => crate::ui::format::date(*d),
         ViewCell::Provisional { amount, .. } => {
             column_cell_text(heading, &ViewCell::Amount(*amount))
         }
@@ -284,7 +289,6 @@ fn drawn_cell_text(heading: &str, cell: &ViewCell) -> String {
         | ViewCell::Signed(_)
         | ViewCell::Qty(_)
         | ViewCell::Text(_)
-        | ViewCell::Date(_)
         | ViewCell::Empty
         | ViewCell::Unsupported(_) => column_cell_text(heading, cell),
     }
@@ -444,10 +448,14 @@ fn draw_rows(
                 let state = RowState {
                     selected: i == selected,
                     hovered: response.hovered(),
-                    sub: emphasised(row.kind),
+                    sub: line_is_emphasised(&report.columns, row.kind),
                 };
                 a11y::name(ui, &response, Role::Row, &line_name(row));
                 a11y::focus_ring(ui, &response, rect);
+                if is_band(&report.columns, row) {
+                    // `band()`: the whole row on `accent-soft`, selected or not.
+                    ui.painter().rect_filled(rect, 0.0, tokens(ui).accent_soft);
+                }
                 paint_line(ui, rect, cols, &report.columns, row, state);
                 if state.selected {
                     drawn.selected = Some(rect);
@@ -494,6 +502,19 @@ fn emphasised(kind: ViewRowKind) -> bool {
         | ViewRowKind::Bill
         | ViewRowKind::Text => false,
     }
+}
+
+/// Whether a line of `kind` is drawn semibold on `surface-2` in a table with these headings.
+///
+/// The two-sided account draws its group lines plain (index.html `plScreen`: only the Total line
+/// is bold); every other table keeps `tr.sub` for them.
+fn line_is_emphasised(headings: &[String], kind: ViewRowKind) -> bool {
+    emphasised(kind) && !(kind == ViewRowKind::Group && is_two_sided(headings))
+}
+
+/// Whether `row` is a band of the two-sided account ("Trading account"), drawn on `accent-soft`.
+fn is_band(headings: &[String], row: &ViewRow) -> bool {
+    row.kind == ViewRowKind::Text && is_two_sided(headings)
 }
 
 /// Where the label and each column sit across a line, and how their cells sit in them.
@@ -876,5 +897,70 @@ mod provisional_marks {
         assert!(drawn.iter().all(|t| !t.contains("below zero")), "{drawn:?}");
         assert!(drawn.iter().any(|t| t == "13,90,759.00"), "{drawn:?}");
         assert_eq!(drawn.iter().filter(|t| *t == "Provisional").count(), 1);
+    }
+}
+
+#[cfg(test)]
+mod s14_look {
+    //! Round s14: the two-sided profit and loss draws plain group lines and shaded bands, and a
+    //! date reads as the mock writes it.
+    //!
+    //! provenance: design/mock-v2/index.html `plScreen`: `band()` is a row on `accent-soft`
+    //! (line 2237), group lines are plain `td`s (class `g` carries no weight, line 2236) and only
+    //! the Total line is bold; the ledger report's rows write a date as "15 Sep 2026" (`fmtDate`).
+    #![allow(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        reason = "test code: the fixture is known to build"
+    )]
+
+    use super::*;
+    use time::macros::date;
+
+    fn two_sided() -> Vec<String> {
+        [
+            super::super::mock::PL_DEBIT,
+            "Particulars",
+            super::super::mock::PL_CREDIT,
+        ]
+        .map(str::to_owned)
+        .to_vec()
+    }
+
+    fn row(kind: ViewRowKind, label: &str) -> ViewRow {
+        ViewRow {
+            key: None,
+            label: label.to_owned(),
+            depth: 0,
+            kind,
+            cells: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn a_group_line_of_the_two_sided_account_is_plain_but_elsewhere_it_is_bold() {
+        let plain = vec!["Group".to_owned(), "Debit".to_owned()];
+        assert!(line_is_emphasised(&plain, ViewRowKind::Group));
+        assert!(!line_is_emphasised(&two_sided(), ViewRowKind::Group));
+        assert!(line_is_emphasised(&two_sided(), ViewRowKind::Subtotal));
+    }
+
+    #[test]
+    fn a_band_is_a_text_line_of_the_two_sided_account() {
+        let band = row(ViewRowKind::Text, "Trading account");
+        assert!(is_band(&two_sided(), &band));
+        assert!(!is_band(&["Debit".to_owned()], &band));
+        assert!(!is_band(
+            &two_sided(),
+            &row(ViewRowKind::Group, "Purchase Accounts")
+        ));
+    }
+
+    #[test]
+    fn a_date_cell_is_drawn_as_day_month_name_year() {
+        assert_eq!(
+            drawn_cell_text("Date", &ViewCell::Date(date!(2026 - 09 - 15))),
+            "15 Sep 2026"
+        );
     }
 }

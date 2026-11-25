@@ -35,7 +35,6 @@ use super::{TableEvents, ViewCell, ViewReport};
 use crate::theme::{RADIUS_M, TEXT_BODY, TEXT_META, border_width, shadow_1};
 use crate::ui::a11y;
 use crate::ui::badge::{BadgeKind, badge, paint_badge};
-use crate::ui::note::{NoteKind, note};
 use crate::ui::table::{
     self, CellPlace, RowState, T_HEAD_GAP, T_HEAD_HEIGHT, T_ROW_HEIGHT, T_TOTAL_HEIGHT,
 };
@@ -321,6 +320,7 @@ pub(super) fn draw(
         .corner_radius(RADIUS_M)
         .shadow(shadow_1(k));
     let reasons = provisional_reasons(report, balance);
+    let mut open_stock = false;
     card.show(ui, |ui| {
         ui.set_min_width(ui.available_width());
         ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
@@ -334,11 +334,13 @@ pub(super) fn draw(
                     bottom: 0,
                 })
                 .show(ui, |ui| {
-                    note(ui, NoteKind::Warn, &provisional_banner(&reasons));
+                    let (lead, rest) = provisional_banner(&reasons);
+                    open_stock = super::draw_provisional_banner(ui, &lead, &rest, true);
                 });
         }
         let room = (ui.available_height() - foot_height - 2.0).max(T_ROW_HEIGHT * 3.0);
         events = draw_lines(ui, report, balance, selected, scroll_to_selected, room);
+        events.open_stock = open_stock;
         foot = Frame::NONE
             .inner_margin(FOOT_PAD)
             .show(ui, |ui| {
@@ -353,11 +355,16 @@ pub(super) fn draw(
     (events, foot)
 }
 
-/// The banner over a statement with provisional figures: what the mark means, then each reason.
-fn provisional_banner(reasons: &[String]) -> String {
-    format!(
-        "Some figures are provisional and are marked. Why: {}.",
-        reasons.join("; ")
+/// The banner over a statement with provisional figures, as the lead sentence (bold) and the rest
+/// (index.html:1588): the closing stock is provisional, why (each reason as the engine words it)
+/// and what the mark means.
+fn provisional_banner(reasons: &[String]) -> (String, String) {
+    (
+        "Closing stock is Provisional.".to_owned(),
+        format!(
+            "Why: {}. The stock engine keeps the figure and marks it Provisional; the totals that follow from it are provisional too.",
+            reasons.join("; ")
+        ),
     )
 }
 
@@ -666,6 +673,34 @@ mod provisional_once {
         let report = statement();
         let balance = vertical_balance(&report).unwrap();
         assert_eq!(provisional_reasons(&report, &balance), [REASON]);
+    }
+
+    #[test]
+    fn the_banner_leads_with_the_closing_stock_and_offers_the_stock_items() {
+        // provenance: index.html:1588 (`balance-sheet.provisional`): a warning note whose bold
+        // lead is "Closing stock is Provisional." and which ends with an "Open stock items"
+        // button (the same button as the profit and loss note, index.html:1661).
+        let report = statement();
+        let balance = vertical_balance(&report).unwrap();
+        let ctx = egui::Context::default();
+        let out = ctx.run_ui(egui::RawInput::default(), |ui| {
+            draw(ui, &report, &balance, 0, false);
+        });
+        let mut drawn = Vec::new();
+        for clipped in &out.shapes {
+            texts(&clipped.shape, &mut drawn);
+        }
+        out.drop_without_applying_deltas();
+        assert!(
+            drawn
+                .iter()
+                .any(|t| t.starts_with("Closing stock is Provisional.")),
+            "texts drawn: {drawn:?}"
+        );
+        assert!(
+            drawn.iter().any(|t| t == "Open stock items"),
+            "texts drawn: {drawn:?}"
+        );
     }
 
     #[test]

@@ -12,7 +12,7 @@
 use ledgerly_api::{AuditReportKind, ReportKind};
 use ledgerly_core::{Date, Period, StockItemId};
 
-use super::{ViewCell, ViewKey, ViewReport, ViewRow, ViewRowKind};
+use super::{ViewCell, ViewDetail, ViewKey, ViewReport, ViewRow, ViewRowKind};
 
 /// Heading of the stock value column. It names the side, so [`super::generic`] can print the
 /// figure bare when it is a debit and keep the word when it is not.
@@ -167,6 +167,47 @@ pub(super) fn outstanding(report: ViewReport, receivable: bool) -> ViewReport {
     }
 }
 
+/// The edit log as the mock draws it.
+#[must_use]
+///
+/// The engine's rows carry a label ("#109 Posted voucher ...") and the same sequence number in
+/// their first column. The label column leads with the number and that column is dropped, so the
+/// table starts with Seq and has no repeated "Particulars" column. Every cell is copied.
+pub(super) fn audit_log(report: ViewReport) -> ViewReport {
+    if report.columns.first().is_none_or(|c| c != "Seq")
+        || report
+            .rows
+            .iter()
+            .any(|r| !matches!(r.cells.first(), Some(ViewCell::Text(_))))
+    {
+        return report;
+    }
+    let rows = report
+        .rows
+        .into_iter()
+        .map(|row| {
+            let mut cells = row.cells.into_iter();
+            let label = match cells.next() {
+                Some(ViewCell::Text(seq)) => seq,
+                Some(_) | None => row.label,
+            };
+            ViewRow {
+                label,
+                cells: cells.collect(),
+                ..row
+            }
+        })
+        .collect();
+    let columns = report.columns.into_iter().skip(1).collect();
+    let totals = report.totals.into_iter().skip(1).collect();
+    ViewReport {
+        columns,
+        rows,
+        totals,
+        ..report
+    }
+}
+
 /// The tabs of the audit screen (`design/mock-v2/index.html`, `SCREENS.audit`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum AuditTab {
@@ -281,7 +322,7 @@ impl Mock {
     }
 
     /// The line under the title. `as_of` is the report's balance date and `period` its period.
-    pub(super) fn subtitle(self, as_of: Date, period: Period) -> String {
+    pub(super) fn subtitle(self, as_of: Date, period: Period, detail: ViewDetail) -> String {
         let day = crate::ui::format::date;
         match self {
             Mock::Trial => format!(
@@ -304,8 +345,12 @@ impl Mock {
                     from.day(),
                     crate::ui::format::month_abbrev(from.month())
                 );
-                // index.html `plScreen`: "... · Ledgerly's trading form, with sub-totals".
-                let form = "Ledgerly's trading form, with sub-totals";
+                // index.html:2235 `plScreen`: "... · by group" or "... · ledgers under each
+                // group" in the detailed view.
+                let form = match detail {
+                    ViewDetail::Condensed => "by group",
+                    ViewDetail::Detailed => "ledgers under each group",
+                };
                 match ledgerly_core::FinancialYear::containing(to) {
                     Ok(fy) => format!(
                         "From {start} to {} \u{b7} FY {} \u{b7} {form}",
@@ -722,6 +767,42 @@ mod tests {
 
     use super::*;
 
+    #[test]
+    fn the_edit_log_leads_with_the_sequence_number_and_does_not_repeat_the_label() {
+        // provenance: index.html `audit.default`: the table's first column is "Seq" (135, 136,
+        // ...), then Date, Time, User, Action, Object. The engine's report has a label per row
+        // ("#109 Posted voucher ...") and the same number again in its first column, which drew a
+        // "Particulars" column before the Seq column in the 2026-11-25 capture.
+        let line = |seq: &str, label: &str| ViewRow {
+            key: None,
+            label: label.to_owned(),
+            depth: 0,
+            kind: ViewRowKind::Item,
+            cells: vec![
+                text(seq),
+                ViewCell::Date(date!(2026 - 11 - 02)),
+                text("user 1"),
+            ],
+        };
+        let report = ViewReport {
+            token: super::super::ReportToken("audit".to_owned()),
+            title: "Edit log".to_owned(),
+            params: super::super::ViewParams {
+                period: Period::new(date!(2026 - 04 - 01), date!(2026 - 11 - 20)).unwrap(),
+                detail: ViewDetail::Detailed,
+            },
+            columns: ["Seq", "Date", "User"].map(str::to_owned).to_vec(),
+            rows: vec![line("135", "#135 Posted voucher")],
+            totals: Vec::new(),
+            notes: Vec::new(),
+        };
+        let out = audit_log(report);
+        assert_eq!(out.columns, ["Date", "User"]);
+        assert_eq!(out.rows[0].label, "135");
+        assert_eq!(out.rows[0].cells.len(), 2);
+        assert_eq!(super::super::generic::label_heading(&out), "Seq");
+    }
+
     fn text(s: &str) -> ViewCell {
         ViewCell::Text(s.to_owned())
     }
@@ -1058,7 +1139,7 @@ mod tests {
         assert_eq!(trial.page_title(), "Trial balance");
         assert_eq!(trial.crumb(), "Trial balance");
         assert_eq!(
-            trial.subtitle(as_of, period),
+            trial.subtitle(as_of, period, ViewDetail::Condensed),
             "As at 20 Nov 2026 \u{b7} every ledger with a balance \u{b7} Enter opens a ledger"
         );
         assert_eq!(
@@ -1076,7 +1157,7 @@ mod tests {
             "Bills payable"
         );
         assert_eq!(
-            bills.subtitle(as_of, period),
+            bills.subtitle(as_of, period, ViewDetail::Condensed),
             "As at 20 Nov 2026 \u{b7} bill-wise, with the due date from the party's credit days"
         );
         let stock = Mock::of(&ReportKind::StockSummary).unwrap();
@@ -1087,14 +1168,14 @@ mod tests {
         let audit = Mock::of(&ReportKind::Audit(AuditReportKind::EditLog)).unwrap();
         assert_eq!(audit.page_title(), "Audit");
         assert_eq!(
-            audit.subtitle(as_of, period),
+            audit.subtitle(as_of, period, ViewDetail::Condensed),
             "Read-only. Nothing here changes a voucher. Period from 1 Apr 2026 to 20 Nov 2026"
         );
         // The integrity certificate checks the whole log, so it names no period: the engine's own
         // period for it is the whole calendar, which must never be printed as if it were data.
         let cert = Mock::of(&ReportKind::Audit(AuditReportKind::IntegrityCertificate)).unwrap();
         assert_eq!(
-            cert.subtitle(as_of, period),
+            cert.subtitle(as_of, period, ViewDetail::Condensed),
             "Read-only. Nothing here changes a voucher. The check covers every event in the log."
         );
         assert_eq!(
@@ -1104,10 +1185,15 @@ mod tests {
         let pl = Mock::of(&ReportKind::ProfitAndLoss).unwrap();
         assert_eq!(pl.page_title(), "Profit and loss");
         assert_eq!(
-            pl.subtitle(as_of, period),
-            // provenance: index.html `plScreen` head: "From 1 Apr to 20 Nov 2026 · FY 2026-27 ·
-            // Ledgerly's trading form, with sub-totals" (the mock now says 20 Nov).
-            "From 1 Apr to 20 Nov 2026 \u{b7} FY 2026-27 \u{b7} Ledgerly's trading form, with sub-totals"
+            pl.subtitle(as_of, period, ViewDetail::Condensed),
+            // provenance: index.html:2235 `plScreen` head: "From 1 Apr to 20 Nov 2026 · FY 2026-27
+            // · by group" (s14: the mock dropped "Ledgerly's trading form, with sub-totals").
+            "From 1 Apr to 20 Nov 2026 \u{b7} FY 2026-27 \u{b7} by group"
+        );
+        assert_eq!(
+            pl.subtitle(as_of, period, ViewDetail::Detailed),
+            // provenance: index.html:2235: `detailed ? 'ledgers under each group' : 'by group'`.
+            "From 1 Apr to 20 Nov 2026 \u{b7} FY 2026-27 \u{b7} ledgers under each group"
         );
     }
 

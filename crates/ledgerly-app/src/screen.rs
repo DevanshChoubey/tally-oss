@@ -55,6 +55,13 @@ pub trait Screen {
         self.title()
     }
 
+    /// Whether the shell draws the breadcrumbs above this screen when it is not the root.
+    /// Defaults to `true`; the setup wizard, drawn as one card with no crumbs in the mock
+    /// (index.html `SCREENS.setup`), says `false`.
+    fn shows_breadcrumbs(&self) -> bool {
+        true
+    }
+
     /// The keys this screen handles, shown in the key bar before the shell's own keys. Defaults
     /// to none, so a screen that has not opted in shows only the shell's keys.
     fn keys(&self) -> Vec<KeyHint> {
