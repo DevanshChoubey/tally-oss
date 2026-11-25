@@ -22,9 +22,10 @@ use ledgerly_core::{
     StockItemId, UnitId, VoucherId, VoucherTypeId,
 };
 use ledgerly_model::{
-    Address, Books, Company, EntityKind, Features, Godown, NegativeStockPolicy, OpeningStock,
-    Scenario, StandardCost, StockItem, StockMove, ValuationMethod, Voucher, VoucherMode,
-    VoucherStatus,
+    Address, BaseVoucherKind, Books, Company, EntityKind, Features, Godown, NegativeStockPolicy,
+    NumberingConfig, NumberingMethod, OpeningStock, RestartPeriod, Scenario, StandardCost,
+    StockItem, StockMove, Unit, UnitKind, ValuationMethod, Voucher, VoucherMode, VoucherStatus,
+    VoucherType,
 };
 use ledgerly_reports::stock_summary::stock_summary;
 use ledgerly_reports::{
@@ -166,6 +167,53 @@ fn books(items: Vec<StockItem>, moves: Vec<StockMove>) -> Books {
     }
 }
 
+/// Gives vouchers 1 and 2 a type (Sales, Purchase), a number and the unit "nos" the item names.
+fn name_the_vouchers(b: &mut Books) {
+    for (id, name, base) in [
+        (1, "Sales", BaseVoucherKind::Sales),
+        (2, "Purchase", BaseVoucherKind::Purchase),
+    ] {
+        b.masters.voucher_types.insert(
+            VoucherTypeId(id),
+            VoucherType {
+                id: VoucherTypeId(id),
+                name: name.to_owned(),
+                base,
+                abbreviation: name.to_owned(),
+                numbering: NumberingConfig {
+                    method: NumberingMethod::Automatic,
+                    prevent_renumbering: false,
+                    prefix: String::new(),
+                    suffix: String::new(),
+                    width: 1,
+                    restart: RestartPeriod::Yearly,
+                    series: vec![],
+                },
+                active: true,
+                tally: None,
+            },
+        );
+    }
+    for (v, ty, number) in [(1, 1, "SI/0001"), (2, 2, "PB/0001")] {
+        if let Some(x) = b.vouchers.get_mut(&VoucherId(v)) {
+            x.type_id = VoucherTypeId(ty);
+            x.number = Some(number.to_owned());
+        }
+    }
+    b.masters.units.insert(
+        UnitId(1),
+        Unit {
+            id: UnitId(1),
+            symbol: "nos".to_owned(),
+            formal_name: "Numbers".to_owned(),
+            decimals: 0,
+            kind: UnitKind::Simple,
+            uqc: None,
+            tally: None,
+        },
+    );
+}
+
 fn params(from: Date, to: Date) -> ReportParams {
     ReportParams {
         kind: ReportKind::StockSummary,
@@ -188,6 +236,12 @@ fn valuation(item: u64, as_of: Date, qty: i64, value: Paise) -> StockValuation {
         rate: None,
         status: ValuationStatus::Final,
     }
+}
+
+/// `v` with the valuation's own rate set (hand-derived by the test that uses it).
+fn rated(mut v: StockValuation, rate: Decimal) -> StockValuation {
+    v.rate = Some(Rate(rate));
+    v
 }
 
 fn run(b: &Books, p: &ReportParams, vals: Vec<StockValuation>) -> Report {
@@ -241,7 +295,11 @@ fn r3_average_cost_item_row() {
     // Inwards value 650 + 600 = 1,250.00. Outwards (consumption) = 1,000 + 1,250 - 473.68 =
     // 1,776.32 (the plan's T3 figure).
     let b = r3_books(ValuationMethod::AverageCost);
-    let closing = valuation(1, date!(2026 - 05 - 31), 40, Paise::new(47_368));
+    // Closing rate: 2,250 / 190 = 11.8421..., shown as 11.84.
+    let closing = rated(
+        valuation(1, date!(2026 - 05 - 31), 40, Paise::new(47_368)),
+        d(2250) / d(190),
+    );
     let r = run(&b, &r3_period(), vec![closing]);
     assert_eq!(r.rows.len(), 1);
     let row = &r.rows[0];
@@ -260,9 +318,10 @@ fn r3_average_cost_item_row() {
             amount(Paise::new(177_632)),
             qty(40),
             amount(Paise::new(47_368)),
+            amount(Paise::new(1_184)),
         ]
     );
-    assert_eq!(r.columns.len(), 8);
+    assert_eq!(r.columns.len(), 9);
     assert_eq!(r.title, "Stock Summary");
 }
 
@@ -272,7 +331,8 @@ fn r3_fifo_item_row() {
     // 100 @ 10 and 20 @ 13, the 31-May sale takes the remaining 30 @ 13, leaving 40 @ 15 = 600.
     // Outwards = 1,000 + 1,250 - 600 = 1,650.00 (= 1,000 + 260 + 390).
     let b = r3_books(ValuationMethod::Fifo);
-    let closing = valuation(1, date!(2026 - 05 - 31), 40, rs(600));
+    // The 40 left are all the 20-May purchase at 15.00, so the closing rate is 15.00.
+    let closing = rated(valuation(1, date!(2026 - 05 - 31), 40, rs(600)), d(15));
     let r = run(&b, &r3_period(), vec![closing]);
     assert_eq!(
         r.rows[0].cells,
@@ -285,6 +345,7 @@ fn r3_fifo_item_row() {
             amount(rs(1650)),
             qty(40),
             amount(rs(600)),
+            amount(rs(15)),
         ]
     );
 }
@@ -355,7 +416,11 @@ fn two_godowns_show_own_quantities_and_no_invented_values() {
     let r = run(
         &b,
         &p,
-        vec![valuation(1, date!(2026 - 04 - 30), 110, rs(1155))],
+        // 1,155.00 over 110 units is 10.50 each.
+        vec![rated(
+            valuation(1, date!(2026 - 04 - 30), 110, rs(1155)),
+            Decimal::new(1050, 2),
+        )],
     );
     assert_eq!(r.rows.len(), 3);
     assert_eq!(
@@ -369,6 +434,7 @@ fn two_godowns_show_own_quantities_and_no_invented_values() {
             amount(rs(105)),
             qty(110),
             amount(rs(1155)),
+            amount(Paise::new(1_050)),
         ]
     );
     let main = row_of(&r, "Main godown");
@@ -396,13 +462,14 @@ fn provisional_valuation_is_flagged_never_a_plain_number() {
     // to 10 - 15 = -5 (below zero on 2026-04-15); 20-Apr purchase of 20 @ 12 = 240.00 gives
     // closing 10 - 15 + 20 = 15. The valuation supplied is provisional (negative stock) with
     // value 180.00. Outwards = 100 + 240 - 180 = 160.00, provisional because its input is.
-    let b = books(
+    let mut b = books(
         vec![item(1, "Widget", ValuationMethod::Fifo, &[(1, 10, 10)])],
         vec![
             mv(1, date!(2026 - 04 - 15), 1, 1, 0, 15, rs(300)),
             mv(2, date!(2026 - 04 - 20), 1, 1, 20, 0, rs(240)),
         ],
     );
+    name_the_vouchers(&mut b);
     let p = params(date!(2026 - 04 - 01), date!(2026 - 04 - 30));
     let mut closing = valuation(1, date!(2026 - 04 - 30), 15, rs(180));
     closing.status = ValuationStatus::Provisional(ProvisionalReason::NegativeStock {
@@ -410,7 +477,10 @@ fn provisional_valuation_is_flagged_never_a_plain_number() {
         date: date!(2026 - 04 - 15),
     });
     let r = run(&b, &p, vec![closing]);
-    let reason = "negative stock: item 1 first went below zero on 2026-04-15".to_owned();
+    // The reason names the item and the vouchers, with dates as the app writes them: the sale
+    // SI/0001 (voucher 1) leaves 10 - 15 = -5 nos, and the purchase on 20 Apr leaves
+    // -5 + 20 = 15, so "brought it back to 15".
+    let reason = "Widget first went below zero on 15 Apr 2026 (\u{2212}5 nos after SI/0001); a purchase on 20 Apr brought it back to 15".to_owned();
     assert_eq!(
         r.rows[0].cells.get(7),
         Some(&Cell::Provisional {
@@ -482,7 +552,7 @@ fn a_period_after_the_first_uses_the_valuation_of_the_day_before() {
         &p,
         vec![
             valuation(1, date!(2026 - 04 - 30), 30, rs(390)),
-            valuation(1, date!(2026 - 05 - 31), 40, rs(600)),
+            rated(valuation(1, date!(2026 - 05 - 31), 40, rs(600)), d(15)),
         ],
     );
     assert_eq!(
@@ -496,6 +566,7 @@ fn a_period_after_the_first_uses_the_valuation_of_the_day_before() {
             amount(rs(390)),
             qty(40),
             amount(rs(600)),
+            amount(rs(15)),
         ]
     );
 }
@@ -612,6 +683,7 @@ fn totals_add_values_and_leave_mixed_unit_quantities_empty() {
             amount(rs(1320)),
             Cell::Empty,
             amount(rs(380)),
+            Cell::Empty,
         ]
     );
     // One unsupported row makes that column's total unsupported, not partial.
@@ -896,4 +968,49 @@ fn a_godown_transfer_makes_inwards_values_unsupported() {
     assert!(is_unsupported(&cells[3]));
     assert!(is_unsupported(&row_of(&r, "Main godown").cells[3]));
     assert!(is_unsupported(&row_of(&r, "Annexe").cells[3]));
+}
+
+#[test]
+fn the_closing_rate_is_the_valuations_rate_rounded_to_the_paisa() {
+    // provenance: derived, R3 average cost. Pool 2,250.00 over 190 units gives the rate
+    // 2,250 / 190 = 11.842105..., shown to the paisa as 11.84; closing 40 x that rate = 473.68
+    // (research 03). The rate is the engine's (the valuation's own `rate`); the report only
+    // rounds it half up to the paisa. It is the ninth cell of the row and has no total.
+    let b = r3_books(ValuationMethod::AverageCost);
+    let mut closing = valuation(1, date!(2026 - 05 - 31), 40, Paise::new(47_368));
+    closing.rate = Some(Rate(Decimal::from(2250) / Decimal::from(190)));
+    let r = run(&b, &r3_period(), vec![closing]);
+    assert_eq!(
+        r.columns.last().map(|c| c.label.as_str()),
+        Some("Closing rate")
+    );
+    assert_eq!(r.rows[0].cells.get(8), Some(&amount(Paise::new(1_184))));
+    assert_eq!(r.totals.get(8), Some(&Cell::Empty));
+}
+
+#[test]
+fn stock_on_hand_with_no_rate_is_unsupported_and_no_stock_has_no_rate() {
+    // provenance: derived. Stock on hand whose valuation gives no rate cannot be stated, so the
+    // cell is Unsupported (never a guess). Opening 10, all 10 sold on 15 Apr: closing quantity
+    // 10 - 10 = 0, nothing on hand has no rate to show, so the cell is Empty.
+    let b = r3_books(ValuationMethod::AverageCost);
+    let on_hand = valuation(1, date!(2026 - 05 - 31), 40, Paise::new(47_368));
+    let r = run(&b, &r3_period(), vec![on_hand]);
+    assert!(is_unsupported(r.rows[0].cells.get(8).unwrap()));
+    let sold = books(
+        vec![item(
+            1,
+            "Widget",
+            ValuationMethod::AverageCost,
+            &[(1, 10, 10)],
+        )],
+        vec![mv(1, date!(2026 - 04 - 15), 1, 1, 0, 10, rs(150))],
+    );
+    let p = params(date!(2026 - 04 - 01), date!(2026 - 04 - 30));
+    let r = run(
+        &sold,
+        &p,
+        vec![valuation(1, date!(2026 - 04 - 30), 0, rs(0))],
+    );
+    assert_eq!(r.rows[0].cells.get(8), Some(&Cell::Empty));
 }

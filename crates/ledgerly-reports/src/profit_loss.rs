@@ -59,7 +59,8 @@ use ledgerly_model::{
 };
 use ledgerly_stock::{ProvisionalReason, StockValuation, ValuationStatus};
 
-use crate::balance_sheet::{negative_stock_reason, stock_in_hand_opening};
+use crate::balance_sheet::stock_in_hand_opening;
+use crate::stock_reason::negative_stock_reason;
 use crate::{
     Cell, ColumnHeader, ColumnSpec, Detail, DrillKey, Report, ReportError, ReportFilter,
     ReportKind, ReportParams, ReportRow, RowKind,
@@ -252,7 +253,7 @@ fn stock_total(
         match &v.status {
             ValuationStatus::Final => {}
             ValuationStatus::Provisional(ProvisionalReason::NegativeStock { item, date }) => {
-                reasons.push(negative_stock_reason(books, *item, *date));
+                reasons.push(negative_stock_reason(books, *item, *date, v.as_of));
             }
         }
     }

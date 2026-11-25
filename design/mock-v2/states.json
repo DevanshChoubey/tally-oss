@@ -319,7 +319,7 @@
    "kind": "happy",
    "hash": "screen=balance-sheet&state=default",
    "title": "Balance sheet",
-   "description": "Condensed balance sheet as at 21 Nov 2026 with a 'both sides agree' check."
+   "description": "Condensed balance sheet as at 20 Nov 2026 with a 'both sides agree' check."
   },
   {
    "id": "balance-sheet.detailed",
@@ -374,7 +374,7 @@
    "id": "day-book.month",
    "kind": "happy",
    "hash": "screen=day-book&state=month",
-   "title": "Day book, 1 to 21 Nov",
+   "title": "Day book, 1 to 20 Nov",
    "description": "Period view of every November voucher."
   },
   {

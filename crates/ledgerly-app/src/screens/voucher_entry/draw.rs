@@ -585,11 +585,19 @@ impl VoucherEntryScreen {
                     );
                 },
             );
+            // index.html `SCREENS.contra`: an error note sits above the entry aid, the other
+            // notes below it.
+            let error = matches!(self.notice, Some(Notice::Error(_)));
+            if error {
+                self.draw_notice(left);
+            }
             sheet::hint(left, &aid);
             if let Some(text) = &overdraft {
                 note(left, NoteKind::Warn, text);
             }
-            self.draw_notice(left);
+            if !error {
+                self.draw_notice(left);
+            }
             if let Some(foot) = &foot_box {
                 sheet::taxbox(
                     right,
@@ -744,7 +752,13 @@ impl VoucherEntryScreen {
     pub(super) fn draw_notice(&self, ui: &mut Ui) {
         match &self.notice {
             Some(Notice::Error(s)) => {
-                note(ui, NoteKind::Bad, s);
+                // The mock's `errNote`: an alert icon, then the message.
+                crate::ui::note::note_with_icon(ui, NoteKind::Bad, Icon::Alert, |ui, ink| {
+                    ui.spacing_mut().item_spacing.y = 2.0;
+                    for line in s.lines() {
+                        ui.label(para_text(line, crate::theme::TEXT_META, ink));
+                    }
+                });
             }
             Some(Notice::Info(s)) => {
                 note(ui, NoteKind::Info, s);
@@ -831,7 +845,7 @@ impl VoucherEntryScreen {
             page_head_numbered(ui, &title, number.as_deref(), subtitle.as_deref(), |ui| {
                 // The mock draws Save disabled while the debits and credits differ.
                 save_clicked = ui
-                    .add_enabled_ui(!differ, |ui| {
+                    .add_enabled_ui(!save_disabled(differ, self.contra_refused()), |ui| {
                         button_icon(
                             ui,
                             Some(Icon::Save),
@@ -899,6 +913,12 @@ fn line_hint(refused: bool, row: usize) -> &'static str {
     }
 }
 
+/// Whether Save is drawn disabled: while a journal's debits and credits differ, and after a
+/// refused contra (index.html `SCREENS.contra` validation-error draws it greyed).
+fn save_disabled(differ: bool, refused: bool) -> bool {
+    differ || refused
+}
+
 /// The amount of an empty line after a refused contra: "blank" on the first, "0.00" on the second,
 /// both in the error colour (index.html:2155-2156).
 fn refused_amount(ui: &mut Ui, row: usize) {
@@ -926,7 +946,15 @@ fn side_switch(ui: &mut Ui, cx: &mut Cx<'_>, i: usize, side: ledgerly_core::DrCr
 
 #[cfg(test)]
 mod tests {
-    use super::masked_account;
+    use super::{masked_account, save_disabled};
+
+    // provenance: index.html `SCREENS.contra` validation-error: the Save button is disabled.
+    #[test]
+    fn save_is_disabled_after_a_refused_contra_and_while_lines_differ() {
+        assert!(save_disabled(false, true));
+        assert!(save_disabled(true, false));
+        assert!(!save_disabled(false, false));
+    }
 
     // provenance: the mock writes the bank's account as `XXXX 4471` (index.html:537); the
     // sample's number 99990004471 ends in those four digits. derived: the last four characters.

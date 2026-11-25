@@ -18,6 +18,9 @@ use super::{ViewCell, ViewKey, ViewReport, ViewRow, ViewRowKind};
 /// figure bare when it is a debit and keep the word when it is not.
 pub(super) const VALUE_HEADING: &str = "Value Dr";
 
+/// Heading of the stock cost column (the engine's closing rate), named like [`VALUE_HEADING`].
+pub(super) const COST_HEADING: &str = "Cost Dr";
+
 /// Heading of the open amount of a bill, naming the side a bill normally sits on.
 pub(super) fn open_heading(receivable: bool) -> &'static str {
     if receivable { "Open Dr" } else { "Open Cr" }
@@ -350,7 +353,8 @@ pub(super) struct ItemFacts {
     pub unit: String,
 }
 
-/// The stock summary as the mock draws it: item, HSN, closing quantity, unit and closing value.
+/// The stock summary as the mock draws it: item, HSN, closing quantity, unit, cost (the engine's
+/// closing rate) and closing value.
 /// `facts` gives the masters' data for an item. A report that does not have the engine's columns
 /// is returned as it came.
 #[must_use]
@@ -359,7 +363,11 @@ pub(super) fn stock_summary(
     facts: &dyn Fn(StockItemId) -> Option<ItemFacts>,
 ) -> ViewReport {
     let at = |name: &str| report.columns.iter().position(|c| c == name);
-    let (Some(qty), Some(value)) = (at("Closing quantity"), at("Closing value")) else {
+    let (Some(qty), Some(value), Some(rate)) = (
+        at("Closing quantity"),
+        at("Closing value"),
+        at("Closing rate"),
+    ) else {
         return report;
     };
     let rows = report
@@ -381,7 +389,7 @@ pub(super) fn stock_summary(
                 (ViewCell::Text(f.hsn), ViewCell::Text(f.unit))
             });
             ViewRow {
-                cells: vec![hsn, cell(qty), unit, cell(value)],
+                cells: vec![hsn, cell(qty), unit, cell(rate), cell(value)],
                 ..row.clone()
             }
         })
@@ -390,10 +398,16 @@ pub(super) fn stock_summary(
         Vec::new()
     } else {
         let t = |i: usize| report.totals.get(i).cloned().unwrap_or(ViewCell::Empty);
-        vec![ViewCell::Empty, t(qty), ViewCell::Empty, t(value)]
+        vec![
+            ViewCell::Empty,
+            t(qty),
+            ViewCell::Empty,
+            ViewCell::Empty,
+            t(value),
+        ]
     };
     ViewReport {
-        columns: ["HSN", "Quantity", "Unit", VALUE_HEADING]
+        columns: ["HSN", "Quantity", "Unit", COST_HEADING, VALUE_HEADING]
             .map(str::to_owned)
             .to_vec(),
         rows,
@@ -420,6 +434,24 @@ fn pl_side(cell: &ViewCell) -> Option<(ledgerly_core::DrCr, ViewCell)> {
         | ViewCell::Date(_)
         | ViewCell::Empty
         | ViewCell::Unsupported(_) => None,
+    }
+}
+
+/// The label of the one line the profit and loss badges: the closing stock is the figure the
+/// stock engine marks; every other figure that follows from it is told in the banner.
+const BADGED_LINE: &str = "Closing stock";
+
+/// The figure of a cell without its provisional wrapper (the amount is the engine's, unchanged).
+fn plain(cell: ViewCell) -> ViewCell {
+    match cell {
+        ViewCell::Provisional { amount, .. } => ViewCell::Amount(amount),
+        ViewCell::Amount(_)
+        | ViewCell::Signed(_)
+        | ViewCell::Qty(_)
+        | ViewCell::Text(_)
+        | ViewCell::Date(_)
+        | ViewCell::Empty
+        | ViewCell::Unsupported(_) => cell,
     }
 }
 
@@ -470,29 +502,75 @@ pub(super) fn pl_provisional_reasons(report: &ViewReport) -> Vec<String> {
     out
 }
 
+/// The labels of the rows that have a provisional cell, in row order (the stock summary's items
+/// whose value is provisional).
+#[must_use]
+pub(super) fn provisional_row_labels(report: &ViewReport) -> Vec<String> {
+    report
+        .rows
+        .iter()
+        .filter(|r| {
+            r.cells
+                .iter()
+                .any(|c| matches!(c, ViewCell::Provisional { .. }))
+        })
+        .map(|r| r.label.clone())
+        .collect()
+}
+
 /// The warning over a stock summary or profit and loss that has provisional figures, as the
 /// lead sentence (drawn bold) and the rest: the engine's reasons, each once, then what the screen
-/// does with the figure (index.html `plScreen` and `stockScreen`). `None` when there is no reason
-/// or the report has no such banner.
+/// does with the figure (index.html `plScreen` and `stockScreen`). `items` are the stock summary's
+/// provisional rows: the lead names them and, when one item has one reason that starts with its
+/// name, the sentence says "Its quantity ..." instead of repeating the name. `None` when there is
+/// no reason or the report has no such banner.
 #[must_use]
-pub(super) fn provisional_banner(mock: Mock, reasons: &[String]) -> Option<(String, String)> {
+pub(super) fn provisional_banner(
+    mock: Mock,
+    reasons: &[String],
+    items: &[String],
+) -> Option<(String, String)> {
     if reasons.is_empty() {
         return None;
     }
-    let why = reasons.join("; ");
-    let mut chars = why.chars();
-    let why = chars.next().map_or_else(String::new, |c| {
-        c.to_uppercase().chain(chars).collect::<String>()
-    });
+    let capital = |s: &str| {
+        let mut chars = s.chars();
+        chars.next().map_or_else(String::new, |c| {
+            c.to_uppercase().chain(chars).collect::<String>()
+        })
+    };
     match mock {
         Mock::ProfitLoss => Some((
             "Closing stock is Provisional.".to_owned(),
-            format!("{why}. The stock engine keeps the figure and marks it Provisional."),
+            format!(
+                "{}. The stock engine keeps the figure and marks it Provisional. The profit figures that follow from it are provisional too.",
+                capital(&reasons.join("; "))
+            ),
         )),
-        Mock::Stock => Some((
-            "Value is Provisional.".to_owned(),
-            format!("{why}. The value is shown and marked, and the total with it."),
-        )),
+        Mock::Stock => {
+            let tail = match (items, reasons) {
+                ([item], [reason]) => reason.strip_prefix(item.as_str()),
+                _ => None,
+            };
+            let (lead, why) = match (items.is_empty(), tail) {
+                (true, _) => (
+                    "Value is Provisional.".to_owned(),
+                    capital(&reasons.join("; ")),
+                ),
+                (false, Some(tail)) => (
+                    format!("Value is Provisional for {}.", items.join(", ")),
+                    format!("Its quantity{tail}"),
+                ),
+                (false, None) => (
+                    format!("Value is Provisional for {}.", items.join(", ")),
+                    capital(&reasons.join("; ")),
+                ),
+            };
+            Some((
+                lead,
+                format!("{why}. The value is shown and marked, and the total with it."),
+            ))
+        }
         Mock::Trial | Mock::Outstanding { .. } | Mock::Audit(_) => None,
     }
 }
@@ -578,7 +656,7 @@ pub(super) fn profit_loss(report: ViewReport) -> ViewReport {
             }
             (ViewRowKind::Subtotal, "Gross profit" | "Net profit") => {}
             (ViewRowKind::Subtotal, "Trading total" | "Profit and loss total") => {
-                total = row.cells.first().and_then(pl_side).map(|(_, c)| c);
+                total = row.cells.first().and_then(pl_side).map(|(_, c)| plain(c));
             }
             (
                 ViewRowKind::Item
@@ -605,7 +683,11 @@ pub(super) fn profit_loss(report: ViewReport) -> ViewReport {
                     label: row.label.clone(),
                     depth: row.depth,
                     kind: row.kind,
-                    cell,
+                    cell: if row.label == BADGED_LINE {
+                        cell
+                    } else {
+                        plain(cell)
+                    },
                 };
                 match side {
                     ledgerly_core::DrCr::Dr => left.push(entry),
@@ -856,9 +938,10 @@ mod tests {
     )]
     fn the_stock_summary_shows_closing_quantity_and_value_with_the_masters_hsn_and_unit() {
         // provenance: derived from `stock-summary.default` in the mock: Item, HSN, Quantity,
-        // Unit, Cost, Value. The closing quantity and value are the engine's cells; the HSN and
-        // unit come from the item master. Cost per unit is not in the engine's report, so the
-        // app has no Cost column (PARITY-GAPS).
+        // Unit, Cost, Value. The closing quantity, rate and value are the engine's cells (the
+        // rate is its "Closing rate" column: Drip lateral 5,83,440.00 over 187 rolls is 3,120.00
+        // each, Steel pickaxe 67,680.00 over 144 is 470.00); the HSN and unit come from the item
+        // master. Cost is the engine's rate, never worked out here.
         let e = ViewCell::Empty;
         let q = |n: i64| ViewCell::Qty(Qty(Decimal::from(n)));
         let item = ViewRow {
@@ -875,6 +958,7 @@ mod tests {
                 e.clone(),
                 q(187),
                 ViewCell::Amount(rs(583_440)),
+                ViewCell::Amount(rs(3_120)),
             ],
         };
         let none = ViewRow {
@@ -891,6 +975,7 @@ mod tests {
                 e.clone(),
                 q(144),
                 ViewCell::Amount(rs(67_680)),
+                ViewCell::Amount(rs(470)),
             ],
         };
         let report = base(
@@ -903,6 +988,7 @@ mod tests {
                 "Outwards value (cost of consumption)",
                 "Closing quantity",
                 "Closing value",
+                "Closing rate",
             ],
             vec![item, none],
             vec![
@@ -914,6 +1000,7 @@ mod tests {
                 e.clone(),
                 e.clone(),
                 ViewCell::Amount(rs(651_120)),
+                e.clone(),
             ],
         );
         let facts = |id: StockItemId| {
@@ -929,19 +1016,24 @@ mod tests {
             })
         };
         let out = stock_summary(report, &facts);
-        assert_eq!(out.columns, vec!["HSN", "Quantity", "Unit", "Value Dr"]);
+        assert_eq!(
+            out.columns,
+            vec!["HSN", "Quantity", "Unit", "Cost Dr", "Value Dr"]
+        );
         assert_eq!(
             out.rows[0].cells,
             vec![
                 text("3917"),
                 q(187),
                 text("roll"),
+                ViewCell::Amount(rs(3_120)),
                 ViewCell::Amount(rs(583_440))
             ]
         );
         assert_eq!(out.rows[1].cells[0], text("none"));
         assert_eq!(out.rows[1].cells[1], q(144));
-        assert_eq!(out.totals[3], ViewCell::Amount(rs(651_120)));
+        assert_eq!(out.totals[4], ViewCell::Amount(rs(651_120)));
+        assert_eq!(out.totals[3], ViewCell::Empty);
     }
 
     #[test]
@@ -957,8 +1049,9 @@ mod tests {
     fn each_report_is_worded_as_the_mock_words_it() {
         // provenance: derived from design/mock-v2/index.html: titles and subtitles of
         // `trial-balance.default`, `outstanding.receivables`, `stock-summary.default`,
-        // `audit.default` (phead calls and keys()), with the dates the engine gives: the mock's
-        // "21 Nov 2026" is the mock's own clock, the test uses 20 Nov 2026.
+        // `audit.default` (phead calls and keys()), with the dates the engine gives: a report is
+        // as on the date of the last voucher entry (help.tallysolutions.com Trial Balance page,
+        // read 2026-11-25), 20 Nov 2026 in the capture company, and the mock says the same.
         let as_of = date!(2026 - 11 - 20);
         let period = ledgerly_core::Period::new(date!(2026 - 04 - 01), as_of).unwrap();
         let trial = Mock::of(&ReportKind::TrialBalance).unwrap();
@@ -1012,8 +1105,8 @@ mod tests {
         assert_eq!(pl.page_title(), "Profit and loss");
         assert_eq!(
             pl.subtitle(as_of, period),
-            // provenance: index.html `plScreen` head: "From 1 Apr to 21 Nov 2026 · FY 2026-27 ·
-            // Ledgerly's trading form, with sub-totals" (the test's date is 20 Nov).
+            // provenance: index.html `plScreen` head: "From 1 Apr to 20 Nov 2026 · FY 2026-27 ·
+            // Ledgerly's trading form, with sub-totals" (the mock now says 20 Nov).
             "From 1 Apr to 20 Nov 2026 \u{b7} FY 2026-27 \u{b7} Ledgerly's trading form, with sub-totals"
         );
     }
@@ -1157,61 +1250,77 @@ mod tests {
     }
 
     #[test]
-    fn a_provisional_line_is_drawn_bare_and_its_reason_goes_to_the_banner() {
-        // provenance: derived from index.html `plScreen` (a provisional stock puts one warning
-        // note over the figures, the figures stay bare) and the s9 balance sheet rule.
+    fn only_the_closing_stock_line_wears_the_provisional_wrapper_the_rest_go_to_the_banner() {
+        // provenance: derived from index.html `plScreen`: the badge is on the Closing stock line
+        // alone; the gross profit c/o, the gross profit b/f, the net profit c/o and the totals
+        // are plain figures, and the banner says the stock engine marks the closing stock.
+        let reason = "Steel pickaxe first went below zero on 19 Nov 2026".to_owned();
+        let prov = |side: fn(Paise) -> SignedAmount, n: i64| ViewCell::Provisional {
+            amount: side(Paise::new(n)),
+            reason: reason.clone(),
+        };
         let mut rows = hand_set_rows();
-        rows[5].cells = vec![ViewCell::Provisional {
-            amount: SignedAmount::cr(Paise::new(3_000_000)),
-            reason: "item Steel pickaxe first went below zero".to_owned(),
-        }];
+        rows[5].cells = vec![prov(SignedAmount::cr, 3_000_000)];
+        rows[7].cells = vec![prov(SignedAmount::dr, 4_500_000)];
+        rows[8].cells = vec![prov(SignedAmount::dr, 13_000_000)];
         let report = base(&[], rows, vec![signed_total()]);
-        assert_eq!(
-            pl_provisional_reasons(&report),
-            vec!["item Steel pickaxe first went below zero"]
-        );
+        assert_eq!(pl_provisional_reasons(&report), vec![reason.clone()]);
         let out = profit_loss(report);
-        let closing = out
-            .rows
-            .iter()
-            .find(|r| matches!(r.cells.get(1), Some(ViewCell::Text(t)) if t == "Closing stock"))
-            .unwrap();
-        // The figure keeps its provisional wrapper so the screen can mark it with a badge
-        // (index.html `plScreen`: `badge('Provisional')` beside the line); the label stays plain.
+        let on = |label: &str| {
+            out.rows
+                .iter()
+                .find(|r| {
+                    r.label == label
+                        || matches!(r.cells.get(1), Some(ViewCell::Text(t)) if t == label)
+                })
+                .unwrap()
+        };
+        let closing = on("Closing stock");
         assert_eq!(closing.cells[1], text("Closing stock"));
+        assert_eq!(closing.cells[2], prov(SignedAmount::cr, 3_000_000));
+        // Gross profit c/o is on the debit side of the same line as Opening stock's pair.
+        let gp = on("Gross profit c/o");
         assert_eq!(
-            closing.cells[2],
-            ViewCell::Provisional {
-                amount: SignedAmount::cr(Paise::new(3_000_000)),
-                reason: "item Steel pickaxe first went below zero".to_owned(),
-            }
+            gp.cells[0],
+            ViewCell::Amount(SignedAmount::dr(Paise::new(4_500_000)))
+        );
+        let total = out.rows.iter().find(|r| r.label == "Total").unwrap();
+        assert_eq!(
+            total.cells[0],
+            ViewCell::Amount(SignedAmount::dr(Paise::new(13_000_000)))
         );
     }
 
     #[test]
-    fn the_provisional_banner_leads_with_what_is_provisional_and_gives_the_engines_reason() {
-        // provenance: derived from index.html `plScreen` ("Closing stock is Provisional. ...
-        // The stock engine keeps the figure and marks it Provisional.") and `stockScreen`
-        // ("Value is Provisional ... The value is shown and marked, and the total with it.").
-        // The reason is the engine's wording, started with a capital.
-        let reasons =
-            vec!["negative stock: item Steel pickaxe 2.5 kg first went below zero".to_owned()];
+    fn the_provisional_banner_names_the_item_and_gives_the_engines_reason() {
+        // provenance: derived from index.html `plScreen` ("Closing stock is Provisional.
+        // Steel pickaxe 2.5 kg first went below zero on 19 Nov 2026 (-30 nos after SI/0416); a
+        // purchase on 20 Nov brought it back to 70. The stock engine keeps the figure and marks
+        // it Provisional.") and `stockScreen` ("Value is Provisional for Steel pickaxe 2.5 kg.
+        // Its quantity first went below zero on ... The value is shown and marked, and the total
+        // with it."). The reason is the engine's sentence; the stock banner swaps the item's
+        // name for "Its quantity".
+        let reasons = vec![
+            "Steel pickaxe 2.5 kg first went below zero on 19 Nov 2026 (\u{2212}30 nos after SI/0416); a purchase on 20 Nov brought it back to 70"
+                .to_owned(),
+        ];
+        let item = vec!["Steel pickaxe 2.5 kg".to_owned()];
         assert_eq!(
-            provisional_banner(Mock::ProfitLoss, &reasons),
+            provisional_banner(Mock::ProfitLoss, &reasons, &[]),
             Some((
                 "Closing stock is Provisional.".to_owned(),
-                "Negative stock: item Steel pickaxe 2.5 kg first went below zero. The stock engine keeps the figure and marks it Provisional.".to_owned()
+                "Steel pickaxe 2.5 kg first went below zero on 19 Nov 2026 (\u{2212}30 nos after SI/0416); a purchase on 20 Nov brought it back to 70. The stock engine keeps the figure and marks it Provisional. The profit figures that follow from it are provisional too.".to_owned()
             ))
         );
         assert_eq!(
-            provisional_banner(Mock::Stock, &reasons),
+            provisional_banner(Mock::Stock, &reasons, &item),
             Some((
-                "Value is Provisional.".to_owned(),
-                "Negative stock: item Steel pickaxe 2.5 kg first went below zero. The value is shown and marked, and the total with it.".to_owned()
+                "Value is Provisional for Steel pickaxe 2.5 kg.".to_owned(),
+                "Its quantity first went below zero on 19 Nov 2026 (\u{2212}30 nos after SI/0416); a purchase on 20 Nov brought it back to 70. The value is shown and marked, and the total with it.".to_owned()
             ))
         );
-        assert_eq!(provisional_banner(Mock::Stock, &[]), None);
-        assert_eq!(provisional_banner(Mock::Trial, &reasons), None);
+        assert_eq!(provisional_banner(Mock::Stock, &[], &item), None);
+        assert_eq!(provisional_banner(Mock::Trial, &reasons, &[]), None);
     }
 
     #[test]

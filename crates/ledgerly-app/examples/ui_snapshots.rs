@@ -1423,6 +1423,11 @@ fn light_shots() -> Vec<Shot> {
             .query("Profit and Loss")
             .then(&[(Key::Enter, NONE)])
             .expect_bar("Profit and loss", "Profit and loss"),
+        // The mock's `profit-and-loss.detailed`: Alt+F1 on the profit and loss opens each group.
+        shot("profit-and-loss.detailed", &[palette])
+            .query("Profit and Loss")
+            .then(&[(Key::Enter, NONE), (Key::F1, Modifiers::ALT)])
+            .expect_bar("Profit and loss", "Profit and loss"),
         shot("profit-and-loss.provisional", &[palette])
             .query("Profit and Loss")
             .then(&[(Key::Enter, NONE)])

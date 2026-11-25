@@ -464,7 +464,7 @@ fn the_provisional_reason_names_the_item() {
         .insert(StockItemId(1), named_item(1, "Pickaxe"));
     assert_eq!(
         provisional_reason(&b),
-        "negative stock: item Pickaxe first went below zero on 2026-09-10"
+        "Pickaxe first went below zero on 10 Sep 2026"
     );
 }
 
@@ -474,6 +474,6 @@ fn an_unknown_item_is_named_by_its_number_not_debug_text() {
     // number, as the stock summary does ("item 1"), and not "StockItemId(1)".
     assert_eq!(
         provisional_reason(&books()),
-        "negative stock: item 1 first went below zero on 2026-09-10"
+        "item 1 first went below zero on 10 Sep 2026"
     );
 }

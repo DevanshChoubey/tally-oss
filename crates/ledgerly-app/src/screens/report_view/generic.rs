@@ -220,6 +220,7 @@ fn column_heading<'a>(report: &ViewReport, name: &'a str) -> &'a str {
             // plain word.
             "Open Dr" | "Open Cr" => "Open",
             "Value Dr" => "Value",
+            "Cost Dr" => "Cost",
             other => other,
         }
     }
@@ -265,7 +266,7 @@ pub fn repeats_label(report: &ViewReport, i: usize) -> bool {
 #[must_use]
 pub fn column_cell_text(heading: &str, cell: &ViewCell) -> String {
     match heading {
-        "Debit" | "Open Dr" | "Value Dr" => amount_on_side(cell, DrCr::Dr),
+        "Debit" | "Open Dr" | "Value Dr" | "Cost Dr" => amount_on_side(cell, DrCr::Dr),
         "Credit" | "Open Cr" => amount_on_side(cell, DrCr::Cr),
         _ => cell_text(cell),
     }
@@ -672,15 +673,26 @@ fn paint_total(ui: &Ui, rect: Rect, cols: &Columns, headings: &[String], totals:
     let t = tokens(ui);
     table::paint_total_rules(ui, rect);
     let font = bold_font(ui, TEXT_BODY);
+    // index.html `stockScreen`: the stock summary's total reads "Total closing stock" with the
+    // engine's tag, the figure being the stock engine's.
+    let stock = headings.iter().any(|h| h == "Cost Dr");
+    let label = if stock {
+        "Total closing stock"
+    } else {
+        "Total"
+    };
     table::paint_cell_text(
         ui,
         cols.label(rect),
         3.0,
-        "Total",
+        label,
         font.clone(),
         t.text,
         CellPlace::Left(table::CELL_PAD_X),
     );
+    if stock {
+        table::paint_engine_tag(ui, cols.label(rect), label, &font);
+    }
     let marks = LineMarks {
         rect,
         cols,
@@ -787,7 +799,7 @@ mod provisional_marks {
         // derived: the pickaxe's 70 nos at 470.00 is 32,900.00 (index.html: ITEMS cost 470);
         // the total 13,90,759.00 is the engine's. Neither cell shows the reason; each has a badge.
         let r = report(
-            &["HSN", "Quantity", "Unit", "Value Dr"],
+            &["HSN", "Quantity", "Unit", "Cost Dr", "Value Dr"],
             vec![
                 line(
                     "Steel pickaxe 2.5 kg",
@@ -795,6 +807,7 @@ mod provisional_marks {
                         ViewCell::Text("none".to_owned()),
                         ViewCell::Empty,
                         ViewCell::Text("nos".to_owned()),
+                        ViewCell::Amount(SignedAmount::dr(Paise::new(47_000))),
                         provisional(DrCr::Dr, 3_290_000),
                     ],
                 ),
@@ -804,11 +817,13 @@ mod provisional_marks {
                         ViewCell::Text("8413".to_owned()),
                         ViewCell::Empty,
                         ViewCell::Text("nos".to_owned()),
+                        ViewCell::Empty,
                         ViewCell::Amount(SignedAmount::dr(Paise::new(8_340_000))),
                     ],
                 ),
             ],
             vec![
+                ViewCell::Empty,
                 ViewCell::Empty,
                 ViewCell::Empty,
                 ViewCell::Empty,
@@ -821,6 +836,14 @@ mod provisional_marks {
             "the reason is drawn in a cell: {drawn:?}"
         );
         assert!(drawn.iter().any(|t| t == "32,900.00"), "{drawn:?}");
+        // provenance: index.html `stockScreen` line 2355: the total row reads "Total closing
+        // stock" followed by the green "engine" tag; the Cost column shows the rate 470.00.
+        assert!(
+            drawn.iter().any(|t| t == "Total closing stock"),
+            "{drawn:?}"
+        );
+        assert!(drawn.iter().any(|t| t == "engine"), "{drawn:?}");
+        assert!(drawn.iter().any(|t| t == "470.00"), "{drawn:?}");
         assert!(drawn.iter().any(|t| t == "13,90,759.00"), "{drawn:?}");
         assert_eq!(
             drawn.iter().filter(|t| *t == "Provisional").count(),

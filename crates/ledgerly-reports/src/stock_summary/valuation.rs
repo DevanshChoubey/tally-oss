@@ -5,10 +5,11 @@
 use ledgerly_core::{
     Decimal, Paise, Qty, RoundingRule, SignedAmount, Unsupported, round_rupees_to_paise,
 };
-use ledgerly_model::{StockItem, ValuationMethod};
+use ledgerly_model::{Books, StockItem, ValuationMethod};
 use ledgerly_stock::{ProvisionalReason, StockValuation, ValuationStatus};
 
 use super::{ItemFlow, Table, overflow};
+use crate::stock_reason::negative_stock_reason;
 use crate::{Cell, ReportError};
 
 /// A value figure with its standing.
@@ -27,17 +28,11 @@ impl Val {
         })
     }
 
-    fn from_valuation(v: &StockValuation) -> Val {
+    fn from_valuation(v: &StockValuation, books: &Books) -> Val {
         match &v.status {
             ValuationStatus::Final => Val::Final(v.value),
             ValuationStatus::Provisional(ProvisionalReason::NegativeStock { item, date }) => {
-                Val::Provisional(
-                    v.value,
-                    format!(
-                        "negative stock: item {} first went below zero on {date}",
-                        item.0
-                    ),
-                )
+                Val::Provisional(v.value, negative_stock_reason(books, *item, *date, v.as_of))
             }
         }
     }
@@ -79,8 +74,38 @@ pub(super) fn closing_value(item: &StockItem, qty_close: Decimal, table: &Table<
             "no closing valuation was supplied for this item",
         ),
         Some(v) if v.qty.0 != qty_close => mismatch(item, "closing", v.qty, qty_close),
-        Some(v) => Val::from_valuation(v),
+        Some(v) => Val::from_valuation(v, table.books),
     }
+}
+
+/// The closing rate cell: the closing valuation's own rate, rounded half up to the paisa.
+///
+/// Nothing on hand has no rate (`Empty`). Stock on hand whose valuation gives no rate is
+/// `Unsupported`, as is a rate when the closing value is. The rate is not itself marked
+/// provisional; the closing value is.
+pub(super) fn closing_rate(
+    item: &StockItem,
+    closing: &Val,
+    qty_close: Decimal,
+    table: &Table<'_>,
+) -> Result<Cell, ReportError> {
+    if let Val::Unsupported(u) = closing {
+        return Ok(Cell::Unsupported(u.clone()));
+    }
+    if qty_close <= Decimal::ZERO {
+        return Ok(Cell::Empty);
+    }
+    let rate = table.closing.get(&item.id).and_then(|v| v.rate);
+    Ok(match rate {
+        Some(r) => Cell::Amount(SignedAmount::from_signed(round_rupees_to_paise(
+            r.0,
+            RoundingRule::HalfUpToPaise,
+        )?)?),
+        None => Cell::Unsupported(Unsupported {
+            what: format!("stock summary: closing rate of {}", item.name),
+            reason: "the valuation gives no rate for the stock on hand".to_owned(),
+        }),
+    })
 }
 
 pub(super) fn opening_value(
@@ -91,7 +116,7 @@ pub(super) fn opening_value(
 ) -> Result<Val, ReportError> {
     if let Some(v) = table.opening.get(&item.id) {
         return Ok(if v.qty.0 == qty_open {
-            Val::from_valuation(v)
+            Val::from_valuation(v, table.books)
         } else {
             mismatch(item, "opening", v.qty, qty_open)
         });

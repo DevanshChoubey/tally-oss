@@ -365,14 +365,41 @@ fn drawn_texts(s: &mut ItemInvoiceScreen, b: &Books, lock: Option<Date>) -> Vec<
 #[test]
 fn the_lock_bar_reads_as_the_mock_words_it() {
     // provenance: index.html:1357: "Period locked. <date> is on or before <lock date>. You can
-    // look, but saving is blocked. Press F2 to change the date." The invoice is dated 21 Nov 2026
-    // (TODAY) and the lock is set to the same day, so both dates read 21 Nov 2026.
+    // look, but saving is blocked. Press <F2 keycap> to change the date." The invoice is dated
+    // 21 Nov 2026 (TODAY) and the lock is set to the same day, so both dates read 21 Nov 2026.
+    // The mock draws F2 as a keycap, so it is its own text, between the two halves.
     let b = books();
     let mut s = open(&b);
     let texts = drawn_texts(&mut s, &b, Some(TODAY));
+    let at = |want: &str| texts.iter().position(|t| t == want);
+    let lead = at(
+        "Period locked. 21 Nov 2026 is on or before 21 Nov 2026. You can look, but saving is blocked. Press",
+    );
+    let key = texts.iter().position(|t| t == "F2");
+    let tail = at("to change the date.");
+    assert!(
+        lead.is_some() && key.is_some() && tail.is_some() && lead < key && key < tail,
+        "{texts:?}"
+    );
+}
+
+#[test]
+fn a_locked_date_wears_the_locked_badge_and_the_note_counts_the_thing_to_fix() {
+    // provenance: index.html `SCREENS['sales-invoice']` period-locked (line 1449): the date shows
+    // a "Locked" badge, and the foot has a red note "1 thing to fix before saving" over the line
+    // "Date <date> is on or before the lock date <lock date>. Choose a later date with F2, or ask
+    // the owner to move the lock." (line 1346).
+    let b = books();
+    let mut s = open(&b);
+    let texts = drawn_texts(&mut s, &b, Some(TODAY));
+    assert!(texts.iter().any(|t| t == "Locked"), "{texts:?}");
+    assert!(
+        texts.iter().any(|t| t == "1 thing to fix before saving"),
+        "{texts:?}"
+    );
     assert!(
         texts.iter().any(|t| t
-            == "Period locked. 21 Nov 2026 is on or before 21 Nov 2026. You can look, but saving is blocked. Press F2 to change the date."),
+            == "Date 21 Nov 2026 is on or before the lock date 21 Nov 2026. Choose a later date with F2, or ask the owner to move the lock."),
         "{texts:?}"
     );
 }

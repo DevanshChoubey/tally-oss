@@ -662,7 +662,7 @@ fn provisional_stock_marks_profit_provisional() {
     ] {
         match cell(&r, label) {
             Cell::Provisional { amount, reason } => {
-                assert!(reason.contains("negative stock"), "{reason}");
+                assert!(reason.contains("first went below zero"), "{reason}");
                 assert_eq!(amount.amount, expect, "{label}");
                 if label != "Closing stock" {
                     assert_eq!(amount.side, DrCr::Cr, "profit is a credit balance");

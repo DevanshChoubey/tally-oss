@@ -1231,12 +1231,18 @@ impl ReportViewScreen {
             let report = self.shown();
             let side = &self.side;
             let mut alter = false;
+            let mut open_stock = false;
             // index.html `plScreen` and `stockScreen`: a provisional stock puts a warning note
             // over the figures. The engine's reason (it names the item) is the note's text; the
             // marked lines say which figures depend on it.
             let banner = match look {
                 Look::Mock(m @ (mock::Mock::ProfitLoss | mock::Mock::Stock)) => {
-                    mock::provisional_banner(m, &mock::pl_provisional_reasons(&self.report))
+                    let items = if matches!(m, mock::Mock::Stock) {
+                        mock::provisional_row_labels(&self.report)
+                    } else {
+                        Vec::new()
+                    };
+                    mock::provisional_banner(m, &mock::pl_provisional_reasons(&self.report), &items)
                 }
                 Look::Mock(
                     mock::Mock::Trial | mock::Mock::Outstanding { .. } | mock::Mock::Audit(_),
@@ -1249,7 +1255,10 @@ impl ReportViewScreen {
                 .frame(egui::Frame::NONE)
                 .show(ui, |ui| {
                     if let Some((lead, rest)) = &banner {
-                        draw_provisional_banner(ui, lead, rest);
+                        // The profit and loss banner carries the "Open stock items" button
+                        // (index.html `plScreen`); the stock summary is already that list.
+                        let with_button = matches!(look, Look::Mock(mock::Mock::ProfitLoss));
+                        open_stock = draw_provisional_banner(ui, lead, rest, with_button);
                         ui.add_space(8.0);
                     }
                     if side.ledger().is_some() {
@@ -1267,6 +1276,9 @@ impl ReportViewScreen {
                 .inner;
             if alter {
                 self.alter_wanted = true;
+            }
+            if open_stock {
+                self.goto = Some("stock-summary");
             }
             self.selected_line = drawn.selected;
             drawn.events
@@ -1645,7 +1657,9 @@ impl Screen for ReportViewScreen {
 
 /// The amber note over a report with provisional figures: an alert icon, the lead sentence in bold
 /// and the rest (the mock's `.note.warn`).
-fn draw_provisional_banner(ui: &mut Ui, lead: &str, rest: &str) {
+/// Returns whether its "Open stock items" button (drawn only with `with_button`) was clicked.
+fn draw_provisional_banner(ui: &mut Ui, lead: &str, rest: &str, with_button: bool) -> bool {
+    let mut clicked = false;
     crate::ui::note::note_with_icon(ui, NoteKind::Warn, Icon::Alert, |ui, ink| {
         // One paragraph: the lead in bold, the rest after it on the same line (the mock's `<b>`).
         let size = crate::theme::TEXT_META;
@@ -1661,7 +1675,11 @@ fn draw_provisional_banner(ui: &mut Ui, lead: &str, rest: &str) {
             egui::TextFormat::simple(egui::FontId::proportional(size), ink),
         );
         ui.label(job);
+        if with_button {
+            clicked = button(ui, "Open stock items", None, ButtonKind::Secondary).clicked();
+        }
     });
+    clicked
 }
 
 /// The red note over a report the engine refused or could not run: the words the engine gave,
