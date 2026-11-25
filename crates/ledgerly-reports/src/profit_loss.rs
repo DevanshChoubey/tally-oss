@@ -15,10 +15,27 @@
 //! the remaining Income and Expense primary groups; `NP = GP + indirect incomes - indirect
 //! expenses`.
 //!
+//! Two-sided rows (session 12): the account is also given as the debit and credit sides of a
+//! horizontal account. Every amount carries the side it stands on; `Gross profit c/o` (or `Gross
+//! loss c/o` on the credit side) balances the trading account, `Gross profit b/f` (or `Gross loss
+//! b/f` on the debit side) opens the profit and loss account, `Net profit c/o` (or `Net loss c/o`)
+//! balances it, and `Trading total` and `Profit and loss total` are what both sides come to. The
+//! sides must agree or the report is an error. The signed `Gross profit` and `Net profit` rows
+//! stay.
+//!
 //! Stock values are injected, never computed here. Opening stock must be the valuation at the
 //! day before the period starts and closing stock the valuation at the period end; a valuation
 //! dated otherwise is an error. A provisional valuation makes every figure derived from it
 //! provisional, with the reason.
+//!
+//! Opening stock entered by hand is the opening balance of a ledger under Stock-in-Hand (TallyPrime
+//! help "Stock Items - FAQ", <https://help.tallysolutions.com/stock-items-faq/>, read
+//! 2026-11-25: create a Stock-in-Hand ledger and enter the opening stock amount; the manually
+//! entered opening and closing stock are displayed in the Profit & Loss account). It is stock on
+//! hand when the books began, so it is added to the opening stock of a period that starts on
+//! `books_begin`. For a later period the opening stock is what is on hand then, which the ledger
+//! does not say, so such a report is `Unsupported` while a Stock-in-Hand ledger holds an opening
+//! balance.
 //!
 //! # What is not computed (returns `Unsupported`)
 //!
@@ -26,6 +43,8 @@
 //! * a non-zero opening balance on an Income/Expense ledger (no defined period split);
 //! * a group of nature Asset or Liability flagged `affects_gross_profit`, or a primary group
 //!   with no nature;
+//! * a Stock-in-Hand ledger that is posted to or has a credit opening balance, and a period that
+//!   starts after `books_begin` while a Stock-in-Hand ledger holds an opening balance;
 //! * either stock input being `Unsupported`.
 //!
 //! The scenario filter is applied here from the documented meaning of [`Scenario`] because the
@@ -38,7 +57,7 @@ use ledgerly_core::{Date, GroupId, LedgerId, Outcome, Paise, SignedAmount};
 use ledgerly_model::{Books, Group, Ledger, Nature, Posting, Scenario, VoucherStatus};
 use ledgerly_stock::{ProvisionalReason, StockValuation, ValuationStatus};
 
-use crate::balance_sheet::negative_stock_reason;
+use crate::balance_sheet::{negative_stock_reason, stock_in_hand_opening};
 use crate::{
     Cell, ColumnHeader, ColumnSpec, Detail, DrillKey, Report, ReportError, ReportFilter,
     ReportKind, ReportParams, ReportRow, RowKind,
@@ -119,6 +138,20 @@ pub fn profit_loss(
         day_before,
         "opening stock"
     )?);
+    let mut opening = opening;
+    let held = supported!(stock_in_hand_opening(books)?);
+    if !held.is_zero() {
+        if from != books.company.books_begin {
+            return Ok(Outcome::unsupported(
+                "profit and loss: opening stock after the books begin",
+                format!(
+                    "a Stock-in-Hand ledger holds the stock on hand at {}; the opening stock of a period starting {from} is not stated by it",
+                    books.company.books_begin
+                ),
+            ));
+        }
+        opening.value = opening.value.checked_add(held)?;
+    }
     let closing = supported!(stock_total(
         books,
         closing_stock,
@@ -464,6 +497,35 @@ fn render_bucket(
     Ok(())
 }
 
+/// The total both sides of a two-sided account come to once the balancing figure is on its side:
+/// `balancing` is debit positive, so a profit is added to the debit side and a loss to the credit
+/// side. The sides must agree; they always do when the nets are right, and a difference is an
+/// error, never a shown total.
+fn balanced_total(
+    debit: Paise,
+    credit: Paise,
+    balancing: Paise,
+    account: &str,
+) -> Result<Paise, ReportError> {
+    let (to_debit, to_credit) = if balancing.is_negative() {
+        (Paise::ZERO, balancing.checked_neg()?)
+    } else {
+        (balancing, Paise::ZERO)
+    };
+    let debit_total = debit.checked_add(to_debit)?;
+    let credit_total = credit.checked_add(to_credit)?;
+    if debit_total != credit_total {
+        return Err(ReportError::Invalid {
+            field: "totals".into(),
+            reason: format!(
+                "the two sides of the {account} differ by {} paise",
+                debit_total.checked_sub(credit_total)?.get()
+            ),
+        });
+    }
+    Ok(debit_total)
+}
+
 /// A profit figure: `Signed` when final, `Provisional` (profit shown as a credit balance) when
 /// stock is provisional.
 fn profit_cell(profit: Paise, provisional: Option<&str>) -> Result<Cell, ReportError> {
@@ -515,6 +577,10 @@ fn report_notes(provisional: Option<&str>) -> Vec<String> {
     notes
 }
 
+#[allow(
+    clippy::too_many_lines,
+    reason = "one linear pass that lays out the two-sided rows in order"
+)]
 fn render(
     books: &Books,
     params: &ReportParams,
@@ -558,7 +624,42 @@ fn render(
         None,
         profit_cell(gross, provisional.as_deref())?,
     ));
+    let prov = provisional.as_deref();
+    // The two-sided form: each amount carries the side it stands on. Debit side of the trading
+    // account is opening stock and the debit groups, credit side the credit groups and closing
+    // stock; the gross profit (or loss) balances the two.
+    let trading_debit = net(Bucket::TradingExpense).checked_add(opening.value)?;
+    let trading_credit = net(Bucket::TradingIncome)
+        .checked_neg()?
+        .checked_add(closing.value)?;
+    let (gross_label, gross_back_label) = if gross.is_negative() {
+        ("Gross loss c/o", "Gross loss b/f")
+    } else {
+        ("Gross profit c/o", "Gross profit b/f")
+    };
+    rows.push(row(
+        gross_label,
+        0,
+        RowKind::Item,
+        None,
+        stock_cell(gross, true, prov)?,
+    ));
+    let trading_total = balanced_total(trading_debit, trading_credit, gross, "trading account")?;
+    rows.push(row(
+        "Trading total",
+        0,
+        RowKind::Subtotal,
+        None,
+        stock_cell(trading_total, true, prov)?,
+    ));
     rows.push(text_row("Profit and loss account"));
+    rows.push(row(
+        gross_back_label,
+        0,
+        RowKind::Item,
+        None,
+        stock_cell(gross, false, prov)?,
+    ));
     render_bucket(books, tree, Bucket::IndirectExpense, detailed, &mut rows)?;
     render_bucket(books, tree, Bucket::IndirectIncome, detailed, &mut rows)?;
     let net_cell = profit_cell(net_profit, provisional.as_deref())?;
@@ -568,6 +669,38 @@ fn render(
         RowKind::Subtotal,
         None,
         net_cell.clone(),
+    ));
+    let net_label = if net_profit.is_negative() {
+        "Net loss c/o"
+    } else {
+        "Net profit c/o"
+    };
+    rows.push(row(
+        net_label,
+        0,
+        RowKind::Item,
+        None,
+        stock_cell(net_profit, true, prov)?,
+    ));
+    let account_debit = net(Bucket::IndirectExpense);
+    let account_credit = net(Bucket::IndirectIncome).checked_neg()?;
+    let carried_in = if gross.is_negative() {
+        (gross.checked_neg()?, Paise::ZERO)
+    } else {
+        (Paise::ZERO, gross)
+    };
+    let account_total = balanced_total(
+        account_debit.checked_add(carried_in.0)?,
+        account_credit.checked_add(carried_in.1)?,
+        net_profit,
+        "profit and loss account",
+    )?;
+    rows.push(row(
+        "Profit and loss total",
+        0,
+        RowKind::Subtotal,
+        None,
+        stock_cell(account_total, true, prov)?,
     ));
 
     let notes = report_notes(provisional.as_deref());

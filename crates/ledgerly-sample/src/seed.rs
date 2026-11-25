@@ -72,6 +72,7 @@ pub(crate) enum GroupSeed {
     SalesAccounts,
     PurchaseAccounts,
     DirectExpenses,
+    StockInHand,
     IndirectExpenses,
     IndirectIncomes,
 }

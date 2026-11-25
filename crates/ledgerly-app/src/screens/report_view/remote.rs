@@ -167,8 +167,8 @@ pub(super) fn mock_lines(
             };
             Some(mock::stock_summary(view.clone(), &facts))
         }
+        ReportKind::ProfitAndLoss => Some(mock::profit_loss(view.clone())),
         ReportKind::BalanceSheet
-        | ReportKind::ProfitAndLoss
         | ReportKind::GroupSummary(_)
         | ReportKind::GroupLedgers(_)
         | ReportKind::LedgerVouchers(_)

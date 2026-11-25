@@ -93,6 +93,7 @@ fn reserved(group: GroupSeed) -> ReservedGroup {
         GroupSeed::SalesAccounts => ReservedGroup::SalesAccounts,
         GroupSeed::PurchaseAccounts => ReservedGroup::PurchaseAccounts,
         GroupSeed::DirectExpenses => ReservedGroup::DirectExpenses,
+        GroupSeed::StockInHand => ReservedGroup::StockInHand,
         GroupSeed::IndirectExpenses => ReservedGroup::IndirectExpenses,
         GroupSeed::IndirectIncomes => ReservedGroup::IndirectIncomes,
     }
