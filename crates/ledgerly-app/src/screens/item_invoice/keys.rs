@@ -190,6 +190,7 @@ impl ItemInvoiceScreen {
             | Field::Number
             | Field::Place
             | Field::Reference
+            | Field::ReferenceDate
             | Field::Qty(_)
             | Field::Rate(_)
             | Field::Discount(_)

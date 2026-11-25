@@ -85,7 +85,7 @@ use std::str::FromStr;
 use thiserror::Error;
 
 pub use self::draft::{BillRow, InvoiceDraft, InvoiceRow, ParticularRow};
-pub use self::draw::{LineShown, tax_rows};
+pub use self::draw::{LineShown, place_note_parts, tax_rows};
 pub use self::picker::{ItemHit, search_items};
 
 /// How many type-ahead entries are listed at most.
@@ -143,27 +143,41 @@ impl InvoiceKind {
         }
     }
 
-    fn account_label(self) -> &'static str {
+    /// The caption of the sales or purchase ledger field.
+    #[must_use]
+    pub fn account_label(self) -> &'static str {
         match self {
             InvoiceKind::Sales | InvoiceKind::CreditNote => "Sales ledger",
             InvoiceKind::Purchase | InvoiceKind::DebitNote => "Purchase ledger",
         }
     }
 
-    fn party_label(self) -> &'static str {
+    /// The caption of the party field.
+    #[must_use]
+    pub fn party_label(self) -> &'static str {
         match self {
-            InvoiceKind::Sales
-            | InvoiceKind::CreditNote
-            | InvoiceKind::Purchase
-            | InvoiceKind::DebitNote => "Party",
+            InvoiceKind::Sales | InvoiceKind::CreditNote => "Party",
+            InvoiceKind::Purchase | InvoiceKind::DebitNote => "Supplier",
         }
     }
 
-    fn reference_label(self) -> &'static str {
+    /// The caption of the reference field.
+    #[must_use]
+    pub fn reference_label(self) -> &'static str {
         match self {
             InvoiceKind::Sales => "Buyer's order no.",
-            InvoiceKind::Purchase => "Supplier invoice no.",
+            InvoiceKind::Purchase => "Supplier bill no.",
             InvoiceKind::CreditNote | InvoiceKind::DebitNote => "Original invoice no.",
+        }
+    }
+
+    /// The caption of the reference date field, `None` when the kind has none.
+    #[must_use]
+    pub fn reference_date_label(self) -> Option<&'static str> {
+        match self {
+            InvoiceKind::Sales => None,
+            InvoiceKind::Purchase => Some("Bill date"),
+            InvoiceKind::CreditNote | InvoiceKind::DebitNote => Some("Original invoice date"),
         }
     }
 }
@@ -436,6 +450,8 @@ pub enum Field {
     Account,
     /// Reference.
     Reference,
+    /// Date of the reference: the supplier's bill date, or the original invoice's date.
+    ReferenceDate,
     /// Item of a line.
     Item(usize),
     /// Quantity of a line.
@@ -1082,6 +1098,7 @@ impl ItemInvoiceScreen {
             | Field::Place
             | Field::Account
             | Field::Reference
+            | Field::ReferenceDate
             | Field::BillKind(_)
             | Field::BillName(_)
             | Field::BillAmount(_)

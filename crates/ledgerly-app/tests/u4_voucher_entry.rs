@@ -1393,3 +1393,26 @@ fn the_list_is_capped_at_fifty_and_recents_still_lead() {
     assert_eq!(names[49], "L48");
     assert_eq!(names[50], "+L");
 }
+
+// ---- a journal that does not balance is never handed to the host ---------------------------------
+
+#[test]
+fn an_unbalanced_journal_is_refused_and_nothing_is_left_for_the_host() {
+    // derived: spec 5 invariant 1 (the sum of Dr equals the sum of Cr). Debit 42,000.00 and a
+    // credit typed as 40,000.00 leave 2,000.00 out; the screen offers a third, prefilled line,
+    // and saving while that line has no ledger is refused, so no voucher reaches the host.
+    let books = books();
+    let mut s = open(&books, T_JOURNAL);
+    let m = &books.masters;
+    s.set_ledger_text(0, "rent");
+    s.submit(m);
+    s.set_amount_text(0, "42000");
+    s.submit(m);
+    s.set_ledger_text(1, "cash");
+    s.submit(m);
+    s.set_amount_text(1, "40000");
+    s.submit(m);
+    s.save(m);
+    assert!(s.take_save_request().is_none(), "{:?}", s.error_text());
+    assert!(s.error_text().is_some());
+}

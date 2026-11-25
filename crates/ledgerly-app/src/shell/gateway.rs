@@ -12,7 +12,8 @@
 //! | Masters (M) | the masters screen |
 //! | Palette (Ctrl+K) | the shell's palette |
 //! | Unmatched bank lines | the bank reconciliation, when the company has exactly one bank ledger |
-//! | Purchase from a bill, describe a transaction, pending IMS | nothing yet: a notice says so |
+//! | Purchase from a bill (F9) | the typed purchase form, as the sidebar's Purchase row: the bill reader is not built |
+//! | Describe a transaction, pending IMS | nothing yet: a notice says so |
 //!
 //! A target that opens nothing always leaves a notice on screen; nothing is dropped silently.
 //!
@@ -117,7 +118,11 @@ impl GatewayScreen {
                 return None;
             }
             HomeTarget::UnmatchedBankLines => books(ctx).and_then(navigate::bank_entry_screen),
-            HomeTarget::PurchaseFromBill => Err(not_yet("a purchase from a photo of a bill")),
+            // The bill reader is not built, so F9 opens the typed purchase form, as the sidebar's
+            // Purchase row (F9) does.
+            HomeTarget::PurchaseFromBill => books(ctx).and_then(|b| {
+                navigate::invoice_screen(b, BaseVoucherKind::Purchase, navigate::today())
+            }),
             HomeTarget::DescribeTransaction => Err(not_yet("describing a transaction")),
             HomeTarget::PendingIms => Err(not_yet("the invoice management system list")),
             HomeTarget::ReviewQueue => Ok(Box::new(ReviewScreen::default()) as Box<dyn Screen>),

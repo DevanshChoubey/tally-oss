@@ -703,6 +703,7 @@ impl Shell {
 
         cmds.extend(self.stage(ui, &trail, &t));
         cmds.extend(Self::key_cmds(ui, can_go_back, self.app_ctx.api.is_none()));
+        cmds.extend(self.voucher_key_cmds(ui));
         cmds.extend(self.toast_frame(ui.ctx()));
         for cmd in cmds {
             self.run_cmd(cmd);
@@ -745,6 +746,37 @@ impl Shell {
                 navigate::KEYS_KEY.to_owned(),
             )));
         }
+        cmds
+    }
+
+    /// The keys that open a new voucher form from any screen of an open company: contra, journal,
+    /// purchase, credit note and debit note. Payment, receipt and sales keep their own handling
+    /// on the screens that offer them. Runs after the screen, so a screen that owns a chord
+    /// (Home's F9) has already consumed it.
+    fn voucher_key_cmds(&self, ui: &egui::Ui) -> Vec<ChromeCmd> {
+        const OPENERS: [Action; 5] = [
+            Action::NewContra,
+            Action::NewJournal,
+            Action::NewPurchase,
+            Action::NewCreditNote,
+            Action::NewDebitNote,
+        ];
+        if self.app_ctx.api.is_none() || self.palette.is_open() {
+            return Vec::new();
+        }
+        let text_focused = ui.ctx().text_edit_focused();
+        let mut cmds = Vec::new();
+        ui.input_mut(|i| {
+            for action in OPENERS {
+                if self
+                    .keymap
+                    .consume_action_outside_text(i, action, text_focused)
+                {
+                    cmds.push(ChromeCmd::OpenOnTop(PaletteTarget::Command(action)));
+                    break;
+                }
+            }
+        });
         cmds
     }
 

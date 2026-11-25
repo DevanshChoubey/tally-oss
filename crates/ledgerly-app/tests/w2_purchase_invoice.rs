@@ -214,14 +214,16 @@ fn purchase_and_the_notes_are_screen_commands() {
 #[test]
 fn each_command_opens_its_invoice_in_accounting_mode_without_inventory() {
     // provenance: the seeded voucher type names (Purchase, Credit Note, Debit Note:
-    // ledgerly-model seed_voucher_types.rs) and the screen title "<type> invoice". Derived: on a
-    // company with inventory off each opens in accounting invoice mode.
+    // ledgerly-model seed_voucher_types.rs) and the screen title: "<type> invoice" for a purchase,
+    // the bare type name for a note (CGST Act s.34 calls it a credit or debit note, not an
+    // invoice; changed in s11). Derived: on a company with inventory off each opens in
+    // accounting invoice mode.
     let (_api, books) = setup("w2_pur_inv_routes.ledgerly");
     let ctx = app(&books, None);
     for (action, title) in [
         (Action::NewPurchase, "Purchase invoice"),
-        (Action::NewCreditNote, "Credit Note invoice"),
-        (Action::NewDebitNote, "Debit Note invoice"),
+        (Action::NewCreditNote, "Credit Note"),
+        (Action::NewDebitNote, "Debit Note"),
     ] {
         let screen = screen_for(&PaletteTarget::Command(action), &ctx).unwrap();
         assert_eq!(screen.title(), title);
@@ -268,6 +270,10 @@ fn fill(s: &mut ItemInvoiceScreen, m: &ledgerly_model::Masters) {
     s.submit(m);
     "27".clone_into(&mut s.draft_mut().place_text);
     s.submit(m);
+    // The supplier's bill number, then its date (both optional); a purchase asks for the date
+    // since s11.
+    s.submit(m);
+    assert_eq!(s.focus(), Field::ReferenceDate);
     s.submit(m);
     assert_eq!(s.focus(), Field::Ledger(0));
     s.set_particular_text(0, "maint");

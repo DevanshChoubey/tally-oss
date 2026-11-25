@@ -203,6 +203,7 @@ fn alt_c_on_an_item_field_opens_nothing() {
             Field::Date
             | Field::Number
             | Field::Reference
+            | Field::ReferenceDate
             | Field::Item(_)
             | Field::Qty(_)
             | Field::Rate(_)
