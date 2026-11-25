@@ -1,6 +1,6 @@
 # Mock coverage: app screens and states against the mock
 
-Round S12 (2026-11-25). The mock (`design/mock-v2/index.html`) is the source of truth. This file
+Rounds S12 and S12b (2026-11-25). The mock (`design/mock-v2/index.html`) is the source of truth. This file
 lists every screen and state the app reaches, and the mock state that shows it, or MISSING.
 Sources read: `crates/ledgerly-app/src/screens/*`, `shell/navigate.rs` (screen keys and report
 kinds), `shell/welcome.rs`, `screens/import/*`, `screens/audit.rs`, `screens/print_job.rs`,
@@ -62,40 +62,115 @@ state and the mock does not; the reason is in the last column.
 | Audit, integrity certificate | audit.integrity | |
 | Audit, edits after lock (Unsupported) | audit.unsupported | The app maps this report to None |
 
-## Still MISSING
+## Added in S12b (30 states)
 
-| App screen or state | Why not in S12 |
+Round 2 of S12 (same day). Each row names the app code it follows. Sample figures and sample
+engine reasons are marked as such; the wording follows the app.
+
+| App screen or state | Mock state (new in S12b) | Source in the app |
+|---|---|---|
+| Home, GST cash payable tile not readable | home.gst-unsupported, home.new-tab | `screens/home/kpi.rs` gst_tile: "Needs GSTR-2B", "not readable yet" |
+| Home, new tab with a company open (Ctrl+T) | home.new-tab | `shell/mod.rs` NewTab: a Gateway (Home) tab; the strip shows "Home" and "Home 2" |
+| Profit and loss, computing | profit-and-loss.loading | `report_view/mod.rs` draw_loading: "Computing from all vouchers…", Esc cancels |
+| Profit and loss, preparing the PDF (Ctrl+P) | profit-and-loss.print-busy | `print_job.rs` is_busy: the app shows no text, so the line is a proposal (PARITY-GAPS) |
+| Profit and loss, not printed | profit-and-loss.print-error | `print_job.rs` print_notice: "{title} was not printed: {reason}" |
+| Trial balance, computing | trial-balance.loading | draw_loading (shared by every report) |
+| Outstanding receivables, computing | outstanding.loading | draw_loading |
+| Stock summary, computing | stock-summary.loading | draw_loading |
+| Audit, reading the log | audit.loading | `audit.rs` body_ui: "Reading the audit log..." |
+| Audit, log could not be read | audit.failed | `audit.rs` AuditState::Failed, set_failed, shown in the error colour |
+| GSTR-1 not loaded for the period | gst.gstr1-not-loaded | `gst/draw.rs` draw_not_ready Feed::NotLoaded: "Not loaded for this period yet." |
+| GSTR-3B not loaded for the period | gst.gstr3b-not-loaded | same |
+| GSTR-1 refused by the engine | gst.gstr1-unsupported | Feed::Unsupported: "Not supported yet: what (reason)" (`wire.rs` unsupported_message) |
+| GSTR-3B refused by the engine | gst.gstr3b-unsupported | same |
+| GSTR-1 sections could not be built | gst.gstr1-failed | `gst/worker.rs` failed(): "{what} could not be built", with the error as the reason |
+| Masters, no ledgers yet | masters.empty | `masters.rs` draw_no_rows: "No ledgers yet", "Create the first ledger with Alt+C." |
+| Masters, no stock items yet | masters.items-empty | same, for stock items |
+| Masters, new stock item form | masters.create-item | `masters/form_ui.rs` stock item fields: Name, Alias, Under, Unit, Valuation, HSN/SAC, Track batches |
+| Masters, balances loading | masters.loading | `masters/balances.rs`: dashes until the engine answers; the heading hint is hover text only |
+| Masters, filter matches nothing | masters.no-match | `masters.rs` draw_no_rows: "No ledgers matches 'zzqx'." (the app's wording) |
+| Import, one-step, idle | import.default | `import/view.rs` draw_direct; the step-by-step panel shows as not connected |
+| Import, no company open | import.no-company | `import/view.rs` Step::Detect with no company: note and "Back to setup" |
+| Import, company name missing | import.validation-error | `import/direct.rs`: "Error: enter the name of the company in the other app" |
+| Import, port not in range | import.port-error | `import/direct.rs`: "\"99999\" is not a port number (1 to 65535)" |
+| Import, running | import.running | `import/direct.rs` DirectState::Running: "Importing..." |
+| Import, finished | import.imported | `ledgerly-api/src/tally_import.rs` ImportSummary Display (sample counts from the sample company) |
+| Import, refused as not supported | import.refused | DirectState::Refused, unsupported_text (sample voucher type) |
+| Import, failed | import.failed | DirectState::Failed: "could not import ... : {error}" (sample error) |
+| Cold start, new tab (Ctrl+T, no company) | setup.new-tab | `shell/mod.rs` NewTab opens SetupScreen; `shell/chrome.rs` tab strip; titles "Company setup", "Company setup 2" |
+| Cold start, sidebar collapsed (Ctrl+\) | setup.rail | `shell/sidebar.rs` 60 px rail; labels hidden |
+
+Notes on the S12b rows:
+
+- The rail resets on navigation in the mock (`railOn` is set from every hash). The app keeps the
+  rail until it is toggled again. Recorded in PARITY-GAPS.
+- Import and the report states above use the sample company. The import counts are the sample's
+  own (14 vouchers, 43 ledgers), not a real import.
+
+## Still MISSING (after S12b)
+
+Each row below is in the app code but the app cannot reach it from the UI, or it is reached only
+with a sample that the mock does not hold. The reason is exact.
+
+| App screen or state | Why it has no mock state |
 |---|---|
-| Cold start, new tab (Ctrl+T, cold.new-tab) | Not read in the app code this round; behaviour unknown, so no design |
-| Cold start, sidebar collapsed (cold.rail) | The mock has the Ctrl+\ command but no capture state; add with the shell round |
-| Import from another app, five steps: detect, choose company, pull with progress and cancel, map, reconcile report; and the error | Large flow with no mock design; needs its own round. The entry card exists on setup.welcome |
-| Profit and loss, trial balance, outstanding and stock summary loading states | The app's report loading card exists (report_view draw_loading); the mock has loading only for balance sheet. Add with the reports round |
-| Print job running (busy) and the print job's other error texts | Not designed |
-| Audit, loading and failed states | Not designed (the app has set_failed) |
-| GSTR-3B cash payable unsupported ("Needs GSTR-2B: not readable yet") and GSTR-1 unsupported feed | Needs an edit to the GST screen; deferred |
-| GSTR-1 and 3B not loaded ("Not loaded for this period yet") | Not designed |
-| Masters empty and loading variants | Not checked against the app this round |
+| Import, choose company, pull (running, cancelling, cancelled, failed), map (not started, working, unmapped, ready), reconcile (committing, commit failed, reconciling, failed, ready) | Not reachable in this build. `screens/import/view.rs:198` sets `STEP_BY_STEP_CONNECTED = false`, so the step-by-step controls are disabled and the screen says so (`import.default`). The steps are built and tested in `tests/u10_import_wizard.rs` but no UI path opens them. Designing them now would design screens users cannot open. |
+| Open a company file, "Working on the company file..." (`shell/welcome.rs`) | `WelcomeScreen` is created only by `Shell::with_welcome`, which the app never calls; it is used by tests (`tests/u1_shell.rs`, `tests/s7_zoom.rs`). The cold start is `SetupScreen` (`Shell::cold_start`), which the mock covers. |
+| Masters: "Not supported yet" notice (`masters.rs` line 2068) | Shown only after a masters action returns Unsupported. The sample engine does not refuse a masters action, so no reachable mock state shows it. The same wording is shown on the GST screen (gst.gstr1-unsupported). |
+
+Former MISSING rows, now covered: cold new tab and cold rail (setup.new-tab, setup.rail), import's
+entry card (setup.welcome links to import), profit and loss, trial balance, outstanding and stock
+summary loading, print busy and its error, audit loading and failed, GSTR-1 and GSTR-3B not
+loaded and unsupported, masters empty and loading variants.
 
 ## Open items for the designs above
 
-- Rule 53(1A) of the CGST Rules: the research of 2026-11-25 read the particulars list from a
-  commentary; the official CBIC text was not reachable. The credit and debit note footers say
-  "rule 53" and need checking against the CBIC text before the wording is final.
-- Debit notes: s.34(3) puts the debit note with the supplier. The purchase-return booking in
-  debit-note.default follows the mock's own rule (Dr supplier, Cr purchases and input tax). Its
-  GST treatment for the buyer needs a GST adviser's check before the app is built to match.
-- Tally voucher fields (credit note reference, journal and contra rules) were found only as search
-  snippets, not full pages. The layouts here follow the app's own forms and the GST rule, not a
-  field-by-field copy of any other product.
+- Credit note (`credit-note.*`): footer now cites CGST Rules r.53(1A)(g), the serial number and
+  date of the invoice, read from the CBIC text.
+- Debit note (`debit-note.*`): s.34(3) and s.34(4) describe a debit note the supplier issues for a
+  tax value that was under-charged. The mock's debit note is a buyer's purchase return to the
+  supplier. The footer no longer says s.34(3). The GST treatment of a buyer's return (input tax
+  reversal and the return it lands in) is not in the primary text read here; it still needs a
+  GST adviser's check before the app is built to match.
+- Tally Journal (`journal.*`) and Contra (`contra.*`): the Journal page was read (te9rel62
+  release). The Contra page URL returned a "lost your way" page, so contra rules are not checked
+  against Tally.
+- Tally print preview and the edit log: no page URL was reachable from the pages read, so the
+  print and audit states are not checked against Tally's help. They follow the app's own behaviour.
+- Print busy (`profit-and-loss.print-busy`): the line "Preparing the PDF." is a proposal. The app
+  shows no text while a PDF is prepared.
 - Audit: the integrity certificate's zero broken links is the mock's sample state, not a computed
   result.
 
 ## Sources (read 2026-11-25)
 
-- CGST Act 2017 s.34 (credit and debit notes) and CGST Rules 2017 r.53, via
-  https://taxguru.in/goods-and-service-tax/credit-note-debit-note-section-34-rule-53-cgst-act-2017.html
-  (commentary, not the statute; the statute and CBIC text were not reachable)
-- Profit and loss, trial balance and reports overview: https://help.tallysolutions.com/accounting-financial-reports-tally/ (search snippet and page)
-- Outstanding receivables and ageing: TallyPrime help search snippets only (no page text read)
-- Print preview and the edit log: TallyPrime help search snippets only (https://help.tallysolutions.com/?p=108972 for the edit log)
-- Import: the general steps only (XML or Excel, company selection, error log); no mapping or reconciliation steps were found
+Statute and rules (CBIC text, read as PDF text with pdftotext; not commentary):
+
+- CGST Act 2017, updated to 31.08.2021: https://cbic-gst.gov.in/pdf/CGST-Act-Updated-31082021.pdf
+  (PDF p.63): s.34(1) credit note, s.34(2) declaration in the return, s.34(3) debit note, s.34(4)
+  declaration of the debit note in the return.
+- CGST Rules 2017, Part A: https://cbic-gst.gov.in/pdf/24092021-CGST-Rules-2017-Part-A-Rules.pdf
+  (PDF pp.60-61, printed "Page 60 of 169"): rule 53(1A)(a)-(i), the particulars of a credit or
+  debit note. (g) is the serial number and date of the corresponding tax invoice or bill of supply.
+  Rule 53 (original, not 1A) sets the particulars of a revised invoice and is not the note rule.
+  Note: the 2026-11-25 research of this round first used a commentary (taxguru.in); the text above
+  replaces it.
+
+TallyPrime help (help.tallysolutions.com, pages fetched and body text extracted 2026-11-25):
+
+- Recording Credit Note: https://help.tallysolutions.com/docs/te9rel65/Voucher_Entry/Accounting_Vouchers/Credit_Note_Entry.htm
+  (voucher and invoice mode, F11 features, Ctrl+F8, Ctrl+V; sample: goods sold returned by a customer)
+- Recording Debit Note: https://help.tallysolutions.com/docs/te9rel65/Voucher_Entry/Accounting_Vouchers/Debit_Note_Entry.htm
+  (Ctrl+F9, Ctrl+V; sample: goods purchased returned to a supplier)
+- Recording a Journal Entry: https://help.tallysolutions.com/docs/te9rel62/Voucher_Entry/Accounting_Vouchers/Creating_a_Journal_Entry.htm
+  (F7; narration keys Alt+R, Ctrl+R; the page covers the interest example, not a balance check)
+- Display Receivables (bills receivable, invoice by invoice, effective date, due-on, Shift+Enter
+  breakup, F1 Detailed): https://help.tallysolutions.com/docs/te9rel65/Reports/MIS_Reports/display_receivables.htm
+- Ledger Outstandings Report: https://help.tallysolutions.com/docs/te9rel65/Reports/MIS_Reports/Ledger_Outstandings_Report.htm
+- Ageing Analysis Report (ageing by bill date or by due date, age periods set by the user):
+  https://help.tallysolutions.com/docs/te9rel65/Reports/MIS_Reports/Ageing_Analysis_Report.htm
+- Not readable: Contra Entry (URL returned a "lost your way" page); Print and Edit Log pages (no
+  URL found in the pages read).
+
+Primary sources for the app's own behaviour: `crates/ledgerly-app/src/**` (the files named in
+each row above) and `crates/ledgerly-api/src/tally_import.rs`.

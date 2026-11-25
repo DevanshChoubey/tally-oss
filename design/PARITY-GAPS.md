@@ -1019,3 +1019,46 @@ Mismatches between the mock's totals and the engine's, and why:
 - **by design: UQC codes.** Units map to the GST portal's UQC codes from the portal's published
   list as the author remembers it (roll ROL, set SET, nos NOS), and the coil unit maps to OTH;
   the list was not re-read for this card.
+
+## Round S12b: states the app reaches (2026-11-25)
+
+- **gap: the print busy line.** The app shows no text while a PDF is prepared: `print_job.rs`
+  `is_busy` only keeps the frame repainting. The mock state `profit-and-loss.print-busy` shows
+  "Preparing the PDF. The save dialog opens when it is ready." That line is a proposal, not a copy
+  of the app. Decide whether the app should show it.
+- **by design: the print error is the app's words.** `print_job.rs` `print_notice` gives
+  "{title} was not printed: {reason}". The mock's `profit-and-loss.print-error` uses that form with a
+  sample reason ("the store is closed").
+- **gap: the import wizard is not connected.** `import/view.rs:198` sets
+  `STEP_BY_STEP_CONNECTED = false`. The app disables the step-by-step controls and says so. The mock
+  shows the same (`import.default`). The choose-company, pull, map and reconcile steps have no mock
+  state, because no UI path opens them. See MOCK-COVERAGE.md, "Still MISSING".
+- **by design: the import summary counts are sample data.** The text is `ImportSummary`'s Display
+  (`ledgerly-api/src/tally_import.rs`). The counts come from the mock's sample company, and the
+  sample error and refusal texts are illustrative.
+- **gap: the stock item form is a separate screen.** The app's empty state for stock items offers
+  Create stock item (Alt+C). The mock's `masters.create-item` shows the same fields (Name, Alias,
+  Under, Unit, Valuation, HSN/SAC, Track batches) but no working Save. Validation (a unit is needed)
+  is not wired.
+- **gap: the masters balance hint is hover text only.** `masters/balances.rs` LOADING_HINT and
+  FAILED_HINT sit on the heading. The mock shows dashes and does not show hover text in captures.
+- **by design: rail resets on navigation in the mock.** The app keeps the rail until it is toggled
+  again (`shell/mod.rs` `rail: bool`). The mock sets the rail from each hash, so a navigation
+  folds it back out.
+- **by design: the new-tab title.** The second tab of the same screen is "Company setup 2" (the
+  app's `unique_tab_labels`). The mock's tab strip uses the same rule.
+- **by design: the GST tile text.** "Needs GSTR-2B" and "not readable yet" come from
+  `screens/home/kpi.rs` (GST_REASON). The mock's home.gst-unsupported shows the tile with those
+  words in place of the figure.
+- **by design: GST not-loaded and unsupported texts.** "Not loaded for this period yet." and
+  "Not supported yet: what (reason)" come from `gst/draw.rs` and `wire.rs`. The sample reasons
+  ("no verified rule pack", "rate pack pending") are the app's test fixtures, not engine output.
+- **gap: the masters "Not supported yet" notice.** `masters.rs` line 2068 shows it after a masters
+  action returns Unsupported. The mock has no state for it, because the sample engine never refuses
+  a masters action. See MOCK-COVERAGE.md.
+- **gap: the open-company busy line.** `shell/welcome.rs` shows "Working on the company file..."
+  while a company opens. `WelcomeScreen` is built only by `Shell::with_welcome`, which the tests call
+  and the app does not. The mock has no state for it.
+- **data: the credit and debit note footers.** The credit note footer cites CGST Rules r.53(1A)(g).
+  The debit note footer no longer cites s.34(3); the debit note is a buyer's return, and its GST
+  basis is an open item in MOCK-COVERAGE.md.
