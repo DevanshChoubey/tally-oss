@@ -1839,7 +1839,7 @@ impl ItemInvoiceScreen {
                         ui,
                         "Period locked.",
                         &format!(
-                            "{} is on or before the lock date {}. You can look, but saving is blocked. Choose a later date to save.",
+                            "{} is on or before {}. You can look, but saving is blocked. Press F2 to change the date.",
                             format::date(date),
                             format::date(lock)
                         ),

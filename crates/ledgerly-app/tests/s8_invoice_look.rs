@@ -324,3 +324,55 @@ fn a_locked_date_puts_a_bar_across_the_top_of_the_sheet() {
         "no bar when the date is open"
     );
 }
+
+/// Every text drawn in one frame of the screen with `lock` as the lock date.
+fn drawn_texts(s: &mut ItemInvoiceScreen, b: &Books, lock: Option<Date>) -> Vec<String> {
+    fn walk(shape: &egui::Shape, out: &mut Vec<String>) {
+        if let egui::Shape::Text(t) = shape {
+            out.push(t.galley.text().to_owned());
+        }
+        if let egui::Shape::Vec(v) = shape {
+            for x in v {
+                walk(x, out);
+            }
+        }
+    }
+    let mut app = AppCtx {
+        books: Some(b.clone()),
+        api: None,
+        lock_date: lock,
+        ai_tier: None,
+    };
+    let ctx = egui::Context::default();
+    let mut texts = Vec::new();
+    for _ in 0..3 {
+        let input = RawInput {
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(1280.0, 800.0))),
+            ..RawInput::default()
+        };
+        let out = ctx.run_ui(input, |ui| {
+            let _stay = s.ui(ui, &mut app);
+        });
+        texts.clear();
+        for clipped in &out.shapes {
+            walk(&clipped.shape, &mut texts);
+        }
+        out.drop_without_applying_deltas();
+    }
+    texts
+}
+
+#[test]
+fn the_lock_bar_reads_as_the_mock_words_it() {
+    // provenance: index.html:1357: "Period locked. <date> is on or before <lock date>. You can
+    // look, but saving is blocked. Press F2 to change the date." The invoice is dated 21 Nov 2026
+    // (TODAY) and the lock is set to the same day, so both dates read 21 Nov 2026.
+    let b = books();
+    let mut s = open(&b);
+    let texts = drawn_texts(&mut s, &b, Some(TODAY));
+    assert!(
+        texts.iter().any(|t| t
+            == "Period locked. 21 Nov 2026 is on or before 21 Nov 2026. You can look, but saving is blocked. Press F2 to change the date."),
+        "{texts:?}"
+    );
+}

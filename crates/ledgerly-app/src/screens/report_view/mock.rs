@@ -407,14 +407,13 @@ pub(super) const PL_DEBIT: &str = "Debit";
 /// Heading of the credit amount column of the profit and loss.
 pub(super) const PL_CREDIT: &str = "Credit";
 
-/// Which side of the two-sided account a cell stands on, and the cell without its provisional
-/// wrapper. `None` for a cell that is not an amount.
-fn pl_side(cell: &ViewCell) -> Option<(ledgerly_core::DrCr, ViewCell, bool)> {
+/// Which side of the two-sided account a cell stands on, and the cell as it came (a provisional
+/// figure keeps its wrapper so the screen marks it with a badge). `None` for a cell that is not
+/// an amount.
+fn pl_side(cell: &ViewCell) -> Option<(ledgerly_core::DrCr, ViewCell)> {
     match cell {
-        ViewCell::Amount(a) => Some((a.side, cell.clone(), false)),
-        ViewCell::Provisional { amount, .. } => {
-            Some((amount.side, ViewCell::Amount(*amount), true))
-        }
+        ViewCell::Amount(a) => Some((a.side, cell.clone())),
+        ViewCell::Provisional { amount, .. } => Some((amount.side, cell.clone())),
         ViewCell::Signed(_)
         | ViewCell::Qty(_)
         | ViewCell::Text(_)
@@ -430,12 +429,15 @@ fn pl_side(cell: &ViewCell) -> Option<(ledgerly_core::DrCr, ViewCell, bool)> {
 fn as_credit(total: &ViewCell) -> ViewCell {
     match total {
         ViewCell::Amount(a) => ViewCell::Amount(ledgerly_core::SignedAmount::cr(a.amount)),
+        ViewCell::Provisional { amount, reason } => ViewCell::Provisional {
+            amount: ledgerly_core::SignedAmount::cr(amount.amount),
+            reason: reason.clone(),
+        },
         ViewCell::Signed(_)
         | ViewCell::Qty(_)
         | ViewCell::Text(_)
         | ViewCell::Date(_)
         | ViewCell::Empty
-        | ViewCell::Provisional { .. }
         | ViewCell::Unsupported(_) => total.clone(),
     }
 }
@@ -466,6 +468,33 @@ pub(super) fn pl_provisional_reasons(report: &ViewReport) -> Vec<String> {
         }
     }
     out
+}
+
+/// The warning over a stock summary or profit and loss that has provisional figures, as the
+/// lead sentence (drawn bold) and the rest: the engine's reasons, each once, then what the screen
+/// does with the figure (index.html `plScreen` and `stockScreen`). `None` when there is no reason
+/// or the report has no such banner.
+#[must_use]
+pub(super) fn provisional_banner(mock: Mock, reasons: &[String]) -> Option<(String, String)> {
+    if reasons.is_empty() {
+        return None;
+    }
+    let why = reasons.join("; ");
+    let mut chars = why.chars();
+    let why = chars.next().map_or_else(String::new, |c| {
+        c.to_uppercase().chain(chars).collect::<String>()
+    });
+    match mock {
+        Mock::ProfitLoss => Some((
+            "Closing stock is Provisional.".to_owned(),
+            format!("{why}. The stock engine keeps the figure and marks it Provisional."),
+        )),
+        Mock::Stock => Some((
+            "Value is Provisional.".to_owned(),
+            format!("{why}. The value is shown and marked, and the total with it."),
+        )),
+        Mock::Trial | Mock::Outstanding { .. } | Mock::Audit(_) => None,
+    }
 }
 
 /// Pairs the collected left and right entries into rows, then the section's total row.
@@ -521,8 +550,8 @@ fn flush_sides(
 /// account, each with the debit side on the left and the credit side on the right and both sides
 /// totalled. The engine's amounts carry the side they stand on, its `Trading total` and `Profit
 /// and loss total` rows are the totals, and its `c/o` and `b/f` rows are the balancing lines, so
-/// this only places each line (rule C4). A provisional figure is drawn bare with "(provisional)"
-/// after its label; the reason is the banner's (see [`pl_provisional_reasons`]). A report that
+/// this only places each line (rule C4). A provisional figure keeps its wrapper, so the screen draws
+/// the bare figure with a "Provisional" badge beside its label; the reason is the banner's (see [`pl_provisional_reasons`]). A report that
 /// does not have the engine's rows is returned as it came.
 #[must_use]
 #[allow(
@@ -549,7 +578,7 @@ pub(super) fn profit_loss(report: ViewReport) -> ViewReport {
             }
             (ViewRowKind::Subtotal, "Gross profit" | "Net profit") => {}
             (ViewRowKind::Subtotal, "Trading total" | "Profit and loss total") => {
-                total = row.cells.first().and_then(pl_side).map(|(_, c, _)| c);
+                total = row.cells.first().and_then(pl_side).map(|(_, c)| c);
             }
             (
                 ViewRowKind::Item
@@ -562,7 +591,7 @@ pub(super) fn profit_loss(report: ViewReport) -> ViewReport {
                 | ViewRowKind::Text,
                 _,
             ) => {
-                let Some((side, cell, provisional)) = row.cells.first().and_then(pl_side) else {
+                let Some((side, cell)) = row.cells.first().and_then(pl_side) else {
                     continue;
                 };
                 let side = if row.depth == 0 {
@@ -571,14 +600,9 @@ pub(super) fn profit_loss(report: ViewReport) -> ViewReport {
                 } else {
                     group_side
                 };
-                let label = if provisional {
-                    format!("{} (provisional)", row.label)
-                } else {
-                    row.label.clone()
-                };
                 let entry = PlEntry {
                     key: row.key.clone(),
-                    label,
+                    label: row.label.clone(),
                     depth: row.depth,
                     kind: row.kind,
                     cell,
@@ -1150,10 +1174,44 @@ mod tests {
         let closing = out
             .rows
             .iter()
-            .find(|r| matches!(r.cells.get(1), Some(ViewCell::Text(t)) if t.starts_with("Closing stock")))
+            .find(|r| matches!(r.cells.get(1), Some(ViewCell::Text(t)) if t == "Closing stock"))
             .unwrap();
-        assert_eq!(closing.cells[1], text("Closing stock (provisional)"));
-        assert_eq!(closing.cells[2], cr(30_000));
+        // The figure keeps its provisional wrapper so the screen can mark it with a badge
+        // (index.html `plScreen`: `badge('Provisional')` beside the line); the label stays plain.
+        assert_eq!(closing.cells[1], text("Closing stock"));
+        assert_eq!(
+            closing.cells[2],
+            ViewCell::Provisional {
+                amount: SignedAmount::cr(Paise::new(3_000_000)),
+                reason: "item Steel pickaxe first went below zero".to_owned(),
+            }
+        );
+    }
+
+    #[test]
+    fn the_provisional_banner_leads_with_what_is_provisional_and_gives_the_engines_reason() {
+        // provenance: derived from index.html `plScreen` ("Closing stock is Provisional. ...
+        // The stock engine keeps the figure and marks it Provisional.") and `stockScreen`
+        // ("Value is Provisional ... The value is shown and marked, and the total with it.").
+        // The reason is the engine's wording, started with a capital.
+        let reasons =
+            vec!["negative stock: item Steel pickaxe 2.5 kg first went below zero".to_owned()];
+        assert_eq!(
+            provisional_banner(Mock::ProfitLoss, &reasons),
+            Some((
+                "Closing stock is Provisional.".to_owned(),
+                "Negative stock: item Steel pickaxe 2.5 kg first went below zero. The stock engine keeps the figure and marks it Provisional.".to_owned()
+            ))
+        );
+        assert_eq!(
+            provisional_banner(Mock::Stock, &reasons),
+            Some((
+                "Value is Provisional.".to_owned(),
+                "Negative stock: item Steel pickaxe 2.5 kg first went below zero. The value is shown and marked, and the total with it.".to_owned()
+            ))
+        );
+        assert_eq!(provisional_banner(Mock::Stock, &[]), None);
+        assert_eq!(provisional_banner(Mock::Trial, &reasons), None);
     }
 
     #[test]

@@ -54,7 +54,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use ledgerly_core::{Date, GroupId, LedgerId, Outcome, Paise, SignedAmount};
-use ledgerly_model::{Books, Group, Ledger, Nature, Posting, Scenario, VoucherStatus};
+use ledgerly_model::{
+    Books, Group, Ledger, Nature, Posting, ReservedGroup, Scenario, VoucherStatus,
+};
 use ledgerly_stock::{ProvisionalReason, StockValuation, ValuationStatus};
 
 use crate::balance_sheet::{negative_stock_reason, stock_in_hand_opening};
@@ -490,11 +492,39 @@ fn render_bucket(
     rows: &mut Vec<ReportRow>,
 ) -> Result<(), ReportError> {
     if let Some(primaries) = tree.primaries.get(&bucket) {
-        for gid in primaries {
-            render_group(books, tree, *gid, 0, detailed, rows)?;
+        let mut ordered: Vec<GroupId> = primaries.iter().copied().collect();
+        // A stable sort: groups of the same rank keep their id order.
+        ordered.sort_by_key(|gid| account_rank(books, bucket, *gid));
+        for gid in ordered {
+            render_group(books, tree, gid, 0, detailed, rows)?;
         }
     }
     Ok(())
+}
+
+/// Where a primary group stands among its bucket's groups in the account: the trading account's
+/// debit side runs Purchase Accounts then Direct Expenses (after the opening stock line), and its
+/// credit side Sales Accounts then Direct Incomes; any other group follows them. The groups'
+/// ids say nothing about this order (the reserved groups are created alphabetically).
+fn account_rank(books: &Books, bucket: Bucket, gid: GroupId) -> u8 {
+    let reserved = books.masters.groups.get(&gid).and_then(|g| g.reserved);
+    let first = match bucket {
+        Bucket::TradingExpense => ReservedGroup::PurchaseAccounts,
+        Bucket::TradingIncome => ReservedGroup::SalesAccounts,
+        Bucket::IndirectExpense | Bucket::IndirectIncome => return 0,
+    };
+    let second = match bucket {
+        Bucket::TradingExpense => ReservedGroup::DirectExpenses,
+        Bucket::TradingIncome => ReservedGroup::DirectIncomes,
+        Bucket::IndirectExpense | Bucket::IndirectIncome => return 0,
+    };
+    if reserved == Some(first) {
+        0
+    } else if reserved == Some(second) {
+        1
+    } else {
+        2
+    }
 }
 
 /// The total both sides of a two-sided account come to once the balancing figure is on its side:

@@ -1140,3 +1140,97 @@ fn provisional_stock_marks_the_carried_rows_and_totals_provisional() {
         );
     }
 }
+
+/// Books whose group ids run against the order of an account: Direct Expenses and Direct Incomes
+/// are created before Purchase Accounts and Sales Accounts, as the reserved groups are when a
+/// company is made, so the ids alone would list them first.
+fn books_with_reserved_groups_in_chart_order() -> Books {
+    let mut m = Masters::default();
+    let reserved = |id: u64, name: &str, kind: ReservedGroup, nature: Nature| {
+        let mut g = group(id, name, None, Some(nature), true);
+        g.reserved = Some(kind);
+        g
+    };
+    for g in [
+        reserved(
+            1,
+            "Direct Expenses",
+            ReservedGroup::DirectExpenses,
+            Nature::Expense,
+        ),
+        reserved(
+            2,
+            "Direct Incomes",
+            ReservedGroup::DirectIncomes,
+            Nature::Income,
+        ),
+        reserved(
+            3,
+            "Purchase Accounts",
+            ReservedGroup::PurchaseAccounts,
+            Nature::Expense,
+        ),
+        reserved(
+            4,
+            "Sales Accounts",
+            ReservedGroup::SalesAccounts,
+            Nature::Income,
+        ),
+    ] {
+        m.groups.insert(g.id, g);
+    }
+    for l in [
+        ledger(SALES_L, "Sales", 4),
+        ledger(PURCHASES_L, "Purchases", 3),
+        ledger(FREIGHT_L, "Freight Inward", 1),
+        ledger(COMMISSION_L, "Commission Received", 2),
+    ] {
+        m.ledgers.insert(l.id, l);
+    }
+    let day = d(2026, Month::June, 15);
+    let reg = VoucherStatus::Regular;
+    Books {
+        company: company(),
+        masters: m,
+        vouchers: BTreeMap::new(),
+        postings: vec![
+            posting(1, SALES_L, day, SignedAmount::cr(rs(100_000)), reg),
+            posting(2, PURCHASES_L, day, SignedAmount::dr(rs(60_000)), reg),
+            posting(3, FREIGHT_L, day, SignedAmount::dr(rs(5_000)), reg),
+            posting(4, COMMISSION_L, day, SignedAmount::cr(rs(1_000)), reg),
+        ],
+        stock_moves: vec![],
+    }
+}
+
+#[test]
+fn the_trading_account_lists_purchases_before_direct_expenses() {
+    // provenance: derived — the trading account's debit side is Opening Stock, Purchase Accounts,
+    // then Direct Expenses (the order the owner's brief gives for the Profit & Loss A/c;
+    // https://help.tallysolutions.com/profit-and-loss-statement-tally/, read 2026-11-25, names
+    // "Cost of Sales" and "Direct Expenses" as the trading items but states no order), and the
+    // credit side Sales Accounts before Direct Incomes. The groups' ids run the other way.
+    let r = run(
+        &books_with_reserved_groups_in_chart_order(),
+        &params(Detail::Condensed),
+        rs(20_000),
+        rs(30_000),
+    );
+    let at = |label: &str| {
+        r.rows
+            .iter()
+            .position(|x| x.label == label)
+            .unwrap_or_else(|| panic!("no row {label:?}"))
+    };
+    assert!(at("Opening stock") < at("Purchase Accounts"));
+    assert!(
+        at("Purchase Accounts") < at("Direct Expenses"),
+        "rows: {:?}",
+        r.rows.iter().map(|x| &x.label).collect::<Vec<_>>()
+    );
+    assert!(
+        at("Sales Accounts") < at("Direct Incomes"),
+        "rows: {:?}",
+        r.rows.iter().map(|x| &x.label).collect::<Vec<_>>()
+    );
+}

@@ -2283,7 +2283,13 @@ SCREENS['profit-and-loss'] = plScreen();
      Debit total 1,25,33,742.30 = credit total 1,25,33,742.30 (the old total, 1,25,54,112.30, counted IGST gross on both sides). */
 const TB_GROUP = {capital:'Capital Account',secured:'Secured Loans',creditors:'Sundry Creditors',duties:'Duties & Taxes',provisions:'Provisions',
   fixed:'Fixed Assets',debtors:'Sundry Debtors',cash:'Cash-in-Hand',bank:'Bank Accounts',advances:'Loans & Advances (Asset)',salesacc:'Sales Accounts',
-  purchacc:'Purchase Accounts',direxp:'Direct Expenses',indexp:'Indirect Expenses',indinc:'Indirect Incomes',openstock:'Direct Expenses'};
+  purchacc:'Purchase Accounts',direxp:'Direct Expenses',indexp:'Indirect Expenses',indinc:'Indirect Incomes',openstock:'Stock-in-Hand'};
+/* The trial balance lists the groups in the chart of accounts' order, each group's ledgers under it in the order they were
+   created: the primary groups alphabetically (Capital Account, Current Assets, Current Liabilities, Direct Expenses, Fixed
+   Assets, Indirect Expenses, Indirect Incomes, Loans (Liability), Purchase Accounts, Sales Accounts) with the sub-groups of
+   Current Assets, Current Liabilities and Loans (Liability) directly under their primary group. This is the order the
+   engine's detailed trial balance gives. */
+const TB_ORDER = ['Capital Account','Bank Accounts','Cash-in-Hand','Loans & Advances (Asset)','Stock-in-Hand','Sundry Debtors','Duties & Taxes','Provisions','Sundry Creditors','Direct Expenses','Fixed Assets','Indirect Expenses','Indirect Incomes','Secured Loans','Purchase Accounts','Sales Accounts'];
 const TB_TAX = [['CGST',['cgstout','cgstin']],['SGST',['sgstout','sgstin']],['IGST',['igstout','igstin']]];
 function tbRows(){
   const b=balances(); const tax=new Set(TB_TAX.flatMap(t=>t[1])); const out=[];
@@ -2292,7 +2298,7 @@ function tbRows(){
     if(t){const v=b[t[1][0]]+b[t[1][1]];if(v!==0)out.push([t[0],TB_GROUP.duties,v]);continue}
     if(tax.has(l.id)||b[l.id]===0)continue;
     out.push([l.name,TB_GROUP[l.group],b[l.id]]);}
-  return out.map(([n,g,v])=>[n,g,v>0?v:0,v<0?-v:0]); }
+  return out.map((r,i)=>[r,i]).sort((a,b)=>TB_ORDER.indexOf(a[0][1])-TB_ORDER.indexOf(b[0][1])||a[1]-b[1]).map(([[n,g,v]])=>[n,g,v>0?v:0,v<0?-v:0]); }
 SCREENS['trial-balance'] = {title:'Trial balance',default:'default',
  render(st){
   if(st==='loading') return reportLoading(phead([['Home',hashFor('home')],['Trial balance']],'Trial balance','As at 21 Nov 2026 · every ledger with a balance · Enter opens a ledger'));

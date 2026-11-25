@@ -73,6 +73,10 @@ pub(crate) struct CreateForm {
     pub(crate) group: Option<GroupId>,
 }
 
+/// The two notes of a contra with no account and no amount (index.html:2150).
+pub(super) const CONTRA_EMPTY: &str =
+    "Pick the cash or bank account first.\nAn amount of zero cannot be posted.";
+
 /// The accounting voucher entry screen (card U4).
 pub struct VoucherEntryScreen {
     pub(super) type_name: String,
@@ -205,6 +209,14 @@ impl VoucherEntryScreen {
     #[must_use]
     pub fn picker_rect(&self) -> Option<egui::Rect> {
         self.shown.picker
+    }
+
+    /// Whether the contra was just refused for having no account and no amount, which the screen
+    /// draws with both lines listed and what each needs (index.html `SCREENS.contra`,
+    /// validation-error).
+    #[must_use]
+    pub(super) fn contra_refused(&self) -> bool {
+        self.draft.kind == EntryKind::Contra && self.error_text() == Some(CONTRA_EMPTY)
     }
 
     /// The current error message, if any.

@@ -1231,26 +1231,25 @@ impl ReportViewScreen {
             let report = self.shown();
             let side = &self.side;
             let mut alter = false;
-            // index.html `plScreen`: a provisional stock puts a warning note over the figures. The
-            // engine's reason (it names the item) is the note's text; the marked lines say which
-            // figures depend on it.
-            let reasons = if look == Look::Mock(mock::Mock::ProfitLoss) {
-                mock::pl_provisional_reasons(&self.report)
-            } else {
-                Vec::new()
+            // index.html `plScreen` and `stockScreen`: a provisional stock puts a warning note
+            // over the figures. The engine's reason (it names the item) is the note's text; the
+            // marked lines say which figures depend on it.
+            let banner = match look {
+                Look::Mock(m @ (mock::Mock::ProfitLoss | mock::Mock::Stock)) => {
+                    mock::provisional_banner(m, &mock::pl_provisional_reasons(&self.report))
+                }
+                Look::Mock(
+                    mock::Mock::Trial | mock::Mock::Outstanding { .. } | mock::Mock::Audit(_),
+                )
+                | Look::Generic
+                | Look::DayBook
+                | Look::BalanceSheet => None,
             };
             let drawn = egui::CentralPanel::default()
                 .frame(egui::Frame::NONE)
                 .show(ui, |ui| {
-                    if !reasons.is_empty() {
-                        note(
-                            ui,
-                            NoteKind::Warn,
-                            &format!(
-                                "Stock is provisional ({}). The figures that depend on it are marked (provisional).",
-                                reasons.join("; ")
-                            ),
-                        );
+                    if let Some((lead, rest)) = &banner {
+                        draw_provisional_banner(ui, lead, rest);
                         ui.add_space(8.0);
                     }
                     if side.ledger().is_some() {
@@ -1642,6 +1641,27 @@ impl Screen for ReportViewScreen {
         }
         action
     }
+}
+
+/// The amber note over a report with provisional figures: an alert icon, the lead sentence in bold
+/// and the rest (the mock's `.note.warn`).
+fn draw_provisional_banner(ui: &mut Ui, lead: &str, rest: &str) {
+    crate::ui::note::note_with_icon(ui, NoteKind::Warn, Icon::Alert, |ui, ink| {
+        // One paragraph: the lead in bold, the rest after it on the same line (the mock's `<b>`).
+        let size = crate::theme::TEXT_META;
+        let mut job = egui::text::LayoutJob::default();
+        job.append(
+            lead,
+            0.0,
+            egui::TextFormat::simple(crate::ui::bold_font(ui, size), ink),
+        );
+        job.append(
+            &format!(" {rest}"),
+            0.0,
+            egui::TextFormat::simple(egui::FontId::proportional(size), ink),
+        );
+        ui.label(job);
+    });
 }
 
 /// The red note over a report the engine refused or could not run: the words the engine gave,

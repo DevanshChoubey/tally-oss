@@ -5,9 +5,9 @@ use ledgerly_model::validate::LineTotals;
 use ledgerly_model::{Masters, Voucher, VoucherError};
 
 use super::display::format_amount;
-use super::draft::{DraftError, VoucherDraft};
+use super::draft::{DraftError, DraftRow, VoucherDraft};
 use super::kind::EntryKind;
-use super::state::{Field, Notice, VoucherEntryScreen};
+use super::state::{CONTRA_EMPTY, Field, Notice, VoucherEntryScreen};
 
 impl VoucherEntryScreen {
     // ---- saving and leaving ----
@@ -31,9 +31,11 @@ impl VoucherEntryScreen {
             Err(DraftError::Voucher(VoucherError::Empty))
                 if self.draft.kind == EntryKind::Contra =>
             {
-                self.fail(
-                    "Pick the cash or bank account first.\nAn amount of zero cannot be posted.",
-                );
+                // The refused contra lists both of its lines, each saying what it still needs.
+                if self.draft.rows.len() < 2 {
+                    self.draft.rows.push(DraftRow::empty(DrCr::Cr));
+                }
+                self.fail(CONTRA_EMPTY);
             }
             Err(DraftError::Voucher(VoucherError::Unbalanced { dr, cr })) => {
                 self.fail(unbalanced_text(dr, cr));
