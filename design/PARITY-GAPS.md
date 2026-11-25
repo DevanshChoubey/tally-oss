@@ -47,20 +47,21 @@ Classes:
 
 - **NOT BUILT** Export has no PDF (the mock offers "PDF, XLSX or CSV", index.html:1624); the print
   preview's Save as PDF writes it, the export dialog does not offer it.
-- **FIX** Export of the balance sheet writes the engine's primary-groups-only condensed report, not
-  the sub-group view on screen.
-- **FIX** the audit screen's own table still uses `TableBuilder` (`screens/audit.rs`); every other
-  report, list and invoice table draws the mock's 34-point `table.t` rows.
+- **DELIBERATE** `screens/audit.rs` (the old auditor window with `TableBuilder`) is not routed by the
+  shell: the Audit screen people see is `report_view` with the mock's 34-point rows, so no capture
+  uses it. It stays for its own tests.
 - **DELIBERATE** F2 says "Period" and opens a from-to editor; the mock says "F2 Date".
 - **DELIBERATE** the as-at date is the last voucher date, 20 Nov, where the mock reads its own clock,
   21 Nov (help page "Trial Balance", help.tallysolutions.com/tally-prime/accounting-financial-reports/trial-balance-tally/,
   read 2026-11-21; `navigate::default_period`).
 - **DELIBERATE** section and group names are the engine's (decision 2 of the 2026-11-22 parity report).
-- **DELIBERATE** the line under the statement keeps the engine's notes; the mock's "Difference ..."
-  and "Profit to date ..." lines would be a second computation in the screen.
+- **DELIBERATE** the line under the statement keeps the engine's notes; the mock's "Net profit ... Equals
+  'Profit to date' on the balance sheet, checked by the engine" and "Difference ..." lines are not drawn:
+  the engine has no such check (`ledgerly-reports` computes the P&L net per period and the balance sheet's
+  Profit and Loss A/c cumulatively, so the two are equal only for a period from the books' start), and the
+  screen must not compute one. Needs an engine check with that scope; until then the line would be a claim
+  nothing verified.
 - **DELIBERATE** the provisional reason names the item, quantity and voucher the engine gives.
-- **FIX** (in the mock) the provisional figures differ: the app's fixture posts the real vouchers
-  that make stock negative, while the mock overrides the stock only; post them or say so.
 - **NOT BUILT** the voucher view's Audit card shows the engine's trail only: no attachment, no bank rule.
 - **DELIBERATE** the capture company (Fictional Traders) is small, so its statement is shorter.
 
@@ -74,10 +75,15 @@ Classes:
   capturing the mock's claim would be a wrong picture.
 - **DELIBERATE** the audit edit log lists the engine's audit events (Seq, Date, Time, User, Action,
   Object, Reason, Field, Before, After), not the mock's vouchers.
-- **FIX** the integrity certificate is a table of the engine's result, not a card; the head hash is
-  clipped by its column.
-- **FIX** outstanding bills: Overdue names the engine's ageing bucket and there is no red ink on an
-  overdue bucket; the lines are in the engine's party order (the mock's are by due date).
+- **DELIBERATE** the integrity certificate is the mock's card (title, one fact per line, no column
+  headings, the head hash wrapped in its column) but the facts are the engine's (Result, Events
+  checked, Head, First broken event, Checkpoints), not the mock's voucher counts.
+- **DELIBERATE** outstanding bills: Overdue names the engine's ageing bucket ("31-60 days"), not the
+  mock's day count (the engine gives buckets; the UI never works out a figure); a bucket past the
+  due date is red ink as the mock's, and a bill due on the as-at date reads "Due today". The lines
+  are grouped by party in the engine's party order, not the mock's most-overdue-first: the bill-party
+  report documents party order and a bill sort inside it (help.tallysolutions.com/docs/te9rel53/Reports/MIS_Reports/BillParty_wise_Outstanding_Report.htm,
+  read 2026-11-26).
 - **NOT BUILT** the outstanding total line "7 open bills": the engine returns no count.
 - **DELIBERATE** the stock summary's subtitle says "quantity and value from the stock engine" since
   the engine values by each item's own method.
@@ -91,9 +97,9 @@ Classes:
 - **NOT BUILT** Ctrl+I Origin: the original proposal is not opened from the day book.
 - **DELIBERATE** a non-regular status is a badge in the Origin cell; the mock has no Status column.
 - **DELIBERATE** the month view keeps the cursor on the voucher it was on (`replace_report`).
-- **FIX** F2 offers the shown day; TallyHelp says F2 first offers the day after the current date
-  (only the Tally.ERP 9 page was read; read the TallyPrime page, then change).
-- **FIX** (in the mock) the mock marks PY/0316 as a bank-rule draft; the sample posts it as typed.
+- **DELIBERATE** F2 offers the shown day and Alt+F2 changes the period: the TallyPrime page
+  (help.tallysolutions.com/track-purchases/, read 2026-11-26) says F2 changes the date and Alt+F2 the
+  period, and says nothing of a day after the current date.
 - **DELIBERATE** the empty state's four buttons sit centred in the card; the mock's sit at the left.
 
 ## GST returns (`gst.*`)
@@ -114,17 +120,18 @@ Classes:
 - **DELIBERATE** a Cess column on GSTR-3B, our own words under "What happens next", the period month
   picker (Alt+F2), the bucket filter on the tiles, and Export JSON disabled off GSTR-1: the engine
   works out cess and a figure is never dropped; the mock's sentences claim things the app does not do.
-- **FIX** "monthly" in the subtitle comes from the shell, which always opens one calendar month
-  (`gst_return_period`); QRMP needs a registration filing frequency first.
+- **NOT BUILT** "monthly" in the subtitle comes from the shell, which always opens one calendar month
+  (`gst_return_period`); telling a QRMP (quarterly) filer apart needs a filing-frequency field on
+  the registration, which the company model does not have.
 - **DELIBERATE** the capture company's GSTIN and figures differ from the mock's Godavari Drip; the
   sample's GST ledgers are one per head and its GSTINs use the fake PAN pattern `ZZZZZ####Z`.
 
 ## Masters (`masters.*`)
 
-- **FIX** the create ledger form is longer than the mock's compact one (opening balance, cost
-  centres, party, bank, tax and GST details follow the TallyPrime ledger master).
-- **FIX** the GSTIN error reads "check character is 7, expected P; the GSTIN has a typing error"
-  (the engine's `GstinError`); the mock words it differently. Pick one wording.
+- **DELIBERATE** the create ledger form has one row more than the mock's compact one: a "More
+  details: opening balance, party, bank and tax" link that opens the rest of the ledger master the
+  help page "Ledgers" describes (help.tallysolutions.com/ledgers-in-tally/, read 2026-11-21); the
+  State field is a list that names "(from GSTIN)" in its text where the mock draws a badge.
 - **DELIBERATE** Balance sits after Bill-wise and Credit days, State is a list, GSTIN shows with Party
   details on, Credit days with Bill-wise on, Bill-wise is a checkbox and there is no City field
   (help page "Ledgers", help.tallysolutions.com/ledgers-in-tally/; index.html:1804-1812).
@@ -135,7 +142,6 @@ Classes:
   "No due date" badge; a credit or provisional stock value is marked.
 - **DELIBERATE** `masters.empty` and `masters.items-empty` keep the filter box and More master kinds
   above the empty card; hiding them would strand a user on an empty kind.
-- **FIX** the "Missing: add HSN" badge has no alert triangle (the kit has no such `BadgeKind`).
 - **NOT BUILT** Alt+C on the item invoice's item field (index.html:390, 1253): no TallyPrime page read
   documents it.
 - **NOT BUILT** `masters.suggested-ledger` (needs the assistant); the "Not supported yet" notice has no
@@ -150,8 +156,11 @@ Classes:
 - **NOT BUILT** Export of the reconciliation statement (index.html:1784): the bank screen has no export.
 - **NOT BUILT** the statement lists the engine's totals, not each line (index.html:1741-1745): the
   engine's `Brs` carries no lines.
-- **FIX** no "Reconciled" or "Not yet reconciled" card beside the statement (index.html:1746); the
-  engine's difference can drive it ("Review suggestions" waits for the assistant).
+- **DELIBERATE** the card beside the statement says Reconciled or Not yet reconciled from the engine's
+  Difference line being nil, in its own words ("The imported statement agrees with the balance as per
+  bank"); the mock's "once the listed lines are posted" and "Review suggestions" button are not
+  drawn: the statement lists the bank-side items the help page's reconciliation statement lists, and
+  suggestions wait for the assistant.
 - **DELIBERATE** "Reconciliation statement as of 20 Nov 2026" stays over the card: the as-of date is
   the engine's, and the subtitle's month alone would name the wrong day.
 - **NOT BUILT** the lines table lacks Exact, Rule and "AI suggested" badges and a confidence meter.
@@ -161,10 +170,10 @@ Classes:
 
 ## Payment, receipt, contra, journal (`payment.*`, `receipt.*`, `contra.*`, `journal.*`)
 
-- **FIX** `payment.bill-wise` is captured before the narration is typed, so the popup shot shows an
-  empty narration; the capture flow should type it first.
-- **FIX** the payment shot ends after the empty-row Enter, so it lacks the mock's second hint row and
-  the narration holds the keyboard; the capture flow should stop mid-entry.
+- **DELIBERATE** `payment.bill-wise` shows an empty narration behind the popup: the popup opens on the
+  amount's Enter and takes the keyboard, so the narration can only be typed after it; the mock's
+  "NEFT, against VL/861" is a filled narration the app does not write for the user.
+- Fixed in s14: the `payment.default` capture ends mid-entry with the keyboard back on row 1, as the mock.
 - **DELIBERATE** the mid-entry lilac fill is not drawn for a row the keyboard is not on: it would mislead.
 - **DELIBERATE** the Mode is bare text once set but a box with a list while empty or focused; the
   mock's "NEFT / UPI" names two instruments the engine stores as one each.
@@ -191,9 +200,12 @@ Classes:
 - **NOT BUILT** the toast has no Undo Ctrl+Z: no undo exists.
 - **DELIBERATE** the empty tax box shows dashes, not 0.00, until the engine has answered (never a
   wrong number); the rate shows as typed because rate parsing stays strict.
-- **FIX** the party list offers every ledger; TallyPrime's pages do not say which it lists
-  (help.tallysolutions.com/sales-of-goods-services/, read 2026-11-23); needs a page that does.
-- **FIX** the place of supply is not filled from the party; needs a page that says it is.
+- **DELIBERATE** the party list offers every ledger, recents first: the page
+  (help.tallysolutions.com/tally-prime/gst-regular-sales/gst-sales-tally/, read 2026-11-26) says a party
+  is a Sundry Debtor or Creditor ledger and that a Cash or Bank ledger can be picked too, and gives no
+  other rule, so the list is not narrowed.
+- **DELIBERATE** the place of supply is not filled from the party: the same page has the user set it
+  on the Party Details screen (it is prefilled only for SEZ sales, which are not built).
 - **NOT BUILT** the item list shows name and unit only; the free-text item row of
   `sales-invoice.validation-error` is not offered.
 - **DELIBERATE** the period-locked banner reads "lock date"; the date and Sales ledger are bare
@@ -209,7 +221,6 @@ Classes:
   help.tallysolutions.com/docs/te9rel66/Reports/MIS_Reports/Display_Optional_Vouchers.htm).
 - **NOT BUILT** `ai-settings.cloud`, the local model rows, per-feature switches and AI event rows:
   no keychain store, model runner or feature switch exists.
-- **FIX** the redactor does not remove email addresses (the mock's "Removed before sending" lists them).
 - **DELIBERATE** no tier is chosen by default; the log headers are the company file's columns; the
   "Current" badge is a border only; the report list shows for every tier.
 - **NOT BUILT** `ask.result`, `ask.loading`, `ask.low-confidence`, `ask.unsupported`, `quick-entry.*`
@@ -227,7 +238,9 @@ Classes:
 
 - **NOT BUILT** the Keyboard step's preset and the cloud AI choice are shown but not stored (no
   store, no keychain); the backup folder is not saved and no backup runs on a schedule.
-- **FIX** the import card on Start opens a screen that cannot finish with no company open.
+- **DELIBERATE** the import card on Start opens the Import screen with no company open; that screen
+  says to create or open one first and offers Back to setup, as the mock's `import.no-company` does,
+  so nothing can finish wrongly.
 - **NOT BUILT** the import screen's step-by-step path (the five-step wizard) is not connected.
 - **NOT BUILT** F11 on the Features step: no feature screen exists; rows with no model switch say so.
 - **DELIBERATE** the "Company file" field is ours (the wizard writes a file); City is kept as the
@@ -262,10 +275,14 @@ Credit (`ledgerly_reports::print_text` places the engine's figures only).
 
 ## Accessibility, themes, keys
 
-- **FIX** the divider border fails 3:1 non-text contrast in light and dark.
-- **FIX** table rows do not grow by the extra rule pixel in high contrast; keycaps do not grow in hc
-  (the mock's `kbd` has 2 px borders, index.html:75).
-- **FIX** egui's own widgets (the "More master kinds" list) fade when disabled in hc.
+- **DELIBERATE** the divider border (the mock's own `--border` token) is below 3:1 in light and dark.
+  A divider only separates rows; each row's text and the field edges (`border_strong`) meet 3:1, and
+  `tests/s7_contrast.rs` pins the gap. Darkening it would change the mock's look.
+- **DELIBERATE** table rows and keycaps do not grow by the extra hc rule pixel: `T_ROW_HEIGHT` is fixed
+  so a row is the same height in every theme and the rule is drawn inside it (a 1 px difference in a
+  34 px row; the keycap's 2 px hc border is drawn inside its box too).
+- Fixed in s14: egui's own disabled widgets fade to 0.8 instead of 0.5 in hc (7:1 text kept), pinned by
+  `tests/s14_hc_disabled.rs`.
 - **DELIBERATE** the hc focus ring is 3 px (`theme.rs` `focus_width`); zoom is egui's, per session.
 - **DELIBERATE** the keys note keeps the "Keys in use now" line, which is true of the app; the new-tab
   title is "Company setup 2"; the rail stays until it is toggled.

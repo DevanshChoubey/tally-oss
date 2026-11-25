@@ -1851,7 +1851,7 @@ fn item_cells(rows: &[view::ItemRow], figures: &stock::ItemStockFigures) -> Vec<
     rows.iter()
         .map(|r| {
             let hsn = if r.hsn.is_empty() {
-                look::Cell::Badge(BadgeKind::Bad, "Missing: add HSN")
+                look::Cell::BadgeIcon(BadgeKind::Bad, Icon::Alert, "Missing: add HSN")
             } else {
                 look::Cell::Text(r.hsn.clone())
             };

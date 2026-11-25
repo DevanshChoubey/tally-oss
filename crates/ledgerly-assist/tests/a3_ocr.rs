@@ -314,7 +314,7 @@ fn gstin_failing_the_check_character_is_rejected() {
     assert_eq!(rejected.field, "supplier_gstin");
     assert_eq!(rejected.text, "GSTIN: 29ABCDE1234F1ZX");
     assert!(
-        rejected.reason.contains("expected W"),
+        rejected.reason.contains("should be W, not X"),
         "{}",
         rejected.reason
     );

@@ -50,7 +50,7 @@ mod voucher_view;
 use std::path::PathBuf;
 
 use egui::{Align, Context, Key, Layout, Modifiers, Rect, Ui};
-use ledgerly_api::{ExportFormat, ReportKind, ReportParams};
+use ledgerly_api::{Detail, ExportFormat, ReportKind, ReportParams};
 use ledgerly_core::{Outcome, Period};
 
 use crate::screen::KeyHint;
@@ -565,10 +565,17 @@ impl ReportViewScreen {
             return;
         };
         let params = run.engine.clone();
+        // The balance sheet's default view lists groups and sub-groups (`remote::run_report`);
+        // its file holds the same rows, not the engine's primary-groups-only condensed report.
+        let by_group =
+            params.kind == ReportKind::BalanceSheet && params.detail == Detail::Condensed;
         self.export.start(handle, move |api| {
-            let done = api
-                .export_report(&params, format, &path)
-                .map_err(|e| e.to_string());
+            let done = if by_group {
+                api.export_report_by_group(&params, format, &path)
+            } else {
+                api.export_report(&params, format, &path)
+            }
+            .map_err(|e| e.to_string());
             (path, done)
         });
     }
@@ -1334,7 +1341,9 @@ impl ReportViewScreen {
                         open_stock = draw_provisional_banner(ui, lead, rest, true);
                         ui.add_space(8.0);
                     }
-                    if side.ledger().is_some() {
+                    if look == Look::Mock(mock::Mock::Audit(mock::AuditTab::Integrity)) {
+                        generic::draw_certificate(ui, report)
+                    } else if side.ledger().is_some() {
                         let mut drawn = None;
                         crate::screens::home::draw::split(
                             ui,

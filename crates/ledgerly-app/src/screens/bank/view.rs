@@ -9,13 +9,13 @@
 //! are wave 3 work and are not drawn here.
 
 use egui::{FontId, Frame, Rect, Sense, Stroke, Ui, pos2, vec2};
-use egui_extras::Column;
+use egui_extras::{Column, Size, StripBuilder};
 
 use super::import;
 use super::{
-    BankScreen, BrsRow, BrsRowKind, Flow, LineState, LineStatus, PAGE_TITLE, SettingsRequest,
-    SuggestionView, Tab, brs_line_height, confidence_label, format_flow, format_line_date,
-    kind_label, status_label,
+    BankScreen, BrsRow, BrsRowKind, BrsVerdict, Flow, LineState, LineStatus, PAGE_TITLE,
+    SettingsRequest, SuggestionView, Tab, brs_line_height, confidence_label, format_flow,
+    format_line_date, kind_label, status_label,
 };
 use crate::screens::ai_gate::settings_note;
 use crate::screens::wire::unsupported_text;
@@ -618,9 +618,40 @@ impl BankScreen {
                     "Reconciliation statement as of {}",
                     format_line_date(view.as_of)
                 ));
-                statement_lines(ui, &view.rows);
-                if let Some(text) = self.brs_note() {
-                    note(ui, NoteKind::Info, text);
+                let verdict = super::brs_verdict(view);
+                let note_text = self.brs_note();
+                if verdict == BrsVerdict::Unknown {
+                    statement_lines(ui, &view.rows);
+                    if let Some(text) = note_text {
+                        note(ui, NoteKind::Info, text);
+                    }
+                } else {
+                    // The mock's `.g-main` row (index.html:1819): the statement over a card that
+                    // says whether the engine's difference is nil.
+                    #[expect(clippy::float_arithmetic, reason = "the grid's fractions of the row")]
+                    let (left, right) = {
+                        let room = (ui.available_width() - GRID_GAP).max(0.0);
+                        let right = (room * (MAIN_PARTS - MAIN_LEFT_PARTS) / MAIN_PARTS)
+                            .max(VERDICT_MIN.min(room));
+                        (room - right, right)
+                    };
+                    ui.scope(|ui| {
+                        ui.spacing_mut().item_spacing.x = 0.0;
+                        StripBuilder::new(ui)
+                            .size(Size::exact(left))
+                            .size(Size::exact(GRID_GAP))
+                            .size(Size::exact(right))
+                            .horizontal(|mut strip| {
+                                strip.cell(|col| {
+                                    statement_lines(col, &view.rows);
+                                    if let Some(text) = note_text {
+                                        note(col, NoteKind::Info, text);
+                                    }
+                                });
+                                strip.empty();
+                                strip.cell(|col| draw_verdict(col, verdict));
+                            });
+                    });
                 }
             }
             Outcome::Unsupported(u) => {
@@ -855,6 +886,38 @@ fn paint_statement_line(ui: &Ui, rect: Rect, row: &BrsRow) {
 
 /// What the side says with AI off: what still runs and what waits (index.html:1830).
 const AI_OFF_NOTE: &str = "AI is off for this company. Exact and Rule matching still run: they are deterministic engine code. Leftover lines wait for you.";
+
+/// Gap between the statement and its card (the mock's grid gap).
+const GRID_GAP: f32 = 16.0;
+/// The mock's `.g-main` columns, `minmax(0,1.55fr) minmax(320px,1fr)`.
+const MAIN_LEFT_PARTS: f32 = 1.55;
+/// The two columns' parts together.
+const MAIN_PARTS: f32 = 2.55;
+/// The card's least width.
+const VERDICT_MIN: f32 = 320.0;
+
+/// The card beside the statement: Reconciled with a check, or Not yet reconciled, and one
+/// sentence. The words say only what the engine's Difference line says.
+fn draw_verdict(ui: &mut Ui, verdict: BrsVerdict) {
+    let t = tokens(ui);
+    let (title, glyph, text) = match verdict {
+        BrsVerdict::Reconciled => (
+            "Reconciled",
+            Some(Icon::Check),
+            "The imported statement agrees with the balance as per bank.",
+        ),
+        BrsVerdict::NotYet | BrsVerdict::Unknown => (
+            "Not yet reconciled",
+            None,
+            "The imported statement differs from the balance as per bank. Match or post the statement lines, then this difference closes.",
+        ),
+    };
+    card(ui, |ui| {
+        ui.set_min_width(ui.available_width());
+        crate::ui::mock_table::panel_title(ui, glyph, title);
+        para(ui, text, TEXT_BODY, t.text_2);
+    });
+}
 
 #[cfg(test)]
 mod a11y_names {

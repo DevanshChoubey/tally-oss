@@ -269,11 +269,15 @@ fn a_valid_gstin_passes_and_surrounding_spaces_do_not_matter() {
 #[test]
 fn a_wrong_check_character_names_the_expected_one() {
     // provenance: derived. The first 14 characters of GSTIN_VALID carry the check character W, so
-    // changing the 15th to X must fail, and the message must say W was expected.
+    // changing the 15th to X must fail, and the message must say W was expected and X was typed.
     let typo = "29ABCDE1234F1ZX";
     match view::check_gstin(typo) {
         GstinCheck::Invalid(reason) => {
-            assert!(reason.contains("expected W"), "reason was: {reason}");
+            // The wording follows the mock (index.html masters.gstin-error): "should be W, not X".
+            assert!(
+                reason.contains("should be W, not X"),
+                "reason was: {reason}"
+            );
         }
         other @ (GstinCheck::Empty | GstinCheck::Valid) => {
             panic!("expected Invalid, got {other:?}")

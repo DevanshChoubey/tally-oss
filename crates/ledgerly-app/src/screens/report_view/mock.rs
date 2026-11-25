@@ -83,6 +83,34 @@ pub(super) fn trial_balance(report: ViewReport) -> ViewReport {
     }
 }
 
+/// The engine's ageing columns for a bill past its due date (`outstanding.rs`, "Ageing").
+pub(super) const OVERDUE_BUCKETS: [&str; 4] =
+    ["0-30 days", "31-60 days", "61-90 days", "Over 90 days"];
+/// What a bill due on the as-at date reads in the Overdue column.
+const DUE_TODAY: &str = "Due today";
+
+/// The bucket a bill sits in as the Overdue cell. The engine puts a bill due on the as-at date in
+/// `0-30 days` though it is 0 days overdue; the mock marks only overdue > 0 (`b.overdue>0`), so
+/// that bill reads "Due today" and keeps the plain ink.
+fn aged_cell(
+    report: &ViewReport,
+    row: &ViewRow,
+    due: usize,
+    buckets: std::ops::RangeInclusive<usize>,
+) -> ViewCell {
+    let due_today =
+        matches!(row.cells.get(due), Some(ViewCell::Date(d)) if *d == report.params.period.to());
+    let name = buckets
+        .into_iter()
+        .find(|i| !matches!(row.cells.get(*i), None | Some(ViewCell::Empty)))
+        .and_then(|i| report.columns.get(i));
+    match name {
+        Some(c) if due_today && c == OVERDUE_BUCKETS[0] => ViewCell::Text(DUE_TODAY.to_owned()),
+        Some(c) => ViewCell::Text(c.clone()),
+        None => ViewCell::Empty,
+    }
+}
+
 /// Outstanding bills as the mock draws them: one line per open bill, with the party, the bill,
 /// its date and due date, the open amount and where the engine aged it. A report that does not
 /// have the engine's columns is returned as it came.
@@ -111,10 +139,7 @@ pub(super) fn outstanding(report: ViewReport, receivable: bool) -> ViewReport {
                     Some(other) => other.clone(),
                     None => ViewCell::Empty,
                 };
-                let aged = (first..=last)
-                    .find(|i| !matches!(row.cells.get(*i), None | Some(ViewCell::Empty)))
-                    .and_then(|i| report.columns.get(i))
-                    .map_or(ViewCell::Empty, |c| ViewCell::Text(c.clone()));
+                let aged = aged_cell(&report, row, due, first..=last);
                 rows.push(ViewRow {
                     key: row.key.clone(),
                     label: party.clone(),
@@ -1010,6 +1035,32 @@ mod tests {
         assert_eq!(out.rows[0].cells[4], text("31-60 days"));
         assert_eq!(out.rows[1].cells[4], text("Not yet due"));
         assert_eq!(out.totals[3], dr(5));
+    }
+
+    #[test]
+    fn a_bill_due_on_the_as_at_date_is_due_today_not_overdue() {
+        // provenance: derived. The engine's ageing doc (outstanding.rs, "Ageing"): "A bill due on
+        // `as_of` is 0 days overdue", and it falls in the `0-30 days` column. The mock draws red
+        // only where overdue > 0 (index.html:2331, `b.overdue>0`), so a bill due on the as-at
+        // date (20 Nov 2026, the period's end) must not carry an overdue bucket's name.
+        let e = ViewCell::Empty;
+        let dr = |n: i64| ViewCell::Amount(rs(n));
+        let mut cells = vec![e.clone(); 11];
+        cells[0] = ViewCell::Date(date!(2026 - 10 - 21));
+        cells[1] = ViewCell::Date(date!(2026 - 11 - 20));
+        cells[2] = dr(3);
+        cells[4] = dr(3);
+        let party = row("Mehta Agro", 0, ViewRowKind::Ledger, vec![e.clone(); 11]);
+        let bill = row("SI/0001", 1, ViewRowKind::Bill, cells);
+        let out = outstanding(
+            base(
+                &outstanding_columns(),
+                vec![party, bill],
+                vec![e.clone(); 11],
+            ),
+            true,
+        );
+        assert_eq!(out.rows[0].cells[4], text("Due today"));
     }
 
     #[test]

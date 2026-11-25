@@ -25,7 +25,9 @@ pub enum GstinError {
     #[error("characters 3 to 12 must be a PAN (5 letters, 4 digits, 1 letter)")]
     PanShape,
     /// The 15th character does not match the checksum of the first 14.
-    #[error("check character is {found}, expected {expected}; the GSTIN has a typing error")]
+    #[error(
+        "Check character should be {expected}, not {found}. One of the first 14 characters is probably mistyped."
+    )]
     CheckCharacter {
         /// The check character the first 14 characters imply.
         expected: char,
@@ -160,6 +162,21 @@ impl std::fmt::Display for Gstin {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_wrong_check_character_reads_as_the_mock_words_it() {
+        // provenance: design/mock-v2/index.html:677, the mock's GSTIN check: "Check character
+        // should be P, not 7. One of the first 14 characters is probably mistyped." The check
+        // character of 27ZZZZZ0100Z1Z is P (the mock's own sample, index.html:1950).
+        let e = GstinError::CheckCharacter {
+            expected: 'P',
+            found: '7',
+        };
+        assert_eq!(
+            e.to_string(),
+            "Check character should be P, not 7. One of the first 14 characters is probably mistyped."
+        );
+    }
 
     // Fictional GSTINs. Provenance: derived by hand with the mod-36 algorithm described in the
     // module doc. That algorithm is recalled, not quoted from GSTN, so these vectors are only as

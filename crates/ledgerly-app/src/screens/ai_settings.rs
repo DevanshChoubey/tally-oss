@@ -635,13 +635,13 @@ fn draw_cloud(ui: &mut Ui, reason: Option<&str>) {
     }
 }
 
-/// What redaction takes out before anything is sent (index.html:1912). The mock also lists email
-/// addresses; the redaction module recognises PAN, GSTIN, Aadhaar, bank account numbers, IFSC
-/// codes and phone numbers, not email addresses, so the card names exactly those.
+/// What redaction takes out before anything is sent (index.html:1912). The redaction module
+/// recognises PAN, GSTIN, Aadhaar, bank account numbers, IFSC codes, phone numbers and email
+/// addresses, and the card names exactly those.
 const REMOVED: [&str; 4] = [
     "Bank account numbers and IFSC codes",
     "PAN, GSTIN and Aadhaar numbers",
-    "Phone numbers",
+    "Phone numbers and email addresses",
     "Ledger balances and report figures (never sent)",
 ];
 

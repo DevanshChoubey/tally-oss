@@ -404,6 +404,11 @@ pub fn visuals(kind: ThemeKind) -> Visuals {
     v.selection.bg_fill = t.accent_soft;
     v.selection.stroke = Stroke::new(focus_width(kind), t.accent);
     set_widget_states(&mut v.widgets, &t, kind);
+    if kind == ThemeKind::HighContrast {
+        // egui fades a disabled widget to this share of its colours (default 0.5, which
+        // measures 5.3:1 for text here); high contrast keeps text at 7:1 or better.
+        v.disabled_alpha = 0.8;
+    }
     v
 }
 

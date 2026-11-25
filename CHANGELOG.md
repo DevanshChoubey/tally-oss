@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The redactor also removes email addresses before a document goes to a cloud model.
+- Bills receivable and payable show overdue days in red, and a bill due on the as-at date is due
+  today, not overdue.
+- Stock items with no HSN show a "Missing: add HSN" badge with an alert icon; a GSTIN with a wrong
+  check character says which character it should be.
+- Bank reconciliation shows a Reconciled or Not yet reconciled card from the statement's difference.
+- The balance sheet exports the view that is on screen (groups and sub-groups, or ledgers).
+- The audit screen's Integrity certificate tab lists the engine's facts as a certificate.
+- High contrast: egui's own disabled widgets keep 7:1 text instead of fading to 5.3:1.
 - Ctrl+P on a report or an invoice opens a print preview of the pages the print engine laid out;
   Save as PDF there writes the same PDF as before, and Esc closes the preview.
 - Printed reports use Indian digit grouping and Dr/Cr instead of a minus; the profit and loss prints

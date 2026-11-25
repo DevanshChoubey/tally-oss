@@ -164,6 +164,28 @@ pub struct BrsRow {
     pub kind: BrsRowKind,
 }
 
+/// What the card beside the reconciliation statement says (index.html:1746).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BrsVerdict {
+    /// The engine's difference is nil.
+    Reconciled,
+    /// The engine's difference is not nil.
+    NotYet,
+    /// The statement has no difference line, so nothing is claimed.
+    Unknown,
+}
+
+/// The verdict the engine's own Difference line gives. The card repeats no figure of its own: it
+/// reads whether that line is nil.
+#[must_use]
+pub fn brs_verdict(view: &BrsView) -> BrsVerdict {
+    match view.rows.iter().find(|r| r.kind == BrsRowKind::Difference) {
+        None => BrsVerdict::Unknown,
+        Some(row) if row.amount.is_zero() => BrsVerdict::Reconciled,
+        Some(_) => BrsVerdict::NotYet,
+    }
+}
+
 /// The height of each line of the reconciliation statement, top to bottom: the total line is
 /// 36 points and every other line 34 (`table.t`, `design/mock-v2/index.html` lines 148-158).
 #[must_use]

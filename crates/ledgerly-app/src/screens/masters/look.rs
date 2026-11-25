@@ -11,7 +11,7 @@ use egui::{
 };
 
 use crate::theme::{RADIUS_M, RADIUS_XS, TEXT_BODY, TEXT_CAP, TEXT_META, border_width, shadow_1};
-use crate::ui::badge::{BadgeKind, badge};
+use crate::ui::badge::{BadgeKind, badge_with_icon};
 use crate::ui::icon::{self, ICON_SIZE, Icon};
 use crate::ui::prov::{self, ProvKind};
 use crate::ui::table::{self, CellPlace, RowState, T_HEAD_HEIGHT, T_ROW_HEIGHT, T_TOTAL_HEIGHT};
@@ -117,8 +117,8 @@ pub(super) enum Cell {
         /// The aliases, joined; empty for none.
         alias: String,
     },
-    /// A badge (`badge(..)` in a cell).
-    Badge(BadgeKind, &'static str),
+    /// A badge that draws the named icon in place of its kind's glyph.
+    BadgeIcon(BadgeKind, Icon, &'static str),
     /// Text in the body ink that says why under the pointer: a dash or a provisional figure
     /// with the engine's reason (rule A1).
     Explained {
@@ -349,7 +349,7 @@ fn row_name(row: &[Cell]) -> String {
             Cell::Text(text) | Cell::Quiet(text) | Cell::Explained { text, .. } => text.clone(),
             Cell::Named { name, alias } if alias.is_empty() => name.clone(),
             Cell::Named { name, alias } => format!("{name}, alias {alias}"),
-            Cell::Badge(_, text) => (*text).to_owned(),
+            Cell::BadgeIcon(_, _, text) => (*text).to_owned(),
         })
         .collect();
     let refs: Vec<&str> = parts.iter().map(String::as_str).collect();
@@ -398,18 +398,23 @@ fn paint_cells(ui: &mut Ui, cols: &[Col], rect: Rect, row: &[Cell], response: &e
                     );
                 }
             }
-            Cell::Badge(kind_of, text) => {
-                let inner = Rect::from_min_max(
-                    pos2(r.left() + table::CELL_PAD_X, r.top()),
-                    pos2(r.right() - table::CELL_PAD_X, r.bottom() - 1.0),
-                );
-                let mut child = ui.new_child(
-                    UiBuilder::new()
-                        .max_rect(inner)
-                        .layout(Layout::left_to_right(Align::Center)),
-                );
-                badge(&mut child, *kind_of, text);
+            Cell::BadgeIcon(kind_of, glyph, text) => {
+                draw_badge(ui, r, *kind_of, Some(*glyph), text);
             }
         }
     }
+}
+
+/// A badge in a table cell `r`, with the icon named or the kind's own glyph.
+fn draw_badge(ui: &mut Ui, r: Rect, kind_of: BadgeKind, glyph: Option<Icon>, text: &str) {
+    let inner = Rect::from_min_max(
+        pos2(r.left() + table::CELL_PAD_X, r.top()),
+        pos2(r.right() - table::CELL_PAD_X, r.bottom() - 1.0),
+    );
+    let mut child = ui.new_child(
+        UiBuilder::new()
+            .max_rect(inner)
+            .layout(Layout::left_to_right(Align::Center)),
+    );
+    badge_with_icon(&mut child, kind_of, text, glyph);
 }

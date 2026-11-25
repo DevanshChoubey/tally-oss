@@ -226,6 +226,24 @@ impl Api {
         }
     }
 
+    /// Exports the balance sheet as the screen shows it by default: each group with its
+    /// sub-groups and no ledgers. Any other report is `Unsupported`.
+    ///
+    /// # Errors
+    /// The errors of [`Api::export_report`].
+    pub fn export_report_by_group(
+        &self,
+        p: &ReportParams,
+        format: ExportFormat,
+        path: &Path,
+    ) -> Result<Outcome<()>, ApiError> {
+        match &self.cache {
+            Cache::Ready(books) => report::export_by_group(&self.store, books, p, format, path),
+            Cache::Blocked(unsupported) => Ok(Outcome::Unsupported(unsupported.clone())),
+            Cache::Stale => Err(ApiError::Stale),
+        }
+    }
+
     /// An owned copy of the loaded books, for a caller that draws masters and vouchers on another
     /// thread (the app's worker sends it back to the UI thread after each change).
     ///

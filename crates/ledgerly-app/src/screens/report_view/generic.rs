@@ -408,6 +408,75 @@ pub(super) fn draw(
     drawn
 }
 
+/// The integrity certificate's facts as (what, value) lines, the engine's cells as written: each
+/// row's label and the text of its first cell. Nothing is worked out here.
+#[must_use]
+pub(super) fn certificate_lines(report: &ViewReport) -> Vec<(String, String)> {
+    report
+        .rows
+        .iter()
+        .map(|row| {
+            // The engine's first cell repeats the label; its last is the value.
+            let value = row.cells.last().map_or_else(String::new, cell_text);
+            (row.label.clone(), value)
+        })
+        .collect()
+}
+
+/// The integrity certificate as the mock draws it (index.html `audit.integrity`): a card titled
+/// "Integrity certificate" with one fact per line, the label at the left and the value at the
+/// right, no column headings. A long value (the head hash) wraps inside its column.
+pub(super) fn draw_certificate(ui: &mut Ui, report: &ViewReport) -> Drawn {
+    let t = tokens(ui);
+    let lines = certificate_lines(report);
+    crate::ui::card::card(ui, |ui| {
+        ui.set_min_width(ui.available_width());
+        crate::ui::mock_table::panel_title(ui, None, "Integrity certificate");
+        ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
+        let width = ui.available_width();
+        let value_left = (width * 0.5).floor();
+        for (what, value) in &lines {
+            let mono = value.len() > 40;
+            let font = if mono {
+                egui::FontId::monospace(crate::theme::TEXT_META)
+            } else {
+                egui::FontId::proportional(TEXT_BODY)
+            };
+            let galley = ui.painter().layout(
+                value.clone(),
+                font,
+                t.text,
+                (width - value_left - table::CELL_PAD_X).max(40.0),
+            );
+            let height = T_ROW_HEIGHT.max(galley.size().y + 14.0 + 1.0);
+            let (rect, response) = ui.allocate_exact_size(vec2(width, height), Sense::hover());
+            a11y::name(
+                ui,
+                &response,
+                Role::Row,
+                &a11y::join(&[what.as_str(), value.as_str()]),
+            );
+            table::paint_cell_rule(ui, rect);
+            table::paint_cell_text(
+                ui,
+                rect,
+                1.0,
+                what,
+                egui::FontId::proportional(TEXT_BODY),
+                t.text,
+                CellPlace::Left(table::CELL_PAD_X),
+            );
+            let y = rect.top() + (rect.height() - 1.0 - galley.size().y) / 2.0;
+            ui.painter()
+                .galley(pos2(rect.left() + value_left, y), galley, t.text);
+        }
+    });
+    Drawn {
+        events: TableEvents::default(),
+        selected: None,
+    }
+}
+
 /// The rows, in a scroll area at most `max_height` tall that lays out only the rows in view.
 fn draw_rows(
     ui: &mut Ui,
@@ -671,13 +740,27 @@ fn paint_line(
     };
     for (i, cell) in row.cells.iter().enumerate() {
         if let Some((cell_rect, place)) = cols.cell(rect, i) {
-            let text = drawn_cell_text(headings.get(i).map_or("", String::as_str), cell);
-            table::paint_cell_text(ui, cell_rect, 1.0, &text, font.clone(), t.text, place);
+            let heading = headings.get(i).map_or("", String::as_str);
+            let text = drawn_cell_text(heading, cell);
+            let ink = if is_overdue_cell(heading, cell) {
+                t.bad
+            } else {
+                t.text
+            };
+            table::paint_cell_text(ui, cell_rect, 1.0, &text, font.clone(), ink, place);
             if matches!(cell, ViewCell::Provisional { .. }) {
                 marks.paint(ui, i, &text);
             }
         }
     }
+}
+
+/// Whether `cell` is an Overdue cell naming an ageing bucket past the due date, which the mock
+/// draws in red ink (index.html:2331, `color:var(--bad)`).
+#[must_use]
+pub(super) fn is_overdue_cell(heading: &str, cell: &ViewCell) -> bool {
+    heading == "Overdue"
+        && matches!(cell, ViewCell::Text(text) if super::mock::OVERDUE_BUCKETS.contains(&text.as_str()))
 }
 
 /// What a screen reader says for a row: its label, then each cell as the row draws it, in column
@@ -961,6 +1044,94 @@ mod s14_look {
         assert_eq!(
             drawn_cell_text("Date", &ViewCell::Date(date!(2026 - 09 - 15))),
             "15 Sep 2026"
+        );
+    }
+}
+
+#[cfg(test)]
+mod s14_overdue_ink {
+    //! The Overdue cell of a bill past its due date is red ink, as the mock draws it.
+    //!
+    //! provenance: design/mock-v2/index.html:2331: `b.overdue>0 ? <span style="color:var(--bad)">`
+    //! and otherwise plain text ("not due", "on demand"). The engine's buckets for a bill past its
+    //! due date are `0-30 days` to `Over 90 days`; `Not yet due`, `No due date` and the "Due
+    //! today" of a bill 0 days overdue are not overdue and keep plain ink.
+
+    use super::*;
+
+    #[test]
+    fn only_a_bucket_past_the_due_date_in_the_overdue_column_is_red() {
+        for bucket in ["0-30 days", "31-60 days", "61-90 days", "Over 90 days"] {
+            assert!(is_overdue_cell(
+                "Overdue",
+                &ViewCell::Text(bucket.to_owned())
+            ));
+        }
+        for plain in ["Not yet due", "No due date", "Due today", ""] {
+            assert!(!is_overdue_cell(
+                "Overdue",
+                &ViewCell::Text(plain.to_owned())
+            ));
+        }
+        // The same words in another column are not an overdue mark.
+        assert!(!is_overdue_cell(
+            "Bill",
+            &ViewCell::Text("31-60 days".to_owned())
+        ));
+    }
+}
+
+#[cfg(test)]
+mod s14_certificate {
+    //! The integrity certificate reads as facts, one per line.
+    //!
+    //! provenance: design/mock-v2/index.html `audit.integrity`: label and value per line under the
+    //! title "Integrity certificate". The values are the engine's cells, passed through.
+
+    #![allow(
+        clippy::unwrap_used,
+        reason = "test code: the fixture is known to build"
+    )]
+
+    use super::*;
+    use crate::screens::report_view::{ReportToken, ViewDetail, ViewParams};
+
+    #[test]
+    fn each_engine_row_is_one_line_with_its_value_as_written() {
+        let row = |label: &str, text: &str| ViewRow {
+            key: None,
+            label: label.to_owned(),
+            depth: 0,
+            kind: ViewRowKind::Text,
+            // The engine's rows carry the label as their first cell and the value as their second
+            // (`ledgerly-reports` `audit.rs` `text_row`).
+            cells: vec![
+                ViewCell::Text(label.to_owned()),
+                ViewCell::Text(text.to_owned()),
+            ],
+        };
+        let report = ViewReport {
+            token: ReportToken("t".to_owned()),
+            title: "Integrity certificate".to_owned(),
+            params: ViewParams {
+                period: ledgerly_core::Period::new(
+                    time::macros::date!(2026 - 04 - 01),
+                    time::macros::date!(2026 - 11 - 20),
+                )
+                .unwrap(),
+                detail: ViewDetail::Detailed,
+            },
+            columns: vec!["Item".to_owned(), "Value".to_owned()],
+            rows: vec![row("Result", "PASS"), row("Events checked", "156")],
+            totals: Vec::new(),
+            notes: Vec::new(),
+        };
+        assert_eq!(
+            certificate_lines(&report),
+            vec![
+                ("Result".to_owned(), "PASS".to_owned()),
+                ("Events checked".to_owned(), "156".to_owned()),
+            ]
         );
     }
 }

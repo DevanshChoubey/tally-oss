@@ -1462,7 +1462,10 @@ fn light_shots() -> Vec<Shot> {
             .press(&[(Key::Enter, NONE)])
             .type_text("6500")
             .press(&[(Key::Enter, NONE), (Key::Enter, NONE)])
-            .type_text("Freight, Vardhaman Logistics, LR 4471"),
+            .type_text("Freight, Vardhaman Logistics, LR 4471")
+            // The mock stops mid-entry with the keyboard back on row 1 (narration filled), so a
+            // click returns to the first particular.
+            .click(384.0, 324.0),
         // The mock's bill allocation: 1,50,000 to Vardhaman Logistics against VL/861.
         shot("payment.bill-wise", &[(Key::F5, NONE)])
             .type_text("Saptagiri")

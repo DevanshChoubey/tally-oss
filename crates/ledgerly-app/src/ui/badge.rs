@@ -46,6 +46,17 @@ const PAD_Y: i8 = 1;
 
 /// Draws a badge of `kind` reading `text`. In high contrast it is outlined in its text colour.
 pub fn badge(ui: &mut Ui, kind_of: BadgeKind, text: &str) -> Response {
+    badge_with_icon(ui, kind_of, text, None)
+}
+
+/// [`badge`] with the mock's own icon in place of the kind's glyph (`badge('Missing: add
+/// HSN','b-bad','alert')` draws the triangle, not the cross). `None` keeps the kind's glyph.
+pub fn badge_with_icon(
+    ui: &mut Ui,
+    kind_of: BadgeKind,
+    text: &str,
+    glyph: Option<Icon>,
+) -> Response {
     let t = tokens(ui);
     let (bg, fg) = colors(kind_of, &t);
     let outline = if kind(ui) == ThemeKind::HighContrast {
@@ -61,7 +72,10 @@ pub fn badge(ui: &mut Ui, kind_of: BadgeKind, text: &str) -> Response {
         .show(ui, |ui| {
             ui.horizontal(|ui| {
                 let (rect, _) = ui.allocate_exact_size(Vec2::splat(ICON), Sense::hover());
-                paint_icon(ui.painter(), rect.center(), kind_of, fg);
+                match glyph {
+                    Some(g) => icon::paint(ui.painter(), rect, g, fg),
+                    None => paint_icon(ui.painter(), rect.center(), kind_of, fg),
+                }
                 ui.label(
                     RichText::new(text)
                         .font(super::bold_font(ui, TEXT_CAP))

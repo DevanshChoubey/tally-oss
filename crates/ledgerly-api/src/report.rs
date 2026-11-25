@@ -16,7 +16,9 @@ use ledgerly_reports::profit_loss::profit_loss;
 use ledgerly_reports::registers::{day_book, register};
 use ledgerly_reports::stock_summary::stock_summary;
 use ledgerly_reports::trial_balance::trial_balance;
-use ledgerly_reports::{AuditReportKind, ColumnSpec, Report, ReportKind, ReportParams};
+use ledgerly_reports::{
+    AuditReportKind, ColumnSpec, Detail, Report, ReportKind, ReportParams, RowKind,
+};
 use ledgerly_stock::avg::average_cost;
 use ledgerly_stock::fifo::fifo;
 use ledgerly_stock::other_methods::{last_purchase_cost, standard_cost};
@@ -210,6 +212,43 @@ pub(crate) fn export(
         Outcome::Value(report) => report,
         Outcome::Unsupported(u) => return Ok(Outcome::Unsupported(u)),
     };
+    match format {
+        ExportFormat::Csv => ledgerly_reports::export::to_csv_file(&report, path)?,
+        ExportFormat::Xlsx => ledgerly_reports::export::to_xlsx(&report, path)?,
+    }
+    Ok(Outcome::Value(()))
+}
+
+/// Runs the balance sheet in its detailed form, keeps the rows down to the first sub-group level
+/// with the ledgers left out (the screen's default view), and writes the result to `path`. Any
+/// other report kind is `Unsupported`.
+///
+/// # Errors
+/// The errors of [`run`], and [`ApiError::Report`] when the file cannot be written.
+pub(crate) fn export_by_group(
+    store: &SqliteStore,
+    books: &Books,
+    p: &ReportParams,
+    format: ExportFormat,
+    path: &Path,
+) -> Result<Outcome<()>, ApiError> {
+    if p.kind != ReportKind::BalanceSheet {
+        return Ok(Outcome::Unsupported(Unsupported {
+            what: "export by group".to_owned(),
+            reason: "only the balance sheet has a group and sub-group view".to_owned(),
+        }));
+    }
+    let detailed = ReportParams {
+        detail: Detail::Detailed,
+        ..p.clone()
+    };
+    let mut report = match run(store, books, &detailed)? {
+        Outcome::Value(report) => report,
+        Outcome::Unsupported(u) => return Ok(Outcome::Unsupported(u)),
+    };
+    report
+        .rows
+        .retain(|row| row.depth <= 1 && row.kind != RowKind::Ledger);
     match format {
         ExportFormat::Csv => ledgerly_reports::export::to_csv_file(&report, path)?,
         ExportFormat::Xlsx => ledgerly_reports::export::to_xlsx(&report, path)?,

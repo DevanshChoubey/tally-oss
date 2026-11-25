@@ -482,3 +482,48 @@ fn the_export_format_is_read_from_the_file_name() {
     assert_eq!(ExportFormat::from_path(Path::new("tb.pdf")), None);
     assert_eq!(ExportFormat::from_path(Path::new("tb")), None);
 }
+
+#[test]
+fn the_balance_sheet_by_group_exports_groups_and_sub_groups_without_ledgers() {
+    // provenance: derived. The balance sheet screen's default view lists each group with its
+    // sub-groups and no ledgers (index.html `balanceSheet()`, PARITY-GAPS "Balance sheet"), and
+    // the mock's Export writes "exactly what is on screen" (index.html:1576). After one payment
+    // of Rs 1,000 from Cash to Rent, the detailed engine report has Current Assets (depth 0),
+    // Cash-in-Hand (depth 1), the ledger Cash (depth 2) and the Profit and Loss A/c line, so the
+    // by-group file keeps the first, second and last, and drops the ledger.
+    let (dir, _path, mut api) = setup();
+    value(api.execute(Command::PostVoucher(payment(
+        1,
+        date!(2026 - 06 - 01),
+        1000,
+    ))));
+    let p = params(ReportKind::BalanceSheet, date!(2026 - 12 - 31));
+    let out = dir.path().join("bs.csv");
+    let done = api
+        .export_report_by_group(&p, ExportFormat::Csv, &out)
+        .unwrap();
+    assert!(matches!(done, Outcome::Value(())), "{done:?}");
+    let text = std::fs::read_to_string(&out).unwrap();
+    let starts = |prefix: &str| text.lines().any(|l| l.starts_with(prefix));
+    assert!(starts("Current Assets,"), "{text}");
+    assert!(starts("  Cash-in-Hand,"), "{text}");
+    assert!(starts("Profit and Loss A/c,"), "{text}");
+    assert!(
+        !starts("    Cash,"),
+        "ledger row in the by-group file: {text}"
+    );
+}
+
+#[test]
+fn only_the_balance_sheet_has_a_by_group_export() {
+    // provenance: derived: the by-group view is the balance sheet's; any other report is
+    // refused as unsupported, never exported as something else.
+    let (dir, _path, api) = setup();
+    let p = params(ReportKind::TrialBalance, date!(2026 - 12 - 31));
+    let out = dir.path().join("tb.csv");
+    let done = api
+        .export_report_by_group(&p, ExportFormat::Csv, &out)
+        .unwrap();
+    assert!(matches!(done, Outcome::Unsupported(_)), "{done:?}");
+    assert!(!out.exists());
+}

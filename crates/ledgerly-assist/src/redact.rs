@@ -1,7 +1,7 @@
 //! Redaction before any cloud call. **Card A4** implements this module.
 //!
 //! Spec 6.8 and 9 and research R10 (privacy tier 2): before text leaves the machine, PAN, GSTIN,
-//! Aadhaar, bank account numbers, IFSC codes and phone numbers are replaced by stable placeholders
+//! Aadhaar, bank account numbers, IFSC codes, phone numbers and email addresses are replaced by stable placeholders
 //! such as `[PAN_1]`. The same value gets the same placeholder inside one call, so the model can
 //! still see that two lines name the same party. The caller keeps the [`Redaction`] list and uses
 //! [`restore`] to put the originals back into the model's answer; the originals never leave the
@@ -27,6 +27,7 @@
 //! | Aadhaar | 12 digits, or 4-4-4 digits joined by one space or hyphen | UIDAI 12-digit number, displayed in groups of 4 |
 //! | Phone | 10 digits starting 6 to 9, or 5-5 digits joined by one space or hyphen | Indian mobile numbering |
 //! | Bank account | 9 to 18 digits in one run | RBI/bank practice: 9 to 18 digits |
+//! | Email | local part, `@`, dotted domain ending in 2 or more letters | RFC 5322 addr-spec, ASCII subset |
 //!
 //! # Known limits
 //!
@@ -55,6 +56,8 @@ pub enum RedactionKind {
     Ifsc,
     /// A bank account number.
     BankAccount,
+    /// An email address.
+    Email,
 }
 
 impl RedactionKind {
@@ -67,6 +70,7 @@ impl RedactionKind {
             RedactionKind::Phone => "PHONE",
             RedactionKind::Ifsc => "IFSC",
             RedactionKind::BankAccount => "ACCOUNT",
+            RedactionKind::Email => "EMAIL",
         }
     }
 }
@@ -261,7 +265,11 @@ fn words(text: &str) -> Vec<(usize, usize)> {
 }
 
 fn scan(text: &str) -> Vec<Hit> {
-    let spans = words(text);
+    let emails = email_hits(text);
+    let spans: Vec<(usize, usize)> = words(text)
+        .into_iter()
+        .filter(|&(s, e)| !emails.iter().any(|h| s < h.end && h.start < e))
+        .collect();
     let mut hits = Vec::new();
     let mut i = 0_usize;
     while i < spans.len() {
@@ -277,7 +285,53 @@ fn scan(text: &str) -> Vec<Hit> {
         }
         i += 1;
     }
+    hits.extend(emails);
+    hits.sort_by_key(|h| h.start);
     hits
+}
+
+/// Email addresses: a local part of ASCII letters, digits and `._%+-`, an `@`, and a domain of
+/// dot-separated labels (letters, digits, hyphens) ending in a label of two or more letters.
+fn email_hits(text: &str) -> Vec<Hit> {
+    let bytes = text.as_bytes();
+    let local = |b: u8| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'%' | b'+' | b'-');
+    let domain = |b: u8| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'-');
+    let mut out: Vec<Hit> = Vec::new();
+    for (at, _) in text.match_indices('@') {
+        let mut start = at;
+        while start > 0 && bytes.get(start - 1).copied().is_some_and(local) {
+            start -= 1;
+        }
+        let mut end = at + 1;
+        while bytes.get(end).copied().is_some_and(domain) {
+            end += 1;
+        }
+        // A trailing dot or hyphen is sentence punctuation, not part of the domain.
+        while end > at + 1 && matches!(bytes.get(end - 1), Some(b'.' | b'-')) {
+            end -= 1;
+        }
+        let Some(host) = text.get(at + 1..end) else {
+            continue;
+        };
+        let labels: Vec<&str> = host.split('.').collect();
+        let tld_ok = labels
+            .last()
+            .is_some_and(|l| l.len() >= 2 && l.bytes().all(|b| b.is_ascii_alphabetic()));
+        let labels_ok = labels
+            .iter()
+            .all(|l| !l.is_empty() && !l.starts_with('-') && !l.ends_with('-'));
+        if start < at && labels.len() >= 2 && tld_ok && labels_ok {
+            if out.last().is_some_and(|h| h.end > start) {
+                continue;
+            }
+            out.push(Hit {
+                start,
+                end,
+                kind: RedactionKind::Email,
+            });
+        }
+    }
+    out
 }
 
 /// Identifiers written in groups: Aadhaar as 4-4-4 and a phone number as 5-5.
@@ -391,6 +445,48 @@ mod tests {
     // hand-derived vector in `ledgerly-core` (its check character W is derived there). The
     // expected redacted strings are produced by hand-substituting the placeholder for the
     // identifier; none is copied from this module's output.
+
+    // Provenance for the email cases: derived from RFC 5322's addr-spec shape (local part, `@`,
+    // dotted domain). The addresses are fictional and written out by hand; the expected strings
+    // are the hand substitution of the placeholder.
+
+    #[test]
+    fn an_email_address_is_replaced_as_one_token() {
+        let (out, found) = redact("Mail accounts@godavari-drip.example.in for the invoice");
+        assert_eq!(out, "Mail [EMAIL_1] for the invoice");
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].kind, RedactionKind::Email);
+        // Hand count: "Mail " is 5 bytes, the address is 8 + 1 + 18 = "accounts@godavari-drip.example.in"
+        // = 33 bytes, so it ends (exclusive) at byte 38.
+        assert_eq!((found[0].start, found[0].end), (5, 38));
+    }
+
+    #[test]
+    fn an_email_whose_local_part_looks_like_a_pan_is_still_one_email() {
+        let (out, found) = redact("write to ABCDE1234F@mail.example.com.");
+        assert_eq!(out, "write to [EMAIL_1].");
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].kind, RedactionKind::Email);
+    }
+
+    #[test]
+    fn the_same_email_gets_the_same_placeholder_and_restores() {
+        // Two spellings that differ only in letter case share one placeholder, as for every other
+        // kind (the module's key is the upper-cased original), so the model's answer restores to
+        // the first spelling; the placeholder assertion is what this test is about.
+        let (out, found) = redact("a.b+c@x.example and A.B+C@X.EXAMPLE");
+        assert_eq!(out, "[EMAIL_1] and [EMAIL_1]");
+        assert_eq!(found.len(), 2);
+        assert_eq!(restore("[EMAIL_1]", &found), "a.b+c@x.example");
+    }
+
+    #[test]
+    fn an_at_sign_that_is_not_an_address_is_left_alone() {
+        // No domain dot, no local part, and a price are not addresses.
+        let (out, found) = redact("5 @ 100, @home, user@localhost, x@.");
+        assert_eq!(out, "5 @ 100, @home, user@localhost, x@.");
+        assert_eq!(found.len(), 0);
+    }
 
     #[test]
     fn pan_is_replaced() {
