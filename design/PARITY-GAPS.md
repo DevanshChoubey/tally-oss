@@ -1227,3 +1227,37 @@ Mismatches between the mock's totals and the engine's, and why:
   quantity of -30 and a warning banner above the table. The sample company's engine run gives
   quantity 70 for Steel pickaxe 2.5 kg at 20 Nov, and the text is clipped at the cell's left edge.
   Needs a badge cell and a top note for stock, as balance sheet has.
+
+## Round S13: capture coverage (2026-11-25)
+
+Every mock state now has an app capture except the states below, each with its reason.
+
+- **not built (AI features that do not run):** `ask.result`, `ask.loading`, `ask.low-confidence`,
+  `ask.unsupported`; `purchase-bill.reading`, `.proposal`, `.low-confidence`, `.mismatch`,
+  `.duplicate`, `.cloud-consent`, `.error`, `.accepted`; `quick-entry.proposal`, `.hinglish`,
+  `.unknown-ledger`, `.loading`, `.rejected`; `gst.recon-explain`; `bank.ai-suggestions`,
+  `bank.suggested-ledger`, `masters.suggested-ledger`. The features need a model that the app does
+  not run; building a screen for them would show a look with nothing behind it.
+- **gap: start.recent.** The app has no recent-companies list yet (it needs a file in the user's
+  config directory, a Start screen and the open flow recording into it). The mock's Start card
+  also draws a full company chrome with no company open, which the app does not (it draws "New
+  company"). Left for its own card.
+- **gap: import.imported.** Needs a running fake import server in the harness to return a company;
+  the other seven import states are captured. The failed capture shows the API's real refusal of the
+  blank capture company ("the import period is outside the supported calendar..."), not the mock's
+  "connection refused", because the engine checks the period before connecting.
+- **no real cause: gst.gstr1-unsupported, gst.gstr1-failed, audit.failed,
+  profit-and-loss.print-error.** The sample books never make the engine refuse these (GSTR-3B for
+  October 2026 is Unsupported and is captured as `gst.gstr3b-unsupported`). A capture would need an
+  invented failure, which would be a wrong picture of the product.
+- **not built: print preview** (`*.print-preview`, `*.print-busy`). Ctrl+P writes the PDF through a
+  save dialog and shows "PDF saved" or the failure; there is no page-as-printed screen.
+- **difference: masters.empty and masters.items-empty.** The app keeps the filter box and shows the
+  empty message without the card and icon the mock draws.
+- **difference: import screens.** The stepper, the card chrome and the key bar ("Enter Import the
+  company") differ from the mock.
+- **difference: home.gst-unsupported.** The tile says "Not supported yet" in the normal colour,
+  not the bad colour.
+- **difference: the tab strip order** was corrected to the mock's (Close tab, then New tab).
+- **difference: bank.offline-ai.** Captured with AI off. The app shows the matcher's lines and the
+  match card but not the mock's "AI is off for this company" note with the AI and privacy link.

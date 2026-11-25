@@ -1778,6 +1778,74 @@ fn s13_shots() -> Vec<Shot> {
     let new_tab = (Key::T, Modifiers::COMMAND);
     vec![
         // Ctrl+T with a company open: a second Home tab.
+        // AI off (the AI and privacy screen, key 1), then the bank chooser and the sample's
+        // Saptagiri account: exact and rule matches only.
+        shot("bank.offline-ai", &[palette])
+            .query("AI and privacy")
+            .then(&[(Key::Enter, NONE), (Key::Num1, NONE), ESC, palette])
+            .type_text("Bank Reconciliation")
+            .press(&[(Key::Enter, NONE)])
+            .seek("Saptagiri Commercial Bank A/c")
+            .press(&[(Key::Enter, NONE)])
+            .expect("Bank reconciliation: Saptagiri Commercial Bank A/c", None),
+        shot("import.default", &[palette])
+            .query("Import from another app")
+            .then(&[(Key::Enter, NONE)])
+            .on(Fixture::Blank)
+            .expect_bar("Import from another app", "Import from another app"),
+        // Field and button positions are from the capture of import.default (1280 x 800).
+        shot("import.validation-error", &[palette])
+            .query("Import from another app")
+            .then(&[(Key::Enter, NONE)])
+            .on(Fixture::Blank)
+            .click(373.0, 375.0)
+            .wait(20)
+            .expect_bar("Import from another app", "Import from another app"),
+        shot("import.port-error", &[palette])
+            .query("Import from another app")
+            .then(&[(Key::Enter, NONE)])
+            .on(Fixture::Blank)
+            .click(749.0, 332.0)
+            .press(&[(Key::A, Modifiers::COMMAND)])
+            .type_text("99999")
+            .click(1054.0, 332.0)
+            .type_text("Godavari")
+            .click(373.0, 375.0)
+            .wait(20)
+            .expect_bar("Import from another app", "Import from another app"),
+        shot("import.running", &[palette])
+            .query("Import from another app")
+            .then(&[(Key::Enter, NONE)])
+            .on(Fixture::GodavariHeld)
+            .click(1054.0, 332.0)
+            .type_text("Godavari")
+            .click(373.0, 375.0)
+            .wait(20)
+            .expect_bar("Import from another app", "Import from another app"),
+        shot("import.refused", &[palette])
+            .query("Import from another app")
+            .then(&[(Key::Enter, NONE)])
+            .click(1054.0, 332.0)
+            .type_text("Godavari")
+            .click(373.0, 375.0)
+            .wait(60)
+            .expect_bar("Import from another app", "Import from another app"),
+        shot("import.failed", &[palette])
+            .query("Import from another app")
+            .then(&[(Key::Enter, NONE)])
+            .on(Fixture::Blank)
+            .click(1054.0, 332.0)
+            .type_text("Godavari")
+            .click(373.0, 375.0)
+            .wait(60)
+            .expect_bar("Import from another app", "Import from another app"),
+        // Right from Create is the Import card (never Down, which reaches Open).
+        shot(
+            "import.no-company",
+            &[(Key::ArrowRight, NONE), (Key::Enter, NONE)],
+        )
+        .on(Fixture::Cold)
+        .expect_bar("Import from another app", "Import from another app"),
         shot("home.new-tab", &[new_tab]).expect("Home", None),
         // Ctrl+T and Ctrl+\ before any company is open.
         shot("setup.new-tab", &[new_tab]).on(Fixture::Cold),
