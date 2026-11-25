@@ -13,6 +13,7 @@ use ledgerly_core::DrCr;
 use super::text::{amount_on_side, cell_text};
 use super::{TableEvents, ViewCell, ViewReport, ViewRow, ViewRowKind};
 use crate::theme::{RADIUS_M, TEXT_BODY, TEXT_META, border_width, shadow_1};
+use crate::ui::badge::{BadgeKind, badge_width, paint_badge};
 use crate::ui::table::{self, CellPlace, RowState, T_HEAD_HEIGHT, T_ROW_HEIGHT, T_TOTAL_HEIGHT};
 use crate::ui::{a11y, bold_font, kind, tokens};
 
@@ -219,6 +220,7 @@ fn column_heading<'a>(report: &ViewReport, name: &'a str) -> &'a str {
             // plain word.
             "Open Dr" | "Open Cr" => "Open",
             "Value Dr" => "Value",
+            "Cost Dr" => "Cost",
             other => other,
         }
     }
@@ -264,9 +266,92 @@ pub fn repeats_label(report: &ViewReport, i: usize) -> bool {
 #[must_use]
 pub fn column_cell_text(heading: &str, cell: &ViewCell) -> String {
     match heading {
-        "Debit" | "Open Dr" | "Value Dr" => amount_on_side(cell, DrCr::Dr),
+        "Debit" | "Open Dr" | "Value Dr" | "Cost Dr" => amount_on_side(cell, DrCr::Dr),
         "Credit" | "Open Cr" => amount_on_side(cell, DrCr::Cr),
         _ => cell_text(cell),
+    }
+}
+
+/// The text drawn for `cell` in the column headed `heading`: [`column_cell_text`], except that a
+/// provisional figure is the bare figure. Its reason is the banner's, and the screen reader's
+/// (see [`line_name`]); a long reason in the cell was cut off where the figure belongs.
+fn drawn_cell_text(heading: &str, cell: &ViewCell) -> String {
+    match cell {
+        ViewCell::Provisional { amount, .. } => {
+            column_cell_text(heading, &ViewCell::Amount(*amount))
+        }
+        ViewCell::Amount(_)
+        | ViewCell::Signed(_)
+        | ViewCell::Qty(_)
+        | ViewCell::Text(_)
+        | ViewCell::Date(_)
+        | ViewCell::Empty
+        | ViewCell::Unsupported(_) => column_cell_text(heading, cell),
+    }
+}
+
+/// The word on the badge that marks a provisional figure (index.html `badge('Provisional')`).
+const PROVISIONAL: &str = "Provisional";
+/// Gap between a label and the badge after it, and between the badge and a figure.
+const BADGE_GAP: f32 = 6.0;
+
+/// Whether `headings` are the two-sided profit and loss's, where a badge goes beside the label of
+/// the side the figure is on (index.html `plScreen`) and not beside the figure.
+fn is_two_sided(headings: &[String]) -> bool {
+    headings.iter().map(String::as_str).eq([
+        super::mock::PL_DEBIT,
+        "Particulars",
+        super::mock::PL_CREDIT,
+    ])
+}
+
+/// What a line needs to place the "Provisional" badges of its cells.
+struct LineMarks<'a> {
+    /// The line.
+    rect: Rect,
+    /// Where its columns are.
+    cols: &'a Columns,
+    /// The report's headings.
+    headings: &'a [String],
+    /// The font its text is drawn in.
+    font: &'a egui::FontId,
+    /// The right end of the row's label, from the label column's left (the debit side).
+    label_end: f32,
+    /// The text of the credit side's label, on the two-sided account.
+    particulars: Option<&'a str>,
+}
+
+impl LineMarks<'_> {
+    /// Paints the badge for the provisional figure `figure` in column `i`: right before the
+    /// figure, or on the two-sided account after the label of the figure's side.
+    fn paint(&self, ui: &Ui, i: usize, figure: &str) {
+        let t = tokens(ui);
+        let y = self.rect.center().y;
+        let text_width = |text: &str| {
+            ui.painter()
+                .layout_no_wrap(text.to_owned(), self.font.clone(), t.text)
+                .size()
+                .x
+        };
+        if is_two_sided(self.headings) {
+            let left = if i == 0 {
+                self.cols.label(self.rect).left() + self.label_end
+            } else {
+                let start = self
+                    .cols
+                    .cell(self.rect, 1)
+                    .map_or(self.rect.left(), |(r, _)| r.left() + table::CELL_PAD_X);
+                start + self.particulars.map_or(0.0, text_width)
+            };
+            paint_badge(ui, left + BADGE_GAP, y, BadgeKind::Warn, PROVISIONAL);
+        } else if let Some((cell_rect, _)) = self.cols.cell(self.rect, i) {
+            let left = cell_rect.right()
+                - table::CELL_PAD_X
+                - text_width(figure)
+                - BADGE_GAP
+                - badge_width(ui, PROVISIONAL);
+            paint_badge(ui, left, y, BadgeKind::Warn, PROVISIONAL);
+        }
     }
 }
 
@@ -546,17 +631,30 @@ fn paint_line(
         t.text,
         CellPlace::Left(table::indent(row.depth)),
     );
+    let label_end = table::indent(row.depth)
+        + ui.painter()
+            .layout_no_wrap(row.label.clone(), font.clone(), t.text)
+            .size()
+            .x;
+    let particulars = match row.cells.get(1) {
+        Some(ViewCell::Text(text)) => Some(text.as_str()),
+        Some(_) | None => None,
+    };
+    let marks = LineMarks {
+        rect,
+        cols,
+        headings,
+        font: &font,
+        label_end,
+        particulars,
+    };
     for (i, cell) in row.cells.iter().enumerate() {
         if let Some((cell_rect, place)) = cols.cell(rect, i) {
-            table::paint_cell_text(
-                ui,
-                cell_rect,
-                1.0,
-                &column_cell_text(headings.get(i).map_or("", String::as_str), cell),
-                font.clone(),
-                t.text,
-                place,
-            );
+            let text = drawn_cell_text(headings.get(i).map_or("", String::as_str), cell);
+            table::paint_cell_text(ui, cell_rect, 1.0, &text, font.clone(), t.text, place);
+            if matches!(cell, ViewCell::Provisional { .. }) {
+                marks.paint(ui, i, &text);
+            }
         }
     }
 }
@@ -575,26 +673,208 @@ fn paint_total(ui: &Ui, rect: Rect, cols: &Columns, headings: &[String], totals:
     let t = tokens(ui);
     table::paint_total_rules(ui, rect);
     let font = bold_font(ui, TEXT_BODY);
+    // index.html `stockScreen`: the stock summary's total reads "Total closing stock" with the
+    // engine's tag, the figure being the stock engine's.
+    let stock = headings.iter().any(|h| h == "Cost Dr");
+    let label = if stock {
+        "Total closing stock"
+    } else {
+        "Total"
+    };
     table::paint_cell_text(
         ui,
         cols.label(rect),
         3.0,
-        "Total",
+        label,
         font.clone(),
         t.text,
         CellPlace::Left(table::CELL_PAD_X),
     );
+    if stock {
+        table::paint_engine_tag(ui, cols.label(rect), label, &font);
+    }
+    let marks = LineMarks {
+        rect,
+        cols,
+        headings,
+        font: &font,
+        label_end: 0.0,
+        particulars: None,
+    };
     for (i, cell) in totals.iter().enumerate() {
         if let Some((cell_rect, place)) = cols.cell(rect, i) {
-            table::paint_cell_text(
-                ui,
-                cell_rect,
-                3.0,
-                &column_cell_text(headings.get(i).map_or("", String::as_str), cell),
-                font.clone(),
-                t.text,
-                place,
-            );
+            let text = drawn_cell_text(headings.get(i).map_or("", String::as_str), cell);
+            table::paint_cell_text(ui, cell_rect, 3.0, &text, font.clone(), t.text, place);
+            if matches!(cell, ViewCell::Provisional { .. }) {
+                marks.paint(ui, i, &text);
+            }
         }
+    }
+}
+
+#[cfg(test)]
+mod provisional_marks {
+    //! A provisional figure is drawn as the figure with a "Provisional" badge; the reason is the
+    //! banner's, never the cell's (the 2026-11-25 capture of `stock-summary.provisional` drew the
+    //! reason, cut off, where the value belongs).
+    //!
+    //! provenance: design/mock-v2/index.html `stockScreen` (line 2348: the badge sits before the
+    //! bare value, line 2349: the total carries one too) and `plScreen` (line 2238: `prov` on the
+    //! closing stock line, the badge beside its label).
+    #![allow(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        reason = "test code: the fixture is known to build"
+    )]
+
+    use super::*;
+    use crate::screens::report_view::{ReportToken, ViewParams, ViewRow};
+    use egui::Shape;
+    use ledgerly_core::{Paise, Period, SignedAmount};
+    use time::macros::date;
+
+    const REASON: &str =
+        "negative stock: item Steel pickaxe 2.5 kg first went below zero on 2026-11-19";
+
+    fn provisional(side: DrCr, paise: i64) -> ViewCell {
+        ViewCell::Provisional {
+            amount: SignedAmount {
+                amount: Paise::new(paise),
+                side,
+            },
+            reason: REASON.to_owned(),
+        }
+    }
+
+    fn report(columns: &[&str], rows: Vec<ViewRow>, totals: Vec<ViewCell>) -> ViewReport {
+        ViewReport {
+            token: ReportToken("provisional".to_owned()),
+            title: "t".to_owned(),
+            params: ViewParams {
+                period: Period::new(date!(2026 - 04 - 01), date!(2026 - 11 - 20)).unwrap(),
+                detail: crate::screens::report_view::ViewDetail::Condensed,
+            },
+            columns: columns.iter().map(|c| (*c).to_owned()).collect(),
+            rows,
+            totals,
+            notes: Vec::new(),
+        }
+    }
+
+    fn line(label: &str, cells: Vec<ViewCell>) -> ViewRow {
+        ViewRow {
+            key: None,
+            label: label.to_owned(),
+            depth: 0,
+            kind: ViewRowKind::Item,
+            cells,
+        }
+    }
+
+    fn texts(shape: &Shape, out: &mut Vec<String>) {
+        if let Shape::Text(t) = shape {
+            out.push(t.galley.text().to_owned());
+        } else if let Shape::Vec(inner) = shape {
+            for s in inner {
+                texts(s, out);
+            }
+        }
+    }
+
+    fn drawn_texts(report: &ViewReport) -> Vec<String> {
+        let ctx = egui::Context::default();
+        let out = ctx.run_ui(egui::RawInput::default(), |ui| {
+            draw(ui, report, 0, false);
+        });
+        let mut drawn = Vec::new();
+        for clipped in &out.shapes {
+            texts(&clipped.shape, &mut drawn);
+        }
+        out.drop_without_applying_deltas();
+        drawn
+    }
+
+    #[test]
+    fn the_stock_summary_draws_a_badge_and_the_bare_value_never_the_reason() {
+        // derived: the pickaxe's 70 nos at 470.00 is 32,900.00 (index.html: ITEMS cost 470);
+        // the total 13,90,759.00 is the engine's. Neither cell shows the reason; each has a badge.
+        let r = report(
+            &["HSN", "Quantity", "Unit", "Cost Dr", "Value Dr"],
+            vec![
+                line(
+                    "Steel pickaxe 2.5 kg",
+                    vec![
+                        ViewCell::Text("none".to_owned()),
+                        ViewCell::Empty,
+                        ViewCell::Text("nos".to_owned()),
+                        ViewCell::Amount(SignedAmount::dr(Paise::new(47_000))),
+                        provisional(DrCr::Dr, 3_290_000),
+                    ],
+                ),
+                line(
+                    "Monoblock pump 1 HP",
+                    vec![
+                        ViewCell::Text("8413".to_owned()),
+                        ViewCell::Empty,
+                        ViewCell::Text("nos".to_owned()),
+                        ViewCell::Empty,
+                        ViewCell::Amount(SignedAmount::dr(Paise::new(8_340_000))),
+                    ],
+                ),
+            ],
+            vec![
+                ViewCell::Empty,
+                ViewCell::Empty,
+                ViewCell::Empty,
+                ViewCell::Empty,
+                provisional(DrCr::Dr, 139_075_900),
+            ],
+        );
+        let drawn = drawn_texts(&r);
+        assert!(
+            drawn.iter().all(|t| !t.contains("below zero")),
+            "the reason is drawn in a cell: {drawn:?}"
+        );
+        assert!(drawn.iter().any(|t| t == "32,900.00"), "{drawn:?}");
+        // provenance: index.html `stockScreen` line 2355: the total row reads "Total closing
+        // stock" followed by the green "engine" tag; the Cost column shows the rate 470.00.
+        assert!(
+            drawn.iter().any(|t| t == "Total closing stock"),
+            "{drawn:?}"
+        );
+        assert!(drawn.iter().any(|t| t == "engine"), "{drawn:?}");
+        assert!(drawn.iter().any(|t| t == "470.00"), "{drawn:?}");
+        assert!(drawn.iter().any(|t| t == "13,90,759.00"), "{drawn:?}");
+        assert_eq!(
+            drawn.iter().filter(|t| *t == "Provisional").count(),
+            2,
+            "one badge on the item and one on the total: {drawn:?}"
+        );
+    }
+
+    #[test]
+    fn the_profit_and_loss_marks_a_provisional_line_with_a_badge_not_a_label_suffix() {
+        // derived: the closing stock 13,90,759.00 sits on the credit side; its line reads
+        // "Closing stock" with a badge, not "Closing stock (provisional)".
+        let r = report(
+            &["Debit", "Particulars", "Credit"],
+            vec![line(
+                "Opening stock",
+                vec![
+                    ViewCell::Amount(SignedAmount::dr(Paise::new(91_200_000))),
+                    ViewCell::Text("Closing stock".to_owned()),
+                    provisional(DrCr::Cr, 139_075_900),
+                ],
+            )],
+            Vec::new(),
+        );
+        let drawn = drawn_texts(&r);
+        assert!(
+            drawn.iter().all(|t| !t.contains("(provisional")),
+            "{drawn:?}"
+        );
+        assert!(drawn.iter().all(|t| !t.contains("below zero")), "{drawn:?}");
+        assert!(drawn.iter().any(|t| t == "13,90,759.00"), "{drawn:?}");
+        assert_eq!(drawn.iter().filter(|t| *t == "Provisional").count(), 1);
     }
 }

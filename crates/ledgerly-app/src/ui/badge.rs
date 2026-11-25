@@ -71,6 +71,18 @@ pub fn badge(ui: &mut Ui, kind_of: BadgeKind, text: &str) -> Response {
         .response
 }
 
+/// The width [`paint_badge`] gives a badge reading `text`, so a caller can place the badge's right
+/// edge before painting it.
+#[must_use]
+pub fn badge_width(ui: &Ui, text: &str) -> f32 {
+    let galley = ui.painter().layout_no_wrap(
+        text.to_owned(),
+        crate::ui::bold_font(ui, TEXT_CAP),
+        egui::Color32::PLACEHOLDER,
+    );
+    f32::from(PAD_X) + ICON + 4.0 + galley.size().x + f32::from(PAD_X)
+}
+
 /// Paints a badge of `kind_of` reading `text` with its left edge at `left` and centred on `y`,
 /// for lines a screen paints itself (a table row's label). Returns the badge's width so the
 /// caller can place what follows. It is the same badge as [`badge`], laid out by hand.

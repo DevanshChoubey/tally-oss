@@ -311,6 +311,32 @@ fn saving_an_empty_contra_names_both_problems() {
     );
 }
 
+// provenance: index.html:2146-2160 (`SCREENS.contra`, validation-error): the refused contra lists
+// both lines with what each still needs ("Pick the account the money goes to" on the Dr line,
+// "Pick the account the money comes from" on the Cr line), the first amount reads "blank", the
+// second "0.00", and the foot box says "Not computed" for the transfer and for the cash after it.
+#[test]
+fn a_refused_empty_contra_lists_both_lines_and_says_what_each_needs() {
+    let b = books();
+    let mut s = open(&b, T_CONTRA);
+    s.save(&b.masters);
+    let shown = frame(&mut s, &b);
+    for want in [
+        "Pick the account the money goes to",
+        "Pick the account the money comes from",
+        "blank",
+        "0.00",
+        "Not computed",
+        "Cash after",
+    ] {
+        assert!(shown.iter().any(|t| t == want), "no {want:?} in {shown:?}");
+    }
+    assert!(
+        shown.iter().any(|t| t == "Dr") && shown.iter().any(|t| t == "Cr"),
+        "{shown:?}"
+    );
+}
+
 /// The colour each text of the last frame is drawn in.
 fn coloured(s: &mut VoucherEntryScreen, b: &Books) -> Vec<(String, egui::Color32)> {
     fn walk(shape: &Shape, out: &mut Vec<(String, egui::Color32)>) {

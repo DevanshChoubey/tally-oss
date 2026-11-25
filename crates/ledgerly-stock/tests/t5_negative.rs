@@ -29,7 +29,8 @@ use ledgerly_model::{
 };
 use ledgerly_stock::StockError;
 use ledgerly_stock::negative::{
-    StockWarning, check_policy, first_negative, first_negative_with_opening,
+    NegativeEpisode, NegativeRecovery, StockWarning, check_policy, first_negative,
+    first_negative_with_opening, negative_episode,
 };
 use time::macros::date;
 
@@ -605,5 +606,42 @@ fn compound_unit_sale_that_exactly_empties_stock_passes_under_block() {
     assert_eq!(
         check_policy(&v, &b, NegativeStockPolicy::Block).unwrap(),
         vec![]
+    );
+}
+
+#[test]
+fn the_negative_episode_names_the_movement_that_went_below_zero_and_the_one_that_recovered() {
+    // provenance: derived. Opening 10. Voucher 1 issues 15 on 10 Apr: 10 - 15 = -5, the first
+    // time below zero. Voucher 2 receives 20 on 12 Apr: -5 + 20 = 15, back above zero. Voucher 3
+    // issues 3 on 20 Apr: 15 - 3 = 12, not a new episode. Another item's move is ignored.
+    let moves = vec![
+        mv(1, date!(2026 - 04 - 10), ITEM, 0, 15),
+        mv(2, date!(2026 - 04 - 12), ITEM, 20, 0),
+        mv(3, date!(2026 - 04 - 20), ITEM, 0, 3),
+        mv(4, date!(2026 - 04 - 11), StockItemId(2), 0, 99),
+    ];
+    let item = stock_item(ITEM, 10);
+    let e = negative_episode(&item, &moves, date!(2026 - 04 - 30)).unwrap();
+    assert_eq!(
+        e,
+        Some(NegativeEpisode {
+            date: date!(2026 - 04 - 10),
+            voucher: VoucherId(1),
+            qty_after: d(-5),
+            recovery: Some(NegativeRecovery {
+                date: date!(2026 - 04 - 12),
+                voucher: VoucherId(2),
+                qty_after: d(15),
+            }),
+        })
+    );
+    // Looking only as far as 11 Apr, the quantity has not come back yet.
+    let early = negative_episode(&item, &moves, date!(2026 - 04 - 11)).unwrap();
+    assert_eq!(early.map(|e| e.recovery), Some(None));
+    // An item that never goes below zero has no episode (10 - 10 = 0 is not below zero).
+    let flat = vec![mv(1, date!(2026 - 04 - 10), ITEM, 0, 10)];
+    assert_eq!(
+        negative_episode(&item, &flat, date!(2026 - 04 - 30)).unwrap(),
+        None
     );
 }

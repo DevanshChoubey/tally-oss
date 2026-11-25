@@ -487,6 +487,7 @@ impl VoucherEntryScreen {
             Ok(Balance::Needs { side, .. }) if journal_like => Some(side),
             Ok(Balance::Needs { .. } | Balance::Balanced) | Err(_) => None,
         };
+        let refused = self.contra_refused();
         let rows = &mut self.draft.rows;
         let count = rows.len().saturating_sub(skip);
         // The list always ends with the empty line that says how to finish, as the mock draws it:
@@ -515,11 +516,7 @@ impl VoucherEntryScreen {
                     }
                     return;
                 };
-                let ledger_hint = if r >= 1 {
-                    NEXT_LEDGER_HINT
-                } else {
-                    "Ledger: type to search"
-                };
+                let ledger_hint = line_hint(refused, r);
                 if single {
                     match c {
                         0 => cell_text(ui, &i.to_string()),
@@ -532,22 +529,14 @@ impl VoucherEntryScreen {
                     match c {
                         0 => cell_text(ui, &r.saturating_add(1).to_string()),
                         1 => ledger_field(ui, cx, base, i, row, ledger_hint, Look::Cell),
-                        2 => {
-                            // Plain text like the mock's, still the switch: a click flips the side.
-                            let t = tokens(ui);
-                            let side = ui.add(
-                                egui::Label::new(para_text(
-                                    side_label(row.side),
-                                    TEXT_BODY,
-                                    t.text_2,
-                                ))
-                                .sense(egui::Sense::click()),
-                            );
-                            if side.on_hover_text("Click to switch Dr and Cr").clicked() {
-                                cx.events.push(UiEvent::Side(i));
-                            }
-                        }
+                        2 => side_switch(ui, cx, i, row.side),
                         3 => cell_text(ui, group_name(masters, row).as_deref().unwrap_or("")),
+                        4 if refused
+                            && row.amount_text.trim().is_empty()
+                            && cx.focus != Field::Amount(i) =>
+                        {
+                            refused_amount(ui, r);
+                        }
                         4 => amount_field(ui, cx, base, i, row, short == Some(row.side)),
                         _ => {}
                     }
@@ -596,11 +585,19 @@ impl VoucherEntryScreen {
                     );
                 },
             );
+            // index.html `SCREENS.contra`: an error note sits above the entry aid, the other
+            // notes below it.
+            let error = matches!(self.notice, Some(Notice::Error(_)));
+            if error {
+                self.draw_notice(left);
+            }
             sheet::hint(left, &aid);
             if let Some(text) = &overdraft {
                 note(left, NoteKind::Warn, text);
             }
-            self.draw_notice(left);
+            if !error {
+                self.draw_notice(left);
+            }
             if let Some(foot) = &foot_box {
                 sheet::taxbox(
                     right,
@@ -678,6 +675,15 @@ impl VoucherEntryScreen {
     /// The contra's foot box: the amount moved and what the credited account holds after it, the
     /// engine's figure. `None` until the engine has answered for the voucher as it stands.
     fn contra_box(&self, masters: &Masters) -> Option<FootBox> {
+        if self.contra_refused() {
+            // Nothing can be transferred yet, so the engine has no figure (index.html:2161).
+            return Some(FootBox {
+                rows: vec![("Transfer".to_owned(), "Not computed".to_owned())],
+                label: "Cash after".to_owned(),
+                value: "Not computed".to_owned(),
+                bad: false,
+            });
+        }
         let (account, voucher) = self.balance_request(masters)?;
         let BalanceShown::Change(change) = self.extras.balance_for(account, &voucher)? else {
             return None;
@@ -746,7 +752,13 @@ impl VoucherEntryScreen {
     pub(super) fn draw_notice(&self, ui: &mut Ui) {
         match &self.notice {
             Some(Notice::Error(s)) => {
-                note(ui, NoteKind::Bad, s);
+                // The mock's `errNote`: an alert icon, then the message.
+                crate::ui::note::note_with_icon(ui, NoteKind::Bad, Icon::Alert, |ui, ink| {
+                    ui.spacing_mut().item_spacing.y = 2.0;
+                    for line in s.lines() {
+                        ui.label(para_text(line, crate::theme::TEXT_META, ink));
+                    }
+                });
             }
             Some(Notice::Info(s)) => {
                 note(ui, NoteKind::Info, s);
@@ -833,7 +845,7 @@ impl VoucherEntryScreen {
             page_head_numbered(ui, &title, number.as_deref(), subtitle.as_deref(), |ui| {
                 // The mock draws Save disabled while the debits and credits differ.
                 save_clicked = ui
-                    .add_enabled_ui(!differ, |ui| {
+                    .add_enabled_ui(!save_disabled(differ, self.contra_refused()), |ui| {
                         button_icon(
                             ui,
                             Some(Icon::Save),
@@ -885,9 +897,64 @@ impl VoucherEntryScreen {
     }
 }
 
+/// The hint a ledger field shows while it is empty. After a refused contra each line says what it
+/// needs (index.html `SCREENS.contra`, validation-error).
+fn line_hint(refused: bool, row: usize) -> &'static str {
+    if refused {
+        if row == 0 {
+            "Pick the account the money goes to"
+        } else {
+            "Pick the account the money comes from"
+        }
+    } else if row >= 1 {
+        NEXT_LEDGER_HINT
+    } else {
+        "Ledger: type to search"
+    }
+}
+
+/// Whether Save is drawn disabled: while a journal's debits and credits differ, and after a
+/// refused contra (index.html `SCREENS.contra` validation-error draws it greyed).
+fn save_disabled(differ: bool, refused: bool) -> bool {
+    differ || refused
+}
+
+/// The amount of an empty line after a refused contra: "blank" on the first, "0.00" on the second,
+/// both in the error colour (index.html:2155-2156).
+fn refused_amount(ui: &mut Ui, row: usize) {
+    let t = tokens(ui);
+    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+        ui.label(para_text(
+            if row == 0 { "blank" } else { "0.00" },
+            TEXT_BODY,
+            t.bad,
+        ));
+    });
+}
+
+/// The Dr/Cr cell: plain text like the mock's, still the switch (a click flips the side).
+fn side_switch(ui: &mut Ui, cx: &mut Cx<'_>, i: usize, side: ledgerly_core::DrCr) {
+    let t = tokens(ui);
+    let label = ui.add(
+        egui::Label::new(para_text(side_label(side), TEXT_BODY, t.text_2))
+            .sense(egui::Sense::click()),
+    );
+    if label.on_hover_text("Click to switch Dr and Cr").clicked() {
+        cx.events.push(UiEvent::Side(i));
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::masked_account;
+    use super::{masked_account, save_disabled};
+
+    // provenance: index.html `SCREENS.contra` validation-error: the Save button is disabled.
+    #[test]
+    fn save_is_disabled_after_a_refused_contra_and_while_lines_differ() {
+        assert!(save_disabled(false, true));
+        assert!(save_disabled(true, false));
+        assert!(!save_disabled(false, false));
+    }
 
     // provenance: the mock writes the bank's account as `XXXX 4471` (index.html:537); the
     // sample's number 99990004471 ends in those four digits. derived: the last four characters.

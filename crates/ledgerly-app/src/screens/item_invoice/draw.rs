@@ -390,6 +390,9 @@ fn text_field(
     response
 }
 
+/// How far the plain date's text starts from the left edge of its field.
+const DATE_TEXT_INSET: f32 = 10.0;
+
 /// A text field that shows `shown` in place of its text while the keyboard is not on it (the mock
 /// shows `21 Nov 2026` and `3,850.00`; typing still works on the raw text). With no `shown`, or
 /// while the field has the keyboard, it is [`text_field`].
@@ -734,6 +737,7 @@ impl ItemInvoiceScreen {
         let fy = self.fy;
         let date_value = parse_entry_date(&self.draft.date_text, fy).ok();
         let date_plain = cx.focus != Field::Date && date_value.is_some();
+        let locked = self.locked_on().is_some();
         let account_plain = cx.focus != Field::Account && self.draft.account.is_some();
         let spec = |id: &str, name: &'static str, field: Field, hint: &'static str| FieldSpec {
             id: base.with(id),
@@ -758,7 +762,29 @@ impl ItemInvoiceScreen {
                         let shown = date_value
                             .filter(|_| date_plain)
                             .map(crate::ui::format::date);
-                        text_field_shown(ui, cx, &s, &mut self.draft.date_text, style, shown);
+                        let width = shown.as_ref().map(|text| {
+                            ui.painter()
+                                .layout_no_wrap(
+                                    text.clone(),
+                                    egui::FontId::proportional(crate::theme::TEXT_INPUT),
+                                    egui::Color32::PLACEHOLDER,
+                                )
+                                .size()
+                                .x
+                        });
+                        let field =
+                            text_field_shown(ui, cx, &s, &mut self.draft.date_text, style, shown);
+                        // index.html:1359: a date on or before the lock date wears a "Locked"
+                        // badge right after the value.
+                        if let (true, Some(width)) = (locked, width) {
+                            crate::ui::badge::paint_badge(
+                                ui,
+                                field.rect.left() + DATE_TEXT_INSET + width + 8.0,
+                                field.rect.center().y,
+                                crate::ui::badge::BadgeKind::Bad,
+                                "Locked",
+                            );
+                        }
                     },
                 );
                 note_field("Date", shown.response.rect);
@@ -1468,6 +1494,30 @@ impl ItemInvoiceScreen {
         }
     }
 
+    /// The red note over the foot of a locked invoice (index.html:1449): "1 thing to fix before
+    /// saving" and the thing.
+    fn lock_note(&self, left: &mut Ui) {
+        if let Some((date, lock)) = self.locked_on() {
+            crate::ui::note::note_with_icon(left, NoteKind::Bad, Icon::Alert, |ui, ink| {
+                ui.spacing_mut().item_spacing.y = 2.0;
+                ui.label(
+                    egui::RichText::new("1 thing to fix before saving")
+                        .font(crate::ui::bold_font(ui, crate::theme::TEXT_META))
+                        .color(ink),
+                );
+                ui.label(para_text(
+                    &format!(
+                        "Date {} is on or before the lock date {}. Choose a later date with F2, or ask the owner to move the lock.",
+                        format::date(date),
+                        format::date(lock)
+                    ),
+                    crate::theme::TEXT_META,
+                    ink,
+                ));
+            });
+        }
+    }
+
     /// The foot: narration, the notices and line problems on the left; the tax box on the right.
     fn draw_foot(
         &mut self,
@@ -1521,6 +1571,7 @@ impl ItemInvoiceScreen {
                     narration = Some(text_field(ui, cx, &s, &mut self.draft.narration, BOXED).rect);
                 },
             );
+            self.lock_note(left);
             match &self.notice {
                 Some(Notice::Error(s)) => {
                     note(left, NoteKind::Bad, s);
@@ -1839,10 +1890,12 @@ impl ItemInvoiceScreen {
                         ui,
                         "Period locked.",
                         &format!(
-                            "{} is on or before the lock date {}. You can look, but saving is blocked. Choose a later date to save.",
+                            "{} is on or before {}. You can look, but saving is blocked. Press",
                             format::date(date),
                             format::date(lock)
                         ),
+                        "F2",
+                        "to change the date.",
                     );
                     let bottom = ui.cursor().min.y;
                     self.shown.lock_bar = Some(Rect::from_min_max(

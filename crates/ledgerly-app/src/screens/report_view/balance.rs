@@ -91,7 +91,7 @@ impl Section {
     }
 }
 
-/// The balance sheet's subtitle (index.html:1577): "As at 21 Nov 2026 · FY 2026-27 · Enter opens
+/// The balance sheet's subtitle (index.html:1577): "As at 20 Nov 2026 · FY 2026-27 · Enter opens
 /// a row, Esc goes back up". The year is the April-start year holding `as_of`; it is left out at
 /// the edges of the calendar, where there is no such year.
 #[must_use]

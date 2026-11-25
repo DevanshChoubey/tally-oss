@@ -87,8 +87,9 @@ pub fn rule_under(ui: &Ui, rect: Rect) {
     );
 }
 
-/// The lock bar at the top of the sheet (`.lockbar`): the lock icon, `bold` in bold, then `rest`.
-pub fn lock_bar(ui: &mut Ui, bold: &str, rest: &str) {
+/// The lock bar at the top of the sheet (`.lockbar`): the lock icon, `bold` in bold, then `before`,
+/// the `key` as a keycap and `after` (index.html: "Press F2 to change the date").
+pub fn lock_bar(ui: &mut Ui, bold: &str, before: &str, key: &str, after: &str) {
     let t = tokens(ui);
     let width = ui.available_width();
     let top = CornerRadius {
@@ -120,7 +121,7 @@ pub fn lock_bar(ui: &mut Ui, bold: &str, rest: &str) {
                     },
                 );
                 job.append(
-                    &format!(" {rest}"),
+                    &format!(" {before}"),
                     0.0,
                     egui::TextFormat {
                         font_id: FontId::proportional(TEXT_META),
@@ -129,7 +130,10 @@ pub fn lock_bar(ui: &mut Ui, bold: &str, rest: &str) {
                         ..egui::TextFormat::default()
                     },
                 );
+                ui.spacing_mut().item_spacing.x = 4.0;
                 ui.add(egui::Label::new(job).wrap());
+                crate::ui::keycap::keycap(ui, key);
+                ui.label(para_text(after, TEXT_META, t.bad));
             });
         });
     rule_under(ui, shown.response.rect);

@@ -324,3 +324,82 @@ fn a_locked_date_puts_a_bar_across_the_top_of_the_sheet() {
         "no bar when the date is open"
     );
 }
+
+/// Every text drawn in one frame of the screen with `lock` as the lock date.
+fn drawn_texts(s: &mut ItemInvoiceScreen, b: &Books, lock: Option<Date>) -> Vec<String> {
+    fn walk(shape: &egui::Shape, out: &mut Vec<String>) {
+        if let egui::Shape::Text(t) = shape {
+            out.push(t.galley.text().to_owned());
+        }
+        if let egui::Shape::Vec(v) = shape {
+            for x in v {
+                walk(x, out);
+            }
+        }
+    }
+    let mut app = AppCtx {
+        books: Some(b.clone()),
+        api: None,
+        lock_date: lock,
+        ai_tier: None,
+    };
+    let ctx = egui::Context::default();
+    let mut texts = Vec::new();
+    for _ in 0..3 {
+        let input = RawInput {
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(1280.0, 800.0))),
+            ..RawInput::default()
+        };
+        let out = ctx.run_ui(input, |ui| {
+            let _stay = s.ui(ui, &mut app);
+        });
+        texts.clear();
+        for clipped in &out.shapes {
+            walk(&clipped.shape, &mut texts);
+        }
+        out.drop_without_applying_deltas();
+    }
+    texts
+}
+
+#[test]
+fn the_lock_bar_reads_as_the_mock_words_it() {
+    // provenance: index.html:1357: "Period locked. <date> is on or before <lock date>. You can
+    // look, but saving is blocked. Press <F2 keycap> to change the date." The invoice is dated
+    // 21 Nov 2026 (TODAY) and the lock is set to the same day, so both dates read 21 Nov 2026.
+    // The mock draws F2 as a keycap, so it is its own text, between the two halves.
+    let b = books();
+    let mut s = open(&b);
+    let texts = drawn_texts(&mut s, &b, Some(TODAY));
+    let at = |want: &str| texts.iter().position(|t| t == want);
+    let lead = at(
+        "Period locked. 21 Nov 2026 is on or before 21 Nov 2026. You can look, but saving is blocked. Press",
+    );
+    let key = texts.iter().position(|t| t == "F2");
+    let tail = at("to change the date.");
+    assert!(
+        lead.is_some() && key.is_some() && tail.is_some() && lead < key && key < tail,
+        "{texts:?}"
+    );
+}
+
+#[test]
+fn a_locked_date_wears_the_locked_badge_and_the_note_counts_the_thing_to_fix() {
+    // provenance: index.html `SCREENS['sales-invoice']` period-locked (line 1449): the date shows
+    // a "Locked" badge, and the foot has a red note "1 thing to fix before saving" over the line
+    // "Date <date> is on or before the lock date <lock date>. Choose a later date with F2, or ask
+    // the owner to move the lock." (line 1346).
+    let b = books();
+    let mut s = open(&b);
+    let texts = drawn_texts(&mut s, &b, Some(TODAY));
+    assert!(texts.iter().any(|t| t == "Locked"), "{texts:?}");
+    assert!(
+        texts.iter().any(|t| t == "1 thing to fix before saving"),
+        "{texts:?}"
+    );
+    assert!(
+        texts.iter().any(|t| t
+            == "Date 21 Nov 2026 is on or before the lock date 21 Nov 2026. Choose a later date with F2, or ask the owner to move the lock."),
+        "{texts:?}"
+    );
+}

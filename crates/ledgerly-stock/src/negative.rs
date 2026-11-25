@@ -154,6 +154,73 @@ pub fn first_negative_with_opening(
     scan(opening_qty(item)?, &steps, None)
 }
 
+/// The movement after which an item's running quantity first went below zero, and the movement
+/// that first brought it back to zero or above.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NegativeEpisode {
+    /// Date of the movement that took the quantity below zero.
+    pub date: Date,
+    /// That movement's voucher.
+    pub voucher: VoucherId,
+    /// The running quantity after it (negative), in the item's base unit.
+    pub qty_after: Decimal,
+    /// The first later movement after which the quantity is zero or above, when there is one on
+    /// or before the `through` date.
+    pub recovery: Option<NegativeRecovery>,
+}
+
+/// The movement that ended a negative stretch.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NegativeRecovery {
+    /// Its date.
+    pub date: Date,
+    /// Its voucher.
+    pub voucher: VoucherId,
+    /// The running quantity after it (zero or above), in the item's base unit.
+    pub qty_after: Decimal,
+}
+
+/// The first negative stretch of `item` on or before `through`, starting from its opening stock:
+/// the movement that took it below zero and the one that brought it back. Moves of other items
+/// and moves after `through` are ignored; the moves need not be sorted.
+///
+/// # Errors
+/// [`StockError::Invalid`] for a negative opening quantity; [`StockError::Money`] on overflow.
+pub fn negative_episode(
+    item: &StockItem,
+    moves: &[StockMove],
+    through: Date,
+) -> Result<Option<NegativeEpisode>, StockError> {
+    let steps = sorted_steps(item.id, moves, Some(through));
+    let mut running = opening_qty(item)?;
+    let mut episode: Option<NegativeEpisode> = None;
+    for s in &steps {
+        running = running
+            .checked_add(s.qty_in)
+            .and_then(|r| r.checked_sub(s.qty_out))
+            .ok_or_else(overflow)?;
+        match episode.as_mut() {
+            None if running < Decimal::ZERO => {
+                episode = Some(NegativeEpisode {
+                    date: s.date,
+                    voucher: s.voucher,
+                    qty_after: running,
+                    recovery: None,
+                });
+            }
+            Some(e) if e.recovery.is_none() && running >= Decimal::ZERO => {
+                e.recovery = Some(NegativeRecovery {
+                    date: s.date,
+                    voucher: s.voucher,
+                    qty_after: running,
+                });
+            }
+            None | Some(_) => {}
+        }
+    }
+    Ok(episode)
+}
+
 /// How a voucher kind moves stock.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum StockEffect {

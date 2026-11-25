@@ -6,8 +6,8 @@
 //! pub fn stock_summary(books: &Books, params: &ReportParams, valuations: &Outcome<Vec<StockValuation>>) -> Result<Outcome<Report>, ReportError>;
 //! ```
 //!
-//! One row per stock item (item-id order) with eight columns: opening, inwards, outwards and
-//! closing, each a quantity and a value. [`Detail::Detailed`] adds a child row per godown the
+//! One row per stock item (item-id order) with nine columns: opening, inwards, outwards and
+//! closing, each a quantity and a value, and the closing rate. [`Detail::Detailed`] adds a child row per godown the
 //! item was held in (depth 1). An item with no opening stock, no movement up to the period end and
 //! no supplied valuation has no row.
 //!
@@ -67,10 +67,10 @@ use crate::{
     ReportParams, ReportRow, RowKind,
 };
 
-use self::valuation::{Val, addend, closing_value, opening_value, outwards_value};
+use self::valuation::{Val, addend, closing_rate, closing_value, opening_value, outwards_value};
 
 /// Column labels, in cell order.
-const COLUMN_LABELS: [&str; 8] = [
+const COLUMN_LABELS: [&str; 9] = [
     "Opening quantity",
     "Opening value",
     "Inwards quantity",
@@ -79,6 +79,7 @@ const COLUMN_LABELS: [&str; 8] = [
     "Outwards value (cost of consumption)",
     "Closing quantity",
     "Closing value",
+    "Closing rate",
 ];
 
 /// Note shown under every stock summary.
@@ -215,6 +216,7 @@ fn wanted_items(
 
 /// The supplied valuations, by item.
 struct Table<'a> {
+    books: &'a Books,
     opening: BTreeMap<StockItemId, &'a StockValuation>,
     closing: BTreeMap<StockItemId, &'a StockValuation>,
 }
@@ -226,7 +228,7 @@ impl Table<'_> {
 }
 
 fn valuation_table<'a>(
-    books: &Books,
+    books: &'a Books,
     input: &'a Outcome<Vec<StockValuation>>,
     day_before: Date,
     to: Date,
@@ -241,6 +243,7 @@ fn valuation_table<'a>(
         }
     };
     let mut table = Table {
+        books,
         opening: BTreeMap::new(),
         closing: BTreeMap::new(),
     };
@@ -482,6 +485,8 @@ struct Vals {
     inwards: Val,
     outwards: Val,
     closing: Val,
+    /// The closing rate cell (the valuation's rate to the paisa, or why there is none).
+    rate: Cell,
 }
 
 impl Vals {
@@ -534,11 +539,13 @@ fn build_item(
     let closing = closing_value(item, qty_close, table);
     let transfer = flow.has_transfer();
     let outwards = outwards_value(item, &opening, sum.in_value, &closing, qty_close, transfer)?;
+    let rate = closing_rate(item, &closing, qty_close, table)?;
     let vals = Vals {
         opening,
         inwards: inwards_value(&item.name, sum.in_value, transfer),
         outwards,
         closing,
+        rate,
     };
     let exception = qty_close < Decimal::ZERO || matches!(vals.closing, Val::Provisional(..));
     let row = ReportRow {
@@ -570,6 +577,7 @@ fn row_cells(flow: &Flow, vals: &Vals) -> Result<Vec<Cell>, ReportError> {
         vals.outwards.cell()?,
         Cell::Qty(Qty(flow.closing()?)),
         vals.closing.cell()?,
+        vals.rate.clone(),
     ])
 }
 
@@ -606,6 +614,10 @@ fn godown_rows(
                 inwards: inwards_value(&item.name, part.in_value, flow.has_transfer()),
                 outwards: by_item("outwards"),
                 closing: by_item("closing"),
+                rate: Cell::Unsupported(Unsupported {
+                    what: format!("stock summary: closing rate of {} in {}", item.name, godown.name),
+                    reason: "stock is valued per item across godowns, so a godown has no rate of its own".to_owned(),
+                }),
             }
         };
         rows.push(ReportRow {
@@ -630,6 +642,7 @@ fn totals(shown: &[Vals]) -> Result<Vec<Cell>, ReportError> {
         total_cell(shown.iter().map(|v| &v.outwards))?,
         Cell::Empty,
         total_cell(shown.iter().map(|v| &v.closing))?,
+        Cell::Empty,
     ])
 }
 

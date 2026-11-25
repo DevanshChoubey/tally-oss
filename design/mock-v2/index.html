@@ -410,7 +410,7 @@ mark{background:var(--accent-soft);color:var(--accent-ink);border-radius:2px;pad
  {"id":"payment.bill-wise","kind":"happy","hash":"screen=payment&state=bill-wise","title":"Payment, bill allocation","description":"Paying a supplier pops the bill-wise allocation with open bills from the engine."},
  {"id":"payment.overdraft","kind":"validation-error","hash":"screen=payment&state=overdraft","title":"Payment, overdraft warning","description":"Amount exceeds the bank balance: a warning, with the shortfall computed by the engine."},
  {"id":"receipt.default","kind":"happy","hash":"screen=receipt&state=default","title":"Receipt","description":"F6 receipt against an open sales bill."},
- {"id":"balance-sheet.default","kind":"happy","hash":"screen=balance-sheet&state=default","title":"Balance sheet","description":"Condensed balance sheet as at 21 Nov 2026 with a 'both sides agree' check."},
+ {"id":"balance-sheet.default","kind":"happy","hash":"screen=balance-sheet&state=default","title":"Balance sheet","description":"Condensed balance sheet as at 20 Nov 2026 with a 'both sides agree' check."},
  {"id":"balance-sheet.detailed","kind":"happy","hash":"screen=balance-sheet&state=detailed","title":"Balance sheet, detailed","description":"Alt+F1 expands every group to ledgers."},
  {"id":"balance-sheet.group","kind":"happy","hash":"screen=balance-sheet&state=group","title":"Balance sheet, group drill","description":"Drilled into Sundry debtors: ledgers with balances that sum to the group figure."},
  {"id":"balance-sheet.ledger","kind":"happy","hash":"screen=balance-sheet&state=ledger","title":"Balance sheet, ledger vouchers","description":"Shree Ganesh Traders: opening, vouchers and running balance."},
@@ -418,7 +418,7 @@ mark{background:var(--accent-soft);color:var(--accent-ink);border-radius:2px;pad
  {"id":"balance-sheet.loading","kind":"loading","hash":"screen=balance-sheet&state=loading","title":"Balance sheet, computing","description":"Report is computing; cancellable; the last result is never shown as current."},
  {"id":"balance-sheet.provisional","kind":"error","hash":"screen=balance-sheet&state=provisional","title":"Balance sheet, provisional stock","description":"Negative stock makes closing stock Provisional; the figure is marked and explained, never silently used."},
  {"id":"day-book.default","kind":"happy","hash":"screen=day-book&state=default","title":"Day book","description":"Vouchers for 20 Nov 2026, with who entered them and whether a draft came from AI."},
- {"id":"day-book.month","kind":"happy","hash":"screen=day-book&state=month","title":"Day book, 1 to 21 Nov","description":"Period view of every November voucher."},
+ {"id":"day-book.month","kind":"happy","hash":"screen=day-book&state=month","title":"Day book, 1 to 20 Nov","description":"Period view of every November voucher."},
  {"id":"day-book.empty","kind":"empty","hash":"screen=day-book&state=empty","title":"Day book, no vouchers","description":"21 Nov 2026 has no vouchers yet; offers voucher keys."},
  {"id":"gst.gstr1","kind":"happy","hash":"screen=gst&state=gstr1","title":"GSTR-1, November","description":"Sections built from sales vouchers with exception buckets: Ready, Not relevant, Mismatch, Needs correction."},
  {"id":"gst.gstr1-correction","kind":"validation-error","hash":"screen=gst&state=gstr1-correction","title":"GSTR-1, needs correction","description":"An item with no HSN code holds back the HSN summary; drill to the master to fix."},
@@ -740,7 +740,7 @@ function balanceSheet(opt){
     if(gid==='stock')leds.push({kind:'stock',id:'stock',name:'Stock in hand (stock engine, average cost)',amt:st.value,provisional:st.provisional});
     const children=[...kids,...leds]; return {kind:'group',id:gid,name:g.name,children,amt:children.reduce((s,c)=>s+c.amt,0)}};
   const liab=['capital','loans','curliab'].map(g=>node(g,-1));
-  liab.push({kind:'pl',id:'pl',name:'Profit and loss account',children:[{kind:'ledger',id:'plcur',name:'Profit, 1 Apr to 21 Nov 2026',amt:profit}],amt:profit});
+  liab.push({kind:'pl',id:'pl',name:'Profit and loss account',children:[{kind:'ledger',id:'plcur',name:'Profit, 1 Apr to 20 Nov 2026',amt:profit}],amt:profit});
   const assets=['fixed','curassets'].map(g=>node(g,1));
   const L=liab.reduce((s,n)=>s+n.amt,0), A=assets.reduce((s,n)=>s+n.amt,0);
   return {liab,assets,L,A,agree:L===A,stock:st,profit}; }
@@ -1184,7 +1184,7 @@ function fuzzy(q,s){q=q.toLowerCase();s=s.toLowerCase();if(s.includes(q))return 
 function hl(s,q){const i=s.toLowerCase().indexOf(q.toLowerCase());if(!q||i<0)return esc(s);return esc(s.slice(0,i))+'<mark>'+esc(s.slice(i,i+q.length))+'</mark>'+esc(s.slice(i+q.length))}
 function palResults(q,tierOff){
   const sec=[]; const t=q.trim();
-  if(!t){sec.push(['Recent',[['Balance sheet','As at 21 Nov 2026','scale',hashFor('balance-sheet')],['GSTR-1, November','3 sections ready, 1 needs correction','gst',hashFor('gst','gstr1')],['Shree Ganesh Traders','Ledger · Sundry debtors · '+inr(balances().sgt)+' Dr','users',hashFor('balance-sheet','ledger')]]]);
+  if(!t){sec.push(['Recent',[['Balance sheet','As at 20 Nov 2026','scale',hashFor('balance-sheet')],['GSTR-1, November','3 sections ready, 1 needs correction','gst',hashFor('gst','gstr1')],['Shree Ganesh Traders','Ledger · Sundry debtors · '+inr(balances().sgt)+' Dr','users',hashFor('balance-sheet','ledger')]]]);
    sec.push(['Type a prefix',[['# voucher number','e.g. #0412','file',null,'#'],['@ party or ledger','name, alias or GSTIN','users',null,'@'],['> command','e.g. > export','sliders',null,'>'],['? ask your books','answer is a report the engine runs','spark',null,'?'],['+ entry in plain words','drafts a voucher for you to review','chat',null,'+']]]);return sec}
   const pre=t[0], body=t.slice(1).trim();
   if(pre==='?'){sec.push(['Ask your books',tierOff?[['AI is off for this company','Use reports and filters, or turn AI on in AI and privacy','off',hashFor('ask','offline-ai')]]:[[`Ask: ${body||'…'}`,'Builds a report query. You see the query and the engine result, never a typed-in number.','spark',hashFor('ask',/top/i.test(body)?'low-confidence':/next|forecast|will/i.test(body)?'unsupported':'result',{q:body})]]]);return sec}
@@ -1246,12 +1246,12 @@ SCREENS.ask = {title:'Ask your books',default:'result',
     <p class="meta" style="margin-top:10px">Logged as an AI event: question, model, outcome Unsupported. Nothing else was stored.</p></div>`;
   if(st==='low-confidence')return head+box+proposal({kind:'Report query',src:[srcChip('chat','Your question')],conf:1,blocked:'Pick a reading first',
     body:`<p style="margin-bottom:10px">"Top customers" can mean two things. Pick one; nothing runs until you do.</p>
-     <div class="stack" style="gap:8px"><button class="opt-card" data-cmd="pick1" aria-checked="false">${kb('1')}<div><b>By sales value, 1 Apr to 21 Nov 2026</b><p>Report: sales register grouped by party, sorted by taxable value, top 5</p></div></button>
-     <button class="opt-card" data-cmd="pick2" aria-checked="false">${kb('2')}<div><b>By amount they owe today</b><p>Report: outstanding receivables as at 21 Nov 2026, sorted by open amount, top 5</p></div></button></div>`,
+     <div class="stack" style="gap:8px"><button class="opt-card" data-cmd="pick1" aria-checked="false">${kb('1')}<div><b>By sales value, 1 Apr to 20 Nov 2026</b><p>Report: sales register grouped by party, sorted by taxable value, top 5</p></div></button>
+     <button class="opt-card" data-cmd="pick2" aria-checked="false">${kb('2')}<div><b>By amount they owe today</b><p>Report: outstanding receivables as at 20 Nov 2026, sorted by open amount, top 5</p></div></button></div>`,
     why:'Low confidence: two readings are equally likely'});
   const rows=overdueRows(); const tot=rows.reduce((s,b)=>s+b.open,0);
   return head+box+`<div class="grid g-main"><div>${proposal({kind:'Report query',src:[srcChip('chat','Your question'),srcChip('cpu','Local model')],conf:3,acceptLabel:'Save as report',editLabel:'Edit query',rejectLabel:'Wrong reading',
-    body:`<div class="row" style="flex-wrap:wrap;gap:6px;margin-bottom:10px"><span class="meta">I ran:</span><span class="bind q">Outstanding receivables, bill-wise</span><span class="bind q">as at 21 Nov 2026</span><span class="bind q">overdue &gt; 30 days</span><span class="bind q">sort: days overdue, high first</span></div>
+    body:`<div class="row" style="flex-wrap:wrap;gap:6px;margin-bottom:10px"><span class="meta">I ran:</span><span class="bind q">Outstanding receivables, bill-wise</span><span class="bind q">as at 20 Nov 2026</span><span class="bind q">overdue &gt; 30 days</span><span class="bind q">sort: days overdue, high first</span></div>
      <p style="margin-bottom:10px">These customers have bills overdue by more than <span class="bind q">30</span> days, measured from each bill's due date. The table is the engine's result.</p>
      <table class="t" id="askt"><thead><tr><th>Party</th><th>Bill</th><th>Bill date</th><th class="num">Days overdue</th><th class="num">Open amount</th></tr></thead><tbody>
      ${rows.map((b,i)=>`<tr data-row="${b.ref}" class="${i===0?'sel':''}" data-href="${hashFor('balance-sheet','ledger',{l:b.led})}"><td>${esc(LED[b.led].name)}</td><td>${b.ref}</td><td>${fmtDate(b.date)}</td><td class="num">${b.overdue}</td><td class="num">${inr(b.open)}</td></tr>`).join('')}
@@ -1647,7 +1647,7 @@ SCREENS['balance-sheet']={title:'Balance sheet',default:'default',
   if(BS_LEVEL[st]>=3)crumbs.push([vid]);
   const actions=`<button class="btn" data-go="${hashFor('balance-sheet',st==='detailed'?'default':'detailed')}">${st==='detailed'?'Condensed':'Detailed'} ${kb('Alt+F1')}</button><button class="btn" data-cmd="export">${ic('upload')}Export ${kb('Ctrl+E')}</button>`;
   const head=phead(crumbs.length>2?crumbs:crumbs.slice(0,1).concat([['Balance sheet']]),BS_LEVEL[st]===0?'Balance sheet':st==='group'?groupOf(g).name:st==='ledger'?esc(LED[l].name):`Voucher ${esc(vid)}`,
-    `As at 21 Nov 2026 · FY ${CO.fy} · ${BS_LEVEL[st]===0?'Enter opens a row, Esc goes back up':'Enter goes deeper, Esc goes back up'}`,BS_LEVEL[st]===0?actions:'');
+    `As at 20 Nov 2026 · FY ${CO.fy} · ${BS_LEVEL[st]===0?'Enter opens a row, Esc goes back up':'Enter goes deeper, Esc goes back up'}`,BS_LEVEL[st]===0?actions:'');
   if(st==='loading')return head+`<div class="card pad" id="report-body"><div class="row t2">${ic('clock')}Computing from all vouchers… ${kb('Esc')} cancels. The previous result is not shown as current.</div>${skelRows(12,[60,45,70,40,55,80,35,65])}</div>`;
   let body='';
   if(BS_LEVEL[st]===0){
@@ -1713,7 +1713,7 @@ SCREENS['day-book']={title:'Day book',default:'default',
  render(st){
   const day=st==='empty'?'21-11-2026':'20-11-2026';
   const list=st==='month'?VOUCHERS:VOUCHERS.filter(v=>v.date===day);
-  const head=phead([['Home',hashFor('home')],['Day book']],'Day book',st==='month'?'1 to 21 Nov 2026 · every voucher, in order':`${fmtDate(day)} · ${kb('F2')} another date · ${kb('Alt+F2')} a period`,
+  const head=phead([['Home',hashFor('home')],['Day book']],'Day book',st==='month'?'1 to 20 Nov 2026 · every voucher, in order':`${fmtDate(day)} · ${kb('F2')} another date · ${kb('Alt+F2')} a period`,
    `<div class="tabs" style="margin:0;border:0"><button data-go="${hashFor('day-book','default')}" aria-selected="${st!=='month'}">Day</button><button data-go="${hashFor('day-book','month')}" aria-selected="${st==='month'}">November</button></div>`);
   if(!list.length)return head+`<div class="card"><div class="empty">${ic('book')}<h2>No vouchers on ${fmtDate(day)} yet</h2><p>Start with a voucher key. Every voucher you save lands here, with who entered it.</p><div class="actions"><button class="btn" data-go="${hashFor('sales-invoice')}">Sales ${kb('F8')}</button><button class="btn" data-go="${hashFor('purchase-bill')}">Purchase ${kb('F9')}</button><button class="btn" data-go="${hashFor('payment')}">Payment ${kb('F5')}</button><button class="btn" data-go="${hashFor('receipt')}">Receipt ${kb('F6')}</button></div></div></div>`;
   const dr=list.reduce((s,v)=>s+vTotal(v),0);
@@ -2277,13 +2277,19 @@ SCREENS['profit-and-loss'] = plScreen();
 /* trial balance. Rows are the sample company's ledgers with a balance (crates/ledgerly-sample/assets/godavari.toml),
    one per ledger, with the group names the engine uses ("Capital Account", "Duties & Taxes", ...). The sample has one
    ledger per tax head (CGST, SGST, IGST), so the mock's separate output and input ledgers are netted into three rows.
-   Hand check, as at 21 Nov 2026 (no voucher is dated after 20 Nov):
+   Hand check, as at 20 Nov 2026 (no voucher is dated after 20 Nov):
      CGST: output 15,323.65 (sales) less input 0 on the mock's intra-state purchases = 15,323.65 Cr; SGST the same;
      IGST: output 20,370.00 Cr less input 29,520.00 Dr = 9,150.00 Dr (the tax on the purchases is more than on the sales).
      Debit total 1,25,33,742.30 = credit total 1,25,33,742.30 (the old total, 1,25,54,112.30, counted IGST gross on both sides). */
 const TB_GROUP = {capital:'Capital Account',secured:'Secured Loans',creditors:'Sundry Creditors',duties:'Duties & Taxes',provisions:'Provisions',
   fixed:'Fixed Assets',debtors:'Sundry Debtors',cash:'Cash-in-Hand',bank:'Bank Accounts',advances:'Loans & Advances (Asset)',salesacc:'Sales Accounts',
-  purchacc:'Purchase Accounts',direxp:'Direct Expenses',indexp:'Indirect Expenses',indinc:'Indirect Incomes',openstock:'Direct Expenses'};
+  purchacc:'Purchase Accounts',direxp:'Direct Expenses',indexp:'Indirect Expenses',indinc:'Indirect Incomes',openstock:'Stock-in-Hand'};
+/* The trial balance lists the groups in the chart of accounts' order, each group's ledgers under it in the order they were
+   created: the primary groups alphabetically (Capital Account, Current Assets, Current Liabilities, Direct Expenses, Fixed
+   Assets, Indirect Expenses, Indirect Incomes, Loans (Liability), Purchase Accounts, Sales Accounts) with the sub-groups of
+   Current Assets, Current Liabilities and Loans (Liability) directly under their primary group. This is the order the
+   engine's detailed trial balance gives. */
+const TB_ORDER = ['Capital Account','Bank Accounts','Cash-in-Hand','Loans & Advances (Asset)','Stock-in-Hand','Sundry Debtors','Duties & Taxes','Provisions','Sundry Creditors','Direct Expenses','Fixed Assets','Indirect Expenses','Indirect Incomes','Secured Loans','Purchase Accounts','Sales Accounts'];
 const TB_TAX = [['CGST',['cgstout','cgstin']],['SGST',['sgstout','sgstin']],['IGST',['igstout','igstin']]];
 function tbRows(){
   const b=balances(); const tax=new Set(TB_TAX.flatMap(t=>t[1])); const out=[];
@@ -2292,13 +2298,13 @@ function tbRows(){
     if(t){const v=b[t[1][0]]+b[t[1][1]];if(v!==0)out.push([t[0],TB_GROUP.duties,v]);continue}
     if(tax.has(l.id)||b[l.id]===0)continue;
     out.push([l.name,TB_GROUP[l.group],b[l.id]]);}
-  return out.map(([n,g,v])=>[n,g,v>0?v:0,v<0?-v:0]); }
+  return out.map((r,i)=>[r,i]).sort((a,b)=>TB_ORDER.indexOf(a[0][1])-TB_ORDER.indexOf(b[0][1])||a[1]-b[1]).map(([[n,g,v]])=>[n,g,v>0?v:0,v<0?-v:0]); }
 SCREENS['trial-balance'] = {title:'Trial balance',default:'default',
  render(st){
-  if(st==='loading') return reportLoading(phead([['Home',hashFor('home')],['Trial balance']],'Trial balance','As at 21 Nov 2026 · every ledger with a balance · Enter opens a ledger'));
+  if(st==='loading') return reportLoading(phead([['Home',hashFor('home')],['Trial balance']],'Trial balance','As at 20 Nov 2026 · every ledger with a balance · Enter opens a ledger'));
   const rows=tbRows();
   const dr=rows.reduce((s,r)=>s+r[2],0), cr=rows.reduce((s,r)=>s+r[3],0);
-  return `${phead([['Home',hashFor('home')],['Trial balance']],'Trial balance','As at 21 Nov 2026 · every ledger with a balance · Enter opens a ledger',`<button class="btn" data-go="${hashFor('profit-and-loss')}">Profit and loss ${kb('F10')}</button>`)}
+  return `${phead([['Home',hashFor('home')],['Trial balance']],'Trial balance','As at 20 Nov 2026 · every ledger with a balance · Enter opens a ledger',`<button class="btn" data-go="${hashFor('profit-and-loss')}">Profit and loss ${kb('F10')}</button>`)}
    <div class="card"><table class="t" id="tb"><thead><tr><th>Ledger</th><th>Group</th><th class="num" style="width:170px">Debit</th><th class="num" style="width:170px">Credit</th></tr></thead><tbody>
     ${rows.map((r,i)=>`<tr data-row="${i}" class="${i===0?'sel':''}"><td>${esc(r[0])}</td><td class="t2">${esc(r[1])}</td><td class="num">${r[2]?inr(r[2]):''}</td><td class="num">${r[3]?inr(r[3]):''}</td></tr>`).join('')}
     <tr class="total"><td colspan="2">Total</td><td class="num">${inr(dr)}</td><td class="num">${inr(cr)}</td></tr></tbody></table></div>
@@ -2315,12 +2321,12 @@ SCREENS['trial-balance'] = {title:'Trial balance',default:'default',
 function outstandingScreen(){
  return {title:'Outstanding bills',default:'receivables',
  render(st){
-  if(st==='loading') return reportLoading(phead([['Home',hashFor('home')],['Receivables']],'Bills receivable','As at 21 Nov 2026 · bill-wise, with the due date from the party\'s credit days'));
+  if(st==='loading') return reportLoading(phead([['Home',hashFor('home')],['Receivables']],'Bills receivable','As at 20 Nov 2026 · bill-wise, with the due date from the party\'s credit days'));
   const rec = st!=='payables';
   const bills = openBills().filter(b=>LED[b.led].group===(rec?'debtors':'creditors')).sort((a,b)=>b.overdue-a.overdue);
   const total = bills.reduce((s,b)=>s+Math.abs(b.open),0);
   const tabs = `<div class="tabs" style="margin:0;border:0"><button data-go="${hashFor('outstanding','receivables')}" aria-selected="${rec}">Receivables</button><button data-go="${hashFor('outstanding','payables')}" aria-selected="${!rec}">Payables</button></div>`;
-  return `${phead([['Home',hashFor('home')],[rec?'Receivables':'Payables']],rec?'Bills receivable':'Bills payable','As at 21 Nov 2026 · bill-wise, with the due date from the party\'s credit days',tabs)}
+  return `${phead([['Home',hashFor('home')],[rec?'Receivables':'Payables']],rec?'Bills receivable':'Bills payable','As at 20 Nov 2026 · bill-wise, with the due date from the party\'s credit days',tabs)}
    <div class="card"><table class="t" id="ob"><thead><tr><th>${rec?'Customer':'Supplier'}</th><th>Bill</th><th>Bill date</th><th>Due</th><th class="num">Open</th><th class="num">Overdue</th></tr></thead><tbody>
     ${bills.map((b,i)=>`<tr data-row="${i}" class="${i===0?'sel':''}"><td>${esc(LED[b.led].name)}</td><td>${b.ref}</td><td>${fmtDate(b.date)}</td><td>${fmtDate(addDays(b.date,LED[b.led].days||0))}</td><td class="num">${inr(Math.abs(b.open))}</td><td class="num">${b.overdue>0?`<span style="color:var(--bad)">${b.overdue} days</span>`:(LED[b.led].days?'not due':'on demand')}</td></tr>`).join('')}
     <tr class="total"><td colspan="4">${bills.length} open bills</td><td class="num">${inr(total)}</td><td></td></tr></tbody></table></div>
@@ -2339,9 +2345,9 @@ SCREENS.outstanding = outstandingScreen();
    base 14,25,539.00 - 144 x 470.00 (67,680.00) + 32,900.00. */
 SCREENS['stock-summary'] = {title:'Stock summary',default:'default',
  render(st){
-  if(st==='loading') return reportLoading(phead([['Home',hashFor('home')],['Stock summary']],'Stock summary','As at 21 Nov 2026 · quantity from the stock engine, value at average cost'));
+  if(st==='loading') return reportLoading(phead([['Home',hashFor('home')],['Stock summary']],'Stock summary','As at 20 Nov 2026 · quantity from the stock engine, value at average cost'));
   const s = stockPosition(st==='provisional');
-  return `${phead([['Home',hashFor('home')],['Stock summary']],'Stock summary','As at 21 Nov 2026 · quantity from the stock engine, value at average cost',
+  return `${phead([['Home',hashFor('home')],['Stock summary']],'Stock summary','As at 20 Nov 2026 · quantity from the stock engine, value at average cost',
     `<button class="btn" data-go="${hashFor('masters','items')}">Stock items ${kb('Enter')}</button>`)}
    ${st==='provisional'?`<div class="note warn" role="alert" style="margin-bottom:12px">${ic('alert')}<div><b>Value is Provisional for Steel pickaxe 2.5 kg.</b> Its quantity first went below zero on ${fmtDate(s.provisional?s.provisional.first:'19-11-2026')} (−30 nos after SI/0416); a purchase on 20 Nov brought it back to 70. The value is shown and marked, and the total with it.</div></div>`:''}
    <div class="card"><table class="t" id="ss"><thead><tr><th>Item</th><th>HSN</th><th class="num">Quantity</th><th>Unit</th><th class="num">Cost</th><th class="num">Value</th></tr></thead><tbody>

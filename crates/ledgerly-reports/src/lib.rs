@@ -11,6 +11,7 @@ pub mod outstanding;
 pub mod params;
 pub mod profit_loss;
 pub mod registers;
+mod stock_reason;
 pub mod stock_summary;
 pub mod trial_balance;
 

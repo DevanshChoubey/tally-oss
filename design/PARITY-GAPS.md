@@ -311,7 +311,8 @@ captured: `suggested-ledger` (an AI state: the assistant proposes the ledger; no
 - **by design: a credit or provisional stock value is marked.** The mock's value is
   `inr(max(qty,0)*cost)`, so stock below zero shows 0.00. Ours shows the engine's figure: a
   credit value keeps "Cr", and a value the engine marks provisional (negative stock) says
-  "(provisional)", with the engine's reason on hover.
+  a "Provisional" badge on the row (s13; it used to print the reason in the cell), with the
+  engine's reason in the banner above the table.
 - **by design: stock is over the stock summary's opening period**, the financial year to its
   last voucher, as the stock summary report opens.
 - **by design: open amounts carry their side** ("1,18,000.00 Dr"). The mock's amounts are bare;
@@ -564,7 +565,9 @@ the selected one.
   360.00. Enter 360.00 more on the credit side to save."). Contra's foot shows Cash after from
   `Api::balance_change`. In `contra.validation-error` the capture clicks the narration so the
   ledger list does not cover the notice (a click now gives the capture window the keyboard).
-- **gap: the journal's Balance column is empty** until a ledger's balance reaches the screen.
+- **closed (s13): the journal's Balance column.** Neither the mock (`SCREENS.journal`) nor the app
+  has a Balance column in the journal entry table (# / Ledger / Dr/Cr / Group / Amount), so there
+  was nothing to fill; the earlier note was stale.
 - **closed (s12): purchase.default, credit-note.default capture data.** The captures enter the
   mock's data (NST/1150 of 21 Nov, 10 HDPE pipe coils at 2,050.00 and 100 PVC ball valves at
   228.40; credit note of 10 brass nozzle sets at 505.00 against SI/0412) and the engine gives the
@@ -588,7 +591,14 @@ the selected one.
 - **trial-balance.default:** rows are the sample's ledgers, group names as the engine's, CGST, SGST
   and IGST as one ledger each (IGST 9,150.00 Dr: output 20,370.00 less input 29,520.00); total
   1,25,33,742.30 (the mock said 1,25,54,112.30). Still different: the engine's balance date is
-  20 Nov, the mock's 21 Nov (no voucher falls between); the row order.
+  20 Nov, the mock's 21 Nov (no voucher falls between). Closed (s13): the row order. The mock sorted
+  by its own list; it now follows the chart's group order as the engine does (Capital Account, Bank
+  Accounts, Cash-in-Hand, Loans & Advances, Stock-in-Hand, Sundry Debtors, Duties & Taxes,
+  Provisions, Sundry Creditors, Direct Expenses, Fixed Assets, Indirect Expenses, Indirect Incomes,
+  Secured Loans, Purchase Accounts, Sales Accounts; ledgers within a group in master order), and
+  its Opening stock ledger sits under Stock-in-Hand. The help page read 2026-11-25
+  (https://help.tallysolutions.com/tally-prime/accounting-financial-reports/trial-balance-tally/)
+  describes group-wise and ledger-wise views but states no order.
 - **stock-summary.provisional, balance-sheet.provisional, profit-and-loss.provisional:** the mock
   used a typed -30 that no books could give ("-30 after the sales on record": the sales leave 144).
   They now use the app's capture scenario: a sale of 174 on 19 Nov (item 30 below zero), a purchase
@@ -628,8 +638,13 @@ journal's short side in the error ink and Save icons; contra's "Account" column.
   narration in the foot with a Dr/Cr on every line, credit note tax rows CGST 9% and SGST 9% from
   the engine, and the profit and loss in two sides with Debit/Credit headings, "Trading account"
   and "Profit and loss account" bands and period end 20 Nov (the engine's balance date).
-  Still different: the app lists Direct Expenses before Purchase Accounts (engine group order);
-  the mock follows the owner's order.
+  Closed (s13): the engine now lists Opening stock, Purchase Accounts, Direct Expenses on the
+  debit side and Sales Accounts before Direct Incomes on the credit side, as the mock does
+  (`profit_loss.rs` `account_rank`, test `the_trading_account_lists_purchases_before_direct_expenses`).
+  The order is the owner's brief and the standard trading form: the help pages read 2026-11-25
+  (https://help.tallysolutions.com/profit-and-loss-statement-tally/ and the ERP 9 page
+  https://help.tallysolutions.com/docs/te9rel65/Reports/Display_Financial_Statements/Display_Profit_Loss_Account.htm)
+  name Cost of Sales and Direct Expenses as trading items but state no debit-side order text.
 - **data: note numbers.** CN/0001, DN/0001, PB/0145 and CT/0022 are the engine's next numbers; the
   debit note is to Rupa Polymers against RP/5398 as the mock's.
 - **gap: the figures of the credit-note hint** ("14 Nov, 67 sets invoiced") are not shown: the
@@ -1052,9 +1067,12 @@ state yet and still draws the generic table.
   must change to the two-sided form, and its subtitle keeps "Ledgerly's trading form, with
   sub-totals". Until then the app differs from the mock in layout, by the documented form. Also
   different: the line under Enter drills only the debit side's group when both sides have a row;
-  a provisional line says "(provisional)" after its label and one warning note over the table
-  gives the engine's reason (the mock's note adds a button to the stock items and names the
-  figure); a period starting after the books' first day is `Unsupported` while a Stock-in-Hand
+  closed (s13, second round): only the Closing stock line wears the "Provisional" badge, as in the
+  mock; the gross profit, net profit and totals that follow from it are plain figures and the
+  banner (engine reason naming the item, quantity and voucher, dates like "19 Nov 2026") says so,
+  with the mock's "Open stock items" button (opens the stock summary; the mock's button opens the
+  stock items master, which is a list with no figures). Still different: the button sits under the
+  banner text, not inline with it; a period starting after the books' first day is `Unsupported` while a Stock-in-Hand
   ledger holds an opening balance.
 - **gap: the provisional states' figures differ from the mock's, by cause.** The mock overrides
   the stock position only (`stockOverride`, pickaxe -30): its closing stock 13,57,859 changes while
@@ -1222,8 +1240,32 @@ Mismatches between the mock's totals and the engine's, and why:
   The debit note footer no longer cites s.34(3); the debit note is a buyer's return, and its GST
   basis is an open item in MOCK-COVERAGE.md.
 
-- **gap (S12): stock-summary.provisional.** The app prints the engine's provisional text in the
-  Value cell ("... below zero on 2026-11-19"), where the mock shows a "Provisional" badge, a
-  quantity of -30 and a warning banner above the table. The sample company's engine run gives
-  quantity 70 for Steel pickaxe 2.5 kg at 20 Nov, and the text is clipped at the cell's left edge.
-  Needs a badge cell and a top note for stock, as balance sheet has.
+- **closed (s13): stock-summary.provisional truncation.** The Value cell and the total draw the
+  amount with a Provisional badge and the banner leads the table (`ViewCell::Provisional` drawn by
+  `generic.rs`, banner from `mock::provisional_banner`). The balance sheet, trial balance and day
+  book were checked: only the balance sheet, P&L and stock summary produce provisional cells, and
+  none truncates. Closed (s13, second round): the reason is the engine's sentence ("Steel pickaxe
+  2.5 kg first went below zero on 19 Nov 2026 (-30 nos after SI/0416); a purchase on 20 Nov
+  brought it back to 70"; item name, quantity and voucher number come from the stock moves via
+  `ledgerly_stock::negative_episode`, never from the UI), the stock summary has the Cost column
+  (the engine's closing rate, nine columns) and the total reads "Total closing stock" with the
+  engine tag; the quantity 70 is right and the mock's table agrees (70, 470.00, 32,900.00). Report
+  date: TallyPrime generates a report "as on the date of the last voucher entry"
+  (https://help.tallysolutions.com/tally-prime/accounting-financial-reports/trial-balance-tally/,
+  read 2026-11-25); the app does this (20 Nov in the capture company) and the mock's report
+  screens now say 20 Nov too. Still different: the mock's subtitle says "value at average cost"
+  (the app states the engine's method per item), and the Item column is narrower than the mock's.
+- **closed (s13): contra.validation-error.** Save is greyed, the error note has the alert icon and
+  the "Lines as typed balance" hint sits below the notice. Still different: the keyboard is on the
+  narration box in the capture (the mock's is unfocused).
+- **gap (s13): sales-invoice.period-locked.** Closed (s13, second round): the "1 thing to fix before
+  saving" note, the Locked badge on the date (the app's badge has a cross where the mock's has a
+  lock icon) and F2 as a keycap in the bar. Still different: the e-invoice cell reads "Not built
+  yet" where the mock says "JSON ready (INV-01)": the engine API (`ledgerly-api`) does not report
+  e-invoice JSON for an invoice (only the `ledgerly-gst-formats` writer exists, not wired to the
+  voucher), so claiming a file is ready would be a wrong statement; the third empty line is not
+  drawn (the app drops a blank trailing line when the keyboard leaves it); the party's balance
+  line differs because the capture company's ledger balance is not the mock's.
+- **closed (s13): profit-and-loss.detailed** has an app capture (Alt+F1); it differs from the mock
+  in the same two-sided layout points as the default state (bold group lines, the figures of the
+  capture company).

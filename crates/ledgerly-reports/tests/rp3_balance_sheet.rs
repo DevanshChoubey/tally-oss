@@ -715,7 +715,7 @@ fn provisional_stock_makes_profit_stock_and_totals_provisional() {
     let r = run(&books_with(p), &params(Detail::Condensed), &closing);
     let is_provisional = |c: &Cell, side: DrCr, amount: Paise| match c {
         Cell::Provisional { amount: a, reason } => {
-            a.side == side && a.amount == amount && reason.contains("negative stock")
+            a.side == side && a.amount == amount && reason.contains("first went below zero")
         }
         _ => false,
     };

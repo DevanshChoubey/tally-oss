@@ -1423,6 +1423,11 @@ fn light_shots() -> Vec<Shot> {
             .query("Profit and Loss")
             .then(&[(Key::Enter, NONE)])
             .expect_bar("Profit and loss", "Profit and loss"),
+        // The mock's `profit-and-loss.detailed`: Alt+F1 on the profit and loss opens each group.
+        shot("profit-and-loss.detailed", &[palette])
+            .query("Profit and Loss")
+            .then(&[(Key::Enter, NONE), (Key::F1, Modifiers::ALT)])
+            .expect_bar("Profit and loss", "Profit and loss"),
         shot("profit-and-loss.provisional", &[palette])
             .query("Profit and Loss")
             .then(&[(Key::Enter, NONE)])
@@ -1514,28 +1519,36 @@ fn light_shots() -> Vec<Shot> {
         )
         .type_text("Brass nozzle")
         .press(&[(Key::Enter, NONE), (Key::A, Modifiers::COMMAND)]),
-        // A click puts the keyboard in the date (Ctrl+A is Save on this screen, so the date is
-        // cleared with End and Backspace), and 31 Oct is the lock date of Fictional Pumps
-        // (index.html sales-invoice.period-locked). Enter then goes on to the customer.
-        shot("sales-invoice.period-locked", &[(Key::F8, NONE)])
-            .on(Fixture::Godavari)
-            .click(360.0, 215.0)
-            .press(&[(Key::End, NONE)])
-            .press(&[(Key::Backspace, NONE); 12])
-            .type_text("31-10-2026")
-            .press(&[(Key::Enter, NONE)])
-            .type_text("Mehta")
-            .press(&[(Key::Enter, NONE)])
-            .type_text("24")
-            .press(&[(Key::Enter, NONE)])
-            .type_text("Sales")
-            .press(&[(Key::Enter, NONE), (Key::Enter, NONE)])
-            .type_text("HDPE")
-            .press(&[(Key::Enter, NONE)])
-            .type_text("10")
-            .press(&[(Key::Enter, NONE)])
-            .type_text("1500")
-            .press(&[(Key::Enter, NONE), (Key::Enter, NONE)]),
+        // The mock's `sales-invoice.period-locked` (index.html `SCREENS['sales-invoice']`, state
+        // period-locked): SI/0418 to Shree Ganesh Traders dated 28 Oct 2026, two lines (25 drip
+        // laterals at 3,850.00 and 67 brass nozzle sets at 505.00), no order number and no
+        // narration; 31 Oct is the lock date of the company. A click puts the keyboard in the date
+        // (Ctrl+A is Save on this screen, so the date is cleared with End and Backspace). Enter
+        // then goes on to the party, and a blank line ends the lines.
+        invoice_line(
+            invoice_line(
+                shot("sales-invoice.period-locked", &[(Key::F8, NONE)])
+                    .on(Fixture::Godavari)
+                    .click(360.0, 215.0)
+                    .press(&[(Key::End, NONE)])
+                    .press(&[(Key::Backspace, NONE); 12])
+                    .type_text("28-10-2026")
+                    .press(&[(Key::Enter, NONE)])
+                    .type_text("Shree Ganesh")
+                    .press(&[(Key::Enter, NONE)])
+                    .type_text("27")
+                    .press(&[(Key::Enter, NONE)])
+                    .type_text("Sales")
+                    .press(&[(Key::Enter, NONE), (Key::Enter, NONE)]),
+                "Drip lateral",
+                "25",
+                "3850",
+            ),
+            "Brass nozzle",
+            "67",
+            "505",
+        )
+        .press(&[(Key::Enter, NONE)]),
         // The mock's `purchase.default` (index.html:1960-1990): Nilgiri Steel Traders' bill NST/1150
         // of 21 Nov 2026, 10 HDPE pipe coils at 2,050.00 and 100 PVC ball valves at 228.40, hand
         // typed. The mock labels the place of supply "29 Karnataka, inter-state"; the engine takes
@@ -1703,7 +1716,7 @@ fn light_shots() -> Vec<Shot> {
             .press(&[(Key::A, Modifiers::COMMAND)])
             // A click on the narration takes the keyboard off the ledger field, so its list no
             // longer covers the notes.
-            .click(800.0, 373.0)
+            .click(820.0, 413.0)
             .expect("Contra", None),
         // A blank line ends the lines; Enter on the narration asks to save.
         three_lines(godavari_invoice(
