@@ -53,7 +53,7 @@ pub use draft::{
 };
 pub use kind::EntryKind;
 pub(crate) use post::{created_ledger, new_ledger};
-pub use search::{LedgerHit, PickerItem, search_ledgers};
+pub use search::{LedgerHit, PickerItem, is_cash_or_bank, search_ledgers, search_ledgers_where};
 pub(crate) use state::CreateForm;
 pub use state::{CreateLedgerRequest, Field, OpenError, VoucherEntryScreen};
 

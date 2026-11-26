@@ -17,7 +17,7 @@ use super::draft::{
     Balance, BillDraft, DraftRow, LedgerRef, VoucherDraft, entry_support, mode_label, parse_mode,
 };
 use super::kind::EntryKind;
-use super::search::{PickerItem, search_ledgers};
+use super::search::{PickerItem, is_cash_or_bank, search_ledgers, search_ledgers_where};
 
 /// How many recently used ledgers are remembered.
 const RECENTS_LIMIT: usize = 20;
@@ -333,9 +333,29 @@ impl VoucherEntryScreen {
         };
         match self.draft.rows.get(i) {
             Some(row) if row.ledger.is_none() => {
-                search_ledgers(masters, &row.ledger_text, &self.recents, &self.balances)
+                if self.is_account_line(i) {
+                    search_ledgers_where(
+                        masters,
+                        &row.ledger_text,
+                        &self.recents,
+                        &self.balances,
+                        |l| is_cash_or_bank(masters, l),
+                    )
+                } else {
+                    search_ledgers(masters, &row.ledger_text, &self.recents, &self.balances)
+                }
             }
             Some(_) | None => Vec::new(),
+        }
+    }
+
+    /// Whether line `i` (0-based) takes only a cash or bank ledger: the Account of a single-entry
+    /// payment or receipt, and every line of a contra ([`super::search::is_cash_or_bank`]).
+    fn is_account_line(&self, i: usize) -> bool {
+        match self.draft.kind {
+            EntryKind::Contra => true,
+            EntryKind::Payment | EntryKind::Receipt => i == 0,
+            EntryKind::Journal | EntryKind::Memorandum | EntryKind::ReversingJournal => false,
         }
     }
 

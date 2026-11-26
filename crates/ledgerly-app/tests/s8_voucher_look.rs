@@ -23,7 +23,8 @@ use ledgerly_core::{
 };
 use ledgerly_model::{
     Address, BaseVoucherKind, Books, Company, EntityKind, Features, Group, Ledger, Masters,
-    NegativeStockPolicy, NumberingConfig, NumberingMethod, RestartPeriod, VoucherType,
+    NegativeStockPolicy, NumberingConfig, NumberingMethod, ReservedGroup, RestartPeriod,
+    VoucherType,
 };
 use time::macros::date;
 
@@ -31,6 +32,7 @@ const CASH: LedgerId = LedgerId(1);
 const RENT: LedgerId = LedgerId(5);
 const T_PAYMENT: VoucherTypeId = VoucherTypeId(2);
 const GROUP: GroupId = GroupId(1);
+const CASH_GROUP: GroupId = GroupId(2);
 const TODAY: Date = date!(2026 - 11 - 21);
 
 fn ledger(id: LedgerId, name: &str) -> Ledger {
@@ -49,6 +51,37 @@ fn ledger(id: LedgerId, name: &str) -> Ledger {
         gst: None,
         reserved: None,
         tally: None,
+    }
+}
+
+/// S22: a payment's or receipt's account lists only cash and bank ledgers, so the fixture puts
+/// `ledgers` under a reserved group (Cash-in-Hand, Bank Accounts) inside Current Assets, as in a
+/// real company.
+fn reserve(
+    masters: &mut Masters,
+    id: GroupId,
+    name: &str,
+    reserved: ReservedGroup,
+    ledgers: &[LedgerId],
+) {
+    masters.groups.insert(
+        id,
+        Group {
+            ineligible_itc: None,
+            id,
+            name: name.to_owned(),
+            aliases: Vec::new(),
+            parent: Some(GROUP),
+            reserved: Some(reserved),
+            nature: None,
+            affects_gross_profit: false,
+            tally: None,
+        },
+    );
+    for ledger in ledgers {
+        if let Some(l) = masters.ledgers.get_mut(ledger) {
+            l.group = id;
+        }
     }
 }
 
@@ -71,6 +104,13 @@ fn books() -> Books {
     for l in [ledger(CASH, "Cash"), ledger(RENT, "Rent")] {
         masters.ledgers.insert(l.id, l);
     }
+    reserve(
+        &mut masters,
+        CASH_GROUP,
+        "Cash-in-Hand",
+        ReservedGroup::CashInHand,
+        &[CASH],
+    );
     masters.voucher_types.insert(
         T_PAYMENT,
         VoucherType {
