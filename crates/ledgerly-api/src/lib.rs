@@ -52,6 +52,7 @@ pub use ledgerly_model::{
     Address, Books, Company, EntityKind, Features, NegativeStockPolicy, Voucher,
 };
 pub use ledgerly_print::pdf::{PageItem, PageLayout, PrintedDocument};
+pub use ledgerly_print::setup::{MAX_COPIES, PageSelection, Paper, PrintSetup};
 pub use ledgerly_reports::outstanding::days_overdue;
 pub use ledgerly_reports::{
     AuditReportKind, Cell, ColumnHeader, ColumnSpec, Detail, DrillKey, Report, ReportFilter,

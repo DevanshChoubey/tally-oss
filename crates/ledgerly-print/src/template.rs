@@ -161,6 +161,13 @@ pub enum PrintError {
         /// What is not handled.
         reason: String,
     },
+    /// A print setting (copies, page range, first page number) cannot be used with this
+    /// document.
+    #[error("the print settings cannot be used: {reason}")]
+    Setup {
+        /// What is wrong and how to fix it.
+        reason: String,
+    },
 }
 
 /// Paper size of a template.

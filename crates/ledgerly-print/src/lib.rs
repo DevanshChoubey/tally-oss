@@ -1,6 +1,7 @@
 //! Print templates and PDF rendering.
 
 pub mod pdf;
+pub mod setup;
 pub mod template;
 
 /// The built-in tax invoice template (A4): the header, bill-to details, item and tax tables,

@@ -450,6 +450,53 @@ fn balance_sheet(report: &Report) -> Option<PrintText> {
     })
 }
 
+/// The day book as printed: the screen's table without the audit columns ("Entered by" and
+/// "Origin" say who typed a voucher and how, which a printed day book does not carry), and
+/// without "Status" and "Narration" on a page where no voucher has any. Cells move whole; no
+/// figure is touched.
+fn day_book(text: PrintText) -> PrintText {
+    let keep: Vec<bool> = text
+        .headings
+        .iter()
+        .enumerate()
+        .map(|(n, heading)| match heading.as_str() {
+            "Entered by" | "Origin" => false,
+            "Status" | "Narration" => text
+                .rows
+                .iter()
+                .any(|r| r.cells.get(n).is_some_and(|c| !c.is_empty())),
+            _ => true,
+        })
+        .collect();
+    let pick = |cells: &[String]| -> Vec<String> {
+        cells
+            .iter()
+            .zip(&keep)
+            .filter(|(_, k)| **k)
+            .map(|(c, _)| c.clone())
+            .collect()
+    };
+    PrintText {
+        headings: pick(&text.headings),
+        aligns: text
+            .aligns
+            .iter()
+            .zip(&keep)
+            .filter(|(_, k)| **k)
+            .map(|(a, _)| *a)
+            .collect(),
+        rows: text
+            .rows
+            .iter()
+            .map(|r| PrintRow {
+                cells: pick(&r.cells),
+                style: r.style,
+            })
+            .collect(),
+        notes: text.notes,
+    }
+}
+
 /// The text of `report` as printed.
 ///
 /// The profit and loss and the balance sheet take their two-sided and vertical forms when the
@@ -462,11 +509,11 @@ pub fn print_text(report: &Report) -> Result<PrintText, ReportError> {
     let special = match report.params.kind {
         ReportKind::ProfitAndLoss => profit_loss(report),
         ReportKind::BalanceSheet => balance_sheet(report),
+        ReportKind::DayBook => return generic(report).map(day_book),
         ReportKind::TrialBalance
         | ReportKind::GroupSummary(_)
         | ReportKind::GroupLedgers(_)
         | ReportKind::LedgerVouchers(_)
-        | ReportKind::DayBook
         | ReportKind::Register(_)
         | ReportKind::Outstanding { .. }
         | ReportKind::StockSummary
