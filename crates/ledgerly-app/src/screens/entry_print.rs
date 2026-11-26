@@ -163,11 +163,11 @@ fn head_for(voucher: &Voucher, title: &str, masters: Option<&Masters>) -> Head {
         .party
         .and_then(|id| masters.and_then(|m| m.ledgers.get(&id)))
         .map(|l| l.name.clone());
-    let mut parts = vec!["Saved".to_owned()];
-    parts.extend(party);
-    parts.push(crate::ui::format::date(voucher.date));
+    let mut words = vec!["Saved".to_owned()];
+    words.extend(party);
+    words.push(crate::ui::format::date(voucher.date));
     Head {
         title,
-        subtitle: parts.join(" \u{b7} "),
+        subtitle: words.join(" \u{b7} "),
     }
 }

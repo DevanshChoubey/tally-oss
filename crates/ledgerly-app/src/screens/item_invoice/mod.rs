@@ -658,6 +658,21 @@ pub struct ItemInvoiceScreen {
     shown: draw::Shown,
     /// Ctrl+P: the voucher saved last and its print preview.
     entry_print: crate::screens::entry_print::EntryPrint,
+    /// What the e-Invoice cell says about the invoice on screen.
+    einvoice: EInvoiceState,
+}
+
+/// The API's answer on whether the invoice on screen maps to e-invoice JSON (INV-01).
+#[derive(Debug)]
+enum EInvoiceState {
+    /// Not asked: no tax answer yet, or the invoice changed since the last answer.
+    Unknown,
+    /// Asked; the worker has not answered.
+    Checking(Ticket<Result<Outcome<()>, String>>),
+    /// The API mapped the invoice and the schema check passed.
+    Ready,
+    /// The API said why it cannot, in words.
+    NotReady(String),
 }
 
 impl ItemInvoiceScreen {
@@ -747,6 +762,7 @@ impl ItemInvoiceScreen {
             waiting: Vec::new(),
             shown: draw::Shown::default(),
             entry_print: crate::screens::entry_print::EntryPrint::default(),
+            einvoice: EInvoiceState::Unknown,
         };
         screen.focus = screen.first_field();
         Ok(Outcome::Value(screen))
@@ -1104,6 +1120,18 @@ impl ItemInvoiceScreen {
                 self.confirming_save = true;
             }
             Err(message) => self.fail(message),
+        }
+    }
+
+    /// What the e-Invoice cell says once the API has answered: "JSON ready (INV-01)", or why the
+    /// invoice cannot be written as e-invoice JSON. `None` until it has answered, and for an
+    /// invoice that is not a sale.
+    #[must_use]
+    pub fn einvoice_note(&self) -> Option<&str> {
+        match &self.einvoice {
+            EInvoiceState::Ready => Some("JSON ready (INV-01)"),
+            EInvoiceState::NotReady(reason) => Some(reason),
+            EInvoiceState::Unknown | EInvoiceState::Checking(_) => None,
         }
     }
 

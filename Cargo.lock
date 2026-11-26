@@ -2219,6 +2219,7 @@ dependencies = [
  "ledgerly-stock",
  "ledgerly-store",
  "ledgerly-tally-bridge",
+ "serde_json",
  "sha2",
  "tempfile",
  "thiserror 2.0.21",

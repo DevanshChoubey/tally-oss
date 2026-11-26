@@ -1770,6 +1770,16 @@ fn light_shots() -> Vec<Shot> {
             "",
         ))
         .press(&[(Key::Enter, NONE)]),
+        // The sample company holds no PIN code, which the e-invoice schema requires: the
+        // e-Invoice cell says what is missing (the mock's `sales-invoice.einvoice-not-ready`).
+        three_lines(godavari_invoice(
+            "sales-invoice.einvoice-not-ready",
+            "Shree Ganesh",
+            "27",
+            "",
+        ))
+        .press(&[(Key::Enter, NONE)])
+        .expect("Sales invoice", None),
         // A cash sale: Cash has no GSTIN, so the sale is B2C.
         invoice_line(
             invoice_line(

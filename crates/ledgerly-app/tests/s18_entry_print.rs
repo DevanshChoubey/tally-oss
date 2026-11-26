@@ -105,7 +105,7 @@ fn journal(
         .unwrap()
         .value()
         .unwrap();
-    screen.draft_mut().date_text = "20-11-2026".to_owned();
+    "20-11-2026".clone_into(&mut screen.draft_mut().date_text);
     let app = AppCtx {
         books: Some(books),
         api: Some(ApiWorker::spawn(api).unwrap()),

@@ -34,10 +34,11 @@ use crate::screens::wire::{Done, Latest, unsupported_text};
 use crate::theme::{RADIUS_M, TEXT_BODY, TEXT_H2, TEXT_META, border_width, shadow_1};
 use crate::ui::badge::{BadgeKind, badge};
 use crate::ui::button::{ButtonKind, button};
+use crate::ui::note::NoteKind;
 use crate::ui::page_head::page_head;
 use crate::ui::table::{self, CellPlace, RowState, T_HEAD_HEIGHT, T_ROW_HEIGHT};
 use crate::ui::{bold_font, kind, tokens};
-use crate::worker::ApiWorker;
+use crate::worker::{ApiWorker, Poll, Ticket};
 use crate::{AppCtx, KeyHint, Screen, ScreenAction};
 use ledgerly_core::Outcome;
 
@@ -340,6 +341,12 @@ pub struct VoucherViewScreen {
     /// The print in flight (Ctrl+P), and the last notice about a print.
     print: PrintJob,
     notice: Option<Notice>,
+    /// Ctrl+E: the e-invoice JSON being made, the dialog that names its file, and what was said
+    /// about the last export (shown as a note under the head, as index.html's
+    /// `balance-sheet.voucher-einvoice-exported`).
+    export: Option<Ticket<Result<Outcome<String>, String>>>,
+    export_picker: JsonPicker,
+    export_note: Option<Notice>,
     /// The voucher's number and page title, once the books have been read (the breadcrumb is
     /// asked for without the books).
     shown: std::cell::RefCell<Option<Shown>>,
@@ -385,7 +392,79 @@ const AMOUNT_W: f32 = 170.0;
 /// The Item table's Qty, Rate and Amount columns.
 const ITEM_COLS: [f32; 3] = [110.0, 112.0, 150.0];
 
+/// The save dialog of the e-invoice export (a closure has no `Debug`).
+struct JsonPicker(crate::screens::print_job::SavePicker);
+
+impl std::fmt::Debug for JsonPicker {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("JsonPicker")
+    }
+}
+
+/// The system save dialog, offering JSON.
+fn save_json_dialog(suggested: &str) -> Option<std::path::PathBuf> {
+    crate::ui::dialogs::save_file(
+        "Export e-invoice JSON",
+        Some(suggested),
+        &[("JSON", &["json"])],
+    )
+}
+
 impl VoucherViewScreen {
+    /// Replaces the save dialog the e-invoice export opens.
+    pub fn set_export_picker(&mut self, picker: crate::screens::print_job::SavePicker) {
+        self.export_picker = JsonPicker(picker);
+    }
+
+    /// What was said about the last e-invoice export, when there was one.
+    #[must_use]
+    pub fn export_note(&self) -> Option<&Notice> {
+        self.export_note.as_ref()
+    }
+
+    /// Takes the e-invoice JSON when the worker has made it, asks where to save it, writes it and
+    /// says where it went. A voucher that cannot be an e-invoice says why; nothing is written.
+    fn tick_export(&mut self) {
+        let Some(ticket) = self.export.as_mut() else {
+            return;
+        };
+        let answer = match ticket.poll() {
+            Poll::Pending | Poll::Taken => return,
+            Poll::Ready(reply) => reply,
+            Poll::Lost => Err("the engine stopped before it answered".to_owned()),
+        };
+        self.export = None;
+        self.export_note = Some(match answer {
+            Ok(Outcome::Value(json)) => {
+                let number = self
+                    .shown
+                    .borrow()
+                    .as_ref()
+                    .map_or_else(|| self.id.0.to_string(), |s| s.number.replace('/', "-"));
+                match (self.export_picker.0)(&format!("e-invoice-{number}.json")) {
+                    // A cancelled dialog writes nothing and says nothing.
+                    None => return,
+                    Some(path) => match std::fs::write(&path, json) {
+                        Ok(()) => Notice::Info(format!(
+                            "Exported the e-invoice JSON (INV-01) to {}. Upload it on the \
+                             government portal's bulk page; nothing is sent from here.",
+                            path.display()
+                        )),
+                        Err(e) => Notice::Error(format!(
+                            "The e-invoice JSON was not saved: \"{}\" could not be written ({e}). \
+                             Nothing was written.",
+                            path.display()
+                        )),
+                    },
+                }
+            }
+            Ok(Outcome::Unsupported(u)) => {
+                Notice::Error(format!("The e-invoice JSON was not written. {}", u.reason))
+            }
+            Err(e) => Notice::Error(format!("The e-invoice JSON was not written: {e}")),
+        });
+    }
+
     /// Replaces the save dialog the print opens.
     pub fn set_print_picker(&mut self, picker: crate::screens::print_job::SavePicker) {
         self.print.set_picker(picker);
@@ -437,6 +516,9 @@ impl VoucherViewScreen {
             origin: None,
             print: PrintJob::default(),
             notice: None,
+            export: None,
+            export_picker: JsonPicker(Box::new(save_json_dialog)),
+            export_note: None,
             shown: std::cell::RefCell::new(None),
             detail: Latest::default(),
             detail_state: DetailState::Loading,
@@ -851,7 +933,11 @@ impl Screen for VoucherViewScreen {
             self.notice = None;
         }
         self.print.run_update(ctx.api.as_ref());
+        self.tick_export();
         self.tick_detail(ctx.api.as_ref());
+        if self.export.is_some() {
+            ui.ctx().request_repaint();
+        }
         if self.detail.is_pending() {
             ui.ctx().request_repaint();
         }
@@ -875,6 +961,24 @@ impl Screen for VoucherViewScreen {
                     self.print.start(handle, &title, move |api, setup| {
                         api.print_voucher_document_with(id, setup)
                     });
+                }
+            }
+        }
+        if ui
+            .ctx()
+            .input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::E))
+        {
+            match ctx.api.as_ref() {
+                None => {
+                    self.export_note = Some(Notice::Error(
+                        "No company is open, so the e-invoice cannot be exported.".to_owned(),
+                    ));
+                }
+                Some(handle) => {
+                    let id = self.id;
+                    self.export = Some(
+                        handle.run(move |api| api.einvoice_json(id).map_err(|e| e.to_string())),
+                    );
                 }
             }
         }
@@ -915,6 +1019,13 @@ impl Screen for VoucherViewScreen {
                         title: title.clone(),
                     });
                     page_head(ui, &title, self.subtitle().as_deref(), |_| {});
+                    if let Some(note) = &self.export_note {
+                        let kind = match note {
+                            Notice::Info(_) => NoteKind::Info,
+                            Notice::Error(_) => NoteKind::Bad,
+                        };
+                        crate::ui::note::note(ui, kind, note.text());
+                    }
                     self.draw_view(ui, &view);
                 }
                 Err(e) => {
