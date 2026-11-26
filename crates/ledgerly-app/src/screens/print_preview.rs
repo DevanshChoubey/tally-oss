@@ -11,7 +11,7 @@ use egui::{
     Color32, CursorIcon, FontId, Key, Layout, Modifiers, Rect, Role, ScrollArea, Sense, Stroke,
     StrokeKind, Ui, pos2, vec2,
 };
-use ledgerly_api::{PageItem, PageLayout, PrintedDocument};
+use ledgerly_api::{PageItem, PageLayout, PageSelection, Paper, PrintSetup, PrintedDocument};
 
 use crate::theme::{RADIUS_XS, TEXT_BODY, TEXT_H2, TEXT_META};
 use crate::ui::button::{ButtonKind, button, button_icon};
@@ -45,8 +45,65 @@ pub enum PreviewAction {
     None,
     /// Save as PDF (Ctrl+P or the button).
     Save,
+    /// Lay the pages out again with the settings in the card (Enter or the button).
+    Update,
     /// Close the preview (Esc or the button).
     Close,
+}
+
+/// The settings as typed in the card: text the user edits, read into a [`PrintSetup`] only when
+/// the preview is updated.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PrintForm {
+    /// The paper chosen with the A4 and A5 tabs.
+    pub paper: Paper,
+    /// Copies, as typed.
+    pub copies: String,
+    /// The number printed on the first page, as typed.
+    pub first_page: String,
+    /// Pages to print, as typed; blank means every page.
+    pub pages: String,
+}
+
+impl Default for PrintForm {
+    fn default() -> Self {
+        Self {
+            paper: Paper::A4,
+            copies: "1".to_owned(),
+            first_page: "1".to_owned(),
+            pages: String::new(),
+        }
+    }
+}
+
+impl PrintForm {
+    /// The settings the card holds.
+    ///
+    /// # Errors
+    /// The words for the field that is not a number or a page range, or whose number the engine
+    /// refuses; the page range is checked against the document by the engine, later.
+    pub fn to_setup(&self) -> Result<PrintSetup, String> {
+        let copies = self
+            .copies
+            .trim()
+            .parse::<u8>()
+            .map_err(|_e| format!("Copies must be a whole number, not \"{}\".", self.copies))?;
+        let first_page_number = self.first_page.trim().parse::<u32>().map_err(|_e| {
+            format!(
+                "First page number must be a whole number, not \"{}\".",
+                self.first_page
+            )
+        })?;
+        let pages = PageSelection::parse(&self.pages).map_err(|e| e.to_string())?;
+        let setup = PrintSetup {
+            paper: Some(self.paper),
+            copies,
+            pages,
+            first_page_number,
+        };
+        setup.check().map_err(|e| e.to_string())?;
+        Ok(setup)
+    }
 }
 
 /// The paper the pages are laid on, named by size and orientation: A4 is 210 x 297 mm, which the
@@ -91,11 +148,13 @@ pub fn draw_busy(ui: &mut Ui) {
     ui.add_space(12.0);
 }
 
-/// The keys of the preview this frame: Ctrl+P saves, Esc closes.
+/// The keys of the preview this frame: Ctrl+P saves, Enter updates, Esc closes.
 fn read_keys(ui: &Ui) -> PreviewAction {
     ui.ctx().input_mut(|i| {
         if i.consume_key(Modifiers::COMMAND, Key::P) {
             PreviewAction::Save
+        } else if i.consume_key(Modifiers::NONE, Key::Enter) {
+            PreviewAction::Update
         } else if i.consume_key(Modifiers::NONE, Key::Escape) {
             PreviewAction::Close
         } else {
@@ -105,7 +164,12 @@ fn read_keys(ui: &Ui) -> PreviewAction {
 }
 
 /// Draws the preview in the space left under the page head and returns what was asked.
-pub fn show(ui: &mut Ui, doc: &PrintedDocument) -> PreviewAction {
+pub fn show(
+    ui: &mut Ui,
+    doc: &PrintedDocument,
+    form: &mut PrintForm,
+    error: Option<&str>,
+) -> PreviewAction {
     let mut action = read_keys(ui);
     let room = ui.available_size();
     let paper_width = (room.x - SIDE_WIDTH - GAP).max(240.0);
@@ -121,7 +185,7 @@ pub fn show(ui: &mut Ui, doc: &PrintedDocument) -> PreviewAction {
             vec2(SIDE_WIDTH, room.y),
             Layout::top_down(egui::Align::Min),
             |ui| {
-                let side = draw_side(ui, doc);
+                let side = draw_side(ui, doc, form, error);
                 if side != PreviewAction::None {
                     action = side;
                 }
@@ -239,14 +303,72 @@ fn draw_page(ui: &mut Ui, page: &PageLayout, width: f32, number: usize, total: u
     }
 }
 
-/// The card at the right: the paper, the pages, the destination and the two buttons.
-fn draw_side(ui: &mut Ui, doc: &PrintedDocument) -> PreviewAction {
+/// A captioned single-line field of the card; `bad` marks it and says why underneath.
+fn field(ui: &mut Ui, label: &str, text: &mut String, width: f32, hint: &str, bad: Option<&str>) {
+    let t = tokens(ui);
+    ui.allocate_ui_with_layout(vec2(width, 0.0), Layout::top_down(egui::Align::Min), |ui| {
+        ui.set_width(width);
+        ui.label(para_text(label, TEXT_META, t.text_2));
+        let edit = egui::TextEdit::singleline(text)
+            .desired_width(width)
+            .hint_text(hint);
+        let response = a11y::text_edit(ui, label, edit);
+        if bad.is_some() {
+            ui.painter().rect_stroke(
+                response.rect,
+                RADIUS_XS,
+                Stroke::new(1.5, t.bad),
+                StrokeKind::Outside,
+            );
+        }
+        if let Some(why) = bad {
+            ui.add_space(2.0);
+            para(ui, why, TEXT_META, t.bad);
+        }
+    });
+}
+
+/// The settings of the card: paper, copies, first page number and pages to print (the mock's
+/// `profit-and-loss.print-config`).
+fn draw_settings(ui: &mut Ui, form: &mut PrintForm, error: Option<&str>) {
+    let inner = SIDE_WIDTH - 34.0;
+    let t = tokens(ui);
+    let paper = usize::from(form.paper == Paper::A5);
+    ui.label(para_text("Paper", TEXT_META, t.text_2));
+    let picked = crate::ui::tabs::tab_strip(ui, &["A4", "A5"], Some(paper));
+    match picked.clicked {
+        Some(0) => form.paper = Paper::A4,
+        Some(1) => form.paper = Paper::A5,
+        Some(_) | None => {}
+    }
+    ui.add_space(6.0);
+    let half = (inner - 8.0) / 2.0;
+    ui.horizontal_top(|ui| {
+        ui.spacing_mut().item_spacing.x = 8.0;
+        field(ui, "Copies", &mut form.copies, half, "", None);
+        field(
+            ui,
+            "First page number",
+            &mut form.first_page,
+            half,
+            "",
+            None,
+        );
+    });
+    ui.add_space(6.0);
+    field(ui, "Pages to print", &mut form.pages, inner, "All", error);
+    ui.add_space(8.0);
+}
+
+/// The card at the right: the settings, the pages, the destination and the buttons.
+fn draw_side(
+    ui: &mut Ui,
+    doc: &PrintedDocument,
+    form: &mut PrintForm,
+    error: Option<&str>,
+) -> PreviewAction {
     let t = tokens(ui);
     let mut action = PreviewAction::None;
-    let paper = doc
-        .pages
-        .first()
-        .map_or_else(|| "none".to_owned(), |p| paper_label(p.width, p.height));
     card(ui, |ui| {
         ui.set_width(SIDE_WIDTH - 34.0);
         ui.label(
@@ -255,12 +377,14 @@ fn draw_side(ui: &mut Ui, doc: &PrintedDocument) -> PreviewAction {
                 .color(t.text),
         );
         ui.add_space(10.0);
+        draw_settings(ui, form, error);
         let inner = SIDE_WIDTH - 34.0;
-        for (label, value) in [
-            ("Paper", paper),
-            ("Pages", doc.pages.len().to_string()),
-            ("Destination", "PDF file".to_owned()),
-        ] {
+        let shown = if doc.copies > 1 {
+            format!("{}, in {} copies", doc.pages.len(), doc.copies)
+        } else {
+            doc.pages.len().to_string()
+        };
+        for (label, value) in [("Pages", shown), ("Destination", "PDF file".to_owned())] {
             // One row of the mock's `table.t`: the caption, the value and a hairline under it.
             ui.allocate_ui_with_layout(
                 vec2(inner, ROW_HEIGHT),
@@ -292,8 +416,11 @@ fn draw_side(ui: &mut Ui, doc: &PrintedDocument) -> PreviewAction {
             t.text_3,
         );
         ui.add_space(10.0);
-        // The mock's `.actions`: the buttons wrap when the card is too narrow for both.
+        // The mock's `.actions`: the buttons wrap when the card is too narrow for all three.
         ui.horizontal_wrapped(|ui| {
+            if button(ui, "Update preview", Some("Enter"), ButtonKind::Secondary).clicked() {
+                action = PreviewAction::Update;
+            }
             if button_icon(
                 ui,
                 Some(Icon::Upload),

@@ -2309,23 +2309,32 @@ function paperHead(title,sub){return `<h2 style="margin:0;color:#1c1b19">${esc(C
 function ptable(heads,rows,aligns){return `<table class="t" style="color:#1c1b19;margin-top:14px"><thead><tr>${heads.map((h,i)=>`<th class="${aligns[i]==='r'?'num':''}">${h}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr class="${r.total?'total':''}">${r.c.map((c,i)=>`<td class="${aligns[i]==='r'?'num':''}">${c}</td>`).join('')}</tr>`).join('')}</tbody></table>`}
 const PRINT_DEFAULT={size:'A4',copies:1,range:'',first:1,pages:1,shown:1,err:false};
 function printPaperInvoice(){
-  const v=VCH['SI/0412'], p=LED[v.party], inv=computeInvoice(v.lines.map(([item,qty,rate])=>({item,qty,rate})),p.st);
-  const items=v.lines.map(([it,q,r],i)=>({c:[i+1,esc(ITEM[it].name),ITEM[it].hsn,q+' '+ITEM[it].unit,inr(r),inr(q*r),ITEM[it].gst+'%']}));
-  const tax=inv.rows.map(g=>({c:[g.rate+'%',inr(g.taxable),inr(g.cgst||0),inr(g.sgst||0),inr(g.igst||0)]}));
-  return paperHead('Tax Invoice','')+`<div style="margin-top:8px;color:#4a4741">Invoice No ${v.id} · Date ${fmtDate(v.date)}<br>Bill to: ${esc(p.name)} · ${p.gstin||'Unregistered'} · ${STATES[p.st]}</div>`
-   +ptable(['#','Description','HSN/SAC','Qty','Rate','Taxable value','GST'],items,['l','l','l','r','r','r','r'])
-   +ptable(['Rate','Taxable value','CGST','SGST','IGST'],tax,['l','r','r','r','r'])
-   +`<div style="margin-top:12px;text-align:right">Taxable value ${inr(inv.taxable)}<br>Tax ${inr(inv.cgst+inv.sgst+inv.igst)}<br>Round off ${inr(inv.ro)}<br><b>Grand total ${inr(inv.total)}</b></div><div style="margin-top:10px;color:#4a4741">${words(inv.total)}</div>`;
+  const v=VCH['SI/0405'], p=LED[v.party], inv=computeInvoice(v.lines.map(([item,qty,rate])=>({item,qty,rate})),p.st);
+  const it0=ITEM[v.lines[0][0]];
+  const items=v.lines.map(([it,q,r],i)=>({c:[i+1,esc(ITEM[it].name),ITEM[it].hsn,q,ITEM[it].unit,inr(r),inr(q*r),ITEM[it].gst+'%',inr(q*r)]}));
+  const g=inv.rows[0], dot='.', pct=g.rate+'%';
+  const tax=[{c:[it0.hsn,inr(g.taxable),g.cgst?pct:dot,g.cgst?inr(g.cgst):dot,g.sgst?pct:dot,g.sgst?inr(g.sgst):dot,g.igst?pct:dot,g.igst?inr(g.igst):dot,inr((g.cgst||0)+(g.sgst||0)+(g.igst||0))]}];
+  const inWords='Rupees '+words(inv.total).replace(/ rupees only$/,'').split(/[ -]/).map(w=>w[0].toUpperCase()+w.slice(1)).join(' ')+' Only';
+  return `<h2 style="margin:0;color:#1c1b19">${esc(CO.name)}</h2><div style="color:#4a4741">Plot 14, Sample Industrial Estate, Pune, Maharashtra<br>GSTIN: ${CO.gstin}</div>`
+   +`<h2 style="margin:6px 0 0;color:#1c1b19">Tax Invoice</h2><div style="color:#4a4741">Invoice No: ${v.id}<br>Date: ${v.date}</div>`
+   +`<div style="margin-top:8px;color:#4a4741"><b>Bill to:</b><br>Name: ${esc(p.name)}<br>Address: ${p.city}, ${STATES[p.st]}<br>GSTIN: ${p.gstin||'Unregistered'}<br>Place of supply: ${p.st}-${STATES[p.st]}</div>`
+   +ptable(['#','Description','HSN/SAC','Qty','Unit','Rate','Taxable value','GST','Amount'],items,['l','l','l','r','l','r','r','r','r'])
+   +'<div style="margin-top:10px;font-weight:600">Tax summary</div>'
+   +ptable(['HSN/SAC','Taxable value','CGST rate','CGST','SGST rate','SGST','IGST rate','IGST','Total tax'],tax,['l','r','r','r','r','r','r','r','r'])
+   +`<div style="margin-top:12px;text-align:right">Taxable value ${inr(inv.taxable)}<br>Total tax ${inr((inv.cgst||0)+(inv.sgst||0)+(inv.igst||0))}<br>Round off ${inr(inv.ro)}<br><b>Grand total ${inr(inv.total)}</b></div><div style="margin-top:10px;font-weight:600">Amount in words</div><div style="color:#4a4741">${inWords}</div><div style="margin-top:10px;color:#4a4741">Goods once sold will not be taken back.</div>`;
 }
 function printPaperDayBook(){
-  const rows=VOUCHERS.map(v=>({c:[fmtDate(v.date),v.type,v.id,esc(vParticulars(v)),inr(vTotal(v))+' Dr']}));
-  const tot=VOUCHERS.reduce((s,v)=>s+vTotal(v),0);
-  rows.push({total:1,c:['Total','','','',inr(tot)+' Dr']});
-  return paperHead('Day Book','1 Nov to 20 Nov 2026')+ptable(['Date','Voucher type','Voucher no.','Particulars','Amount'],rows,['l','l','l','l','r']);
+  const day=VOUCHERS.filter(v=>v.date==='20-11-2026');
+  const pp=v=>v.type==='Sales'?LED[v.party].name:LED[(v.type==='Purchase'?v.cr:v.dr)[0][0]].name;
+  const rows=day.map(v=>({c:[esc(pp(v)),v.date.replace(/-(\d\d)-/,(m,mo)=>'-'+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+mo-1]+'-').replace(/^(.*)$/,'<span style="white-space:nowrap">$1</span>'),v.type,v.id,inr(vTotal(v))+' Dr',esc(v.narr||'')]}));
+  const tot=day.reduce((s,v)=>s+vTotal(v),0);
+  rows.push({total:1,c:['Total','','','',inr(tot)+' Dr','']});
+  return paperHead('Day Book','20-11-2026 to 20-11-2026')+ptable(['Particulars','Date','Voucher type','Voucher no.','Amount','Narration'],rows,['l','l','l','l','r','l']);
 }
 function printPaperJournal(){
-  const rows=[{c:[esc(LED.freight.name),inr(R(1840)),'']},{c:[esc(LED.purch.name),'',inr(R(1840))]},{total:1,c:['Total',inr(R(1840)),inr(R(1840))]},{c:['Narration: Freight inward on the Nilgiri consignment, moved from Purchases','','']}];
-  return paperHead('Journal Voucher','')+`<div style="margin-top:8px;color:#4a4741">No. JV/0033, dated 21-11-2026</div>`+ptable(['Particulars','Debit','Credit'],rows,['l','r','r']);
+  const v=VOUCHERS.find(x=>x.id==='JV/0032'), amt=v.dr[0][1];
+  const rows=[{c:[esc(LED[v.dr[0][0]].name),inr(amt),'']},{c:[esc(LED[v.cr[0][0]].name),'',inr(amt)]},{total:1,c:['Total',inr(amt),inr(amt)]},{c:['Narration: '+esc(v.narr),'','']}];
+  return paperHead('Journal Voucher','')+`<div style="margin-top:8px;color:#4a4741">No. ${v.id}, dated ${v.date}</div>`+ptable(['Particulars','Debit','Credit'],rows,['l','r','r']);
 }
 function addPrintPreview(id,crumbs,title,sub,paper,sel){
   const s=SCREENS[id], render=s.render, key=s.key, keys=s.keys, mount=s.mount;
@@ -2337,9 +2346,9 @@ function addPrintPreview(id,crumbs,title,sub,paper,sel){
   s.keys=function(st){ return st==='print-preview'?PRINT_KEYS:keys.call(this,st) };
   s.mount=function(st,p){ if(st==='print-preview')return; if(mount)return mount.call(this,st,p) };
 }
-addPrintPreview('sales-invoice',[['Home',hashFor('home')],['Sales invoice']],'Sales invoice SI/0412','Saved · Shree Ganesh Traders · 14 Nov 2026',printPaperInvoice,false);
-addPrintPreview('day-book',[['Home',hashFor('home')],['Day book']],'Day book','1 to 20 Nov 2026 · every voucher, in order',printPaperDayBook,true);
-addPrintPreview('journal',[['Home',hashFor('home')],['Journal']],'Journal JV/0033','Saved · 21 Nov 2026',printPaperJournal,false);
+addPrintPreview('sales-invoice',[['Home',hashFor('home')],['Sales invoice']],'Sales invoice SI/0405','Saved · Lakshmi Farm Supplies · 6 Nov 2026',printPaperInvoice,false);
+addPrintPreview('day-book',[['Home',hashFor('home')],['Day book']],'Day book','20 Nov 2026 · F2 another date · Alt+F2 a period',printPaperDayBook,true);
+addPrintPreview('journal',[['Home',hashFor('home')],['Journal']],'Journal JV/0032','Saved · 20 Nov 2026',printPaperJournal,false);
 { /* profit and loss: the settings states */
   const pl=SCREENS['profit-and-loss'], render=pl.render, key=pl.key, keys=pl.keys;
   pl.render=function(st,p){
