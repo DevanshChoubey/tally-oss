@@ -33,7 +33,7 @@ use ledgerly_model::seed_groups::reserved_groups;
 use ledgerly_model::{
     Address, BaseVoucherKind, Books, Company, EntityKind, Features, GstClassification,
     GstRegistration, Ledger, NegativeStockPolicy, PartyDetails, RegistrationType, ReservedGroup,
-    TaxDetails, TaxLedgerKind, Taxability, VoucherMode,
+    ReservedLedger, TaxDetails, TaxLedgerKind, Taxability, VoucherMode,
 };
 use time::OffsetDateTime;
 use time::macros::date;
@@ -431,4 +431,109 @@ fn a_missing_tax_ledger_shows_the_engine_s_reason_and_does_not_save() {
     assert!(u.reason.contains("CGST and SGST"), "{}", u.reason);
     s.save(&books.masters);
     assert!(s.error_text().is_some());
+}
+
+/// Runs frames until the engine has answered for the screen's invoice.
+fn wait_for_engine(s: &mut ItemInvoiceScreen, api: Api, books: &Books) {
+    let mut app = AppCtx {
+        books: Some(books.clone()),
+        api: Some(ApiWorker::spawn(api).unwrap()),
+        lock_date: None,
+        ai_tier: None,
+    };
+    let ctx = egui::Context::default();
+    for _ in 0..2000 {
+        frames(s, &mut app, &ctx, RawInput::default());
+        if !matches!(s.gst_status(&books.masters), GstStatus::NotComputedYet) {
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    panic!("the engine did not answer");
+}
+
+fn rows(s: &ItemInvoiceScreen, books: &Books) -> Vec<(String, String, String)> {
+    s.voucher_rows(&books.masters)
+        .into_iter()
+        .map(|r| (r.ledger, r.side.to_owned(), r.amount))
+        .collect()
+}
+
+fn row(ledger: &str, side: &str, amount: &str) -> (String, String, String) {
+    (ledger.to_owned(), side.to_owned(), amount.to_owned())
+}
+
+#[test]
+fn as_voucher_lists_the_party_first_as_a_dr_line_with_the_engine_s_figures() {
+    // provenance: derived. help.tallysolutions.com/sales-of-goods-services/ (read 2026-11-26):
+    // in As Voucher mode the party ledger is the first (Dr) line, the Sales ledger is a Cr line,
+    // and the GST ledgers follow. 10,000.00 at 18%, intra-state: CGST 900.00, SGST 900.00; the
+    // party is debited 11,800.00 (11,800.00 is whole rupees, so no round-off line). Amounts show
+    // with Indian grouping (the engine's figures, formatted).
+    let (api, books) = setup("s16_vch_rows.ledgerly");
+    let mut s = open(&books);
+    choose(&mut s, InvoiceMode::AsVoucher);
+    fill_voucher(&mut s, &books);
+    wait_for_engine(&mut s, api, &books);
+    assert_eq!(
+        rows(&s, &books),
+        vec![
+            row("Sharma Traders", "Dr", "11,800.00"),
+            row("Service Charges", "Cr", "10,000.00"),
+            row("Output CGST", "Cr", "900.00"),
+            row("Output SGST", "Cr", "900.00"),
+        ]
+    );
+}
+
+#[test]
+fn as_voucher_shows_no_figure_for_the_party_and_tax_lines_until_the_engine_answers() {
+    // provenance: derived from the rule "never a wrong number": before the engine has answered,
+    // the party and the tax ledgers have no amount (not 0.00); the typed Sales amount is the
+    // user's own and shows grouped.
+    let (_api, books) = setup("s16_vch_rows_wait.ledgerly");
+    let mut s = open(&books);
+    choose(&mut s, InvoiceMode::AsVoucher);
+    fill_voucher(&mut s, &books);
+    assert_eq!(
+        rows(&s, &books),
+        vec![
+            row("Sharma Traders", "Dr", ""),
+            row("Service Charges", "Cr", "10,000.00"),
+            row("Output CGST", "Cr", ""),
+            row("Output SGST", "Cr", ""),
+        ]
+    );
+}
+
+#[test]
+fn as_voucher_lists_the_engine_s_round_off_as_its_own_row() {
+    // provenance: derived. 10,000.50 at 18% intra-state: CGST = SGST = 10,000.50 x 9% = 900.045,
+    // rounded half up to 900.05 each; gross = 10,000.50 + 900.05 + 900.05 = 11,800.60, rounded to
+    // the rupee 11,801.00; the invoice rounding line is Cr 0.40 (11,801.00 Dr = 11,800.60 + 0.40).
+    let (mut api, _books) = setup("s16_vch_rows_round.ledgerly");
+    let round = Ledger {
+        reserved: Some(ReservedLedger::InvoiceRounding),
+        ..ledger("Round Off", ReservedGroup::IndirectExpenses)
+    };
+    let made = api.execute(Command::CreateLedger(round));
+    assert!(matches!(made, Ok(Outcome::Value(_))), "{made:?}");
+    let Ok(Outcome::Value(books)) = api.books() else {
+        panic!("the books did not load");
+    };
+    let mut s = open(&books);
+    choose(&mut s, InvoiceMode::AsVoucher);
+    fill_voucher(&mut s, &books);
+    "10000.50".clone_into(&mut s.draft_mut().particulars.first_mut().unwrap().amount_text);
+    wait_for_engine(&mut s, api, &books);
+    assert_eq!(
+        rows(&s, &books),
+        vec![
+            row("Sharma Traders", "Dr", "11,801.00"),
+            row("Service Charges", "Cr", "10,000.50"),
+            row("Output CGST", "Cr", "900.05"),
+            row("Output SGST", "Cr", "900.05"),
+            row("Round Off", "Cr", "0.40"),
+        ]
+    );
 }

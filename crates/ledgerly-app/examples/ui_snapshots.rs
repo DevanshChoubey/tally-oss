@@ -2231,7 +2231,7 @@ fn s13_shots() -> Vec<Shot> {
         .press(&[(Key::Tab, NONE), SELECT_ALL])
         .type_text("20-11-2026")
         .press(&[(Key::Enter, NONE)])
-        .seek_by(Key::K, NONE, "SI/0412")
+        .seek_by(Key::K, NONE, "Shree Ganesh Traders")
         .press(&[(Key::Enter, NONE)])
         .expect("SI/0412", None)
         .press(&[(Key::P, Modifiers::COMMAND)])

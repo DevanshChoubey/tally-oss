@@ -430,12 +430,12 @@ struct Acc {
     igst: Decimal,
 }
 
-fn group_lines(
+/// The engine's lines gathered by item HSN code and total rate, heads summed unrounded.
+fn accumulate(
     books: &Books,
     v: &Voucher,
-    gst: &StoredGst,
     breakup: &ledgerly_gst::compute::GstBreakup,
-) -> Option<Vec<TaxGroup>> {
+) -> Option<Vec<Acc>> {
     let mut accs: Vec<Acc> = Vec::new();
     for line in &breakup.lines {
         let LineSource::Inventory { index } = line.source else {
@@ -452,27 +452,37 @@ fn group_lines(
         let at = accs
             .iter()
             .position(|a| a.hsn == hsn && a.total_rate == line.rate_percent);
-        let acc = match at {
-            Some(at) => accs.get_mut(at)?,
-            None => {
-                accs.push(Acc {
-                    hsn: hsn.to_owned(),
-                    total_rate: line.rate_percent,
-                    lines: Vec::new(),
-                    taxable: Paise::ZERO,
-                    cgst: Decimal::ZERO,
-                    sgst: Decimal::ZERO,
-                    igst: Decimal::ZERO,
-                });
-                accs.last_mut()?
-            }
+        let at = if let Some(at) = at {
+            at
+        } else {
+            accs.push(Acc {
+                hsn: hsn.to_owned(),
+                total_rate: line.rate_percent,
+                lines: Vec::new(),
+                taxable: Paise::ZERO,
+                cgst: Decimal::ZERO,
+                sgst: Decimal::ZERO,
+                igst: Decimal::ZERO,
+            });
+            accs.len().checked_sub(1)?
         };
+        let acc = accs.get_mut(at)?;
         acc.lines.push(index);
         acc.taxable = acc.taxable.checked_add(line.taxable).ok()?;
         acc.cgst = acc.cgst.checked_add(line.cgst)?;
         acc.sgst = acc.sgst.checked_add(line.sgst.checked_add(line.utgst)?)?;
         acc.igst = acc.igst.checked_add(line.igst)?;
     }
+    Some(accs)
+}
+
+fn group_lines(
+    books: &Books,
+    v: &Voucher,
+    gst: &StoredGst,
+    breakup: &ledgerly_gst::compute::GstBreakup,
+) -> Option<Vec<TaxGroup>> {
+    let accs = accumulate(books, v, breakup)?;
     let head_rate = |kinds: &[TaxLedgerKind], total: Decimal, half: bool| -> Option<Rate> {
         gst.lines
             .iter()

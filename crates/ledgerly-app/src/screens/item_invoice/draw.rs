@@ -9,7 +9,7 @@
 //! input, shown as typed.
 
 use super::compute;
-use super::draft::line_amount;
+use super::draft::{line_amount, particular_side};
 use super::extras::BalanceShown;
 use super::keys::{Prompt, read_keys};
 use super::with_engine_lines;
@@ -34,7 +34,7 @@ use crate::{AppCtx, Screen, ScreenAction};
 use egui::{Frame, Id, Margin, Rect, Response, RichText, Ui};
 use ledgerly_api::{Command, is_gst_tax_ledger};
 use ledgerly_core::format::amount_in_words;
-use ledgerly_core::{LedgerId, StateCode};
+use ledgerly_core::{DrCr, LedgerId, StateCode};
 use ledgerly_model::{Masters, Voucher};
 
 /// The one-line purpose under the page title of an item invoice (index.html:1282). The screen asks
@@ -113,12 +113,42 @@ const LINE_COLS_DISCOUNT: [Col; 10] = [
     Col::num("Amount", 140.0),
 ];
 
+/// Where an as-voucher row comes from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RowAt {
+    /// The party, read from the header.
+    Party,
+    /// Typed particular `n` (a blank entry row included).
+    Typed(usize),
+    /// A line only the engine adds: the invoice round-off.
+    Engine,
+}
+
+/// One line of an as-voucher entry as the table lists it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VoucherRow {
+    /// The ledger's name.
+    pub ledger: String,
+    /// `Dr` or `Cr`.
+    pub side: &'static str,
+    /// The amount with Indian grouping; empty until the engine has answered for a figure it owns.
+    pub amount: String,
+}
+
 /// The particulars table of an accounting invoice.
 const PARTICULAR_COLS: [Col; 4] = [
     Col::text("#", 36.0),
     Col::rest("Particulars"),
     Col::num("Amount", 140.0),
     Col::num("GST", 60.0),
+];
+
+/// The lines table of an as-voucher entry: the side column the entry mode is named for.
+const VOUCHER_COLS: [Col; 4] = [
+    Col::text("#", 36.0),
+    Col::rest("Ledger"),
+    Col::text("Dr / Cr", 70.0),
+    Col::num("Amount", 170.0),
 ];
 
 /// Where a text field sits in the focus order and what it says when empty.
@@ -1218,6 +1248,90 @@ impl ItemInvoiceScreen {
         rates
     }
 
+    /// The lines of an as-voucher entry as the table lists them: the party first on the side
+    /// opposite the typed lines, each typed ledger, and the engine's round-off line after the
+    /// last typed one. Every figure the engine owns (the party, a GST ledger, the round-off) is
+    /// the engine's, formatted, and empty until it has answered for exactly this invoice.
+    #[must_use]
+    pub fn voucher_rows(&self, masters: &Masters) -> Vec<VoucherRow> {
+        self.voucher_display(masters)
+            .into_iter()
+            .filter(|(at, row)| !matches!(at, RowAt::Typed(_)) || !row.ledger.is_empty())
+            .map(|(_, row)| row)
+            .collect()
+    }
+
+    /// The as-voucher rows with where each comes from, the blank entry rows included.
+    fn voucher_display(&self, masters: &Masters) -> Vec<(RowAt, VoucherRow)> {
+        let side_text = |side: DrCr| match side {
+            DrCr::Dr => "Dr",
+            DrCr::Cr => "Cr",
+        };
+        let typed_side = side_text(particular_side(self.draft.kind));
+        let party_side = side_text(match particular_side(self.draft.kind) {
+            DrCr::Dr => DrCr::Cr,
+            DrCr::Cr => DrCr::Dr,
+        });
+        let block = self.shown_block(masters);
+        let engine_amount = |ledger: LedgerId| {
+            block
+                .and_then(|b| b.ledger_lines.iter().find(|l| l.ledger == ledger))
+                .map(|l| format::amount(l.amount.amount))
+        };
+        let name = |id: Option<LedgerId>, text: &str| {
+            id.and_then(|id| masters.ledgers.get(&id))
+                .map_or_else(|| text.trim().to_owned(), |l| l.name.clone())
+        };
+        let mut out = vec![(
+            RowAt::Party,
+            VoucherRow {
+                ledger: name(self.draft.party, &self.draft.party_text),
+                side: party_side,
+                amount: self.draft.party.and_then(engine_amount).unwrap_or_default(),
+            },
+        )];
+        let last_typed = self
+            .draft
+            .particulars
+            .iter()
+            .rposition(|r| !r.is_blank())
+            .unwrap_or(0);
+        for (i, row) in self.draft.particulars.iter().enumerate() {
+            let engine_owns = row.ledger.is_some_and(|l| is_gst_tax_ledger(masters, l));
+            let amount = match row.ledger {
+                Some(l) if engine_owns => engine_amount(l).unwrap_or_default(),
+                _ => format::grouped_text(&row.amount_text)
+                    .unwrap_or_else(|| row.amount_text.trim().to_owned()),
+            };
+            out.push((
+                RowAt::Typed(i),
+                VoucherRow {
+                    ledger: name(row.ledger, &row.ledger_text),
+                    side: typed_side,
+                    amount,
+                },
+            ));
+            if i == last_typed {
+                let known = |l: LedgerId| {
+                    Some(l) == self.draft.party
+                        || self.draft.particulars.iter().any(|r| r.ledger == Some(l))
+                };
+                let round = block.and_then(|b| b.ledger_lines.iter().find(|l| !known(l.ledger)));
+                if let Some(line) = round {
+                    out.push((
+                        RowAt::Engine,
+                        VoucherRow {
+                            ledger: name(Some(line.ledger), ""),
+                            side: side_text(line.amount.side),
+                            amount: format::amount(line.amount.amount),
+                        },
+                    ));
+                }
+            }
+        }
+        out
+    }
+
     /// The item table, or the particulars table of an accounting invoice.
     #[expect(
         clippy::too_many_lines,
@@ -1332,7 +1446,96 @@ impl ItemInvoiceScreen {
         self.shown.heads = cols.iter().map(|c| c.label).zip(rects).collect();
     }
 
+    /// The as-voucher lines: the party first, each typed ledger, the engine's round-off. The
+    /// party row and the engine's round-off are read-only; a GST ledger's amount is the engine's.
+    fn draw_voucher_lines(&mut self, ui: &mut Ui, base: Id, masters: &Masters, cx: &mut Cx<'_>) {
+        let display = self.voucher_display(masters);
+        let focused_row = match self.focus {
+            Field::Ledger(i) | Field::LedgerAmount(i) => Some(i),
+            Field::Date
+            | Field::Number
+            | Field::Party
+            | Field::Place
+            | Field::Account
+            | Field::Reference
+            | Field::ReferenceDate
+            | Field::Item(_)
+            | Field::Qty(_)
+            | Field::Rate(_)
+            | Field::Discount(_)
+            | Field::Amount(_)
+            | Field::BillKind(_)
+            | Field::BillName(_)
+            | Field::BillAmount(_)
+            | Field::Narration => None,
+        };
+        let parts = &mut self.draft.particulars;
+        let rects = sheet::lines(
+            ui,
+            &VOUCHER_COLS,
+            display.len(),
+            |r| {
+                display.get(r).is_some_and(|(at, _)| match at {
+                    RowAt::Typed(i) => focused_row == Some(*i),
+                    RowAt::Party | RowAt::Engine => false,
+                })
+            },
+            |ui, r, c| {
+                let Some((at, shown)) = display.get(r) else {
+                    return;
+                };
+                match (c, at) {
+                    (0, _) => cell_text(ui, &r.saturating_add(1).to_string(), false),
+                    (1, RowAt::Typed(i)) => {
+                        let Some(cells) = parts.get_mut(*i) else {
+                            return;
+                        };
+                        let s = FieldSpec {
+                            id: base.with(("ledger", *i)),
+                            field: Field::Ledger(*i),
+                            name: "Ledger",
+                            hint: "Next ledger, or Enter on empty to finish",
+                        };
+                        text_field(ui, cx, &s, &mut cells.ledger_text, CELL);
+                    }
+                    (1, RowAt::Party | RowAt::Engine) => cell_text(ui, &shown.ledger, true),
+                    (2, _) => {
+                        if !shown.ledger.is_empty() {
+                            cell_text(ui, shown.side, false);
+                        }
+                    }
+                    (3, RowAt::Typed(i)) => {
+                        let Some(cells) = parts.get_mut(*i) else {
+                            return;
+                        };
+                        // Only a line the user is on says what to type; a GST ledger's amount is
+                        // the engine's, so it shows that.
+                        let on_it = focused_row == Some(*i);
+                        let s = FieldSpec {
+                            id: base.with(("ledger-amt", *i)),
+                            field: Field::LedgerAmount(*i),
+                            name: "Amount",
+                            hint: if on_it { "Amount" } else { "" },
+                        };
+                        let engine_owns = cells
+                            .ledger
+                            .is_some_and(|l| is_gst_tax_ledger(masters, l));
+                        let text = Some(shown.amount.clone())
+                            .filter(|a| !a.is_empty() && (engine_owns || !on_it));
+                        text_field_shown(ui, cx, &s, &mut cells.amount_text, CELL_NUM, text);
+                    }
+                    (3, RowAt::Party | RowAt::Engine) => cell_text(ui, &shown.amount, true),
+                    _ => {}
+                }
+            },
+        );
+        self.shown.heads = VOUCHER_COLS.iter().map(|c| c.label).zip(rects).collect();
+    }
+
     fn draw_particulars(&mut self, ui: &mut Ui, base: Id, masters: &Masters, cx: &mut Cx<'_>) {
+        if self.draft.mode == InvoiceMode::AsVoucher {
+            return self.draw_voucher_lines(ui, base, masters, cx);
+        }
         let rates = self.particular_rates(masters);
         let focused_row = match self.focus {
             Field::Ledger(i) | Field::LedgerAmount(i) => Some(i),

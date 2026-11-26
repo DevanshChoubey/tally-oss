@@ -85,7 +85,7 @@ use std::str::FromStr;
 use thiserror::Error;
 
 pub use self::draft::{BillRow, InvoiceDraft, InvoiceRow, ParticularRow};
-pub use self::draw::{LineShown, place_note_parts, tax_rows};
+pub use self::draw::{LineShown, VoucherRow, place_note_parts, tax_rows};
 pub use self::picker::{ItemHit, search_items};
 
 /// How many type-ahead entries are listed at most.

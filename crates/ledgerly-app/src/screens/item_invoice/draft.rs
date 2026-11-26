@@ -115,7 +115,7 @@ impl ParticularRow {
 /// The side the particulars of `kind` are posted on: a sale credits its income ledger, a
 /// purchase debits its expense ledger, a credit note (a sales return) debits and a debit note (a
 /// purchase return) credits. The engine posts the tax lines on the same side.
-fn particular_side(kind: InvoiceKind) -> DrCr {
+pub(super) fn particular_side(kind: InvoiceKind) -> DrCr {
     match kind {
         InvoiceKind::Sales | InvoiceKind::DebitNote => DrCr::Cr,
         InvoiceKind::Purchase | InvoiceKind::CreditNote => DrCr::Dr,
@@ -387,8 +387,7 @@ impl InvoiceDraft {
             let mut chars = text.chars();
             let head: String = chars
                 .next()
-                .map(|c| c.to_uppercase().collect())
-                .unwrap_or_default();
+                .map_or_else(String::new, |c| c.to_uppercase().collect());
             let mut out = format!("{head}{}", chars.as_str());
             if !out.ends_with('.') {
                 out.push('.');

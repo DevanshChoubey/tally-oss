@@ -38,7 +38,7 @@ fn texts(api: &Api, number: &str) -> Vec<String> {
         .flat_map(|p| p.items.iter())
         .filter_map(|i| match i {
             PageItem::Text { text, .. } => Some(text.clone()),
-            _ => None,
+            PageItem::Rule { .. } | PageItem::Fill { .. } => None,
         })
         .collect()
 }

@@ -20,7 +20,7 @@
 use std::time::{Duration, Instant};
 
 use ledgerly_api::{Api, Command};
-use ledgerly_app::screens::item_invoice::{Field, ItemInvoiceScreen};
+use ledgerly_app::screens::item_invoice::ItemInvoiceScreen;
 use ledgerly_app::worker::ApiWorker;
 use ledgerly_app::{AppCtx, Screen};
 use ledgerly_core::{

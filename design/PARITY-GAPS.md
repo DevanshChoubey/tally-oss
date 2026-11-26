@@ -167,8 +167,8 @@ Classes:
 - **DELIBERATE** Export of the reconciliation statement (Ctrl+E on the Statement tab) writes CSV or
   XLSX through the report exporter. The capture's save dialog is scripted to a folder of the
   capture run, so the notice names that path, not the mock's /home/asha/Documents.
-- **DELIBERATE** a long line ("... cheque 004512") is clipped by the amount column where the mock
-  lets it run on.
+- **DELIBERATE** a long line ("... cheque 004512") wraps inside its column and the row grows to fit
+  (the mock lets it run on under the amount column). Nothing is clipped or overlapped.
 - **DELIBERATE** the card beside the statement says Reconciled or Not yet reconciled from the engine's
   Difference line being nil, in its own words ("The imported statement agrees with the balance as per
   bank"); the mock's "once the listed lines are posted" and "Review suggestions" button are not
@@ -223,15 +223,17 @@ Classes:
   a card under the mode button, opening on the current mode, Up and Down, Enter or a click. A note
   is offered Item and Accounting only (the engine taxes an as-voucher entry for sales and purchase
   invoices). Accounting and as voucher share their ledger lines.
-- **DELIBERATE** the party of an as-voucher entry stays in the header. The pages say the user enters
-  the party ledger on the Dr line (help.tallysolutions.com/sales-of-goods-services/, read 2026-11-26)
-  and the Sales ledger on the Cr line; here the header's Party and Place of supply come first because
-  the engine needs them to know the supply and the GST heads before any ledger line, and the header
-  is shared by the three modes. The Sales ledger and the GST ledgers are typed as lines, as the pages
-  say.
-- **DELIBERATE** As voucher shows Dr and Cr, not By and To (the pages offer both), asks the party in
-  the header and lists only the lines the user typed; the engine's party line, tax amounts and round-off
-  show in the tax box and are posted, not listed as rows as the mock's `sales-invoice.as-voucher` does.
+- **DELIBERATE** the party of an as-voucher entry is typed in the header, where the three modes share
+  it, and the table lists it as line 1 on the Dr side (the pages put the party ledger on the Dr line,
+  help.tallysolutions.com/sales-of-goods-services/, read 2026-11-26; the engine needs the party and
+  the place of supply before any ledger line, to know the supply and the GST heads). The line is
+  read-only: edit the header's Party to change it. The Sales ledger and the GST ledgers are typed as
+  lines, as the pages say.
+- **DELIBERATE** As voucher shows Dr and Cr, not By and To (the pages offer both). Its table lists the
+  party (Dr), each typed ledger, and the engine's invoice round-off line when there is one, as the
+  mock's `sales-invoice.as-voucher` does. Every figure of the party, a GST ledger and the round-off
+  is the engine's, in Indian grouping, and empty until the engine has answered. A typed amount
+  keeps its right edge a little left of the engine's figures (it is an input).
 - **DELIBERATE** the pages say nothing on the GST ledger lines of an as-voucher entry, so the rule is
   our choice, built on the GST sales and GST-not-calculated pages (read 2026-11-26): the user picks the
   GST ledgers, they must be exactly the heads of the supply (CGST and SGST, CGST and UTGST, or IGST),
@@ -250,6 +252,9 @@ Classes:
   other rule, so the list is not narrowed.
 - **DELIBERATE** the place of supply is not filled from the party: the same page has the user set it
   on the Party Details screen (it is prefilled only for SEZ sales, which are not built).
+- **DELIBERATE** while a line is invalid Save is disabled and the error is a red box with an alert
+  icon naming the line. The valid lines keep the engine's amount and rate (the engine is asked about
+  them alone); the tax box shows dashes, not figures for the half-entered invoice (never a wrong number).
 - **NOT BUILT** the item list shows name and unit only; the free-text item row of
   `sales-invoice.validation-error` is not offered.
 - **DELIBERATE** the period-locked banner reads "lock date"; the date and Sales ledger are bare
@@ -325,15 +330,16 @@ Credit (`ledgerly_reports::print_text` places the engine's figures only).
 - **NOT BUILT** printing to a device; a UPI QR (no UPI address is held); a voucher of any other
   kind than sales, credit note, debit note, payment, receipt, journal, contra and purchase
   (memorandum, optional and cancelled vouchers answer Unsupported with the reason).
-- **NOT BUILT** an invoice with several HSN codes or several tax rates: the stored GST lines hold
-  neither, so the engine answers Unsupported rather than guess an item's code from the master.
-  The sample's SI/0412 is such an invoice, so `sales-invoice.print-preview` shows SI/0405 (one
-  item, one code, one rate) and the mock's state follows.
+- **DELIBERATE** an invoice with several HSN codes prints one tax-summary row for each code and rate:
+  the screen's engine answer groups the lines by the item's HSN and rate, sums the unrounded heads
+  and rounds once, and the print refuses (Unsupported) when an item has no code or the grouped rows
+  do not add up to the stored GST. `sales-invoice.print-preview` shows SI/0412, as the mock's state
+  does again.
 - **DELIBERATE** the preview has no zoom; it scrolls. The app's paper is the full A4 or A5 page
   at the width of the pane, so a short document sits at the top of a tall white page; the mock's
-  paper is cut to its content. The voucher preview's page head reads "Voucher SI/0405" and its
+  paper is cut to its content. The voucher preview's page head reads "Voucher SI/0412" and its
   crumbs "Day book" (the screen the voucher was opened from), where the mock reads "Sales invoice
-  SI/0405" under "Sales invoice".
+  SI/0412" under "Sales invoice".
 - **DELIBERATE** the printed invoice, day book and voucher pages are the engine's own layout
   (company address block, tax summary by HSN code, Particulars/Date/Voucher type/Voucher no./
   Amount/Narration); the mock's paper was written to the same content and wording.
