@@ -1171,6 +1171,58 @@ fn paint_3b_line(ui: &mut Ui, width: f32, line: &Line3b) {
             let place = CellPlace::Left(table::CELL_PAD_X);
             table::paint_cell_text(ui, rect, 1.0, label, bold, t.text, place);
         }
+        Line3b::SubSourced { label, source } => {
+            let (rect, _) = ui.allocate_exact_size(vec2(width, T_ROW_HEIGHT), Sense::hover());
+            let state = RowState {
+                selected: false,
+                hovered: false,
+                sub: true,
+            };
+            table::paint_row(ui, rect, state);
+            let bold = bold_font(ui, TEXT_BODY);
+            let place = CellPlace::Left(table::CELL_PAD_X);
+            table::paint_cell_text(ui, rect, 1.0, label, bold.clone(), t.text, place);
+            let text_w = ui
+                .painter()
+                .layout_no_wrap((*label).to_owned(), bold, t.text)
+                .size()
+                .x;
+            let chip_rect = Rect::from_min_size(
+                egui::pos2(
+                    rect.left() + table::CELL_PAD_X + text_w + CHIP_GAP,
+                    rect.top() + (T_ROW_HEIGHT - CHIP_H) / 2.0,
+                ),
+                vec2(chip_width(ui, source), CHIP_H),
+            );
+            let mut child = ui.new_child(
+                UiBuilder::new()
+                    .max_rect(chip_rect)
+                    .layout(Layout::left_to_right(Align::Center)),
+            );
+            source_chip(&mut child, source);
+        }
+        Line3b::Total {
+            label,
+            taxable,
+            tax,
+        } => {
+            let (rect, _) = ui.allocate_exact_size(vec2(width, T_ROW_HEIGHT), Sense::hover());
+            let state = RowState {
+                selected: false,
+                hovered: false,
+                sub: true,
+            };
+            table::paint_row(ui, rect, state);
+            let bold = bold_font(ui, TEXT_BODY);
+            let [label_rect, figures @ ..] = gstr3b_columns(rect);
+            let place = CellPlace::Left(table::CELL_PAD_X);
+            table::paint_cell_text(ui, label_rect, 1.0, label, bold.clone(), t.text, place);
+            let texts = std::iter::once(amount_cell(Some(*taxable)))
+                .chain(tax.iter().map(|p| amount_cell(Some(*p))));
+            for (r, text) in figures.into_iter().zip(texts) {
+                table::paint_cell_text(ui, r, 1.0, &text, bold.clone(), t.text, CellPlace::Right);
+            }
+        }
         Line3b::Row {
             label,
             source,
@@ -1350,16 +1402,23 @@ const NEXT_STEPS: [&str; 4] = [
 ];
 
 /// The "Read this before filing" lines of GSTR-3B. They follow the engine's module notes in
-/// `ledgerly-gst/src/gstr3b.rs` (what is worked out, which conditions are not checked, and the
-/// reverse-charge rule), not the mock's text, which the engine does not match.
-const GSTR3B_NOTES: [&str; 5] = [
-    "Ledgerly does not file GSTR-3B. It works out tables 3.1(a) and 4(A)(5) from your books.",
+/// `ledgerly-gst/src/gstr3b.rs` and `ledgerly-gst/src/setoff.rs` (what is worked out, which
+/// conditions are not checked, the reverse-charge rule and the order of set-off), not the mock's
+/// text, which the engine does not match. Set-off: CGST Act s.49(5) and Rule 88A (read
+/// 2026-11-26); cess credit pays cess only (Compensation Act s.11(2)).
+const GSTR3B_NOTES: [&str; 6] = [
+    "Ledgerly does not file GSTR-3B. It works out tables 3.1(a), 4(A)(5) and the payment of tax \
+     (6.1) from your books and the 2B file.",
     "Table 4(A)(5) is the credit your books could claim. It is not checked against GSTR-2B, and \
      the conditions of CGST Act s.16(2) and s.16(4) are not checked.",
-    "Tax on blocked or ineligible purchase lines is shown apart and is never added to 4(A)(5).",
-    "Purchases under reverse charge are in neither 3.1(a) nor 4(A)(5).",
-    "Set-off against the liability and the credit accepted in IMS are not worked out yet, so no \
-     cash payable figure is shown.",
+    "Only credit you accepted in IMS pays tax. Records with no action are shown apart and are \
+     not used.",
+    "Set-off: IGST credit pays IGST first, then CGST and SGST. CGST credit pays CGST, then IGST. \
+     SGST credit pays SGST, then IGST. Cess credit pays cess only.",
+    "Credit left in your electronic credit ledger from earlier months is not known to Ledgerly, \
+     so the cash figure assumes none.",
+    "Purchases under reverse charge are in neither 3.1(a) nor 4(A)(5), and tax on blocked or \
+     ineligible purchase lines is never added to 4(A)(5).",
 ];
 
 /// Asks where to save the GSTR-1 JSON and writes it there. Cancelling writes nothing. The dialog

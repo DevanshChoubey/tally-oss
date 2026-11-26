@@ -616,6 +616,13 @@ impl GstScreen {
         parts.join(" \u{00B7} ")
     }
 
+    /// The GSTR-3B table's lines, as the engine's working and payment of tax gave them; empty
+    /// until they are loaded.
+    #[must_use]
+    pub fn gstr3b_lines(&self) -> &[look::Line3b] {
+        &self.lines3b
+    }
+
     /// The reconciliation rows on show, as the engine gave them; empty until they are loaded.
     #[must_use]
     pub fn recon_rows(&self) -> &[ReconRow] {

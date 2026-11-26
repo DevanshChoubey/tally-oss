@@ -13,8 +13,8 @@
 use std::collections::VecDeque;
 
 use ledgerly_api::{
-    Api, Bucket as ApiBucket, BucketedVoucher, Gstr1Return, Gstr2bReconciliation, Gstr3bWorking,
-    MatchLevel, ReconState,
+    Api, Bucket as ApiBucket, BucketedVoucher, Gstr1Return, Gstr2bReconciliation, Gstr3bPayment,
+    Gstr3bWorking, MatchLevel, ReconState,
 };
 use ledgerly_core::{Date, Gstin, Outcome, Paise, Period, Unsupported};
 
@@ -47,6 +47,7 @@ pub struct Figures {
 struct GstAnswer {
     gstr1: Result<Outcome<Gstr1Return>, String>,
     gstr3b: Result<Outcome<Gstr3bWorking>, String>,
+    payment: Result<Outcome<Gstr3bPayment>, String>,
     recon: Result<Outcome<Gstr2bReconciliation>, String>,
 }
 
@@ -95,6 +96,7 @@ fn fetch(api: &Api, gstin: &Gstin, period: Period) -> GstAnswer {
     GstAnswer {
         gstr1: api.gstr1(gstin, period).map_err(|e| e.to_string()),
         gstr3b: api.gstr3b(gstin, period).map_err(|e| e.to_string()),
+        payment: api.gstr3b_payment(gstin, period).map_err(|e| e.to_string()),
         recon: api
             .gstr2b_reconciliation(gstin, period)
             .map_err(|e| e.to_string()),
@@ -450,7 +452,17 @@ impl GstScreen {
             Ok(Outcome::Value(working)) => {
                 self.set_gstr3b(Feed::Loaded(Vec::new()));
                 self.figures3b = gstr3b_figures(&working);
-                self.lines3b = super::look::gstr3b_lines(&working);
+                let payment = match answer.payment {
+                    Ok(p) => p,
+                    Err(message) => Outcome::unsupported(
+                        "Payment of tax",
+                        format!("it could not be read: {message}"),
+                    ),
+                };
+                if let Some(note) = super::look::payment_note(&payment) {
+                    self.figures3b.notes.push(note);
+                }
+                self.lines3b = super::look::gstr3b_lines_with_payment(&working, &payment);
             }
             Ok(Outcome::Unsupported(u)) => {
                 self.set_gstr3b(Feed::Unsupported(u));
