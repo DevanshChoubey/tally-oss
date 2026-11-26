@@ -111,10 +111,10 @@ pub struct PartyBill {
 }
 
 /// A tax ledger of the masters or of a voucher.
-struct TaxLedger {
-    id: LedgerId,
-    kind: TaxLedgerKind,
-    rate: Option<Rate>,
+pub(crate) struct TaxLedger {
+    pub(crate) id: LedgerId,
+    pub(crate) kind: TaxLedgerKind,
+    pub(crate) rate: Option<Rate>,
 }
 
 impl Api {
@@ -133,6 +133,9 @@ impl Api {
             Outcome::Unsupported(u) => return Ok(Outcome::Unsupported(u)),
         };
         let pack = load_pack(BUNDLED_RATE_PACK)?;
+        if v.mode == VoucherMode::AsVoucher {
+            return Ok(crate::as_voucher::breakup(books, v, &pack)?);
+        }
         Ok(compute_for(books, v, &pack)?)
     }
 
@@ -160,6 +163,10 @@ impl Api {
             Outcome::Value(books) => books,
             Outcome::Unsupported(u) => return Ok(Outcome::Unsupported(u)),
         };
+        let pack = load_pack(BUNDLED_RATE_PACK)?;
+        if v.mode == VoucherMode::AsVoucher {
+            return Ok(crate::as_voucher::invoice(books, v, &pack, bills)?);
+        }
         match v.mode {
             VoucherMode::ItemInvoice if v.ledger_lines.is_empty() => {}
             VoucherMode::AccountingInvoice if v.inventory_lines.is_empty() => {}
@@ -170,12 +177,17 @@ impl Api {
                 ));
             }
         }
-        let pack = load_pack(BUNDLED_RATE_PACK)?;
         let breakup = match compute_for(books, v, &pack)? {
             Outcome::Value(b) => b,
             Outcome::Unsupported(u) => return Ok(Outcome::Unsupported(u)),
         };
-        Ok(build_invoice(books, v, breakup, bills)?)
+        Ok(build_invoice(
+            books,
+            v,
+            breakup,
+            bills,
+            &all_tax_ledgers(books),
+        )?)
     }
 
     /// The bills of `ledger` still open on `as_of` (the list of the payment and receipt screens'
@@ -242,7 +254,7 @@ impl Api {
 }
 
 /// Runs the engine for `v` on the rule set of its time of supply.
-fn compute_for(
+pub(crate) fn compute_for(
     books: &Books,
     v: &Voucher,
     pack: &RulePack,
@@ -256,7 +268,7 @@ fn compute_for(
 }
 
 /// The side the tax lines of a voucher kind are posted on, or `None` for a kind that is not taxed.
-fn tax_side(base: BaseVoucherKind) -> Option<DrCr> {
+pub(crate) fn tax_side(base: BaseVoucherKind) -> Option<DrCr> {
     match base {
         BaseVoucherKind::Sales | BaseVoucherKind::DebitNote => Some(DrCr::Cr),
         BaseVoucherKind::Purchase | BaseVoucherKind::CreditNote => Some(DrCr::Dr),
@@ -278,7 +290,7 @@ fn tax_side(base: BaseVoucherKind) -> Option<DrCr> {
 }
 
 /// `true` for the tax kinds the GST engine computes.
-fn is_gst_head(kind: TaxLedgerKind) -> bool {
+pub(crate) fn is_gst_head(kind: TaxLedgerKind) -> bool {
     match kind {
         TaxLedgerKind::Cgst
         | TaxLedgerKind::Sgst
@@ -659,11 +671,12 @@ fn format_rupees(p: Paise) -> String {
     clippy::too_many_lines,
     reason = "one pass that builds the lines, the per-rate rows and the party bills from one breakup"
 )]
-fn build_invoice(
+pub(crate) fn build_invoice(
     books: &Books,
     v: &Voucher,
     breakup: GstBreakup,
     bills: &[PartyBill],
+    ledgers: &[TaxLedger],
 ) -> Result<Outcome<InvoiceGst>, GstError> {
     let round_ledger = if breakup.round_off.is_zero() {
         None
@@ -710,8 +723,7 @@ fn build_invoice(
         Outcome::Value(accounts) => accounts,
         Outcome::Unsupported(u) => return Ok(Outcome::Unsupported(u)),
     };
-    let ledgers = all_tax_ledgers(books);
-    let Some(stored) = stored_gst(&breakup, &ledgers)? else {
+    let Some(stored) = stored_gst(&breakup, ledgers)? else {
         return Ok(Outcome::unsupported(
             "choice of tax ledgers",
             "each tax head needs exactly one ledger of its kind (or one ledger of that kind with the head's rate); keep one CGST, SGST/UTGST and IGST ledger, or give rate-specific ledgers",
@@ -912,7 +924,7 @@ fn particulars(
 }
 
 /// Every GST tax ledger of the masters.
-fn all_tax_ledgers(books: &Books) -> Vec<TaxLedger> {
+pub(crate) fn all_tax_ledgers(books: &Books) -> Vec<TaxLedger> {
     books
         .masters
         .ledgers

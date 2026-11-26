@@ -5,6 +5,7 @@
 //! settings. Every figure comes from the engine or the report engines (spec section 4).
 
 mod ai;
+mod as_voucher;
 mod balance;
 mod bank;
 mod command;
@@ -20,6 +21,7 @@ mod maintenance;
 mod nudges;
 mod print;
 mod recon;
+mod return_against;
 mod report;
 mod review;
 mod search;
@@ -65,6 +67,7 @@ pub use report::ExportFormat;
 pub use search::{MatchedOn, SearchHit};
 pub use tally_import::ImportSummary;
 pub use voucher_audit::{ChangeKind, VoucherAudit, VoucherChange, VoucherDetail};
+pub use return_against::{InvoicedAgainst, InvoicedLine};
 pub use voucher_gst::{InvoiceGst, PartyBill, RateRow};
 
 pub use ledgerly_bank::brs::Brs;
