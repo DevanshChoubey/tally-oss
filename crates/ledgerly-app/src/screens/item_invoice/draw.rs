@@ -18,6 +18,7 @@ use super::{
     UiEvent, place_label,
 };
 use crate::screen::KeyHint;
+use crate::screens::entry_print::PrintKey;
 use crate::screens::voucher_entry::parse_entry_date;
 use crate::screens::voucher_sheet::{self as sheet, Col, InputSpec, Look, Total};
 use crate::shell::submit::{self, CommandReply};
@@ -2361,6 +2362,9 @@ impl Screen for ItemInvoiceScreen {
     }
 
     fn subtitle(&self) -> Option<String> {
+        if let Some(saved) = self.entry_print.subtitle() {
+            return Some(saved.to_owned());
+        }
         let note = match self.draft.kind {
             InvoiceKind::Sales | InvoiceKind::Purchase => None,
             InvoiceKind::CreditNote => Some("Credit note"),
@@ -2387,6 +2391,13 @@ impl Screen for ItemInvoiceScreen {
     }
 
     fn keys(&self) -> Vec<KeyHint> {
+        if self.entry_print.preview().is_some() {
+            // index.html:2272: the preview's key bar.
+            return vec![
+                KeyHint::new("Ctrl+P", "Save as PDF"),
+                KeyHint::new("Esc", "Close"),
+            ];
+        }
         if self.confirm_discard {
             return vec![KeyHint::new("Y", "Discard"), KeyHint::new("N", "Keep it")];
         }
@@ -2434,6 +2445,9 @@ impl Screen for ItemInvoiceScreen {
         // A save that is out is polled first; the form is drawn either way, taking no input while
         // it waits.
         self.wait_for_post(ui);
+        if self.draw_print(ui, ctx) {
+            return ScreenAction::Stay;
+        }
         self.lock_date = ctx.lock_date;
         self.drive_compute(ui, ctx);
         self.drive_extras(ui, ctx);
@@ -2462,6 +2476,33 @@ fn no_books_text(ctx: &AppCtx) -> &'static str {
 }
 
 impl ItemInvoiceScreen {
+    /// Ctrl+P and the print preview. `true` while the preview (or its busy note) takes the
+    /// screen, so the sheet is not drawn and takes no key.
+    fn draw_print(&mut self, ui: &mut Ui, ctx: &AppCtx) -> bool {
+        if let Some(note) = self.entry_print.tick(ctx) {
+            self.notice = Some(match note {
+                crate::screens::report_view::Notice::Info(s) => Notice::Info(s),
+                crate::screens::report_view::Notice::Error(s) => Notice::Error(s),
+            });
+        }
+        let busy = self.posting.is_some()
+            || self.creating.is_some()
+            || self.create.is_some()
+            || self.confirming_save
+            || self.confirm_discard;
+        if !busy {
+            let title = self.title();
+            match self
+                .entry_print
+                .on_ctrl_p(ui, ctx, &title, self.has_unsaved_lines())
+            {
+                PrintKey::None | PrintKey::Started => {}
+                PrintKey::Said(text) => self.notice = Some(Notice::Info(text.to_owned())),
+            }
+        }
+        self.entry_print.show(ui)
+    }
+
     /// Hands in the tax answer when the worker has it, and asks for the tax of the invoice as it
     /// now stands when it is complete and no answer or request exists for it (card C2). Without a
     /// worker nothing is asked, and the screen keeps saying tax is not computed.
@@ -2564,6 +2605,7 @@ impl ItemInvoiceScreen {
         match reply {
             CommandReply::Booked(result) => {
                 let number = result.posted.as_ref().and_then(|v| v.number.clone());
+                self.entry_print.remember(result.posted);
                 self.confirm_saved_as(number.as_deref());
             }
             CommandReply::Unsupported(u) => {

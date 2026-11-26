@@ -362,7 +362,18 @@ Credit (`ledgerly_reports::print_text` places the engine's figures only).
 - **DELIBERATE** a voucher's preview reads as the entry screen names it ("Sales invoice SI/0412", crumb
   "Sales invoice", subtitle "Saved · party · date", as the mock). The app reaches it from the voucher view,
   which a drill from the Day book opens, so the crumb is Home, Day book, Sales invoice; the mock's is Home,
-  Sales invoice because it has no such drill. The invoice entry screen has no Ctrl+P on a saved invoice.
+  Sales invoice because it has no such drill. Ctrl+P on an entry screen (every voucher screen and the item
+  invoice) previews the voucher that screen saved last, headed the same ("Journal JV/0033", "Saved · date"),
+  with the entry screen's own crumb; Esc returns to the empty next voucher (tests/s18_entry_print*.rs).
+  Source: help.tallysolutions.com/print-documents/ and /print-invoices-reports/, read 2026-11-26.
+- **DELIBERATE** the product has no voucher alteration screen yet, so Ctrl+P prints only the voucher this
+  screen saved; unsaved lines get "Save the voucher first with Ctrl+A", a screen that saved nothing says so.
+  Printing a voucher opened from a list is the voucher view's Ctrl+P (above).
+- **DELIBERATE** Alt+P is not bound: the help page lists it as the Print menu (printer set-up), not as
+  print-current (help.tallysolutions.com/print-invoices-reports/, read 2026-11-26).
+- **NOT BUILT** "print after saving" (a voucher-type option in the accounting product): `VoucherType` has no
+  such field and the masters screen has no mock state for it. An accounting invoice previews as "not
+  printed" with the print crate's own reason (it has no item table to lay out).
 
 ## Accessibility, themes, keys
 

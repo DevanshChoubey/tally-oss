@@ -110,6 +110,8 @@ pub struct VoucherEntryScreen {
     pub(super) panel: Option<BillPanel>,
     /// Whether the account is a bank account, so Enter on it goes to the mode.
     pub(super) mode_stop: bool,
+    /// Ctrl+P: the voucher saved last and its print preview.
+    pub(super) entry_print: crate::screens::entry_print::EntryPrint,
 }
 
 /// The bill-wise details that are open: the line they belong to and whether the open bills have
@@ -169,7 +171,19 @@ impl VoucherEntryScreen {
             extras: Extras::default(),
             panel: None,
             mode_stop: false,
+            entry_print: crate::screens::entry_print::EntryPrint::default(),
         }))
+    }
+
+    /// The pages the print preview shows, when it is open.
+    #[must_use]
+    pub fn print_preview(&self) -> Option<&ledgerly_api::PrintedDocument> {
+        self.entry_print.preview()
+    }
+
+    /// Replaces the save dialog the print preview opens.
+    pub fn set_print_picker(&mut self, picker: crate::screens::print_job::SavePicker) {
+        self.entry_print.set_picker(picker);
     }
 
     /// The voucher being entered.

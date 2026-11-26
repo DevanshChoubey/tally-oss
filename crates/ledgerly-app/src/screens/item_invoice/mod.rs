@@ -656,6 +656,8 @@ pub struct ItemInvoiceScreen {
     waiting: Vec<(create::CreateFor, String)>,
     /// Where parts of the screen were drawn in the last frame.
     shown: draw::Shown,
+    /// Ctrl+P: the voucher saved last and its print preview.
+    entry_print: crate::screens::entry_print::EntryPrint,
 }
 
 impl ItemInvoiceScreen {
@@ -744,6 +746,7 @@ impl ItemInvoiceScreen {
             creating: None,
             waiting: Vec::new(),
             shown: draw::Shown::default(),
+            entry_print: crate::screens::entry_print::EntryPrint::default(),
         };
         screen.focus = screen.first_field();
         Ok(Outcome::Value(screen))
@@ -1102,6 +1105,23 @@ impl ItemInvoiceScreen {
             }
             Err(message) => self.fail(message),
         }
+    }
+
+    /// The pages the print preview shows, when it is open.
+    #[must_use]
+    pub fn print_preview(&self) -> Option<&ledgerly_api::PrintedDocument> {
+        self.entry_print.preview()
+    }
+
+    /// Replaces the save dialog the print preview opens.
+    pub fn set_print_picker(&mut self, picker: crate::screens::print_job::SavePicker) {
+        self.entry_print.set_picker(picker);
+    }
+
+    /// `true` while lines are typed that are not saved: Ctrl+P then asks to save first.
+    fn has_unsaved_lines(&self) -> bool {
+        !self.draft.rows.iter().all(InvoiceRow::is_blank)
+            || !self.draft.particulars.iter().all(ParticularRow::is_blank)
     }
 
     /// The voucher queued by [`Self::save`], for the host to post.
