@@ -3,7 +3,7 @@ Version: @VERSION@
 Section: office
 Priority: optional
 Architecture: amd64
-Maintainer: Ledgerly contributors <ledgerly@example.invalid>
+Maintainer: Ledgerly maintainers <ledgerly@users.noreply.github.com>
 Installed-Size: @SIZE_KB@
 Depends: libc6, libgcc-s1, libxkbcommon0, libwayland-client0, libx11-6, libgl1
 Homepage: https://github.com/DevanshChoubey/tally-oss

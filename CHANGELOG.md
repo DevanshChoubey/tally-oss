@@ -53,9 +53,12 @@ Install this one. The full list of what is in it, and the known gaps, is in
 
 ### Not in this release
 
-- The AI assistant. A new company starts with AI off, and the screens for Ask your books,
-  plain-words entry, bill photos and AI bank suggestions show their AI-off state. No model, no
-  reader and no network call for AI is part of this release. The MCP server is separate and works.
+- The AI assistant. Every company runs with AI off. The AI and privacy screen and the setup step
+  show "On this computer" and "Cloud, with your own key" as disabled, tagged "Not in this release".
+  There is no Plain-words entry, "Ask" or bill-photo route in the sidebar, the search box, the
+  command palette or the purchase form. A company file saved with an AI tier by an older build
+  opens and shows AI off. No model, no reader and no network call for AI is part of this release.
+  The MCP server is separate and works.
 - Printing straight to a printer. Save as PDF, then print from your PDF viewer.
 - GSTR-3B JSON export. The return's working and its set-off are on screen; no file is written.
 - e-Invoice upload to the portal. Ledgerly writes the JSON; you upload it.

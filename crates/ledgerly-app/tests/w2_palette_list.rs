@@ -68,6 +68,10 @@ const PREFIX_ROWS: [(&str, &str); 5] = [
 
 #[test]
 fn the_empty_query_lists_the_prefix_rows_and_no_reports() {
+    // Provenance: owner decision of 2026-11-26. Release 1.0.0 ships without the AI assistant, so
+    // `release::AI_IN_THIS_RELEASE` is false. This test exercises the AI UI itself, so it turns the
+    // switch on for this test's thread only; the 1.0.0 screens are pinned in `s19b_ai_not_in_release.rs`.
+    ledgerly_app::release::set_ai_enabled(true);
     // provenance: index.html:1115-1116: with nothing typed the mock lists "Recent" and then
     // "Type a prefix" with these five rows, each filling its prefix (`it[4]`), and nothing else.
     // A fresh palette has no recent choice (session only), so only the prefix rows show. Catches
@@ -91,6 +95,10 @@ fn the_empty_query_lists_the_prefix_rows_and_no_reports() {
 
 #[test]
 fn a_recent_choice_leads_the_empty_query_then_the_prefix_rows() {
+    // Provenance: owner decision of 2026-11-26. Release 1.0.0 ships without the AI assistant, so
+    // `release::AI_IN_THIS_RELEASE` is false. This test exercises the AI UI itself, so it turns the
+    // switch on for this test's thread only; the 1.0.0 screens are pinned in `s19b_ai_not_in_release.rs`.
+    ledgerly_app::release::set_ai_enabled(true);
     // provenance: index.html:1115: "Recent" comes before "Type a prefix". Catches recents
     // dropped from the empty query, or shown after the prefix rows.
     let mut p = opened(vec![

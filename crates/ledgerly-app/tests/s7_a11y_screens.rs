@@ -126,6 +126,10 @@ fn the_shell_names_its_sidebar_entries_and_marks_the_open_one() {
 
 #[test]
 fn the_shell_chips_read_their_words() {
+    // Provenance: owner decision of 2026-11-26. Release 1.0.0 ships without the AI assistant, so
+    // `release::AI_IN_THIS_RELEASE` is false. This test exercises the AI UI itself, so it turns the
+    // switch on for this test's thread only; the 1.0.0 screens are pinned in `s19b_ai_not_in_release.rs`.
+    ledgerly_app::release::set_ai_enabled(true);
     // provenance: index.html:900 search chip "Search, jump, ask or type an entry" and
     // index.html:902 the theme switch, named by its hover text.
     let ctx = context();

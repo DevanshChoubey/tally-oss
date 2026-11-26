@@ -190,7 +190,16 @@ pub(super) fn top_bar(
         );
         let response = ui
             .scope_builder(egui::UiBuilder::new().max_rect(search), |ui| {
-                chip::search_chip(ui, width, &ctx.tr.t("topbar.search_text"), "Ctrl+K")
+                chip::search_chip(
+                    ui,
+                    width,
+                    &ctx.tr.t(if crate::release::ai_enabled() {
+                        "topbar.search_text"
+                    } else {
+                        "topbar.search_text_no_ai"
+                    }),
+                    "Ctrl+K",
+                )
             })
             .inner;
         if response
@@ -304,8 +313,9 @@ fn right_items(
             {
                 cmds.push(ChromeCmd::CycleTheme);
             }
-            let (icon, tint) = ai_look(ctx.ai_tier, t);
-            let words = ai_chip(ctx.ai_tier, &ctx.tr);
+            let tier = crate::release::effective_tier(ctx.ai_tier);
+            let (icon, tint) = ai_look(tier, t);
+            let words = ai_chip(tier, &ctx.tr);
             if chip::chip_parts(
                 ui,
                 Chip {

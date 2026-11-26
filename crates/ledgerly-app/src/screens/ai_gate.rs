@@ -193,6 +193,7 @@ impl TierGate {
         match self.latest.poll() {
             None => {}
             Some(Done::Ready(Ok(tier))) => {
+                let tier = crate::release::effective_tier(tier);
                 self.read = Some(Ok(tier));
                 ctx.ai_tier = tier;
             }

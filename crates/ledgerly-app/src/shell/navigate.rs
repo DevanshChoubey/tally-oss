@@ -257,7 +257,13 @@ pub fn host_entries(keymap: &Keymap) -> Vec<PaletteEntry> {
     let mut entries = command_entries(keymap);
     // The mock lists these straight after the four voucher commands (`PAL_CMDS`).
     let at = entries.len().min(crate::palette::LEAD_COMMAND_COUNT);
-    entries.splice(at..at, RunCommand::ALL.map(RunCommand::entry));
+    entries.splice(
+        at..at,
+        RunCommand::ALL
+            .into_iter()
+            .filter(|command| crate::release::ai_enabled() || *command != RunCommand::ReadBillPhoto)
+            .map(RunCommand::entry),
+    );
     entries.extend(menu_entries());
     entries
 }
@@ -374,13 +380,22 @@ pub fn screen_entries(books: Option<&Books>) -> Vec<PaletteEntry> {
         screen(IMPORT_KEY, "Import from another app"),
         screen(MASTERS_KEY, "Masters"),
         screen(BANK_RECON_KEY, "Bank reconciliation"),
-        screen(QUICK_ENTRY_KEY, "Plain-words entry"),
-        screen(ASK_KEY, "Ask your books"),
-        screen(PURCHASE_BILL_KEY, "Purchase from bill photo"),
         screen(KEYS_KEY, "Keyboard map"),
         screen(AI_SETTINGS_KEY, "AI and privacy"),
         screen(SETUP_KEY, "Company setup"),
     ];
+    if crate::release::ai_enabled() {
+        // The three assistant screens are routed only in a release that carries the assistant.
+        let at = entries.len().saturating_sub(3);
+        entries.splice(
+            at..at,
+            [
+                screen(QUICK_ENTRY_KEY, "Plain-words entry"),
+                screen(ASK_KEY, "Ask your books"),
+                screen(PURCHASE_BILL_KEY, "Purchase from bill photo"),
+            ],
+        );
+    }
     if let Some(books) = books {
         for ledger in books.masters.ledgers.values() {
             if ledger.bank.is_some() {
@@ -443,7 +458,7 @@ fn row(label: &'static str, hint: Option<&'static str>, target: PaletteTarget) -
 #[must_use]
 pub fn sidebar() -> Vec<SidebarGroup> {
     let screen = |key: &str| PaletteTarget::Report(key.to_owned());
-    vec![
+    let mut groups = vec![
         SidebarGroup {
             title: "Overview",
             entries: vec![
@@ -474,7 +489,6 @@ pub fn sidebar() -> Vec<SidebarGroup> {
                     Some("F6"),
                     PaletteTarget::Command(Action::NewReceipt),
                 ),
-                row("Plain-words entry", None, screen(QUICK_ENTRY_KEY)),
             ],
         },
         SidebarGroup {
@@ -500,7 +514,16 @@ pub fn sidebar() -> Vec<SidebarGroup> {
                 row("Company setup", None, screen(SETUP_KEY)),
             ],
         },
-    ]
+    ];
+    if crate::release::ai_enabled()
+        && let Some(enter) = groups.get_mut(1)
+    {
+        // Plain-words entry needs the assistant, so only a release that carries it lists it.
+        enter
+            .entries
+            .push(row("Plain-words entry", None, screen(QUICK_ENTRY_KEY)));
+    }
+    groups
 }
 
 /// The moment [`today`] and [`hour_now`] report instead of the real clock, when set.

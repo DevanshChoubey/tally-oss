@@ -10,7 +10,7 @@ use egui::{
 };
 
 use super::scope::{Section, empty_scope_hint};
-use super::{LEGEND, Palette, PaletteChoice, PaletteMode, PaletteScope, PaletteTarget, match_span};
+use super::{Palette, PaletteChoice, PaletteMode, PaletteScope, PaletteTarget, match_span};
 use crate::shell::navigate::{new_ledger_name, row_icon};
 use crate::theme::{RADIUS_L, RADIUS_S, TEXT_BODY, TEXT_CAP, TEXT_META, border_width};
 use crate::ui::icon::{self, ICON_SIZE, Icon};
@@ -207,7 +207,7 @@ impl Palette {
                         egui::TextEdit::singleline(&mut self.query)
                             .id(Id::unique(QUERY_ID))
                             .hint_text(
-                                RichText::new(self.tr.t("palette.placeholder"))
+                                RichText::new(self.tr.t(super::placeholder_key()))
                                     .size(QUERY_SIZE)
                                     .color(t.text_3),
                             )
@@ -424,7 +424,7 @@ fn legend_row(ui: &mut Ui) {
             ui.set_width(ui.available_width());
             ui.horizontal_wrapped(|ui| {
                 ui.spacing_mut().item_spacing = Vec2::ZERO;
-                for (n, (key, label)) in LEGEND.into_iter().enumerate() {
+                for (n, &(key, label)) in super::legend().iter().enumerate() {
                     if n > 0 {
                         ui.add_space(6.0);
                     }

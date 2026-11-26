@@ -236,9 +236,11 @@ pub fn key_hints_in(log_has_rows: bool, tr: &Tr) -> Vec<KeyHint> {
     let mut hints = vec![
         KeyHint::new("", tr.t("ai.settings.title")),
         KeyHint::new("1", tr.t("ai.settings.key.off")),
-        KeyHint::new("2", tr.t("ai.settings.key.local")),
-        KeyHint::new("3", tr.t("ai.settings.key.cloud")),
     ];
+    if crate::release::ai_enabled() {
+        hints.push(KeyHint::new("2", tr.t("ai.settings.key.local")));
+        hints.push(KeyHint::new("3", tr.t("ai.settings.key.cloud")));
+    }
     if log_has_rows {
         hints.push(KeyHint::new("Ctrl+E", tr.t("ai.settings.key.export")));
     }
@@ -398,7 +400,11 @@ impl AiSettingsScreen {
             )
         });
         let worker = ctx.api.as_ref();
-        if one {
+        if !crate::release::ai_enabled() {
+            // Keys 1, 2 and 3 choose a tier; with no AI in this release the company stays Off.
+            // The keys are still consumed, so no other screen reads them.
+            let _ = (one, two, three);
+        } else if one {
             self.pick(worker, AiTier::Off);
         } else if two {
             self.pick(worker, AiTier::Local);
@@ -414,6 +420,10 @@ impl AiSettingsScreen {
     }
 
     fn pick(&mut self, worker: Option<&ApiWorker>, tier: AiTier) {
+        if !crate::release::ai_enabled() {
+            // The company stays Off: nothing to store, and no card to pick.
+            return;
+        }
         self.cloud_asked = tier == AiTier::Cloud;
         if let Some(worker) = worker {
             self.choose(worker, tier);
@@ -433,6 +443,9 @@ impl AiSettingsScreen {
         };
         match reply {
             Reply::Loaded(Ok((tier, log))) => {
+                // A file stored with Local by an older build opens, and shows Off, while the
+                // release carries no AI (see `crate::release`).
+                let tier = crate::release::effective_tier(tier);
                 self.stored = tier;
                 self.log = log;
                 self.loaded = true;
@@ -526,6 +539,12 @@ impl Screen for AiSettingsScreen {
         if let Some(tier) = draw_options(ui, panel, self.stored, &tr) {
             self.pick(ctx.api.as_ref(), tier);
         }
+        if !crate::release::ai_enabled() {
+            // The one plain line under the cards: AI comes in a later version.
+            gap(ui, 6.0);
+            let color = tokens(ui).text_2;
+            para(ui, &tr.t("ai.settings.later_note"), TEXT_BODY, color);
+        }
         gap(ui, 14.0);
 
         draw_panel(ui, panel, self.cloud_reason.as_deref(), &tr);
@@ -605,10 +624,19 @@ fn draw_options(ui: &mut Ui, panel: Panel, stored: Option<AiTier>, tr: &Tr) -> O
     let shown = shown_tier(panel);
     let current_word = tr.t("ai.settings.option.current");
     let words = options.map(|(tier, _)| option_in(tier, tr));
+    let ai_in_release = crate::release::ai_enabled();
+    let not_in_release = tr.t("ai.settings.not_in_release");
     let cards: Vec<OptionCard<'_>> = options
         .iter()
         .zip(&words)
         .map(|(&(tier, glyph), (name, note))| {
+            if !ai_in_release && tier != AiTier::Off {
+                // Local and Cloud are shown, disabled and tagged, so the choice is visible but
+                // cannot be made (index.html, AI_IN_RELEASE false).
+                return OptionCard::new(glyph, name, note)
+                    .disabled()
+                    .badge(Some(not_in_release.as_str()));
+            }
             let current_elsewhere = stored == Some(tier) && shown != Some(tier);
             OptionCard::new(glyph, name, note)
                 .selected(shown == Some(tier))

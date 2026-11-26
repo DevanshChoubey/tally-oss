@@ -185,6 +185,10 @@ fn ai_settings(path: &Path) -> Vec<(String, String, String)> {
 
 #[test]
 fn the_three_states_render_the_mock_wording_and_keys() {
+    // Provenance: owner decision of 2026-11-26. Release 1.0.0 ships without the AI assistant, so
+    // `release::AI_IN_THIS_RELEASE` is false. This test exercises the AI UI itself, so it turns the
+    // switch on for this test's thread only; the 1.0.0 screens are pinned in `s19b_ai_not_in_release.rs`.
+    ledgerly_app::release::set_ai_enabled(true);
     let path = new_file("w4_states.ledgerly");
     let mut app = open(&path);
     let mut screen = AiSettingsScreen::default();
@@ -255,6 +259,10 @@ fn the_never_list_is_the_mock_list_on_every_state() {
 
 #[test]
 fn choosing_a_tier_is_kept_in_the_file_and_the_chip_follows_it() {
+    // Provenance: owner decision of 2026-11-26. Release 1.0.0 ships without the AI assistant, so
+    // `release::AI_IN_THIS_RELEASE` is false. This test exercises the AI UI itself, so it turns the
+    // switch on for this test's thread only; the 1.0.0 screens are pinned in `s19b_ai_not_in_release.rs`.
+    ledgerly_app::release::set_ai_enabled(true);
     let path = new_file("w4_chip.ledgerly");
     let mut app = open(&path);
     let mut screen = AiSettingsScreen::default();
@@ -374,6 +382,10 @@ fn an_empty_log_says_so_and_offers_no_export() {
 
 #[test]
 fn the_key_hints_match_the_mock_keys() {
+    // Provenance: owner decision of 2026-11-26. Release 1.0.0 ships without the AI assistant, so
+    // `release::AI_IN_THIS_RELEASE` is false. This test exercises the AI UI itself, so it turns the
+    // switch on for this test's thread only; the 1.0.0 screens are pinned in `s19b_ai_not_in_release.rs`.
+    ledgerly_app::release::set_ai_enabled(true);
     // index.html:1920: 1 Off, 2 On this computer, 3 Cloud, Ctrl+E Export log. The shell adds Esc.
     let without = key_hints(false);
     let labels: Vec<(&str, &str)> = without
@@ -394,6 +406,10 @@ fn the_key_hints_match_the_mock_keys() {
 
 #[test]
 fn no_cloud_key_reaches_the_company_file() {
+    // Provenance: owner decision of 2026-11-26. Release 1.0.0 ships without the AI assistant, so
+    // `release::AI_IN_THIS_RELEASE` is false. This test exercises the AI UI itself, so it turns the
+    // switch on for this test's thread only; the 1.0.0 screens are pinned in `s19b_ai_not_in_release.rs`.
+    ledgerly_app::release::set_ai_enabled(true);
     let path = new_file("w4_no_key_file.ledgerly");
     let mut app = open(&path);
     let mut screen = AiSettingsScreen::default();
@@ -568,6 +584,10 @@ fn probe<T: Clone + Send + Sync + 'static>(ctx: &egui::Context, name: &str) -> T
 
 #[test]
 fn the_feature_table_sits_beside_the_never_card_without_overlap() {
+    // Provenance: owner decision of 2026-11-26. Release 1.0.0 ships without the AI assistant, so
+    // `release::AI_IN_THIS_RELEASE` is false. This test exercises the AI UI itself, so it turns the
+    // switch on for this test's thread only; the 1.0.0 screens are pinned in `s19b_ai_not_in_release.rs`.
+    ledgerly_app::release::set_ai_enabled(true);
     // The mock's row: the table takes about two thirds of the width, the never card the rest
     // (side-by-side comparison with design/mock-v2/index.html:1908-1916, screenshot in
     // claude-tmp/sbs). The two-thirds figure is read from that comparison, not computed.
@@ -587,6 +607,10 @@ fn the_feature_table_sits_beside_the_never_card_without_overlap() {
 
 #[test]
 fn the_selected_tier_card_has_the_accent_stroke_and_fill_and_the_others_do_not() {
+    // Provenance: owner decision of 2026-11-26. Release 1.0.0 ships without the AI assistant, so
+    // `release::AI_IN_THIS_RELEASE` is false. This test exercises the AI UI itself, so it turns the
+    // switch on for this test's thread only; the 1.0.0 screens are pinned in `s19b_ai_not_in_release.rs`.
+    ledgerly_app::release::set_ai_enabled(true);
     let (ctx, painted) = local_layout("w4_layout_accent.ledgerly");
     let accent: Color32 = probe(&ctx, "ai-settings.accent");
     let accent_soft: Color32 = probe(&ctx, "ai-settings.accent_soft");
@@ -624,6 +648,10 @@ fn the_selected_tier_card_has_the_accent_stroke_and_fill_and_the_others_do_not()
 
 #[test]
 fn each_option_card_draws_its_icon_before_a_bold_title() {
+    // Provenance: owner decision of 2026-11-26. Release 1.0.0 ships without the AI assistant, so
+    // `release::AI_IN_THIS_RELEASE` is false. This test exercises the AI UI itself, so it turns the
+    // switch on for this test's thread only; the 1.0.0 screens are pinned in `s19b_ai_not_in_release.rs`.
+    ledgerly_app::release::set_ai_enabled(true);
     let (ctx, painted) = local_layout("w4_layout_icons.ledgerly");
     for n in 0..3 {
         let icon: Rect = probe(&ctx, &format!("ai-settings.icon.{n}"));
@@ -643,6 +671,10 @@ fn each_option_card_draws_its_icon_before_a_bold_title() {
 
 #[test]
 fn the_option_bodies_are_left_aligned_not_justified() {
+    // Provenance: owner decision of 2026-11-26. Release 1.0.0 ships without the AI assistant, so
+    // `release::AI_IN_THIS_RELEASE` is false. This test exercises the AI UI itself, so it turns the
+    // switch on for this test's thread only; the 1.0.0 screens are pinned in `s19b_ai_not_in_release.rs`.
+    ledgerly_app::release::set_ai_enabled(true);
     let (_, painted) = local_layout("w4_layout_justify.ledgerly");
     assert!(
         painted.text.contains("Redaction runs"),
@@ -660,6 +692,10 @@ fn the_option_bodies_are_left_aligned_not_justified() {
 
 #[test]
 fn the_local_panel_spans_the_width_of_the_three_option_cards() {
+    // Provenance: owner decision of 2026-11-26. Release 1.0.0 ships without the AI assistant, so
+    // `release::AI_IN_THIS_RELEASE` is false. This test exercises the AI UI itself, so it turns the
+    // switch on for this test's thread only; the 1.0.0 screens are pinned in `s19b_ai_not_in_release.rs`.
+    ledgerly_app::release::set_ai_enabled(true);
     let (ctx, _) = local_layout("w4_layout_full.ledgerly");
     let local: Rect = probe(&ctx, "ai-settings.local");
     let cards: Vec<Rect> = (0..3)
@@ -678,6 +714,10 @@ fn the_local_panel_spans_the_width_of_the_three_option_cards() {
 
 #[test]
 fn the_local_panel_rows_are_separated_by_rules() {
+    // Provenance: owner decision of 2026-11-26. Release 1.0.0 ships without the AI assistant, so
+    // `release::AI_IN_THIS_RELEASE` is false. This test exercises the AI UI itself, so it turns the
+    // switch on for this test's thread only; the 1.0.0 screens are pinned in `s19b_ai_not_in_release.rs`.
+    ledgerly_app::release::set_ai_enabled(true);
     let (ctx, painted) = local_layout("w4_layout_rules.ledgerly");
     let local: Rect = probe(&ctx, "ai-settings.local");
     let rules = painted
@@ -693,6 +733,10 @@ fn the_local_panel_rows_are_separated_by_rules() {
 
 #[test]
 fn the_feature_table_has_an_on_column_and_no_status_column() {
+    // Provenance: owner decision of 2026-11-26. Release 1.0.0 ships without the AI assistant, so
+    // `release::AI_IN_THIS_RELEASE` is false. This test exercises the AI UI itself, so it turns the
+    // switch on for this test's thread only; the 1.0.0 screens are pinned in `s19b_ai_not_in_release.rs`.
+    ledgerly_app::release::set_ai_enabled(true);
     let (_, painted) = local_layout("w4_layout_on.ledgerly");
     assert!(
         painted.text.lines().any(|l| l == "On"),
@@ -706,6 +750,10 @@ fn the_feature_table_has_an_on_column_and_no_status_column() {
 
 #[test]
 fn the_feature_text_clears_the_on_column_with_room_to_spare() {
+    // Provenance: owner decision of 2026-11-26. Release 1.0.0 ships without the AI assistant, so
+    // `release::AI_IN_THIS_RELEASE` is false. This test exercises the AI UI itself, so it turns the
+    // switch on for this test's thread only; the 1.0.0 screens are pinned in `s19b_ai_not_in_release.rs`.
+    ledgerly_app::release::set_ai_enabled(true);
     // The mock sets "What the model sees" text in its column with room to spare (index.html:
     // 1908-1910). In the captured app the longest line ran to the On column and was cut ("on
     // this co..."), so every feature line must end at least 12 before the On header.
@@ -756,6 +804,10 @@ fn cloud_layout(name: &str) -> (egui::Context, Painted, AiSettingsScreen) {
 
 #[test]
 fn a_refused_cloud_choice_is_a_provider_card_pair_and_no_banner() {
+    // Provenance: owner decision of 2026-11-26. Release 1.0.0 ships without the AI assistant, so
+    // `release::AI_IN_THIS_RELEASE` is false. This test exercises the AI UI itself, so it turns the
+    // switch on for this test's thread only; the 1.0.0 screens are pinned in `s19b_ai_not_in_release.rs`.
+    ledgerly_app::release::set_ai_enabled(true);
     // index.html:1912: the cloud state is two cards side by side, Provider and Removed before
     // sending. The refusal stays readable through `notice()` and in the Provider card.
     let (ctx, painted, screen) = cloud_layout("s8_cloud_pair.ledgerly");
@@ -793,6 +845,10 @@ fn a_notice_that_is_not_the_cloud_refusal_is_still_a_banner() {
 
 #[test]
 fn the_shown_tier_card_is_selected_and_the_stored_one_says_current() {
+    // Provenance: owner decision of 2026-11-26. Release 1.0.0 ships without the AI assistant, so
+    // `release::AI_IN_THIS_RELEASE` is false. This test exercises the AI UI itself, so it turns the
+    // switch on for this test's thread only; the 1.0.0 screens are pinned in `s19b_ai_not_in_release.rs`.
+    ledgerly_app::release::set_ai_enabled(true);
     // index.html:1907: Cloud is the checked card in the cloud state. Our stored tier stays Off, so
     // the Off card keeps a "Current" badge: the highlight follows the view, the badge the file.
     let (ctx, painted, screen) = cloud_layout("s8_cloud_selected.ledgerly");
@@ -812,6 +868,10 @@ fn the_shown_tier_card_is_selected_and_the_stored_one_says_current() {
 
 #[test]
 fn card_headings_are_bold() {
+    // Provenance: owner decision of 2026-11-26. Release 1.0.0 ships without the AI assistant, so
+    // `release::AI_IN_THIS_RELEASE` is false. This test exercises the AI UI itself, so it turns the
+    // switch on for this test's thread only; the 1.0.0 screens are pinned in `s19b_ai_not_in_release.rs`.
+    ledgerly_app::release::set_ai_enabled(true);
     // `h2{font-weight:600}` (index.html:69): panel titles are set in the bold family.
     let (_, local) = local_layout("s8_headings.ledgerly");
     for title in [
@@ -829,6 +889,10 @@ fn card_headings_are_bold() {
 
 #[test]
 fn the_option_cards_start_sixteen_below_the_page_head() {
+    // Provenance: owner decision of 2026-11-26. Release 1.0.0 ships without the AI assistant, so
+    // `release::AI_IN_THIS_RELEASE` is false. This test exercises the AI UI itself, so it turns the
+    // switch on for this test's thread only; the 1.0.0 screens are pinned in `s19b_ai_not_in_release.rs`.
+    ledgerly_app::release::set_ai_enabled(true);
     // `.phead{margin-bottom:16px}` (index.html:121). The screen used to add the gap a second
     // time, so the cards sat 32 below the head.
     let (ctx, _) = local_layout("s8_head_gap.ledgerly");
@@ -840,6 +904,10 @@ fn the_option_cards_start_sixteen_below_the_page_head() {
 
 #[test]
 fn the_feature_table_runs_edge_to_edge_in_its_card() {
+    // Provenance: owner decision of 2026-11-26. Release 1.0.0 ships without the AI assistant, so
+    // `release::AI_IN_THIS_RELEASE` is false. This test exercises the AI UI itself, so it turns the
+    // switch on for this test's thread only; the 1.0.0 screens are pinned in `s19b_ai_not_in_release.rs`.
+    ledgerly_app::release::set_ai_enabled(true);
     // `.card` holds the table with no padding (index.html:1908): the row rules reach both edges.
     let (ctx, painted) = local_layout("s8_flush.ledgerly");
     let table: Rect = probe(&ctx, "ai-settings.features");
@@ -854,6 +922,10 @@ fn the_feature_table_runs_edge_to_edge_in_its_card() {
 
 #[test]
 fn the_main_row_splits_one_point_five_five_to_one() {
+    // Provenance: owner decision of 2026-11-26. Release 1.0.0 ships without the AI assistant, so
+    // `release::AI_IN_THIS_RELEASE` is false. This test exercises the AI UI itself, so it turns the
+    // switch on for this test's thread only; the 1.0.0 screens are pinned in `s19b_ai_not_in_release.rs`.
+    ledgerly_app::release::set_ai_enabled(true);
     // `.g-main{grid-template-columns:minmax(0,1.55fr) minmax(320px,1fr)}` (index.html:138) with a
     // 12 point gap: the table card is 1.55 / 2.55 of the row less the gap.
     let (ctx, _) = local_layout("s8_ratio.ledgerly");

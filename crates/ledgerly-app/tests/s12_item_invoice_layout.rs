@@ -301,6 +301,10 @@ fn a_purchase_table_has_no_unit_column_and_a_sale_keeps_it() {
 
 #[test]
 fn a_purchase_offers_bill_photo_and_save_not_the_sales_buttons() {
+    // Provenance: owner decision of 2026-11-26. Release 1.0.0 ships without the AI assistant, so
+    // `release::AI_IN_THIS_RELEASE` is false. This test exercises the AI UI itself, so it turns the
+    // switch on for this test's thread only; the 1.0.0 screens are pinned in `s19b_ai_not_in_release.rs`.
+    ledgerly_app::release::set_ai_enabled(true);
     // provenance: index.html:1990 (`Bill photo Alt+O`, Save) against :1308 (sales invoice: the
     // mode button, More details, Save).
     let b = books();
@@ -473,9 +477,13 @@ fn a_sale_still_starts_on_the_party_and_goes_party_place_ledger() {
 
 #[test]
 fn alt_o_on_a_purchase_opens_the_bill_screen_and_does_nothing_on_a_sale() {
+    // Provenance: owner decision of 2026-11-26. Release 1.0.0 ships without the AI assistant, so
+    // `release::AI_IN_THIS_RELEASE` is false. This test exercises the AI UI itself, so it turns the
+    // switch on for this test's thread only; the 1.0.0 screens are pinned in `s19b_ai_not_in_release.rs`.
     // provenance: index.html:1990 and :2013, "Bill photo Alt+O" / "Read a bill", on the purchase
     // only.
     use egui::{Event, Key, Modifiers};
+    ledgerly_app::release::set_ai_enabled(true);
     let b = books();
     let press = || RawInput {
         screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(1280.0, 800.0))),

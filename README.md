@@ -149,9 +149,9 @@ Exit codes:
 
 ## AI and the MCP server
 
-**Release 1.0.0 ships without the AI assistant.** A new company starts with AI off. The screens for
-Ask your books, plain-words entry, bill photos and AI bank suggestions show their AI-off state and
-explain what to do by hand instead. Nothing in the app sends anything to a model. The assistant
+**Release 1.0.0 ships without the AI assistant.** Every company runs with AI off, and the AI and
+privacy screen shows the other choices as "Not in this release". The sidebar, the search box and the
+command palette have no route to plain-words entry, Ask your books or bill photos. Nothing in the app sends anything to a model. The assistant
 never produces a figure that you see; when it comes, it will only propose drafts, and the engine
 computes every number.
 

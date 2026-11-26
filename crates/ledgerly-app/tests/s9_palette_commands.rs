@@ -21,6 +21,10 @@ fn open_commands() -> Palette {
 
 #[test]
 fn the_commands_scope_lists_the_runnable_mock_commands_after_the_voucher_commands() {
+    // Provenance: owner decision of 2026-11-26. Release 1.0.0 ships without the AI assistant, so
+    // `release::AI_IN_THIS_RELEASE` is false. This test exercises the AI UI itself, so it turns the
+    // switch on for this test's thread only; the 1.0.0 screens are pinned in `s19b_ai_not_in_release.rs`.
+    ledgerly_app::release::set_ai_enabled(true);
     // provenance: derived, the mock's order: New sales invoice, New purchase, New payment, New
     // receipt, then Read a bill photo, Import bank statement, then (not built) 2B import and the
     // GSTR-1 export, then Switch theme and Collapse side bar.

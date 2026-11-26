@@ -2206,7 +2206,9 @@ impl ItemInvoiceScreen {
 
         let mut clicks: Option<Click> = None;
         let mut mode_anchor: Option<Rect> = None;
+        // The bill photo screen needs the assistant (`crate::release`): no button, no Alt+O.
         let mut bill_photo = !busy
+            && crate::release::ai_enabled()
             && self.draft.kind == InvoiceKind::Purchase
             && !self.confirm_discard
             && !self.confirming_save
@@ -2271,7 +2273,7 @@ impl ItemInvoiceScreen {
                             clicks = Some(Click::ChangeMode);
                         }
                     }
-                    InvoiceKind::Purchase => {
+                    InvoiceKind::Purchase if crate::release::ai_enabled() => {
                         if button(
                             ui,
                             &tr.lit("Bill photo"),
@@ -2283,7 +2285,7 @@ impl ItemInvoiceScreen {
                             clicks = Some(Click::BillPhoto);
                         }
                     }
-                    InvoiceKind::CreditNote | InvoiceKind::DebitNote => {}
+                    InvoiceKind::Purchase | InvoiceKind::CreditNote | InvoiceKind::DebitNote => {}
                 }
             },
         );
@@ -2546,13 +2548,18 @@ impl Screen for ItemInvoiceScreen {
                 KeyHint::new("Esc", tr.lit("Back")),
             ],
             // index.html:2013 and :2041.
-            InvoiceKind::Purchase => vec![
-                KeyHint::new("Enter", tr.lit("Next field")),
-                KeyHint::new("Alt+C", tr.lit("Create master")),
-                KeyHint::new("Alt+O", tr.lit("Read a bill")),
-                KeyHint::new("Ctrl+A", tr.lit("Save")),
-                KeyHint::new("Esc", tr.lit("Back")),
-            ],
+            InvoiceKind::Purchase => {
+                let mut hints = vec![
+                    KeyHint::new("Enter", tr.lit("Next field")),
+                    KeyHint::new("Alt+C", tr.lit("Create master")),
+                ];
+                if crate::release::ai_enabled() {
+                    hints.push(KeyHint::new("Alt+O", tr.lit("Read a bill")));
+                }
+                hints.push(KeyHint::new("Ctrl+A", tr.lit("Save")));
+                hints.push(KeyHint::new("Esc", tr.lit("Back")));
+                hints
+            }
             InvoiceKind::CreditNote | InvoiceKind::DebitNote => vec![
                 KeyHint::new("Enter", tr.lit("Next field")),
                 KeyHint::new("Alt+C", tr.lit("Create master")),

@@ -246,6 +246,10 @@ fn ask_with_ai_off_offers_the_report_list() {
 
 #[test]
 fn ask_with_the_local_tier_says_no_model_is_installed() {
+    // Provenance: owner decision of 2026-11-26. Release 1.0.0 ships without the AI assistant, so
+    // `release::AI_IN_THIS_RELEASE` is false. This test exercises the AI UI itself, so it turns the
+    // switch on for this test's thread only; the 1.0.0 screens are pinned in `s19b_ai_not_in_release.rs`.
+    ledgerly_app::release::set_ai_enabled(true);
     let path = file_with_tier("s5_ask_local.ledgerly", Some(AiTier::Local));
     let mut app = open(&path);
     let mut screen = AskScreen::default();
@@ -405,6 +409,10 @@ fn bill_photo_with_ai_off_says_reading_is_off() {
 
 #[test]
 fn bill_photo_local_tier_and_f9() {
+    // Provenance: owner decision of 2026-11-26. Release 1.0.0 ships without the AI assistant, so
+    // `release::AI_IN_THIS_RELEASE` is false. This test exercises the AI UI itself, so it turns the
+    // switch on for this test's thread only; the 1.0.0 screens are pinned in `s19b_ai_not_in_release.rs`.
+    ledgerly_app::release::set_ai_enabled(true);
     let path = file_with_tier("s5_pb_local.ledgerly", Some(AiTier::Local));
     let mut app = open(&path);
     let mut screen = PurchaseBillScreen::default();
@@ -430,6 +438,10 @@ fn bill_photo_local_tier_and_f9() {
 
 #[test]
 fn no_tier_chosen_is_said_and_not_taken_for_off() {
+    // Provenance: owner decision of 2026-11-26. Release 1.0.0 ships without the AI assistant, so
+    // `release::AI_IN_THIS_RELEASE` is false. This test exercises the AI UI itself, so it turns the
+    // switch on for this test's thread only; the 1.0.0 screens are pinned in `s19b_ai_not_in_release.rs`.
+    ledgerly_app::release::set_ai_enabled(true);
     let path = file_with_tier("s5_unset.ledgerly", None);
     let mut app = open(&path);
     let mut screen = AskScreen::default();
@@ -442,6 +454,10 @@ fn no_tier_chosen_is_said_and_not_taken_for_off() {
 
 #[test]
 fn a_tier_changed_after_opening_is_read_again() {
+    // Provenance: owner decision of 2026-11-26. Release 1.0.0 ships without the AI assistant, so
+    // `release::AI_IN_THIS_RELEASE` is false. This test exercises the AI UI itself, so it turns the
+    // switch on for this test's thread only; the 1.0.0 screens are pinned in `s19b_ai_not_in_release.rs`.
+    ledgerly_app::release::set_ai_enabled(true);
     let path = file_with_tier("s5_reread.ledgerly", Some(AiTier::Off));
     let mut app = open(&path);
     let mut screen = AskScreen::default();

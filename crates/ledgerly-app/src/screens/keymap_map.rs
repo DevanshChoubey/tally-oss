@@ -35,7 +35,7 @@ const MOCK_GROUPS: [(&str, &[(Action, &str)]); 4] = [
         &[
             (
                 Action::OpenPalette,
-                "Command palette: jump, search, ask, type an entry",
+                "Command palette: jump, search, type an entry",
             ),
             (Action::SwitchPalette, "Switch to, replacing this screen"),
             (Action::Back, "Back one level, never loses a saved voucher"),

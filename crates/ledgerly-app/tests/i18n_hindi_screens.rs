@@ -369,6 +369,10 @@ fn draw_all(tr: &Tr) -> (Vec<Drawn>, BTreeSet<String>) {
 
 #[test]
 fn every_screen_speaks_hindi() {
+    // Provenance: owner decision of 2026-11-26. Release 1.0.0 ships without the AI assistant, so
+    // `release::AI_IN_THIS_RELEASE` is false. This test exercises the AI UI itself, so it turns the
+    // switch on for this test's thread only; the 1.0.0 screens are pinned in `s19b_ai_not_in_release.rs`.
+    ledgerly_app::release::set_ai_enabled(true);
     let hi = Catalog::builtin().unwrap().tr("hi");
     let (screens, data) = draw_all(&hi);
     assert!(screens.len() >= 12, "only {} screens drew", screens.len());

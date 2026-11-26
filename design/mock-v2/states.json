@@ -126,20 +126,6 @@
    "description": "The # prefix finds a voucher by number and shows party, date and engine amount."
   },
   {
-   "id": "palette.ask",
-   "kind": "happy",
-   "hash": "screen=palette&base=home&query=%3Fwho%20owes%20us%20for%20more%20than%2030%20days",
-   "title": "Palette, ask your books",
-   "description": "The ? prefix turns a question into a report query; the preview shows the query, not an answer."
-  },
-  {
-   "id": "palette.entry",
-   "kind": "happy",
-   "hash": "screen=palette&base=home&query=%2Bpaid%20rent%2025k%20to%20Sharma%20Properties%20from%20Saptagiri",
-   "title": "Palette, plain-words entry",
-   "description": "The + prefix drafts a voucher from plain words; Enter opens the draft for review."
-  },
-  {
    "id": "palette.commands",
    "kind": "happy",
    "hash": "screen=palette&base=home&query=%3E",
@@ -151,7 +137,7 @@
    "kind": "empty",
    "hash": "screen=palette&base=home&query=zzqx",
    "title": "Palette, no results",
-   "description": "No match: offers to create a ledger, ask as a question, or search vouchers."
+   "description": "No match: offers to create a ledger or search vouchers."
   },
   {
    "id": "ask.result",
@@ -690,7 +676,7 @@
    "kind": "happy",
    "hash": "screen=setup&state=ai",
    "title": "Setup, AI and privacy",
-   "description": "Off, On this computer, or Cloud with your own key; what leaves the machine in each."
+   "description": "Off is selected. On this computer and Cloud are shown disabled, tagged Not in this release; AI arrives in a later version."
   },
   {
    "id": "setup.backup",
@@ -707,25 +693,11 @@
    "description": "Company created; the first three things to do, each with its key."
   },
   {
-   "id": "ai-settings.local",
-   "kind": "happy",
-   "hash": "screen=ai-settings&state=local",
-   "title": "AI and privacy, local",
-   "description": "Per-company AI tier, model details, what each feature sends, and the AI activity log."
-  },
-  {
-   "id": "ai-settings.cloud",
-   "kind": "happy",
-   "hash": "screen=ai-settings&state=cloud",
-   "title": "AI and privacy, cloud key",
-   "description": "Cloud with your own key: provider, redaction list, per-document confirmation."
-  },
-  {
    "id": "ai-settings.off",
    "kind": "offline-ai",
    "hash": "screen=ai-settings&state=off",
    "title": "AI and privacy, off",
-   "description": "AI off: every AI entry point hidden; rule checks and engine matching still work."
+   "description": "Off is selected; On this computer and Cloud are disabled, tagged Not in this release. Every AI entry point is hidden; rule checks and engine matching still work."
   },
   {
    "id": "masters.create-item",

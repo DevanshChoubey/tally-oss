@@ -705,6 +705,10 @@ fn report(key: &str) -> PaletteTarget {
 
 #[test]
 fn the_mock_screens_have_palette_rows_that_open_them_with_their_titles() {
+    // Provenance: owner decision of 2026-11-26. Release 1.0.0 ships without the AI assistant, so
+    // `release::AI_IN_THIS_RELEASE` is false. This test exercises the AI UI itself, so it turns the
+    // switch on for this test's thread only; the 1.0.0 screens are pinned in `s19b_ai_not_in_release.rs`.
+    ledgerly_app::release::set_ai_enabled(true);
     // provenance: derived. The titles are the mock's (design/mock-v2/index.html, SCREENS[...].title
     // and the NAV list): "Review queue", "Ask your books", "Plain-words entry", "Purchase from bill
     // photo", "Keyboard map", "AI and privacy", "Company setup". The masters screen titles itself
@@ -785,6 +789,10 @@ fn the_bank_row_says_why_it_cannot_open_without_one_bank_ledger() {
 
 #[test]
 fn the_sidebar_has_the_mock_groups_and_entries_in_order() {
+    // Provenance: owner decision of 2026-11-26. Release 1.0.0 ships without the AI assistant, so
+    // `release::AI_IN_THIS_RELEASE` is false. This test exercises the AI UI itself, so it turns the
+    // switch on for this test's thread only; the 1.0.0 screens are pinned in `s19b_ai_not_in_release.rs`.
+    ledgerly_app::release::set_ai_enabled(true);
     // provenance: derived. design/mock-v2/DESIGN.md, "Side bar groups", in order: Overview (Home,
     // Review queue), Enter (Sales, Purchase, Payment, Receipt, Plain-words entry), Books (Day
     // book, Balance sheet, Masters), Compliance (GST returns, Bank reconciliation), Settings (AI

@@ -88,6 +88,13 @@ impl<'a> OptionCard<'a> {
         self
     }
 
+    /// The same card that cannot be chosen, with no note: the badge or the page says why.
+    #[must_use]
+    pub fn disabled(mut self) -> Self {
+        self.enabled = false;
+        self
+    }
+
     /// The same card with a badge after its title.
     #[must_use]
     pub fn badge(mut self, badge: Option<impl Into<Cow<'a, str>>>) -> Self {
@@ -244,21 +251,49 @@ pub fn option_grid(
 fn text_column(ui: &mut Ui, card: &OptionCard<'_>) -> Rect {
     let t = tokens(ui);
     ui.spacing_mut().item_spacing.y = 2.0;
-    let title = ui
-        .horizontal(|ui| {
-            let title = ui
-                .add(egui::Label::new(
-                    RichText::new(&*card.title)
-                        .font(bold_font(ui, TEXT_BODY))
-                        .color(t.text),
-                ))
-                .rect;
-            if let Some(text) = card.badge.as_deref() {
-                super::badge::badge(ui, super::badge::BadgeKind::Accent, text);
+    let title_label = |ui: &mut Ui| {
+        ui.add(egui::Label::new(
+            RichText::new(&*card.title)
+                .font(bold_font(ui, TEXT_BODY))
+                .color(t.text),
+        ))
+        .rect
+    };
+    let badge_kind = if card.enabled {
+        super::badge::BadgeKind::Accent
+    } else {
+        super::badge::BadgeKind::Neutral
+    };
+    // The badge sits after the title when both fit the card's width, and under it when they do
+    // not (the mock's tag wraps the same way in a narrow card).
+    let title = match card.badge.as_deref() {
+        None => title_label(ui),
+        Some(text) => {
+            let title_width = ui
+                .painter()
+                .layout_no_wrap(
+                    card.title.to_string(),
+                    bold_font(ui, TEXT_BODY),
+                    egui::Color32::PLACEHOLDER,
+                )
+                .size()
+                .x;
+            let needed =
+                title_width + ui.spacing().item_spacing.x + super::badge::badge_width(ui, text);
+            if needed <= ui.available_width() {
+                ui.horizontal(|ui| {
+                    let rect = title_label(ui);
+                    super::badge::badge(ui, badge_kind, text);
+                    rect
+                })
+                .inner
+            } else {
+                let rect = title_label(ui);
+                super::badge::badge(ui, badge_kind, text);
+                rect
             }
-            title
-        })
-        .inner;
+        }
+    };
     para(ui, &card.body, TEXT_META, t.text_2);
     if !card.keys.is_empty() {
         ui.add_space(4.0);

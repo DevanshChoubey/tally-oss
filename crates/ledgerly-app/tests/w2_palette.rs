@@ -83,6 +83,10 @@ fn key_press(key: Key, modifiers: Modifiers) -> RawInput {
 
 #[test]
 fn each_prefix_selects_its_scope_and_the_rest_is_the_body() {
+    // Provenance: owner decision of 2026-11-26. Release 1.0.0 ships without the AI assistant, so
+    // `release::AI_IN_THIS_RELEASE` is false. This test exercises the AI UI itself, so it turns the
+    // switch on for this test's thread only; the 1.0.0 screens are pinned in `s19b_ai_not_in_release.rs`.
+    ledgerly_app::release::set_ai_enabled(true);
     // provenance: derived — DESIGN.md "Command palette" table: # voucher, @ party, > command,
     // ? ask, + entry. Leading spaces are ignored (`of_query` docs).
     assert_eq!(
@@ -184,6 +188,10 @@ fn the_command_prefix_keeps_only_commands() {
 
 #[test]
 fn the_ask_prefix_shows_one_row_that_says_it_is_not_available() {
+    // Provenance: owner decision of 2026-11-26. Release 1.0.0 ships without the AI assistant, so
+    // `release::AI_IN_THIS_RELEASE` is false. This test exercises the AI UI itself, so it turns the
+    // switch on for this test's thread only; the 1.0.0 screens are pinned in `s19b_ai_not_in_release.rs`.
+    ledgerly_app::release::set_ai_enabled(true);
     // provenance: index.html:1123 titles the row "Ask: <question>"; the detail is ours and says
     // the feature is not available (no answer is made).
     let mut p = open_with(vec![report("bs", "Balance Sheet")], PaletteMode::OnTop);
@@ -195,6 +203,10 @@ fn the_ask_prefix_shows_one_row_that_says_it_is_not_available() {
 
 #[test]
 fn the_ask_prefix_with_nothing_after_it_is_titled_ask_your_books() {
+    // Provenance: owner decision of 2026-11-26. Release 1.0.0 ships without the AI assistant, so
+    // `release::AI_IN_THIS_RELEASE` is false. This test exercises the AI UI itself, so it turns the
+    // switch on for this test's thread only; the 1.0.0 screens are pinned in `s19b_ai_not_in_release.rs`.
+    ledgerly_app::release::set_ai_enabled(true);
     // provenance: index.html:1121 heads the ? section "Ask your books".
     let mut p = open_with(Vec::new(), PaletteMode::OnTop);
     p.set_query("?");
@@ -203,6 +215,10 @@ fn the_ask_prefix_with_nothing_after_it_is_titled_ask_your_books() {
 
 #[test]
 fn choosing_an_assistant_row_does_nothing_and_keeps_the_palette_open() {
+    // Provenance: owner decision of 2026-11-26. Release 1.0.0 ships without the AI assistant, so
+    // `release::AI_IN_THIS_RELEASE` is false. This test exercises the AI UI itself, so it turns the
+    // switch on for this test's thread only; the 1.0.0 screens are pinned in `s19b_ai_not_in_release.rs`.
+    ledgerly_app::release::set_ai_enabled(true);
     // provenance: derived — the assistant is not connected, so the row is inert: accept() returns
     // None, the palette stays open and nothing enters the recents.
     let mut p = open_with(Vec::new(), PaletteMode::OnTop);
@@ -330,6 +346,10 @@ fn ranked_rows_stay_in_rank_order_inside_each_heading() {
 
 #[test]
 fn recent_choices_come_first_and_survive_the_search_that_found_them() {
+    // Provenance: owner decision of 2026-11-26. Release 1.0.0 ships without the AI assistant, so
+    // `release::AI_IN_THIS_RELEASE` is false. This test exercises the AI UI itself, so it turns the
+    // switch on for this test's thread only; the 1.0.0 screens are pinned in `s19b_ai_not_in_release.rs`.
+    ledgerly_app::release::set_ai_enabled(true);
     // provenance: derived — a voucher the API found is chosen, then the palette is reopened: the
     // search's rows are cleared by `open`, but the recent choice is still shown first (its row is
     // kept with the target).
@@ -388,6 +408,10 @@ fn a_query_with_no_match_is_drawn_and_leaves_the_palette_open() {
 
 #[test]
 fn only_the_voucher_and_party_prefixes_and_plain_text_are_searched() {
+    // Provenance: owner decision of 2026-11-26. Release 1.0.0 ships without the AI assistant, so
+    // `release::AI_IN_THIS_RELEASE` is false. This test exercises the AI UI itself, so it turns the
+    // switch on for this test's thread only; the 1.0.0 screens are pinned in `s19b_ai_not_in_release.rs`.
+    ledgerly_app::release::set_ai_enabled(true);
     // provenance: derived — `#` and `@` send the text after the prefix to the API; `>`, `?` and
     // `+` send nothing (their rows are commands or inert rows). Nothing typed means nothing sent.
     let mut p = open_with(Vec::new(), PaletteMode::OnTop);
@@ -409,6 +433,10 @@ fn only_the_voucher_and_party_prefixes_and_plain_text_are_searched() {
 
 #[test]
 fn an_assistant_query_makes_no_api_call_and_no_note() {
+    // Provenance: owner decision of 2026-11-26. Release 1.0.0 ships without the AI assistant, so
+    // `release::AI_IN_THIS_RELEASE` is false. This test exercises the AI UI itself, so it turns the
+    // switch on for this test's thread only; the 1.0.0 screens are pinned in `s19b_ai_not_in_release.rs`.
+    ledgerly_app::release::set_ai_enabled(true);
     // provenance: derived — with no worker, a query that is searched gets the no-company note; a
     // `?` query is not searched, so it gets none and nothing is pending.
     let mut p = open_with(Vec::new(), PaletteMode::OnTop);

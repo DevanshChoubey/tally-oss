@@ -47,6 +47,12 @@ impl PaletteScope {
     pub fn of_query(query: &str) -> (PaletteScope, &str) {
         let text = query.trim_start();
         for (prefix, scope) in PREFIXES {
+            // `?` and `+` are plain text while this release carries no AI (`crate::release`).
+            if matches!(scope, PaletteScope::Ask | PaletteScope::Entry)
+                && !crate::release::ai_enabled()
+            {
+                continue;
+            }
             if let Some(rest) = text.strip_prefix(prefix) {
                 return (scope, rest);
             }

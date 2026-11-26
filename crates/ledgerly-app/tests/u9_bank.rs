@@ -701,6 +701,10 @@ fn painted_with_tier(tier: Option<ledgerly_app::AiTier>) -> Vec<String> {
 
 #[test]
 fn with_ai_off_the_side_says_what_still_runs_and_offers_ai_and_privacy() {
+    // Provenance: owner decision of 2026-11-26. Release 1.0.0 ships without the AI assistant, so
+    // `release::AI_IN_THIS_RELEASE` is false. This test exercises the AI UI itself, so it turns the
+    // switch on for this test's thread only; the 1.0.0 screens are pinned in `s19b_ai_not_in_release.rs`.
+    ledgerly_app::release::set_ai_enabled(true);
     // provenance: design/mock-v2/index.html:1830, state `bank.offline-ai`: the side holds a note,
     // "AI is off for this company. Exact and Rule matching still run: they are deterministic
     // engine code. Leftover lines wait for you.", with an "AI and privacy" button.

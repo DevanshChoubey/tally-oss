@@ -1113,19 +1113,35 @@ impl SetupScreen {
                 crate::i18n::t("setup.ai.cloud_hint"),
             ),
         ];
+        let ai_in_release = crate::release::ai_enabled();
+        let not_in_release = crate::i18n::t("ai.settings.not_in_release");
         let cards = cards
             .into_iter()
             .zip(tiers)
-            .map(|(card, tier)| card.selected(self.ai == tier))
+            .map(|(card, tier)| {
+                if !ai_in_release && tier != AiTier::Off {
+                    // Shown, tagged and disabled: the company stays Off (`crate::release`).
+                    card.disabled().badge(Some(not_in_release.as_str()))
+                } else {
+                    card.selected(self.ai == tier)
+                }
+            })
             .collect::<Vec<_>>();
         let drawn = option_grid(ui, egui::Id::unique("setup-ai"), 3, &cards);
         for (n, (card, tier)) in drawn.iter().zip(tiers).enumerate() {
             record_probe(ui, &format!("setup.option.{n}"), card.card);
-            if card.response.clicked() {
+            if card.response.clicked() && (ai_in_release || tier == AiTier::Off) {
                 self.ai = tier;
             }
         }
-        step_text(ui, &crate::i18n::t("setup.ai.later"));
+        step_text(
+            ui,
+            &crate::i18n::t(if ai_in_release {
+                "setup.ai.later"
+            } else {
+                "ai.settings.later_note"
+            }),
+        );
         if let Some(notice) = ai_notice(self.ai) {
             step_text(ui, &notice);
         }

@@ -944,7 +944,7 @@ impl Screen for HomeScreen {
                 new_company_line(&self.data.company_name, fy)
             },
         );
-        let ai = ai_panel(ctx.ai_tier);
+        let ai = ai_panel(crate::release::effective_tier(ctx.ai_tier));
         let tiles = self.tile_items();
         let mut chosen = draw::Chosen::default();
         let mut rects = Vec::new();

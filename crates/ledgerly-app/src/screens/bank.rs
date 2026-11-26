@@ -995,7 +995,7 @@ impl Screen for BankScreen {
             .books
             .as_ref()
             .is_some_and(|books| crate::shell::navigate::bank_ledger_count(books) > 1);
-        self.ai_tier = ctx.ai_tier;
+        self.ai_tier = crate::release::effective_tier(ctx.ai_tier);
         self.draw(ui);
         if self.settings_requested.take().is_some()
             && let Ok(action) = crate::screens::ai_gate::open_settings(ctx)

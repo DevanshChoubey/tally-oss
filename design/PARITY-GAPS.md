@@ -26,14 +26,16 @@ Classes:
 - **DELIBERATE** the entry bar says "not connected in this build" where the mock says "runs on this
   computer"; claiming a model that is not there would be a false statement.
 - **NOT BUILT** a recent GSTR-1 row has no live detail ("3 sections ready, 1 needs correction").
-- **NOT BUILT** the palette's Ask rows ("Ask: q", "Or" Ask or Draft; index.html:1127, 1129) while AI is off.
+- **DELIBERATE** the palette has no `?` and `+` prefixes, Ask or Draft rows, or "Read a bill photo"
+  command in 1.0.0 (owner decision of 2026-11-26: the release carries no AI); the mock's
+  `AI_IN_RELEASE=false` drops them the same way, and the legend and placeholder name no `?` or `+`.
 - **DELIBERATE** Search vouchers detail says "Number, party, amount or date", which is what the
   search matches (`MatchedOn`); the mock's "Narrations and party names" would be wrong.
 - **DELIBERATE** `home.loading` and `balance-sheet.loading` are captured with preset books and a
   held worker, so the shell's open-company answers do not queue behind the hold.
-- **DELIBERATE** `start.recent`: the recent list is read from the user's config folder; the AI chip
-  reads "AI: not set up" where the mock says "AI on this computer", and the sidebar has no review
-  count, because no company is open to ask (a chip that claimed a tier would be false).
+- **DELIBERATE** `start.recent`: the recent list is read from the user's config folder, and the
+  sidebar has no review count, because no company is open to ask. The AI chip reads "AI off", as the
+  mock's does in 1.0.0.
 
 ## Palette
 
@@ -308,7 +310,9 @@ Classes:
 - **NOT BUILT** Home rows do not open their proposal; the empty state's "Read a bill" (Alt+O).
 - **DELIBERATE** no optional-voucher list (help page "Display Optional Vouchers",
   help.tallysolutions.com/docs/te9rel66/Reports/MIS_Reports/Display_Optional_Vouchers.htm).
-- **NOT BUILT** `ai-settings.cloud`, the local model rows, per-feature switches and AI event rows:
+- **DELIBERATE** the mock's `ai-settings.local` and `ai-settings.cloud` states are removed for 1.0.0;
+  the screen is `ai-settings.off` only, with the two cards disabled. Their layout returns with the AI.
+- **NOT BUILT** the cloud panel, the local model rows, per-feature switches and AI event rows:
   no keychain store, model runner or feature switch exists.
 - **DELIBERATE** no tier is chosen by default; the log headers are the company file's columns; the
   "Current" badge is a border only; the report list shows for every tier.
@@ -327,9 +331,12 @@ Classes:
 
 - **NOT BUILT** the Keyboard step's preset is shown but not stored; the backup folder is not saved
   and no backup runs on a schedule.
-- **DELIBERATE** release 1.0.0 ships without the AI assistant: the AI step starts on Off (the mock
-  starts on "On this computer"), and choosing On this computer or Cloud says it is not available in
-  this release and the company starts with AI off. Nothing but Off is stored by the wizard.
+- **DELIBERATE** release 1.0.0 ships without the AI assistant (owner decision of 2026-11-26). The AI
+  step selects Off; On this computer and Cloud are shown disabled with a "Not in this release" tag
+  and the line "AI arrives in a later version. This company stays Off.", as the mock does with
+  `AI_IN_RELEASE=false`. Nothing but Off is stored by the wizard. One switch, `release::AI_IN_THIS_RELEASE`,
+  brings the AI screens back; the sidebar's Plain-words entry, the palette routes and the purchase
+  form's Bill photo button and Alt+O are hidden until then.
 - **DELIBERATE** the import card on Start opens the Import screen with no company open; that screen
   says to create or open one first and offers Back to setup, as the mock's `import.no-company` does,
   so nothing can finish wrongly.
@@ -445,9 +452,9 @@ Credit (`ledgerly_reports::print_text` places the engine's figures only).
 
 Seen in the release binary under a nested X server with an empty config and data directory.
 
-- **DELIBERATE** the title bar shows today's date and "AI: not set up" on a cold start; the fixture
-  captures pin the date to 21 Nov 2026 and some show "AI on this computer" (the AI and privacy
-  screen still lets a company file hold that tier; a new company starts with AI off). Both are the app's real state.
+- **DELIBERATE** the title bar shows today's date and "AI off" on a cold start; the fixture
+  captures pin the date to 21 Nov 2026. A company file stored with the Local tier by an older build
+  opens and shows AI off (`release::effective_tier`).
 - **DELIBERATE** the key bar drops the hint that does not fit before it would overlap the right-hand
   hint ("Enter Open" on Home at 1280 points; the mock shows it). The mock's bar is wider than the
   app's text at that size; overlapping text would be worse than a missing hint.

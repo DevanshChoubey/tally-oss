@@ -107,6 +107,28 @@ pub const LEGEND: [(&str, &str); 5] = [
     ("+", "entry"),
 ];
 
+/// The prefix legend of this release: [`LEGEND`] without `?` and `+` while the release carries no
+/// AI (`crate::release`).
+#[must_use]
+pub fn legend() -> &'static [(&'static str, &'static str)] {
+    if crate::release::ai_enabled() {
+        &LEGEND
+    } else {
+        &LEGEND[..3]
+    }
+}
+
+/// The key of the query box's placeholder text in the translation files: the full text, or the
+/// one that names no `?` or `+` prefix while the release carries no AI.
+#[must_use]
+pub fn placeholder_key() -> &'static str {
+    if crate::release::ai_enabled() {
+        "palette.placeholder"
+    } else {
+        "palette.placeholder_no_ai"
+    }
+}
+
 /// A palette command that is not a keymap action (`design/mock-v2/index.html:1110`, `PAL_CMDS`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RunCommand {
@@ -683,7 +705,12 @@ impl Palette {
                     .iter()
                     .map(|entry| Row::new(Section::Recent, entry.clone(), RowKind::Pick)),
             );
-            rows.extend(PREFIX_ROWS.iter().map(|(fill, title, detail)| {
+            // `?` and `+` reach the assistant, which this release does not carry.
+            let ai = crate::release::ai_enabled();
+            let prefixes = PREFIX_ROWS
+                .iter()
+                .filter(|(fill, _, _)| ai || !matches!(*fill, "?" | "+"));
+            rows.extend(prefixes.map(|(fill, title, detail)| {
                 let entry = PaletteEntry::new(
                     PaletteTarget::Fill((*fill).to_owned()),
                     crate::i18n::lit(title),
