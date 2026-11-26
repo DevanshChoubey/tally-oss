@@ -7,6 +7,7 @@ use super::{
     place_label,
 };
 use crate::screens::voucher_entry::{LedgerHit, format_entry_date, parse_entry_date};
+use ledgerly_api::is_gst_tax_ledger;
 use ledgerly_model::Masters;
 
 impl ItemInvoiceScreen {
@@ -75,7 +76,7 @@ impl ItemInvoiceScreen {
                     }
                 }
             }
-            InvoiceMode::Accounting => {
+            InvoiceMode::Accounting | InvoiceMode::AsVoucher => {
                 for i in 0..self.draft.particulars.len() {
                     order.extend([Field::Ledger(i), Field::LedgerAmount(i)]);
                 }
@@ -205,7 +206,7 @@ impl ItemInvoiceScreen {
                 self.submit_cell(i)
             }
             Field::Ledger(i) => self.submit_particular(masters, i),
-            Field::LedgerAmount(i) => self.submit_particular_amount(i),
+            Field::LedgerAmount(i) => self.submit_particular_amount(masters, i),
             Field::Number | Field::Reference | Field::BillName(_) => Step::Next,
             Field::BillKind(i) => self.submit_bill_kind(i),
             Field::BillAmount(i) => self.submit_bill_amount(i),
@@ -473,10 +474,17 @@ impl ItemInvoiceScreen {
     }
 
     /// Enter on a particular's amount: it must be a plain amount in paise.
-    fn submit_particular_amount(&mut self, i: usize) -> Step {
+    fn submit_particular_amount(&mut self, masters: &Masters, i: usize) -> Step {
         let Some(row) = self.draft.particulars.get(i) else {
             return Step::Stay;
         };
+        // As voucher: a GST ledger line may stay empty, the engine fills it.
+        if self.draft.mode == InvoiceMode::AsVoucher
+            && row.amount_text.trim().is_empty()
+            && row.ledger.is_some_and(|l| is_gst_tax_ledger(masters, l))
+        {
+            return Step::Next;
+        }
         match typed_amount(&row.amount_text) {
             Ok(amount) if amount.is_zero() || amount.is_negative() => {
                 self.refuse("The amount must be more than zero.".to_owned())

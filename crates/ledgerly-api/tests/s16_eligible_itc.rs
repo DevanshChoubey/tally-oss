@@ -232,7 +232,7 @@ fn widget() -> StockItem {
 fn ok<T: Debug>(out: Result<Outcome<T>, ApiError>) -> T {
     match out {
         Ok(Outcome::Value(v)) => v,
-        other => panic!("expected a value, got {other:?}"),
+        other @ (Ok(Outcome::Unsupported(_)) | Err(_)) => panic!("expected a value, got {other:?}"),
     }
 }
 
@@ -364,7 +364,7 @@ fn a_purchase_marked_eligible_gets_all_its_tax_as_eligible_credit() {
     let itc = built.eligible_itc.expect("a purchase has an ITC figure");
     let itc = match itc {
         Outcome::Value(i) => i,
-        other => panic!("expected a value, got {other:?}"),
+        other @ Outcome::Unsupported(_) => panic!("expected a value, got {other:?}"),
     };
     assert_eq!(itc.eligible, Paise::new(720_000));
     assert_eq!(itc.not_claimable, Paise::ZERO);
@@ -379,7 +379,7 @@ fn a_purchase_marked_ineligible_gets_no_credit() {
     let built = ok(api.invoice_gst(&purchase_draft()));
     let itc = match built.eligible_itc.expect("a purchase has an ITC figure") {
         Outcome::Value(i) => i,
-        other => panic!("expected a value, got {other:?}"),
+        other @ Outcome::Unsupported(_) => panic!("expected a value, got {other:?}"),
     };
     assert_eq!(itc.eligible, Paise::ZERO);
     assert_eq!(itc.not_claimable, Paise::new(720_000));
@@ -419,7 +419,7 @@ fn an_as_voucher_purchase_gets_the_credit_figure_too() {
     let built = ok(api.invoice_gst(&draft));
     let itc = match built.eligible_itc.expect("a purchase has an ITC figure") {
         Outcome::Value(i) => i,
-        other => panic!("expected a value, got {other:?}"),
+        other @ Outcome::Unsupported(_) => panic!("expected a value, got {other:?}"),
     };
     assert_eq!(itc.eligible, Paise::new(180_000));
 }

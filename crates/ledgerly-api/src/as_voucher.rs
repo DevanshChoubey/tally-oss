@@ -39,12 +39,26 @@ struct Parts {
     tax_ledgers: Vec<TaxLedger>,
 }
 
-fn unsupported<T>(what: &str, reason: impl Into<String>) -> Result<Outcome<T>, GstError> {
-    Ok(Outcome::unsupported(what, reason))
+fn unsupported<T>(what: &str, reason: impl Into<String>) -> Outcome<T> {
+    Outcome::unsupported(what, reason)
+}
+
+/// `true` when `ledger` is a GST tax ledger (CGST, SGST, UTGST, IGST or cess): the engine fills
+/// its amount in an as-voucher entry, so a screen need not ask for one.
+#[must_use]
+pub fn is_gst_tax_ledger(
+    masters: &ledgerly_model::Masters,
+    ledger: ledgerly_core::LedgerId,
+) -> bool {
+    masters
+        .ledgers
+        .get(&ledger)
+        .and_then(|l| l.tax)
+        .is_some_and(|t| is_gst_head(t.kind))
 }
 
 /// Splits the entry's lines into the party, the tax ledgers and the taxable particulars.
-fn split(books: &Books, v: &Voucher) -> Result<Outcome<Parts>, GstError> {
+fn split(books: &Books, v: &Voucher) -> Outcome<Parts> {
     if !v.inventory_lines.is_empty() {
         return unsupported(
             "stock item allocation in As Voucher mode",
@@ -107,10 +121,10 @@ fn split(books: &Books, v: &Voucher) -> Result<Outcome<Parts>, GstError> {
         ledger_lines: particulars,
         ..v.clone()
     };
-    Ok(Outcome::Value(Parts {
+    Outcome::Value(Parts {
         accounting,
         tax_ledgers,
-    }))
+    })
 }
 
 /// `Unsupported` unless the selected tax ledgers are exactly the heads of the supply.
@@ -143,7 +157,7 @@ pub(crate) fn breakup(
     v: &Voucher,
     pack: &RulePack,
 ) -> Result<Outcome<GstBreakup>, GstError> {
-    let parts = match split(books, v)? {
+    let parts = match split(books, v) {
         Outcome::Value(p) => p,
         Outcome::Unsupported(u) => return Ok(Outcome::Unsupported(u)),
     };
@@ -164,7 +178,7 @@ pub(crate) fn invoice(
     pack: &RulePack,
     bills: &[PartyBill],
 ) -> Result<Outcome<InvoiceGst>, GstError> {
-    let parts = match split(books, v)? {
+    let parts = match split(books, v) {
         Outcome::Value(p) => p,
         Outcome::Unsupported(u) => return Ok(Outcome::Unsupported(u)),
     };

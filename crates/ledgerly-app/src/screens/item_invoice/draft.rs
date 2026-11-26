@@ -3,6 +3,7 @@
 use super::{InvoiceError, InvoiceKind, InvoiceMode, parse_decimal, parse_place};
 use crate::screens::voucher_entry::{UNASSIGNED_VOUCHER_ID, eval_amount, parse_entry_date};
 use ledgerly_api::PartyBill;
+use ledgerly_api::is_gst_tax_ledger;
 use ledgerly_core::{
     Date, Decimal, DrCr, FinancialYear, GodownId, LedgerId, MoneyError, Paise, Qty, Rate,
     RoundingRule, SignedAmount, StockItemId, Unsupported, VoucherTypeId, round_rupees_to_paise,
@@ -373,6 +374,11 @@ impl InvoiceDraft {
                 self.particular_lines(masters)?,
                 Vec::new(),
             ),
+            InvoiceMode::AsVoucher => (
+                VoucherMode::AsVoucher,
+                self.particular_lines(masters)?,
+                Vec::new(),
+            ),
         };
         Ok(Voucher {
             id: UNASSIGNED_VOUCHER_ID,
@@ -412,8 +418,17 @@ impl InvoiceDraft {
                 .ledger
                 .filter(|id| masters.ledgers.contains_key(id))
                 .ok_or_else(|| bad("choose a ledger".to_owned()))?;
-            let amount = typed_amount(&row.amount_text).map_err(|e| bad(format!("amount: {e}")))?;
-            if amount.is_zero() || amount.is_negative() {
+            // As voucher: a GST ledger needs no amount, the engine fills it (a typed one is
+            // replaced).
+            let engine_fills = self.mode == InvoiceMode::AsVoucher
+                && row.amount_text.trim().is_empty()
+                && is_gst_tax_ledger(masters, ledger);
+            let amount = if engine_fills {
+                Paise::ZERO
+            } else {
+                typed_amount(&row.amount_text).map_err(|e| bad(format!("amount: {e}")))?
+            };
+            if !engine_fills && (amount.is_zero() || amount.is_negative()) {
                 return Err(bad("the amount must be more than zero".to_owned()));
             }
             lines.push(LedgerLine {

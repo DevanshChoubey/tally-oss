@@ -92,5 +92,6 @@ fn to_block(gst: InvoiceGst) -> GstBlock {
         invoice_total: gst.invoice_total,
         ledger_lines: gst.ledger_lines,
         stored: gst.stored,
+        eligible_itc: gst.eligible_itc,
     }
 }

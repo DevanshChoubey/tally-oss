@@ -142,8 +142,10 @@ Classes:
   "No due date" badge; a credit or provisional stock value is marked.
 - **DELIBERATE** `masters.empty` and `masters.items-empty` keep the filter box and More master kinds
   above the empty card; hiding them would strand a user on an empty kind.
-- **NOT BUILT** Alt+C on the item invoice's item field (index.html:390, 1253): no TallyPrime page read
-  documents it.
+- **NOT BUILT** Alt+C on the item invoice's item field (index.html:390, 1253): re-read 2026-11-26,
+  help.tallysolutions.com/tally-prime/inventory/manage-stock-item-tally/ documents Alt+C for a stock
+  group or a unit inside the stock item form, and no India page says Alt+C on a voucher's Name of Item
+  creates a stock item (only a Brazil-edition page does), so the key does nothing there.
 - **NOT BUILT** `masters.suggested-ledger` (needs the assistant); the "Not supported yet" notice has no
   mock state because the sample engine never refuses a masters action.
 - **DELIBERATE** `masters.create-item` is captured from the sample company: a company without
@@ -184,11 +186,16 @@ Classes:
 - **DELIBERATE** group names keep the sample's capitalisation ("Direct Expenses").
 - **DELIBERATE** a prefilled amount is selected when the keyboard arrives; a literal finer than a
   paisa is refused.
-- **NOT BUILT** eligible ITC on a purchase: `Api::invoice_gst_with_bills` does not return it for a draft
-  and the UI must not compute it.
+- **DELIBERATE** the purchase's input credit line is the engine's credit "before the 2B match": the
+  s.16(2) conditions (bill in 2B, receipt, payment) cannot be known on a draft. A ledger without an HSN/SAC
+  shows "Not computed" and the engine's reason, never a guessed figure; a reverse-charge purchase does too.
+  A blocked credit is shown as "0.00 (n not claimable)".
 - **DELIBERATE** the balance line can say "balance not shown": the API answers Unsupported, never zero.
-- **NOT BUILT** the credit note hint's figures ("14 Nov, 67 sets invoiced"): no return-against-invoice
-  quantity exists.
+- **DELIBERATE** the note's "Invoiced on SI/0412, 14 Nov 2026: 67 set of ..." line lists only the
+  quantity invoiced (the pages read ask for the original invoice number and date and say nothing about
+  showing a quantity; it is our choice). It does not subtract earlier notes, so it does not stop a
+  second return of the same goods, and it shows nothing while the invoice is not found (a half-typed
+  number is not an error).
 - **DELIBERATE** a debit note goes back to the supplier, as a purchase return is a Debit Note against
   the supplier in the accounting product; a note is titled "Credit Note" or "Debit Note".
 
@@ -197,8 +204,20 @@ Classes:
 - **DELIBERATE** a company without inventory gets an accounting invoice
   (help.tallysolutions.com/sales-of-goods-services/ and
   help.tallysolutions.com/tally-prime/sales-process/faq-sales/, both read 2026-11-23).
-- **NOT BUILT** As Voucher mode (Ctrl+H, help.tallysolutions.com/sales-of-goods-services/): the GST
-  engine refuses it.
+- **DELIBERATE** As voucher mode is Ctrl+Shift+H, not a choice in Ctrl+H's list
+  (help.tallysolutions.com/sales-of-goods-services/, read 2026-11-26, says Ctrl+H then select the mode):
+  Ctrl+H keeps toggling item and accounting mode. It is for sales and purchase only; a note keeps two
+  modes. Accounting and as voucher share their ledger lines.
+- **DELIBERATE** As voucher shows Dr and Cr, not By and To (the pages offer both), asks the party in
+  the header and lists only the lines the user typed; the engine's party line, tax amounts and round-off
+  show in the tax box and are posted, not listed as rows as the mock's `sales-invoice.as-voucher` does.
+- **DELIBERATE** the pages say nothing on the GST ledger lines of an as-voucher entry, so the rule is
+  our choice, built on the GST sales and GST-not-calculated pages (read 2026-11-26): the user picks the
+  GST ledgers, they must be exactly the heads of the supply (CGST and SGST, CGST and UTGST, or IGST),
+  an amount typed on one is replaced, and the engine fills the party line. A stock item line, a
+  cess ledger, no GST ledger or the wrong heads show "Not supported yet" with the reason.
+- **DELIBERATE** an as-voucher entry is saved as an accounting invoice (the GST returns read that
+  mode); it opens again as one.
 - **NOT BUILT** the e-Invoice cell says "Not built yet": nothing maps a voucher to an `EInvoice`.
 - **DELIBERATE** the sample GSTIN is synthetic and the rule pack reads "2026.1-slabs".
 - **NOT BUILT** the toast has no Undo Ctrl+Z: no undo exists.

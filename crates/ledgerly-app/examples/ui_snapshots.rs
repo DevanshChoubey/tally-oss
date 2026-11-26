@@ -1459,6 +1459,32 @@ fn light_shots() -> Vec<Shot> {
         ))
         .press(&[(Key::Enter, NONE)])
         .type_text(SI_NARRATION),
+        // The mock's `sales-invoice.as-voucher`: Ctrl+Shift+H, then the party, the Sales ledger
+        // for the taxable 1,30,085.00 (25 x 3,850.00 + 67 x 505.00) and the two GST ledgers with
+        // no amount typed (the engine fills them). A blank ledger ends the lines; the narration is typed.
+        shot("sales-invoice.as-voucher", &[(Key::F8, NONE)])
+            .on(Fixture::Godavari)
+            .press(&[(
+                Key::H,
+                Modifiers {
+                    shift: true,
+                    ..Modifiers::COMMAND
+                },
+            )])
+            .type_text("Shree Ganesh")
+            .press(&[(Key::Enter, NONE)])
+            .type_text("27")
+            .press(&[(Key::Enter, NONE), (Key::Enter, NONE)])
+            .type_text("Sales")
+            .press(&[(Key::Enter, NONE)])
+            .type_text("130085")
+            .press(&[(Key::Enter, NONE)])
+            .type_text("CGST")
+            .press(&[(Key::Enter, NONE), (Key::Enter, NONE)])
+            .type_text("SGST")
+            .press(&[(Key::Enter, NONE), (Key::Enter, NONE), (Key::Enter, NONE)])
+            .type_text(SI_NARRATION)
+            .expect("Sales invoice", None),
         // The mock's receipt: 1,00,000 from Mehta Agro into the Saptagiri account. Mehta tracks
         // bills, so the bill-wise popup opens on the amount, as the mock draws it.
         shot("receipt.default", &[(Key::F6, NONE)])

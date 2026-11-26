@@ -228,6 +228,7 @@ fn block_for_10000() -> GstBlock {
             lines: Vec::new(),
             round_off: Paise::ZERO,
         },
+        eligible_itc: None,
     }
 }
 

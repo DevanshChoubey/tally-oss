@@ -4,8 +4,8 @@
 //! purchase return goes against the supplier's bill. The note screen shows the invoice's date and
 //! quantities beside the lines; they come from here, never from the screen.
 
-use ledgerly_core::{Date, LedgerId, MoneyError, Outcome, Qty, StockItemId, UnitId};
-use ledgerly_model::{BaseVoucherKind, Books, VoucherStatus};
+use ledgerly_core::{Date, LedgerId, MoneyError, Outcome, Qty, StockItemId};
+use ledgerly_model::{BaseVoucherKind, VoucherStatus};
 
 use ledgerly_gst::GstError;
 
@@ -95,9 +95,12 @@ impl Api {
                 .voucher_types
                 .get(&v.type_id)
                 .is_some_and(|t| t.base == original);
-            let named = match original {
-                BaseVoucherKind::Purchase => v.reference.as_deref(),
-                _ => v.number.as_deref(),
+            // A debit note's original is the supplier's bill, found by the bill number the
+            // purchase carries as its reference; a credit note's is a sales voucher's number.
+            let named = if original == BaseVoucherKind::Purchase {
+                v.reference.as_deref()
+            } else {
+                v.number.as_deref()
             };
             is_original
                 && v.party == Some(party)
@@ -113,9 +116,22 @@ impl Api {
         };
         let mut lines: Vec<InvoicedLine> = Vec::new();
         for l in &invoice.inventory_lines {
+            let (Some(name), Some(symbol)) = (
+                books
+                    .masters
+                    .stock_items
+                    .get(&l.item)
+                    .map(|i| i.name.clone()),
+                books.masters.units.get(&l.unit).map(|u| u.symbol.clone()),
+            ) else {
+                return Ok(Outcome::unsupported(
+                    "original invoice quantities",
+                    format!("{wanted} names a stock item or unit that is not in the masters"),
+                ));
+            };
             if let Some(existing) = lines
                 .iter_mut()
-                .find(|x| x.item == l.item && x.unit_symbol == unit_symbol(books, l.unit))
+                .find(|x| x.item == l.item && x.unit_symbol == symbol)
             {
                 existing.qty = Qty(existing
                     .qty
@@ -125,13 +141,8 @@ impl Api {
             } else {
                 lines.push(InvoicedLine {
                     item: l.item,
-                    name: books
-                        .masters
-                        .stock_items
-                        .get(&l.item)
-                        .map(|i| i.name.clone())
-                        .unwrap_or_default(),
-                    unit_symbol: unit_symbol(books, l.unit),
+                    name,
+                    unit_symbol: symbol,
                     qty: l.qty,
                 });
             }
@@ -148,13 +159,4 @@ impl Api {
             lines,
         }))
     }
-}
-
-fn unit_symbol(books: &Books, unit: UnitId) -> String {
-    books
-        .masters
-        .units
-        .get(&unit)
-        .map(|u| u.symbol.clone())
-        .unwrap_or_default()
 }

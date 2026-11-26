@@ -387,6 +387,7 @@ mark{background:var(--accent-soft);color:var(--accent-ink);border-radius:2px;pad
  {"id":"sales-invoice.default","kind":"happy","hash":"screen=sales-invoice&state=default","title":"Sales invoice, intra-state","description":"F8 item invoice to a Maharashtra party: CGST + SGST recomputed live on every keystroke."},
  {"id":"sales-invoice.gst-inter-state","kind":"happy","hash":"screen=sales-invoice&state=gst-inter-state","title":"Sales invoice, inter-state","description":"Party in Gujarat: place of supply differs, so the engine applies IGST."},
  {"id":"sales-invoice.b2c","kind":"happy","hash":"screen=sales-invoice&state=b2c","title":"Sales invoice, unregistered buyer","description":"Cash sale to an unregistered buyer: B2C, no GSTIN, e-invoice not applicable."},
+ {"id":"sales-invoice.as-voucher","kind":"happy","hash":"screen=sales-invoice&state=as-voucher","title":"Sales invoice, as voucher","description":"Ctrl+H, As voucher: ledger lines with the CGST and SGST ledgers chosen; the engine fills the party and tax amounts."},
  {"id":"sales-invoice.item-list","kind":"happy","hash":"screen=sales-invoice&state=item-list","title":"Sales invoice, item list open","description":"Type-ahead over item masters with HSN, rate, GST and stock; Alt+C creates a new item."},
  {"id":"sales-invoice.validation-error","kind":"validation-error","hash":"screen=sales-invoice&state=validation-error","title":"Sales invoice, validation errors","description":"Missing quantity and an unknown item block saving; each error says where and what to do."},
  {"id":"sales-invoice.period-locked","kind":"period-locked","hash":"screen=sales-invoice&state=period-locked","title":"Sales invoice, period locked","description":"Date falls on or before the lock date 31 Oct 2026: saving is blocked and the reason is shown."},
@@ -1345,8 +1346,36 @@ function invErrors(){const e=[];INV.lines.forEach((l,i)=>{if(!l.item&&l.text)e.p
   if(l.item&&!(l.qty>0))e.push([i,'qty',`Line ${i+1}: quantity is missing.`])});
   if(ddiff(INV.date,CO.lock)<=0)e.push([-1,'date',`Date ${fmtDate(INV.date)} is on or before the lock date ${fmtDate(CO.lock)}. Choose a later date with F2, or ask the owner to move the lock.`]);
   return e}
+/* as voucher (Ctrl+H on a sales invoice). Lines as the user chose them: the party, the Sales ledger (taxable, 18%) and the two local
+   tax ledgers, the way the sales help pages describe selecting the party, the Sales ledger and the applicable GST ledgers
+   (help.tallysolutions.com/tally-prime/gst-regular-sales/gst-sales-tally/, read 2026-11-26). The engine gives every tax and party amount.
+   Hand check: lat16 25 x 3,850.00 = 96,250.00; noz6 67 x 505.00 = 33,835.00; taxable 1,30,085.00 on the Sales ledger; Nashik is in
+   Maharashtra (27) like the company, so CGST 9% = 11,707.65 and SGST 9% = 11,707.65; gross 1,53,500.30; round off -0.30; the party is
+   debited 1,53,500.00, the round-off ledger 0.30. The pages show By and To instead of Dr and Cr; ours says Dr and Cr, which the same pages
+   offer as an option. */
+function asVoucherSheet(){
+  const inv=computeInvoice([{item:'lat16',qty:25,rate:R(3850)},{item:'noz6',qty:67,rate:R(505)}],LED.sgt.st);const p=LED.sgt;
+  const rows=[['sgt','Dr',inv.total],['sales','Cr',inv.taxable],['cgstout','Cr',inv.cgst],['sgstout','Cr',inv.sgst],['roundoff','Dr',-inv.ro]];
+  const body=rows.map(([l,side,amt],i)=>`<tr class="${i===0?'active':''}"><td class="n">${i+1}</td><td>${esc(LED[l].name)}</td><td class="t2">${side}</td><td class="num">${inr(amt)} ${prov('eng','')}</td></tr>`).join('');
+  return `${phead([['Home',hashFor('home')],['Sales invoice']],`Sales invoice <span class="t2" style="font-weight:500">SI/0418</span>`,'As voucher mode · ledger lines · tax is recomputed by the GST engine on every keystroke',
+    `<button class="btn" data-cmd="mode" title="As voucher (Ctrl+Shift+H)">As voucher ${kb('Ctrl+Shift+H')}</button><button class="btn" data-cmd="more">More details ${kb('Ctrl+I')}</button><button class="btn primary" data-cmd="save">${ic('save')}Save ${kb('Ctrl+A')}</button>`)}
+  <div class="card vsheet" id="sheet"><div class="vhead">
+    <div class="fld"><label>Date ${kb('F2')}</label><div class="ro">21 Nov 2026</div></div>
+    <div class="fld span2"><label>Party</label><div class="ro">${esc(p.name)}</div></div>
+    <div class="fld"><label>Place of supply</label><div class="ro">${p.st} ${STATES[p.st]}</div></div>
+    <div class="fld"><label>Party GSTIN</label><div class="ro">${p.gstin} ${badge('Check OK','b-ok','check')}</div></div></div>
+   <table class="lines"><thead><tr><th class="n">#</th><th>Ledger</th><th style="width:60px">Dr / Cr</th><th class="num" style="width:170px">Amount</th></tr></thead><tbody>${body}
+    <tr><td class="n">${rows.length+1}</td><td><input placeholder="Next ledger, or Enter on empty to finish" aria-label="Ledger"></td><td></td><td></td></tr></tbody></table>
+   <div class="vfoot"><div class="stack"><div class="fld"><label>Narration</label><input value="Against PO SGT/PO/1131"></div>
+     <div class="meta">Pick the party, the Sales ledger and the tax ledgers for the supply: CGST and SGST here, IGST for another state. The engine fills the party and tax amounts; an amount typed on a tax line is replaced.</div></div>
+    <div><div class="taxbox"><div class="taxrow"><span class="lab">Taxable value</span><span class="num">${inr(inv.taxable)}</span></div>
+     <div class="taxrow"><span class="lab">CGST 9%</span><span class="num">${inr(inv.cgst)}</span></div><div class="taxrow"><span class="lab">SGST 9%</span><span class="num">${inr(inv.sgst)}</span></div>
+     <div class="taxrow"><span class="lab">Round off</span><span class="num">${inr(inv.ro)}</span></div>
+     <div class="taxrow tot"><span class="lab">Invoice total ${prov('eng','engine')}</span><span class="num">${inr(inv.total)}</span></div></div></div></div></div>`;
+}
 SCREENS['sales-invoice']={title:'Sales invoice',default:'default',
  render(st){
+  if(st==='as-voucher')return asVoucherSheet();
   const s=INV_SEED[st]||INV_SEED.default; INV={party:s.party,pos:null,date:s.date,no:s.no||'SI/0418',lines:s.lines.map(([item,qty,rate,text])=>({item,qty,rate,text:text||''})),st};
   if(INV.lines.length<4&&st!=='validation-error')INV.lines.push({item:null,qty:null,rate:null,text:''});
   const p=LED[INV.party]; const locked=ddiff(INV.date,CO.lock)<=0;
@@ -1374,6 +1403,7 @@ SCREENS['sales-invoice']={title:'Sales invoice',default:'default',
   </div>`;
  },
  mount(st){
+  if(st==='as-voucher'){const i=$('.lines tbody tr:last-child input');i&&i.focus();return}
   buildLines(); recalcInv(false);
   if(st==='saved'&&parseHash().toast!=='none'){const last=window.__lastInv||{party:'Shree Ganesh Traders',total:computeInvoice([{item:'lat16',qty:25,rate:R(3850)},{item:'noz6',qty:67,rate:R(505)},{item:'spr16',qty:40,rate:R(1450)}],'27').total};window.__lastInv=null;toast(`Saved SI/0418 · ${esc(last.party)} · ₹${inr(last.total)}`,true,FREEZE!=null)}
   const sheet=$('#sheet');
@@ -1408,7 +1438,7 @@ SCREENS['sales-invoice']={title:'Sales invoice',default:'default',
   if(k==='Ctrl+A'||k==='Ctrl+S'){if(invErrors().length){recalcInv(false);toast('Cannot save yet: fix the items marked in red.');return true}window.__lastInv={party:LED[INV.party].name,total:invTotals().total};go(hashFor('sales-invoice','saved'),'toast-in');return true}
   if(st==='save-confirm'&&k==='Escape'){go(hashFor('sales-invoice','default'));return true}
   if(k==='Ctrl+I'){toast('More details: dispatch, e-way bill and buyer order fields open below the line.');return true}
-  if(k==='Ctrl+H'){toast('Ctrl+H switches between item invoice and accounting invoice.');return true}
+  if(k==='Ctrl+H'){toast('Ctrl+H switches between item invoice and accounting invoice; Ctrl+Shift+H switches to as voucher.');return true}
   if(k==='Ctrl+D'){const r=document.activeElement&&document.activeElement.closest('tr[data-i]');if(r){INV.lines.splice(+r.dataset.i,1);buildLines();recalcInv(true)}return true}
   return false},
  cmd(c){if(c==='save'){go(hashFor('sales-invoice','saved'),'toast-in')}if(c==='nosave')go(hashFor('sales-invoice','default'));if(c==='more'||c==='mode')toast('Not drawn in this mock.')},
@@ -1918,7 +1948,7 @@ SCREENS.masters={title:'Masters',default:'ledgers',
 const KEYMAP=[
  ['Go anywhere',[['Ctrl+K','Ctrl+K','Command palette: jump, search, ask, type an entry'],['Alt+G','Ctrl+K','Go to (palette)'],['Ctrl+G','Ctrl+K','Switch to, replacing this screen'],['Esc','Esc','Back one level, never loses a saved voucher'],['?','?','This map'],['F3','Ctrl+Shift+O','Switch company'],['Ctrl+\\','Ctrl+\\','Collapse the side bar']]],
  ['Vouchers',[['F8','Ctrl+Shift+S','Sales'],['F9','Ctrl+Shift+P','Purchase'],['F5','Ctrl+Shift+Y','Payment'],['F6','Ctrl+Shift+R','Receipt'],['F4','Ctrl+Shift+C','Contra'],['F7','Ctrl+Shift+J','Journal'],['Alt+O','Alt+O','Read a bill photo or PDF']]],
- ['Inside a voucher',[['Enter','Enter','Next field (Tab works too)'],['Shift+Enter','Shift+Tab','Previous field'],['Ctrl+A','Ctrl+S','Save'],['Alt+C','Alt+C','Create a master from the field'],['Ctrl+Enter','Ctrl+Enter','Alter the master in the field'],['Ctrl+D','Ctrl+D','Delete line'],['Alt+R','Alt+R','Recall last narration'],['F2','F2','Voucher date'],['Ctrl+H','Ctrl+H','Change mode']]],
+ ['Inside a voucher',[['Enter','Enter','Next field (Tab works too)'],['Shift+Enter','Shift+Tab','Previous field'],['Ctrl+A','Ctrl+S','Save'],['Alt+C','Alt+C','Create a master from the field'],['Ctrl+Enter','Ctrl+Enter','Alter the master in the field'],['Ctrl+D','Ctrl+D','Delete line'],['Alt+R','Alt+R','Recall last narration'],['F2','F2','Voucher date'],['Ctrl+H','Ctrl+H','Change mode'],['Ctrl+Shift+H','Ctrl+Shift+H','As voucher mode (sales and purchase)']]],
  ['Reports',[['Enter','Enter','Drill in'],['Esc','Esc','Back up'],['Alt+F1','Alt+F1','Detailed or condensed'],['Alt+F2','Alt+F2','Period'],['Ctrl+E','Ctrl+E','Export'],['Ctrl+J','Ctrl+J','Exceptions only'],['Ctrl+P','Ctrl+P','Print']]],
  ['AI proposals, everywhere',[['Ctrl+A','Ctrl+S','Accept (engine checks first)'],['Enter','Enter','Edit'],['Alt+D','Alt+D','Reject'],['Ctrl+I','Ctrl+I','Show the source']]],
  ['Lists and queues',[['J / ↓','J / ↓','Next'],['K / ↑','K / ↑','Previous'],['Y','Y','Accept selected'],['N','N','Reject selected'],['E','E','Edit selected'],['X','X','Explain (2B)']]],
@@ -2022,7 +2052,10 @@ const errNote = (lines) => `<div class="note bad" role="alert" style="margin:0 1
    moved to the recipient is where the movement ends; https://taxguru.in/goods-and-service-tax/section-10-igst-act-2017-place-supply-goods.html, read 2026-11-25). Supplier in 29, place of supply 27, so the supply is inter-State and the engine
    charges IGST, never CGST and SGST. The next purchase number in the sample is PB/0145 (highest posted PB/0144).
    Hand check: HDPE 10 x 2,050.00 = 20,500.00; valves 100 x 228.40 = 22,840.00; taxable 43,340.00;
-   IGST 18% = 7,801.20; gross 51,141.20; round off -0.20; invoice total 51,141.00. */
+   IGST 18% = 7,801.20; gross 51,141.20; round off -0.20; invoice total 51,141.00.
+   Eligible input credit: the Purchases ledger is marked eligible (CGST Act s.16(1); the accounting product marks a purchase ineligible with
+   "Is ineligible for input credit?", help.tallysolutions.com/docs/te9rel66/Tax_India/gst/gst_accounting_for_ineligible_itc.htm, read 2026-11-26),
+   so all of the IGST, 7,801.20, is eligible. It is the credit before the s.16(2) conditions (the bill in 2B, receipt, payment) are met. */
 const PURCH_LINES = [['hdpe32',10,R(2050)],['bv50',100,R(228.4)]];
 SCREENS.purchase = {title:'Purchase',default:'default',
  render(st){
@@ -2049,7 +2082,8 @@ SCREENS.purchase = {title:'Purchase',default:'default',
     <div><div class="taxbox"><div class="taxrow"><span class="lab">Taxable value</span><span class="num">${bad?'Not computed':inr(inv.taxable)}</span></div>
      <div class="taxrow"><span class="lab">IGST 18%</span><span class="num">${bad?'Not computed':inr(inv.igst)}</span></div>
      <div class="taxrow"><span class="lab">Round off</span><span class="num">${bad?'Not computed':inr(inv.ro)}</span></div>
-     <div class="taxrow tot"><span class="lab">Invoice total ${prov('eng','engine')}</span><span class="num">${bad?'Not computed':inr(inv.total)}</span></div></div></div></div>
+     <div class="taxrow tot"><span class="lab">Invoice total ${prov('eng','engine')}</span><span class="num">${bad?'Not computed':inr(inv.total)}</span></div></div>
+     <div class="meta" style="margin-top:6px">Input credit eligible before the 2B match ${prov('eng','engine')} <b>${bad?'Not computed':inr(inv.igst)}</b></div></div></div>
   </div>`;
  },
  mount(st){const i=$('.lines tbody tr.active input, .lines tbody tr input');i&&i.focus()},
@@ -2072,13 +2106,14 @@ SCREENS.purchase = {title:'Purchase',default:'default',
    18% = 738.00; total 4,838.00, round off 0.00.
    Validation (the app's refusal, crates/ledgerly-app/src/screens/item_invoice/draft.rs): a line whose item is chosen but whose quantity is
    blank is refused, "line 2: quantity: type a number", and the tax and total stay "Not computed". The engine has no rule that compares
-   a returned quantity with the invoiced quantity, so the mock shows none. */
+   a returned quantity with the invoiced quantity, so the mock shows none: it only tells the user what the original invoice carried
+   (SI/0412 of 14 Nov 2026 has 67 sets of the brass nozzle set; RP/5398 of 15 Oct 2026 has 58 coils of HDPE pipe, both read from the sample). */
 const NOTE_SEED = {
  credit:{default:{lines:[['noz6',10,R(505)]],narr:'Returned 10 sets, damaged in transit'},'validation-error':{lines:[['noz6',10,R(505)],['lat16',null,null]],narr:''}},
  debit:{default:{lines:[['hdpe32',2,R(2050)]],narr:'Returned 2 coils, cracked in transit'},'validation-error':{lines:[['hdpe32',2,R(2050)],['bv50',null,null]],narr:''}}};
 function noteScreen(kind){
- const cfg = kind==='credit'?{title:'Credit Note',no:'CN/0001',party:'sgt',bad:'Sales return',refLabel:'Against sales invoice',ref:'SI/0412',refDate:'14 Nov 2026',hint:'Credit note, CGST Act s.34(1): reduces the tax on an invoice already issued'}
-   : {title:'Debit Note',no:'DN/0001',party:'rupa',bad:'Purchase return',refLabel:'Against purchase bill',ref:'RP/5398',refDate:'15 Oct 2026',hint:'Debit note, purchase return: reduces what Godavari owes the supplier'};
+ const cfg = kind==='credit'?{title:'Credit Note',no:'CN/0001',party:'sgt',bad:'Sales return',refLabel:'Against sales invoice',ref:'SI/0412',refDate:'14 Nov 2026',invoiced:'67 set of Brass nozzle set (6 pc)',hint:'Credit note, CGST Act s.34(1): reduces the tax on an invoice already issued'}
+   : {title:'Debit Note',no:'DN/0001',party:'rupa',bad:'Purchase return',refLabel:'Against purchase bill',ref:'RP/5398',refDate:'15 Oct 2026',invoiced:'58 coil of HDPE pipe coil 32 mm',hint:'Debit note, purchase return: reduces what Godavari owes the supplier'};
  return {title:cfg.title,default:'default',
  render(st){
   const s = NOTE_SEED[kind][st]||NOTE_SEED[kind].default; const p=LED[cfg.party]; const bad = st==='validation-error';
@@ -2100,7 +2135,8 @@ function noteScreen(kind){
     <div class="fld"><label>${kind==='credit'?'Sales ledger':'Purchase ledger'}</label><div class="ro">${kind==='credit'?'Sales':'Purchases'}</div></div>`)}
    <table class="lines"><thead><tr><th class="n">#</th><th>Item</th><th style="width:70px">HSN</th><th class="num" style="width:90px">Qty</th><th class="num" style="width:120px">Rate</th><th class="num" style="width:60px">GST</th><th class="num" style="width:140px">Amount</th></tr></thead><tbody>${body}</tbody></table>
    <div class="vfoot"><div class="stack"><div class="fld"><label>Narration</label><input value="${esc(s.narr)}"></div>
-     ${errs.length?errNote(errs):''}<div class="meta">${meta}</div></div>
+     ${errs.length?errNote(errs):''}<div class="meta">${meta}</div>
+     <div class="meta">Invoiced on ${cfg.ref}, ${cfg.refDate}: ${cfg.invoiced} ${prov('eng','engine')}</div></div>
     <div><div class="taxbox"><div class="taxrow"><span class="lab">Taxable value</span><span class="num">${bad?'Not computed':inr(inv.taxable)}</span></div>
      ${kind==='credit'?`<div class="taxrow"><span class="lab">CGST 9%</span><span class="num">${bad?'Not computed':inr(inv.cgst)}</span></div><div class="taxrow"><span class="lab">SGST 9%</span><span class="num">${bad?'Not computed':inr(inv.sgst)}</span></div>`:`<div class="taxrow"><span class="lab">IGST 18%</span><span class="num">${bad?'Not computed':inr(inv.igst)}</span></div>`}
      <div class="taxrow tot"><span class="lab">Note total ${prov('eng','engine')}</span><span class="num">${bad?'Not computed':inr(inv.total)}</span></div></div></div></div>

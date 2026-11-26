@@ -77,6 +77,12 @@ pub(super) fn read_keys(
         if !prompt.discard && !prompt.save && consume_exact(i, Key::C, Modifiers::ALT) {
             out.push(KeyCmd::Create);
         }
+        if !prompt.discard
+            && !prompt.save
+            && consume_exact(i, Key::H, Modifiers::COMMAND.plus(Modifiers::SHIFT))
+        {
+            out.push(KeyCmd::AsVoucher);
+        }
         if !prompt.discard && !prompt.save && consume_exact(i, Key::H, Modifiers::COMMAND) {
             out.push(KeyCmd::ChangeMode);
         }
@@ -125,6 +131,7 @@ impl ItemInvoiceScreen {
             }
             KeyCmd::Create => self.begin_create(),
             KeyCmd::ChangeMode => self.change_mode(),
+            KeyCmd::AsVoucher => self.toggle_as_voucher(),
             KeyCmd::DeleteLine => self.delete_line(),
             KeyCmd::RecallNarration => self.recall_narration(),
             KeyCmd::ToggleDiscount => self.toggle_discount(),

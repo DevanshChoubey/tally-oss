@@ -12,6 +12,7 @@ use super::compute;
 use super::draft::line_amount;
 use super::extras::BalanceShown;
 use super::keys::{Prompt, read_keys};
+use super::with_engine_lines;
 use super::{
     Field, GstBlock, GstResult, GstStatus, InvoiceKind, InvoiceMode, ItemInvoiceScreen, Notice,
     UiEvent, place_label,
@@ -27,11 +28,11 @@ use crate::ui::button::{ButtonKind, button, button_icon};
 use crate::ui::icon::Icon;
 use crate::ui::note::{NoteKind, note};
 use crate::ui::page_head::page_head_numbered;
-use crate::ui::prov::ProvKind;
+use crate::ui::prov::{ProvKind, prov};
 use crate::ui::{format, para_text, tokens};
 use crate::{AppCtx, Screen, ScreenAction};
 use egui::{Frame, Id, Margin, Rect, Response, RichText, Ui};
-use ledgerly_api::Command;
+use ledgerly_api::{Command, is_gst_tax_ledger};
 use ledgerly_core::format::amount_in_words;
 use ledgerly_core::{LedgerId, StateCode};
 use ledgerly_model::{Masters, Voucher};
@@ -56,6 +57,7 @@ const PURCHASE_META: &str =
     "Each line is checked when you leave it. Save waits until every line is complete.";
 
 /// The one-line purpose under the page title of an accounting invoice.
+const AS_VOUCHER_SUBTITLE: &str = "As voucher mode \u{b7} ledger lines \u{b7} tax is recomputed by the GST engine on every keystroke";
 const ACCOUNTING_SUBTITLE: &str = "Accounting invoice · ledgers under Particulars; tax is recomputed by the GST engine on every keystroke";
 
 /// The item table: heading, width and whether the column holds figures. The mock's columns run
@@ -185,6 +187,8 @@ enum Click {
     Cancel,
     /// Change the mode (Ctrl+H).
     ChangeMode,
+    /// Switch to As voucher, or back (Ctrl+Shift+H).
+    AsVoucher,
     /// Open or close the More details panel (Ctrl+I).
     More,
     /// Read a bill photo into a purchase (Alt+O): opens the bill screen.
@@ -560,6 +564,22 @@ fn tax_box(ui: &mut Ui, block: &GstBlock, kind: InvoiceKind) {
             bad: false,
         }),
     );
+    // The purchase's box has the eligible input credit under it (index.html, purchase `.meta`).
+    if let Some((label, value)) = super::itc_line_text(block) {
+        let t = tokens(ui);
+        ui.add_space(6.0);
+        ui.horizontal_wrapped(|ui| {
+            ui.spacing_mut().item_spacing.x = 6.0;
+            ui.label(para_text(&label, crate::theme::TEXT_META, t.text_2));
+            prov(ui, ProvKind::Engine);
+            ui.label(
+                RichText::new(value)
+                    .size(crate::theme::TEXT_META)
+                    .font(crate::ui::bold_font(ui, crate::theme::TEXT_META))
+                    .color(t.text),
+            );
+        });
+    }
     // Only the sales invoice's box has the total in words under it (index.html:1321).
     match kind {
         InvoiceKind::Sales => sheet::words(ui, &amount_in_words(block.invoice_total)),
@@ -839,7 +859,7 @@ impl ItemInvoiceScreen {
                         note_field(label, shown.response.rect);
                     }
                     // The sales FAQ: no Sales ledger field in accounting invoice mode.
-                    InvoiceMode::Accounting => {
+                    InvoiceMode::Accounting | InvoiceMode::AsVoucher => {
                         ui.allocate_space(egui::vec2(sheet::span_width(total, 1), 0.0));
                     }
                 }
@@ -1191,6 +1211,13 @@ impl ItemInvoiceScreen {
                 rates.push(String::new());
                 continue;
             }
+            // As voucher: a GST ledger line is not a taxable line, the engine has none for it.
+            if self.draft.mode == InvoiceMode::AsVoucher
+                && row.ledger.is_some_and(|l| is_gst_tax_ledger(masters, l))
+            {
+                rates.push(String::new());
+                continue;
+            }
             let engine = computed.and_then(|block| block.lines.get(engine_line));
             engine_line = engine_line.saturating_add(1);
             rates.push(engine.map_or_else(String::new, |line| {
@@ -1206,7 +1233,10 @@ impl ItemInvoiceScreen {
         reason = "one table drawn column by column, each named by its heading"
     )]
     fn draw_lines(&mut self, ui: &mut Ui, base: Id, masters: &Masters, cx: &mut Cx<'_>) {
-        if self.draft.mode == InvoiceMode::Accounting {
+        if matches!(
+            self.draft.mode,
+            InvoiceMode::Accounting | InvoiceMode::AsVoucher
+        ) {
             return self.draw_particulars(ui, base, masters, cx);
         }
         let shown = self.lines_shown(masters);
@@ -1454,12 +1484,7 @@ impl ItemInvoiceScreen {
         let voucher = self.draft.build_voucher(masters, self.fy).ok()?;
         let bills = self.draft.party_bills().ok()?;
         match self.answer_for(&voucher, &bills) {
-            Some(GstResult::Computed(block)) => {
-                let mut v = voucher;
-                v.ledger_lines.clone_from(&block.ledger_lines);
-                v.gst = Some(block.stored.clone());
-                Some(v)
-            }
+            Some(GstResult::Computed(block)) => Some(with_engine_lines(voucher, block)),
             Some(GstResult::Unsupported(_) | GstResult::Failed(_)) | None => None,
         }
     }
@@ -1530,7 +1555,8 @@ impl ItemInvoiceScreen {
     ) {
         let lines = self.lines_shown(masters);
         let kind = self.draft.kind;
-        let accounting = self.draft.mode == InvoiceMode::Accounting;
+        // Accounting and as voucher have no per-line checks to show; item mode does.
+        let accounting = self.draft.mode != InvoiceMode::Item;
         let recall = self
             .last_narration
             .as_ref()
@@ -1601,13 +1627,39 @@ impl ItemInvoiceScreen {
                 // The mock's purchase says how lines are checked (index.html:2005, with "Save"
                 // for its "Accept": that word belongs to the bill reader); a note has no line.
                 InvoiceKind::Purchase => sheet::hint(left, PURCHASE_META),
-                InvoiceKind::CreditNote | InvoiceKind::DebitNote => {}
+                InvoiceKind::CreditNote | InvoiceKind::DebitNote => {
+                    self.draw_invoiced_line(left, masters);
+                }
             }
             self.draw_tax(right, masters);
         });
         self.shown.narration = narration;
         if self.confirming_save {
             save_bar(ui, clicks, &self.save_title());
+        }
+    }
+
+    /// The note's "Invoiced on ..." line with the engine tag, when the engine has found the
+    /// invoice.
+    fn draw_invoiced_line(&self, ui: &mut Ui, masters: &Masters) {
+        let Some(text) = self.invoiced_line(masters) else {
+            return;
+        };
+        let t = tokens(ui);
+        let label = para_text(&text, crate::theme::TEXT_META, t.text_2);
+        // A long line (several items on the invoice) wraps; the tag then goes under it, not into
+        // the sliver of width the wrapped text leaves.
+        if text.chars().count() > 72 {
+            ui.vertical(|ui| {
+                ui.label(label);
+                prov(ui, ProvKind::Engine);
+            });
+        } else {
+            ui.horizontal_wrapped(|ui| {
+                ui.spacing_mut().item_spacing.x = 6.0;
+                ui.label(label);
+                prov(ui, ProvKind::Engine);
+            });
         }
     }
 
@@ -1819,6 +1871,7 @@ impl ItemInvoiceScreen {
             (false, InvoiceMode::Accounting) => "Accounting invoice",
             (true, InvoiceMode::Item) => "Item mode",
             (true, InvoiceMode::Accounting) => "Accounting mode",
+            (_, InvoiceMode::AsVoucher) => "As voucher",
         };
         let number = self.extras.number.clone();
         page_head_numbered(
@@ -1852,8 +1905,15 @@ impl ItemInvoiceScreen {
                         {
                             clicks = Some(Click::More);
                         }
-                        if button(ui, mode_label, Some("Ctrl+H"), ButtonKind::Secondary).clicked() {
-                            clicks = Some(Click::ChangeMode);
+                        // As voucher has its own key; the button then switches back.
+                        let (keys, click) = match self.draft.mode {
+                            InvoiceMode::AsVoucher => ("Ctrl+Shift+H", Click::AsVoucher),
+                            InvoiceMode::Item | InvoiceMode::Accounting => {
+                                ("Ctrl+H", Click::ChangeMode)
+                            }
+                        };
+                        if button(ui, mode_label, Some(keys), ButtonKind::Secondary).clicked() {
+                            clicks = Some(click);
                         }
                     }
                     InvoiceKind::Purchase => {
@@ -1937,6 +1997,7 @@ impl ItemInvoiceScreen {
             Some(Click::Cancel) => self.confirming_save = false,
             Some(Click::Save) => self.save(masters),
             Some(Click::ChangeMode) => self.change_mode(),
+            Some(Click::AsVoucher) => self.toggle_as_voucher(),
             Some(Click::More) => self.toggle_more(masters),
             Some(Click::BillPhoto) => bill_photo = true,
             None => {}
@@ -2035,6 +2096,7 @@ impl Screen for ItemInvoiceScreen {
             }
             (None, InvoiceMode::Item) => SUBTITLE.to_owned(),
             (None, InvoiceMode::Accounting) => ACCOUNTING_SUBTITLE.to_owned(),
+            (_, InvoiceMode::AsVoucher) => AS_VOUCHER_SUBTITLE.to_owned(),
             (Some(_), InvoiceMode::Item) => match self.draft.kind {
                 InvoiceKind::DebitNote => DEBIT_NOTE_SUBTITLE.to_owned(),
                 InvoiceKind::CreditNote | InvoiceKind::Sales | InvoiceKind::Purchase => {
@@ -2156,7 +2218,8 @@ impl ItemInvoiceScreen {
         let number_busy = self.extras.drive_number(worker, want);
         let balance_want = self.draft.party.zip(self.computed_voucher(&books.masters));
         let balance_busy = self.extras.drive_balance(worker, balance_want);
-        if number_busy || balance_busy {
+        let invoiced_busy = self.extras.drive_invoiced(worker, self.invoiced_key());
+        if number_busy || balance_busy || invoiced_busy {
             ui.ctx().request_repaint();
         }
     }

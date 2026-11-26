@@ -154,6 +154,13 @@
    "description": "Cash sale to an unregistered buyer: B2C, no GSTIN, e-invoice not applicable."
   },
   {
+   "id": "sales-invoice.as-voucher",
+   "kind": "happy",
+   "hash": "screen=sales-invoice&state=as-voucher",
+   "title": "Sales invoice, as voucher",
+   "description": "Ctrl+H, As voucher: ledger lines with the CGST and SGST ledgers chosen; the engine fills the party and tax amounts."
+  },
+  {
    "id": "sales-invoice.item-list",
    "kind": "happy",
    "hash": "screen=sales-invoice&state=item-list",
