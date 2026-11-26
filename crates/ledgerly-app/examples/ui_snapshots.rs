@@ -817,6 +817,8 @@ enum SaveTarget {
     Writable,
     /// A file in a folder that does not exist, so the write fails with the system's reason.
     MissingFolder,
+    /// A new `.csv` file in a folder that exists (the reconciliation statement's export).
+    WritableCsv,
 }
 
 impl SaveTarget {
@@ -831,6 +833,11 @@ impl SaveTarget {
                 path
             }
             SaveTarget::MissingFolder => dir.join("no-such-folder").join("Profit and loss.pdf"),
+            SaveTarget::WritableCsv => {
+                let path = dir.join("bank-reconciliation-statement.csv");
+                let _removed = std::fs::remove_file(&path);
+                path
+            }
         }
     }
 }
@@ -1344,7 +1351,7 @@ fn shots() -> Vec<Shot> {
 fn light_shots() -> Vec<Shot> {
     let palette = (Key::K, Modifiers::COMMAND);
     vec![
-        shot("home.default", &[]),
+        shot("home.default", &[]).wait(60).expect("Home", None),
         // The possible-double-payment nudge's Compare button (rule D-02) opens the comparison.
         shot("home.nudge-open", &[])
             .click_named("Compare")
@@ -1397,7 +1404,9 @@ fn light_shots() -> Vec<Shot> {
         ai_off_shot("quick-entry.offline-ai", "Plain-words entry"),
         // The tabs are 1 GSTR-1, 2 GSTR-3B, 3 reconciliation (`screens/gst.rs`). The capture
         // company has no 2B data, so the reconciliation tab is the mock's empty state.
-        shot("gst.gstr3b", &[(Key::G, NONE), (Key::Num2, NONE)]),
+        shot("gst.gstr3b", &[(Key::G, NONE), (Key::Num2, NONE)])
+            .wait(60)
+            .expect("GST returns", None),
         // The mock selects G2, Nilgiri's NST/1145 (index.html:1695).
         shot("gst.recon", &[(Key::G, NONE), (Key::Num3, NONE)])
             .seek("NST/1145")
@@ -1552,7 +1561,27 @@ fn light_shots() -> Vec<Shot> {
             .expect("Bank reconciliation: Saptagiri Commercial Bank A/c", None),
         shot("bank.brs", &[palette])
             .query("Bank Reconciliation")
-            .then(&[(Key::Enter, NONE), (Key::Enter, NONE), (Key::B, NONE)]),
+            .then(&[(Key::Enter, NONE)])
+            .seek("Saptagiri Commercial Bank A/c")
+            .press(&[(Key::Enter, NONE)])
+            .expect("Bank reconciliation: Saptagiri Commercial Bank A/c", None)
+            .press(&[(Key::B, NONE)])
+            .wait(30)
+            .expect("Bank reconciliation: Saptagiri Commercial Bank A/c", None),
+        // Ctrl+E on the Statement tab writes the reconciliation statement; the save dialog is
+        // scripted to a new .csv file, so the screen says where it went.
+        shot("bank.brs-exported", &[palette])
+            .query("Bank Reconciliation")
+            .then(&[(Key::Enter, NONE)])
+            .seek("Saptagiri Commercial Bank A/c")
+            .press(&[(Key::Enter, NONE)])
+            .expect("Bank reconciliation: Saptagiri Commercial Bank A/c", None)
+            .press(&[(Key::B, NONE)])
+            .wait(30)
+            .script_save(SaveTarget::WritableCsv)
+            .press(&[(Key::E, Modifiers::COMMAND)])
+            .wait(90)
+            .expect("Bank reconciliation: Saptagiri Commercial Bank A/c", None),
         // Company setup (mock SCREENS.setup). The palette opens the wizard at Start; Enter goes on.
         // The true first launch: the shell as `main` builds it (`Shell::cold_start`), no company.
         shot("setup.welcome", &[]).on(Fixture::Cold),

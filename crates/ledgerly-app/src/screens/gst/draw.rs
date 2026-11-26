@@ -1206,17 +1206,28 @@ fn paint_3b_line(ui: &mut Ui, width: f32, line: &Line3b) {
             taxable,
             tax,
         } => {
-            let (rect, _) = ui.allocate_exact_size(vec2(width, T_ROW_HEIGHT), Sense::hover());
+            let bold = bold_font(ui, TEXT_BODY);
+            // The label wraps inside its column, as the other rows do, and the row grows to fit.
+            let probe = Rect::from_min_size(egui::pos2(0.0, 0.0), vec2(width, T_ROW_HEIGHT));
+            let [probe_label, ..] = gstr3b_columns(probe);
+            let wrap = (probe_label.width() - 2.0 * table::CELL_PAD_X).max(40.0);
+            let galley = ui
+                .painter()
+                .layout((*label).to_owned(), bold.clone(), t.text, wrap);
+            let height = (galley.size().y + 2.0 * table::CELL_PAD_X).max(T_ROW_HEIGHT);
+            let (rect, _) = ui.allocate_exact_size(vec2(width, height), Sense::hover());
             let state = RowState {
                 selected: false,
                 hovered: false,
                 sub: true,
             };
             table::paint_row(ui, rect, state);
-            let bold = bold_font(ui, TEXT_BODY);
             let [label_rect, figures @ ..] = gstr3b_columns(rect);
-            let place = CellPlace::Left(table::CELL_PAD_X);
-            table::paint_cell_text(ui, label_rect, 1.0, label, bold.clone(), t.text, place);
+            let text_pos = egui::pos2(
+                label_rect.left() + table::CELL_PAD_X,
+                rect.center().y - galley.size().y / 2.0,
+            );
+            ui.painter().galley(text_pos, galley, t.text);
             let texts = std::iter::once(amount_cell(Some(*taxable)))
                 .chain(tax.iter().map(|p| amount_cell(Some(*p))));
             for (r, text) in figures.into_iter().zip(texts) {

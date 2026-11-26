@@ -13,9 +13,9 @@ Classes:
 
 ## Home (`home.*`, `start.recent`)
 
-- **NOT BUILT** GST cash payable tile: the mock shows 39,498.00 after accepted ITC; the engine has
-  no set-off, so the tile says "Not supported yet" (`screens/home/kpi.rs` `GST_REASON`).
-- **NOT BUILT** IMS nudge ("3 2B records have no IMS action"): the count is not wired yet.
+- **DELIBERATE** the GST cash tile and the IMS nudge read the month of the as-at date from the
+  engine (`Api::home_gst`). Without a single regular GSTIN, a 2B file or a supported set-off they
+  say why instead of a number; zero records gives no IMS card.
 - **DELIBERATE** the GSTR-1 nudge uses the monthly due date, the 11th (CBIC Notification
   83/2020-Central Tax); QRMP dates are not modelled and no filing record exists.
 - **NOT BUILT** compare dialog has no "Adjust rule" or "Not a duplicate": the engine cannot record a
@@ -84,7 +84,6 @@ Classes:
   are grouped by party in the engine's party order, not the mock's most-overdue-first: the bill-party
   report documents party order and a bill sort inside it (help.tallysolutions.com/docs/te9rel53/Reports/MIS_Reports/BillParty_wise_Outstanding_Report.htm,
   read 2026-11-26).
-- **NOT BUILT** the outstanding total line "7 open bills": the engine returns no count.
 - **DELIBERATE** the stock summary's subtitle says "quantity and value from the stock engine" since
   the engine values by each item's own method.
 - **DELIBERATE** the trial balance names groups as the engine does ("Capital Account", "Duties & Taxes").
@@ -104,9 +103,19 @@ Classes:
 
 ## GST returns (`gst.*`)
 
-- **NOT BUILT** GSTR-3B rows from IMS and set-off (index.html:1683-1686, "Payable in cash"): set-off
-  (engine item E-1) does not exist.
-- **NOT BUILT** the GSTR-3B key bar (index.html:1721): no rows on that tab, and only GSTR-1 exports.
+- **DELIBERATE** the GSTR-3B key bar stays "1 2 3 Tabs, Esc Back": the engine has no GSTR-3B JSON
+  and the tab has no openable rows, so J/K, Enter and Ctrl+E would be dead keys (Ctrl+E is shown
+  disabled).
+- **NOT BUILT** set-off starts from the month's liability and the credit the user accepted in IMS;
+  the electronic credit ledger's opening balance and earlier periods are not modelled, and credit
+  that is only deemed accepted is treated as not used (rule `pending observed`: IMS no-action
+  handling). Rule 86B (the 1% cash rule) returns Unsupported. Reverse-charge tax, the cess source
+  and interest or late fee are not worked out.
+- **DELIBERATE** the IGST-credit split between CGST and SGST uses a least-cash policy, which Circular
+  98/17/2019-GST allows but does not require (the order across heads is law: CGST Act s.49(5), 49A,
+  49B, Rule 88A).
+- **DELIBERATE** the app shows a Cess column the mock lacks, and six notes beside the table where
+  the mock has four.
 - **NOT BUILT** the GSTR-2B JSON shape is `pending observed` (rule A5): no public GSTN schema was
   found; the parser keeps its `items[]` shape.
 - **NOT BUILT** the 2B tab leaves out deemed acceptance and the amendment line: no public source found.
@@ -153,9 +162,11 @@ Classes:
 
 ## Bank reconciliation (`bank.*`)
 
-- **NOT BUILT** Export of the reconciliation statement (index.html:1784): the bank screen has no export.
-- **NOT BUILT** the statement lists the engine's totals, not each line (index.html:1741-1745): the
-  engine's `Brs` carries no lines.
+- **DELIBERATE** Export of the reconciliation statement (Ctrl+E on the Statement tab) writes CSV or
+  XLSX through the report exporter. The capture's save dialog is scripted to a folder of the
+  capture run, so the notice names that path, not the mock's /home/asha/Documents.
+- **DELIBERATE** a long line ("... cheque 004512") is clipped by the amount column where the mock
+  lets it run on.
 - **DELIBERATE** the card beside the statement says Reconciled or Not yet reconciled from the engine's
   Difference line being nil, in its own words ("The imported statement agrees with the balance as per
   bank"); the mock's "once the listed lines are posted" and "Review suggestions" button are not
