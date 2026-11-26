@@ -10,6 +10,12 @@ permissions:
 env:
   CARGO_TERM_COLOR: always
   RUSTFLAGS: -D warnings
+  # About 40 test binaries each link the whole UI stack. With debug info they fill the hosted
+  # Ubuntu runner's disk ("No space left on device", ld bus errors). Tests and coverage do not
+  # need it: coverage uses LLVM instrumentation, and a panic still names the file and line.
+  CARGO_PROFILE_DEV_DEBUG: 0
+  CARGO_PROFILE_TEST_DEBUG: 0
+  CARGO_INCREMENTAL: 0
 
 jobs:
   lint:
