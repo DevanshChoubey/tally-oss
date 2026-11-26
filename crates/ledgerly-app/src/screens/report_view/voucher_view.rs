@@ -573,6 +573,49 @@ impl VoucherViewScreen {
 
     /// The voucher as the mock's two cards (index.html:1612-1630): the voucher, its items and
     /// postings on the left, the Audit card on the right.
+    /// Ctrl+P prints the voucher (spec 11 M5) and Ctrl+E exports its e-invoice JSON; both
+    /// run on the API worker.
+    fn handle_keys(&mut self, ui: &mut Ui, ctx: &mut AppCtx) {
+        // Ctrl+P prints the voucher (spec 11 M5). The PDF comes from the API worker.
+        if ui
+            .ctx()
+            .input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::P))
+        {
+            match ctx.api.as_ref() {
+                None => {
+                    self.notice = Some(Notice::Error(
+                        "No company is open, so the voucher cannot be printed.".to_owned(),
+                    ));
+                }
+                Some(handle) => {
+                    let id = self.id;
+                    let title = format!("Voucher {}", id.0);
+                    self.print.start(handle, &title, move |api, setup| {
+                        api.print_voucher_document_with(id, setup)
+                    });
+                }
+            }
+        }
+        if ui
+            .ctx()
+            .input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::E))
+        {
+            match ctx.api.as_ref() {
+                None => {
+                    self.export_note = Some(Notice::Error(
+                        "No company is open, so the e-invoice cannot be exported.".to_owned(),
+                    ));
+                }
+                Some(handle) => {
+                    let id = self.id;
+                    self.export = Some(
+                        handle.run(move |api| api.einvoice_json(id).map_err(|e| e.to_string())),
+                    );
+                }
+            }
+        }
+    }
+
     fn draw_view(&self, ui: &mut Ui, view: &VoucherView) {
         let gap = 12.0;
         let total = ui.available_width();
@@ -944,44 +987,7 @@ impl Screen for VoucherViewScreen {
         if self.print.preview().is_some() {
             return self.draw_print_preview(ui);
         }
-        // Ctrl+P prints the voucher (spec 11 M5). The PDF comes from the API worker.
-        if ui
-            .ctx()
-            .input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::P))
-        {
-            match ctx.api.as_ref() {
-                None => {
-                    self.notice = Some(Notice::Error(
-                        "No company is open, so the voucher cannot be printed.".to_owned(),
-                    ));
-                }
-                Some(handle) => {
-                    let id = self.id;
-                    let title = format!("Voucher {}", id.0);
-                    self.print.start(handle, &title, move |api, setup| {
-                        api.print_voucher_document_with(id, setup)
-                    });
-                }
-            }
-        }
-        if ui
-            .ctx()
-            .input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::E))
-        {
-            match ctx.api.as_ref() {
-                None => {
-                    self.export_note = Some(Notice::Error(
-                        "No company is open, so the e-invoice cannot be exported.".to_owned(),
-                    ));
-                }
-                Some(handle) => {
-                    let id = self.id;
-                    self.export = Some(
-                        handle.run(move |api| api.einvoice_json(id).map_err(|e| e.to_string())),
-                    );
-                }
-            }
-        }
+        self.handle_keys(ui, ctx);
         if self.print.is_rendering() {
             crate::screens::print_preview::draw_busy(ui);
         }
