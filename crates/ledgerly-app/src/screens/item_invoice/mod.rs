@@ -845,7 +845,13 @@ impl ItemInvoiceScreen {
     /// The voucher the host should run the tax engine on, once, when the invoice is complete and
     /// no answer or request for exactly this voucher exists.
     pub fn take_compute_request(&mut self, masters: &Masters) -> Option<Voucher> {
-        let voucher = self.draft.build_voucher(masters, self.fy).ok()?;
+        // While a line is invalid the engine is asked about the valid lines alone, so they can
+        // show their amount and rate; that answer is never saved (`saveable` needs the whole).
+        let voucher = self
+            .draft
+            .build_voucher(masters, self.fy)
+            .or_else(|_| self.draft.build_partial(masters, self.fy))
+            .ok()?;
         let bills = self.draft.party_bills().ok()?;
         let answered = self
             .answer
@@ -898,6 +904,21 @@ impl ItemInvoiceScreen {
             Some(GstResult::Unsupported(u)) => GstStatus::Unsupported(u),
             Some(GstResult::Failed(m)) => GstStatus::Failed(m),
             None => GstStatus::NotComputedYet,
+        }
+    }
+
+    /// The engine's block for the lines that show their figures: the whole invoice's, or, while
+    /// a line is invalid, the one for the valid lines alone.
+    pub(super) fn shown_block(&self, masters: &Masters) -> Option<&GstBlock> {
+        let voucher = self
+            .draft
+            .build_voucher(masters, self.fy)
+            .or_else(|_| self.draft.build_partial(masters, self.fy))
+            .ok()?;
+        let bills = self.draft.party_bills().ok()?;
+        match self.answer_for(&voucher, &bills) {
+            Some(GstResult::Computed(block)) => Some(block),
+            Some(GstResult::Unsupported(_) | GstResult::Failed(_)) | None => None,
         }
     }
 
@@ -1004,9 +1025,18 @@ impl ItemInvoiceScreen {
         (date <= lock).then_some((date, lock))
     }
 
+    /// Whether the Save button is enabled: no line of the invoice is invalid.
+    #[must_use]
+    pub fn save_enabled(&self, masters: &Masters) -> bool {
+        self.draft.validation_summary(masters).is_none()
+    }
+
     /// The voucher a save would post, or the reason it cannot be saved yet. Every check a save
     /// makes is here, so Ctrl+A and the Enter confirmation refuse the same invoices.
     fn saveable(&self, masters: &Masters) -> Result<Voucher, String> {
+        if let Some(summary) = self.draft.validation_summary(masters) {
+            return Err(summary);
+        }
         let voucher = self
             .draft
             .build_voucher(masters, self.fy)

@@ -679,13 +679,7 @@ impl ItemInvoiceScreen {
     /// engine's answer fills the GST and amount cells only when it is for exactly this invoice.
     #[must_use]
     pub fn lines_shown(&self, masters: &Masters) -> Vec<LineShown> {
-        let computed: Option<&GstBlock> = match self.gst_status(masters) {
-            GstStatus::Computed(block) => Some(block),
-            GstStatus::Incomplete(_)
-            | GstStatus::NotComputedYet
-            | GstStatus::Unsupported(_)
-            | GstStatus::Failed(_) => None,
-        };
+        let computed: Option<&GstBlock> = self.shown_block(masters);
         let focused_row = row_of(self.focus);
         let mut engine_line = 0_usize;
         let mut shown = Vec::with_capacity(self.draft.rows.len());
@@ -704,9 +698,16 @@ impl ItemInvoiceScreen {
                 });
                 continue;
             }
-            // The engine's lines are the non-blank rows, in order (`InvoiceDraft::build_voucher`).
-            let engine = computed.and_then(|block| block.lines.get(engine_line));
-            engine_line = engine_line.saturating_add(1);
+            // The engine's lines are the valid non-blank rows, in order
+            // (`InvoiceDraft::build_partial`).
+            let problem = line_amount(masters, row, number).err();
+            let engine = if problem.is_none() {
+                let at = engine_line;
+                engine_line = engine_line.saturating_add(1);
+                computed.and_then(|block| block.lines.get(at))
+            } else {
+                None
+            };
             let item = row.item.and_then(|id| masters.stock_items.get(&id));
             let hsn = item
                 .and_then(|item| item.hsn.as_ref())
@@ -722,9 +723,7 @@ impl ItemInvoiceScreen {
                     format!("{}%", line.rate_percent.normalize())
                 }),
                 amount: engine.map_or_else(String::new, |line| format::amount(line.taxable)),
-                problem: line_amount(masters, row, number)
-                    .err()
-                    .map(|e| e.to_string()),
+                problem: problem.map(|e| e.to_string()),
                 focused,
             });
         }
@@ -1195,17 +1194,11 @@ impl ItemInvoiceScreen {
     /// lines are the non-blank particulars, in order (`InvoiceDraft::build_voucher`).
     #[must_use]
     pub fn particular_rates(&self, masters: &Masters) -> Vec<String> {
-        let computed: Option<&GstBlock> = match self.gst_status(masters) {
-            GstStatus::Computed(block) => Some(block),
-            GstStatus::Incomplete(_)
-            | GstStatus::NotComputedYet
-            | GstStatus::Unsupported(_)
-            | GstStatus::Failed(_) => None,
-        };
+        let computed: Option<&GstBlock> = self.shown_block(masters);
         let mut engine_line = 0_usize;
         let mut rates = Vec::with_capacity(self.draft.particulars.len());
-        for row in &self.draft.particulars {
-            if row.is_blank() {
+        for (i, row) in self.draft.particulars.iter().enumerate() {
+            if row.is_blank() || self.draft.particular_problem(masters, i, row).is_some() {
                 rates.push(String::new());
                 continue;
             }
@@ -1598,9 +1591,7 @@ impl ItemInvoiceScreen {
             );
             self.lock_note(left);
             match &self.notice {
-                Some(Notice::Error(s)) => {
-                    note(left, NoteKind::Bad, s);
-                }
+                Some(Notice::Error(s)) => error_box(left, s),
                 Some(Notice::Info(s)) if !(s == "Saved." && self.toast.is_some()) => {
                     note(left, NoteKind::Info, s);
                 }
@@ -1900,6 +1891,7 @@ impl ItemInvoiceScreen {
             (_, InvoiceMode::AsVoucher) => "As voucher",
         };
         let number = self.extras.number.clone();
+        let save_ok = self.save_enabled(masters);
         page_head_numbered(
             ui,
             &self.page_title(),
@@ -1907,7 +1899,7 @@ impl ItemInvoiceScreen {
             Some(subtitle.as_str()),
             |ui| {
                 let saved = ui
-                    .add_enabled_ui(locked.is_none() && !busy, |ui| {
+                    .add_enabled_ui(locked.is_none() && !busy && save_ok, |ui| {
                         button_icon(
                             ui,
                             Some(Icon::Save),
@@ -2039,6 +2031,26 @@ impl ItemInvoiceScreen {
         }
         action
     }
+}
+
+/// The red box for an error (the mock's `errNote`): an alert icon, then the message. A message of
+/// several lines is a heading ("2 things to fix before saving", in bold) and one line each.
+fn error_box(ui: &mut Ui, message: &str) {
+    crate::ui::note::note_with_icon(ui, NoteKind::Bad, Icon::Alert, |ui, ink| {
+        ui.spacing_mut().item_spacing.y = 2.0;
+        let many = message.lines().count() > 1;
+        for (i, line) in message.lines().enumerate() {
+            if many && i == 0 {
+                ui.label(
+                    egui::RichText::new(line)
+                        .font(crate::ui::bold_font(ui, crate::theme::TEXT_META))
+                        .color(ink),
+                );
+            } else {
+                ui.label(para_text(line, crate::theme::TEXT_META, ink));
+            }
+        }
+    });
 }
 
 /// Where parts of the screen were drawn in the last frame, for layout tests.

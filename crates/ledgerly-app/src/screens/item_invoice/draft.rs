@@ -346,6 +346,91 @@ impl InvoiceDraft {
         masters: &Masters,
         fy: FinancialYear,
     ) -> Result<Voucher, InvoiceError> {
+        self.build(masters, fy, false)
+    }
+
+    /// The voucher of the lines that are valid, leaving out each line that has a problem (an
+    /// item with no quantity, text that names no item). The engine is asked about it so the
+    /// valid lines can show their own amount and rate while another line is still being fixed;
+    /// it is never saved. An error when the header is incomplete or no line is valid.
+    ///
+    /// # Errors
+    /// An [`InvoiceError`] naming the first thing that is missing or wrong outside the lines.
+    pub fn build_partial(
+        &self,
+        masters: &Masters,
+        fy: FinancialYear,
+    ) -> Result<Voucher, InvoiceError> {
+        self.build(masters, fy, true)
+    }
+
+    /// Every line problem, in line order, each worded for the red box ("Line 2: quantity: type a
+    /// number."), and the box's summary when there is more than one.
+    #[must_use]
+    pub fn validation_summary(&self, masters: &Masters) -> Option<String> {
+        let problems = self.line_problems(masters);
+        match problems.as_slice() {
+            [] => None,
+            [one] => Some(one.clone()),
+            many => Some(format!(
+                "{} things to fix before saving\n{}",
+                many.len(),
+                many.join("\n")
+            )),
+        }
+    }
+
+    /// The problem of each invalid line, as a sentence.
+    fn line_problems(&self, masters: &Masters) -> Vec<String> {
+        let sentence = |e: &InvoiceError| {
+            let text = e.to_string();
+            let mut chars = text.chars();
+            let head: String = chars
+                .next()
+                .map(|c| c.to_uppercase().collect())
+                .unwrap_or_default();
+            let mut out = format!("{head}{}", chars.as_str());
+            if !out.ends_with('.') {
+                out.push('.');
+            }
+            out
+        };
+        match self.mode {
+            InvoiceMode::Item => self
+                .rows
+                .iter()
+                .enumerate()
+                .filter(|(_, row)| !row.is_blank())
+                .filter_map(|(i, row)| {
+                    line_amount(masters, row, i.saturating_add(1))
+                        .err()
+                        .map(|e| sentence(&e))
+                })
+                .collect(),
+            InvoiceMode::Accounting | InvoiceMode::AsVoucher => self
+                .particulars
+                .iter()
+                .enumerate()
+                .filter(|(_, row)| !row.is_blank())
+                .filter_map(|(i, row)| {
+                    self.particular_problem(masters, i, row)
+                        .map(|reason| {
+                            sentence(&InvoiceError::Line {
+                                line: i.saturating_add(1),
+                                reason,
+                            })
+                        })
+                })
+                .collect(),
+        }
+    }
+
+    fn build(
+        &self,
+        masters: &Masters,
+        fy: FinancialYear,
+        lenient: bool,
+    ) -> Result<Voucher, InvoiceError> {
         let date = parse_entry_date(&self.date_text, fy)?;
         let reference_date = self.reference_date(fy)?;
         if self.number_required && self.number_text.trim().is_empty() {
@@ -366,17 +451,17 @@ impl InvoiceDraft {
                 let account = self.account.ok_or(InvoiceError::Missing {
                     field: self.kind.account_label(),
                 })?;
-                let lines = self.inventory_lines(masters, account)?;
+                let lines = self.inventory_lines(masters, account, lenient)?;
                 (VoucherMode::ItemInvoice, Vec::new(), lines)
             }
             InvoiceMode::Accounting => (
                 VoucherMode::AccountingInvoice,
-                self.particular_lines(masters)?,
+                self.particular_lines(masters, lenient)?,
                 Vec::new(),
             ),
             InvoiceMode::AsVoucher => (
                 VoucherMode::AsVoucher,
-                self.particular_lines(masters)?,
+                self.particular_lines(masters, lenient)?,
                 Vec::new(),
             ),
         };
@@ -404,33 +489,68 @@ impl InvoiceDraft {
         })
     }
 
-    /// The non-blank particulars as ledger lines on the kind's side, in typed order.
-    fn particular_lines(&self, masters: &Masters) -> Result<Vec<LedgerLine>, InvoiceError> {
+    /// Why particular `index` (`row`) cannot be a ledger line yet; `None` when it can.
+    pub(super) fn particular_problem(
+        &self,
+        masters: &Masters,
+        index: usize,
+        row: &ParticularRow,
+    ) -> Option<String> {
+        let _ = index;
+        let Some(ledger) = row.ledger.filter(|id| masters.ledgers.contains_key(id)) else {
+            return Some("choose a ledger".to_owned());
+        };
+        // As voucher: a GST ledger needs no amount, the engine fills it (a typed one is
+        // replaced).
+        if self.mode == InvoiceMode::AsVoucher
+            && row.amount_text.trim().is_empty()
+            && is_gst_tax_ledger(masters, ledger)
+        {
+            return None;
+        }
+        match typed_amount(&row.amount_text) {
+            Err(e) => Some(format!("amount: {e}")),
+            Ok(amount) if amount.is_zero() || amount.is_negative() => {
+                Some("the amount must be more than zero".to_owned())
+            }
+            Ok(_) => None,
+        }
+    }
+
+    /// The non-blank particulars as ledger lines on the kind's side, in typed order. When
+    /// `lenient`, a particular with a problem is left out.
+    fn particular_lines(
+        &self,
+        masters: &Masters,
+        lenient: bool,
+    ) -> Result<Vec<LedgerLine>, InvoiceError> {
         let side = particular_side(self.kind);
         let mut lines = Vec::new();
         for (index, row) in self.particulars.iter().enumerate() {
             if row.is_blank() {
                 continue;
             }
-            let line = index.saturating_add(1);
-            let bad = |reason: String| InvoiceError::Line { line, reason };
-            let ledger = row
-                .ledger
-                .filter(|id| masters.ledgers.contains_key(id))
-                .ok_or_else(|| bad("choose a ledger".to_owned()))?;
-            // As voucher: a GST ledger needs no amount, the engine fills it (a typed one is
-            // replaced).
+            if let Some(reason) = self.particular_problem(masters, index, row) {
+                if lenient {
+                    continue;
+                }
+                return Err(InvoiceError::Line {
+                    line: index.saturating_add(1),
+                    reason,
+                });
+            }
             let engine_fills = self.mode == InvoiceMode::AsVoucher
                 && row.amount_text.trim().is_empty()
-                && is_gst_tax_ledger(masters, ledger);
+                && row.ledger.is_some_and(|l| is_gst_tax_ledger(masters, l));
             let amount = if engine_fills {
                 Paise::ZERO
             } else {
-                typed_amount(&row.amount_text).map_err(|e| bad(format!("amount: {e}")))?
+                typed_amount(&row.amount_text).map_err(|reason| InvoiceError::Line {
+                    line: index.saturating_add(1),
+                    reason: format!("amount: {reason}"),
+                })?
             };
-            if !engine_fills && (amount.is_zero() || amount.is_negative()) {
-                return Err(bad("the amount must be more than zero".to_owned()));
-            }
+            let ledger = row.ledger.ok_or(InvoiceError::Missing { field: "a ledger" })?;
             lines.push(LedgerLine {
                 ledger,
                 amount: SignedAmount { amount, side },
@@ -450,18 +570,18 @@ impl InvoiceDraft {
         &self,
         masters: &Masters,
         account: LedgerId,
+        lenient: bool,
     ) -> Result<Vec<InventoryLine>, InvoiceError> {
         let godown = only_godown(masters)?;
         let mut lines = Vec::new();
         for (index, row) in self.rows.iter().enumerate() {
-            if !row.is_blank() {
-                lines.push(inventory_line(
-                    masters,
-                    row,
-                    index.saturating_add(1),
-                    account,
-                    godown,
-                )?);
+            if row.is_blank() {
+                continue;
+            }
+            match inventory_line(masters, row, index.saturating_add(1), account, godown) {
+                Ok(line) => lines.push(line),
+                Err(InvoiceError::Line { .. } | InvoiceError::NeedsAmount { .. }) if lenient => {}
+                Err(e) => return Err(e),
             }
         }
         if lines.is_empty() {
