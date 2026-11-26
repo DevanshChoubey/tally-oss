@@ -97,7 +97,7 @@ fn old_events_keep_their_record_hashes() {
 
 #[test]
 fn a_file_of_old_events_opens_and_verifies_after_the_new_events_exist() {
-    let dir = tempfile::tempdir_in("/media/devansh/Experiment/playground/claude-tmp").unwrap();
+    let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("old.ledgerly");
     {
         let mut store =
@@ -117,7 +117,7 @@ fn a_file_of_old_events_opens_and_verifies_after_the_new_events_exist() {
 
 #[test]
 fn the_new_events_commit_read_back_and_keep_the_chain_whole() {
-    let dir = tempfile::tempdir_in("/media/devansh/Experiment/playground/claude-tmp").unwrap();
+    let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("new.ledgerly");
     let events = vec![
         Event::Gstr2bImported {

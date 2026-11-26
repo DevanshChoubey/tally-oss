@@ -19,10 +19,8 @@ use ledgerly_core::{Clock, LedgerId, Outcome, Paise};
 use time::OffsetDateTime;
 use time::macros::date;
 
-const DIR: &str = "/media/devansh/Experiment/playground/claude-tmp";
-
 fn open() -> (tempfile::TempDir, ApiWorker, LedgerId) {
-    let dir = tempfile::tempdir_in(DIR).unwrap();
+    let dir = tempfile::tempdir().unwrap();
     let api = ledgerly_sample::create(
         &dir.path().join("sample.ledgerly"),
         Clock::Fixed(OffsetDateTime::UNIX_EPOCH),

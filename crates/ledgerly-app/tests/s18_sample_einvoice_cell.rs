@@ -28,8 +28,6 @@ use ledgerly_model::{BaseVoucherKind, Books, Masters};
 use time::OffsetDateTime;
 use time::macros::date;
 
-const DIR: &str = "/media/devansh/Experiment/playground/claude-tmp";
-
 fn frame(screen: &mut ItemInvoiceScreen, app: &mut AppCtx) {
     let ctx = egui::Context::default();
     let out = ctx.run_ui(egui::RawInput::default(), |ui| {
@@ -71,7 +69,7 @@ fn fill(screen: &mut ItemInvoiceScreen, m: &Masters) {
 /// The sample company's SI/0418 as the default capture types it, opened on 21 Nov 2026; with
 /// `strip_buyer_pin` the buyer's PIN code is removed from the books first.
 fn note_for_default_invoice(strip_buyer_pin: bool) -> Option<String> {
-    let dir = tempfile::tempdir_in(DIR).unwrap();
+    let dir = tempfile::tempdir().unwrap();
     let mut api = ledgerly_sample::create(
         &dir.path().join("s.ledgerly"),
         Clock::Fixed(OffsetDateTime::UNIX_EPOCH),

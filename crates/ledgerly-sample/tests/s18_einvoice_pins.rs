@@ -22,10 +22,8 @@
 use ledgerly_core::{Clock, Outcome};
 use time::OffsetDateTime;
 
-const DIR: &str = "/media/devansh/Experiment/playground/claude-tmp";
-
 fn json_of(number: &str) -> serde_json::Value {
-    let dir = tempfile::tempdir_in(DIR).unwrap();
+    let dir = tempfile::tempdir().unwrap();
     let api = ledgerly_sample::create(
         &dir.path().join("s.ledgerly"),
         Clock::Fixed(OffsetDateTime::UNIX_EPOCH),
@@ -85,7 +83,7 @@ fn every_registered_party_has_a_two_line_address_and_a_pin_of_its_own_state() {
     // Madhya Pradesh 4, Gujarat 3. The first three digits name the sorting district: Pune 411,
     // Nashik 422, Satara 415, Mysuru 570, Bengaluru 560, Ahmedabad 382, Rajkot 360, Coimbatore 641,
     // Indore 452.
-    let dir = tempfile::tempdir_in(DIR).unwrap();
+    let dir = tempfile::tempdir().unwrap();
     let api = ledgerly_sample::create(
         &dir.path().join("s.ledgerly"),
         Clock::Fixed(OffsetDateTime::UNIX_EPOCH),

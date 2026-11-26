@@ -19,8 +19,6 @@ use ledgerly_core::{Clock, Gstin, Paise, Period};
 use time::OffsetDateTime;
 use time::macros::date;
 
-const DIR: &str = "/media/devansh/Experiment/playground/claude-tmp";
-
 fn gstin() -> Gstin {
     Gstin::parse("27ZZZZZ0000Z1ZQ").unwrap()
 }
@@ -34,7 +32,7 @@ fn rs(rupees: i64, paise: i64) -> Paise {
 }
 
 fn open(with_2b: bool) -> (tempfile::TempDir, ApiWorker) {
-    let dir = tempfile::tempdir_in(DIR).unwrap();
+    let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("sample.ledgerly");
     let clock = Clock::Fixed(OffsetDateTime::UNIX_EPOCH);
     let api = if with_2b {

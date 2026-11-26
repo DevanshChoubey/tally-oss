@@ -17,8 +17,6 @@ use ledgerly_api::{Api, PageItem};
 use ledgerly_core::{Clock, Outcome};
 use time::OffsetDateTime;
 
-const DIR: &str = "/media/devansh/Experiment/playground/claude-tmp";
-
 fn texts(api: &Api, number: &str) -> Vec<String> {
     let Outcome::Value(books) = api.books().unwrap() else {
         panic!("books")
@@ -50,7 +48,7 @@ fn si_0412_prints_with_one_tax_row_per_hsn_code() {
     // 3,045.15 (SGST the same), so the total tax of the two rows is 17,325.00 and 6,090.30 and
     // of the invoice 23,415.30 (= 2 x 11,707.65); 1,30,085.00 + 23,415.30 = 1,53,500.30 prints
     // as 1,53,500.00 with round-off -0.30.
-    let dir = tempfile::tempdir_in(DIR).unwrap();
+    let dir = tempfile::tempdir().unwrap();
     let api = ledgerly_sample::create(
         &dir.path().join("s.ledgerly"),
         Clock::Fixed(OffsetDateTime::UNIX_EPOCH),

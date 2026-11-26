@@ -13,7 +13,7 @@ use time::OffsetDateTime;
 use time::macros::date;
 
 fn sample() -> (tempfile::TempDir, Api) {
-    let dir = tempfile::tempdir_in("/media/devansh/Experiment/playground/claude-tmp").unwrap();
+    let dir = tempfile::tempdir().unwrap();
     let api = ledgerly_sample::create(
         &dir.path().join("sample.ledgerly"),
         Clock::Fixed(OffsetDateTime::UNIX_EPOCH),

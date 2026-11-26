@@ -17,7 +17,7 @@ use time::OffsetDateTime;
 use time::macros::date;
 
 fn detail_of(number: &str) -> VoucherDetail {
-    let dir = tempfile::tempdir_in("/media/devansh/Experiment/playground/claude-tmp").unwrap();
+    let dir = tempfile::tempdir().unwrap();
     let api = ledgerly_sample::create(
         &dir.path().join("sample.ledgerly"),
         Clock::Fixed(OffsetDateTime::UNIX_EPOCH),

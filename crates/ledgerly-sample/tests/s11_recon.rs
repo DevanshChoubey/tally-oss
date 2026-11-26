@@ -15,10 +15,8 @@ use ledgerly_core::{Clock, Gstin, Outcome, Paise, Period};
 use time::OffsetDateTime;
 use time::macros::date;
 
-const DIR: &str = "/media/devansh/Experiment/playground/claude-tmp";
-
 fn company(with_2b: bool) -> (tempfile::TempDir, std::path::PathBuf, Api) {
-    let dir = tempfile::tempdir_in(DIR).unwrap();
+    let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("sample.ledgerly");
     let clock = Clock::Fixed(OffsetDateTime::UNIX_EPOCH);
     let api = if with_2b {
