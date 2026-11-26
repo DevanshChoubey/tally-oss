@@ -99,26 +99,12 @@ pub fn extra_columns(columns: &[String]) -> ExtraColumns {
 /// (index.html:1645: "November").
 #[must_use]
 pub fn tab_labels(period: Period) -> [String; 2] {
-    ["Day".to_owned(), month_name(period.to())]
+    [crate::i18n::lit("Day"), month_name(period.to())]
 }
 
 /// The month of `d` in full, as the mock's tab writes it.
 fn month_name(d: Date) -> String {
-    let name = match d.month() {
-        time::Month::January => "January",
-        time::Month::February => "February",
-        time::Month::March => "March",
-        time::Month::April => "April",
-        time::Month::May => "May",
-        time::Month::June => "June",
-        time::Month::July => "July",
-        time::Month::August => "August",
-        time::Month::September => "September",
-        time::Month::October => "October",
-        time::Month::November => "November",
-        time::Month::December => "December",
-    };
-    name.to_owned()
+    crate::ui::format::month_name_in(d.month(), &crate::i18n::current())
 }
 
 /// The tab that shows `period`: `Day` for a single day, the month tab for the first of a month
@@ -166,18 +152,28 @@ pub fn subtitle_parts(period: Period) -> Vec<SubPart> {
         return vec![
             SubPart::Text(format!("{} \u{00B7} ", format::date(to))),
             SubPart::Key("F2"),
-            SubPart::Text(" another date \u{00B7} ".to_owned()),
+            SubPart::Text(format!(
+                " {} \u{00B7} ",
+                crate::i18n::t("daybook.another_date")
+            )),
             SubPart::Key("Alt+F2"),
-            SubPart::Text(" a period".to_owned()),
+            SubPart::Text(format!(" {}", crate::i18n::t("daybook.a_period"))),
         ];
     }
     let range = if from.year() == to.year() && from.month() == to.month() {
-        format!("{} to {}", from.day(), format::date(to))
+        crate::i18n::tf(
+            "daybook.range",
+            &[("from", &from.day().to_string()), ("to", &format::date(to))],
+        )
     } else {
-        format!("{} to {}", format::date(from), format::date(to))
+        crate::i18n::tf(
+            "daybook.range",
+            &[("from", &format::date(from)), ("to", &format::date(to))],
+        )
     };
-    vec![SubPart::Text(format!(
-        "{range} \u{00B7} every voucher, in order"
+    vec![SubPart::Text(crate::i18n::tf(
+        "daybook.every_voucher",
+        &[("range", &range)],
     ))]
 }
 
@@ -277,7 +273,11 @@ pub(super) fn draw_empty(ui: &mut Ui, report: &ViewReport) -> (Option<Action>, R
                 .map(String::as_str)
                 .chain([NOT_RECORDED])
             {
-                ui.label(egui::RichText::new(line).size(TEXT_META).color(t.text_3));
+                ui.label(
+                    egui::RichText::new(crate::i18n::lit(line))
+                        .size(TEXT_META)
+                        .color(t.text_3),
+                );
             }
         })
         .response
@@ -325,9 +325,9 @@ pub fn amount_text(cell: &ViewCell) -> String {
 #[must_use]
 pub fn total_label(count: usize) -> String {
     if count == 1 {
-        "1 voucher".to_owned()
+        crate::i18n::t("daybook.one_voucher")
     } else {
-        format!("{count} vouchers")
+        crate::i18n::tf("daybook.n_vouchers", &[("count", &count.to_string())])
     }
 }
 
@@ -436,7 +436,11 @@ pub(super) fn draw(
                 .map(String::as_str)
                 .chain([NOT_RECORDED])
             {
-                ui.label(egui::RichText::new(line).size(TEXT_META).color(t.text_3));
+                ui.label(
+                    egui::RichText::new(crate::i18n::lit(line))
+                        .size(TEXT_META)
+                        .color(t.text_3),
+                );
             }
         })
         .response
@@ -460,9 +464,25 @@ fn paint_heading(ui: &Ui, rect: Rect) {
         (by, "Entered by"),
         (origin, "Origin"),
     ] {
-        table::paint_cell_text(ui, r, 1.0, label, font.clone(), t.text_3, left);
+        table::paint_cell_text(
+            ui,
+            r,
+            1.0,
+            &crate::i18n::lit(label),
+            font.clone(),
+            t.text_3,
+            left,
+        );
     }
-    table::paint_cell_text(ui, amount, 1.0, "Amount", font, t.text_3, CellPlace::Right);
+    table::paint_cell_text(
+        ui,
+        amount,
+        1.0,
+        &crate::i18n::lit("Amount"),
+        font,
+        t.text_3,
+        CellPlace::Right,
+    );
 }
 
 /// The voucher rows and the total, in a scroll area at most `max_height` tall.
@@ -603,15 +623,21 @@ fn paint_origin(ui: &Ui, rect: Rect, origin: &str, status: &str) {
     let x = rect.left() + table::CELL_PAD_X;
     let y = rect.center().y;
     if origin == "AI draft" {
-        paint_badge(ui, x, y, BadgeKind::Ai, "AI draft, accepted");
+        paint_badge(
+            ui,
+            x,
+            y,
+            BadgeKind::Ai,
+            &crate::i18n::lit("AI draft, accepted"),
+        );
     } else if origin == "Imported" {
-        paint_badge(ui, x, y, BadgeKind::Neutral, "Imported");
+        paint_badge(ui, x, y, BadgeKind::Neutral, &crate::i18n::lit("Imported"));
     } else {
         table::paint_cell_text(
             ui,
             rect,
             1.0,
-            origin,
+            &super::generic::fixed_words(origin).unwrap_or_else(|| origin.to_owned()),
             egui::FontId::proportional(TEXT_META),
             t.text_3,
             CellPlace::Left(table::CELL_PAD_X),

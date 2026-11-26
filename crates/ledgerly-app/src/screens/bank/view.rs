@@ -14,9 +14,10 @@ use egui_extras::{Column, Size, StripBuilder};
 use super::import;
 use super::{
     BankScreen, BrsRow, BrsRowKind, BrsVerdict, Flow, LineState, LineStatus, PAGE_TITLE,
-    SettingsRequest, SuggestionView, Tab, brs_line_height, confidence_label, format_flow,
-    format_line_date, kind_label, status_label,
+    SettingsRequest, SuggestionView, Tab, brs_line_height, confidence_label_in, format_flow,
+    format_line_date, kind_label_in, status_label_in,
 };
+use crate::i18n::Tr;
 use crate::screens::ai_gate::settings_note;
 use crate::screens::wire::unsupported_text;
 use crate::theme::{RADIUS_M, TEXT_BODY, border_width, shadow_1};
@@ -33,9 +34,6 @@ use crate::ui::tabs::tabs;
 use crate::ui::{bold_font, kind, para, tokens};
 use ledgerly_core::{Outcome, VoucherId};
 use ledgerly_model::MatchKind;
-
-/// The sentence under the empty state, from the mock's bank empty state.
-const NO_STATEMENT_SENTENCE: &str = "Download a statement from your bank's website as CSV, XLSX or MT940, then import it here. The file is read on this computer. Ledgerly never signs in to your bank.";
 
 /// The least width of the statement lines table.
 const MIN_LINES_WIDTH: f32 = 420.0;
@@ -144,13 +142,17 @@ fn suggestion_badge(kind: MatchKind) -> BadgeKind {
 
 /// The match badge of a statement line: the status when it is not waiting, else the kind of the
 /// suggestion on it, else "Not matched".
-fn match_badge(line: &LineState, suggestion: Option<&SuggestionView>) -> (BadgeKind, String) {
+fn match_badge(
+    line: &LineState,
+    suggestion: Option<&SuggestionView>,
+    tr: &Tr,
+) -> (BadgeKind, String) {
     match line.status {
-        LineStatus::Matched => (BadgeKind::Ok, "Matched".to_owned()),
-        LineStatus::Skipped => (BadgeKind::Neutral, "Skipped".to_owned()),
+        LineStatus::Matched => (BadgeKind::Ok, status_label_in(line.status, tr)),
+        LineStatus::Skipped => (BadgeKind::Neutral, status_label_in(line.status, tr)),
         LineStatus::Pending => match suggestion {
-            Some(s) => (suggestion_badge(s.kind), kind_label(s.kind).to_owned()),
-            None => (BadgeKind::Warn, "Not matched".to_owned()),
+            Some(s) => (suggestion_badge(s.kind), kind_label_in(s.kind, tr)),
+            None => (BadgeKind::Warn, status_label_in(line.status, tr)),
         },
     }
 }
@@ -162,13 +164,16 @@ fn line_name(cells: &[&str]) -> String {
 }
 
 /// The action column of a statement line.
-fn action_text(line: &LineState, suggestion: Option<&SuggestionView>) -> String {
+fn action_text(line: &LineState, suggestion: Option<&SuggestionView>, tr: &Tr) -> String {
     match line.status {
-        LineStatus::Matched => "Matched by you".to_owned(),
-        LineStatus::Skipped => "Set aside".to_owned(),
+        LineStatus::Matched => tr.t("bank.action.matched_by_you"),
+        LineStatus::Skipped => tr.t("bank.action.set_aside"),
         LineStatus::Pending => match suggestion {
-            Some(s) => format!("Matches {}", s.voucher_label),
-            None => "Match by hand".to_owned(),
+            Some(s) => tr.tf(
+                "bank.action.matches",
+                &[("voucher", s.voucher_label.as_str())],
+            ),
+            None => tr.t("bank.action.by_hand"),
         },
     }
 }
@@ -184,7 +189,7 @@ impl BankScreen {
         // index.html:1738: a file that does not add up shows the head and the working, nothing
         // else: the statement the screen held before is not shown beside a refusal.
         if let Some(working) = self.import_working().copied() {
-            draw_balance_refusal(ui, &working);
+            draw_balance_refusal(ui, &working, &self.tr);
             return;
         }
         // index.html:1737: with no statement the mock shows the head and one card, no tab strip.
@@ -195,7 +200,7 @@ impl BankScreen {
             note(
                 ui,
                 NoteKind::Bad,
-                &format!("Not imported. {text} Nothing was imported."),
+                &self.tr.tf("bank.notice.not_imported", &[("text", text)]),
             );
         }
         if let Some(text) = self.export_notice() {
@@ -207,10 +212,20 @@ impl BankScreen {
             Tab::Statement => self.draw_statement(ui),
         }
         if let Some(err) = self.last_error() {
-            note(ui, NoteKind::Bad, &format!("Error: {err}"));
+            note(
+                ui,
+                NoteKind::Bad,
+                &self
+                    .tr
+                    .tf("bank.notice.error", &[("text", &err.to_string())]),
+            );
         }
         if let Some(text) = self.notice() {
-            note(ui, NoteKind::Bad, &format!("Error: {text}"));
+            note(
+                ui,
+                NoteKind::Bad,
+                &self.tr.tf("bank.notice.error", &[("text", text)]),
+            );
         }
         for event in events {
             self.run_event(event);
@@ -310,15 +325,22 @@ impl BankScreen {
     /// the first action at the far right, so the reconciliation statement is added first.
     fn draw_head(&self, ui: &mut Ui, events: &mut Vec<UiEvent>) {
         let sub = self.subtitle_text();
-        page_head(ui, PAGE_TITLE, Some(&sub), |ui| {
-            if button(ui, "Reconciliation statement", None, ButtonKind::Secondary).clicked() {
+        page_head(ui, &crate::i18n::lit(PAGE_TITLE), Some(&sub), |ui| {
+            if button(
+                ui,
+                &self.tr.t("bank.key.statement"),
+                None,
+                ButtonKind::Secondary,
+            )
+            .clicked()
+            {
                 events.push(UiEvent::Tab(Tab::Statement));
             }
             if self.is_worker()
                 && button_icon(
                     ui,
                     Some(Icon::Upload),
-                    "Import statement",
+                    &self.tr.t("bank.key.import"),
                     Some("Ctrl+O"),
                     ButtonKind::Secondary,
                 )
@@ -327,7 +349,13 @@ impl BankScreen {
                 events.push(UiEvent::Import);
             }
             if self.can_switch
-                && button(ui, "Change account", Some("C"), ButtonKind::Secondary).clicked()
+                && button(
+                    ui,
+                    &self.tr.t("bank.change_account"),
+                    Some("C"),
+                    ButtonKind::Secondary,
+                )
+                .clicked()
             {
                 events.push(UiEvent::ChangeAccount);
             }
@@ -350,7 +378,9 @@ impl BankScreen {
             Tab::Matching => 0,
             Tab::Statement => 1,
         };
-        let response = tabs(ui, &["All lines", "Reconciliation statement"], selected);
+        let all_lines = self.tr.t("bank.key.all_lines");
+        let statement = self.tr.t("bank.key.statement");
+        let response = tabs(ui, &[all_lines.as_str(), statement.as_str()], selected);
         if let Some(i) = response.clicked {
             let tab = match i {
                 0 => Tab::Matching,
@@ -364,16 +394,18 @@ impl BankScreen {
     fn draw_matching(&self, ui: &mut Ui, events: &mut Vec<UiEvent>) {
         if self.line_count() == 0 {
             if self.is_loading() {
-                ui.weak("Loading the statement and its suggestions.");
+                ui.weak(self.tr.t("bank.loading"));
             } else {
                 self.draw_no_statement(ui, events);
             }
             return;
         }
-        ui.weak(format!(
-            "{} of {} statement lines are not matched. Enter accepts the suggestion, S skips, M matches by hand, J and K move.",
-            self.pending_count(),
-            self.line_count()
+        ui.weak(self.tr.tf(
+            "bank.count",
+            &[
+                ("pending", self.pending_count().to_string().as_str()),
+                ("total", self.line_count().to_string().as_str()),
+            ],
         ));
         // Two columns from the width the page has: the table takes what the card beside it leaves.
         // (A strip let the table's own minimum push the card past the window's right edge.)
@@ -410,21 +442,21 @@ impl BankScreen {
             if empty_state_with_icon(
                 ui,
                 Some(Icon::Bank),
-                "No statement for this account yet",
-                NO_STATEMENT_SENTENCE,
-                Some((Some(Icon::Upload), "Import statement", "Ctrl+O")),
+                &self.tr.t("bank.no_statement.title"),
+                &self.tr.t("bank.no_statement.sentence"),
+                Some((Some(Icon::Upload), &self.tr.t("bank.key.import"), "Ctrl+O")),
             ) {
                 events.push(UiEvent::Import);
             }
             let current = self.import_layout();
             ui.horizontal(|ui| {
-                ui.weak("File layout");
+                ui.weak(self.tr.t("bank.layout.label"));
                 style_combo(ui);
                 egui::ComboBox::from_id_salt("bank-import-layout")
-                    .selected_text(import::layout_label(current))
+                    .selected_text(import::layout_label_in(current, &self.tr))
                     .show_ui(ui, |ui| {
-                        for (id, label) in import::LAYOUTS {
-                            if ui.selectable_label(id == current, label).clicked() {
+                        for (id, key) in import::LAYOUTS {
+                            if ui.selectable_label(id == current, self.tr.t(key)).clicked() {
                                 events.push(UiEvent::Layout(id));
                             }
                         }
@@ -437,24 +469,30 @@ impl BankScreen {
     fn draw_lines(&self, ui: &mut Ui, events: &mut Vec<UiEvent>) {
         // The narration takes the width the other five columns and the gaps between the columns
         // leave. (A remainder column let the table run wider than the cell it is drawn in.)
+        let date = self.tr.t("bank.col.date");
+        let narration = self.tr.t("bank.col.narration");
+        let withdrawal = self.tr.t("bank.col.withdrawal");
+        let deposit = self.tr.t("bank.col.deposit");
+        let match_col = self.tr.t("bank.col.match");
+        let action = self.tr.t("bank.col.action");
         let fixed = 84.0 + 88.0 + 88.0 + 112.0 + 128.0;
         let gaps = 5.0 * ui.spacing().item_spacing.x;
-        let narration = (ui.available_width() - fixed - gaps).max(120.0);
+        let narration_w = (ui.available_width() - fixed - gaps).max(120.0);
         table::builder(ui)
             .sense(Sense::click())
             .column(Column::exact(84.0))
-            .column(Column::exact(narration))
+            .column(Column::exact(narration_w))
             .column(Column::exact(88.0))
             .column(Column::exact(88.0))
             .column(Column::exact(112.0))
             .column(Column::exact(128.0))
             .header(table::HEADER_HEIGHT, |mut row| {
-                table::header(&mut row, "Date", false);
-                table::header(&mut row, "Narration (as imported)", false);
-                table::header(&mut row, "Withdrawal", true);
-                table::header(&mut row, "Deposit", true);
-                table::header(&mut row, "Match", false);
-                table::header(&mut row, "Action", false);
+                table::header(&mut row, &date, false);
+                table::header(&mut row, &narration, false);
+                table::header(&mut row, &withdrawal, true);
+                table::header(&mut row, &deposit, true);
+                table::header(&mut row, &match_col, false);
+                table::header(&mut row, &action, false);
             })
             .body(|body| {
                 body.rows(LINE_HEIGHT, self.line_count(), |mut row| {
@@ -469,9 +507,9 @@ impl BankScreen {
                         Flow::Out => (amount.as_str(), ""),
                         Flow::In => ("", amount.as_str()),
                     };
-                    let (kind, text) = match_badge(line, suggestion);
+                    let (kind, text) = match_badge(line, suggestion, &self.tr);
                     let date = format_line_date(line.view.date);
-                    let action = action_text(line, suggestion);
+                    let action = action_text(line, suggestion, &self.tr);
                     row.col(|ui| table::text(ui, &date));
                     row.col(|ui| {
                         let t = tokens(ui);
@@ -513,7 +551,14 @@ impl BankScreen {
         // With AI off the side is the mock's note, not a card (index.html:1830); the manual match
         // panel still opens as a card, since matching by hand needs no AI.
         if self.ai_tier == Some(crate::AiTier::Off) && !self.is_manual_open() {
-            if settings_note(ui, NoteKind::Info, Icon::Off, AI_OFF_NOTE, true) {
+            if settings_note(
+                ui,
+                NoteKind::Info,
+                Icon::Off,
+                &self.tr.t("bank.ai_off_note"),
+                true,
+                &self.tr,
+            ) {
                 events.push(UiEvent::OpenSettings);
             }
             return;
@@ -532,7 +577,7 @@ impl BankScreen {
             match line.status {
                 LineStatus::Pending => self.draw_pending(ui, events, self.focus_index()),
                 LineStatus::Matched | LineStatus::Skipped => {
-                    ui.label(status_label(line.status));
+                    ui.label(status_label_in(line.status, &self.tr));
                 }
             }
             if self.is_manual_open() {
@@ -549,38 +594,43 @@ impl BankScreen {
         };
         if let Some(s) = self.suggestion_for(line.view.line_no) {
             let together = s.lines.len() > 1 || s.vouchers.len() > 1;
-            ui.horizontal(|ui| {
-                badge(ui, suggestion_badge(s.kind), kind_label(s.kind));
+            let kind = kind_label_in(s.kind, &self.tr);
+            let match_word = self.tr.t(if together {
+                "bank.match.together"
+            } else {
+                "bank.match.single"
             });
-            ui.label(format!(
-                "{}{}",
-                if together {
-                    "Match together: "
-                } else {
-                    "Match: "
-                },
-                s.voucher_label
-            ));
-            ui.weak(format!(
-                "{}. Confidence {}.",
-                s.reason,
-                confidence_label(s.confidence)
+            let confidence = confidence_label_in(s.confidence, &self.tr);
+            let match_button = self.tr.t("bank.key.match");
+            let skip = self.tr.t("bank.key.skip");
+            ui.horizontal(|ui| {
+                badge(ui, suggestion_badge(s.kind), &kind);
+            });
+            ui.label(format!("{match_word}{}", s.voucher_label));
+            ui.weak(self.tr.tf(
+                "bank.pending.confidence",
+                &[
+                    ("reason", s.reason.as_str()),
+                    ("level", confidence.as_str()),
+                ],
             ));
             ui.horizontal(|ui| {
-                if button(ui, "Match", Some("Enter"), ButtonKind::Primary).clicked() {
+                if button(ui, &match_button, Some("Enter"), ButtonKind::Primary).clicked() {
                     events.push(UiEvent::Accept(index));
                 }
-                if button(ui, "Skip", Some("S"), ButtonKind::Secondary).clicked() {
+                if button(ui, &skip, Some("S"), ButtonKind::Secondary).clicked() {
                     events.push(UiEvent::Skip(index));
                 }
             });
         } else {
-            ui.weak("No suggestion. Press M to match it by hand.");
+            ui.weak(self.tr.t("bank.pending.no_suggestion"));
+            let by_hand = self.tr.t("bank.key.match_by_hand");
+            let skip = self.tr.t("bank.key.skip");
             ui.horizontal(|ui| {
-                if button(ui, "Match by hand", Some("M"), ButtonKind::Secondary).clicked() {
+                if button(ui, &by_hand, Some("M"), ButtonKind::Secondary).clicked() {
                     events.push(UiEvent::ToggleManual);
                 }
-                if button(ui, "Skip", Some("S"), ButtonKind::Secondary).clicked() {
+                if button(ui, &skip, Some("S"), ButtonKind::Secondary).clicked() {
                     events.push(UiEvent::Skip(index));
                 }
             });
@@ -589,13 +639,11 @@ impl BankScreen {
 
     /// The manual match panel: the open vouchers as choices, then the confirm button.
     fn draw_manual(&self, ui: &mut Ui, events: &mut Vec<UiEvent>) {
-        ui.strong("Match by hand");
-        ui.weak(
-            "Choose the vouchers for the focused statement line (Space), then Enter. The engine checks the amounts before the bank date is set. Esc closes.",
-        );
+        ui.strong(self.tr.t("bank.manual.title"));
+        ui.weak(self.tr.t("bank.manual.help"));
         let candidates = self.manual_candidates();
         if candidates.is_empty() {
-            ui.label("Every open voucher is matched.");
+            ui.label(self.tr.t("bank.manual.all_matched"));
         }
         for (j, v) in candidates.iter().enumerate() {
             let mut chosen = self.is_voucher_chosen(v.voucher);
@@ -614,7 +662,8 @@ impl BankScreen {
                 events.push(UiEvent::Choose(v.voucher));
             }
         }
-        if button(ui, "Match by hand", Some("Enter"), ButtonKind::Primary).clicked() {
+        let by_hand = self.tr.t("bank.key.match_by_hand");
+        if button(ui, &by_hand, Some("Enter"), ButtonKind::Primary).clicked() {
             events.push(UiEvent::ConfirmManual);
         }
     }
@@ -623,9 +672,9 @@ impl BankScreen {
     fn draw_statement(&self, ui: &mut Ui) {
         match self.brs() {
             Outcome::Value(view) => {
-                ui.strong(format!(
-                    "Reconciliation statement as of {}",
-                    format_line_date(view.as_of)
+                ui.strong(self.tr.tf(
+                    "bank.statement.as_of",
+                    &[("date", format_line_date(view.as_of).as_str())],
                 ));
                 let verdict = super::brs_verdict(view);
                 let note_text = self.brs_note();
@@ -658,7 +707,7 @@ impl BankScreen {
                                     }
                                 });
                                 strip.empty();
-                                strip.cell(|col| draw_verdict(col, verdict));
+                                strip.cell(|col| draw_verdict(col, verdict, &self.tr));
                             });
                     });
                 }
@@ -678,9 +727,12 @@ impl BankScreen {
             return;
         }
         if let Some(path) = crate::ui::dialogs::save_file(
-            "Save the reconciliation statement",
+            &self.tr.t("bank.export.dialog_title"),
             Some("bank-reconciliation-statement.csv"),
-            &[("CSV", &["csv"]), ("Excel workbook", &["xlsx"])],
+            &[
+                ("CSV", &["csv"]),
+                (&self.tr.t("bank.export.excel"), &["xlsx"]),
+            ],
         ) {
             self.export_statement_to(path);
         }
@@ -693,7 +745,7 @@ impl BankScreen {
         if !self.is_worker() {
             return;
         }
-        match import::pick_file(self.import_layout()) {
+        match import::pick_file(self.import_layout(), &self.tr) {
             Ok(Some(picked)) => {
                 self.set_import_layout(picked.layout);
                 self.queue_import(picked.bytes, picked.layout);
@@ -709,19 +761,19 @@ const REFUSAL_TABLE_WIDTH: f32 = 520.0;
 
 /// The refusal for a file that does not add up (the mock's `bank.import-error`): a red note with
 /// the working, every figure from the engine's [`ledgerly_api::BalanceRefusal`].
-fn draw_balance_refusal(ui: &mut Ui, working: &ledgerly_api::BalanceRefusal) {
+fn draw_balance_refusal(ui: &mut Ui, working: &ledgerly_api::BalanceRefusal, tr: &Tr) {
     note_with_icon(ui, NoteKind::Bad, Icon::Alert, |ui, ink| {
         ui.label(
-            egui::RichText::new("Not imported: the file does not add up.")
+            egui::RichText::new(tr.t("bank.refusal.title"))
                 .font(bold_font(ui, crate::theme::TEXT_META))
                 .color(ink),
         );
         ui.add_space(8.0);
-        refusal_table(ui, working, ink);
+        refusal_table(ui, working, ink, tr);
         ui.add_space(8.0);
         para(
             ui,
-            "A line is probably missing from the export, or the file was cut. Download the statement again for the full period. Nothing was imported.",
+            &tr.t("bank.refusal.advice"),
             crate::theme::TEXT_META,
             ink,
         );
@@ -741,34 +793,37 @@ enum WorkingRow {
 
 /// The working's rows, from the engine's figures: label, amount, look, and whether the label
 /// carries the engine tag.
-fn refusal_rows(w: &ledgerly_api::BalanceRefusal) -> Vec<(String, String, WorkingRow, bool)> {
+fn refusal_rows(
+    w: &ledgerly_api::BalanceRefusal,
+    tr: &Tr,
+) -> Vec<(String, String, WorkingRow, bool)> {
     vec![
         (
-            "Opening balance in the file".to_owned(),
+            tr.t("bank.refusal.opening"),
             format::amount(w.opening),
             WorkingRow::Plain,
             false,
         ),
         (
-            format!("Plus deposits, less withdrawals ({} lines)", w.lines),
+            tr.tf("bank.refusal.lines_net", &[("n", &w.lines.to_string())]),
             format::amount(w.lines_net),
             WorkingRow::Plain,
             true,
         ),
         (
-            "Closing balance, computed".to_owned(),
+            tr.t("bank.refusal.computed"),
             format::amount(w.computed_closing),
             WorkingRow::Total,
             false,
         ),
         (
-            "Closing balance printed in the file".to_owned(),
+            tr.t("bank.refusal.stated"),
             format::amount(w.stated_closing),
             WorkingRow::Plain,
             false,
         ),
         (
-            "Difference".to_owned(),
+            tr.t("bank.refusal.difference"),
             format::amount(w.difference),
             WorkingRow::Strong,
             false,
@@ -778,9 +833,9 @@ fn refusal_rows(w: &ledgerly_api::BalanceRefusal) -> Vec<(String, String, Workin
 
 /// The working as a `table.t` in the note's ink: rules in the border colour, the computed line
 /// with the total's rules.
-fn refusal_table(ui: &mut Ui, w: &ledgerly_api::BalanceRefusal, ink: egui::Color32) {
+fn refusal_table(ui: &mut Ui, w: &ledgerly_api::BalanceRefusal, ink: egui::Color32, tr: &Tr) {
     let width = ui.available_width().min(REFUSAL_TABLE_WIDTH);
-    for (label, amount, look, engine) in refusal_rows(w) {
+    for (label, amount, look, engine) in refusal_rows(w, tr) {
         let height = match look {
             WorkingRow::Total => table::T_TOTAL_HEIGHT,
             WorkingRow::Plain | WorkingRow::Strong => table::T_ROW_HEIGHT,
@@ -950,9 +1005,6 @@ fn paint_statement_line(ui: &Ui, rect: Rect, row: &BrsRow) {
     );
 }
 
-/// What the side says with AI off: what still runs and what waits (index.html:1830).
-const AI_OFF_NOTE: &str = "AI is off for this company. Exact and Rule matching still run: they are deterministic engine code. Leftover lines wait for you.";
-
 /// Gap between the statement and its card (the mock's grid gap).
 const GRID_GAP: f32 = 16.0;
 /// The mock's `.g-main` columns, `minmax(0,1.55fr) minmax(320px,1fr)`.
@@ -964,24 +1016,24 @@ const VERDICT_MIN: f32 = 320.0;
 
 /// The card beside the statement: Reconciled with a check, or Not yet reconciled, and one
 /// sentence. The words say only what the engine's Difference line says.
-fn draw_verdict(ui: &mut Ui, verdict: BrsVerdict) {
+fn draw_verdict(ui: &mut Ui, verdict: BrsVerdict, tr: &Tr) {
     let t = tokens(ui);
     let (title, glyph, text) = match verdict {
         BrsVerdict::Reconciled => (
-            "Reconciled",
+            tr.t("bank.verdict.ok_title"),
             Some(Icon::Check),
-            "The imported statement agrees with the balance as per bank.",
+            tr.t("bank.verdict.ok_text"),
         ),
         BrsVerdict::NotYet | BrsVerdict::Unknown => (
-            "Not yet reconciled",
+            tr.t("bank.verdict.not_title"),
             None,
-            "The imported statement differs from the balance as per bank. Match or post the statement lines, then this difference closes.",
+            tr.t("bank.verdict.not_text"),
         ),
     };
     card(ui, |ui| {
         ui.set_min_width(ui.available_width());
-        crate::ui::mock_table::panel_title(ui, glyph, title);
-        para(ui, text, TEXT_BODY, t.text_2);
+        crate::ui::mock_table::panel_title(ui, glyph, &title);
+        para(ui, &text, TEXT_BODY, t.text_2);
     });
 }
 

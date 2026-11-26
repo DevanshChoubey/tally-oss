@@ -11,6 +11,8 @@
 use ledgerly_core::{Date, Month, Paise};
 use time::Weekday;
 
+use crate::i18n::Tr;
+
 /// An amount in paise as rupees and paise with Indian grouping: `1,00,000.00`, `12,34,567.89`,
 /// `-50.25`, `0.00`. The sign is a leading `-` for negative amounts.
 #[must_use]
@@ -65,22 +67,84 @@ pub fn grouped_text(text: &str) -> Option<String> {
 /// `2026-11-21` becomes `21 Nov 2026`, and `2026-11-05` becomes `5 Nov 2026`.
 #[must_use]
 pub fn date(d: Date) -> String {
-    format!("{} {} {}", d.day(), month_abbrev(d.month()), d.year())
+    date_in(d, &crate::i18n::current())
 }
 
 /// `d` with its weekday in full, as the mock's Home line writes it: `Saturday 21 Nov 2026`.
 #[must_use]
 pub fn long_date(d: Date) -> String {
-    let day = match d.weekday() {
-        Weekday::Monday => "Monday",
-        Weekday::Tuesday => "Tuesday",
-        Weekday::Wednesday => "Wednesday",
-        Weekday::Thursday => "Thursday",
-        Weekday::Friday => "Friday",
-        Weekday::Saturday => "Saturday",
-        Weekday::Sunday => "Sunday",
-    };
-    format!("{day} {}", date(d))
+    long_date_in(d, &crate::i18n::current())
+}
+
+/// `d` in the words of `tr`: the day, the month's word from the translation file, the year.
+/// The digits stay Latin.
+#[must_use]
+pub fn date_in(d: Date, tr: &Tr) -> String {
+    format!("{} {} {}", d.day(), tr.t(month_key(d.month())), d.year())
+}
+
+/// `d` with its weekday in the words of `tr`, as [`long_date`] writes it in English.
+#[must_use]
+pub fn long_date_in(d: Date, tr: &Tr) -> String {
+    format!("{} {}", tr.t(weekday_key(d.weekday())), date_in(d, tr))
+}
+
+/// The translation key of the weekday `w`.
+fn weekday_key(w: Weekday) -> &'static str {
+    match w {
+        Weekday::Monday => "format.weekday.monday",
+        Weekday::Tuesday => "format.weekday.tuesday",
+        Weekday::Wednesday => "format.weekday.wednesday",
+        Weekday::Thursday => "format.weekday.thursday",
+        Weekday::Friday => "format.weekday.friday",
+        Weekday::Saturday => "format.weekday.saturday",
+        Weekday::Sunday => "format.weekday.sunday",
+    }
+}
+
+/// The translation key of the month `m`.
+fn month_key(m: Month) -> &'static str {
+    match m {
+        Month::January => "format.month.jan",
+        Month::February => "format.month.feb",
+        Month::March => "format.month.mar",
+        Month::April => "format.month.apr",
+        Month::May => "format.month.may",
+        Month::June => "format.month.jun",
+        Month::July => "format.month.jul",
+        Month::August => "format.month.aug",
+        Month::September => "format.month.sep",
+        Month::October => "format.month.oct",
+        Month::November => "format.month.nov",
+        Month::December => "format.month.dec",
+    }
+}
+
+/// The abbreviation of `m` in the words of `tr`.
+#[must_use]
+pub fn month_abbrev_in(m: Month, tr: &Tr) -> String {
+    tr.t(month_key(m))
+}
+
+/// The month whose English abbreviation is `abbrev`, if it is one.
+#[must_use]
+pub fn month_from_abbrev(abbrev: &str) -> Option<Month> {
+    [
+        Month::January,
+        Month::February,
+        Month::March,
+        Month::April,
+        Month::May,
+        Month::June,
+        Month::July,
+        Month::August,
+        Month::September,
+        Month::October,
+        Month::November,
+        Month::December,
+    ]
+    .into_iter()
+    .find(|m| month_abbrev(*m) == abbrev)
 }
 
 /// The three-letter English abbreviation of `m`.
@@ -100,6 +164,26 @@ pub fn month_abbrev(m: Month) -> &'static str {
         Month::November => "Nov",
         Month::December => "Dec",
     }
+}
+
+/// The name of `m` in full in the words of `tr`.
+#[must_use]
+pub fn month_name_in(m: Month, tr: &Tr) -> String {
+    let key = match m {
+        Month::January => "format.month_full.jan",
+        Month::February => "format.month_full.feb",
+        Month::March => "format.month_full.mar",
+        Month::April => "format.month_full.apr",
+        Month::May => "format.month_full.may",
+        Month::June => "format.month_full.jun",
+        Month::July => "format.month_full.jul",
+        Month::August => "format.month_full.aug",
+        Month::September => "format.month_full.sep",
+        Month::October => "format.month_full.oct",
+        Month::November => "format.month_full.nov",
+        Month::December => "format.month_full.dec",
+    };
+    tr.t(key)
 }
 
 /// The English name of `m` in full: `November`.

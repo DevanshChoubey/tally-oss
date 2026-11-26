@@ -139,7 +139,10 @@ fn the_payment_screen_keeps_the_payment_row_selected() {
     let b = books();
     let screen = open(&b);
     assert_eq!(
-        ledgerly_app::shell::sidebar::selected_label(&screen.sidebar_title()),
+        ledgerly_app::shell::sidebar::selected_label(
+            &screen.sidebar_title(&ledgerly_app::i18n::Tr::default()),
+            &ledgerly_app::i18n::Tr::default(),
+        ),
         Some("Payment")
     );
 }

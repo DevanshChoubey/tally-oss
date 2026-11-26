@@ -10,6 +10,7 @@
 //! The mock's other states (`ask.result`, `ask.loading`, `ask.low-confidence`,
 //! `ask.unsupported`) need a compiled query and are listed in `design/PARITY-GAPS.md`.
 
+use crate::i18n::Tr;
 use egui::{RichText, Ui};
 
 use crate::palette::PaletteTarget;
@@ -24,16 +25,6 @@ use crate::ui::note::{NoteKind, note};
 use crate::ui::page_head::page_head;
 use crate::ui::{bold_font, tokens};
 use crate::{AppCtx, Screen, ScreenAction};
-
-/// The screen's title (index.html:1167).
-pub const TITLE: &str = "Ask your books";
-/// The page head's purpose line (index.html:1167).
-pub const SUBTITLE: &str = "The answer is always a report the engine runs. The assistant writes the query, never the figures.";
-/// The disabled question box's hint. The mock fills it with a sample question; no sample is
-/// shown, since nothing would answer it.
-pub const QUESTION_HINT: &str = "Questions are not turned into queries in this build";
-/// The report card's title (index.html:1170).
-pub const REPORTS_TITLE: &str = "Reports";
 
 /// The reports the screen offers in place of an answer (index.html:1170).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -63,7 +54,8 @@ impl AskReport {
         AskReport::Ledgers,
     ];
 
-    /// The words on the report's button (index.html:1170).
+    /// The words on the report's button in English (index.html:1170): [`AskReport::label_in`]
+    /// with the English file, kept for the tests that read the English list.
     #[must_use]
     pub fn label(self) -> &'static str {
         match self {
@@ -74,6 +66,19 @@ impl AskReport {
             AskReport::BankReconciliation => "Bank reconciliation",
             AskReport::Ledgers => "Ledgers",
         }
+    }
+
+    /// The words on the report's button in the words of `tr` (index.html:1170).
+    #[must_use]
+    pub fn label_in(self, tr: &Tr) -> String {
+        tr.t(match self {
+            AskReport::Receivables => "ask.report.receivables",
+            AskReport::BalanceSheet => "ask.report.balance_sheet",
+            AskReport::DayBook => "ask.report.day_book",
+            AskReport::Gstr3b => "ask.report.gstr3b",
+            AskReport::BankReconciliation => "ask.report.bank_recon",
+            AskReport::Ledgers => "ask.report.ledgers",
+        })
     }
 
     /// The icon on the report's button, the mock's own (index.html:1242).
@@ -112,11 +117,17 @@ impl AskReport {
     }
 }
 
-/// The key bar entries. The mock lists Enter "Ask" (index.html:1199); Enter asks nothing in this
-/// build, so only the screen's name is listed. Esc is the shell's.
+/// The key bar entries in English: [`key_hints_in`] with the English file.
 #[must_use]
 pub fn key_hints() -> Vec<KeyHint> {
-    vec![KeyHint::new("", TITLE)]
+    key_hints_in(&Tr::default())
+}
+
+/// The key bar entries in the words of `tr`. The mock lists Enter "Ask" (index.html:1199); Enter
+/// asks nothing in this build, so only the screen's name is listed. Esc is the shell's.
+#[must_use]
+pub fn key_hints_in(tr: &Tr) -> Vec<KeyHint> {
+    vec![KeyHint::new("", tr.t("ask.title"))]
 }
 
 /// The Ask your books screen.
@@ -161,7 +172,7 @@ const TILE_GAP: f32 = 6.0;
     clippy::cast_sign_loss,
     reason = "layout: the column count and button width follow the card's width"
 )]
-fn draw_reports(ui: &mut Ui) -> Option<AskReport> {
+fn draw_reports(ui: &mut Ui, tr: &Tr) -> Option<AskReport> {
     let width = ui.available_width();
     let columns = (((width + TILE_GAP) / (TILE_MIN + TILE_GAP)).floor() as usize).max(1);
     let tile = (width - TILE_GAP * (columns as f32 - 1.0)) / columns as f32;
@@ -169,12 +180,13 @@ fn draw_reports(ui: &mut Ui) -> Option<AskReport> {
     for row in AskReport::ALL.chunks(columns) {
         let height = row
             .iter()
-            .map(|report| ai_gate::tile_height(ui, report.label(), tile))
+            .map(|report| ai_gate::tile_height(ui, &report.label_in(tr), tile))
             .fold(ai_gate::TILE_HEIGHT, f32::max);
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = TILE_GAP;
             for report in row {
-                if ai_gate::launch_tile(ui, report.icon(), report.label(), tile, height).clicked() {
+                let label = report.label_in(tr);
+                if ai_gate::launch_tile(ui, report.icon(), &label, tile, height).clicked() {
                     clicked = Some(*report);
                 }
             }
@@ -185,27 +197,30 @@ fn draw_reports(ui: &mut Ui) -> Option<AskReport> {
 }
 
 impl Screen for AskScreen {
-    fn title(&self) -> String {
-        TITLE.to_owned()
+    fn title(&self, tr: &Tr) -> String {
+        tr.t("ask.title")
     }
 
-    fn subtitle(&self) -> Option<String> {
-        Some(SUBTITLE.to_owned())
+    fn subtitle(&self, tr: &Tr) -> Option<String> {
+        Some(tr.t("ask.subtitle"))
     }
 
-    fn keys(&self) -> Vec<KeyHint> {
-        key_hints()
+    fn keys(&self, tr: &Tr) -> Vec<KeyHint> {
+        key_hints_in(tr)
     }
 
     fn ui(&mut self, ui: &mut Ui, ctx: &mut AppCtx) -> ScreenAction {
+        let tr = ctx.tr.clone();
         let gate = self.gate.gate(ui, ctx);
         self.last = Some(gate.clone());
-        page_head(ui, TITLE, Some(SUBTITLE), |_| {});
-        ai_gate::input_box(ui, Icon::Spark, QUESTION_HINT);
+        page_head(ui, &tr.t("ask.title"), Some(&tr.t("ask.subtitle")), |_| {});
+        // The mock fills the box with a sample question; no sample is shown, since nothing
+        // would answer it.
+        ai_gate::input_box(ui, Icon::Spark, &tr.t("ask.question_hint"));
         ui.add_space(14.0);
 
         let mut action = ScreenAction::Stay;
-        if ai_gate::gate_note(ui, Feature::Ask, &gate) {
+        if ai_gate::gate_note_in(ui, Feature::Ask, &gate, &tr) {
             match ai_gate::open_settings(ctx) {
                 Ok(open) => action = open,
                 Err(why) => self.notice = Some(why),
@@ -220,12 +235,12 @@ impl Screen for AskScreen {
         let picked = card(ui, |ui| {
             ui.set_width(ui.available_width());
             ui.label(
-                RichText::new(REPORTS_TITLE)
+                RichText::new(tr.t("ask.reports_title"))
                     .font(bold_font(ui, TEXT_H2))
                     .color(t.text),
             );
             ui.add_space(10.0);
-            draw_reports(ui)
+            draw_reports(ui, &tr)
         })
         .inner;
         if let Some(report) = picked {

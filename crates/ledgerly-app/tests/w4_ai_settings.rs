@@ -213,7 +213,11 @@ fn the_three_states_render_the_mock_wording_and_keys() {
         screen.panel(),
         ledgerly_app::screens::ai_settings::Panel::Local
     );
-    assert_eq!(screen.keys(), key_hints(false), "the keys without a log");
+    assert_eq!(
+        screen.keys(&ledgerly_app::i18n::Tr::default()),
+        key_hints(false),
+        "the keys without a log"
+    );
 
     // Off (mock state ai-settings.off, index.html:1905 and the off note): every feature is off.
     let off = settle(&mut screen, &mut app, &[(Key::Num1, NONE)], |s| {
@@ -255,20 +259,29 @@ fn choosing_a_tier_is_kept_in_the_file_and_the_chip_follows_it() {
     let mut app = open(&path);
     let mut screen = AiSettingsScreen::default();
     settle(&mut screen, &mut app, &[], AiSettingsScreen::loaded);
-    assert_eq!(ai_chip(app.ai_tier), "AI: not set up");
+    assert_eq!(
+        ai_chip(app.ai_tier, &ledgerly_app::i18n::Tr::default()),
+        "AI: not set up"
+    );
 
     frame(&mut screen, &mut app, &[(Key::Num2, NONE)]);
     settle(&mut screen, &mut app, &[], |s| {
         s.stored() == Some(AiTier::Local)
     });
     assert_eq!(app.ai_tier, Some(AiTier::Local));
-    assert_eq!(ai_chip(app.ai_tier), "AI on this computer");
+    assert_eq!(
+        ai_chip(app.ai_tier, &ledgerly_app::i18n::Tr::default()),
+        "AI on this computer"
+    );
 
     frame(&mut screen, &mut app, &[(Key::Num1, NONE)]);
     settle(&mut screen, &mut app, &[], |s| {
         s.stored() == Some(AiTier::Off)
     });
-    assert_eq!(ai_chip(app.ai_tier), "AI off");
+    assert_eq!(
+        ai_chip(app.ai_tier, &ledgerly_app::i18n::Tr::default()),
+        "AI off"
+    );
 
     // Read back from the file after the company is closed and opened again.
     drop(app);
@@ -299,7 +312,13 @@ fn the_top_bar_chip_reads_the_stored_tier_when_the_shell_opens_the_file() {
         std::thread::sleep(Duration::from_millis(2));
     }
     assert_eq!(shell.app_ctx_mut().ai_tier, Some(AiTier::Local));
-    assert_eq!(ai_chip(shell.app_ctx_mut().ai_tier), "AI on this computer");
+    assert_eq!(
+        ai_chip(
+            shell.app_ctx_mut().ai_tier,
+            &ledgerly_app::i18n::Tr::default()
+        ),
+        "AI on this computer"
+    );
 }
 
 #[test]
@@ -327,7 +346,7 @@ fn the_log_shows_the_file_rows_and_never_sample_rows() {
     }
     assert!(
         screen
-            .keys()
+            .keys(&ledgerly_app::i18n::Tr::default())
             .iter()
             .any(|k| k.keys == "Ctrl+E" && k.label == "Export log")
     );
@@ -342,7 +361,12 @@ fn an_empty_log_says_so_and_offers_no_export() {
     assert!(text.contains(LOG_EMPTY));
     assert!(!text.contains("Ctrl+E exports it"));
     assert_eq!(screen.log().len(), 0);
-    assert!(!screen.keys().iter().any(|k| k.keys == "Ctrl+E"));
+    assert!(
+        !screen
+            .keys(&ledgerly_app::i18n::Tr::default())
+            .iter()
+            .any(|k| k.keys == "Ctrl+E")
+    );
     // Ctrl+E with no rows does nothing: no save dialog, no notice.
     frame(&mut screen, &mut app, &[(Key::E, Modifiers::COMMAND)]);
     assert_eq!(screen.notice(), None);

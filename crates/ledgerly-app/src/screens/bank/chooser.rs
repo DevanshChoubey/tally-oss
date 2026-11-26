@@ -10,10 +10,11 @@
 //! (rule C4, the screen adds up nothing). A bank the engine cannot answer for shows the reason,
 //! never a zero.
 
+use crate::i18n::Tr;
 use egui::{FontId, Frame, Rect, Sense, Stroke, Ui, pos2, vec2};
 use ledgerly_core::{Date, LedgerId, Outcome, Paise};
 
-use super::{PAGE_TITLE, format_line_date};
+use super::format_line_date;
 use crate::screen::KeyHint;
 use crate::screens::wire::{Done, Latest, unsupported_text};
 use crate::shell::navigate;
@@ -25,12 +26,6 @@ use crate::ui::page_head::page_head;
 use crate::ui::table::{self, CellPlace, RowState};
 use crate::ui::{bold_font, kind, tokens};
 use crate::{AppCtx, Screen, ScreenAction};
-
-/// The page head's title (`design/mock-v2` bank-chooser).
-const HEAD_TITLE: &str = "Choose a bank account";
-
-/// The line under the card.
-const FOOTNOTE: &str = "The balance is the engine's balance on this computer, as at the last voucher date. Import a statement before matching.";
 
 /// One bank ledger the chooser offers.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -223,17 +218,17 @@ impl BankChooserScreen {
             }
         } else if !self.started {
             self.started = true;
-            self.notice = Some("No company is open, so the balances cannot be read.".to_owned());
+            self.notice = Some(ctx.tr.t("bank.chooser.no_company"));
             for row in &mut self.rows {
-                row.balance = Balance::Missing("no company is open".to_owned());
+                row.balance = Balance::Missing(ctx.tr.t("bank.chooser.no_company_short"));
             }
         }
         match self.load.poll() {
             Some(Done::Ready(answers)) => self.apply(answers),
             Some(Done::Lost) => {
-                self.notice = Some("The worker stopped before it gave the balances.".to_owned());
+                self.notice = Some(ctx.tr.t("bank.chooser.worker_stopped"));
                 for row in &mut self.rows {
-                    row.balance = Balance::Missing("the worker stopped".to_owned());
+                    row.balance = Balance::Missing(ctx.tr.t("bank.chooser.worker_stopped_short"));
                 }
             }
             None => {}
@@ -260,7 +255,7 @@ impl BankChooserScreen {
             return ScreenAction::Stay;
         };
         let Some(books) = ctx.books.as_ref() else {
-            self.notice = Some("The company's books are not loaded yet.".to_owned());
+            self.notice = Some(ctx.tr.t("bank.chooser.not_loaded"));
             return ScreenAction::Stay;
         };
         match navigate::bank_screen(books, row.ledger) {
@@ -272,7 +267,7 @@ impl BankChooserScreen {
         }
     }
 
-    fn draw_card(&self, ui: &mut Ui) -> Option<usize> {
+    fn draw_card(&self, ui: &mut Ui, tr: &Tr) -> Option<usize> {
         let t = tokens(ui);
         let k = kind(ui);
         let mut clicked = None;
@@ -287,7 +282,7 @@ impl BankChooserScreen {
                 let width = ui.available_width();
                 let (head, _) =
                     ui.allocate_exact_size(vec2(width, table::T_HEAD_HEIGHT), Sense::hover());
-                Self::paint_head(ui, head);
+                Self::paint_head(ui, head, tr);
                 for (i, row) in self.rows.iter().enumerate() {
                     let (rect, response) =
                         ui.allocate_exact_size(vec2(width, table::T_ROW_HEIGHT), Sense::click());
@@ -296,8 +291,8 @@ impl BankChooserScreen {
                         hovered: response.hovered(),
                         sub: false,
                     };
-                    paint_line(ui, rect, row, state);
-                    let name = format!("{}, {}, {}", row.name, row.account, balance_text(row));
+                    paint_line(ui, rect, row, state, tr);
+                    let name = format!("{}, {}, {}", row.name, row.account, balance_text(row, tr));
                     response.widget_info(|| {
                         egui::WidgetInfo::labeled(egui::accesskit::Role::Row, true, &name)
                     });
@@ -309,7 +304,7 @@ impl BankChooserScreen {
         clicked
     }
 
-    fn paint_head(ui: &Ui, rect: Rect) {
+    fn paint_head(ui: &Ui, rect: Rect, tr: &Tr) {
         let t = tokens(ui);
         table::paint_head_rule(ui, rect);
         let font = bold_font(ui, TEXT_META);
@@ -318,7 +313,7 @@ impl BankChooserScreen {
             ui,
             rect,
             1.0,
-            "Account",
+            &tr.t("bank.chooser.col.account"),
             font.clone(),
             t.text_3,
             CellPlace::Left(table::indent(0)),
@@ -327,7 +322,7 @@ impl BankChooserScreen {
             ui,
             cols.number,
             1.0,
-            "Number",
+            &tr.t("bank.chooser.col.number"),
             font.clone(),
             t.text_3,
             CellPlace::Left(0.0),
@@ -336,7 +331,7 @@ impl BankChooserScreen {
             ui,
             cols.balance,
             1.0,
-            "Balance per books",
+            &tr.t("bank.chooser.col.balance"),
             font.clone(),
             t.text_3,
             CellPlace::Right,
@@ -345,7 +340,7 @@ impl BankChooserScreen {
             ui,
             cols.statement,
             1.0,
-            "Statement",
+            &tr.t("bank.chooser.col.statement"),
             font,
             t.text_3,
             CellPlace::Left(0.0),
@@ -373,9 +368,9 @@ fn columns(rect: Rect) -> Columns {
 }
 
 /// What the balance cell of `row` says.
-fn balance_text(row: &ChooserRow) -> String {
+fn balance_text(row: &ChooserRow, tr: &Tr) -> String {
     match &row.balance {
-        Balance::Loading => "Loading".to_owned(),
+        Balance::Loading => tr.t("bank.chooser.loading"),
         Balance::Value(p) => format::amount(*p),
         Balance::Missing(why) => why.clone(),
     }
@@ -383,11 +378,11 @@ fn balance_text(row: &ChooserRow) -> String {
 
 /// The words after the badge in the statement column: the period, or that there is none.
 #[must_use]
-pub(super) fn statement_text(statement: &Statement) -> String {
+pub(super) fn statement_text(statement: &Statement, tr: &Tr) -> String {
     match statement {
-        Statement::Loading => "Loading".to_owned(),
-        Statement::None => "No statement imported".to_owned(),
-        Statement::Imported(None) => "Yes".to_owned(),
+        Statement::Loading => tr.t("bank.chooser.loading"),
+        Statement::None => tr.t("bank.chooser.none"),
+        Statement::Imported(None) => tr.t("bank.chooser.yes"),
         Statement::Imported(Some((from, to))) => {
             let from_text = if from.year() == to.year() {
                 format!(
@@ -398,14 +393,17 @@ pub(super) fn statement_text(statement: &Statement) -> String {
             } else {
                 format_line_date(*from)
             };
-            format!("Yes, {from_text} to {}", format_line_date(*to))
+            tr.tf(
+                "bank.chooser.yes_range",
+                &[("from", &from_text), ("to", &format_line_date(*to))],
+            )
         }
-        Statement::Unreadable(why) => format!("Could not be read: {why}"),
+        Statement::Unreadable(why) => tr.tf("bank.chooser.unreadable_why", &[("why", why)]),
     }
 }
 
 /// One bank line: fill and rule, the name, the account number, the balance and the statement.
-fn paint_line(ui: &Ui, rect: Rect, row: &ChooserRow, state: RowState) {
+fn paint_line(ui: &Ui, rect: Rect, row: &ChooserRow, state: RowState, tr: &Tr) {
     let t = tokens(ui);
     table::paint_row(ui, rect, state);
     let font = FontId::proportional(TEXT_BODY);
@@ -436,7 +434,7 @@ fn paint_line(ui: &Ui, rect: Rect, row: &ChooserRow, state: RowState) {
         ui,
         cols.balance,
         1.0,
-        &balance_text(row),
+        &balance_text(row, tr),
         font,
         colour,
         CellPlace::Right,
@@ -444,18 +442,18 @@ fn paint_line(ui: &Ui, rect: Rect, row: &ChooserRow, state: RowState) {
     let y = rect.center().y;
     let mut x = cols.statement.left();
     let badge = match row.statement {
-        Statement::Imported(_) => Some((BadgeKind::Ok, "Imported")),
-        Statement::None => Some((BadgeKind::Neutral, "Not imported")),
-        Statement::Unreadable(_) => Some((BadgeKind::Bad, "Unreadable")),
+        Statement::Imported(_) => Some((BadgeKind::Ok, tr.t("bank.chooser.imported"))),
+        Statement::None => Some((BadgeKind::Neutral, tr.t("bank.chooser.not_imported"))),
+        Statement::Unreadable(_) => Some((BadgeKind::Bad, tr.t("bank.chooser.unreadable"))),
         Statement::Loading => None,
     };
     if let Some((kind_of, label)) = badge {
-        x += paint_badge(ui, x, y, kind_of, label) + 6.0;
+        x += paint_badge(ui, x, y, kind_of, &label) + 6.0;
     }
     let meta = match &row.statement {
         Statement::Unreadable(why) => why.clone(),
         Statement::Imported(_) | Statement::None | Statement::Loading => {
-            statement_text(&row.statement)
+            statement_text(&row.statement, tr)
         }
     };
     table::paint_cell_text(
@@ -474,30 +472,27 @@ impl Screen for BankChooserScreen {
         self.rows.get(self.focus).map(|r| r.name.clone())
     }
 
-    fn title(&self) -> String {
-        PAGE_TITLE.to_owned()
+    fn title(&self, tr: &Tr) -> String {
+        tr.t("bank.page_title")
     }
 
-    fn page_title(&self) -> String {
-        HEAD_TITLE.to_owned()
+    fn page_title(&self, tr: &Tr) -> String {
+        tr.t("bank.chooser.head")
     }
 
-    fn key_bar_name(&self) -> String {
-        "Choose account".to_owned()
+    fn key_bar_name(&self, tr: &Tr) -> String {
+        tr.t("bank.chooser.key_bar")
     }
 
-    fn subtitle(&self) -> Option<String> {
-        Some(
-            "Each account reconciles on its own statement. Enter opens the one selected."
-                .to_owned(),
-        )
+    fn subtitle(&self, tr: &Tr) -> Option<String> {
+        Some(tr.t("bank.chooser.subtitle"))
     }
 
-    fn keys(&self) -> Vec<KeyHint> {
+    fn keys(&self, tr: &Tr) -> Vec<KeyHint> {
         vec![
-            KeyHint::new("J / K", "Move"),
-            KeyHint::new("Enter", "Open reconciliation"),
-            KeyHint::new("Esc", "Back"),
+            KeyHint::new("J / K", tr.t("keys.move")),
+            KeyHint::new("Enter", tr.t("bank.chooser.key_open")),
+            KeyHint::new("Esc", tr.t("chrome.back")),
         ]
     }
 
@@ -520,13 +515,13 @@ impl Screen for BankChooserScreen {
         if up {
             self.focus = self.focus.saturating_sub(1);
         }
-        let sub = self.subtitle();
-        page_head(ui, HEAD_TITLE, sub.as_deref(), |_| {});
-        let clicked = self.draw_card(ui);
+        let sub = self.subtitle(&ctx.tr);
+        page_head(ui, &ctx.tr.t("bank.chooser.head"), sub.as_deref(), |_| {});
+        let clicked = self.draw_card(ui, &ctx.tr);
         let t = tokens(ui);
         ui.add_space(6.0);
         ui.label(
-            egui::RichText::new(FOOTNOTE)
+            egui::RichText::new(ctx.tr.t("bank.chooser.footnote"))
                 .size(TEXT_META)
                 .color(t.text_3),
         );

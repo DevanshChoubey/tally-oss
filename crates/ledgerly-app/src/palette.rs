@@ -411,6 +411,8 @@ impl Row {
 /// [`Palette::results`] is always the list the user sees, in the order it is drawn.
 #[derive(Debug, Clone, Default)]
 pub struct Palette {
+    /// The language of the palette's words, set by the shell before each frame.
+    tr: crate::i18n::Tr,
     open: Option<PaletteMode>,
     query: String,
     /// The rows the host fed in ([`Palette::set_entries`]).
@@ -441,6 +443,12 @@ pub struct Palette {
 
 impl Palette {
     /// A closed palette with no entries.
+    /// Uses `tr` for the palette's words from the next frame on.
+    pub fn set_tr(&mut self, tr: &crate::i18n::Tr) {
+        self.tr = tr.clone();
+    }
+
+    /// A new palette, in English until [`Palette::set_tr`].
     #[must_use]
     pub fn new() -> Palette {
         Palette::default()
@@ -676,8 +684,11 @@ impl Palette {
                     .map(|entry| Row::new(Section::Recent, entry.clone(), RowKind::Pick)),
             );
             rows.extend(PREFIX_ROWS.iter().map(|(fill, title, detail)| {
-                let entry = PaletteEntry::new(PaletteTarget::Fill((*fill).to_owned()), *title)
-                    .with_detail(*detail);
+                let entry = PaletteEntry::new(
+                    PaletteTarget::Fill((*fill).to_owned()),
+                    crate::i18n::lit(title),
+                )
+                .with_detail(crate::i18n::lit(detail));
                 Row::new(Section::Prefixes, entry, RowKind::Pick)
             }));
             self.shown = rows;
@@ -724,11 +735,11 @@ impl Palette {
             ("Open on top", "Replace")
         };
         vec![
-            KeyHint::new("", "Go to"),
-            KeyHint::new("\u{2191} \u{2193}", "Move"),
-            KeyHint::new("Enter", enter),
-            KeyHint::new("Shift+Enter", shift_enter),
-            KeyHint::new("Esc", "Close"),
+            KeyHint::new("", crate::i18n::lit("Go to")),
+            KeyHint::new("\u{2191} \u{2193}", crate::i18n::lit("Move")),
+            KeyHint::new("Enter", crate::i18n::lit(enter)),
+            KeyHint::new("Shift+Enter", crate::i18n::lit(shift_enter)),
+            KeyHint::new("Esc", crate::i18n::lit("Close")),
         ]
     }
 
@@ -759,14 +770,14 @@ impl Palette {
 fn no_match_rows(body: &str) -> [Row; 2] {
     let create = PaletteEntry::new(
         PaletteTarget::Master(new_ledger_key(body)),
-        format!("Create ledger \"{body}\""),
+        crate::i18n::tf("palette.create_ledger", &[("name", body)]),
     )
-    .with_detail("Opens the ledger form with this name");
+    .with_detail(crate::i18n::lit("Opens the ledger form with this name"));
     let search = PaletteEntry::new(
         PaletteTarget::Fill(format!("#{body}")),
-        format!("Search vouchers for \"{body}\""),
+        crate::i18n::tf("palette.search_vouchers", &[("name", body)]),
     )
-    .with_detail("Number, party, amount or date");
+    .with_detail(crate::i18n::lit("Number, party, amount or date"));
     [
         Row::new(Section::NoMatch, create, RowKind::Once),
         Row::new(Section::NoMatch, search, RowKind::Pick),

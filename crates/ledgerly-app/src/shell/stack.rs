@@ -1,5 +1,6 @@
 //! Screen stack and tab set: the state behind the breadcrumbs and the open-screen tabs.
 
+use crate::i18n::Tr;
 use ledgerly_api::ReportKind;
 
 use super::navigate::{self, NavError};
@@ -140,14 +141,14 @@ impl ScreenStack {
 
     /// Titles from the root to the top screen: the breadcrumb trail.
     #[must_use]
-    pub fn breadcrumbs(&self) -> Vec<String> {
-        self.screens.iter().map(|s| s.title()).collect()
+    pub fn breadcrumbs(&self, tr: &Tr) -> Vec<String> {
+        self.screens.iter().map(|s| s.title(tr)).collect()
     }
 
     /// Title of the top screen.
     #[must_use]
-    pub fn top_title(&self) -> String {
-        self.screens.last().map_or_default(|s| s.title())
+    pub fn top_title(&self, tr: &Tr) -> String {
+        self.screens.last().map_or_default(|s| s.title(tr))
     }
 
     /// The label of the row under the top screen's cursor ([`Screen::cursor_label`]).
@@ -158,20 +159,20 @@ impl ScreenStack {
 
     /// The title the sidebar selects by for the top screen ([`Screen::sidebar_title`]).
     #[must_use]
-    pub fn top_sidebar_title(&self) -> String {
-        self.screens.last().map_or_default(|s| s.sidebar_title())
+    pub fn top_sidebar_title(&self, tr: &Tr) -> String {
+        self.screens.last().map_or_default(|s| s.sidebar_title(tr))
     }
 
     /// The page title of the top screen ([`Screen::page_title`]), which the key bar names.
     #[must_use]
-    pub fn top_page_title(&self) -> String {
-        self.screens.last().map_or_default(|s| s.page_title())
+    pub fn top_page_title(&self, tr: &Tr) -> String {
+        self.screens.last().map_or_default(|s| s.page_title(tr))
     }
 
     /// The key bar name of the top screen ([`Screen::key_bar_name`]), or empty with no screen.
     #[must_use]
-    pub fn top_key_bar_name(&self) -> String {
-        self.screens.last().map_or_default(|s| s.key_bar_name())
+    pub fn top_key_bar_name(&self, tr: &Tr) -> String {
+        self.screens.last().map_or_default(|s| s.key_bar_name(tr))
     }
 
     /// The top screen, which is the one drawn.
@@ -248,8 +249,11 @@ impl Tabs {
 
     /// Title of each tab's top screen, in tab order.
     #[must_use]
-    pub fn titles(&self) -> Vec<String> {
-        self.stacks.iter().map(ScreenStack::top_title).collect()
+    pub fn titles(&self, tr: &Tr) -> Vec<String> {
+        self.stacks
+            .iter()
+            .map(|stack| stack.top_title(tr))
+            .collect()
     }
 
     /// The active tab's stack.

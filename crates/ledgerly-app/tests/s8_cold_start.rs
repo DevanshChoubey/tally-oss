@@ -92,7 +92,11 @@ fn the_cold_start_shows_the_setup_welcome_not_the_raw_form() {
     let mut shell = Shell::cold_start();
     let (_ctx, painted) = settled(&mut shell);
     assert_eq!(
-        shell.tabs().active_stack().unwrap().top_key_bar_name(),
+        shell
+            .tabs()
+            .active_stack()
+            .unwrap()
+            .top_key_bar_name(&ledgerly_app::i18n::Tr::default()),
         "Setup, step 1 of 7"
     );
     for wanted in [
@@ -198,7 +202,11 @@ fn opening_a_file_from_the_welcome_opens_the_company_without_typing_a_path() {
     let books = shell.app_ctx_mut().books.as_ref().unwrap();
     assert_eq!(books.company.name, "Fictional Traders");
     assert_ne!(
-        shell.tabs().active_stack().unwrap().top_key_bar_name(),
+        shell
+            .tabs()
+            .active_stack()
+            .unwrap()
+            .top_key_bar_name(&ledgerly_app::i18n::Tr::default()),
         "Setup, step 1 of 7",
         "Home should have replaced the wizard"
     );
@@ -214,7 +222,11 @@ fn cancelling_the_file_dialog_leaves_the_welcome_as_it_was() {
     }
     assert!(shell.app_ctx_mut().api.is_none());
     assert_eq!(
-        shell.tabs().active_stack().unwrap().top_key_bar_name(),
+        shell
+            .tabs()
+            .active_stack()
+            .unwrap()
+            .top_key_bar_name(&ledgerly_app::i18n::Tr::default()),
         "Setup, step 1 of 7"
     );
 }
@@ -238,7 +250,11 @@ fn a_file_that_is_not_a_company_says_so_and_stays_on_the_welcome() {
     );
     assert!(shell.app_ctx_mut().api.is_none());
     assert_eq!(
-        shell.tabs().active_stack().unwrap().top_key_bar_name(),
+        shell
+            .tabs()
+            .active_stack()
+            .unwrap()
+            .top_key_bar_name(&ledgerly_app::i18n::Tr::default()),
         "Setup, step 1 of 7"
     );
 }
@@ -261,7 +277,11 @@ fn a_new_tab_with_no_company_opens_the_setup_welcome_too() {
     assert_eq!(shell.tabs().len(), 2);
     frame(&ctx, &mut shell, vec![]);
     assert_eq!(
-        shell.tabs().active_stack().unwrap().top_key_bar_name(),
+        shell
+            .tabs()
+            .active_stack()
+            .unwrap()
+            .top_key_bar_name(&ledgerly_app::i18n::Tr::default()),
         "Setup, step 1 of 7"
     );
 }

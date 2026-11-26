@@ -29,7 +29,7 @@ const only = args.includes('--only') ? args[args.indexOf('--only') + 1] : null;
 /** The sha256 of the files the captures are made from. */
 function sourceHash() {
   const h = createHash('sha256');
-  for (const f of ['index.html', 'states.json', 'transitions.json']) {
+  for (const f of ['index.html', 'hi.js', 'states.json', 'transitions.json']) {
     h.update(readFileSync(join(here, f)));
   }
   return h.digest('hex');
@@ -45,31 +45,45 @@ if (args.includes('--check')) {
 
 // ---- Chrome over the DevTools protocol -------------------------------------------------------
 
-const profile = mkdtempSync(join(process.env.TMPDIR || here, 'ledgerly-capture-'));
+const profile = process.env.CAPTURE_PROFILE || mkdtempSync(join(process.env.TMPDIR || here, 'ledgerly-capture-'));
 // Spell checking off for the whole profile: its dictionary loads in the background and its
 // squiggles land on some captures and not others, whatever the page's spellcheck attribute says.
-mkdirSync(join(profile, 'Default'));
+mkdirSync(join(profile, 'Default'), { recursive: true });
 writeFileSync(join(profile, 'Default', 'Preferences'),
   JSON.stringify({ browser: { enable_spellchecking: false }, spellcheck: { dictionaries: [] } }));
-const chrome = spawn('google-chrome', [
-  '--headless=new', '--remote-debugging-port=0', `--user-data-dir=${profile}`,
-  '--no-first-run', '--no-default-browser-check', '--hide-scrollbars',
-  '--force-color-profile=srgb', '--allow-file-access-from-files',
-  // Software raster on one thread: GPU and partial raster antialias rounded corners differently
-  // from run to run.
-  '--disable-gpu', '--disable-partial-raster', '--disable-skia-runtime-opts', '--num-raster-threads=1',
-  'about:blank',
-], { stdio: ['ignore', 'ignore', 'pipe'] });
-
-const wsUrl = await new Promise((resolve, reject) => {
-  let buf = '';
-  chrome.stderr.on('data', (d) => {
-    buf += d;
-    const m = buf.match(/DevTools listening on (ws:\/\/\S+)/);
-    if (m) resolve(m[1]);
+// Chrome sometimes dies at start (SIGTRAP) on this machine, so a start that fails is tried again.
+function startChrome() {
+  const chrome = spawn('google-chrome', [
+    '--headless=new', '--remote-debugging-port=0', `--user-data-dir=${profile}`,
+    '--no-first-run', '--no-default-browser-check', '--hide-scrollbars',
+    '--force-color-profile=srgb', '--allow-file-access-from-files',
+    // Software raster on one thread: GPU and partial raster antialias rounded corners differently
+    // from run to run.
+    '--disable-gpu', '--disable-partial-raster', '--disable-skia-runtime-opts', '--num-raster-threads=1',
+    'about:blank',
+  ], { stdio: ['ignore', 'ignore', 'pipe'] });
+  const wsUrl = new Promise((resolve, reject) => {
+    let buf = '';
+    chrome.stderr.on('data', (d) => {
+      buf += d;
+      const m = buf.match(/DevTools listening on (ws:\/\/\S+)/);
+      if (m) resolve(m[1]);
+    });
+    chrome.on('exit', (code, sig) => reject(new Error(`chrome exited with ${code} ${sig}: ${buf}`)));
   });
-  chrome.on('exit', (code) => reject(new Error(`chrome exited with ${code}: ${buf}`)));
-});
+  wsUrl.catch(() => {});
+  return { chrome, wsUrl };
+}
+let started = startChrome();
+for (let attempt = 1; ; attempt++) {
+  try { await started.wsUrl; break; } catch (e) {
+    if (attempt === 8) throw e;
+    rmSync(join(profile, 'SingletonLock'), { force: true });
+    started = startChrome();
+  }
+}
+const chrome = started.chrome;
+const wsUrl = await started.wsUrl;
 
 const browser = new WebSocket(wsUrl);
 await new Promise((r) => browser.addEventListener('open', r, { once: true }));
@@ -196,7 +210,7 @@ const exited = new Promise((r) => chrome.once('exit', r));
 await send('Browser.close').catch(() => {});
 await Promise.race([exited, sleep(5000)]);
 chrome.kill();
-rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+if (!process.env.CAPTURE_PROFILE) rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
 
 if (!only) {
   writeFileSync(join(out, 'manifest.json'), JSON.stringify({

@@ -21,6 +21,62 @@
    "description": "Dashboard: engine KPIs, plain-words entry bar, review queue and rule-based nudges."
   },
   {
+   "id": "hi.home.default",
+   "kind": "happy",
+   "hash": "screen=home&state=default&lang=hi",
+   "title": "Home, Hindi",
+   "description": "The default Home with every word the app translates shown in Hindi; figures, dates and digit grouping unchanged."
+  },
+  {
+   "id": "hi.sales-invoice.default",
+   "kind": "happy",
+   "hash": "screen=sales-invoice&state=default&lang=hi",
+   "title": "Sales invoice, Hindi",
+   "description": "The intra-state item invoice in Hindi."
+  },
+  {
+   "id": "hi.sales-invoice.print-preview",
+   "kind": "happy",
+   "hash": "screen=sales-invoice&state=print-preview&lang=hi",
+   "title": "Sales invoice, print preview, Hindi",
+   "description": "The print preview chrome in Hindi; the printed page stays English (the PDF font is Latin-only)."
+  },
+  {
+   "id": "hi.masters.ledgers",
+   "kind": "happy",
+   "hash": "screen=masters&state=ledgers&lang=hi",
+   "title": "Masters, ledgers, Hindi",
+   "description": "The ledger list in Hindi."
+  },
+  {
+   "id": "hi.balance-sheet.default",
+   "kind": "happy",
+   "hash": "screen=balance-sheet&state=default&lang=hi",
+   "title": "Balance sheet, Hindi",
+   "description": "The balance sheet in Hindi; Dr and Cr stay as the books write them."
+  },
+  {
+   "id": "hi.gst.gstr1",
+   "kind": "happy",
+   "hash": "screen=gst&state=gstr1&lang=hi",
+   "title": "GSTR-1, Hindi",
+   "description": "GSTR-1 in Hindi; return names and table numbers stay as the portal writes them."
+  },
+  {
+   "id": "hi.bank.default",
+   "kind": "happy",
+   "hash": "screen=bank&state=default&lang=hi",
+   "title": "Bank reconciliation, Hindi",
+   "description": "The bank reconciliation screen in Hindi."
+  },
+  {
+   "id": "hi.setup.welcome",
+   "kind": "happy",
+   "hash": "screen=setup&state=welcome&lang=hi",
+   "title": "First run, welcome, Hindi",
+   "description": "The welcome screen in Hindi."
+  },
+  {
    "id": "home.loading",
    "kind": "loading",
    "hash": "screen=home&state=loading",

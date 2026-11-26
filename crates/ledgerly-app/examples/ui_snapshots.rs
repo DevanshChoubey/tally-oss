@@ -750,6 +750,8 @@ struct Shot {
     /// The mock state id (`design/mock-v2/states.json`), which also names the image.
     state: &'static str,
     theme: Theme,
+    /// The language code the shell is set to for this entry (`en` unless [`Shot::lang`]).
+    lang: &'static str,
     keys: Vec<(Key, Modifiers)>,
     query: Option<&'static str>,
     after: Vec<Inject>,
@@ -924,6 +926,13 @@ impl Shot {
         self
     }
 
+    /// The same shot in another language, set before its keys (the shell's language, as the
+    /// palette sets it).
+    fn lang(mut self, code: &'static str) -> Self {
+        self.lang = code;
+        self
+    }
+
     /// The same shot with a palette query typed after its keys.
     fn query(mut self, query: &'static str) -> Self {
         self.query = Some(query);
@@ -1054,6 +1063,7 @@ fn shot(state: &'static str, keys: &[(Key, Modifiers)]) -> Shot {
     Shot {
         state,
         theme: Theme::Light,
+        lang: "en",
         keys: keys.to_vec(),
         query: None,
         after: Vec::new(),
@@ -1327,9 +1337,40 @@ const ENGINE_SETTLED: [&str; 5] = [
     "contra.",
 ];
 
+/// The Hindi set: the same flows as the English shots they copy, with the shell's language set to
+/// Hindi before the keys. Each is named for its mock state (`hi.<screen>.<state>`, all in
+/// `design/mock-v2/states.json`). Flows that pick rows by their English name keep working because
+/// the names they pick are data (party and ledger names), not translated words.
+fn hindi_shots(english: &[Shot]) -> Vec<Shot> {
+    const COPIES: [(&str, &str); 8] = [
+        ("home.default", "hi.home.default"),
+        ("sales-invoice.default", "hi.sales-invoice.default"),
+        (
+            "sales-invoice.print-preview",
+            "hi.sales-invoice.print-preview",
+        ),
+        ("masters.ledgers", "hi.masters.ledgers"),
+        ("balance-sheet.default", "hi.balance-sheet.default"),
+        ("gst.gstr1", "hi.gst.gstr1"),
+        ("bank.default", "hi.bank.default"),
+        ("setup.welcome", "hi.setup.welcome"),
+    ];
+    COPIES
+        .iter()
+        .filter_map(|(from, to)| {
+            english.iter().find(|s| s.state == *from).map(|s| {
+                let mut copy = s.clone().lang("hi");
+                copy.state = to;
+                copy
+            })
+        })
+        .collect()
+}
+
 fn shots() -> Vec<Shot> {
     let mut light = light_shots();
     light.extend(s13_shots());
+    light.extend(hindi_shots(&light));
     let mock = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../design/mock-v2/captures/states");
     let mut all = light.clone();
     for theme in [Theme::Dark, Theme::Hc] {
@@ -2386,7 +2427,10 @@ impl Snapshots {
             self.seek_presses < SEEK_PRESSES_MAX,
             "{state}: the cursor never reached the row {label:?} on the screen {:?} (cursor now \
              {cursor:?}, {} J presses)",
-            self.shell.tabs().active_stack().map(ScreenStack::top_title),
+            self.shell
+                .tabs()
+                .active_stack()
+                .map(|stack| stack.top_title(&ledgerly_app::i18n::Tr::default())),
             self.seek_presses,
         );
         for pressed in [true, false] {
@@ -2409,11 +2453,13 @@ impl Snapshots {
             .shell
             .tabs()
             .active_stack()
-            .map_or_default(ScreenStack::top_title);
+            .map_or_default(|stack| stack.top_title(&ledgerly_app::i18n::Tr::default()));
         let key_bar = self.shell.top_key_bar_name();
         let cursor = self.shell.top_cursor_label();
         let reached = title == expect.title
-            && expect.key_bar.is_none_or(|k| key_bar == k)
+            && expect
+                .key_bar
+                .is_none_or(|k| key_bar == k || key_bar == ledgerly_app::i18n::lit(k))
             && expect.cursor.is_none_or(|c| cursor.as_deref() == Some(c));
         if reached {
             self.inject.pop_front();
@@ -2515,11 +2561,10 @@ impl Snapshots {
     fn clean_home(&self) -> bool {
         !self.shell.palette().is_open()
             && self.shell.notice().is_none()
-            && self
-                .shell
-                .tabs()
-                .active_stack()
-                .is_some_and(|stack| stack.depth() == 1 && stack.top_title() != HOME_COMPARE_TITLE)
+            && self.shell.tabs().active_stack().is_some_and(|stack| {
+                stack.depth() == 1
+                    && stack.top_title(&ledgerly_app::i18n::Tr::default()) != HOME_COMPARE_TITLE
+            })
     }
 
     fn write_shot(&self, image: &egui::ColorImage) {
@@ -2682,6 +2727,7 @@ impl eframe::App for Snapshots {
             Stage::Keys => {
                 let current = &self.shots[self.index];
                 self.shell.set_theme(current.theme.kind());
+                self.shell.set_language(current.lang);
                 self.inject = current
                     .keys
                     .iter()
@@ -2740,6 +2786,7 @@ impl eframe::App for Snapshots {
                     self.write_shot(&image);
                     // Restore the default theme; the next entry sets its own.
                     self.shell.set_theme(ThemeKind::Light);
+                    self.shell.set_language("en");
                     self.index += 1;
                     if self.index == self.shots.len() {
                         self.next_stage(Stage::Done);

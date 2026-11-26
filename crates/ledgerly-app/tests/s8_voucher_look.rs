@@ -124,6 +124,7 @@ fn open(b: &Books) -> VoucherEntryScreen {
 
 fn draw(s: &mut VoucherEntryScreen, b: &Books, frames: usize) {
     let mut app = AppCtx {
+        tr: ledgerly_app::i18n::Tr::default(),
         books: Some(b.clone()),
         api: None,
         lock_date: None,

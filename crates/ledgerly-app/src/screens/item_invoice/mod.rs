@@ -127,7 +127,9 @@ impl InvoiceKind {
             | BaseVoucherKind::Memorandum
             | BaseVoucherKind::ReversingJournal => Outcome::unsupported(
                 format!("{base:?} voucher on the item invoice screen"),
-                "plain debit and credit vouchers are entered on the accounting voucher screen",
+                crate::i18n::lit(
+                    "plain debit and credit vouchers are entered on the accounting voucher screen",
+                ),
             ),
             BaseVoucherKind::ReceiptNote
             | BaseVoucherKind::DeliveryNote
@@ -138,7 +140,9 @@ impl InvoiceKind {
             | BaseVoucherKind::SalesOrder
             | BaseVoucherKind::PurchaseOrder => Outcome::unsupported(
                 format!("{base:?} voucher on the item invoice screen"),
-                "stock-only and order vouchers have no invoice and no tax; not built yet",
+                crate::i18n::lit(
+                    "stock-only and order vouchers have no invoice and no tax; not built yet",
+                ),
             ),
         }
     }
@@ -596,6 +600,8 @@ struct Toast {
     reason = "independent screen modes (focus pending, discard prompt, save prompt, bill panel); a state enum would not model them"
 )]
 pub struct ItemInvoiceScreen {
+    /// The language of the screen's words, set from the context on each frame.
+    tr: crate::i18n::Tr,
     type_name: String,
     /// Whether the item mode has stock items to pick.
     stock: Stock,
@@ -705,6 +711,7 @@ impl ItemInvoiceScreen {
             NumberingMethod::Automatic | NumberingMethod::None => false,
         };
         let mut screen = ItemInvoiceScreen {
+            tr: crate::i18n::Tr::default(),
             type_name: vt.name.clone(),
             stock: if books.company.features.inventory {
                 Stock::Kept
@@ -1364,15 +1371,13 @@ impl ItemInvoiceScreen {
         self.mode_list = None;
         if !self.mode_choices().contains(&next) {
             return self.fail(
-                "As voucher is for sales and purchase invoices; a note has item and accounting mode."
-                    .to_owned(),
+                crate::i18n::lit("As voucher is for sales and purchase invoices; a note has item and accounting mode."),
             );
         }
         if next == InvoiceMode::Item && self.stock == Stock::NotKept {
-            return self.fail(
-                "Item invoice needs stock items: this company does not maintain inventory."
-                    .to_owned(),
-            );
+            return self.fail(crate::i18n::lit(
+                "Item invoice needs stock items: this company does not maintain inventory.",
+            ));
         }
         if next != self.draft.mode {
             self.set_mode(next);

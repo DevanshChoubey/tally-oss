@@ -57,6 +57,7 @@ pub use search::{LedgerHit, PickerItem, search_ledgers};
 pub(crate) use state::CreateForm;
 pub use state::{CreateLedgerRequest, Field, OpenError, VoucherEntryScreen};
 
+use crate::i18n::Tr;
 use egui::Ui;
 
 use crate::keymap::Action;
@@ -64,56 +65,56 @@ use crate::screen::KeyHint;
 use crate::{AppCtx, Screen, ScreenAction};
 
 impl Screen for VoucherEntryScreen {
-    fn title(&self) -> String {
-        self.type_name.clone()
+    fn title(&self, tr: &Tr) -> String {
+        self.shown_type_name(tr)
     }
 
-    fn page_title(&self) -> String {
-        self.type_name.clone()
+    fn page_title(&self, tr: &Tr) -> String {
+        self.shown_type_name(tr)
     }
 
     /// The sidebar row of the voucher type stays selected, as the mock marks the open screen's
     /// row (index.html line 904): Payment and Receipt have rows; Contra and Journal have none.
-    fn sidebar_title(&self) -> String {
-        self.type_name.clone()
+    fn sidebar_title(&self, tr: &Tr) -> String {
+        self.shown_type_name(tr)
     }
 
-    fn subtitle(&self) -> Option<String> {
+    fn subtitle(&self, tr: &Tr) -> Option<String> {
         let (action, text) = match self.draft.kind {
             EntryKind::Payment => (
                 Action::NewPayment,
-                "single entry: pick the cash or bank account once, then the ledgers",
+                tr.lit("single entry: pick the cash or bank account once, then the ledgers"),
             ),
             EntryKind::Receipt => (
                 Action::NewReceipt,
-                "single entry: pick the cash or bank account once, then the ledgers",
+                tr.lit("single entry: pick the cash or bank account once, then the ledgers"),
             ),
             // The mock's contra subtitle (index.html:2075) says "pick the account once", which is
             // not how this screen works (each line has its own account), so only its first half
             // is kept.
             EntryKind::Contra => (
                 Action::NewContra,
-                "cash and bank transfers \u{b7} every line has its own Dr or Cr",
+                tr.lit("cash and bank transfers \u{b7} every line has its own Dr or Cr"),
             ),
             EntryKind::Journal => (
                 Action::NewJournal,
-                "debit and credit lines, no cash or bank account set once \u{b7} the entry must balance before it saves",
+                tr.lit("debit and credit lines, no cash or bank account set once \u{b7} the entry must balance before it saves"),
             ),
             EntryKind::Memorandum | EntryKind::ReversingJournal => return None,
         };
         Some(match self.keymap.shortcut_label(action) {
             Some(key) => format!("{key} · {text}"),
-            None => text.to_owned(),
+            None => text,
         })
     }
 
-    fn keys(&self) -> Vec<KeyHint> {
-        let mut hints = vec![KeyHint::new("Enter", "Next field")];
+    fn keys(&self, tr: &Tr) -> Vec<KeyHint> {
+        let mut hints = vec![KeyHint::new("Enter", tr.t("voucher.key.next_field"))];
         let bound = [
-            (Action::CreateMaster, "Create ledger"),
-            (Action::DeleteLine, "Delete line"),
-            (Action::Save, "Save"),
-            (Action::Back, "Discard"),
+            (Action::CreateMaster, tr.t("voucher.key.create_ledger")),
+            (Action::DeleteLine, tr.t("voucher.key.delete_line")),
+            (Action::Save, tr.t("voucher.save")),
+            (Action::Back, tr.t("voucher.discard")),
         ];
         for (action, label) in bound {
             if let Some(keys) = self.keymap.shortcut_label(action) {
@@ -124,6 +125,7 @@ impl Screen for VoucherEntryScreen {
     }
 
     fn ui(&mut self, ui: &mut Ui, ctx: &mut AppCtx) -> ScreenAction {
+        self.tr = ctx.tr.clone();
         self.poll_ledger_create(ui);
         // A save that is out is polled first; the sheet is drawn either way, taking no input
         // while it waits.
@@ -132,7 +134,7 @@ impl Screen for VoucherEntryScreen {
         let action = if let Some(books) = ctx.books.as_ref() {
             self.draw(ui, &books.masters)
         } else {
-            ui.label(no_books_text(ctx));
+            ui.label(no_books_text(ctx, &ctx.tr));
             ScreenAction::Stay
         };
         if ctx.api.is_some() {
@@ -144,6 +146,16 @@ impl Screen for VoucherEntryScreen {
 }
 
 impl VoucherEntryScreen {
+    /// The voucher type's name for the title and the sidebar: a type still called by its built-in
+    /// English name is shown in the language of `tr`; a name the user chose is shown as typed.
+    fn shown_type_name(&self, tr: &Tr) -> String {
+        if self.type_name == self.draft.kind.label_in(&Tr::default()) {
+            self.draft.kind.label_in(tr)
+        } else {
+            self.type_name.clone()
+        }
+    }
+
     /// Asks the engine for the number the voucher will get and, for a single-entry voucher, the
     /// account's balance now and after it. The screen shows the answers and adds nothing to them.
     fn drive_extras(&mut self, ui: &Ui, ctx: &AppCtx) {
@@ -208,10 +220,10 @@ impl VoucherEntryScreen {
 }
 
 /// What the screen says when it has no books to draw from.
-fn no_books_text(ctx: &AppCtx) -> &'static str {
+fn no_books_text(ctx: &AppCtx, tr: &Tr) -> String {
     if ctx.api.is_some() {
-        "The company is open. Its masters are being read, or could not be read."
+        tr.t("voucher.no_masters")
     } else {
-        "No company is open."
+        tr.t("voucher.no_company")
     }
 }

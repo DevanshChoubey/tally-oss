@@ -5,6 +5,7 @@
 //! No width is fixed. Tiles and panels split the width they are given, through `Ui::columns`, so
 //! nothing clips when the window is narrow (B2).
 
+use crate::i18n::Tr;
 use egui::FontId;
 use egui::text::{LayoutJob, TextFormat};
 use egui::{
@@ -30,23 +31,6 @@ use crate::ui::page_head::page_head;
 use crate::ui::skeleton::skeleton_bar;
 use crate::ui::{bold_font, format, kind, para, tokens};
 
-/// Line under the title while the figures load (the mock's `home.loading`).
-const LOADING_LINE: &str =
-    "Loading balances and projections. Figures appear only when the engine returns them.";
-/// The AI-off note (the mock's `home.ai-off`, `index.html` line 1054).
-const AI_OFF_REST: &str = "Plain-words entry, bill reading and suggestions are hidden. Rule checks, matching rules and every report work as usual.";
-/// Placeholder for the plain-words line, which needs the assistant and runs nothing.
-const ENTRY_PLACEHOLDER: &str = "Type an entry in plain words";
-/// What the entry line says at its right, in place of the mock's "runs on this computer": no
-/// assistant is connected, so nothing runs it.
-const ENTRY_META: &str = "not connected in this build";
-/// The page title of a company with no vouchers (`home.empty`).
-const NEW_COMPANY_TITLE: &str = "Welcome to your new company";
-/// Shown when no company is open.
-const NO_FIGURES_TEXT: &str = "No figures yet. Open a company to see them.";
-/// Under the welcome card, as the mock's empty state says (`home.empty`, `index.html` line 1054).
-const WELCOME_NOTE: &str =
-    "Totals stay hidden until there is data. Ledgerly never shows a zero it did not compute.";
 /// Relative widths of the bars in a skeleton KPI card.
 const KPI_BAR_WIDTHS: [f32; 3] = [0.5, 0.8, 0.4];
 /// Relative widths of the bars in the left skeleton panel (index.html:1045).
@@ -59,8 +43,13 @@ const SKELETON_GAP: f32 = 12.0;
 /// Draws the page head: the title, the company line and, when there are figures, the two
 /// actions. The loading and new-company bodies show no actions. `new_line` is the line under
 /// the new-company title ([`super::new_company_line`]).
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the page head takes each line it draws"
+)]
 pub(super) fn header(
     ui: &mut Ui,
+    tr: &Tr,
     shown: HomeBody,
     company: &str,
     new_line: &str,
@@ -69,15 +58,15 @@ pub(super) fn header(
     chosen: &mut Option<HomeTarget>,
 ) {
     let line = match shown {
-        HomeBody::Loading => LOADING_LINE.to_owned(),
+        HomeBody::Loading => tr.t("home.loading"),
         HomeBody::NewCompany { .. } => new_line.to_owned(),
         HomeBody::Figures | HomeBody::NoFigures => date_line.to_owned(),
     };
     // The mock's loading and empty states have their own titles (`home.loading`: "Opening
     // <company>", `home.empty`: "Welcome to your new company", index.html lines 1043, 1046).
     let title = match shown {
-        HomeBody::Loading if !company.is_empty() => format!("Opening {company}"),
-        HomeBody::NewCompany { .. } => NEW_COMPANY_TITLE.to_owned(),
+        HomeBody::Loading if !company.is_empty() => tr.tf("home.opening", &[("company", company)]),
+        HomeBody::NewCompany { .. } => tr.t("home.new_company"),
         HomeBody::Loading | HomeBody::Figures | HomeBody::NoFigures => title.to_owned(),
     };
     let sub = (!line.is_empty()).then_some(line.as_str());
@@ -91,7 +80,7 @@ pub(super) fn header(
         if button_icon(
             ui,
             Some(Icon::Sale),
-            "New sale",
+            &crate::i18n::t("home.new_sale"),
             Some("F8"),
             ButtonKind::Primary,
         )
@@ -102,7 +91,7 @@ pub(super) fn header(
         if button_icon(
             ui,
             Some(Icon::Book),
-            "Day book",
+            &crate::i18n::t("sidebar.day_book"),
             None,
             ButtonKind::Secondary,
         )
@@ -150,6 +139,7 @@ pub(super) struct Chosen {
 /// tile was drawn, in order.
 pub(super) fn figures(
     ui: &mut Ui,
+    _tr: &Tr,
     tiles: &[(KpiView, HomeTarget)],
     lower: &Lower<'_>,
     chosen: &mut Chosen,
@@ -181,8 +171,8 @@ pub(super) fn figures(
 }
 
 /// Draws the body for a company with no figures to show.
-pub(super) fn no_figures(ui: &mut Ui) {
-    note(ui, NoteKind::Info, NO_FIGURES_TEXT);
+pub(super) fn no_figures(ui: &mut Ui, tr: &Tr) {
+    note(ui, NoteKind::Info, &tr.t("home.no_figures"));
 }
 
 /// A note with an icon, an optional bold lead and, when `link` is given, a link at its end
@@ -231,16 +221,17 @@ fn icon_note(
 /// welcome card with its book icon and three actions, then the note that totals stay hidden.
 pub(super) fn welcome(ui: &mut Ui, begins: Date, chosen: &mut Option<HomeTarget>) {
     let t = tokens(ui);
-    let sentence = format!(
-        "Your books start on {}. Enter opening balances, bring data from another app, or start with today's first voucher.",
-        format::date(begins)
+    let sentence = crate::i18n::tf(
+        "home.books_start_full",
+        &[("date", &format::date_in(begins, &crate::i18n::current()))],
     );
+
     card(ui, |ui| {
         ui.vertical_centered(|ui| {
             ui.add_space(SPACE_6);
             icon::icon_sized(ui, Icon::Book, t.text_3, 32.0);
             ui.add_space(SPACE_2);
-            title(ui, "No vouchers yet");
+            title(ui, &crate::i18n::t("home.no_vouchers"));
             ui.add_space(SPACE_2);
             ui.label(
                 RichText::new(sentence.as_str())
@@ -256,7 +247,7 @@ pub(super) fn welcome(ui: &mut Ui, begins: Date, chosen: &mut Option<HomeTarget>
                 if button_icon(
                     ui,
                     Some(Icon::Users),
-                    "Opening balances",
+                    &crate::i18n::t("home.opening_balances"),
                     None,
                     ButtonKind::Primary,
                 )
@@ -267,7 +258,7 @@ pub(super) fn welcome(ui: &mut Ui, begins: Date, chosen: &mut Option<HomeTarget>
                 if button_icon(
                     ui,
                     Some(Icon::Upload),
-                    "Import from another app",
+                    &crate::i18n::t("import.title"),
                     None,
                     ButtonKind::Secondary,
                 )
@@ -278,7 +269,7 @@ pub(super) fn welcome(ui: &mut Ui, begins: Date, chosen: &mut Option<HomeTarget>
                 if button_icon(
                     ui,
                     Some(Icon::Sale),
-                    "First sales invoice",
+                    &crate::i18n::t("home.first_sales"),
                     Some("F8"),
                     ButtonKind::Secondary,
                 )
@@ -291,7 +282,14 @@ pub(super) fn welcome(ui: &mut Ui, begins: Date, chosen: &mut Option<HomeTarget>
         });
     });
     ui.add_space(SPACE_3);
-    icon_note(ui, NoteKind::Info, Icon::Info, None, WELCOME_NOTE, None);
+    icon_note(
+        ui,
+        NoteKind::Info,
+        Icon::Info,
+        None,
+        &crate::i18n::t("home.totals_hidden"),
+        None,
+    );
 }
 
 /// Draws the loading body (the mock's `home.loading`): four skeleton KPI cards and two skeleton
@@ -333,9 +331,9 @@ fn entry_bar(ui: &mut Ui, ai: AiPanel, chosen: &mut Option<HomeTarget>) {
                 ui,
                 NoteKind::Info,
                 Icon::Off,
-                Some("AI is off for this company."),
-                AI_OFF_REST,
-                Some("AI and privacy"),
+                Some(&crate::i18n::t("home.ai_off_lead")),
+                &crate::i18n::t("home.ai_off_rest"),
+                Some(&crate::i18n::t("topbar.ai_privacy_hover")),
             ) {
                 *chosen = Some(HomeTarget::AiSettings);
             }
@@ -360,12 +358,16 @@ fn entry_bar(ui: &mut Ui, ai: AiPanel, chosen: &mut Option<HomeTarget>) {
                         ui.spacing_mut().item_spacing.x = SPACE_2;
                         icon::icon(ui, Icon::Spark, t.text);
                         ui.label(
-                            RichText::new(ENTRY_PLACEHOLDER)
+                            RichText::new(crate::i18n::t("home.entry_hint"))
                                 .size(TEXT_BODY)
                                 .color(t.text_3),
                         );
                         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                            ui.label(RichText::new(ENTRY_META).size(TEXT_META).color(t.text_3));
+                            ui.label(
+                                RichText::new(crate::i18n::t("home.entry_meta"))
+                                    .size(TEXT_META)
+                                    .color(t.text_3),
+                            );
                             icon::icon_sized(ui, Icon::Off, t.text_3, 14.0);
                         });
                     });
@@ -397,7 +399,7 @@ fn panels(ui: &mut Ui, lower: &Lower<'_>, chosen: &mut Chosen) {
         },
         |right| {
             card(right, |ui| {
-                title(ui, "Nudges");
+                title(ui, &crate::i18n::t("home.nudges"));
                 nudge_draw::list(
                     ui,
                     lower.nudges,

@@ -46,8 +46,9 @@ mod review_draw;
 
 pub use kpi::home_kpis;
 
+use crate::i18n::Tr;
 use egui::{Event, InputState, Key, Modifiers, Rect, Ui};
-use ledgerly_api::{DuplicatePayment, ReviewQueue};
+use ledgerly_api::{CUSTOMER_LATE_DAYS, DuplicatePayment, ReviewQueue};
 use ledgerly_core::format::format_inr;
 use ledgerly_core::{Date, Outcome, Paise};
 
@@ -61,8 +62,10 @@ use crate::theme::SPACE_3;
 use crate::worker::ApiWorker;
 use crate::{AppCtx, Screen, ScreenAction};
 
-/// Title of the page head until the greeting is set (the first frame).
-const PAGE_TITLE: &str = "Home";
+/// The footnote of the GST tile, as the engine layer writes it.
+const GST_FOOTNOTE: &str = "GSTR-3B working, after accepted ITC";
+/// What a closing-balance footnote starts with.
+const CLOSING_PREFIX: &str = "Closing balance as of ";
 /// Smallest width of a KPI tile that still fits its figure, in points.
 pub const TILE_MIN_WIDTH: f32 = 200.0;
 /// Width from which the lower row shows its two panels side by side, in points (the mock's
@@ -70,8 +73,6 @@ pub const TILE_MIN_WIDTH: f32 = 200.0;
 pub const WIDE_MIN_WIDTH: f32 = 720.0;
 /// The rows the Home card lists before "All N" (the mock shows four).
 pub const REVIEW_ROWS: usize = 4;
-/// Text shown in place of a figure the engine cannot compute yet.
-const UNSUPPORTED_WORDS: &str = "Not supported yet";
 /// Where a click or a key on the home screen asks to go. The host maps each to a screen.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum HomeTarget {
@@ -152,6 +153,16 @@ pub enum AttentionKind {
 impl AttentionKind {
     /// The word printed before the item, so the colour is never the only signal.
     #[must_use]
+    pub fn word_in(self, tr: &Tr) -> String {
+        match self {
+            AttentionKind::Pending => tr.t("home.attention.pending"),
+            AttentionKind::Due => tr.t("home.attention.due"),
+            AttentionKind::Done => tr.t("home.attention.done"),
+        }
+    }
+
+    /// The English word.
+    #[must_use]
     pub fn word(self) -> &'static str {
         match self {
             AttentionKind::Pending => "Pending",
@@ -203,25 +214,125 @@ pub struct KpiView {
 /// The text of a tile's figure: `₹12,34,567.00` for a value, "Not supported yet" otherwise.
 #[must_use]
 pub fn value_text(value: &Outcome<Paise>) -> String {
+    value_text_in(value, &Tr::default())
+}
+
+/// The text of a tile's figure in `tr`: the figure, or the unsupported words in that language.
+#[must_use]
+pub fn value_text_in(value: &Outcome<Paise>, tr: &Tr) -> String {
     match value {
         Outcome::Value(amount) => format!("\u{20B9}{}", format_inr(*amount)),
-        Outcome::Unsupported(_) => UNSUPPORTED_WORDS.to_owned(),
+        Outcome::Unsupported(_) => tr.t("home.not_supported"),
     }
 }
 
 /// The view of one tile. An unsupported tile shows the reason instead of its footnote, so the
 /// user learns why the number is missing.
 #[must_use]
-pub fn kpi_view(kpi: &Kpi) -> KpiView {
+pub fn kpi_view_in(kpi: &Kpi, tr: &Tr) -> KpiView {
     let (footnote_text, supported) = match &kpi.value {
-        Outcome::Value(_) => (kpi.footnote.clone(), true),
+        Outcome::Value(_) => (footnote_in(&kpi.footnote, tr), true),
         Outcome::Unsupported(u) => (format!("{}: {}", u.what, u.reason), false),
     };
     KpiView {
-        label: kpi.label.clone(),
-        value_text: value_text(&kpi.value),
+        label: tile_label_in(&kpi.label, tr),
+        value_text: value_text_in(&kpi.value, tr),
         footnote_text,
         supported,
+    }
+}
+
+/// The English view of a tile, for callers without a language of their own.
+#[must_use]
+pub fn kpi_view(kpi: &Kpi) -> KpiView {
+    kpi_view_in(kpi, &Tr::default())
+}
+
+/// A tile's title in `tr`. The English identity of each tile is its label ("Cash and bank",
+/// "GST cash payable, Nov"); an unknown label is shown as it is.
+fn tile_label_in(label: &str, tr: &Tr) -> String {
+    let key = match label {
+        "Cash and bank" => "home.tile.cash_and_bank",
+        "Cash in hand" => "home.tile.cash_in_hand",
+        "Bank accounts" => "home.tile.bank_accounts",
+        "Receivables" => "home.tile.receivables",
+        "Payables" => "home.tile.payables",
+        "GST cash payable" => "home.tile.gst_cash_payable",
+        other => {
+            if let Some(month) = other
+                .strip_prefix("GST cash payable, ")
+                .and_then(crate::ui::format::month_from_abbrev)
+            {
+                return tr.tf(
+                    "home.tile.gst_cash_payable_month",
+                    &[("month", &crate::ui::format::month_abbrev_in(month, tr))],
+                );
+            }
+            return other.to_owned();
+        }
+    };
+    tr.t(key)
+}
+
+/// A count and the rest of a footnote, when `text` is `"<count> <rest>"`.
+fn split_count(text: &str) -> Option<(&str, &str)> {
+    let (count, rest) = text.split_once(' ')?;
+    (!count.is_empty() && count.bytes().all(|b| b.is_ascii_digit())).then_some((count, rest))
+}
+
+/// A value tile's footnote in `tr`: the counted lines the engine's figures give, or the GST
+/// line. Any other footnote (and any engine reason) is shown as it is.
+fn footnote_in(footnote: &str, tr: &Tr) -> String {
+    if footnote == GST_FOOTNOTE {
+        return tr.t("home.kpi.gstr3b_working");
+    }
+    if let Some(n) = footnote
+        .strip_prefix("Cash and ")
+        .and_then(|rest| {
+            rest.strip_suffix(" bank accounts")
+                .or(rest.strip_suffix(" bank account"))
+        })
+        .filter(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
+    {
+        let key = if n == "1" {
+            "home.kpi.cash_foot_one"
+        } else {
+            "home.kpi.cash_foot_many"
+        };
+        return tr.tf(key, &[("n", n)]);
+    }
+    if let Some((n, rest)) = split_count(footnote) {
+        let days = CUSTOMER_LATE_DAYS.to_string();
+        let overdue = rest
+            .strip_prefix("bills overdue more than ")
+            .or_else(|| rest.strip_prefix("bill overdue more than "))
+            .and_then(|r| r.strip_suffix(" days"));
+        if overdue == Some(days.as_str()) {
+            let key = if n == "1" {
+                "home.kpi.overdue_foot_one"
+            } else {
+                "home.kpi.overdue_foot_many"
+            };
+            return tr.tf(key, &[("n", n), ("days", &days)]);
+        }
+        if rest == "supplier bills past due" || rest == "supplier bill past due" {
+            let key = if n == "1" {
+                "home.kpi.past_due_foot_one"
+            } else {
+                "home.kpi.past_due_foot_many"
+            };
+            return tr.tf(key, &[("n", n)]);
+        }
+    }
+    if let Some(reason) = footnote.strip_prefix("Overdue bills not counted: ") {
+        return tr.tf("home.kpi.overdue_unknown", &[("reason", reason)]);
+    }
+    if let Some(reason) = footnote.strip_prefix("Past-due bills not counted: ") {
+        return tr.tf("home.kpi.past_due_unknown", &[("reason", reason)]);
+    }
+    match footnote.strip_prefix(CLOSING_PREFIX) {
+        Some(date) => tr.tf("home.closing_as_of", &[("date", date)]),
+        None => footnote.to_owned(),
     }
 }
 
@@ -282,21 +393,21 @@ pub fn figure_parts(value_text: &str) -> (Option<&str>, &str) {
 /// The greeting for `hour` with the signed-in user's first name, as the mock's head has it
 /// ("Good afternoon, Ananya"). With no stored name it is the plain greeting.
 #[must_use]
-pub fn greeting_for(hour: u8, name: Option<&str>) -> String {
+pub fn greeting_for(hour: u8, name: Option<&str>, tr: &Tr) -> String {
     match name.and_then(|n| n.split_whitespace().next()) {
-        Some(first) => format!("{}, {first}", greeting(hour)),
-        None => greeting(hour).to_owned(),
+        Some(first) => format!("{}, {first}", greeting(hour, tr)),
+        None => greeting(hour, tr),
     }
 }
 
 /// The greeting for `hour` (0 to 23): "Good morning" from 05:00, "Good afternoon" from 12:00,
 /// "Good evening" from 17:00 until 05:00.
 #[must_use]
-pub fn greeting(hour: u8) -> &'static str {
+pub fn greeting(hour: u8, tr: &Tr) -> String {
     match hour {
-        5..=11 => "Good morning",
-        12..=16 => "Good afternoon",
-        _ => "Good evening",
+        5..=11 => tr.t("home.greet.morning"),
+        12..=16 => tr.t("home.greet.afternoon"),
+        _ => tr.t("home.greet.evening"),
     }
 }
 
@@ -304,13 +415,16 @@ pub fn greeting(hour: u8) -> &'static str {
 /// when known, joined by middle dots (`Saturday 21 Nov 2026 · FY 2026-27 · books locked to 31 Oct
 /// 2026`).
 #[must_use]
-pub fn date_line(today: Date, fy: Option<&str>, lock: Option<Date>) -> String {
-    let mut parts = vec![crate::ui::format::long_date(today)];
+pub fn date_line(today: Date, fy: Option<&str>, lock: Option<Date>, tr: &Tr) -> String {
+    let mut parts = vec![crate::ui::format::long_date_in(today, tr)];
     if let Some(fy) = fy {
         parts.push(fy.to_owned());
     }
     if let Some(lock) = lock {
-        parts.push(format!("books locked to {}", crate::ui::format::date(lock)));
+        parts.push(tr.tf(
+            "home.locked_to",
+            &[("date", &crate::ui::format::date_in(lock, tr))],
+        ));
     }
     parts.join(" \u{b7} ")
 }
@@ -430,14 +544,14 @@ const SHORTCUTS: [Shortcut; 10] = [
 /// The keys the key bar shows for this screen: the ones above that open a screen that exists.
 /// F9 and Ctrl+Shift+J are left out because they open nothing yet.
 const HOME_KEYS: [(&str, &str); 8] = [
-    ("F8", "Sales"),
-    ("F5", "Payment"),
-    ("F6", "Receipt"),
-    ("B", "Balance sheet"),
-    ("D", "Day book"),
-    ("G", "GST returns"),
-    ("M", "Masters"),
-    ("Ctrl+K", "Palette"),
+    ("F8", "sidebar.sales"),
+    ("F5", "sidebar.payment"),
+    ("F6", "sidebar.receipt"),
+    ("B", "sidebar.balance_sheet"),
+    ("D", "sidebar.day_book"),
+    ("G", "sidebar.gst_returns"),
+    ("M", "sidebar.masters"),
+    ("Ctrl+K", "home.palette"),
 ];
 
 /// The target a key opens from the home screen, or `None` for a key it does not handle.
@@ -498,6 +612,11 @@ pub struct HomeScreen {
     head: Option<(String, String)>,
     /// The signed-in user's stored name, read with the books on each refresh.
     user_name: Option<String>,
+    /// The language the figures and nudges were last built in; the next refresh builds them in
+    /// this one.
+    tr: Tr,
+    /// The date the last refresh was for, so a change of language can ask for the same again.
+    last_as_of: Option<Date>,
 }
 
 impl HomeScreen {
@@ -521,6 +640,8 @@ impl HomeScreen {
             tile_rects: Vec::new(),
             head: None,
             user_name: None,
+            tr: Tr::default(),
+            last_as_of: None,
         }
     }
 
@@ -559,9 +680,7 @@ impl HomeScreen {
             }
             Some(Done::Ready(Err(e))) => self.review_error = Some(e),
             Some(Done::Lost) => {
-                self.review_error = Some(
-                    "The background worker stopped, so the proposals could not be read.".to_owned(),
-                );
+                self.review_error = Some(self.tr.t("home.err.worker_review"));
             }
             None => {}
         }
@@ -578,10 +697,7 @@ impl HomeScreen {
                 self.notice = None;
             }
             Some(Done::Lost) => {
-                self.notice = Some(
-                    "The background worker stopped, so the figures could not be refreshed."
-                        .to_owned(),
-                );
+                self.notice = Some(self.tr.t("home.err.worker_figures"));
             }
             None => {}
         }
@@ -589,12 +705,14 @@ impl HomeScreen {
             return;
         };
         let Some(handle) = worker else {
-            self.notice = Some("No company is open, so there are no figures to show.".to_owned());
+            self.notice = Some(self.tr.t("home.err.no_company"));
             return;
         };
+        self.last_as_of = Some(as_of);
         let today = crate::shell::navigate::today();
+        let tr = self.tr.clone();
         self.latest
-            .start(handle, move |api| home_load(api, as_of, today));
+            .start(handle, move |api| home_load(api, as_of, today, &tr));
         self.review_latest.start(handle, move |api| {
             api.review_queue_on(today).map_err(|e| e.to_string())
         });
@@ -615,7 +733,11 @@ impl HomeScreen {
     /// The text each KPI tile displays, in order.
     #[must_use]
     pub fn kpi_views(&self) -> Vec<KpiView> {
-        self.data.kpis.iter().map(kpi_view).collect()
+        self.data
+            .kpis
+            .iter()
+            .map(|kpi| kpi_view_in(kpi, &crate::i18n::current()))
+            .collect()
     }
 
     /// The screen rectangle of each KPI tile as it was drawn in the last frame, in order. Empty
@@ -710,32 +832,36 @@ impl HomeScreen {
         self.data
             .kpis
             .iter()
-            .map(|kpi| (kpi_view(kpi), kpi.target.clone()))
+            .map(|kpi| {
+                (
+                    kpi_view_in(kpi, &crate::i18n::current()),
+                    kpi.target.clone(),
+                )
+            })
             .collect()
     }
 }
 
 impl Screen for HomeScreen {
-    fn title(&self) -> String {
-        "Home".to_owned()
+    fn title(&self, tr: &Tr) -> String {
+        tr.t("home.title")
     }
 
-    fn page_title(&self) -> String {
+    fn page_title(&self, tr: &Tr) -> String {
         self.head
             .as_ref()
-            .map_or(PAGE_TITLE, |(greet, _)| greet.as_str())
-            .to_owned()
+            .map_or_else(|| tr.t("home.title"), |(greet, _)| greet.clone())
     }
 
-    fn key_bar_name(&self) -> String {
+    fn key_bar_name(&self, tr: &Tr) -> String {
         if self.compare.is_some() {
-            "Compare vouchers".to_owned()
+            tr.t("home.compare.title")
         } else {
-            PAGE_TITLE.to_owned()
+            tr.t("home.title")
         }
     }
 
-    fn subtitle(&self) -> Option<String> {
+    fn subtitle(&self, _tr: &Tr) -> Option<String> {
         let line = match &self.head {
             Some((_, line)) => line.clone(),
             None => sub_line(&self.data.company_name, &self.data.subtitle),
@@ -743,20 +869,20 @@ impl Screen for HomeScreen {
         (!line.is_empty()).then_some(line)
     }
 
-    fn keys(&self) -> Vec<KeyHint> {
+    fn keys(&self, tr: &Tr) -> Vec<KeyHint> {
         if self.compare.is_some() {
             return vec![
-                KeyHint::new("Ctrl+A", "Open both in day book"),
-                KeyHint::new("Esc", "Close"),
+                KeyHint::new("Ctrl+A", tr.t("home.compare.open_both")),
+                KeyHint::new("Esc", tr.t("common.close")),
             ];
         }
         let mut keys: Vec<KeyHint> = HOME_KEYS
             .iter()
-            .map(|(keys, label)| KeyHint::new(*keys, *label))
+            .map(|(keys, label)| KeyHint::new(*keys, tr.t(label)))
             .collect();
         if self.review.as_ref().is_some_and(|p| !p.rows.is_empty()) {
-            keys.push(KeyHint::new("J / K", "Review list"));
-            keys.push(KeyHint::new("Enter", "Open"));
+            keys.push(KeyHint::new("J / K", tr.t("home.keys.review_list")));
+            keys.push(KeyHint::new("Enter", tr.t("common.open")));
         }
         keys
     }
@@ -774,28 +900,41 @@ impl Screen for HomeScreen {
             .filter(|books| books.vouchers.is_empty())
             .map(|books| books.company.books_begin);
         let shown = body(new_company, self.is_loading(), !self.data.kpis.is_empty());
+        let tr = ctx.tr.clone();
+        if self.tr.code() != tr.code() {
+            // The nudges and the chart words were made in the old language: make them again.
+            self.tr = tr.clone();
+            if self.want.is_none() {
+                self.want = self.last_as_of;
+            }
+        }
         let fy = ctx.books.as_ref().map(|books| {
-            format!(
-                "FY {}",
-                ledgerly_core::FinancialYear {
-                    start: books.company.fy_start
-                }
-                .label()
+            tr.tf(
+                "topbar.fy",
+                &[(
+                    "year",
+                    &ledgerly_core::FinancialYear {
+                        start: books.company.fy_start,
+                    }
+                    .label(),
+                )],
             )
         });
         self.head = Some((
             greeting_for(
                 crate::shell::navigate::hour_now(),
                 self.user_name.as_deref(),
+                &tr,
             ),
             date_line(
                 crate::shell::navigate::today(),
                 fy.as_deref(),
                 ctx.lock_date,
+                &tr,
             ),
         ));
-        let title = self.page_title();
-        let line = self.subtitle().unwrap_or_default();
+        let title = self.page_title(&tr);
+        let line = self.subtitle(&tr).unwrap_or_default();
         let new_line = ctx.books.as_ref().map_or_else(
             || self.data.company_name.clone(),
             |books| {
@@ -812,6 +951,7 @@ impl Screen for HomeScreen {
         egui::ScrollArea::vertical().show(ui, |ui| {
             draw::header(
                 ui,
+                &tr,
                 shown,
                 &self.data.company_name,
                 &new_line,
@@ -836,9 +976,9 @@ impl Screen for HomeScreen {
                         review,
                         selected: self.selected,
                     };
-                    rects = draw::figures(ui, &tiles, &lower, &mut chosen);
+                    rects = draw::figures(ui, &tr, &tiles, &lower, &mut chosen);
                 }
-                HomeBody::NoFigures => draw::no_figures(ui),
+                HomeBody::NoFigures => draw::no_figures(ui, &tr),
             }
         });
         self.tile_rects = rects;

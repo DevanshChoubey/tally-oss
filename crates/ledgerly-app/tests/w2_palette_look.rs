@@ -153,7 +153,7 @@ fn the_key_bar_shows_the_palettes_keys_while_it_is_open() {
 struct Leaf;
 
 impl ledgerly_app::Screen for Leaf {
-    fn title(&self) -> String {
+    fn title(&self, _tr: &ledgerly_app::i18n::Tr) -> String {
         "Home".to_owned()
     }
     fn ui(

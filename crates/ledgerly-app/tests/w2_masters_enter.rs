@@ -77,6 +77,7 @@ fn typed(text: &str) -> RawInput {
 fn open_form() -> (egui::Context, MastersScreen, AppCtx) {
     let ctx = egui::Context::default();
     let mut app = AppCtx {
+        tr: ledgerly_app::i18n::Tr::default(),
         books: Some(books()),
         api: None,
         lock_date: None,

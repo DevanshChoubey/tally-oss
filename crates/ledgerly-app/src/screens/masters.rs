@@ -57,6 +57,7 @@ mod look;
 pub mod stock;
 pub mod view;
 
+use crate::i18n::Tr;
 use egui::{Align, Key, Layout, Modifiers, RichText, Ui};
 use ledgerly_core::{Date, LedgerId, Outcome, Period, StockItemId, Unsupported};
 use ledgerly_model::{Books, Features, MasterSnapshot, Masters};
@@ -149,6 +150,50 @@ impl MasterKind {
             MasterKind::CostCategory => "cost category",
             MasterKind::CostCentre => "cost centre",
         }
+    }
+
+    /// The translation key of the singular name.
+    fn label_key(self) -> &'static str {
+        match self {
+            MasterKind::Group => "masters.kind.group",
+            MasterKind::Ledger => "masters.kind.ledger",
+            MasterKind::VoucherType => "masters.kind.voucher_type",
+            MasterKind::Unit => "masters.kind.unit",
+            MasterKind::StockGroup => "masters.kind.stock_group",
+            MasterKind::StockItem => "masters.kind.stock_item",
+            MasterKind::Godown => "masters.kind.godown",
+            MasterKind::Batch => "masters.kind.batch",
+            MasterKind::CostCategory => "masters.kind.cost_category",
+            MasterKind::CostCentre => "masters.kind.cost_centre",
+        }
+    }
+
+    /// The translation key of the plural name.
+    fn plural_key(self) -> &'static str {
+        match self {
+            MasterKind::Group => "masters.kind_plural.group",
+            MasterKind::Ledger => "masters.kind_plural.ledger",
+            MasterKind::VoucherType => "masters.kind_plural.voucher_type",
+            MasterKind::Unit => "masters.kind_plural.unit",
+            MasterKind::StockGroup => "masters.kind_plural.stock_group",
+            MasterKind::StockItem => "masters.kind_plural.stock_item",
+            MasterKind::Godown => "masters.kind_plural.godown",
+            MasterKind::Batch => "masters.kind_plural.batch",
+            MasterKind::CostCategory => "masters.kind_plural.cost_category",
+            MasterKind::CostCentre => "masters.kind_plural.cost_centre",
+        }
+    }
+
+    /// The singular name in language `tr`.
+    #[must_use]
+    pub fn label_in(self, tr: &crate::i18n::Tr) -> String {
+        tr.t(self.label_key())
+    }
+
+    /// The plural name in language `tr`.
+    #[must_use]
+    pub fn plural_in(self, tr: &crate::i18n::Tr) -> String {
+        tr.t(self.plural_key())
     }
 
     /// The plural name, for tabs and titles.
@@ -269,6 +314,50 @@ pub enum MasterError {
     Money(#[from] ledgerly_core::MoneyError),
 }
 
+impl MasterError {
+    /// The message in the language the screen is showing. The text inside `reason`, `what` and
+    /// `by` comes from the validation and the engine and is shown as it is.
+    #[must_use]
+    pub fn text(&self) -> String {
+        use crate::i18n::{t, tf};
+        match self {
+            MasterError::NameEmpty { field } => tf("masters.err.name_empty", &[("field", field)]),
+            MasterError::NameTaken { name } => tf("masters.err.name_taken", &[("name", name)]),
+            MasterError::Invalid { field, reason } => tf(
+                "masters.err.invalid",
+                &[("field", field), ("reason", reason)],
+            ),
+            MasterError::Reserved { name, what } => {
+                let key = match what.as_str() {
+                    "deleted" => "masters.err.reserved_deleted",
+                    "moved to another group" => "masters.err.reserved_moved",
+                    "moved or reclassified (only its name and aliases can change)" => {
+                        "masters.err.reserved_reclassified"
+                    }
+                    other => return tf("masters.err.reserved", &[("name", name), ("what", other)]),
+                };
+                tf(key, &[("name", name)])
+            }
+            MasterError::InUse { name, by } => {
+                tf("masters.err.in_use", &[("name", name), ("by", by)])
+            }
+            MasterError::FeatureOff { feature } => {
+                tf("masters.err.feature_off", &[("feature", feature)])
+            }
+            MasterError::NotFound { kind } => tf("masters.err.not_found", &[("kind", kind)]),
+            MasterError::Unsupported { what, reason } => tf(
+                "masters.err.unsupported",
+                &[("what", what), ("reason", reason)],
+            ),
+            MasterError::NothingSelected => t("masters.err.nothing_selected"),
+            MasterError::Busy => t("masters.err.busy"),
+            MasterError::NoForm => t("masters.err.no_form"),
+            MasterError::NothingToConfirm => t("masters.err.nothing_to_confirm"),
+            MasterError::Money(e) => e.to_string(),
+        }
+    }
+}
+
 impl From<Unsupported> for MasterError {
     fn from(u: Unsupported) -> Self {
         MasterError::Unsupported {
@@ -361,6 +450,8 @@ enum KeyCmd {
 
 /// The masters screen (card U6).
 pub struct MastersScreen {
+    /// The strings of the language the user chose, set each frame from the app context.
+    tr: crate::i18n::Tr,
     kind: MasterKind,
     filter: String,
     selected: Option<MasterRef>,
@@ -416,6 +507,7 @@ impl MastersScreen {
     #[must_use]
     pub fn with_kind(kind: MasterKind) -> Self {
         MastersScreen {
+            tr: crate::i18n::Tr::default(),
             kind,
             filter: String::new(),
             selected: None,
@@ -646,7 +738,7 @@ impl MastersScreen {
 
     fn record<T>(&mut self, result: Result<T, MasterError>) -> Result<T, MasterError> {
         if let Err(e) = &result {
-            self.notice = Some(Notice::Error(e.to_string()));
+            self.notice = Some(Notice::Error(e.text()));
         }
         result
     }
@@ -746,8 +838,9 @@ impl MastersScreen {
             // takes the group's id when the engine has created it.
             self.mode = Mode::Form(parent);
             self.awaiting_group = true;
-            self.notice = Some(Notice::Info(format!(
-                "'{name}' sent to be saved; it goes under this ledger once it is created."
+            self.notice = Some(Notice::Info(crate::i18n::tf(
+                "masters.sent_under_ledger",
+                &[("name", &name)],
             )));
             return Ok(());
         }
@@ -755,7 +848,10 @@ impl MastersScreen {
         if editing.is_none() {
             self.selected = None;
         }
-        self.notice = Some(Notice::Info(format!("'{name}' sent to be saved.")));
+        self.notice = Some(Notice::Info(crate::i18n::tf(
+            "masters.sent_saved",
+            &[("name", &name)],
+        )));
         Ok(())
     }
 
@@ -796,7 +892,7 @@ impl MastersScreen {
         check::delete_blockers(books, target)?;
         self.requests.push(MasterRequest::Delete(target));
         self.selected = None;
-        self.notice = Some(Notice::Info("Delete sent.".to_owned()));
+        self.notice = Some(Notice::Info(self.tr.t("masters.notice.delete_sent")));
         Ok(())
     }
 
@@ -827,9 +923,7 @@ impl MastersScreen {
                     if let Mode::Form(f) = &mut self.mode {
                         f.armed = Some(f.draft.clone());
                     }
-                    self.notice = Some(Notice::Warn(
-                        "This form has changes. Press Esc again to discard them.".to_owned(),
-                    ));
+                    self.notice = Some(Notice::Warn(self.tr.t("masters.notice.unsaved")));
                 }
             }
         }
@@ -853,7 +947,7 @@ impl MastersScreen {
         let group = match MasterDraft::blank(MasterKind::Group) {
             Outcome::Value(d) => d,
             Outcome::Unsupported(u) => {
-                self.notice = Some(Notice::Error(MasterError::from(u).to_string()));
+                self.notice = Some(Notice::Error(MasterError::from(u).text()));
                 return;
             }
         };
@@ -1020,7 +1114,6 @@ fn read_keys(ui: &Ui, tag: ModeTag, kind: MasterKind) -> Vec<KeyCmd> {
 }
 
 /// The subtitle under the page title (mock v2).
-const SUBTITLE: &str = "Ledgers and stock items. Type to filter. Alt+C creates anywhere.";
 /// The gap under the tabs' rule (`.tabs{margin-bottom:14px}`, index.html:139).
 const TABS_GAP: f32 = 14.0;
 /// The widest the create form grows (`style="max-width:880px"`, index.html:1808).
@@ -1028,27 +1121,13 @@ const FORM_MAX_WIDTH: f32 = 880.0;
 /// What a cell shows where a figure is not available yet.
 const NOT_AVAILABLE: &str = "\u{2014}";
 /// The header tooltip of a column whose figures the engine does not supply to this screen yet.
-const NOT_AVAILABLE_HINT: &str = "Not available yet: the engine does not give this screen this figure. Nothing is estimated here.";
-/// What the form's foot says when it has a GSTIN field (index.html:1812).
-const UNIT_FOOT: &str = "A unit is needed before the item can be saved.";
-
-/// The subtitle of the new stock item page (index.html `masters.create-item`).
-const NEW_ITEM_SUBTITLE: &str = "Creating a stock item posts nothing. Esc goes back to the list.";
-
-const GSTIN_FOOT: &str =
-    "The check character is verified on this computer. Ledgerly does not look the GSTIN up online.";
 /// What the open bills card says before the engine's answer.
-const OPEN_BILLS_LOADING: &str =
-    "The open bills have not come from the engine yet. Nothing is estimated here.";
-/// What the open bills card says when the party has nothing open.
-const OPEN_BILLS_NONE: &str = "Nothing is open for this party.";
-
 /// The ledger list's columns (index.html:1796), with the Balance heading's hover text and its
 /// "engine" chip set from what the balances are now.
-fn ledger_cols(balances: &balances::LedgerBalances) -> [look::Col; 4] {
-    let mut cols = LEDGER_COLS;
+fn ledger_cols(balances: &balances::LedgerBalances, tr: &crate::i18n::Tr) -> [look::Col; 4] {
+    let mut cols = ledger_base_cols(tr);
     if let Some(balance) = cols.last_mut() {
-        balance.hint = balances.heading_hint();
+        balance.hint = balances.heading_hint().map(str::to_owned);
         balance.tag = balance
             .hint
             .is_none()
@@ -1059,45 +1138,47 @@ fn ledger_cols(balances: &balances::LedgerBalances) -> [look::Col; 4] {
 
 /// The ledger list's columns before the balances are known. Widths are read off the mock's
 /// capture at 1280 by 800; the ledger name takes what is left.
-const LEDGER_COLS: [look::Col; 4] = [
-    look::Col {
-        label: "Ledger",
-        width: None,
-        numeric: false,
-        hint: None,
-        tag: None,
-    },
-    look::Col {
-        label: "Group",
-        width: Some(276.0),
-        numeric: false,
-        hint: None,
-        tag: None,
-    },
-    look::Col {
-        label: "GSTIN",
-        width: Some(200.0),
-        numeric: false,
-        hint: None,
-        tag: None,
-    },
-    look::Col {
-        label: "Balance",
-        width: Some(197.0),
-        numeric: true,
-        hint: Some(NOT_AVAILABLE_HINT),
-        tag: None,
-    },
-];
+fn ledger_base_cols(tr: &crate::i18n::Tr) -> [look::Col; 4] {
+    [
+        look::Col {
+            label: tr.t("masters.col.ledger"),
+            width: None,
+            numeric: false,
+            hint: None,
+            tag: None,
+        },
+        look::Col {
+            label: tr.t("masters.col.group"),
+            width: Some(276.0),
+            numeric: false,
+            hint: None,
+            tag: None,
+        },
+        look::Col {
+            label: "GSTIN".to_owned(),
+            width: Some(200.0),
+            numeric: false,
+            hint: None,
+            tag: None,
+        },
+        look::Col {
+            label: tr.t("masters.col.balance"),
+            width: Some(197.0),
+            numeric: true,
+            hint: Some(tr.t("masters.note.not_available")),
+            tag: None,
+        },
+    ]
+}
 
 /// The stock item list's columns (index.html:1798), with the Stock and value headings' hover
 /// text and the value's "stock engine" chip set from what the figures are now.
-fn item_cols(figures: &stock::ItemStockFigures) -> [look::Col; 5] {
-    let mut cols = ITEM_COLS;
+fn item_cols(figures: &stock::ItemStockFigures, tr: &crate::i18n::Tr) -> [look::Col; 5] {
+    let mut cols = item_base_cols(tr);
     let hint = figures.heading_hint();
     let [.., qty, value] = &mut cols;
-    qty.hint = hint;
-    value.hint = hint;
+    qty.hint = hint.map(str::to_owned);
+    value.hint = hint.map(str::to_owned);
     value.tag = hint.is_none().then_some(STOCK_ENGINE_TAG);
     cols
 }
@@ -1109,65 +1190,68 @@ const STOCK_ENGINE_TAG: &str = "stock engine";
 /// capture. The mock's value heading is "Value at average cost"; the engine values each item by
 /// its own method (average cost, FIFO, last purchase or standard cost), so the heading is the
 /// engine's own "Closing value" (design/PARITY-GAPS.md).
-const ITEM_COLS: [look::Col; 5] = [
-    look::Col {
-        label: "Item",
-        width: Some(296.0),
-        numeric: false,
-        hint: None,
-        tag: None,
-    },
-    look::Col {
-        label: "HSN",
-        width: Some(213.0),
-        numeric: false,
-        hint: None,
-        tag: None,
-    },
-    look::Col {
-        label: "GST",
-        width: Some(72.0),
-        numeric: true,
-        hint: None,
-        tag: None,
-    },
-    look::Col {
-        label: "Stock",
-        width: Some(116.0),
-        numeric: true,
-        hint: None,
-        tag: None,
-    },
-    look::Col {
-        label: stock::VALUE_HEADING,
-        width: None,
-        numeric: true,
-        hint: None,
-        tag: None,
-    },
-];
+fn item_base_cols(tr: &crate::i18n::Tr) -> [look::Col; 5] {
+    [
+        look::Col {
+            label: tr.t("masters.col.item"),
+            width: Some(296.0),
+            numeric: false,
+            hint: None,
+            tag: None,
+        },
+        look::Col {
+            label: "HSN".to_owned(),
+            width: Some(213.0),
+            numeric: false,
+            hint: None,
+            tag: None,
+        },
+        look::Col {
+            label: "GST".to_owned(),
+            width: Some(72.0),
+            numeric: true,
+            hint: None,
+            tag: None,
+        },
+        look::Col {
+            label: tr.t("masters.col.stock"),
+            width: Some(116.0),
+            numeric: true,
+            hint: None,
+            tag: None,
+        },
+        look::Col {
+            label: tr.t("masters.col.closing_value"),
+            width: None,
+            numeric: true,
+            hint: None,
+            tag: None,
+        },
+    ]
+}
 
 /// The columns of a kind the mock does not draw: its name and a short description.
-const PLAIN_COLS: [look::Col; 2] = [
-    look::Col {
-        label: "Name",
-        width: None,
-        numeric: false,
-        hint: None,
-        tag: None,
-    },
-    look::Col {
-        label: "Details",
-        width: None,
-        numeric: false,
-        hint: None,
-        tag: None,
-    },
-];
+fn plain_cols(tr: &crate::i18n::Tr) -> [look::Col; 2] {
+    [
+        look::Col {
+            label: tr.t("masters.col.name"),
+            width: None,
+            numeric: false,
+            hint: None,
+            tag: None,
+        },
+        look::Col {
+            label: tr.t("masters.col.details"),
+            width: None,
+            numeric: false,
+            hint: None,
+            tag: None,
+        },
+    ]
+}
 
 /// `kind`'s singular name with a capital, for the key bar ("Ledger", index.html:1831).
-fn capitalised(kind: MasterKind) -> String {
-    let label = kind.label();
+fn capitalised(label: &str) -> String {
     let mut chars = label.chars();
     chars.next().map_or_else(String::new, |first| {
         first.to_uppercase().chain(chars).collect()
@@ -1180,7 +1264,11 @@ impl MastersScreen {
         let enabled = matches!(self.mode, Mode::List);
         let selected = view::primary_tab(self.kind).unwrap_or(view::PRIMARY_KINDS.len());
         let kinds = view::primary_kinds(features);
-        let labels: Vec<&str> = kinds.iter().map(|k| k.plural()).collect();
+        let shown: Vec<String> = kinds
+            .iter()
+            .map(|k| k.plural_in(&crate::i18n::current()))
+            .collect();
+        let labels: Vec<&str> = shown.iter().map(String::as_str).collect();
         let mut chosen: Option<MasterKind> = None;
         ui.add_enabled_ui(enabled, |ui| {
             let response = tabs(ui, &labels, selected);
@@ -1197,9 +1285,9 @@ impl MastersScreen {
     fn draw_more_kinds(&mut self, ui: &mut Ui, features: &Features) {
         let enabled = matches!(self.mode, Mode::List);
         let shown = if view::primary_tab(self.kind).is_some() {
-            "More master kinds".to_owned()
+            self.tr.t("masters.more_kinds")
         } else {
-            self.kind.plural().to_owned()
+            self.kind.plural_in(&self.tr)
         };
         let current = self.kind;
         let mut chosen: Option<MasterKind> = None;
@@ -1211,7 +1299,7 @@ impl MastersScreen {
                 .show_ui(ui, |ui| {
                     for kind in view::more_kinds(features) {
                         if ui
-                            .selectable_label(current == kind, kind.plural())
+                            .selectable_label(current == kind, kind.plural_in(&self.tr))
                             .clicked()
                         {
                             chosen = Some(kind);
@@ -1228,7 +1316,7 @@ impl MastersScreen {
     /// kept on a row the list shows, the first one when it is not (index.html:1797, `sel` on the
     /// first row). Returns what a double click asked for.
     fn draw_list(&mut self, ui: &mut Ui, books: &Books) -> Option<KeyCmd> {
-        let hint = view::filter_hint(self.kind);
+        let hint = view::filter_hint_in(self.kind, &self.tr);
         look::filter_box(ui, &mut self.filter, &hint);
         ui.add_space(look::FILTER_GAP);
         let refs = self.visible_refs(&books.masters);
@@ -1254,7 +1342,7 @@ impl MastersScreen {
                     &view::ledger_rows(&books.masters, &self.filter),
                     &self.balances,
                 );
-                let cols = ledger_cols(&self.balances);
+                let cols = ledger_cols(&self.balances, &self.tr);
                 look::list_card(ui, "ledgers", &cols, &rows, selected, scroll, None)
             }
             MasterKind::StockItem => {
@@ -1263,9 +1351,9 @@ impl MastersScreen {
                     ui.add_space(look::FILTER_GAP);
                 }
                 let rows = item_cells(&view::item_rows(&books.masters, &self.filter), &self.stock);
-                let cols = item_cols(&self.stock);
+                let cols = item_cols(&self.stock, &self.tr);
                 let total = self.stock.total_text().map(|value| look::TotalLine {
-                    label: CLOSING_STOCK,
+                    label: self.tr.t("masters.total.closing_stock"),
                     value,
                     why: self.stock.total_why(),
                 });
@@ -1280,7 +1368,15 @@ impl MastersScreen {
             | MasterKind::CostCategory
             | MasterKind::CostCentre => {
                 let rows = plain_cells(&list_rows(&books.masters, kind, &self.filter));
-                look::list_card(ui, "plain", &PLAIN_COLS, &rows, selected, scroll, None)
+                look::list_card(
+                    ui,
+                    "plain",
+                    &plain_cols(&self.tr),
+                    &rows,
+                    selected,
+                    scroll,
+                    None,
+                )
             }
         };
         if let Some(i) = events.clicked.or(events.opened) {
@@ -1307,9 +1403,18 @@ impl MastersScreen {
     /// empty, or a line saying nothing matches.
     fn draw_no_rows(&mut self, ui: &mut Ui, books: &Books) {
         if self.filter.trim().is_empty() {
-            let title = format!("No {} yet", self.kind.plural().to_lowercase());
-            let sentence = format!("Create the first {} with Alt+C.", self.kind.label());
-            let label = format!("Create {}", self.kind.label());
+            let title = self.tr.tf(
+                "masters.no_rows.title",
+                &[("plural", &self.kind.plural_in(&self.tr).to_lowercase())],
+            );
+            let sentence = self.tr.tf(
+                "masters.no_rows.sentence",
+                &[("kind", &self.kind.label_in(&self.tr))],
+            );
+            let label = self.tr.tf(
+                "masters.create_kind",
+                &[("kind", &self.kind.label_in(&self.tr))],
+            );
             // The mock's `.card > .empty`: the users glyph over the title, a plus on the button.
             let create = card(ui, |ui| {
                 ui.set_width(ui.available_width());
@@ -1326,10 +1431,10 @@ impl MastersScreen {
                 drop(self.begin_create(books));
             }
         } else {
-            ui.weak(format!(
-                "No {} matches '{}'.",
-                self.kind.plural().to_lowercase(),
-                self.filter
+            let plural = self.kind.plural_in(&self.tr).to_lowercase();
+            ui.weak(self.tr.tf(
+                "masters.no_match",
+                &[("plural", &plural), ("filter", &self.filter)],
             ));
         }
     }
@@ -1338,13 +1443,15 @@ impl MastersScreen {
     /// of four columns, then a foot with a note and Cancel and Save. Altering a bill-wise ledger
     /// puts the open bills card beside it (index.html:1806).
     fn draw_form_panel(&mut self, ui: &mut Ui, books: &Books) {
+        let gstin_foot = self.tr.t("masters.note.gstin_foot");
+        let unit_foot = self.tr.t("masters.note.unit_foot");
         let mut clicks = FormClicks::default();
         if let Mode::Form(form) = &mut self.mode {
             let editing = form.editing;
             let bills =
                 editing.is_some() && matches!(&form.draft, MasterDraft::Ledger(d) if d.bill_wise);
             let foot = match &form.draft {
-                MasterDraft::Ledger(d) if d.party.is_some() => Some(GSTIN_FOOT),
+                MasterDraft::Ledger(d) if d.party.is_some() => Some(gstin_foot.as_str()),
                 MasterDraft::Ledger(_)
                 | MasterDraft::Group(_)
                 | MasterDraft::Unit(_)
@@ -1352,7 +1459,7 @@ impl MastersScreen {
                 | MasterDraft::Godown(_)
                 | MasterDraft::CostCategory(_)
                 | MasterDraft::CostCentre(_) => None,
-                MasterDraft::StockItem(d) => d.unit.is_none().then_some(UNIT_FOOT),
+                MasterDraft::StockItem(d) => d.unit.is_none().then_some(unit_foot.as_str()),
             };
             // An altered ledger shows its closing balance as the engine gave it (index.html:1805).
             let balance = form_balance(form, &self.balances);
@@ -1419,7 +1526,7 @@ impl MastersScreen {
             return;
         };
         let name = snapshot_of(&books.masters, target).map_or_else(
-            || "this master".to_owned(),
+            || self.tr.t("masters.this_master"),
             |s| snapshot_name(&s).to_owned(),
         );
         let (mut yes, mut no) = (false, false);
@@ -1427,12 +1534,24 @@ impl MastersScreen {
             note(
                 ui,
                 NoteKind::Warn,
-                &format!("Delete '{name}'? Press Y to delete, N to keep it."),
+                &self.tr.tf("masters.delete_question", &[("name", &name)]),
             );
             ui.add_space(SPACE_2);
             ui.horizontal(|ui| {
-                yes = button(ui, "Delete", Some("Y"), ButtonKind::Danger).clicked();
-                no = button(ui, "Keep", Some("N"), ButtonKind::Secondary).clicked();
+                yes = button(
+                    ui,
+                    &self.tr.t("masters.key.delete"),
+                    Some("Y"),
+                    ButtonKind::Danger,
+                )
+                .clicked();
+                no = button(
+                    ui,
+                    &self.tr.t("masters.key.keep"),
+                    Some("N"),
+                    ButtonKind::Secondary,
+                )
+                .clicked();
             });
         });
         if yes {
@@ -1460,31 +1579,31 @@ impl MastersScreen {
     /// The key bar hints for the mode now showing (index.html:1831). Enter is offered only on the
     /// ledgers, where it opens the ledger's vouchers; Alt+D and Alt+Left / Right are this
     /// screen's own keys and come before Esc.
-    fn key_hints(&self) -> Vec<KeyHint> {
+    fn key_hints(&self, tr: &Tr) -> Vec<KeyHint> {
         match self.mode_tag() {
             ModeTag::List => {
-                let mut keys = vec![KeyHint::new("J / K", "Move")];
+                let mut keys = vec![KeyHint::new("J / K", tr.t("keys.move"))];
                 if self.kind == MasterKind::Ledger {
-                    keys.push(KeyHint::new("Enter", "Open"));
+                    keys.push(KeyHint::new("Enter", tr.t("masters.key.open")));
                 }
                 keys.extend([
-                    KeyHint::new("Alt+C", "Create"),
-                    KeyHint::new("Ctrl+Enter", "Alter"),
-                    KeyHint::new("Alt+D", "Delete"),
-                    KeyHint::new("Alt+Left / Right", "Change kind"),
-                    KeyHint::new("Esc", "Back"),
+                    KeyHint::new("Alt+C", tr.t("masters.key.create")),
+                    KeyHint::new("Ctrl+Enter", tr.t("masters.key.alter")),
+                    KeyHint::new("Alt+D", tr.t("masters.key.delete")),
+                    KeyHint::new("Alt+Left / Right", tr.t("masters.key.change_kind")),
+                    KeyHint::new("Esc", tr.t("chrome.back")),
                 ]);
                 keys
             }
             ModeTag::Form => vec![
-                KeyHint::new("Enter", "Next field"),
-                KeyHint::new("Ctrl+A", "Save"),
-                KeyHint::new("Esc", "Back"),
+                KeyHint::new("Enter", tr.t("masters.key.next_field")),
+                KeyHint::new("Ctrl+A", tr.t("masters.key.save")),
+                KeyHint::new("Esc", tr.t("chrome.back")),
             ],
             ModeTag::Confirm => vec![
-                KeyHint::new("Y", "Delete"),
-                KeyHint::new("N", "Keep"),
-                KeyHint::new("Esc", "Back"),
+                KeyHint::new("Y", tr.t("masters.key.delete")),
+                KeyHint::new("N", tr.t("masters.key.keep")),
+                KeyHint::new("Esc", tr.t("chrome.back")),
             ],
         }
     }
@@ -1493,7 +1612,7 @@ impl MastersScreen {
     /// saying why it cannot open.
     fn open_selected(&mut self, books: &Books) -> ScreenAction {
         let Some(target) = self.selected.filter(|s| s.kind == MasterKind::Ledger) else {
-            self.notice = Some(Notice::Error(MasterError::NothingSelected.to_string()));
+            self.notice = Some(Notice::Error(MasterError::NothingSelected.text()));
             return ScreenAction::Stay;
         };
         let kind = ledgerly_api::ReportKind::LedgerVouchers(ledgerly_core::LedgerId(target.id));
@@ -1517,10 +1636,19 @@ impl MastersScreen {
         }
         let mut action = ScreenAction::Stay;
         let mut keys = read_keys(ui, self.mode_tag(), self.kind);
-        let create_label = format!("Create {}", self.kind.label());
+        let create_label = self.tr.tf(
+            "masters.create_kind",
+            &[("kind", &self.kind.label_in(&self.tr))],
+        );
+        let (title, subtitle) = (self.tr.t("masters.title"), self.tr.t("masters.subtitle"));
         let mut create = false;
         if self.is_new_stock_item() {
-            page_head(ui, "New stock item", Some(NEW_ITEM_SUBTITLE), |_| {});
+            page_head(
+                ui,
+                &self.tr.t("masters.new_stock_item"),
+                Some(&self.tr.t("masters.new_item_subtitle")),
+                |_| {},
+            );
             ui.add_space(TABS_GAP);
             self.draw_notice(ui);
             self.draw_form_panel(ui, books);
@@ -1535,7 +1663,7 @@ impl MastersScreen {
             }
             return action;
         }
-        page_head(ui, "Masters", Some(SUBTITLE), |ui| {
+        page_head(ui, &title, Some(&subtitle), |ui| {
             create = button_icon(
                 ui,
                 Some(Icon::Plus),
@@ -1635,15 +1763,20 @@ fn sheet(
                                     button_icon(
                                         ui,
                                         Some(Icon::Save),
-                                        "Save",
+                                        &crate::i18n::t("masters.key.save"),
                                         Some("Ctrl+A"),
                                         ButtonKind::Primary,
                                     )
                                     .clicked()
                                 })
                                 .inner;
-                            clicks.cancel =
-                                button(ui, "Cancel", Some("Esc"), ButtonKind::Secondary).clicked();
+                            clicks.cancel = button(
+                                ui,
+                                &crate::i18n::t("masters.cancel"),
+                                Some("Esc"),
+                                ButtonKind::Secondary,
+                            )
+                            .clicked();
                         });
                     });
                 });
@@ -1666,7 +1799,11 @@ pub(crate) fn open_bills_card(ui: &mut Ui, party: &bills::PartyBills) {
     card(ui, |ui| {
         let t = tokens(ui);
         let h2 = bold_font(ui, TEXT_H2);
-        ui.label(RichText::new("Open bills").font(h2).color(t.text));
+        ui.label(
+            RichText::new(crate::i18n::t("masters.bills.heading"))
+                .font(h2)
+                .color(t.text),
+        );
         ui.add_space(SPACE_2);
         open_bills_body(ui, party);
     });
@@ -1680,12 +1817,16 @@ pub(crate) fn open_bills_body(ui: &mut Ui, party: &bills::PartyBills) {
         ui.label(RichText::new(text).size(TEXT_META).color(t.text_2));
     };
     match party.state() {
-        bills::BillsState::NotAsked => quiet(ui, OPEN_BILLS_LOADING),
+        bills::BillsState::NotAsked => {
+            quiet(ui, &crate::i18n::t("masters.note.open_bills_loading"));
+        }
         bills::BillsState::Unsupported(why) => quiet(
             ui,
-            &format!("Open bills are not shown: {why}. Nothing is estimated here."),
+            &crate::i18n::tf("masters.bills.unsupported", &[("why", &why.clone())]),
         ),
-        bills::BillsState::Loaded(lines) if lines.is_empty() => quiet(ui, OPEN_BILLS_NONE),
+        bills::BillsState::Loaded(lines) if lines.is_empty() => {
+            quiet(ui, &crate::i18n::t("masters.note.open_bills_none"));
+        }
         bills::BillsState::Loaded(lines) => bills_table(ui, lines),
     }
 }
@@ -1842,16 +1983,17 @@ fn ledger_cells(
         .collect()
 }
 
-/// The label of the item list's total line (index.html:1800).
-const CLOSING_STOCK: &str = "Closing stock";
-
 /// The stock item list's cells: the name, the HSN (or the missing-HSN badge), the GST rate, and
 /// the closing quantity and value as the engine gave them ([`stock::ItemStockFigures`]).
 fn item_cells(rows: &[view::ItemRow], figures: &stock::ItemStockFigures) -> Vec<Vec<look::Cell>> {
     rows.iter()
         .map(|r| {
             let hsn = if r.hsn.is_empty() {
-                look::Cell::BadgeIcon(BadgeKind::Bad, Icon::Alert, "Missing: add HSN")
+                look::Cell::BadgeIcon(
+                    BadgeKind::Bad,
+                    Icon::Alert,
+                    crate::i18n::t("masters.missing_hsn"),
+                )
             } else {
                 look::Cell::Text(r.hsn.clone())
             };
@@ -1902,38 +2044,40 @@ impl Screen for MastersScreen {
         Some(snapshot_name(&snapshot).to_owned())
     }
 
-    fn title(&self) -> String {
+    fn title(&self, tr: &Tr) -> String {
         // The breadcrumb reads "Masters" on every kind (index.html:1794).
-        "Masters".to_owned()
+        tr.t("masters.title")
     }
 
-    fn key_bar_name(&self) -> String {
+    fn key_bar_name(&self, _tr: &Tr) -> String {
         // The form's key bar is named after what it makes, "Ledger" (index.html:1831).
         match self.mode_tag() {
-            ModeTag::Form => self
-                .draft()
-                .map_or_else(|| "Masters".to_owned(), |d| capitalised(d.kind())),
-            ModeTag::List | ModeTag::Confirm => "Masters".to_owned(),
+            ModeTag::Form => self.draft().map_or_else(
+                || self.tr.t("masters.title"),
+                |d| capitalised(&d.kind().label_in(&self.tr)),
+            ),
+            ModeTag::List | ModeTag::Confirm => self.tr.t("masters.title"),
         }
     }
 
-    fn page_title(&self) -> String {
+    fn page_title(&self, tr: &Tr) -> String {
         if self.is_new_stock_item() {
-            "New stock item".to_owned()
+            tr.t("masters.new_stock_item")
         } else {
-            "Masters".to_owned()
+            tr.t("masters.title")
         }
     }
 
-    fn subtitle(&self) -> Option<String> {
-        Some(SUBTITLE.to_owned())
+    fn subtitle(&self, tr: &Tr) -> Option<String> {
+        Some(tr.t("masters.subtitle"))
     }
 
-    fn keys(&self) -> Vec<KeyHint> {
-        self.key_hints()
+    fn keys(&self, tr: &Tr) -> Vec<KeyHint> {
+        self.key_hints(tr)
     }
 
     fn ui(&mut self, ui: &mut Ui, ctx: &mut AppCtx) -> ScreenAction {
+        self.tr = ctx.tr.clone();
         if self.posting.is_some() {
             self.wait_for_post(ui);
             return ScreenAction::Stay;
@@ -1952,7 +2096,7 @@ impl Screen for MastersScreen {
             }
             self.draw(ui, books)
         } else {
-            ui.label(no_books_text(ctx));
+            ui.label(no_books_text(ctx, &self.tr));
             ScreenAction::Stay
         };
         // Without a worker the requests stay with the screen for the host to take.
@@ -2073,7 +2217,7 @@ impl MastersScreen {
     pub fn stock_note(&self) -> Option<String> {
         self.stock
             .notice()
-            .map(|why| format!("Stock figures are not shown: {why}. Nothing is estimated here."))
+            .map(|why| crate::i18n::tf("masters.stock_note", &[("why", why)]))
     }
 
     /// The ledger list's balances, as the screen holds them.
@@ -2093,16 +2237,16 @@ impl MastersScreen {
     pub fn balance_note(&self) -> Option<String> {
         self.balances
             .notice()
-            .map(|why| format!("Balances are not shown: {why}. Nothing is estimated here."))
+            .map(|why| crate::i18n::tf("masters.balance_note", &[("why", why)]))
     }
 }
 
 /// What the screen says when it has no books to draw from.
-fn no_books_text(ctx: &AppCtx) -> &'static str {
+fn no_books_text(ctx: &AppCtx, tr: &crate::i18n::Tr) -> String {
     if ctx.api.is_some() {
-        "The company is open. Its masters are being read, or could not be read."
+        tr.t("masters.no_books.open")
     } else {
-        "No company is open."
+        tr.t("masters.no_books.none")
     }
 }
 
@@ -2125,7 +2269,7 @@ impl MastersScreen {
         }
         if let Some(cmd) = self.commands.pop_front() {
             self.posting = Some(submit::send(worker, cmd));
-            self.notice = Some(Notice::Info("Saving...".to_owned()));
+            self.notice = Some(Notice::Info(crate::i18n::t("voucher.saving")));
         }
     }
 
@@ -2141,7 +2285,7 @@ impl MastersScreen {
                 ui.ctx().request_repaint();
             }
         } else {
-            ui.label("Saving...");
+            ui.label(crate::i18n::t("voucher.saving"));
             ui.ctx().request_repaint();
         }
     }
@@ -2154,12 +2298,15 @@ impl MastersScreen {
         self.notice = Some(match reply {
             CommandReply::Booked(result) => {
                 self.master_created(result.created);
-                Notice::Info("Saved.".to_owned())
+                Notice::Info(crate::i18n::t("masters.saved"))
             }
-            CommandReply::Unsupported(u) => {
-                Notice::Warn(format!("Not supported yet: {} ({})", u.what, u.reason))
+            CommandReply::Unsupported(u) => Notice::Warn(crate::i18n::tf(
+                "masters.not_supported",
+                &[("what", &u.what), ("reason", &u.reason)],
+            )),
+            CommandReply::Failed(reason) => {
+                Notice::Error(crate::i18n::tf("voucher.not_saved", &[("reason", &reason)]))
             }
-            CommandReply::Failed(reason) => Notice::Error(format!("Not saved: {reason}")),
         });
     }
 }

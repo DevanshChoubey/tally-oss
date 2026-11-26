@@ -116,6 +116,7 @@ impl BankScreen {
     #[must_use]
     pub fn worker(ledger_name: &str, ledger: LedgerId, as_of: Date) -> Self {
         BankScreen {
+            tr: crate::i18n::Tr::default(),
             ledger_name: ledger_name.to_owned(),
             ai_tier: None,
             settings_requested: None,
@@ -626,13 +627,14 @@ fn view_of(candidate: &Candidate) -> SuggestionView {
     let (confidence, reason) = if candidate.ambiguous {
         (
             Confidence::Low,
-            "Other suggestions compete for the same line or voucher, so choose carefully"
-                .to_owned(),
+            crate::i18n::lit(
+                "Other suggestions compete for the same line or voucher, so choose carefully",
+            ),
         )
     } else {
         (
             Confidence::High,
-            "The matcher found no competing suggestion for this line".to_owned(),
+            crate::i18n::lit("The matcher found no competing suggestion for this line"),
         )
     };
     SuggestionView {

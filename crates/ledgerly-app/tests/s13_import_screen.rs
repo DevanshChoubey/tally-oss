@@ -53,7 +53,11 @@ fn the_key_bar_offers_enter_to_import_and_esc_to_go_back() {
     // provenance: index.html:2463 (the empty-keys entry is the bar's name): [['','Import from another app'],['Enter','Import the company'],
     // ['Esc','Back']].
     let s = ImportScreen::new(date!(2026 - 11 - 21)).unwrap();
-    let keys: Vec<(String, String)> = s.keys().into_iter().map(|k| (k.keys, k.label)).collect();
+    let keys: Vec<(String, String)> = s
+        .keys(&ledgerly_app::i18n::Tr::default())
+        .into_iter()
+        .map(|k| (k.keys, k.label))
+        .collect();
     assert_eq!(
         keys,
         [

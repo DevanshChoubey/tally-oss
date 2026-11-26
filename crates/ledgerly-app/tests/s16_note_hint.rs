@@ -66,6 +66,7 @@ fn open_note(books: &Books, kind: BaseVoucherKind) -> ItemInvoiceScreen {
 
 fn settle(s: &mut ItemInvoiceScreen, books: &Books, api: Api) {
     let mut app = AppCtx {
+        tr: ledgerly_app::i18n::Tr::default(),
         books: Some(books.clone()),
         api: Some(ApiWorker::spawn(api).unwrap()),
         lock_date: None,

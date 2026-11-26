@@ -6,6 +6,7 @@
 //! `.grid` stretches them ([`option_grid`]).
 
 use egui::{Frame, Id, Margin, Rect, Response, RichText, Role, Sense, Stroke, Ui};
+use std::borrow::Cow;
 
 use super::a11y;
 use super::icon::{Icon, icon};
@@ -35,35 +36,35 @@ pub fn selected_stroke(kind: ThemeKind) -> f32 {
 }
 
 /// What one card shows.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct OptionCard<'a> {
     /// The icon at the card's left.
     pub glyph: Icon,
     /// The bold title.
-    pub title: &'a str,
+    pub title: Cow<'a, str>,
     /// The muted text under the title.
-    pub body: &'a str,
+    pub body: Cow<'a, str>,
     /// Whether this is the chosen card.
     pub selected: bool,
     /// Whether a click chooses the card. A card that cannot be chosen is drawn at full strength
     /// and says why in its `note`.
     pub enabled: bool,
     /// A badge after the title, such as "Current".
-    pub badge: Option<&'a str>,
+    pub badge: Option<Cow<'a, str>>,
     /// Keys shown as keycaps under the text (`<p class="meta">` with `kb()` in the mock).
     pub keys: &'a [&'a str],
     /// A muted line at the bottom, such as why the card cannot be chosen.
-    pub note: Option<&'a str>,
+    pub note: Option<Cow<'a, str>>,
 }
 
 impl<'a> OptionCard<'a> {
     /// An enabled, unchosen card with no badge, keys or note.
     #[must_use]
-    pub fn new(glyph: Icon, title: &'a str, body: &'a str) -> Self {
+    pub fn new(glyph: Icon, title: impl Into<Cow<'a, str>>, body: impl Into<Cow<'a, str>>) -> Self {
         Self {
             glyph,
-            title,
-            body,
+            title: title.into(),
+            body: body.into(),
             selected: false,
             enabled: true,
             badge: None,
@@ -81,16 +82,16 @@ impl<'a> OptionCard<'a> {
 
     /// The same card that cannot be chosen, with the reason as its note.
     #[must_use]
-    pub fn unavailable(mut self, reason: &'a str) -> Self {
+    pub fn unavailable(mut self, reason: impl Into<Cow<'a, str>>) -> Self {
         self.enabled = false;
-        self.note = Some(reason);
+        self.note = Some(reason.into());
         self
     }
 
     /// The same card with a badge after its title.
     #[must_use]
-    pub fn badge(mut self, badge: Option<&'a str>) -> Self {
-        self.badge = badge;
+    pub fn badge(mut self, badge: Option<impl Into<Cow<'a, str>>>) -> Self {
+        self.badge = badge.map(Into::into);
         self
     }
 
@@ -175,7 +176,7 @@ pub fn option_card(
         &response,
         Role::RadioButton,
         card.selected,
-        &a11y::join(&[card.title, card.body]),
+        &a11y::join(&[&card.title, &card.body]),
     );
     a11y::focus_ring(ui, &response, rect);
     #[expect(
@@ -247,18 +248,18 @@ fn text_column(ui: &mut Ui, card: &OptionCard<'_>) -> Rect {
         .horizontal(|ui| {
             let title = ui
                 .add(egui::Label::new(
-                    RichText::new(card.title)
+                    RichText::new(&*card.title)
                         .font(bold_font(ui, TEXT_BODY))
                         .color(t.text),
                 ))
                 .rect;
-            if let Some(text) = card.badge {
+            if let Some(text) = card.badge.as_deref() {
                 super::badge::badge(ui, super::badge::BadgeKind::Accent, text);
             }
             title
         })
         .inner;
-    para(ui, card.body, TEXT_META, t.text_2);
+    para(ui, &card.body, TEXT_META, t.text_2);
     if !card.keys.is_empty() {
         ui.add_space(4.0);
         ui.horizontal(|ui| {
@@ -267,7 +268,7 @@ fn text_column(ui: &mut Ui, card: &OptionCard<'_>) -> Rect {
             }
         });
     }
-    if let Some(note) = card.note {
+    if let Some(note) = card.note.as_deref() {
         ui.add_space(4.0);
         para(ui, note, TEXT_META, t.text_3);
     }

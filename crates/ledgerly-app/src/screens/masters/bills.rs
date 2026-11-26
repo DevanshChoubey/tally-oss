@@ -323,10 +323,15 @@ fn age(report: &Report, cells: &[Cell], due: Option<Date>) -> BillAge {
 #[must_use]
 pub fn age_badge(age: &BillAge) -> Option<(String, bool)> {
     match age {
-        BillAge::NotDue => Some(("Not due".to_owned(), false)),
-        BillAge::Overdue { days: 1, .. } => Some(("1 day overdue".to_owned(), true)),
-        BillAge::Overdue { days, .. } => Some((format!("{days} days overdue"), true)),
-        BillAge::NoDueDate => Some(("No due date".to_owned(), false)),
+        BillAge::NotDue => Some((crate::i18n::t("masters.bills.not_due"), false)),
+        BillAge::Overdue { days: 1, .. } => {
+            Some((crate::i18n::t("masters.bills.overdue_one"), true))
+        }
+        BillAge::Overdue { days, .. } => Some((
+            crate::i18n::tf("masters.bills.overdue_many", &[("days", &days.to_string())]),
+            true,
+        )),
+        BillAge::NoDueDate => Some((crate::i18n::t("masters.bills.no_due"), false)),
         BillAge::OnAccount => None,
         BillAge::Unknown(_) => Some(("\u{2014}".to_owned(), false)),
     }

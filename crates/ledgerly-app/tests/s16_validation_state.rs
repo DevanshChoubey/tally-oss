@@ -276,6 +276,7 @@ fn screen_with_a_bad_second_line(name: &str) -> (ItemInvoiceScreen, AppCtx) {
     screen.set_item_text(1, "widget");
     screen.submit(m);
     let app = AppCtx {
+        tr: ledgerly_app::i18n::Tr::default(),
         books: Some(books),
         api: Some(worker),
         lock_date: None,

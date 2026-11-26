@@ -7,28 +7,18 @@
 
 use std::path::Path;
 
+use crate::i18n::Tr;
+
 /// The layout used until the user chooses another.
 pub(super) const DEFAULT_LAYOUT: &str = "generic-csv-split";
 
-/// Every layout the import offers, as (registry id, label).
+/// Every layout the import offers, as (registry id, translation key of its label).
 pub(super) const LAYOUTS: [(&str, &str); 5] = [
-    (
-        "generic-csv-split",
-        "Generic CSV, separate withdrawal and deposit columns",
-    ),
-    (
-        "generic-csv-signed",
-        "Generic CSV, one signed amount column",
-    ),
-    (
-        "generic-csv-indicator",
-        "Generic CSV, amount with a Dr/Cr marker column",
-    ),
-    (
-        "generic-xlsx-split",
-        "Generic Excel, separate withdrawal and deposit columns",
-    ),
-    ("generic-mt940", "SWIFT MT940 statement"),
+    ("generic-csv-split", "bank.layout.csv_split"),
+    ("generic-csv-signed", "bank.layout.csv_signed"),
+    ("generic-csv-indicator", "bank.layout.csv_indicator"),
+    ("generic-xlsx-split", "bank.layout.xlsx_split"),
+    ("generic-mt940", "bank.layout.mt940"),
 ];
 
 /// A statement file the user picked, read into memory.
@@ -40,12 +30,12 @@ pub(super) struct PickedFile {
     pub(super) layout: &'static str,
 }
 
-/// The label of a layout. An id that is not in [`LAYOUTS`] is shown as it is.
-pub(super) fn layout_label(layout: &'static str) -> &'static str {
+/// The label of a layout in the words of `tr`. An id that is not in [`LAYOUTS`] is shown as it is.
+pub(super) fn layout_label_in(layout: &str, tr: &Tr) -> String {
     LAYOUTS
         .iter()
         .find(|(id, _)| *id == layout)
-        .map_or(layout, |(_, label)| *label)
+        .map_or_else(|| layout.to_owned(), |(_, key)| tr.t(key))
 }
 
 /// The layout for a file: the extension decides when it is clear, else `current`.
@@ -67,14 +57,18 @@ pub(super) fn layout_for(path: &Path, current: &'static str) -> &'static str {
 ///
 /// # Errors
 /// The text to show when the file cannot be read.
-pub(super) fn pick_file(current: &'static str) -> Result<Option<PickedFile>, String> {
+pub(super) fn pick_file(current: &'static str, tr: &Tr) -> Result<Option<PickedFile>, String> {
     let Some(path) = crate::ui::dialogs::open_file(
-        "Import bank statement",
-        &[("Bank statement", &["csv", "xlsx", "mt940", "sta"])],
+        &tr.t("bank.import.dialog_title"),
+        &[(
+            &tr.t("bank.import.filter"),
+            &["csv", "xlsx", "mt940", "sta"],
+        )],
     ) else {
         return Ok(None);
     };
-    let bytes = std::fs::read(&path).map_err(|e| format!("The file could not be read: {e}."))?;
+    let bytes = std::fs::read(&path)
+        .map_err(|e| tr.tf("bank.import.unreadable", &[("error", &e.to_string())]))?;
     Ok(Some(PickedFile {
         bytes,
         layout: layout_for(&path, current),

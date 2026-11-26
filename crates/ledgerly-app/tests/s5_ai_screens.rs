@@ -276,10 +276,19 @@ fn ask_reports_open_real_screens() {
     // provenance: derived. Balance sheet opens the balance sheet report, whose crumb title is
     // "Balance sheet" (report_view `title`, index.html:1572); the masters screen is "Masters".
     assert_eq!(
-        AskReport::BalanceSheet.open(&app).unwrap().title(),
+        AskReport::BalanceSheet
+            .open(&app)
+            .unwrap()
+            .title(&ledgerly_app::i18n::Tr::default()),
         "Balance sheet"
     );
-    assert_eq!(AskReport::Ledgers.open(&app).unwrap().title(), "Masters");
+    assert_eq!(
+        AskReport::Ledgers
+            .open(&app)
+            .unwrap()
+            .title(&ledgerly_app::i18n::Tr::default()),
+        "Masters"
+    );
     // provenance: derived. The test company has no GST registration and no bank ledger, so those
     // two say why (navigate::gst_screen, navigate::bank_entry_screen).
     match AskReport::Gstr3b.open(&app) {
@@ -287,14 +296,20 @@ fn ask_reports_open_real_screens() {
             assert_eq!(reason, "the company has no GST registration");
         }
         Err(other) => panic!("unexpected error {other}"),
-        Ok(screen) => panic!("opened {}", screen.title()),
+        Ok(screen) => panic!(
+            "opened {}",
+            screen.title(&ledgerly_app::i18n::Tr::default())
+        ),
     }
     match AskReport::BankReconciliation.open(&app) {
         Err(NavError::Unsupported { reason, .. }) => {
             assert_eq!(reason, "the company has no bank ledger");
         }
         Err(other) => panic!("unexpected error {other}"),
-        Ok(screen) => panic!("opened {}", screen.title()),
+        Ok(screen) => panic!(
+            "opened {}",
+            screen.title(&ledgerly_app::i18n::Tr::default())
+        ),
     }
 }
 
@@ -349,14 +364,20 @@ fn plain_words_keys_open_payment_and_receipt() {
     );
     let (_, action) = frame(&mut screen, &mut app, &[(Key::F5, Modifiers::NONE)]);
     match action {
-        ScreenAction::Push(screen) => assert_eq!(screen.page_title(), "Payment"),
+        ScreenAction::Push(screen) => assert_eq!(
+            screen.page_title(&ledgerly_app::i18n::Tr::default()),
+            "Payment"
+        ),
         ScreenAction::Stay | ScreenAction::Replace(_) | ScreenAction::Pop => {
             panic!("F5 opened no payment")
         }
     }
     let (_, action) = frame(&mut screen, &mut app, &[(Key::F6, Modifiers::NONE)]);
     match action {
-        ScreenAction::Push(screen) => assert_eq!(screen.page_title(), "Receipt"),
+        ScreenAction::Push(screen) => assert_eq!(
+            screen.page_title(&ledgerly_app::i18n::Tr::default()),
+            "Receipt"
+        ),
         ScreenAction::Stay | ScreenAction::Replace(_) | ScreenAction::Pop => {
             panic!("F6 opened no receipt")
         }
@@ -376,7 +397,10 @@ fn bill_photo_with_ai_off_says_reading_is_off() {
     // No sample bill, reading or total is drawn.
     assert!(!text.contains("RUPA POLYMERS"));
     assert!(!text.contains("Engine total"));
-    assert_eq!(screen.page_title(), purchase_bill::PAGE_TITLE);
+    assert_eq!(
+        screen.page_title(&ledgerly_app::i18n::Tr::default()),
+        purchase_bill::PAGE_TITLE
+    );
 }
 
 #[test]
@@ -462,6 +486,12 @@ fn bill_photo_names_its_key_bar_and_keeps_purchase_selected() {
     // provenance: index.html:1422, the crumbs Home, Purchase, From bill photo: the sidebar's
     // Purchase entry stays selected. The key bar name is derived: the mock's "Draft purchase"
     // (index.html:1455) names a draft that never exists here, so the bar names the screen.
-    assert_eq!(screen.sidebar_title(), "Purchase");
-    assert_eq!(screen.key_bar_name(), "Bill photo");
+    assert_eq!(
+        screen.sidebar_title(&ledgerly_app::i18n::Tr::default()),
+        "Purchase"
+    );
+    assert_eq!(
+        screen.key_bar_name(&ledgerly_app::i18n::Tr::default()),
+        "Bill photo"
+    );
 }

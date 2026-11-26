@@ -169,7 +169,10 @@ fn screen() -> BankScreen {
 #[test]
 fn a_new_screen_has_every_line_waiting_and_nothing_confirmed() {
     let mut s = screen();
-    assert_eq!(s.title(), "Bank reconciliation: HDFC Bank A/c");
+    assert_eq!(
+        s.title(&ledgerly_app::i18n::Tr::default()),
+        "Bank reconciliation: HDFC Bank A/c"
+    );
     assert_eq!(s.pending_count(), 6);
     assert_eq!(s.focused_line_no(), Some(1));
     assert_eq!(s.tab(), Tab::Matching);

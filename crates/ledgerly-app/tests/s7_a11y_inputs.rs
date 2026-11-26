@@ -234,6 +234,7 @@ fn voucher_entry_fields_read_their_captions() {
     for t in [T_PAYMENT, T_JOURNAL] {
         let mut screen = open(&b, t);
         let mut app = AppCtx {
+            tr: ledgerly_app::i18n::Tr::default(),
             books: Some(b.clone()),
             api: None,
             lock_date: None,
@@ -252,6 +253,7 @@ fn masters_ledger_form_fields_read_their_captions() {
     let ctx = context();
     let b = fixture_books();
     let mut app = AppCtx {
+        tr: ledgerly_app::i18n::Tr::default(),
         books: Some(b.clone()),
         api: None,
         lock_date: None,
@@ -274,6 +276,7 @@ fn masters_create_ledger_form_is_compact_until_more_details_is_opened() {
     let ctx = context();
     let b = fixture_books();
     let mut app = AppCtx {
+        tr: ledgerly_app::i18n::Tr::default(),
         books: Some(b.clone()),
         api: None,
         lock_date: None,
@@ -389,6 +392,7 @@ fn tab_in_a_voucher_skips_the_entries_of_the_open_ledger_list() {
     let b = fixture_books();
     let mut screen = open(&b, T_PAYMENT);
     let mut app = AppCtx {
+        tr: ledgerly_app::i18n::Tr::default(),
         books: Some(b.clone()),
         api: None,
         lock_date: None,

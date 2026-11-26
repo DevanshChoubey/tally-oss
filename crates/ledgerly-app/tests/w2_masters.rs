@@ -212,6 +212,7 @@ fn key(key: Key, modifiers: Modifiers) -> RawInput {
 
 fn app_with(masters: Masters) -> AppCtx {
     AppCtx {
+        tr: ledgerly_app::i18n::Tr::default(),
         books: Some(books_with(masters)),
         api: None,
         lock_date: None,
@@ -431,18 +432,22 @@ fn the_stock_filter_matches_names() {
 fn the_page_head_and_keys_follow_the_mock() {
     let s = MastersScreen::new();
     // provenance: mock v2 index.html line 1794 gives the page title and the sub-line.
-    assert_eq!(s.page_title(), "Masters");
+    assert_eq!(s.page_title(&ledgerly_app::i18n::Tr::default()), "Masters");
     assert_eq!(
-        s.subtitle().as_deref(),
+        s.subtitle(&ledgerly_app::i18n::Tr::default()).as_deref(),
         Some("Ledgers and stock items. Type to filter. Alt+C creates anywhere.")
     );
     // provenance: mock v2 index.html line 1831 (the masters key bar): Alt+C creates.
     assert!(
-        s.keys()
+        s.keys(&ledgerly_app::i18n::Tr::default())
             .iter()
             .any(|k| k.keys == "Alt+C" && k.label == "Create")
     );
-    assert!(s.keys().iter().any(|k| k.keys == "Ctrl+Enter"));
+    assert!(
+        s.keys(&ledgerly_app::i18n::Tr::default())
+            .iter()
+            .any(|k| k.keys == "Ctrl+Enter")
+    );
 }
 
 #[test]
@@ -455,11 +460,15 @@ fn the_form_keys_replace_the_list_keys() {
     assert!(s.is_form_open());
     // provenance: mock v2 index.html line 1831 (the create-ledger key bar): Ctrl+A saves.
     assert!(
-        s.keys()
+        s.keys(&ledgerly_app::i18n::Tr::default())
             .iter()
             .any(|k| k.keys == "Ctrl+A" && k.label == "Save")
     );
-    assert!(!s.keys().iter().any(|k| k.keys == "Alt+C"));
+    assert!(
+        !s.keys(&ledgerly_app::i18n::Tr::default())
+            .iter()
+            .any(|k| k.keys == "Alt+C")
+    );
 }
 
 #[test]
@@ -562,6 +571,7 @@ fn a_create_from_the_palette_without_books_says_why() {
     // or opens a form with no books under it.
     let ctx = egui::Context::default();
     let mut app = AppCtx {
+        tr: ledgerly_app::i18n::Tr::default(),
         books: None,
         api: None,
         lock_date: None,
@@ -575,7 +585,10 @@ fn a_create_from_the_palette_without_books_says_why() {
 // ---- the look of 2026-11-23 (design/mock-v2/index.html, `SCREENS.masters` at 1791-1832) --------
 
 fn pairs(s: &MastersScreen) -> Vec<(String, String)> {
-    s.keys().into_iter().map(|k| (k.keys, k.label)).collect()
+    s.keys(&ledgerly_app::i18n::Tr::default())
+        .into_iter()
+        .map(|k| (k.keys, k.label))
+        .collect()
 }
 
 fn owned(list: &[(&str, &str)]) -> Vec<(String, String)> {
@@ -589,7 +602,10 @@ fn the_breadcrumb_reads_masters_on_every_kind() {
     // provenance: index.html:1794: `phead([['Home',..],['Masters']], ..)`, on the Ledgers and the
     // Stock items tab alike. Catches "Masters: Ledgers" in the breadcrumb.
     for kind in MasterKind::ALL {
-        assert_eq!(MastersScreen::with_kind(kind).title(), "Masters");
+        assert_eq!(
+            MastersScreen::with_kind(kind).title(&ledgerly_app::i18n::Tr::default()),
+            "Masters"
+        );
     }
 }
 
@@ -637,10 +653,13 @@ fn the_form_key_bar_reads_like_the_mocks_and_names_the_kind() {
     let ctx = egui::Context::default();
     let mut app = app_with(fixture());
     let mut s = MastersScreen::new();
-    assert_eq!(s.key_bar_name(), "Masters");
+    assert_eq!(
+        s.key_bar_name(&ledgerly_app::i18n::Tr::default()),
+        "Masters"
+    );
     frame(&ctx, &mut s, &mut app, key(Key::C, Modifiers::ALT));
     assert!(s.is_form_open());
-    assert_eq!(s.key_bar_name(), "Ledger");
+    assert_eq!(s.key_bar_name(&ledgerly_app::i18n::Tr::default()), "Ledger");
     assert_eq!(
         pairs(&s),
         owned(&[("Enter", "Next field"), ("Ctrl+A", "Save"), ("Esc", "Back")])

@@ -5,10 +5,8 @@
 use ledgerly_api::MonthSales;
 use ledgerly_core::Paise;
 
+use crate::i18n::Tr;
 use crate::ui::format;
-
-/// Words before the open month in the caption.
-const SOURCE: &str = "From posted vouchers";
 
 /// One bar of the chart.
 #[derive(Debug, Clone, PartialEq)]
@@ -43,6 +41,17 @@ fn value_text(value: Paise) -> String {
     reason = "a bar's height as a share of the tallest; drawing only, no displayed figure"
 )]
 pub fn bars(months: &[MonthSales]) -> Vec<Bar> {
+    bars_in(months, &Tr::default())
+}
+
+/// The bars for `months` with the month words of `tr`.
+#[must_use]
+#[allow(
+    clippy::float_arithmetic,
+    clippy::cast_precision_loss,
+    reason = "a bar's height as a share of the tallest; drawing only, no displayed figure"
+)]
+pub fn bars_in(months: &[MonthSales], tr: &Tr) -> Vec<Bar> {
     let tallest = months.iter().map(|m| m.sales.get()).max().unwrap_or(0);
     months
         .iter()
@@ -53,7 +62,7 @@ pub fn bars(months: &[MonthSales]) -> Vec<Bar> {
                 0.0
             };
             Bar {
-                label: format::month_abbrev(m.month_start.month()).to_owned(),
+                label: format::month_abbrev_in(m.month_start.month(), tr),
                 value: m.sales,
                 value_text: value_text(m.sales),
                 share,
@@ -67,12 +76,21 @@ pub fn bars(months: &[MonthSales]) -> Vec<Bar> {
 /// still open ("From posted vouchers · November to date (hatched)").
 #[must_use]
 pub fn caption(months: &[MonthSales]) -> String {
+    caption_in(months, &Tr::default())
+}
+
+/// The caption in the words of `tr`.
+#[must_use]
+pub fn caption_in(months: &[MonthSales], tr: &Tr) -> String {
     match months.iter().rev().find(|m| m.to_date) {
-        Some(open) => format!(
-            "{SOURCE} \u{b7} {} to date (hatched)",
-            format::month_name(open.month_start.month())
+        Some(open) => tr.tf(
+            "home.chart.caption_open",
+            &[(
+                "month",
+                &format::month_name_in(open.month_start.month(), tr),
+            )],
         ),
-        None => SOURCE.to_owned(),
+        None => tr.t("home.chart.source"),
     }
 }
 
@@ -93,10 +111,16 @@ pub enum Chart {
 /// The chart for the engine's monthly series.
 #[must_use]
 pub fn chart_of(series: &ledgerly_core::Outcome<Vec<MonthSales>>) -> Chart {
+    chart_of_in(series, &Tr::default())
+}
+
+/// The chart for the engine's monthly series, in the words of `tr`.
+#[must_use]
+pub fn chart_of_in(series: &ledgerly_core::Outcome<Vec<MonthSales>>, tr: &Tr) -> Chart {
     match series {
         ledgerly_core::Outcome::Value(months) => Chart::Bars {
-            bars: bars(months),
-            caption: caption(months),
+            bars: bars_in(months, tr),
+            caption: caption_in(months, tr),
         },
         ledgerly_core::Outcome::Unsupported(u) => {
             Chart::Unsupported(format!("{}: {}", u.what, u.reason))

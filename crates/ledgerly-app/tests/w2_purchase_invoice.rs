@@ -168,6 +168,7 @@ fn id_of(books: &Books, name: &str) -> LedgerId {
 
 fn app(books: &Books, api: Option<Api>) -> AppCtx {
     AppCtx {
+        tr: ledgerly_app::i18n::Tr::default(),
         books: Some(books.clone()),
         api: api.map(|a| ApiWorker::spawn(a).unwrap()),
         lock_date: None,
@@ -235,8 +236,8 @@ fn each_command_opens_its_invoice_in_accounting_mode_without_inventory() {
         ),
     ] {
         let screen = screen_for(&PaletteTarget::Command(action), &ctx).unwrap();
-        assert_eq!(screen.title(), title);
-        let subtitle = screen.subtitle().unwrap();
+        assert_eq!(screen.title(&ledgerly_app::i18n::Tr::default()), title);
+        let subtitle = screen.subtitle(&ledgerly_app::i18n::Tr::default()).unwrap();
         assert!(subtitle.starts_with(head), "{subtitle}");
     }
 }

@@ -286,7 +286,10 @@ fn the_import_card_on_the_welcome_opens_the_import_screen() {
     frame(&ctx, &mut shell, vec![]);
     let stack = shell.tabs().active_stack().unwrap();
     assert_eq!(stack.depth(), 2);
-    assert_eq!(stack.top_title(), "Import from another app");
+    assert_eq!(
+        stack.top_title(&ledgerly_app::i18n::Tr::default()),
+        "Import from another app"
+    );
 }
 
 #[test]

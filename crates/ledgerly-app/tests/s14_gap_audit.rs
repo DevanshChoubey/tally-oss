@@ -174,7 +174,10 @@ mod masters_forms {
         let books = books("s14_item_form");
         let mut screen = MastersScreen::with_kind(MasterKind::StockItem);
         screen.begin_create(&books).unwrap();
-        assert_eq!(screen.page_title(), "New stock item");
+        assert_eq!(
+            screen.page_title(&ledgerly_app::i18n::Tr::default()),
+            "New stock item"
+        );
         let drawn = texts(&draw(&mut screen, &books));
         for want in [
             "New stock item",

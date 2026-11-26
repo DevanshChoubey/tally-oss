@@ -88,16 +88,16 @@ pub(super) fn filter_box(ui: &mut Ui, text: &mut String, hint: &str) -> bool {
 }
 
 /// One column of a list.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub(super) struct Col {
     /// The heading.
-    pub label: &'static str,
+    pub label: String,
     /// The width in points, or `None` for a share of what the fixed columns leave.
     pub width: Option<f32>,
     /// Figures: right-aligned heading and cells (`th.num`, `td.num`).
     pub numeric: bool,
     /// Shown when the pointer is over the heading, for a column whose figures are not here yet.
-    pub hint: Option<&'static str>,
+    pub hint: Option<String>,
     /// The figures came from the engine: the heading carries the engine provenance tag with this
     /// text (`prov('eng','engine')`, index.html:1796; `prov('eng','stock engine')`, line 1798).
     pub tag: Option<&'static str>,
@@ -118,7 +118,7 @@ pub(super) enum Cell {
         alias: String,
     },
     /// A badge that draws the named icon in place of its kind's glyph.
-    BadgeIcon(BadgeKind, Icon, &'static str),
+    BadgeIcon(BadgeKind, Icon, String),
     /// Text in the body ink that says why under the pointer: a dash or a provisional figure
     /// with the engine's reason (rule A1).
     Explained {
@@ -144,7 +144,7 @@ impl Cell {
 #[derive(Debug, Clone)]
 pub(super) struct TotalLine {
     /// The label ("Closing stock").
-    pub label: &'static str,
+    pub label: String,
     /// The figure, as the engine gave it.
     pub value: String,
     /// Why the figure is a dash or provisional, shown on hover.
@@ -267,7 +267,7 @@ fn paint_heading(ui: &Ui, cols: &[Col], rect: Rect, response: &egui::Response) {
             CellPlace::Left(table::CELL_PAD_X)
         };
         let label_rect = if let Some(text) = col.tag {
-            let tag = paint_engine_tag(ui, r, text);
+            let tag = paint_engine_tag(ui, r, &crate::i18n::lit(text));
             // `CellPlace::Right` keeps the cell's right padding, so give it back here: the label
             // then ends `TAG_GAP` before the tag.
             Rect::from_min_max(
@@ -281,12 +281,12 @@ fn paint_heading(ui: &Ui, cols: &[Col], rect: Rect, response: &egui::Response) {
             ui,
             label_rect,
             1.0,
-            col.label,
+            &col.label,
             font.clone(),
             t.text_3,
             place,
         );
-        if let Some(hint) = col.hint
+        if let Some(hint) = col.hint.as_deref()
             && response.hover_pos().is_some_and(|p| r.contains(p))
         {
             response.clone().on_hover_text(hint);
@@ -331,7 +331,7 @@ fn paint_total(ui: &Ui, cols: &[Col], rect: Rect, line: &TotalLine) {
         ui,
         label_rect,
         3.0,
-        line.label,
+        &line.label,
         font.clone(),
         t.text,
         CellPlace::Left(table::CELL_PAD_X),
@@ -346,10 +346,14 @@ fn row_name(row: &[Cell]) -> String {
     let parts: Vec<String> = row
         .iter()
         .map(|cell| match cell {
-            Cell::Text(text) | Cell::Quiet(text) | Cell::Explained { text, .. } => text.clone(),
+            Cell::Text(text)
+            | Cell::Quiet(text)
+            | Cell::Explained { text, .. }
+            | Cell::BadgeIcon(_, _, text) => text.clone(),
             Cell::Named { name, alias } if alias.is_empty() => name.clone(),
-            Cell::Named { name, alias } => format!("{name}, alias {alias}"),
-            Cell::BadgeIcon(_, _, text) => (*text).to_owned(),
+            Cell::Named { name, alias } => {
+                crate::i18n::tf("masters.name_alias", &[("name", name), ("alias", alias)])
+            }
         })
         .collect();
     let refs: Vec<&str> = parts.iter().map(String::as_str).collect();
@@ -391,7 +395,7 @@ fn paint_cells(ui: &mut Ui, cols: &[Col], rect: Rect, row: &[Cell], response: &e
                         ui,
                         r,
                         1.0,
-                        &format!("alias {alias}"),
+                        &crate::i18n::tf("masters.alias_only", &[("alias", alias)]),
                         FontId::proportional(TEXT_META),
                         t.text_3,
                         CellPlace::Left(left),

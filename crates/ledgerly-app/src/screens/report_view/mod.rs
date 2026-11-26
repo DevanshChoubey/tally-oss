@@ -444,7 +444,9 @@ impl ReportViewScreen {
             return;
         };
         let Some(handle) = worker else {
-            self.fail("No company is open, so the report cannot run.");
+            self.fail(crate::i18n::lit(
+                "No company is open, so the report cannot run.",
+            ));
             return;
         };
         let Some(run) = self.worker.as_mut() else {
@@ -529,11 +531,15 @@ impl ReportViewScreen {
             return;
         }
         let Some(handle) = worker else {
-            self.fail("No company is open, so the report cannot be printed.");
+            self.fail(crate::i18n::lit(
+                "No company is open, so the report cannot be printed.",
+            ));
             return;
         };
         let Some(run) = self.worker.as_ref() else {
-            self.fail("This report was not run by the engine, so it cannot be printed.");
+            self.fail(crate::i18n::lit(
+                "This report was not run by the engine, so it cannot be printed.",
+            ));
             return;
         };
         let params = run.engine.clone();
@@ -568,11 +574,15 @@ impl ReportViewScreen {
             return;
         }
         let Some(run) = self.worker.as_ref() else {
-            self.fail("This report was not run by the engine, so it cannot be exported.");
+            self.fail(crate::i18n::lit(
+                "This report was not run by the engine, so it cannot be exported.",
+            ));
             return;
         };
         let Some(handle) = worker else {
-            self.fail("No company is open, so the report cannot be exported.");
+            self.fail(crate::i18n::lit(
+                "No company is open, so the report cannot be exported.",
+            ));
             return;
         };
         let params = run.engine.clone();
@@ -602,7 +612,9 @@ impl ReportViewScreen {
                 self.fail(format!("\"{}\" was not written: {e}", path.display()));
             }
             Some(Done::Lost) => {
-                self.fail("the engine stopped before the export finished; nothing was written");
+                self.fail(crate::i18n::lit(
+                    "the engine stopped before the export finished; nothing was written",
+                ));
             }
             None => {}
         }
@@ -705,7 +717,7 @@ impl ReportViewScreen {
         let (key, label) = if let Some(row) = self.shown().rows.get(self.selected) {
             (row.key.clone(), row.label.clone())
         } else {
-            self.info("This report has no rows to open.");
+            self.info(crate::i18n::lit("This report has no rows to open."));
             return ScreenAction::Stay;
         };
         let Some(key) = key else {
@@ -739,7 +751,7 @@ impl ReportViewScreen {
 
     /// `screen`, opened by a drill from this one: it keeps this screen's sidebar entry.
     fn drilled(&self, mut screen: ReportViewScreen) -> ReportViewScreen {
-        screen.origin = Some(self.sidebar_title());
+        screen.origin = Some(self.sidebar_title(&crate::i18n::current()));
         screen
     }
 
@@ -748,7 +760,8 @@ impl ReportViewScreen {
     fn drill_worker(&mut self, key: &ViewKey) -> ScreenAction {
         // A voucher is a screen, not a report: open it read-only (see `voucher_view.rs`).
         if let ViewKey::Voucher(id) = key {
-            let view = VoucherViewScreen::new(*id).with_origin(self.sidebar_title());
+            let view = VoucherViewScreen::new(*id)
+                .with_origin(self.sidebar_title(&crate::i18n::current()));
             return ScreenAction::Push(Box::new(view));
         }
         let base = self
@@ -756,7 +769,9 @@ impl ReportViewScreen {
             .as_ref()
             .map(|run| with_view(&run.engine, self.report.params, run.engine.as_of));
         let Some(base) = base else {
-            self.fail("This report has no worker to run a drill with.");
+            self.fail(crate::i18n::lit(
+                "This report has no worker to run a drill with.",
+            ));
             return ScreenAction::Stay;
         };
         match drill_params(&base, key) {
@@ -768,7 +783,7 @@ impl ReportViewScreen {
                 if let Some(screen) = ReportViewScreen::worker(ReportSource::worker(params)) {
                     ScreenAction::Push(Box::new(self.drilled(screen)))
                 } else {
-                    self.fail("The drilled report could not be set up.");
+                    self.fail(crate::i18n::lit("The drilled report could not be set up."));
                     ScreenAction::Stay
                 }
             }
@@ -861,7 +876,9 @@ impl ReportViewScreen {
             return;
         }
         let Some(refresh) = self.source.host_refresh() else {
-            self.fail("This report has no source to run it with.");
+            self.fail(crate::i18n::lit(
+                "This report has no source to run it with.",
+            ));
             return;
         };
         match refresh(&self.report.token, params) {
@@ -969,8 +986,8 @@ impl ReportViewScreen {
 
     /// The page header, the day book's tabs, the loading line, the notice and the period editor.
     fn draw_head(&mut self, ui: &mut Ui, look: Look) {
-        let title = self.page_title();
-        let subtitle = self.subtitle();
+        let title = self.page_title(&crate::i18n::current());
+        let subtitle = self.subtitle(&crate::i18n::current());
         let detail_switch = self.detail_switch();
         let mut toggle = false;
         let mut tab_clicked = None;
@@ -1007,15 +1024,20 @@ impl ReportViewScreen {
                     export = button_icon(
                         ui,
                         Some(Icon::Upload),
-                        "Export",
+                        &crate::i18n::lit("Export"),
                         Some("Ctrl+E"),
                         ButtonKind::Secondary,
                     )
                     .clicked();
                 }
                 if look == Look::BalanceSheet {
-                    toggle =
-                        button(ui, detail_switch, Some("Alt+F1"), ButtonKind::Secondary).clicked();
+                    toggle = button(
+                        ui,
+                        &crate::i18n::lit(detail_switch),
+                        Some("Alt+F1"),
+                        ButtonKind::Secondary,
+                    )
+                    .clicked();
                 }
             });
             if export {
@@ -1056,13 +1078,16 @@ impl ReportViewScreen {
         reason = "one head: tabs, the buttons of each report and their clicks"
     )]
     fn draw_mock_head(&mut self, ui: &mut Ui, m: mock::Mock, title: &str, subtitle: Option<&str>) {
-        let tabs: Vec<(&str, bool)> = match m {
+        let tabs: Vec<(String, bool)> = match m {
             mock::Mock::Audit(current) => mock::AuditTab::ALL
                 .iter()
-                .map(|t| (t.label(), *t == current))
+                .map(|t| (crate::i18n::lit(t.label()), *t == current))
                 .collect(),
             mock::Mock::Outstanding { receivable } => {
-                vec![("Receivables", receivable), ("Payables", !receivable)]
+                vec![
+                    (crate::i18n::lit("Receivables"), receivable),
+                    (crate::i18n::lit("Payables"), !receivable),
+                ]
             }
             mock::Mock::Trial | mock::Mock::Stock | mock::Mock::ProfitLoss => Vec::new(),
         };
@@ -1073,7 +1098,7 @@ impl ReportViewScreen {
         let sub = subtitle.unwrap_or_default().to_owned();
         let t = crate::ui::tokens(ui);
         let drawing_tabs = !tabs.is_empty();
-        let labels: Vec<&str> = tabs.iter().map(|(l, _)| *l).collect();
+        let labels: Vec<&str> = tabs.iter().map(|(l, _)| l.as_str()).collect();
         let selected = tabs.iter().position(|(_, on)| *on);
         page_head_with(
             ui,
@@ -1093,12 +1118,22 @@ impl ReportViewScreen {
                 }
                 match m {
                     mock::Mock::Trial => {
-                        goto = button(ui, "Profit and loss", Some("F10"), ButtonKind::Secondary)
-                            .clicked();
+                        goto = button(
+                            ui,
+                            &crate::i18n::lit("Profit and loss"),
+                            Some("F10"),
+                            ButtonKind::Secondary,
+                        )
+                        .clicked();
                     }
                     mock::Mock::Stock => {
-                        drill = button(ui, "Stock items", Some("Enter"), ButtonKind::Secondary)
-                            .clicked();
+                        drill = button(
+                            ui,
+                            &crate::i18n::lit("Stock items"),
+                            Some("Enter"),
+                            ButtonKind::Secondary,
+                        )
+                        .clicked();
                     }
                     mock::Mock::ProfitLoss => {
                         // index.html:2234: Detailed (Alt+F1), Print preview, Export; the head
@@ -1106,7 +1141,7 @@ impl ReportViewScreen {
                         export = button_icon(
                             ui,
                             Some(Icon::Upload),
-                            "Export",
+                            &crate::i18n::lit("Export"),
                             Some("Ctrl+E"),
                             ButtonKind::Secondary,
                         )
@@ -1114,13 +1149,18 @@ impl ReportViewScreen {
                         print = button_icon(
                             ui,
                             Some(Icon::Upload),
-                            "Print preview",
+                            &crate::i18n::lit("Print preview"),
                             Some("Ctrl+P"),
                             ButtonKind::Secondary,
                         )
                         .clicked();
-                        detail = button(ui, detail_switch, Some("Alt+F1"), ButtonKind::Secondary)
-                            .clicked();
+                        detail = button(
+                            ui,
+                            &crate::i18n::lit(detail_switch),
+                            Some("Alt+F1"),
+                            ButtonKind::Secondary,
+                        )
+                        .clicked();
                     }
                     mock::Mock::Outstanding { .. } | mock::Mock::Audit(_) => {}
                 }
@@ -1388,7 +1428,11 @@ impl ReportViewScreen {
             );
         }
         if look == Look::DayBook {
-            note(ui, NoteKind::Info, day_book::NOT_RECORDED);
+            note(
+                ui,
+                NoteKind::Info,
+                &crate::i18n::lit(day_book::NOT_RECORDED),
+            );
         }
     }
 
@@ -1464,15 +1508,17 @@ fn draw_loading(ui: &mut Ui) {
                 ui.spacing_mut().item_spacing.x = crate::theme::SPACE_2;
                 crate::ui::icon::icon(ui, crate::ui::icon::Icon::Clock, t.text_2);
                 ui.label(
-                    egui::RichText::new("Computing from all vouchers\u{2026}")
+                    egui::RichText::new(crate::i18n::lit("Computing from all vouchers\u{2026}"))
                         .size(crate::theme::TEXT_BODY)
                         .color(t.text_2),
                 );
                 keycap(ui, "Esc");
                 ui.label(
-                    egui::RichText::new("cancels. The previous result is not shown as current.")
-                        .size(crate::theme::TEXT_BODY)
-                        .color(t.text_2),
+                    egui::RichText::new(crate::i18n::lit(
+                        "cancels. The previous result is not shown as current.",
+                    ))
+                    .size(crate::theme::TEXT_BODY)
+                    .color(t.text_2),
                 );
             });
             ui.add_space(14.0);
@@ -1580,26 +1626,26 @@ impl Screen for ReportViewScreen {
         Some(row.label.clone())
     }
 
-    fn title(&self) -> String {
+    fn title(&self, tr: &crate::i18n::Tr) -> String {
         // The crumb uses the page title's wording for the screens drawn to the mock
         // (index.html:1572: "Balance sheet").
         match self.look() {
-            Look::BalanceSheet | Look::DayBook => self.page_title(),
-            Look::Mock(m) => m.crumb().to_owned(),
+            Look::BalanceSheet | Look::DayBook => self.page_title(tr),
+            Look::Mock(m) => tr.lit(m.crumb()),
             Look::Generic => self.generic_title(),
         }
     }
 
-    fn page_title(&self) -> String {
+    fn page_title(&self, tr: &crate::i18n::Tr) -> String {
         match self.look() {
-            Look::BalanceSheet => "Balance sheet".to_owned(),
-            Look::DayBook => "Day book".to_owned(),
-            Look::Mock(m) => m.page_title().to_owned(),
+            Look::BalanceSheet => tr.t("report.balance_sheet"),
+            Look::DayBook => tr.t("report.day_book"),
+            Look::Mock(m) => tr.lit(m.page_title()),
             Look::Generic => self.generic_title(),
         }
     }
 
-    fn subtitle(&self) -> Option<String> {
+    fn subtitle(&self, _tr: &crate::i18n::Tr) -> Option<String> {
         let period = self.report.params.period;
         match self.look() {
             Look::BalanceSheet => {
@@ -1635,62 +1681,62 @@ impl Screen for ReportViewScreen {
         }
     }
 
-    fn sidebar_title(&self) -> String {
-        self.origin.clone().unwrap_or_else(|| self.title())
+    fn sidebar_title(&self, tr: &crate::i18n::Tr) -> String {
+        self.origin.clone().unwrap_or_else(|| self.title(tr))
     }
 
-    fn key_bar_name(&self) -> String {
+    fn key_bar_name(&self, tr: &crate::i18n::Tr) -> String {
         if self.print.preview().is_some() {
-            return "Print preview".to_owned();
+            return tr.lit("Print preview");
         }
         if self.is_computing() {
             // index.html:1579: while the report computes the bar says so and offers only Esc.
-            return "Computing".to_owned();
+            return tr.lit("Computing");
         }
         match self.look() {
-            Look::Mock(m) => m.key_bar_name().to_owned(),
-            Look::BalanceSheet | Look::DayBook | Look::Generic => self.page_title(),
+            Look::Mock(m) => tr.lit(m.key_bar_name()),
+            Look::BalanceSheet | Look::DayBook | Look::Generic => self.page_title(tr),
         }
     }
 
-    fn keys(&self) -> Vec<KeyHint> {
+    fn keys(&self, _tr: &crate::i18n::Tr) -> Vec<KeyHint> {
         if self.print.preview().is_some() {
             // index.html:2272: the preview's key bar.
             return vec![
-                KeyHint::new("Ctrl+P", "Save as PDF"),
-                KeyHint::new("Esc", "Close"),
+                KeyHint::new("Ctrl+P", crate::i18n::lit("Save as PDF")),
+                KeyHint::new("Esc", crate::i18n::lit("Close")),
             ];
         }
         if self.is_computing() {
-            return vec![KeyHint::new("Esc", "Cancel")];
+            return vec![KeyHint::new("Esc", crate::i18n::lit("Cancel"))];
         }
         match self.look() {
             Look::BalanceSheet => vec![
-                KeyHint::new("J / K", "Move"),
-                KeyHint::new("Enter", "Drill in"),
-                KeyHint::new("Esc", "Back up"),
-                KeyHint::new("Alt+F1", self.detail_switch()),
-                KeyHint::new("Ctrl+E", "Export"),
-                KeyHint::new("F2", "Period"),
+                KeyHint::new("J / K", crate::i18n::lit("Move")),
+                KeyHint::new("Enter", crate::i18n::lit("Drill in")),
+                KeyHint::new("Esc", crate::i18n::lit("Back up")),
+                KeyHint::new("Alt+F1", crate::i18n::lit(self.detail_switch())),
+                KeyHint::new("Ctrl+E", crate::i18n::lit("Export")),
+                KeyHint::new("F2", crate::i18n::lit("Period")),
             ],
             Look::DayBook => vec![
-                KeyHint::new("J / K", "Move"),
-                KeyHint::new("Enter", "Open voucher"),
-                KeyHint::new("F2", "Date"),
-                KeyHint::new("Esc", "Back"),
+                KeyHint::new("J / K", crate::i18n::lit("Move")),
+                KeyHint::new("Enter", crate::i18n::lit("Open voucher")),
+                KeyHint::new("F2", crate::i18n::lit("Date")),
+                KeyHint::new("Esc", crate::i18n::lit("Back")),
             ],
             Look::Mock(m) => m
                 .keys()
                 .into_iter()
-                .map(|(k, a)| KeyHint::new(k, a))
+                .map(|(k, a)| KeyHint::new(k, crate::i18n::lit(a)))
                 .collect(),
             Look::Generic => vec![
-                KeyHint::new("J / K", "Move"),
-                KeyHint::new("Enter", "Open"),
-                KeyHint::new("Esc", "Back up"),
-                KeyHint::new("Alt+F1", "Condensed or detailed"),
-                KeyHint::new("Ctrl+E", "Export"),
-                KeyHint::new("F2", "Period"),
+                KeyHint::new("J / K", crate::i18n::lit("Move")),
+                KeyHint::new("Enter", crate::i18n::lit("Open")),
+                KeyHint::new("Esc", crate::i18n::lit("Back up")),
+                KeyHint::new("Alt+F1", crate::i18n::lit("Condensed or detailed")),
+                KeyHint::new("Ctrl+E", crate::i18n::lit("Export")),
+                KeyHint::new("F2", crate::i18n::lit("Period")),
             ],
         }
     }
@@ -1790,7 +1836,13 @@ pub(super) fn draw_provisional_banner(
         ui.horizontal_wrapped(|ui| {
             ui.label(job);
             if with_button {
-                clicked = button(ui, "Open stock items", None, ButtonKind::Secondary).clicked();
+                clicked = button(
+                    ui,
+                    &crate::i18n::lit("Open stock items"),
+                    None,
+                    ButtonKind::Secondary,
+                )
+                .clicked();
             }
         });
     });
@@ -1817,7 +1869,13 @@ fn draw_info(ui: &mut Ui, text: &str, saved_pdf: bool) -> bool {
             }
             ui.label(para_text(&rest, crate::theme::TEXT_META, ink));
             if saved_pdf {
-                open = button(ui, "Open file", None, ButtonKind::Secondary).clicked();
+                open = button(
+                    ui,
+                    &crate::i18n::lit("Open file"),
+                    None,
+                    ButtonKind::Secondary,
+                )
+                .clicked();
             }
         });
     });

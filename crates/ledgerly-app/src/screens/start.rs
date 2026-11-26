@@ -2,6 +2,7 @@
 //! empty (mock `SCREENS.start`, state `start.recent`). With no list the app starts on company
 //! setup instead.
 
+use crate::i18n::Tr;
 use std::path::PathBuf;
 use std::sync::mpsc::{Receiver, TryRecvError};
 
@@ -212,7 +213,10 @@ impl StartScreen {
                     let t = tokens(ui);
                     draw_title_row(ui, &t);
                     ui.add_space(12.0);
-                    ui.label(RichText::new("Recent companies").font(bold_font(ui, TEXT_BODY)));
+                    ui.label(
+                        RichText::new(crate::i18n::lit("Recent companies"))
+                            .font(bold_font(ui, TEXT_BODY)),
+                    );
                     ui.add_space(6.0);
                     let (head, _) =
                         ui.allocate_exact_size(vec2(ui.available_width(), 22.0), Sense::hover());
@@ -221,12 +225,12 @@ impl StartScreen {
                         (
                             head.right() - 160.0,
                             egui::Align2::RIGHT_CENTER,
-                            "Financial year",
+                            &crate::i18n::lit("Financial year"),
                         ),
                         (
                             head.right() - 10.0,
                             egui::Align2::RIGHT_CENTER,
-                            "Last opened",
+                            &crate::i18n::lit("Last opened"),
                         ),
                     ] {
                         ui.painter().text(
@@ -272,11 +276,11 @@ impl StartScreen {
 }
 
 impl Screen for StartScreen {
-    fn title(&self) -> String {
+    fn title(&self, _tr: &Tr) -> String {
         "Start".to_owned()
     }
 
-    fn keys(&self) -> Vec<KeyHint> {
+    fn keys(&self, _tr: &Tr) -> Vec<KeyHint> {
         vec![
             KeyHint::new("", "Start"),
             KeyHint::new("J / K", "Move"),
@@ -349,7 +353,7 @@ fn draw_title_row(ui: &mut egui::Ui, t: &crate::theme::Tokens) {
     ui.painter().text(
         egui::pos2(check.left() - 6.0, row.center().y),
         egui::Align2::RIGHT_CENTER,
-        "Saved on this computer",
+        crate::i18n::lit("Saved on this computer"),
         egui::FontId::proportional(TEXT_META),
         t.text_3,
     );

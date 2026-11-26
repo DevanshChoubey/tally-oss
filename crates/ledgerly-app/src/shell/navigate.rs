@@ -56,7 +56,7 @@
 
 use ledgerly_api::{AuditReportKind, ColumnSpec, Detail, ReportFilter, ReportKind, ReportParams};
 use ledgerly_core::{
-    Date, FinancialYear, GroupId, LedgerId, Month, Outcome, Period, PeriodError, VoucherId,
+    Date, FinancialYear, GroupId, LedgerId, Outcome, Period, PeriodError, VoucherId,
 };
 use ledgerly_model::{BaseVoucherKind, Books, Scenario};
 use thiserror::Error;
@@ -589,20 +589,7 @@ pub fn gst_return_period(books: &Books, today: Date) -> Result<Period, NavError>
 /// A return period's first month as the label reads, for example `November 2026`.
 #[must_use]
 pub fn return_label(period: Period) -> String {
-    let month = match period.from().month() {
-        Month::January => "January",
-        Month::February => "February",
-        Month::March => "March",
-        Month::April => "April",
-        Month::May => "May",
-        Month::June => "June",
-        Month::July => "July",
-        Month::August => "August",
-        Month::September => "September",
-        Month::October => "October",
-        Month::November => "November",
-        Month::December => "December",
-    };
+    let month = crate::ui::format::month_name_in(period.from().month(), &crate::i18n::current());
     format!("{month} {}", period.from().year())
 }
 

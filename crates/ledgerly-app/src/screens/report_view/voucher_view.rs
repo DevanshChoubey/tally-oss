@@ -423,7 +423,12 @@ impl VoucherViewScreen {
     /// The print preview in place of the voucher: the page head, then the engine's pages and the
     /// card that saves them (the same preview as every report).
     fn draw_print_preview(&mut self, ui: &mut Ui) -> ScreenAction {
-        page_head(ui, &self.page_title(), self.subtitle().as_deref(), |_| {});
+        page_head(
+            ui,
+            &self.page_title(&crate::i18n::current()),
+            self.subtitle(&crate::i18n::current()).as_deref(),
+            |_| {},
+        );
         self.print.draw_preview(ui);
         ui.ctx().request_repaint();
         ScreenAction::Stay
@@ -796,51 +801,61 @@ fn field(ui: &mut Ui, label: &str, value: impl FnOnce(&mut Ui)) {
 }
 
 impl Screen for VoucherViewScreen {
-    fn title(&self) -> String {
+    fn title(&self, tr: &crate::i18n::Tr) -> String {
         match self.shown.borrow().as_ref() {
             Some(s) if self.print.preview().is_some() => s.type_label.clone(),
             Some(s) => s.number.clone(),
-            None => format!("Voucher #{}", self.id.0),
+            None => tr.tf(
+                "voucher_view.title_missing",
+                &[("id", &self.id.0.to_string())],
+            ),
         }
     }
 
-    fn page_title(&self) -> String {
+    fn page_title(&self, tr: &crate::i18n::Tr) -> String {
         match self.shown.borrow().as_ref() {
             Some(s) if self.print.preview().is_some() => s.preview_title.clone(),
             Some(s) => s.title.clone(),
-            None => format!("Voucher #{}", self.id.0),
+            None => tr.tf(
+                "voucher_view.title_missing",
+                &[("id", &self.id.0.to_string())],
+            ),
         }
     }
 
-    fn subtitle(&self) -> Option<String> {
+    fn subtitle(&self, tr: &crate::i18n::Tr) -> Option<String> {
         match self.shown.borrow().as_ref() {
             Some(s) if self.print.preview().is_some() => Some(s.preview_subtitle.clone()),
-            Some(_) | None => Some("Read-only. Esc goes back up".to_owned()),
+            Some(_) | None => Some(tr.lit("Read-only. Esc goes back up")),
         }
     }
 
-    fn key_bar_name(&self) -> String {
+    fn key_bar_name(&self, tr: &crate::i18n::Tr) -> String {
         if self.print.preview().is_some() {
-            return "Print preview".to_owned();
+            return tr.lit("Print preview");
         }
-        self.page_title()
+        self.page_title(tr)
     }
 
-    fn keys(&self) -> Vec<KeyHint> {
+    fn keys(&self, _tr: &crate::i18n::Tr) -> Vec<KeyHint> {
         if self.print.preview().is_some() {
             // index.html:2272: the preview's key bar.
             return vec![
-                KeyHint::new("Ctrl+P", "Save as PDF"),
-                KeyHint::new("Esc", "Close"),
+                KeyHint::new("Ctrl+P", crate::i18n::lit("Save as PDF")),
+                KeyHint::new("Esc", crate::i18n::lit("Close")),
             ];
         }
         Vec::new()
     }
 
-    fn sidebar_title(&self) -> String {
-        self.origin.clone().unwrap_or_else(|| self.title())
+    fn sidebar_title(&self, tr: &crate::i18n::Tr) -> String {
+        self.origin.clone().unwrap_or_else(|| self.title(tr))
     }
 
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one drawing pass of the screen, a line for each part of it"
+    )]
     fn ui(&mut self, ui: &mut Ui, ctx: &mut AppCtx) -> ScreenAction {
         let was_previewing = self.print.preview().is_some();
         if let Some(note) = self.print.tick() {
@@ -885,7 +900,13 @@ impl Screen for VoucherViewScreen {
             ui.label(note.text());
         }
         if self.print.saved_path().is_some()
-            && button(ui, "Open PDF", None, ButtonKind::Secondary).clicked()
+            && button(
+                ui,
+                &crate::i18n::lit("Open PDF"),
+                None,
+                ButtonKind::Secondary,
+            )
+            .clicked()
             && let Some(note) = self.print.open_saved()
         {
             self.notice = Some(note);
@@ -914,7 +935,12 @@ impl Screen for VoucherViewScreen {
                         number,
                         title: title.clone(),
                     });
-                    page_head(ui, &title, self.subtitle().as_deref(), |_| {});
+                    page_head(
+                        ui,
+                        &title,
+                        self.subtitle(&crate::i18n::current()).as_deref(),
+                        |_| {},
+                    );
                     self.draw_view(ui, &view);
                 }
                 Err(e) => {

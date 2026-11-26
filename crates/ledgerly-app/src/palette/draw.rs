@@ -10,10 +10,7 @@ use egui::{
 };
 
 use super::scope::{Section, empty_scope_hint};
-use super::{
-    LEGEND, PLACEHOLDER, Palette, PaletteChoice, PaletteMode, PaletteScope, PaletteTarget,
-    match_span,
-};
+use super::{LEGEND, Palette, PaletteChoice, PaletteMode, PaletteScope, PaletteTarget, match_span};
 use crate::shell::navigate::{new_ledger_name, row_icon};
 use crate::theme::{RADIUS_L, RADIUS_S, TEXT_BODY, TEXT_CAP, TEXT_META, border_width};
 use crate::ui::icon::{self, ICON_SIZE, Icon};
@@ -189,7 +186,7 @@ impl Palette {
         let go_width = ui
             .painter()
             .layout_no_wrap(
-                "Go to".to_owned(),
+                self.tr.t("palette.go_to"),
                 FontId::proportional(TEXT_META),
                 t.text_3,
             )
@@ -209,7 +206,11 @@ impl Palette {
                     let edit = ui.add(
                         egui::TextEdit::singleline(&mut self.query)
                             .id(Id::unique(QUERY_ID))
-                            .hint_text(RichText::new(PLACEHOLDER).size(QUERY_SIZE).color(t.text_3))
+                            .hint_text(
+                                RichText::new(self.tr.t("palette.placeholder"))
+                                    .size(QUERY_SIZE)
+                                    .color(t.text_3),
+                            )
                             .frame(Frame::NONE)
                             .margin(Margin::ZERO)
                             .font(FontId::proportional(QUERY_SIZE))
@@ -218,7 +219,11 @@ impl Palette {
                             .min_size(vec2(0.0, QUERY_HEIGHT))
                             .desired_width(width),
                     );
-                    ui.label(RichText::new("Go to").size(TEXT_META).color(t.text_3));
+                    ui.label(
+                        RichText::new(self.tr.t("palette.go_to"))
+                            .size(TEXT_META)
+                            .color(t.text_3),
+                    );
                     if focus {
                         edit.request_focus();
                     }
@@ -247,7 +252,9 @@ impl Palette {
                 for (index, row) in self.shown.iter().enumerate() {
                     if heading != Some(row.section) {
                         let label = match row.section {
-                            Section::NoMatch => format!("No match for \"{}\"", self.query.trim()),
+                            Section::NoMatch => self
+                                .tr
+                                .tf("palette.no_match_for", &[("query", self.query.trim())]),
                             Section::Recent
                             | Section::Prefixes
                             | Section::Reports
@@ -256,7 +263,7 @@ impl Palette {
                             | Section::Commands
                             | Section::Settings
                             | Section::Ask
-                            | Section::Entry => row.section.label().to_owned(),
+                            | Section::Entry => row.section.label_in(&self.tr),
                         };
                         padded(ui, |ui| section_heading(ui, &label));
                         heading = Some(row.section);
@@ -318,7 +325,12 @@ impl Palette {
         }
         if scope != PaletteScope::All {
             padded(ui, |ui| {
-                section_heading(ui, &format!("No match for \"{}\"", self.query.trim()));
+                section_heading(
+                    ui,
+                    &self
+                        .tr
+                        .tf("palette.no_match_for", &[("query", self.query.trim())]),
+                );
             });
         }
     }
@@ -373,7 +385,7 @@ impl Palette {
                             ui.add_space(5.0);
                         }
                         ui.label(
-                            RichText::new(label)
+                            RichText::new(crate::i18n::lit(label))
                                 .size(TEXT_META)
                                 .line_height(Some(line_height(TEXT_META)))
                                 .color(t.text_3),
@@ -419,7 +431,7 @@ fn legend_row(ui: &mut Ui) {
                     keycap::keycap(ui, key);
                     ui.add_space(4.0);
                     ui.label(
-                        RichText::new(label)
+                        RichText::new(crate::i18n::lit(label))
                             .size(TEXT_META)
                             .line_height(Some(line_height(TEXT_META)))
                             .color(t.text_3),

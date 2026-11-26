@@ -176,6 +176,7 @@ fn texts(shapes: &[ClippedShape]) -> Vec<String> {
 
 fn frame(s: &mut VoucherEntryScreen, b: &Books) -> Vec<String> {
     let mut app = AppCtx {
+        tr: ledgerly_app::i18n::Tr::default(),
         books: Some(b.clone()),
         api: None,
         lock_date: None,
@@ -361,6 +362,7 @@ fn coloured(s: &mut VoucherEntryScreen, b: &Books) -> Vec<(String, egui::Color32
         }
     }
     let mut app = AppCtx {
+        tr: ledgerly_app::i18n::Tr::default(),
         books: Some(b.clone()),
         api: None,
         lock_date: None,

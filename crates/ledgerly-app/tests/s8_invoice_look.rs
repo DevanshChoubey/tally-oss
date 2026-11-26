@@ -165,6 +165,7 @@ fn open(b: &Books) -> ItemInvoiceScreen {
 /// Draws the screen `frames` times in a 1280 by 800 window.
 fn draw(s: &mut ItemInvoiceScreen, b: &Books, lock: Option<Date>, frames: usize) {
     let mut app = AppCtx {
+        tr: ledgerly_app::i18n::Tr::default(),
         books: Some(b.clone()),
         api: None,
         lock_date: lock,
@@ -338,6 +339,7 @@ fn drawn_texts(s: &mut ItemInvoiceScreen, b: &Books, lock: Option<Date>) -> Vec<
         }
     }
     let mut app = AppCtx {
+        tr: ledgerly_app::i18n::Tr::default(),
         books: Some(b.clone()),
         api: None,
         lock_date: lock,

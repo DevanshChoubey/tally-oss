@@ -196,6 +196,7 @@ fn a_masters_ledger_row_reads_its_cells_in_column_order() {
     let ctx = context();
     let b = books();
     let mut app = AppCtx {
+        tr: ledgerly_app::i18n::Tr::default(),
         books: Some(b.clone()),
         api: None,
         lock_date: None,

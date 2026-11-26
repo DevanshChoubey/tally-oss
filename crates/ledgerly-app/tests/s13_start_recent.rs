@@ -49,15 +49,24 @@ fn entry(n: usize) -> RecentCompany {
 fn the_shell_starts_on_setup_without_a_list_and_on_start_with_one() {
     // provenance: derived; the spec's first launch has no company to list, a later launch has.
     let none = Shell::cold_start_with_recent(None);
-    assert_eq!(none.tabs().titles(), ["Company setup"]);
+    assert_eq!(
+        none.tabs().titles(&ledgerly_app::i18n::Tr::default()),
+        ["Company setup"]
+    );
 
     let dir = tempfile::tempdir().expect("temp folder");
     let empty = Shell::cold_start_with_recent(Some(dir.path().to_path_buf()));
-    assert_eq!(empty.tabs().titles(), ["Company setup"]);
+    assert_eq!(
+        empty.tabs().titles(&ledgerly_app::i18n::Tr::default()),
+        ["Company setup"]
+    );
 
     recent::record(dir.path(), entry(1)).expect("records");
     let listed = Shell::cold_start_with_recent(Some(dir.path().to_path_buf()));
-    assert_eq!(listed.tabs().titles(), ["Start"]);
+    assert_eq!(
+        listed.tabs().titles(&ledgerly_app::i18n::Tr::default()),
+        ["Start"]
+    );
 }
 
 #[test]
@@ -65,7 +74,10 @@ fn a_list_that_cannot_be_read_starts_on_setup() {
     let dir = tempfile::tempdir().expect("temp folder");
     std::fs::write(dir.path().join("recent-companies.toml"), "company = 5 [").expect("written");
     let shell = Shell::cold_start_with_recent(Some(dir.path().to_path_buf()));
-    assert_eq!(shell.tabs().titles(), ["Company setup"]);
+    assert_eq!(
+        shell.tabs().titles(&ledgerly_app::i18n::Tr::default()),
+        ["Company setup"]
+    );
 }
 
 #[test]

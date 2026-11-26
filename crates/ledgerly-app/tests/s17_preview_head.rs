@@ -102,14 +102,25 @@ fn the_preview_of_a_sales_invoice_is_headed_with_the_type_and_number() {
     let ctx = egui::Context::default();
     let mut screen = VoucherViewScreen::new(id);
     let _left = frame(&ctx, &mut screen, &mut app, RawInput::default());
-    assert_eq!(screen.title(), "SI/0412");
-    assert_eq!(screen.page_title(), "Voucher SI/0412");
+    assert_eq!(screen.title(&ledgerly_app::i18n::Tr::default()), "SI/0412");
+    assert_eq!(
+        screen.page_title(&ledgerly_app::i18n::Tr::default()),
+        "Voucher SI/0412"
+    );
     let _left = frame(&ctx, &mut screen, &mut app, key(Key::P, Modifiers::COMMAND));
     until(&ctx, &mut screen, &mut app, |s| s.print_preview().is_some());
-    assert_eq!(screen.title(), "Sales invoice");
-    assert_eq!(screen.page_title(), "Sales invoice SI/0412");
     assert_eq!(
-        screen.subtitle().as_deref(),
+        screen.title(&ledgerly_app::i18n::Tr::default()),
+        "Sales invoice"
+    );
+    assert_eq!(
+        screen.page_title(&ledgerly_app::i18n::Tr::default()),
+        "Sales invoice SI/0412"
+    );
+    assert_eq!(
+        screen
+            .subtitle(&ledgerly_app::i18n::Tr::default())
+            .as_deref(),
         Some("Saved \u{b7} Shree Ganesh Traders \u{b7} 14 Nov 2026")
     );
     let _left = frame(
@@ -118,6 +129,9 @@ fn the_preview_of_a_sales_invoice_is_headed_with_the_type_and_number() {
         &mut app,
         key(Key::Escape, Modifiers::NONE),
     );
-    assert_eq!(screen.title(), "SI/0412");
-    assert_eq!(screen.page_title(), "Voucher SI/0412");
+    assert_eq!(screen.title(&ledgerly_app::i18n::Tr::default()), "SI/0412");
+    assert_eq!(
+        screen.page_title(&ledgerly_app::i18n::Tr::default()),
+        "Voucher SI/0412"
+    );
 }

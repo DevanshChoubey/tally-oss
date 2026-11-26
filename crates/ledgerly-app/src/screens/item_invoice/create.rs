@@ -114,7 +114,7 @@ impl ItemInvoiceScreen {
             .chain(&self.create_queue)
             .cloned()
             .collect();
-        let (name, group) = match check_new_ledger(masters, name, group, &queued) {
+        let (name, group) = match check_new_ledger(&self.tr, masters, name, group, &queued) {
             Ok(checked) => checked,
             Err(message) => return self.fail(message),
         };
@@ -196,7 +196,7 @@ impl ItemInvoiceScreen {
         let Some((_, form)) = self.create.as_mut() else {
             return;
         };
-        match create_form_ui(ui, form, masters, "u5-create-group") {
+        match create_form_ui(ui, &self.tr, form, masters, "u5-create-group") {
             FormAnswer::Open => {}
             FormAnswer::Confirm => {
                 let (name, group) = (form.name.clone(), form.group);

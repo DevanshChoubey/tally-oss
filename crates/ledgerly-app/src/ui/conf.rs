@@ -4,6 +4,7 @@
 use egui::{CornerRadius, Rect, Response, RichText, Sense, Ui, Vec2, pos2};
 
 use super::tokens;
+use crate::i18n::Tr;
 use crate::theme::TEXT_META;
 
 /// How sure a proposal is.
@@ -41,6 +42,17 @@ pub fn word(level: Confidence) -> &'static str {
     }
 }
 
+/// The word shown after the bars, in the words of `tr`.
+#[must_use]
+pub fn word_in(level: Confidence, tr: &Tr) -> String {
+    tr.t(match level {
+        Confidence::High => "conf.high",
+        Confidence::Medium => "conf.medium",
+        Confidence::Low => "conf.low",
+        Confidence::Rule => "conf.rule",
+    })
+}
+
 /// Width of one bar, in points.
 const BAR_W: f32 = 5.0;
 /// Height of one bar, in points.
@@ -50,8 +62,8 @@ const BAR_GAP: f32 = 2.0;
 /// Left edge of each of the three bars, relative to the first.
 const BAR_OFFSETS: [f32; 3] = [0.0, BAR_W + BAR_GAP, 2.0 * (BAR_W + BAR_GAP)];
 
-/// Draws the confidence band for `level`: lit bars, then the word.
-pub fn conf(ui: &mut Ui, level: Confidence) -> Response {
+/// Draws the confidence band for `level` in the words of `tr`: lit bars, then the word.
+pub fn conf(ui: &mut Ui, level: Confidence, tr: &Tr) -> Response {
     let t = tokens(ui);
     let lit = lit_bars(level);
     let lit_color = t.text_2;
@@ -69,7 +81,7 @@ pub fn conf(ui: &mut Ui, level: Confidence) -> Response {
             painter.rect_filled(bar, CornerRadius::same(1), color);
         }
         ui.label(
-            RichText::new(word(level))
+            RichText::new(word_in(level, tr))
                 .size(TEXT_META)
                 .strong()
                 .color(t.text_2),

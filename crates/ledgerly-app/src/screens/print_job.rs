@@ -54,7 +54,11 @@ type PrintFn = dyn Fn(&mut Api, &PrintSetup) -> Result<Outcome<PrintedDocument>,
 
 /// The system save dialog, offering PDF.
 fn save_pdf_dialog(suggested: &str) -> Option<PathBuf> {
-    crate::ui::dialogs::save_file("Save as PDF", Some(suggested), &[("PDF", &["pdf"])])
+    crate::ui::dialogs::save_file(
+        &crate::i18n::t("print.save_dialog"),
+        Some(suggested),
+        &[("PDF", &["pdf"])],
+    )
 }
 
 /// The file name a PDF of a report or voucher titled `title` is saved under: the name Export
@@ -71,13 +75,18 @@ pub fn pdf_file_name(title: &str) -> String {
 #[must_use]
 pub fn print_notice(title: &str, done: &Rendered) -> Notice {
     match done {
-        Ok(Outcome::Value(doc)) => {
-            Notice::Info(format!("{title} is ready: {} bytes of PDF.", doc.pdf.len()))
-        }
-        Ok(Outcome::Unsupported(u)) => {
-            Notice::Error(format!("{title} was not printed. {}", unsupported_text(u)))
-        }
-        Err(e) => Notice::Error(format!("{title} was not printed: {e}")),
+        Ok(Outcome::Value(doc)) => Notice::Info(crate::i18n::tf(
+            "print.ready",
+            &[("title", title), ("bytes", &doc.pdf.len().to_string())],
+        )),
+        Ok(Outcome::Unsupported(u)) => Notice::Error(crate::i18n::tf(
+            "print.unsupported",
+            &[("title", title), ("reason", &unsupported_text(u))],
+        )),
+        Err(e) => Notice::Error(crate::i18n::tf(
+            "print.failed",
+            &[("title", title), ("error", e)],
+        )),
     }
 }
 
@@ -90,9 +99,9 @@ pub fn write_failure(path: &Path, error: &std::io::Error) -> String {
     let reason = reason
         .rsplit_once(" (os error ")
         .map_or(reason.as_str(), |(text, _code)| text);
-    format!(
-        "The PDF was not saved: \"{}\" could not be written ({reason}). Nothing was written.",
-        path.display()
+    crate::i18n::tf(
+        "print.write_failure",
+        &[("path", &path.display().to_string()), ("reason", reason)],
     )
 }
 
@@ -303,7 +312,10 @@ impl PrintJob {
                     self.writing = None;
                     let shown = path.display().to_string();
                     self.saved = Some(path);
-                    return Some(Notice::Info(format!("Saved PDF to {shown}.")));
+                    return Some(Notice::Info(crate::i18n::tf(
+                        "print.saved",
+                        &[("path", &shown)],
+                    )));
                 }
                 Ok(Err(e)) => {
                     self.writing = None;
@@ -311,10 +323,7 @@ impl PrintJob {
                 }
                 Err(TryRecvError::Disconnected) => {
                     self.writing = None;
-                    return Some(Notice::Error(
-                        "the file thread stopped before the PDF was written; nothing was saved"
-                            .to_owned(),
-                    ));
+                    return Some(Notice::Error(crate::i18n::t("print.file_thread_lost")));
                 }
             }
             return None;
@@ -343,9 +352,9 @@ impl PrintJob {
                 None
             }
             Some(Done::Ready(other)) => Some(print_notice(&self.title, &other)),
-            Some(Done::Lost) => Some(Notice::Error(format!(
-                "{} was not printed: the engine stopped before the print finished",
-                self.title
+            Some(Done::Lost) => Some(Notice::Error(crate::i18n::tf(
+                "print.lost",
+                &[("title", &self.title)],
             ))),
         }
     }
@@ -358,7 +367,10 @@ impl PrintJob {
                 self.writing = Some(rx);
                 None
             }
-            Err(e) => Some(Notice::Error(format!("the PDF was not written: {e}"))),
+            Err(e) => Some(Notice::Error(crate::i18n::tf(
+                "print.not_written",
+                &[("error", &e)],
+            ))),
         }
     }
 }
@@ -392,7 +404,12 @@ pub fn open_in_viewer(path: &Path) -> Result<(), String> {
         .args(&args)
         .spawn()
         .map(|_child| ())
-        .map_err(|e| format!("the PDF could not be opened with {program}: {e}"))
+        .map_err(|e| {
+            crate::i18n::tf(
+                "print.open_failed",
+                &[("program", &program), ("error", &e.to_string())],
+            )
+        })
 }
 
 #[cfg(test)]

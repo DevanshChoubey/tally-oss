@@ -294,7 +294,7 @@ fn targets(palette: &Palette) -> Vec<PaletteTarget> {
 struct Root;
 
 impl Screen for Root {
-    fn title(&self) -> String {
+    fn title(&self, _tr: &ledgerly_app::i18n::Tr) -> String {
         "Home".to_owned()
     }
 
@@ -438,7 +438,10 @@ fn a_picked_ledger_opens_its_report_on_top_of_the_screen() {
     assert_eq!(change, StackChange::Pushed);
     let stack = tabs.active_stack().unwrap();
     assert_eq!(stack.depth(), 2);
-    assert_eq!(stack.top_title(), "Report");
+    assert_eq!(
+        stack.top_title(&ledgerly_app::i18n::Tr::default()),
+        "Report"
+    );
 }
 
 #[test]
@@ -459,7 +462,10 @@ fn a_replace_pick_replaces_the_screen() {
     assert_eq!(change, StackChange::Replaced);
     let stack = tabs.active_stack().unwrap();
     assert_eq!(stack.depth(), 1);
-    assert_eq!(stack.top_title(), "Voucher #1");
+    assert_eq!(
+        stack.top_title(&ledgerly_app::i18n::Tr::default()),
+        "Voucher #1"
+    );
 }
 
 #[test]
@@ -623,7 +629,10 @@ fn a_voucher_row_of_a_ledger_report_drills_to_the_voucher() {
     let ScreenAction::Push(opened) = screen.drill() else {
         panic!("a voucher row opens a screen");
     };
-    assert_eq!(opened.title(), "Voucher #2");
+    assert_eq!(
+        opened.title(&ledgerly_app::i18n::Tr::default()),
+        "Voucher #2"
+    );
     assert_eq!(screen.notice(), None);
 }
 
@@ -724,7 +733,11 @@ fn the_mock_screens_have_palette_rows_that_open_them_with_their_titles() {
             .find(|e| e.title == row_title)
             .unwrap_or_else(|| panic!("no palette row \"{row_title}\""));
         match open_target(&row.target, &ctx) {
-            Ok(screen) => assert_eq!(screen.title(), expected, "row \"{row_title}\""),
+            Ok(screen) => assert_eq!(
+                screen.title(&ledgerly_app::i18n::Tr::default()),
+                expected,
+                "row \"{row_title}\""
+            ),
             Err(err) => panic!("row \"{row_title}\" did not open: {err}"),
         }
     }
@@ -744,7 +757,11 @@ fn the_stubs_open_with_their_titles_and_need_no_company() {
     ];
     for (key, expected) in cases {
         match open_target(&report(key), &AppCtx::default()) {
-            Ok(screen) => assert_eq!(screen.title(), expected, "stub \"{key}\""),
+            Ok(screen) => assert_eq!(
+                screen.title(&ledgerly_app::i18n::Tr::default()),
+                expected,
+                "stub \"{key}\""
+            ),
             Err(err) => panic!("stub \"{key}\" did not open: {err}"),
         }
     }
@@ -759,7 +776,10 @@ fn the_bank_row_says_why_it_cannot_open_without_one_bank_ledger() {
             assert_eq!(what, "Bank reconciliation");
             assert_eq!(reason, "the company has no bank ledger");
         }
-        other => panic!("expected the reason, got {:?}", other.map(|s| s.title())),
+        other => panic!(
+            "expected the reason, got {:?}",
+            other.map(|s| s.title(&ledgerly_app::i18n::Tr::default()))
+        ),
     }
 }
 

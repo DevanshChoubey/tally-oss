@@ -146,6 +146,7 @@ fn bills_that_arrive_late_still_take_the_keyboard() {
     let b = books();
     let m = &b.masters;
     let mut app = AppCtx {
+        tr: ledgerly_app::i18n::Tr::default(),
         books: Some(b.clone()),
         api: None,
         lock_date: None,

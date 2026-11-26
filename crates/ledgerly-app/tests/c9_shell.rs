@@ -31,7 +31,7 @@ use egui::{Event, Key, Modifiers, RawInput};
 use ledgerly_api::{Api, ApiError, Command, CommandResult};
 use ledgerly_app::screens::home::KpiView;
 use ledgerly_app::shell::submit::{self, CommandReply};
-use ledgerly_app::shell::{GatewayScreen, ScreenStack, Shell, WelcomeScreen};
+use ledgerly_app::shell::{GatewayScreen, Shell, WelcomeScreen};
 use ledgerly_app::worker::ApiWorker;
 use ledgerly_app::{AppCtx, Screen, ScreenAction};
 use ledgerly_core::{
@@ -198,8 +198,8 @@ fn setup(name: &str, banks: usize) -> Api {
 struct Shared(Rc<RefCell<GatewayScreen>>);
 
 impl Screen for Shared {
-    fn title(&self) -> String {
-        self.0.borrow().title()
+    fn title(&self, _tr: &ledgerly_app::i18n::Tr) -> String {
+        self.0.borrow().title(&ledgerly_app::i18n::Tr::default())
     }
     fn ui(&mut self, ui: &mut egui::Ui, ctx: &mut AppCtx) -> ScreenAction {
         self.0.borrow_mut().ui(ui, ctx)
@@ -261,7 +261,7 @@ fn titles(shell: &Shell) -> Vec<String> {
     shell
         .tabs()
         .active_stack()
-        .map_or_default(ScreenStack::breadcrumbs)
+        .map_or_default(|s| s.breadcrumbs(&ledgerly_app::i18n::Tr::default()))
 }
 
 /// Opens the palette with Ctrl+K, types `query` and accepts the first row with Enter.
@@ -496,8 +496,20 @@ fn the_gateway_shows_the_home_screens_title_subtitle_and_keys() {
     // (page title, subtitle and key bar) shows what the home screen inside it gives.
     let gateway = GatewayScreen::new();
     let home = gateway.home();
-    assert_eq!(gateway.page_title(), home.page_title());
-    assert_eq!(gateway.subtitle(), home.subtitle());
-    assert!(!home.keys().is_empty(), "the home screen lists its keys");
-    assert_eq!(gateway.keys(), home.keys());
+    assert_eq!(
+        gateway.page_title(&ledgerly_app::i18n::Tr::default()),
+        home.page_title(&ledgerly_app::i18n::Tr::default())
+    );
+    assert_eq!(
+        gateway.subtitle(&ledgerly_app::i18n::Tr::default()),
+        home.subtitle(&ledgerly_app::i18n::Tr::default())
+    );
+    assert!(
+        !home.keys(&ledgerly_app::i18n::Tr::default()).is_empty(),
+        "the home screen lists its keys"
+    );
+    assert_eq!(
+        gateway.keys(&ledgerly_app::i18n::Tr::default()),
+        home.keys(&ledgerly_app::i18n::Tr::default())
+    );
 }

@@ -272,7 +272,7 @@ fn key(key: Key) -> RawInput {
 
 #[test]
 fn tax_box_shows_the_engine_heads_in_order_without_adding_anything() {
-    let rows = tax_rows(&block_for_10000());
+    let rows = tax_rows(&block_for_10000(), &ledgerly_app::i18n::Tr::default());
     let labels: Vec<&str> = rows.iter().map(|(l, _)| l.as_str()).collect();
     assert_eq!(labels, ["Taxable value", "CGST", "SGST", "Round off"]);
     // provenance: derived. Indian grouping of 10,000.00, 900.00 and 900.00 (below one lakh).
@@ -322,6 +322,7 @@ fn a_locked_period_refuses_the_save_with_the_lock_message() {
     let mut s = answered(&b);
     let ctx = egui::Context::default();
     let mut app = AppCtx {
+        tr: ledgerly_app::i18n::Tr::default(),
         books: Some(b.clone()),
         api: None,
         lock_date: Some(TODAY),
@@ -360,6 +361,7 @@ fn escape_while_asking_keeps_the_draft_and_does_not_leave() {
     s.submit(m);
     let ctx = egui::Context::default();
     let mut app = AppCtx {
+        tr: ledgerly_app::i18n::Tr::default(),
         books: Some(b.clone()),
         api: None,
         lock_date: None,
@@ -377,9 +379,9 @@ fn escape_while_asking_keeps_the_draft_and_does_not_leave() {
 fn the_screen_names_its_type_and_shows_the_key_bar() {
     let b = books();
     let s = open(&b);
-    assert_eq!(s.title(), "Sales invoice");
-    assert!(s.subtitle().is_some());
-    let keys = s.keys();
+    assert_eq!(s.title(&ledgerly_app::i18n::Tr::default()), "Sales invoice");
+    assert!(s.subtitle(&ledgerly_app::i18n::Tr::default()).is_some());
+    let keys = s.keys(&ledgerly_app::i18n::Tr::default());
     assert!(keys.iter().any(|k| k.keys == "Ctrl+A"));
     assert!(keys.iter().any(|k| k.keys == "Enter"));
 }
@@ -390,6 +392,7 @@ fn the_screen_draws_with_a_filled_invoice_and_a_lock() {
     let ctx = egui::Context::default();
     let mut s = answered(&b);
     let mut app = AppCtx {
+        tr: ledgerly_app::i18n::Tr::default(),
         books: Some(b.clone()),
         api: None,
         lock_date: Some(TODAY),

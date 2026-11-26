@@ -16,6 +16,7 @@ use egui::{
     Align, Frame, Key, Label, Layout, Margin, Modifiers, Rect, RichText, Ui, UiBuilder, vec2,
 };
 
+use crate::i18n::Tr;
 use crate::keymap::Action;
 use crate::screen::KeyHint;
 use crate::screens::ai_gate::{self, Feature, Gate, TierGate};
@@ -52,8 +53,8 @@ pub const KEY_BAR_NAME: &str = "Bill photo";
 #[must_use]
 pub fn key_hints() -> Vec<KeyHint> {
     vec![
-        KeyHint::new("", "Bill photo"),
-        KeyHint::new("F9", "Purchase"),
+        KeyHint::new("", crate::i18n::lit("Bill photo")),
+        KeyHint::new("F9", crate::i18n::lit("Purchase")),
     ]
 }
 
@@ -141,21 +142,35 @@ fn draw_image(ui: &mut Ui) {
                     icon_sized(ui, Icon::Camera, t.text_3, 36.0);
                     ui.add_space(10.0);
                     ui.label(
-                        RichText::new(NO_IMAGE_TITLE)
+                        RichText::new(crate::i18n::lit(NO_IMAGE_TITLE))
                             .font(bold_font(ui, TEXT_H2))
                             .color(t.text),
                     );
                     ui.add_space(SPACE_4 / 2.0);
-                    ui.add(Label::new(para_text(NO_IMAGE_SENTENCE, TEXT_BODY, t.text_2)).wrap());
+                    ui.add(
+                        Label::new(para_text(
+                            &crate::i18n::lit(NO_IMAGE_SENTENCE),
+                            TEXT_BODY,
+                            t.text_2,
+                        ))
+                        .wrap(),
+                    );
                 },
             );
         });
 }
 
+/// The gate note's words for `gate` in the language of `tr`: the shared wording of
+/// [`ai_gate::reason_in`] for this screen's feature.
+#[must_use]
+pub fn gate_line_in(gate: &Gate, tr: &Tr) -> Option<String> {
+    ai_gate::reason_in(Feature::BillReading, gate, tr)
+}
+
 /// The right column: the note with its AI and privacy button, then the purchase form.
-fn draw_right(ui: &mut Ui, gate: &Gate, notice: Option<&str>) -> Ask {
+fn draw_right(ui: &mut Ui, gate: &Gate, notice: Option<&str>, tr: &Tr) -> Ask {
     let mut asked = Ask::Nothing;
-    if ai_gate::gate_note(ui, Feature::BillReading, gate) {
+    if ai_gate::gate_note_in(ui, Feature::BillReading, gate, tr) {
         asked = Ask::Settings;
     }
     if let Some(line) = notice {
@@ -164,7 +179,14 @@ fn draw_right(ui: &mut Ui, gate: &Gate, notice: Option<&str>) -> Ask {
     }
     ui.add_space(12.0);
     ui.horizontal(|ui| {
-        if button(ui, "Purchase", Some("F9"), ButtonKind::Primary).clicked() {
+        if button(
+            ui,
+            &crate::i18n::lit("Purchase"),
+            Some("F9"),
+            ButtonKind::Primary,
+        )
+        .clicked()
+        {
             asked = Ask::Purchase;
         }
     });
@@ -172,29 +194,29 @@ fn draw_right(ui: &mut Ui, gate: &Gate, notice: Option<&str>) -> Ask {
 }
 
 impl Screen for PurchaseBillScreen {
-    fn title(&self) -> String {
-        TITLE.to_owned()
+    fn title(&self, _tr: &Tr) -> String {
+        crate::i18n::lit(TITLE)
     }
 
-    fn page_title(&self) -> String {
-        PAGE_TITLE.to_owned()
+    fn page_title(&self, _tr: &Tr) -> String {
+        crate::i18n::lit(PAGE_TITLE)
     }
 
     /// The sidebar keeps Purchase selected, as the mock does (index.html:1422: the crumbs run
     /// Home, Purchase, From bill photo).
-    fn sidebar_title(&self) -> String {
-        SIDEBAR_TITLE.to_owned()
+    fn sidebar_title(&self, _tr: &Tr) -> String {
+        crate::i18n::lit(SIDEBAR_TITLE)
     }
 
-    fn key_bar_name(&self) -> String {
-        KEY_BAR_NAME.to_owned()
+    fn key_bar_name(&self, _tr: &Tr) -> String {
+        crate::i18n::lit(KEY_BAR_NAME)
     }
 
-    fn subtitle(&self) -> Option<String> {
-        Some(SUBTITLE.to_owned())
+    fn subtitle(&self, _tr: &Tr) -> Option<String> {
+        Some(crate::i18n::lit(SUBTITLE))
     }
 
-    fn keys(&self) -> Vec<KeyHint> {
+    fn keys(&self, _tr: &Tr) -> Vec<KeyHint> {
         key_hints()
     }
 
@@ -205,13 +227,18 @@ impl Screen for PurchaseBillScreen {
             return self.opened(ai_gate::open_voucher(Action::NewPurchase, ctx));
         }
 
-        page_head(ui, PAGE_TITLE, Some(SUBTITLE), |_| {});
+        page_head(
+            ui,
+            &crate::i18n::lit(PAGE_TITLE),
+            Some(&crate::i18n::lit(SUBTITLE)),
+            |_| {},
+        );
         let notice = self.notice.clone();
         let mut asked = Ask::Nothing;
         ui.horizontal_top(|ui| {
             ui.spacing_mut().item_spacing.x = COLUMN_GAP;
             draw_image(ui);
-            ui.vertical(|ui| asked = draw_right(ui, &gate, notice.as_deref()));
+            ui.vertical(|ui| asked = draw_right(ui, &gate, notice.as_deref(), &ctx.tr));
         });
         match asked {
             Ask::Nothing => ScreenAction::Stay,

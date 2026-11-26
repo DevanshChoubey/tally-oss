@@ -30,15 +30,19 @@ const HATCH_STEP: f32 = 10.0;
 pub(super) fn show(ui: &mut Ui, chart: Option<&Chart>) {
     card(ui, |ui| match chart {
         Some(Chart::Bars { bars, caption }) => {
-            title_row(ui, "Sales by month, before GST", Some(caption));
+            title_row(
+                ui,
+                &crate::i18n::lit("Sales by month, before GST"),
+                Some(caption),
+            );
             draw_bars(ui, bars);
         }
         Some(Chart::Unsupported(reason)) => {
-            title_row(ui, "Sales by month, before GST", None);
+            title_row(ui, &crate::i18n::lit("Sales by month, before GST"), None);
             note(ui, NoteKind::Info, &format!("Not supported yet. {reason}"));
         }
         None => {
-            title_row(ui, "Sales by month, before GST", None);
+            title_row(ui, &crate::i18n::lit("Sales by month, before GST"), None);
             note(
                 ui,
                 NoteKind::Info,

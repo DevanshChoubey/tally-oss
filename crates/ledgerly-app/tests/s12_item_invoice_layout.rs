@@ -17,6 +17,7 @@
     reason = "test code: rule B2 lets tests unwrap and panic"
 )]
 
+use ledgerly_app::i18n::Tr;
 use std::collections::BTreeMap;
 
 use egui::{Pos2, RawInput, Rect, Vec2};
@@ -205,6 +206,7 @@ fn texts_of(shapes: &[egui::epaint::ClippedShape]) -> Vec<String> {
 /// Draws the screen a few times in a 1280 by 800 window and returns every text of the last frame.
 fn draw(s: &mut ItemInvoiceScreen, b: &Books) -> Vec<String> {
     let mut app = AppCtx {
+        tr: ledgerly_app::i18n::Tr::default(),
         books: Some(b.clone()),
         api: None,
         lock_date: None,
@@ -399,20 +401,20 @@ fn a_purchase_and_a_note_are_titled_as_the_mock_titles_them() {
     // (`<title> CN/0007`); the sales invoice keeps "Sales invoice" (the voucher type's name
     // here is the data; the mock writes "Credit note" in sentence case, ours keeps the master's).
     let b = books();
-    assert_eq!(open(&b, T_PURCHASE).title(), "Purchase");
-    assert_eq!(open(&b, T_CREDIT).title(), "Credit Note");
-    assert_eq!(open(&b, T_SALES).title(), "Sales invoice");
-    let purchase = open(&b, T_PURCHASE).subtitle().unwrap();
+    assert_eq!(open(&b, T_PURCHASE).title(&Tr::default()), "Purchase");
+    assert_eq!(open(&b, T_CREDIT).title(&Tr::default()), "Credit Note");
+    assert_eq!(open(&b, T_SALES).title(&Tr::default()), "Sales invoice");
+    let purchase = open(&b, T_PURCHASE).subtitle(&Tr::default()).unwrap();
     assert_eq!(
         purchase,
         "Typed by hand \u{b7} no bill reader \u{b7} tax is recomputed by the GST engine on every keystroke"
     );
     assert_eq!(
-        open(&b, T_CREDIT).subtitle().unwrap(),
+        open(&b, T_CREDIT).subtitle(&Tr::default()).unwrap(),
         "Credit note, CGST Act s.34(1): reduces the tax on an invoice already issued"
     );
     assert_eq!(
-        open(&b, T_DEBIT).subtitle().unwrap(),
+        open(&b, T_DEBIT).subtitle(&Tr::default()).unwrap(),
         "Debit note, purchase return: reduces what you owe the supplier"
     );
 }
@@ -487,6 +489,7 @@ fn alt_o_on_a_purchase_opens_the_bill_screen_and_does_nothing_on_a_sale() {
         ..RawInput::default()
     };
     let mut app = AppCtx {
+        tr: ledgerly_app::i18n::Tr::default(),
         books: Some(b.clone()),
         api: None,
         lock_date: None,

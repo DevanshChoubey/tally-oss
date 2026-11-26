@@ -209,6 +209,16 @@ fn place_order(report: &ViewReport) -> Vec<Place> {
     out
 }
 
+/// `name` in the current language. "Open" is the open balance of a bill here, not the verb the
+/// Open key has, so it has its own entry.
+fn heading_words(name: &str) -> String {
+    if name == "Open" {
+        crate::i18n::t("report.col.open")
+    } else {
+        crate::i18n::lit(name)
+    }
+}
+
 /// The heading drawn over column `i`: the engine's, except where the mock names it shorter.
 fn column_heading<'a>(report: &ViewReport, name: &'a str) -> &'a str {
     if is_ledger_report(report) {
@@ -280,6 +290,11 @@ pub fn column_cell_text(heading: &str, cell: &ViewCell) -> String {
 /// (see [`line_name`]); a long reason in the cell was cut off where the figure belongs.
 fn drawn_cell_text(heading: &str, cell: &ViewCell) -> String {
     match cell {
+        // The fixed words a report writes in a cell (an ageing bucket, a status) are translated;
+        // any other text is the company's data and is shown as it is.
+        ViewCell::Text(text) if fixed_words(text).is_some() => {
+            fixed_words(text).unwrap_or_default()
+        }
         // The mock writes a date as "15 Sep 2026" (`fmtDate`), not as the export's 15-Sep-2026.
         ViewCell::Date(d) => crate::ui::format::date(*d),
         ViewCell::Provisional { amount, .. } => {
@@ -291,6 +306,85 @@ fn drawn_cell_text(heading: &str, cell: &ViewCell) -> String {
         | ViewCell::Text(_)
         | ViewCell::Empty
         | ViewCell::Unsupported(_) => column_cell_text(heading, cell),
+    }
+}
+
+/// The words a report's own code writes in a cell. Everything else in a text cell is the
+/// company's data (a party, a narration) and is never translated.
+const FIXED_CELL_WORDS: &[&str] = &[
+    "Not yet due",
+    "Overdue",
+    "No due date",
+    "Due today",
+    "0-30 days",
+    "31-60 days",
+    "61-90 days",
+    "Over 90 days",
+    "Pending",
+    "PASS",
+    "FAIL",
+    "none",
+    "Typed",
+    "Not available",
+];
+
+/// The rows the engine names itself, whatever their kind: the profit and stock rows.
+const RESERVED_ROWS: &[&str] = &[
+    "Profit and Loss A/c",
+    "Closing stock",
+    "Opening stock",
+    "Gross profit",
+    "Net profit",
+    "Gross profit b/f",
+    "Gross profit c/o",
+    "Net profit c/o",
+];
+
+/// `text` in the current language when it is one of the words a report's own code writes: a
+/// fixed word, or the count line the outstanding bills' total carries ("7 open bills").
+pub(super) fn fixed_words(text: &str) -> Option<String> {
+    if FIXED_CELL_WORDS.contains(&text) || RESERVED_ROWS.contains(&text) || text == "Total" {
+        return Some(crate::i18n::lit(text));
+    }
+    if let Some(date) = english_date(text) {
+        return Some(date);
+    }
+    let count = text.strip_suffix(" open bills")?;
+    count
+        .chars()
+        .all(|c| c.is_ascii_digit())
+        .then(|| crate::i18n::tf("report.open_bills", &[("n", count)]))
+}
+
+/// `text` written in the current language when it is a date as the English mock writes it
+/// (`20 Oct 2026`), which the outstanding bills' text cells carry.
+fn english_date(text: &str) -> Option<String> {
+    let mut parts = text.split(' ');
+    let (day, month, year) = (parts.next()?, parts.next()?, parts.next()?);
+    if parts.next().is_some() {
+        return None;
+    }
+    let month = crate::ui::format::month_from_abbrev(month)?;
+    let date = time::Date::from_calendar_date(year.parse().ok()?, month, day.parse().ok()?).ok()?;
+    let shown = crate::ui::format::date(date);
+    (shown != text).then_some(shown)
+}
+
+/// The label of `row`: the words of a total, a subtotal or a note are the report's own and are
+/// translated; a group, ledger, voucher, item or bill label is the company's data.
+pub(super) fn row_label(row: &ViewRow) -> String {
+    if RESERVED_ROWS.contains(&row.label.as_str()) {
+        return crate::i18n::lit(&row.label);
+    }
+    match row.kind {
+        ViewRowKind::Subtotal | ViewRowKind::Text | ViewRowKind::Difference => {
+            crate::i18n::lit(&row.label)
+        }
+        ViewRowKind::Group
+        | ViewRowKind::Ledger
+        | ViewRowKind::Voucher
+        | ViewRowKind::Item
+        | ViewRowKind::Bill => row.label.clone(),
     }
 }
 
@@ -431,7 +525,7 @@ pub(super) fn draw_certificate(ui: &mut Ui, report: &ViewReport) -> Drawn {
     let lines = certificate_lines(report);
     crate::ui::card::card(ui, |ui| {
         ui.set_min_width(ui.available_width());
-        crate::ui::mock_table::panel_title(ui, None, "Integrity certificate");
+        crate::ui::mock_table::panel_title(ui, None, &crate::i18n::lit("Integrity certificate"));
         ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
         let width = ui.available_width();
         let value_left = (width * 0.5).floor();
@@ -442,6 +536,8 @@ pub(super) fn draw_certificate(ui: &mut Ui, report: &ViewReport) -> Drawn {
             } else {
                 egui::FontId::proportional(TEXT_BODY)
             };
+            let value = &fixed_words(value).unwrap_or_else(|| value.clone());
+            let what = &crate::i18n::lit(what);
             let galley = ui.painter().layout(
                 value.clone(),
                 font,
@@ -682,15 +778,15 @@ fn paint_heading(ui: &Ui, rect: Rect, cols: &Columns, label: &str, report: &View
         ui,
         cols.label(rect),
         1.0,
-        label,
+        &crate::i18n::lit(label),
         font.clone(),
         t.text_3,
         CellPlace::Left(table::CELL_PAD_X),
     );
     for (i, name) in report.columns.iter().enumerate() {
         if let Some((cell_rect, place)) = cols.cell(rect, i) {
-            let name = column_heading(report, name);
-            table::paint_cell_text(ui, cell_rect, 1.0, name, font.clone(), t.text_3, place);
+            let name = heading_words(column_heading(report, name));
+            table::paint_cell_text(ui, cell_rect, 1.0, &name, font.clone(), t.text_3, place);
         }
     }
 }
@@ -712,18 +808,19 @@ fn paint_line(
     } else {
         egui::FontId::proportional(TEXT_BODY)
     };
+    let label = row_label(row);
     table::paint_cell_text(
         ui,
         cols.label_of(rect, row),
         1.0,
-        &row.label,
+        &label,
         font.clone(),
         t.text,
         CellPlace::Left(table::indent(row.depth)),
     );
     let label_end = table::indent(row.depth)
         + ui.painter()
-            .layout_no_wrap(row.label.clone(), font.clone(), t.text)
+            .layout_no_wrap(label.clone(), font.clone(), t.text)
             .size()
             .x;
     let particulars = match row.cells.get(1) {
@@ -780,22 +877,22 @@ fn paint_total(ui: &Ui, rect: Rect, cols: &Columns, headings: &[String], totals:
     // index.html `stockScreen`: the stock summary's total reads "Total closing stock" with the
     // engine's tag, the figure being the stock engine's.
     let stock = headings.iter().any(|h| h == "Cost Dr");
-    let label = if stock {
+    let label = crate::i18n::lit(if stock {
         "Total closing stock"
     } else {
         "Total"
-    };
+    });
     table::paint_cell_text(
         ui,
         cols.label(rect),
         3.0,
-        label,
+        &label,
         font.clone(),
         t.text,
         CellPlace::Left(table::CELL_PAD_X),
     );
     if stock {
-        table::paint_engine_tag(ui, cols.label(rect), label, &font);
+        table::paint_engine_tag(ui, cols.label(rect), &label, &font);
     }
     let marks = LineMarks {
         rect,

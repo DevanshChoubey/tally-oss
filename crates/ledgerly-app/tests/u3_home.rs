@@ -263,7 +263,10 @@ fn latest_request_wins_and_set_data_keeps_it() {
 
 #[test]
 fn title_is_home() {
-    assert_eq!(HomeScreen::default().title(), "Home");
+    assert_eq!(
+        HomeScreen::default().title(&ledgerly_app::i18n::Tr::default()),
+        "Home"
+    );
 }
 
 #[test]

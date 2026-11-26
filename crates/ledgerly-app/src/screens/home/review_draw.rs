@@ -23,8 +23,6 @@ const CONF_WIDTH: f32 = 124.0;
 const AMOUNT_WIDTH: f32 = 96.0;
 /// Width of one confidence bar and the gap between bars.
 const BAR: (f32, f32, f32) = (5.0, 12.0, 2.0);
-/// The line under the rows, as the mock says it.
-const FOOTER: &str = "Every row is a proposal. Nothing posts until you accept it. Amounts are recomputed by the engine.";
 
 /// Draws the card. `selected` is the highlighted row; `chosen` gets the queue when a row or the
 /// heading link is clicked.
@@ -37,28 +35,31 @@ pub(super) fn show(
     let t = tokens(ui);
     card(ui, |ui| {
         let Some(panel) = review.panel else {
-            title_row(ui, "Waiting for your review", None);
+            title_row(ui, &crate::i18n::t("home.waiting_review"), None);
             match review.error {
                 Some(error) => note(ui, NoteKind::Bad, error),
-                None => note(ui, NoteKind::Info, "Loading the proposals from the engine."),
+                None => note(
+                    ui,
+                    NoteKind::Info,
+                    &crate::i18n::t("home.loading_proposals"),
+                ),
             };
             return;
         };
-        let count = panel.count.map(|n| format!("All {n}"));
-        let label = count.as_deref().unwrap_or("Review queue");
+        let count = panel
+            .count
+            .map(|n| crate::i18n::tf("home.all_count", &[("count", &n.to_string())]));
+        let queue_label = crate::i18n::t("home.review_queue");
+        let label = count.as_deref().unwrap_or(&queue_label);
         let mut all = false;
-        title_row_with(ui, "Waiting for your review", |ui| {
+        title_row_with(ui, &crate::i18n::t("home.waiting_review"), |ui| {
             all = ghost(ui, label, true).clicked();
         });
         if all {
             *chosen = Some(HomeTarget::ReviewQueue);
         }
         if panel.rows.is_empty() {
-            note(
-                ui,
-                NoteKind::Info,
-                "No proposal is waiting from the connected sources.",
-            );
+            note(ui, NoteKind::Info, &crate::i18n::t("home.no_proposal"));
         }
         for (i, row) in panel.rows.iter().take(super::REVIEW_ROWS).enumerate() {
             if proposal_row(ui, row, i == selected).clicked() {
@@ -69,16 +70,16 @@ pub(super) fn show(
             ui.add_space(SPACE_2);
             para(
                 ui,
-                &format!(
-                    "{} sources are not connected yet, so their proposals are not listed. The Review queue says which.",
-                    panel.not_connected.len()
+                &crate::i18n::tf(
+                    "home.sources_not_connected",
+                    &[("count", &panel.not_connected.len().to_string())],
                 ),
                 TEXT_META,
                 t.text_3,
             );
         }
         ui.add_space(SPACE_2);
-        para(ui, FOOTER, TEXT_META, t.text_3);
+        para(ui, &crate::i18n::t("home.every_row"), TEXT_META, t.text_3);
     });
 }
 
@@ -102,10 +103,11 @@ fn confidence(ui: &mut Ui, level: Confidence) {
             ui.painter().rect_filled(bar, CornerRadius::same(1), color);
         }
         let word = match level {
-            Confidence::Rule => conf::word(level).to_owned(),
-            Confidence::High | Confidence::Medium | Confidence::Low => {
-                format!("{} confidence", conf::word(level))
-            }
+            Confidence::Rule => conf::word_in(level, &crate::i18n::current()),
+            Confidence::High | Confidence::Medium | Confidence::Low => crate::i18n::tf(
+                "home.confidence",
+                &[("level", &conf::word_in(level, &crate::i18n::current()))],
+            ),
         };
         ui.add(
             egui::Label::new(
@@ -143,7 +145,7 @@ fn proposal_row(ui: &mut Ui, row: &QueueRow, selected: bool) -> egui::Response {
                     ui.spacing_mut().item_spacing.y = 1.0;
                     let mut job = LayoutJob::default();
                     job.append(
-                        row.kind,
+                        &row.kind,
                         0.0,
                         TextFormat::simple(bold_font(ui, TEXT_BODY), t.text),
                     );

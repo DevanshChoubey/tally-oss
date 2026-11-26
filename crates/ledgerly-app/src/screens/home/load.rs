@@ -8,6 +8,7 @@ use super::Kpi;
 use super::chart::{self, Chart};
 use super::kpi;
 use super::nudge::{self, Nudge};
+use crate::i18n::Tr;
 
 /// The answer to one refresh.
 #[derive(Debug, Clone)]
@@ -25,7 +26,7 @@ pub(super) struct HomeLoad {
 }
 
 /// Reads everything Home shows for `as_of`, with the nudges as of `today`.
-pub(super) fn home_load(api: &Api, as_of: Date, today: Date) -> HomeLoad {
+pub(super) fn home_load(api: &Api, as_of: Date, today: Date, tr: &Tr) -> HomeLoad {
     let figures = kpi::figures_or_failed(api, as_of);
     let found = api.home_nudges(today).unwrap_or_else(|e| HomeNudges {
         gstr1: None,
@@ -50,15 +51,15 @@ pub(super) fn home_load(api: &Api, as_of: Date, today: Date) -> HomeLoad {
         Ok(g) => g.ims_no_action,
         Err(e) => Outcome::unsupported("IMS", format!("the 2B file could not be read: {e}")),
     };
-    let mut nudges = nudge::nudges(&figures, &found);
-    if let Some(card) = nudge::ims_nudge(&ims) {
+    let mut nudges = nudge::nudges_in(&figures, &found, tr);
+    if let Some(card) = nudge::ims_nudge_in(&ims, tr) {
         // The mock's order: GSTR-1, then IMS, then the rest.
         let at = usize::from(found.gstr1.is_some()).min(nudges.len());
         nudges.insert(at, card);
     }
     HomeLoad {
         kpis: kpi::tiles(&figures, &gst_cash, as_of),
-        chart: chart::chart_of(&figures.sales_by_month),
+        chart: chart::chart_of_in(&figures.sales_by_month, tr),
         nudges,
         duplicates,
         user_name: api.actor_name().unwrap_or(None),

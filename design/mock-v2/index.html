@@ -368,6 +368,14 @@ mark{background:var(--accent-soft);color:var(--accent-ink);border-radius:2px;pad
 "ready": "document.documentElement.dataset.ready === '1'",
 "states": [
  {"id":"home.default","kind":"happy","hash":"screen=home&state=default","title":"Home","description":"Dashboard: engine KPIs, plain-words entry bar, review queue and rule-based nudges."},
+ {"id":"hi.home.default","kind":"happy","hash":"screen=home&state=default&lang=hi","title":"Home, Hindi","description":"The default Home with every word the app translates shown in Hindi; figures, dates and digit grouping unchanged."},
+ {"id":"hi.sales-invoice.default","kind":"happy","hash":"screen=sales-invoice&state=default&lang=hi","title":"Sales invoice, Hindi","description":"The intra-state item invoice in Hindi."},
+ {"id":"hi.sales-invoice.print-preview","kind":"happy","hash":"screen=sales-invoice&state=print-preview&lang=hi","title":"Sales invoice, print preview, Hindi","description":"The print preview chrome in Hindi; the printed page stays English (the PDF font is Latin-only)."},
+ {"id":"hi.masters.ledgers","kind":"happy","hash":"screen=masters&state=ledgers&lang=hi","title":"Masters, ledgers, Hindi","description":"The ledger list in Hindi."},
+ {"id":"hi.balance-sheet.default","kind":"happy","hash":"screen=balance-sheet&state=default&lang=hi","title":"Balance sheet, Hindi","description":"The balance sheet in Hindi; Dr and Cr stay as the books write them."},
+ {"id":"hi.gst.gstr1","kind":"happy","hash":"screen=gst&state=gstr1&lang=hi","title":"GSTR-1, Hindi","description":"GSTR-1 in Hindi; return names and table numbers stay as the portal writes them."},
+ {"id":"hi.bank.default","kind":"happy","hash":"screen=bank&state=default&lang=hi","title":"Bank reconciliation, Hindi","description":"The bank reconciliation screen in Hindi."},
+ {"id":"hi.setup.welcome","kind":"happy","hash":"screen=setup&state=welcome&lang=hi","title":"First run, welcome, Hindi","description":"The welcome screen in Hindi."},
  {"id":"home.loading","kind":"loading","hash":"screen=home&state=loading","title":"Home, company opening","description":"Skeleton rows while the company file opens and projections load; no figure is shown until the engine returns it."},
  {"id":"home.empty","kind":"empty","hash":"screen=home&state=empty","title":"Home, new company","description":"A new company with no vouchers: first steps instead of zero-filled KPIs."},
  {"id":"home.ai-off","kind":"offline-ai","hash":"screen=home&state=ai-off","title":"Home, AI off","description":"AI tier Off: no AI cards or entry bar, rule-based nudges still shown, top bar says AI off."},
@@ -540,6 +548,7 @@ mark{background:var(--accent-soft);color:var(--accent-ink);border-radius:2px;pad
 ]
 }
 </script>
+<script src="hi.js"></script>
 <script>
 let SCREENS;
 /* =====================================================================
@@ -956,7 +965,7 @@ const skelRows = (n,w) => Array.from({length:n},(_,i)=>`<div class="skel" style=
 /* ---------- params, theme, AI tier ---------- */
 function parseHash(){const h=location.hash.replace(/^#/,'');const p={};for(const kv of h.split('&')){if(!kv)continue;const i=kv.indexOf('=');const k=i<0?kv:kv.slice(0,i);try{p[k]=i<0?'':decodeURIComponent(kv.slice(i+1))}catch(e){p[k]=kv.slice(i+1)}}return p}
 const buildHash = p => Object.entries(p).filter(([,v])=>v!=null&&v!=='').map(([k,v])=>k+'='+encodeURIComponent(v).replace(/%20/g,'%20')).join('&');
-function hashFor(screen,state,extra){const p={screen};if(state)p.state=state;Object.assign(p,extra||{});const cur=parseHash();if(cur.theme)p.theme=cur.theme;return buildHash(p)}
+function hashFor(screen,state,extra){const p={screen};if(state)p.state=state;Object.assign(p,extra||{});const cur=parseHash();if(cur.theme)p.theme=cur.theme;if(cur.lang)p.lang=cur.lang;return buildHash(p)}
 const readFreeze = ()=>{const m=/[?&]freeze=(\d+)/.exec(location.search)||/[#&]freeze=(\d+)/.exec(location.hash);return m?+m[1]:null};
 let FREEZE = readFreeze();
 function resolveTheme(p){const t=p.theme||store.get('ledgerly.theme')||'system';if(t==='system')return matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';return ['light','dark','hc'].includes(t)?t:'light'}
@@ -1023,6 +1032,19 @@ function go(hash,tx){pendingTx=tx||null;const h=hash.replace(/^#/,'');if(locatio
 function back(){const p=parseHash();const def=SCREENS[p.screen]||SCREENS.home;const st=p.state||def.default;const b=def.back?def.back(st,p):hashFor('home');
   if(p.screen==='palette'){animateThen('palette-close',()=>go(b));return}
   go(b,def.backTx?def.backTx(st):'screen-pop')}
+/* ---------- Hindi (lang=hi): whole text nodes and attributes the app translates, and dates ---------- */
+function translateDom(lang){
+  document.documentElement.lang=lang==='hi'?'hi':'en';
+  if(lang!=='hi'||!window.HI)return;
+  const W=window.HI.words,M=window.HI.months,F=window.HI.full;
+  const mon=Object.keys(M).join('|'),fulls=Object.keys(F).join('|');
+  const dre=new RegExp('\\b(\\d{1,2}) ('+mon+') (\\d{4})\\b','g'),mre=new RegExp('\\b('+fulls+')\\b','g');
+  const tr=t=>{const k=t.trim();if(!k)return t;if(W[k])return t.replace(k,W[k]);
+    return t.replace(dre,(m,d,mo,y)=>d+' '+(M[mo]||mo)+' '+y).replace(mre,m=>F[m]||m)};
+  const w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);let n;
+  while((n=w.nextNode())){if(n.parentNode&&/^(SCRIPT|STYLE)$/.test(n.parentNode.nodeName))continue;const v=tr(n.nodeValue);if(v!==n.nodeValue)n.nodeValue=v}
+  for(const el of document.querySelectorAll('[title],[placeholder],[aria-label]'))for(const a of['title','placeholder','aria-label']){const v=el.getAttribute(a);if(v){const t=tr(v);if(t!==v)el.setAttribute(a,t)}}
+}
 function render(){
   FREEZE=readFreeze();
   const p=parseHash(); if(!SCREENS[p.screen])p.screen=p.screen==='palette'?'palette':'home';
@@ -1041,6 +1063,7 @@ function render(){
   const tx=p.tx||pendingTx; pendingTx=null;
   if(tx&&TX[tx]){ if(FREEZE!=null||p.tx){applyTx(tx,FREEZE)} else applyTx(tx,null);
     if(p.tx&&FREEZE==null&&TX[tx].render==='start'){const els=$$(TX[tx].targets[0].selector);if(els[0])els[0].addEventListener('animationend',()=>go(TX[tx].end),{once:true})} }
+  translateDom(p.lang);
   document.title=`Ledgerly · ${(REG.states.find(s=>s.hash===buildHash({screen:p.screen,state:p.state,base:p.base,query:p.query}))||{title:def.title||'mock'}).title}`;
   const ready=()=>{document.documentElement.dataset.ready='1'};
   document.documentElement.dataset.ready='0';

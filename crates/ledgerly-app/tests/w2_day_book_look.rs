@@ -175,7 +175,10 @@ fn the_key_bar_reads_like_the_mocks() {
     .iter()
     .map(|(k, l)| ((*k).to_owned(), (*l).to_owned()))
     .collect();
-    assert_eq!(pairs(&day_book_screen().keys()), expected);
+    assert_eq!(
+        pairs(&day_book_screen().keys(&ledgerly_app::i18n::Tr::default())),
+        expected
+    );
 }
 
 fn press(key: Key, modifiers: Modifiers) -> RawInput {

@@ -7,6 +7,7 @@
 //! that no [`Action`] exists for (Alt+R, Ctrl+H, Ctrl+J, Alt+O and the list and proposal keys)
 //! are not shown: nothing in the app can say what they do.
 
+use crate::i18n::Tr;
 use egui::{Key, Modifiers, RichText, Ui};
 
 use super::wire;
@@ -154,7 +155,11 @@ fn chord_keys(ui: &mut Ui, keymap: &Keymap, action: Action) {
     let chords = keymap.chords(action);
     if chords.is_empty() {
         let t = tokens(ui);
-        ui.label(RichText::new("No key yet").size(TEXT_META).color(t.text_3));
+        ui.label(
+            RichText::new(crate::i18n::t("keymap.no_key"))
+                .size(TEXT_META)
+                .color(t.text_3),
+        );
         return;
     }
     for chord in chords {
@@ -171,7 +176,11 @@ const KEYS_WIDTH: f32 = 120.0;
 fn group_ui(ui: &mut Ui, group: &KeyGroup, keymap: &Keymap, t: &Tokens) {
     ui.set_width(ui.available_width());
     let heading = bold_font(ui, TEXT_H3);
-    ui.label(RichText::new(group.title).font(heading).color(t.text));
+    ui.label(
+        RichText::new(crate::i18n::lit(group.title))
+            .font(heading)
+            .color(t.text),
+    );
     ui.add_space(SPACE_2);
     for row in &group.rows {
         ui.horizontal_top(|ui| {
@@ -184,7 +193,7 @@ fn group_ui(ui: &mut Ui, group: &KeyGroup, keymap: &Keymap, t: &Tokens) {
                 },
             );
             ui.add_space(SPACE_3);
-            crate::ui::para(ui, row.label, TEXT_BODY, t.text);
+            crate::ui::para(ui, &crate::i18n::lit(row.label), TEXT_BODY, t.text);
         });
         ui.add_space(SPACE_2);
     }
@@ -207,26 +216,26 @@ impl KeymapScreen {
 }
 
 impl Screen for KeymapScreen {
-    fn title(&self) -> String {
-        "Keyboard map".to_owned()
+    fn title(&self, tr: &Tr) -> String {
+        tr.t("sidebar.keymap")
     }
 
-    fn subtitle(&self) -> Option<String> {
-        Some(
-            "Every action has a key. The bar at the bottom always shows the keys for this screen."
-                .to_owned(),
-        )
+    fn subtitle(&self, tr: &Tr) -> Option<String> {
+        Some(tr.t("keymap.subtitle"))
     }
 
-    fn keys(&self) -> Vec<KeyHint> {
-        vec![KeyHint::new("1", "Classic"), KeyHint::new("2", "Standard")]
+    fn keys(&self, tr: &Tr) -> Vec<KeyHint> {
+        vec![
+            KeyHint::new("1", tr.t("keymap.classic")),
+            KeyHint::new("2", tr.t("keymap.standard")),
+        ]
     }
 
     #[allow(
         clippy::too_many_lines,
         reason = "one screen's layout, read top to bottom"
     )]
-    fn ui(&mut self, ui: &mut Ui, _ctx: &mut AppCtx) -> ScreenAction {
+    fn ui(&mut self, ui: &mut Ui, ctx: &mut AppCtx) -> ScreenAction {
         let id = ui.scope_id().with(VIEW_SALT);
         let t = tokens(ui);
         let mut view: usize = ui.ctx().data(|d| d.get_temp::<usize>(id)).unwrap_or(0);
@@ -244,11 +253,15 @@ impl Screen for KeymapScreen {
             view = index;
         }
 
-        let title = self.title();
-        let subtitle = self.subtitle();
+        let title = self.title(&ctx.tr);
+        let subtitle = self.subtitle(&ctx.tr);
         // index.html:1845: the two presets are tabs at the right of the head, each with its key,
         // and no rule under them.
-        let items = [(TAB_LABELS[0], "1"), (TAB_LABELS[1], "2")];
+        let tab_names = [
+            crate::i18n::lit(TAB_LABELS[0]),
+            crate::i18n::lit(TAB_LABELS[1]),
+        ];
+        let items = [(tab_names[0].as_str(), "1"), (tab_names[1].as_str(), "2")];
         let mut clicked = None;
         page_head(ui, &title, subtitle.as_deref(), |ui| {
             let size = egui::vec2(tab_strip_with_keys_width(ui, &items), ui.available_height());
@@ -279,18 +292,20 @@ impl Screen for KeymapScreen {
                 return ScreenAction::Stay;
             }
         };
-        let note = if shown_name == keymap::DEFAULT_PRESET {
+        let note = crate::i18n::lit(if shown_name == keymap::DEFAULT_PRESET {
             CLASSIC_NOTE
         } else {
             STANDARD_NOTE
-        };
+        });
         // `p.meta` (index.html:1846): 12 point, the tertiary colour.
-        crate::ui::para(ui, note, TEXT_META, t.text_3);
+        crate::ui::para(ui, &note, TEXT_META, t.text_3);
         ui.label(
-            RichText::new(format!(
-                "Keys in use now: {}. Changing the preset is not available yet; this map shows {} for reference.",
-                tab_label(keymap::DEFAULT_PRESET),
-                tab_label(shown_name)
+            RichText::new(ctx.tr.tf(
+                "keymap.in_use",
+                &[
+                    ("now", &crate::i18n::lit(tab_label(keymap::DEFAULT_PRESET))),
+                    ("shown", &crate::i18n::lit(tab_label(shown_name))),
+                ],
             ))
             .size(TEXT_META)
             .color(t.text_3),

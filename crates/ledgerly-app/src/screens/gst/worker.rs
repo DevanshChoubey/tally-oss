@@ -150,15 +150,13 @@ impl GstScreen {
     #[must_use]
     pub fn export_blocked_reason(&self) -> Option<String> {
         if self.tab != GstTab::Gstr1 {
-            return Some(
-                "GSTR-1 JSON is exported from the GSTR-1 tab. Press 1 to open it.".to_owned(),
-            );
+            return Some(self.tr.t("gst.blocked.tab"));
         }
         if self.run.scope.is_none() {
-            return Some("No return is loaded, so there is no JSON to export.".to_owned());
+            return Some(self.tr.t("gst.blocked.no_return"));
         }
         match &self.gstr1 {
-            Feed::NotLoaded => Some("GSTR-1 is still loading, so there is no JSON yet.".to_owned()),
+            Feed::NotLoaded => Some(self.tr.t("gst.blocked.loading")),
             Feed::Unsupported(u) => Some(unsupported_text(u)),
             Feed::Loaded(_) => None,
         }
@@ -415,9 +413,9 @@ impl GstScreen {
                 Some(match ret.taxable_vs_gstr3b(working) {
                     Ok(Outcome::Value(a)) => super::look::agreement_text(&a),
                     Ok(Outcome::Unsupported(u)) => {
-                        format!("Not compared with GSTR-3B table 3.1(a): {}.", u.reason)
+                        crate::i18n::tf("gst.agreement.unsupported", &[("reason", &u.reason)])
                     }
-                    Err(e) => format!("Not compared with GSTR-3B table 3.1(a): {e}."),
+                    Err(e) => crate::i18n::tf("gst.agreement.error", &[("error", &e.to_string())]),
                 })
             }
             _ => None,

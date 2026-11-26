@@ -122,21 +122,22 @@ impl Section {
         }
     }
 
-    /// The heading text, in the app's own words.
+    /// The heading in `tr`.
     #[must_use]
-    pub(crate) fn label(self) -> &'static str {
-        match self {
-            Section::Recent => "Recent",
-            Section::Prefixes => "Type a prefix",
-            Section::NoMatch => "No match",
-            Section::Reports => "Reports and screens",
-            Section::Ledgers => "Ledgers",
-            Section::Vouchers => "Vouchers",
-            Section::Commands => "Commands",
-            Section::Settings => "Settings",
-            Section::Ask => "Ask your books",
-            Section::Entry => "Entry in plain words",
-        }
+    pub(crate) fn label_in(self, tr: &crate::i18n::Tr) -> String {
+        let key = match self {
+            Section::Recent => "palette.section.recent",
+            Section::Prefixes => "palette.section.prefixes",
+            Section::NoMatch => "palette.section.no_match",
+            Section::Reports => "palette.section.reports",
+            Section::Ledgers => "palette.section.ledgers",
+            Section::Vouchers => "palette.section.vouchers",
+            Section::Commands => "palette.section.commands",
+            Section::Settings => "palette.section.settings",
+            Section::Ask => "palette.section.ask",
+            Section::Entry => "palette.section.entry",
+        };
+        tr.t(key)
     }
 }
 

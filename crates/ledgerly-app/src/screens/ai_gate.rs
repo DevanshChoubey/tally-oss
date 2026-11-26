@@ -20,6 +20,7 @@
 use egui::{FontId, Frame, Margin, Response, Sense, Stroke, StrokeKind, TextEdit, Ui, vec2};
 use ledgerly_api::AiTier;
 
+use crate::i18n::Tr;
 use crate::keymap::Action;
 use crate::palette::PaletteTarget;
 use crate::screens::wire::{Done, Latest};
@@ -83,66 +84,82 @@ impl Gate {
     }
 }
 
-/// What the feature cannot do, in the words that follow "so" in [`reason`].
-fn cannot(feature: Feature) -> &'static str {
-    match feature {
-        Feature::Ask => "questions cannot be turned into queries",
-        Feature::PlainWords => "a sentence cannot be drafted into a voucher",
-        Feature::BillReading => "a bill photo cannot be read",
-    }
+/// What the feature cannot do, in the words that follow "so" in [`reason_in`].
+fn cannot_in(feature: Feature, tr: &Tr) -> String {
+    tr.t(match feature {
+        Feature::Ask => "ai.gate.cannot.ask",
+        Feature::PlainWords => "ai.gate.cannot.plain_words",
+        Feature::BillReading => "ai.gate.cannot.bill",
+    })
 }
 
 /// What the user can do instead, the sentence after the reason.
-fn instead(feature: Feature) -> &'static str {
-    match feature {
-        Feature::Ask => "These reports answer most questions directly.",
-        Feature::PlainWords => "Type the voucher yourself in the payment or receipt form.",
-        Feature::BillReading => "Type the bill in the purchase form instead.",
-    }
+fn instead_in(feature: Feature, tr: &Tr) -> String {
+    tr.t(match feature {
+        Feature::Ask => "ai.gate.instead.ask",
+        Feature::PlainWords => "ai.gate.instead.plain_words",
+        Feature::BillReading => "ai.gate.instead.bill",
+    })
 }
 
 /// The screen's name, for the line shown when no company is open.
-fn screen_name(feature: Feature) -> &'static str {
-    match feature {
-        Feature::Ask => "ask about your books",
-        Feature::PlainWords => "enter a voucher in plain words",
-        Feature::BillReading => "read a bill photo",
-    }
+fn screen_name_in(feature: Feature, tr: &Tr) -> String {
+    tr.t(match feature {
+        Feature::Ask => "ai.gate.what.ask",
+        Feature::PlainWords => "ai.gate.what.plain_words",
+        Feature::BillReading => "ai.gate.what.bill",
+    })
 }
 
-/// The note a screen shows for `gate`: why the feature does not run, then what to do instead.
-/// `None` while the tier is still being read, so no tier is claimed before it is known.
+/// The note a screen shows for `gate`, in the words of `tr`: why the feature does not run, then
+/// what to do instead. `None` while the tier is still being read, so no tier is claimed before it
+/// is known.
 #[must_use]
-pub fn reason(feature: Feature, gate: &Gate) -> Option<String> {
-    let then = instead(feature);
-    let so = cannot(feature);
+pub fn reason_in(feature: Feature, gate: &Gate, tr: &Tr) -> Option<String> {
+    let cannot = cannot_in(feature, tr);
+    let instead = instead_in(feature, tr);
     let text = match gate {
         Gate::Reading => return None,
-        Gate::NoCompany => format!("Open a company file to {}.", screen_name(feature)),
-        Gate::Failed(why) => format!("The company's AI tier could not be read: {why}"),
+        Gate::NoCompany => tr.tf(
+            "ai.gate.no_company",
+            &[("what", screen_name_in(feature, tr).as_str())],
+        ),
+        Gate::Failed(why) => tr.tf("ai.gate.failed", &[("why", why.as_str())]),
         Gate::Off => match feature {
             // index.html:1430: the bill photo's own AI-off words.
-            Feature::BillReading => format!("Bill reading is off for this company. {then}"),
+            Feature::BillReading => tr.tf("ai.gate.bill_off", &[("instead", instead.as_str())]),
             // index.html:1169: Ask's AI-off words; plain-words entry says the same of itself.
-            Feature::Ask | Feature::PlainWords => {
-                format!("AI is off for this company, so {so}. {then}")
-            }
+            Feature::Ask | Feature::PlainWords => tr.tf(
+                "ai.gate.off",
+                &[("cannot", cannot.as_str()), ("instead", instead.as_str())],
+            ),
         },
-        Gate::Unset => format!("No AI tier is chosen for this company, so {so}. {then}"),
+        Gate::Unset => tr.tf(
+            "ai.gate.unset",
+            &[("cannot", cannot.as_str()), ("instead", instead.as_str())],
+        ),
         Gate::Local => match feature {
-            Feature::BillReading => {
-                format!("No bill reader is installed on this computer, so {so}. {then}")
-            }
-            Feature::Ask | Feature::PlainWords => {
-                format!("No local model is installed on this computer, so {so}. {then}")
-            }
+            Feature::BillReading => tr.tf(
+                "ai.gate.local_bill",
+                &[("cannot", cannot.as_str()), ("instead", instead.as_str())],
+            ),
+            Feature::Ask | Feature::PlainWords => tr.tf(
+                "ai.gate.local",
+                &[("cannot", cannot.as_str()), ("instead", instead.as_str())],
+            ),
         },
-        Gate::Cloud => format!(
-            "The cloud tier is not available in this build: the provider key must be kept in the \
-             system keychain, and no keychain store is wired in. So {so}. {then}"
+        Gate::Cloud => tr.tf(
+            "ai.gate.cloud",
+            &[("cannot", cannot.as_str()), ("instead", instead.as_str())],
         ),
     };
     Some(text)
+}
+
+/// The note a screen shows for `gate` in English: [`reason_in`] with the English file.
+#[must_use]
+pub fn reason(feature: Feature, gate: &Gate) -> Option<String> {
+    reason_in(feature, gate, &Tr::default())
 }
 
 /// Reads the company's AI tier through the worker, and again after any saved change (choosing a
@@ -181,9 +198,7 @@ impl TierGate {
             }
             Some(Done::Ready(Err(reason))) => self.read = Some(Err(reason)),
             Some(Done::Lost) => {
-                self.read = Some(Err(
-                    "the company file stopped responding; reopen the company file".to_owned(),
-                ));
+                self.read = Some(Err(ctx.tr.t("ai.gate.lost")));
             }
         }
         let stale = self.seen != Some(submit::change_count());
@@ -233,9 +248,6 @@ pub fn input_box(ui: &mut Ui, which: Icon, hint: &str) {
         });
 }
 
-/// The words on the button that opens AI and privacy (index.html:1169, 1430).
-pub const SETTINGS_BUTTON: &str = "AI and privacy";
-
 /// The note's icon for `gate` (the mock's `off` for AI off, index.html:1169).
 fn gate_icon(gate: &Gate) -> Icon {
     match gate {
@@ -245,11 +257,16 @@ fn gate_icon(gate: &Gate) -> Icon {
     }
 }
 
-/// Draws the note for `gate` across the width (`.note`, index.html:1169 and 1430): its icon, the
-/// reason and, when a tier was read, the AI and privacy button after the text. Draws nothing
-/// while the tier is being read. Returns `true` in the frame the button is clicked.
+/// Draws the note for `gate` in English: [`gate_note_in`] with the English file.
 pub fn gate_note(ui: &mut Ui, feature: Feature, gate: &Gate) -> bool {
-    let Some(text) = reason(feature, gate) else {
+    gate_note_in(ui, feature, gate, &Tr::default())
+}
+
+/// Draws the note for `gate` across the width (`.note`, index.html:1169 and 1430) in the words of
+/// `tr`: its icon, the reason and, when a tier was read, the AI and privacy button after the text.
+/// Draws nothing while the tier is being read. Returns `true` in the frame the button is clicked.
+pub fn gate_note_in(ui: &mut Ui, feature: Feature, gate: &Gate, tr: &Tr) -> bool {
+    let Some(text) = reason_in(feature, gate, tr) else {
         return false;
     };
     let kind_of = match gate {
@@ -258,7 +275,14 @@ pub fn gate_note(ui: &mut Ui, feature: Feature, gate: &Gate) -> bool {
             NoteKind::Info
         }
     };
-    settings_note(ui, kind_of, gate_icon(gate), &text, gate.offers_settings())
+    settings_note(
+        ui,
+        kind_of,
+        gate_icon(gate),
+        &text,
+        gate.offers_settings(),
+        tr,
+    )
 }
 
 /// Splits a note's text into its bold lead and the rest (the mock bolds the first clause,
@@ -275,7 +299,14 @@ fn lead_split(text: &str) -> (&str, &str) {
 /// Draws a note across the width with `icon`, `text` and, when `offer` is set, the AI and privacy
 /// button after the text. Returns `true` in the frame the button is clicked. [`gate_note`] and
 /// the bank screen's AI-off note (index.html:1830) share it.
-pub fn settings_note(ui: &mut Ui, kind_of: NoteKind, glyph: Icon, text: &str, offer: bool) -> bool {
+pub fn settings_note(
+    ui: &mut Ui,
+    kind_of: NoteKind,
+    glyph: Icon,
+    text: &str,
+    offer: bool,
+    tr: &Tr,
+) -> bool {
     let t = tokens(ui);
     let (bg, fg, edge) = note_colors(kind_of, &t);
     let mut clicked = false;
@@ -300,7 +331,8 @@ pub fn settings_note(ui: &mut Ui, kind_of: NoteKind, glyph: Icon, text: &str, of
                 }
                 ui.label(job);
                 if offer {
-                    clicked = button(ui, SETTINGS_BUTTON, None, ButtonKind::Secondary).clicked();
+                    clicked = button(ui, &tr.t("ai.gate.settings"), None, ButtonKind::Secondary)
+                        .clicked();
                 }
             });
         });

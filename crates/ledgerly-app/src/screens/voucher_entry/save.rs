@@ -19,12 +19,13 @@ impl VoucherEntryScreen {
         match self.draft.build_voucher(masters, self.fy, self.books_begin) {
             Ok(Outcome::Value(voucher)) => {
                 self.outbox = Some(voucher);
-                self.notice = Some(Notice::Info(
-                    "Checked. Waiting for the engine to post it.".to_owned(),
-                ));
+                self.notice = Some(Notice::Info(self.tr.t("voucher.checked")));
             }
             Ok(Outcome::Unsupported(u)) => {
-                self.fail(format!("Not supported yet: {} ({})", u.what, u.reason));
+                self.fail(self.tr.tf(
+                    "voucher.not_supported",
+                    &[("what", &u.what), ("reason", &u.reason)],
+                ));
             }
             // A contra with nothing in it has no account and no amount: both are said, as the
             // mock's contra does (index.html:2082).
@@ -65,7 +66,7 @@ impl VoucherEntryScreen {
     /// The host could not post the voucher: the draft stays and the reason is shown.
     pub fn save_failed(&mut self, reason: &str) {
         self.outbox = None;
-        self.fail(format!("Not saved: {reason}"));
+        self.fail(self.tr.tf("voucher.not_saved", &[("reason", reason)]));
     }
 
     /// Esc: returns `true` when the screen can close now; otherwise asks "discard?" first.

@@ -19,7 +19,7 @@ use time::macros::date;
 struct Leaf(&'static str);
 
 impl Screen for Leaf {
-    fn title(&self) -> String {
+    fn title(&self, _tr: &ledgerly_app::i18n::Tr) -> String {
         self.0.to_owned()
     }
     fn ui(&mut self, ui: &mut egui::Ui, _ctx: &mut AppCtx) -> ScreenAction {
@@ -32,7 +32,7 @@ impl Screen for Leaf {
 struct Once(&'static str, Option<ScreenAction>);
 
 impl Screen for Once {
-    fn title(&self) -> String {
+    fn title(&self, _tr: &ledgerly_app::i18n::Tr) -> String {
         self.0.to_owned()
     }
     fn ui(&mut self, _ui: &mut egui::Ui, _ctx: &mut AppCtx) -> ScreenAction {
@@ -44,7 +44,7 @@ impl Screen for Once {
 struct KeepsEsc;
 
 impl Screen for KeepsEsc {
-    fn title(&self) -> String {
+    fn title(&self, _tr: &ledgerly_app::i18n::Tr) -> String {
         "Keeps Esc".to_owned()
     }
     fn ui(&mut self, ui: &mut egui::Ui, _ctx: &mut AppCtx) -> ScreenAction {
@@ -79,7 +79,7 @@ fn titles(shell: &Shell) -> Vec<String> {
     shell
         .tabs()
         .active_stack()
-        .map_or_default(ScreenStack::breadcrumbs)
+        .map_or_default(|s| s.breadcrumbs(&ledgerly_app::i18n::Tr::default()))
 }
 
 // ---- stack ---------------------------------------------------------------------------------
@@ -90,9 +90,12 @@ fn breadcrumbs_list_titles_from_root_to_top() {
     let mut s = ScreenStack::new(leaf("Home"));
     s.push(leaf("Balance sheet"));
     s.push(leaf("Cash"));
-    assert_eq!(s.breadcrumbs(), ["Home", "Balance sheet", "Cash"]);
+    assert_eq!(
+        s.breadcrumbs(&ledgerly_app::i18n::Tr::default()),
+        ["Home", "Balance sheet", "Cash"]
+    );
     assert_eq!(s.depth(), 3);
-    assert_eq!(s.top_title(), "Cash");
+    assert_eq!(s.top_title(&ledgerly_app::i18n::Tr::default()), "Cash");
 }
 
 #[test]
@@ -105,7 +108,10 @@ fn push_keeps_the_screen_below_and_pop_returns_to_it() {
     );
     assert_eq!(s.depth(), 2);
     assert_eq!(s.apply(ScreenAction::Pop), StackChange::Popped);
-    assert_eq!(s.breadcrumbs(), ["Voucher"]);
+    assert_eq!(
+        s.breadcrumbs(&ledgerly_app::i18n::Tr::default()),
+        ["Voucher"]
+    );
 }
 
 #[test]
@@ -117,14 +123,17 @@ fn replace_swaps_the_top_and_keeps_the_depth() {
         s.apply(ScreenAction::Replace(leaf("Receipt"))),
         StackChange::Replaced
     );
-    assert_eq!(s.breadcrumbs(), ["Home", "Receipt"]);
+    assert_eq!(
+        s.breadcrumbs(&ledgerly_app::i18n::Tr::default()),
+        ["Home", "Receipt"]
+    );
 }
 
 #[test]
 fn replace_on_the_root_leaves_one_screen() {
     let mut s = ScreenStack::new(leaf("Home"));
     s.replace(leaf("Other"));
-    assert_eq!(s.breadcrumbs(), ["Other"]);
+    assert_eq!(s.breadcrumbs(&ledgerly_app::i18n::Tr::default()), ["Other"]);
 }
 
 #[test]
@@ -141,7 +150,7 @@ fn the_root_is_never_popped() {
 fn stay_changes_nothing() {
     let mut s = ScreenStack::new(leaf("Home"));
     assert_eq!(s.apply(ScreenAction::Stay), StackChange::None);
-    assert_eq!(s.breadcrumbs(), ["Home"]);
+    assert_eq!(s.breadcrumbs(&ledgerly_app::i18n::Tr::default()), ["Home"]);
 }
 
 #[test]
@@ -152,11 +161,14 @@ fn truncate_goes_back_to_a_breadcrumb() {
         s.push(leaf(n));
     }
     assert_eq!(s.truncate_to(2), 2);
-    assert_eq!(s.breadcrumbs(), ["Home", "A"]);
+    assert_eq!(
+        s.breadcrumbs(&ledgerly_app::i18n::Tr::default()),
+        ["Home", "A"]
+    );
     // Asking for more than exists, or for zero, never empties the stack.
     assert_eq!(s.truncate_to(9), 0);
     assert_eq!(s.truncate_to(0), 1);
-    assert_eq!(s.breadcrumbs(), ["Home"]);
+    assert_eq!(s.breadcrumbs(&ledgerly_app::i18n::Tr::default()), ["Home"]);
 }
 
 // ---- tabs ----------------------------------------------------------------------------------
@@ -167,7 +179,7 @@ fn open_makes_the_new_tab_active() {
     t.open(leaf("Two"));
     assert_eq!(t.len(), 2);
     assert_eq!(t.active_index(), 1);
-    assert_eq!(t.titles(), ["One", "Two"]);
+    assert_eq!(t.titles(&ledgerly_app::i18n::Tr::default()), ["One", "Two"]);
 }
 
 #[test]
@@ -176,7 +188,7 @@ fn a_tab_shows_the_top_screen_of_its_stack() {
     if let Some(s) = t.active_stack_mut() {
         s.push(leaf("Day book"));
     }
-    assert_eq!(t.titles(), ["Day book"]);
+    assert_eq!(t.titles(&ledgerly_app::i18n::Tr::default()), ["Day book"]);
 }
 
 #[test]
@@ -201,7 +213,7 @@ fn closing_a_tab_before_the_active_one_keeps_the_same_tab_active() {
     t.open(leaf("B"));
     t.open(leaf("C"));
     assert!(t.close(0));
-    assert_eq!(t.titles(), ["B", "C"]);
+    assert_eq!(t.titles(&ledgerly_app::i18n::Tr::default()), ["B", "C"]);
     assert_eq!(t.active_index(), 1);
 }
 
@@ -210,7 +222,7 @@ fn closing_the_active_last_tab_activates_the_new_last() {
     let mut t = Tabs::new(leaf("A"));
     t.open(leaf("B"));
     assert!(t.close(1));
-    assert_eq!(t.titles(), ["A"]);
+    assert_eq!(t.titles(&ledgerly_app::i18n::Tr::default()), ["A"]);
     assert_eq!(t.active_index(), 0);
 }
 
@@ -222,7 +234,7 @@ fn closing_the_active_middle_tab_activates_its_successor() {
     t.open(leaf("C"));
     assert!(t.select(1));
     assert!(t.close(1));
-    assert_eq!(t.titles(), ["A", "C"]);
+    assert_eq!(t.titles(&ledgerly_app::i18n::Tr::default()), ["A", "C"]);
     assert_eq!(t.active_index(), 1);
 }
 
@@ -386,18 +398,37 @@ fn the_chips_say_not_known_when_the_data_is_missing() {
     // never show a name, a tier or a lock date that is not known. Catches a chip that shows an
     // invented value (the default would then not say "not").
     assert_eq!(company_chip(&AppCtx::default()), "No company open");
-    assert_eq!(ai_chip(None), "AI: not set up");
-    assert_eq!(lock_chip(None), None, "no lock date means no lock chip");
-    assert_eq!(ai_chip(Some(AiTier::Local)), "AI on this computer");
+    assert_eq!(
+        ai_chip(None, &ledgerly_app::i18n::Tr::default()),
+        "AI: not set up"
+    );
+    assert_eq!(
+        lock_chip(None, &ledgerly_app::i18n::Tr::default()),
+        None,
+        "no lock date means no lock chip"
+    );
+    assert_eq!(
+        ai_chip(Some(AiTier::Local), &ledgerly_app::i18n::Tr::default()),
+        "AI on this computer"
+    );
     // provenance: derived from the mock, `design/mock-v2/index.html:898`, which reads
     // "Sat, 21 Nov 2026" (spec change 2026-11-22: the user asked for the app to match the mock;
     // 21 Nov 2026 is a Saturday by the calendar).
-    assert_eq!(date_chip(date!(2026 - 11 - 21)), "Sat, 21 Nov 2026");
-    assert_eq!(date_chip(date!(2026 - 04 - 10)), "Fri, 10 Apr 2026");
     assert_eq!(
-        lock_chip(Some(date!(2026 - 03 - 31)))
-            .unwrap_or_default()
-            .as_str(),
+        date_chip(date!(2026 - 11 - 21), &ledgerly_app::i18n::Tr::default()),
+        "Sat, 21 Nov 2026"
+    );
+    assert_eq!(
+        date_chip(date!(2026 - 04 - 10), &ledgerly_app::i18n::Tr::default()),
+        "Fri, 10 Apr 2026"
+    );
+    assert_eq!(
+        lock_chip(
+            Some(date!(2026 - 03 - 31)),
+            &ledgerly_app::i18n::Tr::default()
+        )
+        .unwrap_or_default()
+        .as_str(),
         "Locked to 31 Mar 2026"
     );
 }
@@ -454,7 +485,14 @@ fn a_screen_has_no_keys_and_its_title_as_page_title_unless_it_says_so() {
     // title, none and none, so a screen that has not opted in is drawn as before. Catches a
     // default that invents a subtitle or a key.
     let screen = Leaf("Home");
-    assert_eq!(screen.page_title(), "Home");
-    assert_eq!(screen.subtitle(), None);
-    assert_eq!(screen.keys().len(), 0, "no keys by default");
+    assert_eq!(
+        screen.page_title(&ledgerly_app::i18n::Tr::default()),
+        "Home"
+    );
+    assert_eq!(screen.subtitle(&ledgerly_app::i18n::Tr::default()), None);
+    assert_eq!(
+        screen.keys(&ledgerly_app::i18n::Tr::default()).len(),
+        0,
+        "no keys by default"
+    );
 }

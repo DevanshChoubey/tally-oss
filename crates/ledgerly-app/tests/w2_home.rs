@@ -294,12 +294,20 @@ fn the_page_title_is_home_and_the_company_line_joins_name_and_subtitle() {
     // sub-line does ("Saturday 21 Nov 2026 · FY 2026-27", index.html line 1054). After a frame
     // the title is the greeting (see `after_a_frame_home_greets_and_the_key_bar_still_says_home`).
     let screen = HomeScreen::new(four_tiles());
-    assert_eq!(screen.page_title(), "Home");
     assert_eq!(
-        screen.subtitle().as_deref(),
+        screen.page_title(&ledgerly_app::i18n::Tr::default()),
+        "Home"
+    );
+    assert_eq!(
+        screen
+            .subtitle(&ledgerly_app::i18n::Tr::default())
+            .as_deref(),
         Some("Fictional Traders \u{b7} Figures as of 30 Apr 2026")
     );
-    assert_eq!(HomeScreen::default().subtitle(), None);
+    assert_eq!(
+        HomeScreen::default().subtitle(&ledgerly_app::i18n::Tr::default()),
+        None
+    );
 }
 
 #[test]
@@ -320,7 +328,7 @@ fn the_key_bar_lists_the_working_home_keys_and_not_the_removed_lists() {
     // F6, Ctrl+K, J/K for the review list and Enter. The review list and the Enter list are not
     // on this screen (the review list needs the assistant, and the sidebar replaces the Enter
     // list), and F9 opens nothing yet, so the bar lists F8 and not J/K or Enter.
-    let keys = HomeScreen::default().keys();
+    let keys = HomeScreen::default().keys(&ledgerly_app::i18n::Tr::default());
     assert!(keys.iter().any(|k| k.keys == "F8" && k.label == "Sales"));
     assert!(keys.iter().any(|k| k.keys == "Ctrl+K"));
     assert!(!keys.iter().any(|k| k.keys == "Enter"));
@@ -357,14 +365,38 @@ fn the_greeting_follows_the_hour() {
     // user; the user chose the greeting without a name on 2026-11-23. The hour bands are ours:
     // morning from 05:00, afternoon from 12:00, evening from 17:00 until 05:00. Catches a
     // greeting that ignores the clock or has a gap between bands.
-    assert_eq!(greeting(5), "Good morning");
-    assert_eq!(greeting(11), "Good morning");
-    assert_eq!(greeting(12), "Good afternoon");
-    assert_eq!(greeting(16), "Good afternoon");
-    assert_eq!(greeting(17), "Good evening");
-    assert_eq!(greeting(23), "Good evening");
-    assert_eq!(greeting(0), "Good evening");
-    assert_eq!(greeting(4), "Good evening");
+    assert_eq!(
+        greeting(5, &ledgerly_app::i18n::Tr::default()),
+        "Good morning"
+    );
+    assert_eq!(
+        greeting(11, &ledgerly_app::i18n::Tr::default()),
+        "Good morning"
+    );
+    assert_eq!(
+        greeting(12, &ledgerly_app::i18n::Tr::default()),
+        "Good afternoon"
+    );
+    assert_eq!(
+        greeting(16, &ledgerly_app::i18n::Tr::default()),
+        "Good afternoon"
+    );
+    assert_eq!(
+        greeting(17, &ledgerly_app::i18n::Tr::default()),
+        "Good evening"
+    );
+    assert_eq!(
+        greeting(23, &ledgerly_app::i18n::Tr::default()),
+        "Good evening"
+    );
+    assert_eq!(
+        greeting(0, &ledgerly_app::i18n::Tr::default()),
+        "Good evening"
+    );
+    assert_eq!(
+        greeting(4, &ledgerly_app::i18n::Tr::default()),
+        "Good evening"
+    );
 }
 
 #[test]
@@ -376,16 +408,27 @@ fn the_date_line_reads_like_the_mocks() {
         date_line(
             date!(2026 - 11 - 21),
             Some("FY 2026-27"),
-            Some(date!(2026 - 10 - 31))
+            Some(date!(2026 - 10 - 31)),
+            &ledgerly_app::i18n::Tr::default()
         ),
         "Saturday 21 Nov 2026 \u{b7} FY 2026-27 \u{b7} books locked to 31 Oct 2026"
     );
     assert_eq!(
-        date_line(date!(2026 - 11 - 23), Some("FY 2026-27"), None),
+        date_line(
+            date!(2026 - 11 - 23),
+            Some("FY 2026-27"),
+            None,
+            &ledgerly_app::i18n::Tr::default()
+        ),
         "Monday 23 Nov 2026 \u{b7} FY 2026-27"
     );
     assert_eq!(
-        date_line(date!(2026 - 04 - 10), None, None),
+        date_line(
+            date!(2026 - 04 - 10),
+            None,
+            None,
+            &ledgerly_app::i18n::Tr::default()
+        ),
         "Friday 10 Apr 2026"
     );
 }
@@ -407,12 +450,19 @@ fn after_a_frame_home_greets_and_the_key_bar_still_says_home() {
     });
     out.drop_without_applying_deltas();
     assert!(
-        screen.page_title().starts_with("Good "),
+        screen
+            .page_title(&ledgerly_app::i18n::Tr::default())
+            .starts_with("Good "),
         "title {}",
-        screen.page_title()
+        screen.page_title(&ledgerly_app::i18n::Tr::default())
     );
-    assert_eq!(screen.key_bar_name(), "Home");
-    let line = screen.subtitle().unwrap_or_default();
+    assert_eq!(
+        screen.key_bar_name(&ledgerly_app::i18n::Tr::default()),
+        "Home"
+    );
+    let line = screen
+        .subtitle(&ledgerly_app::i18n::Tr::default())
+        .unwrap_or_default();
     assert!(
         line.ends_with("\u{b7} FY 2026-27 \u{b7} books locked to 31 Mar 2026"),
         "line {line}"
@@ -425,11 +475,20 @@ fn the_greeting_names_the_user_by_first_name_when_a_name_is_stored() {
     // "Good afternoon, Ananya") with the sample user "Ananya K." (ledgerly-sample/src/load.rs):
     // the first word of the stored name follows the comma.
     assert_eq!(
-        greeting_for(14, Some("Ananya K.")),
+        greeting_for(14, Some("Ananya K."), &ledgerly_app::i18n::Tr::default()),
         "Good afternoon, Ananya"
     );
-    assert_eq!(greeting_for(8, Some("Rohan D.")), "Good morning, Rohan");
+    assert_eq!(
+        greeting_for(8, Some("Rohan D."), &ledgerly_app::i18n::Tr::default()),
+        "Good morning, Rohan"
+    );
     // No stored name: the plain greeting, never an invented name.
-    assert_eq!(greeting_for(14, None), "Good afternoon");
-    assert_eq!(greeting_for(14, Some("  ")), "Good afternoon");
+    assert_eq!(
+        greeting_for(14, None, &ledgerly_app::i18n::Tr::default()),
+        "Good afternoon"
+    );
+    assert_eq!(
+        greeting_for(14, Some("  "), &ledgerly_app::i18n::Tr::default()),
+        "Good afternoon"
+    );
 }

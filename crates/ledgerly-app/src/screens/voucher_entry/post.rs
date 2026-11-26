@@ -19,7 +19,7 @@ impl VoucherEntryScreen {
         };
         if let Some(voucher) = self.take_save_request() {
             self.posting = Some(submit::send(worker, Command::PostVoucher(voucher)));
-            self.notice = Some(Notice::Info("Saving...".to_owned()));
+            self.notice = Some(Notice::Info(self.tr.t("voucher.saving")));
         }
     }
 

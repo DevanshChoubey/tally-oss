@@ -404,3 +404,75 @@ Seen in the release binary under a nested X server with an empty config and data
   machine (Finish failed with "No such file or directory"); the folder is now created first.
 - **FIXED** the bill-wise popup on Payment did not take the keyboard when the open bills arrived after
   the popup opened.
+- **gap: no in-app print preview or configuration.** TallyPrime's flow is Ctrl+P (Current),
+  then C (configure), I (preview), P (print), as read on "How to Print Invoices/Reports in
+  TallyPrime" (help.tallysolutions.com/print-invoices-reports/, read 2026-11-24, last updated
+  2026-11-20). The mock has no print state. Ours saves a PDF to a file chosen in a save dialog,
+  and an "Open PDF" button then opens it in the system's PDF viewer (xdg-open, open or start).
+  That viewer is the preview until an in-app preview exists.
+- **gap: no printing to a device.** Ours writes PDF files only. The Alt+P > Configuration
+  printer and paper setup is not built.
+- **gap: some reports cannot be printed.** Trial balance, balance sheet, profit and loss, day book
+  and ledger vouchers print (`Api::print_report`, `ledgerly-print::pdf::render_report`). Other
+  reports (group summary, registers, outstanding, stock summary, audit) say "not supported" with
+  the reason; CSV and XLSX export remain.
+- **gap: only sales invoices, credit notes and debit notes print.** Any other voucher, and a
+  voucher with no GST block, says "not supported" with the reason. Reasons come from the print
+  crate (`PrintError::Unsupported`), never a blank page.
+- **gap: no UPI QR on printed invoices.** The books hold no UPI address to pay to, so the built-in
+  template (`ledgerly-print/templates/tax-invoice-a4.toml`) has no `upi_qr` block.
+  `render_invoice_with_upi` draws one when a payee is given; the company needs a UPI address
+  field before it can.
+- **by design: printed text is plain ASCII.** The print crate refuses other characters (built-in
+  Helvetica); the refusal is shown as "not supported", not replaced.
+- **by design: Ctrl+P is not on the key bars.** The mock's report key bars (index.html:1634)
+  and the voucher screen have no Print key, so neither shows Ctrl+P. The key map lists
+  "Print" under Reports (index.html:1839; `keymap_map::layout`), and Ctrl+P prints the open
+  report or voucher.
+
+## Hindi UI (card s18, 2026-11-26)
+
+Hindi (`hi`) is set per user from the palette's Language row and applies at once. Every
+user-visible string of every current screen and state goes through `assets/i18n/{en,hi}.toml`:
+a keyed string (`t`, `tf`) or, for static labels, `lit("English")`, which finds the English phrase
+in `en.toml` and returns the Hindi. Figures, dates and Indian digit grouping come from the
+formatters as before; month and weekday words come from the `format.*` keys.
+
+Guards (all in `crates/ledgerly-app/tests/`):
+
+- `i18n_hindi_screens.rs` draws every screen the palette can open (reports, bank ledgers, GST,
+  masters, import, review, ask, AI, setup, keyboard map) and walks the real shell (home, palette,
+  F8/F9/F5/F6 vouchers, balance sheet, day book, print preview, GST, masters, create ledger) with the
+  language set to Hindi. It fails on any Latin word that is not data, a kept abbreviation or a listed
+  engine text.
+- `i18n_lit_phrases.rs` fails when a `lit("...")` phrase has no `en.toml` entry, or a `t`/`tf` key
+  does not exist.
+- `i18n.rs` keeps the key parity of the two files.
+
+Open, with the reason:
+
+- **gap: Hindi terms are mostly unsourced.** NACIN's administrative glossary and the CBIC Hindi
+  page labels settle about twenty words; the official Hindi CGST Act, the CBIC lexicon and the RBI
+  shabdavali could not be read (403, a registration gate, a human-verification page) and Tally has no
+  Hindi UI. The rest are marked `# unsourced` or `# s18: see glossary` in `hi.toml` and need a Hindi
+  speaking accountant's review (the header lists what was read and when).
+- **gap: PDF bodies are English.** The print crate's fonts are Latin only, so printed pages and the
+  page the preview draws stay English; the preview's own controls are Hindi.
+- **gap: Dr and Cr, GST, GSTIN, GSTR, ITC, IMS, PAN stay Latin** as the books and the portal write them.
+- **gap: engine text stays English.** Engine and validation reasons, GSTR table names and engine
+  notes under reports, state names (the core GST code list) and engine report column labels that the
+  generic view cannot match by identity. Spec section 7: the engine's words are not translated here.
+- **gap: user data is not translated.** Ledger, group and voucher type names the user types, bank
+  narrations, units and party names. Standard names the product ships (Sales, Purchase, Credit note)
+  are translated when they match `en.toml`.
+- **gap: native dialog filter names stay English** (the file chooser is the system's).
+- **gap: text computed once keeps its language.** Worker lines (GST agreement text, bank match
+  reasons) and `return_label` are built when the worker answers; changing language while one is on
+  screen shows the old language until the screen reloads.
+- **gap: the mock translates whole labels only.** `design/mock-v2/hi.js` is generated from the app's
+  own files (`gen-hi.py`) and replaces whole text nodes and dates of a `lang=hi` state; sentences the
+  mock words differently from the app stay English in the mock. The `hi.*` mock states exist to
+  compare Devanagari widths and wrapping, not copy.
+- **gap: Hindi captures cover eight states** (home, sales invoice, its print preview, masters,
+  balance sheet, GSTR-1, bank reconciliation, setup welcome). Other screens are covered by the
+  guard test, not by captures.

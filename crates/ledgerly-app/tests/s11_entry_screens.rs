@@ -239,7 +239,7 @@ fn titles(shell: &Shell) -> Vec<String> {
     shell
         .tabs()
         .active_stack()
-        .map_or_default(ScreenStack::breadcrumbs)
+        .map_or_default(|stack| stack.breadcrumbs(&ledgerly_app::i18n::Tr::default()))
 }
 
 /// The breadcrumb trail after `key` is pressed on Home.
@@ -494,7 +494,7 @@ fn head_after(name: &str, key: Key, modifiers: Modifiers) -> String {
         .tabs_mut()
         .active_stack_mut()
         .and_then(ScreenStack::top_mut)
-        .and_then(|s| s.subtitle())
+        .and_then(|s| s.subtitle(&ledgerly_app::i18n::Tr::default()))
         .unwrap_or_default()
 }
 

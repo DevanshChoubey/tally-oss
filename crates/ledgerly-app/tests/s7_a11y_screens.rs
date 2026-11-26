@@ -362,6 +362,7 @@ fn the_sales_invoice_fields_are_named_by_their_captions_and_columns() {
     let b = books();
     let mut screen = open(&b);
     let mut app = AppCtx {
+        tr: ledgerly_app::i18n::Tr::default(),
         books: Some(b.clone()),
         api: None,
         lock_date: Some(TODAY),
@@ -390,6 +391,7 @@ fn a_date_and_a_rate_read_as_the_mock_writes_them_until_the_keyboard_is_on_them(
     let mut screen = open(&b);
     screen.draft_mut().rows[0].rate_text = "3850".to_owned();
     let mut app = AppCtx {
+        tr: ledgerly_app::i18n::Tr::default(),
         books: Some(b.clone()),
         api: None,
         lock_date: Some(TODAY),

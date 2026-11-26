@@ -5,6 +5,7 @@
 //! [`AppCtx::api`]. The previous worker, if any, is dropped on another thread, because dropping a
 //! worker waits for its queued jobs.
 
+use crate::i18n::Tr;
 use std::path::PathBuf;
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 
@@ -229,7 +230,7 @@ pub fn company_from_form(name: &str, state: &str, fy_year: &str) -> Result<Compa
 }
 
 impl Screen for WelcomeScreen {
-    fn title(&self) -> String {
+    fn title(&self, _tr: &Tr) -> String {
         "Home".to_owned()
     }
 

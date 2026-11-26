@@ -262,7 +262,11 @@ fn picking_as_voucher_in_the_mode_list_switches_and_picking_accounting_goes_back
     choose(&mut s, InvoiceMode::AsVoucher);
     assert_eq!(s.mode(), InvoiceMode::AsVoucher, "{:?}", s.error_text());
     assert_eq!(s.draft().party, party);
-    assert!(s.subtitle().unwrap().starts_with("As voucher"));
+    assert!(
+        s.subtitle(&ledgerly_app::i18n::Tr::default())
+            .unwrap()
+            .starts_with("As voucher")
+    );
     choose(&mut s, InvoiceMode::Accounting);
     assert_eq!(s.mode(), InvoiceMode::Accounting);
 }
@@ -274,6 +278,7 @@ fn ctrl_h_down_enter_on_the_screen_reaches_as_voucher() {
     let (_api, books) = setup("s16_vch_key.ledgerly");
     let mut s = open(&books);
     let mut app = AppCtx {
+        tr: ledgerly_app::i18n::Tr::default(),
         books: Some(books.clone()),
         api: None,
         lock_date: None,
@@ -344,6 +349,7 @@ fn as_voucher_is_taxed_by_the_engine_and_saved_as_an_accounting_invoice() {
     choose(&mut s, InvoiceMode::AsVoucher);
     fill_voucher(&mut s, &books);
     let mut app = AppCtx {
+        tr: ledgerly_app::i18n::Tr::default(),
         books: Some(books.clone()),
         api: Some(ApiWorker::spawn(api).unwrap()),
         lock_date: None,
@@ -412,6 +418,7 @@ fn a_missing_tax_ledger_shows_the_engine_s_reason_and_does_not_save() {
     "".clone_into(&mut s.draft_mut().particulars.get_mut(2).unwrap().amount_text);
     let _ = m;
     let mut app = AppCtx {
+        tr: ledgerly_app::i18n::Tr::default(),
         books: Some(books.clone()),
         api: Some(ApiWorker::spawn(api).unwrap()),
         lock_date: None,
@@ -436,6 +443,7 @@ fn a_missing_tax_ledger_shows_the_engine_s_reason_and_does_not_save() {
 /// Runs frames until the engine has answered for the screen's invoice.
 fn wait_for_engine(s: &mut ItemInvoiceScreen, api: Api, books: &Books) {
     let mut app = AppCtx {
+        tr: ledgerly_app::i18n::Tr::default(),
         books: Some(books.clone()),
         api: Some(ApiWorker::spawn(api).unwrap()),
         lock_date: None,

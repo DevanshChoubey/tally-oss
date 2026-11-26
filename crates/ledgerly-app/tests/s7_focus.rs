@@ -243,6 +243,7 @@ fn open(b: &Books) -> ItemInvoiceScreen {
 
 fn sales_app(b: &Books) -> AppCtx {
     AppCtx {
+        tr: ledgerly_app::i18n::Tr::default(),
         books: Some(b.clone()),
         api: None,
         lock_date: Some(TODAY),

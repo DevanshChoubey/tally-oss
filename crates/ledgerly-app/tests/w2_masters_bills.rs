@@ -503,6 +503,7 @@ fn altering_a_bill_wise_party_asks_for_its_bills() {
         panic!("the books did not load");
     };
     let mut app = AppCtx {
+        tr: ledgerly_app::i18n::Tr::default(),
         books: Some(books.clone()),
         api: Some(ApiWorker::spawn(api).unwrap()),
         lock_date: None,

@@ -144,7 +144,9 @@ fn enter_on_the_correction_section_opens_the_item_master() {
     frame(&mut s, egui::Key::J);
     assert_eq!(code(&s), "12");
     match frame(&mut s, egui::Key::Enter) {
-        ScreenAction::Push(screen) => assert_eq!(screen.title(), "Masters"),
+        ScreenAction::Push(screen) => {
+            assert_eq!(screen.title(&ledgerly_app::i18n::Tr::default()), "Masters");
+        }
         ScreenAction::Stay | ScreenAction::Replace(_) | ScreenAction::Pop => {
             panic!("Enter on Table 12 did not open the item master")
         }
@@ -192,7 +194,7 @@ fn alt_f2_opens_a_month_picker_and_choosing_a_month_reloads_the_screen() {
     s.apply(GstCmd::Open);
     assert!(!s.period_picker_open());
     assert_eq!(
-        s.subtitle(),
+        s.subtitle(&ledgerly_app::i18n::Tr::default()),
         format!("{} \u{00B7} October 2026 \u{00B7} monthly", gstin())
     );
     let october = {

@@ -95,7 +95,10 @@ impl Section {
 /// the edges of the calendar, where there is no such year.
 #[must_use]
 pub fn subtitle(as_of: Date) -> String {
-    subtitle_with(as_of, "Enter opens a row, Esc goes back up")
+    subtitle_with(
+        as_of,
+        &crate::i18n::lit("Enter opens a row, Esc goes back up"),
+    )
 }
 
 /// The subtitle of a level below the balance sheet (index.html:1577: "Enter goes deeper, Esc
@@ -108,8 +111,11 @@ pub fn drill_subtitle(as_of: Date) -> String {
 fn subtitle_with(as_of: Date, keys: &str) -> String {
     let date = crate::ui::format::date(as_of);
     match FinancialYear::containing(as_of) {
-        Ok(fy) => format!("As at {date} \u{00B7} FY {} \u{00B7} {keys}", fy.label()),
-        Err(_) => format!("As at {date} \u{00B7} {keys}"),
+        Ok(fy) => crate::i18n::tf(
+            "report.sub.as_at_fy",
+            &[("date", &date), ("fy", &fy.label()), ("keys", keys)],
+        ),
+        Err(_) => crate::i18n::tf("report.sub.as_at", &[("date", &date), ("keys", keys)]),
     }
 }
 
@@ -378,10 +384,10 @@ fn draw_foot(ui: &mut Ui, report: &ViewReport, balance: &VerticalBalance) {
     let t = tokens(ui);
     match sides_agree(balance) {
         Some(true) => {
-            badge(ui, BadgeKind::Ok, "Both sides agree");
+            badge(ui, BadgeKind::Ok, &crate::i18n::lit("Both sides agree"));
         }
         Some(false) => {
-            badge(ui, BadgeKind::Bad, "Sides differ");
+            badge(ui, BadgeKind::Bad, &crate::i18n::lit("Sides differ"));
         }
         None => {}
     }
@@ -520,18 +526,19 @@ fn paint_line(
         egui::FontId::proportional(TEXT_BODY)
     };
     let indent = table::indent(row.depth);
+    let label = super::generic::row_label(row);
     table::paint_cell_text(
         ui,
         label_rect(rect),
         1.0,
-        &row.label,
+        &label,
         font.clone(),
         t.text,
         CellPlace::Left(indent),
     );
     let cell = row.cells.get(section.column());
     if cell.is_some_and(is_provisional) {
-        paint_provisional_mark(ui, rect, indent, &row.label, font.clone());
+        paint_provisional_mark(ui, rect, indent, &label, font.clone());
     }
     let amount = cell.map_or_default(|cell| figure_in(cell, section));
     table::paint_cell_text(ui, rect, 1.0, &amount, font, t.text, CellPlace::Right);
@@ -567,7 +574,7 @@ fn paint_total(ui: &Ui, rect: Rect, section: Section, balance: &VerticalBalance)
         ui,
         label_rect(rect),
         3.0,
-        "Total",
+        &crate::i18n::lit("Total"),
         font.clone(),
         t.text,
         CellPlace::Left(table::CELL_PAD_X),

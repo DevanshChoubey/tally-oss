@@ -79,7 +79,10 @@ pub(super) const CONTRA_EMPTY: &str =
 
 /// The accounting voucher entry screen (card U4).
 pub struct VoucherEntryScreen {
+    /// The voucher type's name as the books hold it.
     pub(super) type_name: String,
+    /// The language of the screen's words, set from the context on each frame.
+    pub(super) tr: crate::i18n::Tr,
     /// The keymap the screen reads its keys from (the classic preset until the shell passes its own).
     pub(super) keymap: Keymap,
     pub(super) fy: FinancialYear,
@@ -148,6 +151,7 @@ impl VoucherEntryScreen {
         };
         Ok(Outcome::Value(VoucherEntryScreen {
             type_name: voucher_type.name.clone(),
+            tr: crate::i18n::Tr::default(),
             keymap: keymap::classic(),
             fy,
             books_begin: books.company.books_begin,
@@ -424,7 +428,10 @@ impl VoucherEntryScreen {
                     .get(&hit.id)
                     .map(|l| entry_support(l, self.draft.is_single_entry()))
                 {
-                    return self.fail(format!("Not supported yet: {} ({})", u.what, u.reason));
+                    return self.fail(self.tr.tf(
+                        "voucher.not_supported",
+                        &[("what", &u.what), ("reason", &u.reason)],
+                    ));
                 }
                 if let Some(r) = self.draft.rows.get_mut(i) {
                     r.ledger = Some(LedgerRef::Chosen(hit.id));
@@ -437,7 +444,7 @@ impl VoucherEntryScreen {
             Some(PickerItem::Create { name }) => {
                 self.create = Some(CreateForm { name, group: None });
             }
-            None => self.fail("No ledger matches; press Alt+C to create one."),
+            None => self.fail(self.tr.t("voucher.no_ledger_match")),
         }
     }
 
@@ -457,7 +464,7 @@ impl VoucherEntryScreen {
                 self.go(Field::Narration);
             }
             Ok(Balance::Balanced | Balance::Needs { .. }) => {
-                self.fail("Pick a ledger: type part of its name or alias.");
+                self.fail(self.tr.t("voucher.pick_ledger"));
             }
             Err(e) => self.fail(e.to_string()),
         }
@@ -467,7 +474,7 @@ impl VoucherEntryScreen {
     /// particulars line. The account is never a list end; it must be picked first.
     pub(super) fn end_of_single_list(&mut self, i: usize) {
         if i == 0 {
-            return self.fail("Pick the cash or bank account first.");
+            return self.fail(self.tr.t("voucher.pick_cash_bank_first"));
         }
         let row_empty = self
             .draft
@@ -475,10 +482,10 @@ impl VoucherEntryScreen {
             .get(i)
             .is_some_and(|r| r.amount_text.trim().is_empty());
         if !row_empty {
-            return self.fail("Pick a ledger: type part of its name or alias.");
+            return self.fail(self.tr.t("voucher.pick_ledger"));
         }
         if i == 1 {
-            return self.fail("Pick the ledger that is paid or received first.");
+            return self.fail(self.tr.t("voucher.pick_paid_first"));
         }
         self.draft.rows.truncate(i);
         self.go(Field::Narration);
@@ -487,11 +494,11 @@ impl VoucherEntryScreen {
     pub(super) fn submit_amount(&mut self, masters: &Masters, i: usize) {
         let amount = match self.draft.line_amount(i) {
             Ok(Some(amount)) => amount,
-            Ok(None) => return self.fail("Type an amount."),
+            Ok(None) => return self.fail(self.tr.t("voucher.type_amount")),
             Err(e) => return self.fail(e.to_string()),
         };
         if amount.is_zero() {
-            return self.fail("An amount of zero cannot be posted.");
+            return self.fail(self.tr.t("voucher.zero_amount"));
         }
         if let Some(r) = self.draft.rows.get_mut(i) {
             r.amount_text = amount.to_rupees().to_string();
@@ -695,7 +702,7 @@ impl VoucherEntryScreen {
     /// particulars line is always left to fill.
     pub(super) fn delete_single_line(&mut self, i: usize) {
         if i == 0 {
-            return self.fail("The cash or bank account is set once for the whole voucher.");
+            return self.fail(self.tr.t("voucher.cash_bank_once"));
         }
         if i < self.draft.rows.len() {
             self.draft.rows.remove(i);

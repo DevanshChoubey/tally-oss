@@ -134,12 +134,12 @@ pub fn draw_busy(ui: &mut Ui) {
         ui.horizontal_wrapped(|ui| {
             ui.spacing_mut().item_spacing.x = 4.0;
             ui.label(
-                egui::RichText::new("Preparing the PDF.")
+                egui::RichText::new(crate::i18n::lit("Preparing the PDF."))
                     .font(bold_font(ui, TEXT_META))
                     .color(ink),
             );
             ui.label(para_text(
-                "The preview opens when it is ready.",
+                &crate::i18n::lit("The preview opens when it is ready."),
                 TEXT_META,
                 ink,
             ));
@@ -242,7 +242,13 @@ fn draw_page(ui: &mut Ui, page: &PageLayout, width: f32, number: usize, total: u
         ui,
         &response,
         Role::Image,
-        &format!("Page {number} of {total}"),
+        &crate::i18n::tf(
+            "print.page_n_of",
+            &[
+                ("number", &number.to_string()),
+                ("total", &total.to_string()),
+            ],
+        ),
     );
     let painter = ui.painter_at(rect);
     painter.rect_filled(rect, RADIUS_XS, Color32::WHITE);
@@ -334,7 +340,7 @@ fn draw_settings(ui: &mut Ui, form: &mut PrintForm, error: Option<&str>) {
     let inner = SIDE_WIDTH - 34.0;
     let t = tokens(ui);
     let paper = usize::from(form.paper == Paper::A5);
-    ui.label(para_text("Paper", TEXT_META, t.text_2));
+    ui.label(para_text(&crate::i18n::lit("Paper"), TEXT_META, t.text_2));
     let picked = crate::ui::tabs::tab_strip(ui, &["A4", "A5"], Some(paper));
     match picked.clicked {
         Some(0) => form.paper = Paper::A4,
@@ -345,10 +351,17 @@ fn draw_settings(ui: &mut Ui, form: &mut PrintForm, error: Option<&str>) {
     let half = (inner - 8.0) / 2.0;
     ui.horizontal_top(|ui| {
         ui.spacing_mut().item_spacing.x = 8.0;
-        field(ui, "Copies", &mut form.copies, half, "", None);
         field(
             ui,
-            "First page number",
+            &crate::i18n::lit("Copies"),
+            &mut form.copies,
+            half,
+            "",
+            None,
+        );
+        field(
+            ui,
+            &crate::i18n::lit("First page number"),
             &mut form.first_page,
             half,
             "",
@@ -356,11 +369,22 @@ fn draw_settings(ui: &mut Ui, form: &mut PrintForm, error: Option<&str>) {
         );
     });
     ui.add_space(6.0);
-    field(ui, "Pages to print", &mut form.pages, inner, "All", error);
+    field(
+        ui,
+        &crate::i18n::lit("Pages to print"),
+        &mut form.pages,
+        inner,
+        &crate::i18n::lit("All"),
+        error,
+    );
     ui.add_space(8.0);
 }
 
 /// The card at the right: the settings, the pages, the destination and the buttons.
+#[allow(
+    clippy::too_many_lines,
+    reason = "one drawing pass of the screen, a line for each part of it"
+)]
 fn draw_side(
     ui: &mut Ui,
     doc: &PrintedDocument,
@@ -372,7 +396,7 @@ fn draw_side(
     card(ui, |ui| {
         ui.set_width(SIDE_WIDTH - 34.0);
         ui.label(
-            egui::RichText::new("Print preview")
+            egui::RichText::new(crate::i18n::lit("Print preview"))
                 .font(bold_font(ui, TEXT_H2))
                 .color(t.text),
         );
@@ -380,11 +404,23 @@ fn draw_side(
         draw_settings(ui, form, error);
         let inner = SIDE_WIDTH - 34.0;
         let shown = if doc.copies > 1 {
-            format!("{}, in {} copies", doc.pages.len(), doc.copies)
+            crate::i18n::tf(
+                "print.n_copies",
+                &[
+                    ("pages", &doc.pages.len().to_string()),
+                    ("copies", &doc.copies.to_string()),
+                ],
+            )
         } else {
             doc.pages.len().to_string()
         };
-        for (label, value) in [("Pages", shown), ("Destination", "PDF file".to_owned())] {
+        for (label, value) in [
+            (crate::i18n::lit("Pages"), shown),
+            (
+                crate::i18n::lit("Destination"),
+                crate::i18n::lit("PDF file"),
+            ),
+        ] {
             // One row of the mock's `table.t`: the caption, the value and a hairline under it.
             ui.allocate_ui_with_layout(
                 vec2(inner, ROW_HEIGHT),
@@ -397,7 +433,7 @@ fn draw_side(
                         Layout::left_to_right(egui::Align::Center),
                         |ui| {
                             ui.set_min_width(ROW_LABEL);
-                            ui.label(para_text(label, TEXT_BODY, t.text_2));
+                            ui.label(para_text(&label, TEXT_BODY, t.text_2));
                         },
                     );
                     ui.label(para_text(&value, TEXT_BODY, t.text));
@@ -411,20 +447,29 @@ fn draw_side(
         ui.add_space(8.0);
         para(
             ui,
-            "Paper printing is not built yet. The PDF is written to a folder you choose.",
+            &crate::i18n::lit(
+                "Paper printing is not built yet. The PDF is written to a folder you choose.",
+            ),
             TEXT_META,
             t.text_3,
         );
         ui.add_space(10.0);
         // The mock's `.actions`: the buttons wrap when the card is too narrow for all three.
         ui.horizontal_wrapped(|ui| {
-            if button(ui, "Update preview", Some("Enter"), ButtonKind::Secondary).clicked() {
+            if button(
+                ui,
+                &crate::i18n::lit("Update preview"),
+                Some("Enter"),
+                ButtonKind::Secondary,
+            )
+            .clicked()
+            {
                 action = PreviewAction::Update;
             }
             if button_icon(
                 ui,
                 Some(Icon::Upload),
-                "Save as PDF",
+                &crate::i18n::lit("Save as PDF"),
                 Some("Ctrl+P"),
                 ButtonKind::Primary,
             )
@@ -433,7 +478,14 @@ fn draw_side(
             {
                 action = PreviewAction::Save;
             }
-            if button(ui, "Close", Some("Esc"), ButtonKind::Secondary).clicked() {
+            if button(
+                ui,
+                &crate::i18n::lit("Close"),
+                Some("Esc"),
+                ButtonKind::Secondary,
+            )
+            .clicked()
+            {
                 action = PreviewAction::Close;
             }
         });

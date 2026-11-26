@@ -7,6 +7,8 @@
 
 use std::path::Path;
 
+use crate::i18n::Tr;
+
 use ledgerly_api::{AiTier, Api, GstFiling};
 use ledgerly_core::{Clock, CompanyId, Date, Gstin, GstinError, Outcome, Pan, StateCode};
 use ledgerly_model::{
@@ -73,18 +75,10 @@ impl Step {
         }
     }
 
-    /// The label the step rail shows (index.html:1855).
+    /// The label the step rail shows (index.html:1855), in the current language.
     #[must_use]
-    pub fn label(self) -> &'static str {
-        match self {
-            Step::Welcome => "Start",
-            Step::Company => "Company",
-            Step::Features => "Features",
-            Step::Keyboard => "Keyboard",
-            Step::Ai => "AI and privacy",
-            Step::Backup => "Backup",
-            Step::Done => "Done",
-        }
+    pub fn label(self) -> String {
+        step_label_in(self, &crate::i18n::current())
     }
 
     /// The step after this one, or `None` on the last.
@@ -100,6 +94,12 @@ impl Step {
             .checked_sub(1)
             .and_then(|i| Self::ALL.get(i).copied())
     }
+}
+
+/// The step's name in the words of `tr`, as the step rail shows it (index.html:1855).
+#[must_use]
+pub fn step_label_in(step: Step, tr: &Tr) -> String {
+    tr.t(&format!("setup.step.{}", step.key()))
 }
 
 /// A key the wizard looks at (index.html:1887-1888).
@@ -123,17 +123,20 @@ pub enum KeyOutcome {
 }
 
 /// What a step says when its choice cannot be stored yet, or `None` when the step saves what it
-/// asks. The keyboard preset and backup folder have no store (design/PARITY-GAPS.md); the AI tier
-/// is stored, and [`ai_notice`] covers the one AI choice the engine refuses.
+/// asks, in the current language. The keyboard preset and backup folder have no store
+/// (design/PARITY-GAPS.md); the AI tier is stored, and [`ai_notice`] covers the one AI choice the
+/// engine refuses.
 #[must_use]
-pub fn unsaved_notice(step: Step) -> Option<&'static str> {
+pub fn unsaved_notice(step: Step) -> Option<String> {
+    unsaved_notice_in(step, &crate::i18n::current())
+}
+
+/// [`unsaved_notice`] in the words of `tr`.
+#[must_use]
+pub fn unsaved_notice_in(step: Step, tr: &Tr) -> Option<String> {
     match step {
-        Step::Keyboard => Some(
-            "This choice is not saved yet: every company uses the classic keys until keyboard presets are stored (PARITY-GAPS).",
-        ),
-        Step::Backup => {
-            Some("This folder is not saved and no backup runs on a schedule yet (PARITY-GAPS).")
-        }
+        Step::Keyboard => Some(tr.t("setup.notice.keyboard_unsaved")),
+        Step::Backup => Some(tr.t("setup.notice.backup_unsaved")),
         Step::Welcome | Step::Company | Step::Ai | Step::Features | Step::Done => None,
     }
 }
@@ -142,12 +145,10 @@ pub fn unsaved_notice(step: Step) -> Option<&'static str> {
 /// the company. Off and On this computer are stored ([`create_company`]); the cloud tier is
 /// refused by the engine until a keychain store exists (design/PARITY-GAPS.md).
 #[must_use]
-pub fn ai_notice(choice: AiTier) -> Option<&'static str> {
+pub fn ai_notice(choice: AiTier) -> Option<String> {
     match choice {
         AiTier::Off | AiTier::Local => None,
-        AiTier::Cloud => Some(
-            "Cloud is not saved yet: this build has no keychain store for the provider key. The company starts with AI not set up (PARITY-GAPS).",
-        ),
+        AiTier::Cloud => Some(crate::i18n::t("setup.notice.cloud_unsaved")),
     }
 }
 
@@ -166,21 +167,25 @@ pub fn create_company(
     // The default file lives in `~/Documents/Ledgerly/`, which a new computer does not have yet.
     if let Some(folder) = path.parent().filter(|p| !p.as_os_str().is_empty()) {
         std::fs::create_dir_all(folder).map_err(|e| {
-            format!(
-                "could not make the folder {} for the company file: {e}",
-                folder.display()
+            crate::i18n::tf(
+                "setup.notice.folder_failed",
+                &[
+                    ("folder", &folder.display().to_string()),
+                    ("error", &e.to_string()),
+                ],
             )
         })?;
     }
     let mut api = Api::create(path, company, clock).map_err(|e| e.to_string())?;
     let note = match api.set_ai_tier(ai) {
         Ok(Outcome::Value(())) => None,
-        Ok(Outcome::Unsupported(refused)) => Some(format!(
-            "The AI choice was not saved: {}. AI is not set up for this company.",
-            refused.reason
+        Ok(Outcome::Unsupported(refused)) => Some(crate::i18n::tf(
+            "setup.notice.ai_not_saved",
+            &[("reason", &refused.reason)],
         )),
-        Err(e) => Some(format!(
-            "The AI choice was not saved: {e}. AI is not set up for this company."
+        Err(e) => Some(crate::i18n::tf(
+            "setup.notice.ai_not_saved",
+            &[("reason", &e.to_string())],
         )),
     };
     Ok((api, note))
@@ -200,11 +205,14 @@ pub fn create_company_with_filing(
     let (mut api, note) = create_company(path, company, clock, ai)?;
     let note = match api.set_gst_filing(filing) {
         Ok(Outcome::Value(())) => note,
-        Ok(Outcome::Unsupported(refused)) => Some(format!(
-            "The GST filing choice was not saved: {}.",
-            refused.reason
+        Ok(Outcome::Unsupported(refused)) => Some(crate::i18n::tf(
+            "setup.notice.filing_not_saved",
+            &[("reason", &refused.reason)],
         )),
-        Err(e) => Some(format!("The GST filing choice was not saved: {e}.")),
+        Err(e) => Some(crate::i18n::tf(
+            "setup.notice.filing_not_saved",
+            &[("reason", &e.to_string())],
+        )),
     };
     Ok((api, note))
 }
@@ -262,18 +270,19 @@ pub fn check_gstin(text: &str, chosen: StateCode) -> GstinCheck {
         Err(e) => return GstinCheck::Invalid(gstin_reason(&e)),
     };
     let Some(found) = gstin.state() else {
-        return GstinCheck::Invalid("the first two digits are not a GST state code".to_owned());
+        return GstinCheck::Invalid(crate::i18n::t("setup.notice.gstin_state_code"));
     };
     if found == chosen {
         return GstinCheck::Valid(gstin);
     }
-    let message = format!(
-        "This GSTIN starts with {:02} ({}), but the state is set to {:02} {}. Change the state to {}, or check the first two digits.",
-        found.get(),
-        found.name(),
-        chosen.get(),
-        chosen.name(),
-        found.name()
+    let message = crate::i18n::tf(
+        "setup.notice.gstin_mismatch",
+        &[
+            ("prefix", &format!("{:02}", found.get())),
+            ("prefix_name", found.name()),
+            ("state", &format!("{:02}", chosen.get())),
+            ("state_name", chosen.name()),
+        ],
     );
     GstinCheck::Mismatch {
         found,
@@ -314,7 +323,7 @@ pub fn financial_year_start(today: Date) -> Result<Date, String> {
         today.year() - 1
     };
     Date::from_calendar_date(year, Month::April, 1)
-        .map_err(|_| "That date is outside the supported range.".to_owned())
+        .map_err(|_| crate::i18n::t("setup.notice.date_range"))
 }
 
 /// The last day of the financial year that starts on `fy_start` (31 March of the next year).
@@ -323,13 +332,40 @@ pub fn financial_year_start(today: Date) -> Result<Date, String> {
 /// A message when the date is outside the calendar range.
 pub fn financial_year_end(fy_start: Date) -> Result<Date, String> {
     Date::from_calendar_date(fy_start.year() + 1, Month::March, 31)
-        .map_err(|_| "That date is outside the supported range.".to_owned())
+        .map_err(|_| crate::i18n::t("setup.notice.date_range"))
 }
 
-/// The three-letter month names the books date is written with.
+/// The three-letter English month names the books date may be written with.
 const MONTH_ABBREVIATIONS: [&str; 12] = [
     "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
 ];
+
+/// The translation keys of the month words, in calendar order.
+const MONTH_KEYS: [&str; 12] = [
+    "format.month.jan",
+    "format.month.feb",
+    "format.month.mar",
+    "format.month.apr",
+    "format.month.may",
+    "format.month.jun",
+    "format.month.jul",
+    "format.month.aug",
+    "format.month.sep",
+    "format.month.oct",
+    "format.month.nov",
+    "format.month.dec",
+];
+
+/// The month number (1 to 12) a typed month word names: the English abbreviation, or the
+/// abbreviation of the current language.
+fn month_from_word(word: &str) -> Option<u8> {
+    let tr = crate::i18n::current();
+    MONTH_ABBREVIATIONS
+        .iter()
+        .position(|m| m.eq_ignore_ascii_case(word))
+        .or_else(|| MONTH_KEYS.iter().position(|k| tr.t(k) == word))
+        .and_then(|i| u8::try_from(i + 1).ok())
+}
 
 /// Reads the "Books begin from" text: `1 Apr 2026` (as the box shows it) or `YYYY-MM-DD`. Books
 /// may begin on any day of the financial year (Tally help, read 2026-11-23: change the date to the
@@ -338,14 +374,10 @@ const MONTH_ABBREVIATIONS: [&str; 12] = [
 /// # Errors
 /// A message when the text is not a date, or the date is outside `fy_start` to `fy_end`.
 pub fn parse_books_begin(text: &str, fy_start: Date, fy_end: Date) -> Result<Date, String> {
-    let not_a_date = || "Type the date as 1 Apr 2026 or 2026-04-01.".to_owned();
+    let not_a_date = || crate::i18n::t("setup.notice.type_date");
     let words: Vec<&str> = text.split_whitespace().collect();
     let (year, month, day) = if let [day, month, year] = words.as_slice() {
-        let month = MONTH_ABBREVIATIONS
-            .iter()
-            .position(|m| m.eq_ignore_ascii_case(month))
-            .and_then(|i| u8::try_from(i + 1).ok())
-            .ok_or_else(not_a_date)?;
+        let month = month_from_word(month).ok_or_else(not_a_date)?;
         (
             (*year).parse::<i32>().map_err(|_| not_a_date())?,
             month,
@@ -365,26 +397,27 @@ pub fn parse_books_begin(text: &str, fy_start: Date, fy_end: Date) -> Result<Dat
     let month = Month::try_from(month).map_err(|_| not_a_date())?;
     let date = Date::from_calendar_date(year, month, day).map_err(|_| not_a_date())?;
     if date < fy_start || date > fy_end {
-        return Err(format!(
-            "Books begin between {fy_start} and {fy_end}, inside the financial year."
+        return Err(crate::i18n::tf(
+            "setup.notice.books_between",
+            &[("from", &fy_start.to_string()), ("to", &fy_end.to_string())],
         ));
     }
     Ok(date)
 }
 
 /// One feature row of the wizard (index.html:1872-1880).
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 pub struct FeatureRow {
     /// The row's title.
-    pub label: &'static str,
+    pub label: String,
     /// The one-line explanation the mock gives.
-    pub hint: &'static str,
+    pub hint: String,
     /// On by default in the mock (index.html:1872).
     pub default_on: bool,
     /// The model switch this row turns on, when the model has one.
     pub switch: Option<fn(&mut Features) -> &mut bool>,
     /// Why the row cannot be turned on, when the model has no switch for it.
-    pub unavailable: Option<&'static str>,
+    pub unavailable: Option<String>,
 }
 
 /// The feature rows of the wizard. A row is a working switch only when the model has the switch
@@ -393,54 +426,50 @@ pub struct FeatureRow {
 pub fn feature_rows() -> Vec<FeatureRow> {
     vec![
         FeatureRow {
-            label: "Inventory",
-            hint: "Stock items, quantities and stock value in the balance sheet.",
+            label: crate::i18n::t("setup.feature.inventory.label"),
+            hint: crate::i18n::t("setup.feature.inventory.hint"),
             default_on: true,
             switch: Some(|f| &mut f.inventory),
             unavailable: None,
         },
         FeatureRow {
-            label: "GST",
-            hint: "Tax on invoices, GSTR-1 and GSTR-3B data, 2B matching.",
+            label: crate::i18n::t("invoice.col.gst"),
+            hint: crate::i18n::t("setup.feature.gst.hint"),
             default_on: true,
             switch: Some(|f| &mut f.gst),
             unavailable: None,
         },
         FeatureRow {
-            label: "Bank reconciliation",
-            hint: "Import statements and match lines to vouchers.",
+            label: crate::i18n::t("sidebar.bank_recon"),
+            hint: crate::i18n::t("setup.feature.bank.hint"),
             default_on: true,
             switch: Some(|f| &mut f.bank_reconciliation),
             unavailable: None,
         },
         FeatureRow {
-            label: "Bill-wise tracking",
-            hint: "Track each invoice until it is paid; ageing and reminders.",
+            label: crate::i18n::t("setup.feature.bill_wise.label"),
+            hint: crate::i18n::t("setup.feature.bill_wise.hint"),
             default_on: true,
             switch: Some(|f| &mut f.bill_wise),
             unavailable: None,
         },
         FeatureRow {
-            label: "e-Invoice JSON",
-            hint: "Export invoices in the government schema. You upload them yourself.",
+            label: crate::i18n::t("setup.feature.e_invoice.label"),
+            hint: crate::i18n::t("setup.feature.e_invoice.hint"),
             default_on: true,
             switch: None,
-            unavailable: Some(
-                "The model has no e-invoice switch yet, and e-invoice export is not built (PARITY-GAPS).",
-            ),
+            unavailable: Some(crate::i18n::t("setup.feature.e_invoice.reason")),
         },
         FeatureRow {
-            label: "Multiple currencies",
-            hint: "For export and import. Off for most businesses.",
+            label: crate::i18n::t("setup.feature.currencies.label"),
+            hint: crate::i18n::t("setup.feature.currencies.hint"),
             default_on: false,
             switch: None,
-            unavailable: Some(
-                "The model has no currency switch yet, and foreign currency is not built (PARITY-GAPS).",
-            ),
+            unavailable: Some(crate::i18n::t("setup.feature.currencies.reason")),
         },
         FeatureRow {
-            label: "Cost centres",
-            hint: "Split expenses by branch or project.",
+            label: crate::i18n::t("masters.kind_plural.cost_centre"),
+            hint: crate::i18n::t("setup.feature.cost_centres.hint"),
             default_on: false,
             switch: Some(|f| &mut f.cost_centres),
             unavailable: None,
@@ -487,7 +516,7 @@ pub struct CompanyForm {
 pub fn build_company(form: &CompanyForm, features: Features) -> Result<Company, String> {
     let name = form.name.trim();
     if name.is_empty() {
-        return Err("Type a name for the company.".to_owned());
+        return Err(crate::i18n::t("setup.notice.type_name"));
     }
     let (registrations, pan) = match check_gstin(&form.gstin, form.state) {
         GstinCheck::Blank => (Vec::new(), None),

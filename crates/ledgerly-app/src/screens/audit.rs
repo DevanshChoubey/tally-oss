@@ -32,6 +32,7 @@
 //! [`AuditScreen::set_failed`]. An `Unsupported` outcome from RP10 is shown as such, with its
 //! reason, never as an empty table.
 
+use crate::i18n::Tr;
 use std::collections::BTreeSet;
 
 use egui_extras::{Column, TableBuilder};
@@ -535,12 +536,12 @@ impl AuditScreen {
         ui.label(self.kind.description());
         ui.horizontal(|ui| {
             if self.kind.uses_period() {
-                ui.label("From");
+                ui.label(crate::i18n::lit("From"));
                 ui.add(egui::TextEdit::singleline(&mut self.from_text).desired_width(90.0));
                 ui.label("to");
                 ui.add(egui::TextEdit::singleline(&mut self.to_text).desired_width(90.0));
             } else {
-                ui.label("Covers the whole log.");
+                ui.label(crate::i18n::lit("Covers the whole log."));
             }
             if ui.button("Run").clicked() {
                 self.run();
@@ -553,10 +554,10 @@ impl AuditScreen {
 
     fn filter_ui(&mut self, ui: &mut egui::Ui, visible: &[usize]) {
         ui.horizontal(|ui| {
-            ui.label("Find");
+            ui.label(crate::i18n::lit("Find"));
             ui.add(
                 egui::TextEdit::singleline(&mut self.filter)
-                    .hint_text("text in any column")
+                    .hint_text(crate::i18n::lit("text in any column"))
                     .desired_width(180.0),
             );
             if let AuditState::Loaded(table) = &self.state {
@@ -575,10 +576,10 @@ impl AuditScreen {
         }
         match &self.state {
             AuditState::NotRun => {
-                ui.label("Choose a report and press Run.");
+                ui.label(crate::i18n::lit("Choose a report and press Run."));
             }
             AuditState::Running => {
-                ui.label("Reading the audit log...");
+                ui.label(crate::i18n::lit("Reading the audit log..."));
             }
             AuditState::Unsupported { what, reason } => {
                 ui.colored_label(ui.visuals().warn_fg_color, format!("Unsupported: {what}"));
@@ -634,7 +635,7 @@ fn draw_table(
     collapsed: &BTreeSet<usize>,
 ) -> Option<usize> {
     if table.columns.is_empty() {
-        ui.label("The report has no columns.");
+        ui.label(crate::i18n::lit("The report has no columns."));
         return None;
     }
     let mut toggled: Option<usize> = None;
@@ -685,7 +686,7 @@ fn draw_table(
 }
 
 impl Screen for AuditScreen {
-    fn title(&self) -> String {
+    fn title(&self, _tr: &Tr) -> String {
         "Audit trail".to_owned()
     }
 

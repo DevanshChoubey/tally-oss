@@ -175,11 +175,11 @@ fn opens_on_the_reconciliation_tab_as_the_mock_does() {
     // provenance: derived - mock `let gTab='g2'` (the 2B and IMS tab is the default).
     let s = screen();
     assert_eq!(s.tab(), GstTab::Reconciliation);
-    assert_eq!(s.title(), "GST returns");
+    assert_eq!(s.title(&ledgerly_app::i18n::Tr::default()), "GST returns");
     // Spec change 2026-11-23: the subtitle follows the mock-v2 head (index.html:1670); it was
     // "Return period November 2026. GSTIN ...".
     assert_eq!(
-        s.subtitle(),
+        s.subtitle(&ledgerly_app::i18n::Tr::default()),
         format!(
             "{} \u{00B7} November 2026 \u{00B7} monthly",
             gstin("27ZZZZZ0113Z1Z")
@@ -338,7 +338,10 @@ fn deciding_without_a_reconciliation_is_an_error() {
     assert_eq!(s.item_count(GstTab::Reconciliation), None);
     assert_eq!(s.open_count(), 0);
     // Spec change 2026-11-23: mock-v2 head subtitle (index.html:1670).
-    assert_eq!(s.subtitle(), "November 2026 \u{00B7} monthly");
+    assert_eq!(
+        s.subtitle(&ledgerly_app::i18n::Tr::default()),
+        "November 2026 \u{00B7} monthly"
+    );
 }
 
 #[test]
@@ -779,6 +782,9 @@ fn enter_through_egui_opens_the_voucher() {
     let ScreenAction::Push(pushed) = action else {
         panic!("Enter did not open the voucher");
     };
-    assert_eq!(pushed.title(), "Voucher #101");
+    assert_eq!(
+        pushed.title(&ledgerly_app::i18n::Tr::default()),
+        "Voucher #101"
+    );
     assert_eq!(s.take_drill_request(), None);
 }

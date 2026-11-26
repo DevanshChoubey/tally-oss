@@ -106,7 +106,7 @@ pub(crate) fn draw_gstin_check(ui: &mut Ui, text: &str) {
         GstinCheck::Valid => {
             ui.horizontal_wrapped(|ui| {
                 ui.spacing_mut().item_spacing.x = 6.0;
-                badge(ui, BadgeKind::Ok, "Check character OK");
+                badge(ui, BadgeKind::Ok, &crate::i18n::t("masters.check_ok"));
                 if let Some(hint) = gstin_hint(text) {
                     let t = tokens(ui);
                     ui.label(RichText::new(hint).size(TEXT_META).color(t.text_3));
@@ -126,15 +126,15 @@ pub(crate) fn draw_gstin_check(ui: &mut Ui, text: &str) {
     }
 }
 
-fn registration_label(r: RegistrationType) -> &'static str {
+fn registration_label(r: RegistrationType) -> String {
     match r {
-        RegistrationType::Regular => "Regular",
-        RegistrationType::Composition => "Composition",
-        RegistrationType::Unregistered => "Unregistered",
-        RegistrationType::Consumer => "Consumer",
-        RegistrationType::Sez => "SEZ",
-        RegistrationType::Overseas => "Overseas",
-        RegistrationType::Uin => "UIN holder",
+        RegistrationType::Regular => crate::i18n::t("masters.reg.regular"),
+        RegistrationType::Composition => crate::i18n::t("masters.reg.composition"),
+        RegistrationType::Unregistered => crate::i18n::t("masters.reg.unregistered"),
+        RegistrationType::Consumer => crate::i18n::t("masters.reg.consumer"),
+        RegistrationType::Sez => crate::i18n::t("masters.reg.sez"),
+        RegistrationType::Overseas => crate::i18n::t("masters.reg.overseas"),
+        RegistrationType::Uin => crate::i18n::t("masters.reg.uin"),
     }
 }
 
@@ -148,12 +148,12 @@ const REGISTRATIONS: [RegistrationType; 7] = [
     RegistrationType::Uin,
 ];
 
-fn nature_label(n: Nature) -> &'static str {
+fn nature_label(n: Nature) -> String {
     match n {
-        Nature::Asset => "Asset",
-        Nature::Liability => "Liability",
-        Nature::Income => "Income",
-        Nature::Expense => "Expense",
+        Nature::Asset => crate::i18n::t("masters.nature.asset"),
+        Nature::Liability => crate::i18n::t("masters.nature.liability"),
+        Nature::Income => crate::i18n::t("masters.nature.income"),
+        Nature::Expense => crate::i18n::t("masters.nature.expense"),
     }
 }
 
@@ -164,12 +164,12 @@ const NATURES: [Nature; 4] = [
     Nature::Expense,
 ];
 
-fn valuation_label(v: ValuationMethod) -> &'static str {
+fn valuation_label(v: ValuationMethod) -> String {
     match v {
-        ValuationMethod::AverageCost => "Average cost",
-        ValuationMethod::Fifo => "FIFO",
-        ValuationMethod::LastPurchaseCost => "Last purchase cost",
-        ValuationMethod::StandardCost => "Standard cost",
+        ValuationMethod::AverageCost => crate::i18n::t("masters.valuation.average_cost"),
+        ValuationMethod::Fifo => crate::i18n::t("masters.valuation.fifo"),
+        ValuationMethod::LastPurchaseCost => crate::i18n::t("masters.valuation.last_purchase_cost"),
+        ValuationMethod::StandardCost => crate::i18n::t("masters.valuation.standard_cost"),
     }
 }
 
@@ -180,16 +180,16 @@ const VALUATIONS: [ValuationMethod; 4] = [
     ValuationMethod::StandardCost,
 ];
 
-fn tax_kind_label(k: TaxLedgerKind) -> &'static str {
+fn tax_kind_label(k: TaxLedgerKind) -> String {
     match k {
-        TaxLedgerKind::Cgst => "CGST",
-        TaxLedgerKind::Sgst => "SGST",
-        TaxLedgerKind::Utgst => "UTGST",
-        TaxLedgerKind::Igst => "IGST",
-        TaxLedgerKind::Cess => "Cess",
-        TaxLedgerKind::Tds => "TDS",
-        TaxLedgerKind::Tcs => "TCS",
-        TaxLedgerKind::Other => "Other",
+        TaxLedgerKind::Cgst => "CGST".to_owned(),
+        TaxLedgerKind::Sgst => "SGST".to_owned(),
+        TaxLedgerKind::Utgst => "UTGST".to_owned(),
+        TaxLedgerKind::Igst => "IGST".to_owned(),
+        TaxLedgerKind::Cess => "Cess".to_owned(),
+        TaxLedgerKind::Tds => "TDS".to_owned(),
+        TaxLedgerKind::Tcs => "TCS".to_owned(),
+        TaxLedgerKind::Other => crate::i18n::t("masters.tax_kind.other"),
     }
 }
 
@@ -204,12 +204,12 @@ const TAX_KINDS: [TaxLedgerKind; 8] = [
     TaxLedgerKind::Other,
 ];
 
-fn taxability_label(t: Taxability) -> &'static str {
+fn taxability_label(t: Taxability) -> String {
     match t {
-        Taxability::Taxable => "Taxable",
-        Taxability::Exempt => "Exempt",
-        Taxability::NilRated => "Nil rated",
-        Taxability::NonGst => "Non-GST",
+        Taxability::Taxable => crate::i18n::t("masters.taxability.taxable"),
+        Taxability::Exempt => crate::i18n::t("masters.taxability.exempt"),
+        Taxability::NilRated => crate::i18n::t("masters.taxability.nil_rated"),
+        Taxability::NonGst => crate::i18n::t("masters.taxability.non_gst"),
     }
 }
 
@@ -301,7 +301,7 @@ fn switch_row(ui: &mut Ui, span: u8, label: &str, value: &mut bool) {
             Layout::left_to_right(Align::Center),
             |ui| {
                 // The box reads "On"; a screen reader is told which field it switches.
-                let response = ui.checkbox(value, "On");
+                let response = ui.checkbox(value, crate::i18n::t("masters.field.on"));
                 crate::ui::a11y::name_selected(
                     ui,
                     &response,
@@ -371,31 +371,27 @@ fn choose_one<T: Copy + PartialEq>(
     salt: &str,
     label: &str,
     current: &mut T,
-    options: &[(T, &'static str)],
+    options: &[(T, String)],
 ) {
     let shown = options
         .iter()
         .find(|(v, _)| *v == *current)
-        .map_or("", |(_, name)| *name);
+        .map_or("", |(_, name)| name.as_str());
     fld(ui, span, label, |ui| {
         let combo = egui::ComboBox::from_id_salt(salt)
             .selected_text(shown)
             .width(ui.available_width())
             .show_ui(ui, |ui| {
                 for (value, name) in options {
-                    ui.selectable_value(&mut *current, *value, *name);
+                    ui.selectable_value(&mut *current, *value, name.as_str());
                 }
             });
         crate::ui::a11y::name(ui, &combo.response, egui::accesskit::Role::ComboBox, label);
     });
 }
 
-fn labelled<T: Copy>(all: &[T], label: fn(T) -> &'static str) -> Vec<(T, &'static str)> {
+fn named<T: Copy>(all: &[T], label: fn(T) -> String) -> Vec<(T, String)> {
     all.iter().map(|v| (*v, label(*v))).collect()
-}
-
-fn named<T: Copy>(all: &[T], label: fn(T) -> &'static str) -> Vec<(T, String)> {
-    all.iter().map(|v| (*v, label(*v).to_owned())).collect()
 }
 
 /// Sorted `(id, name)` options, skipping `exclude` (the master being altered).
@@ -452,7 +448,12 @@ fn draw_fields(
         MasterDraft::Ledger(d) => draw_ledger(ui, masters, d, balance),
         MasterDraft::Unit(d) => draw_unit(ui, d),
         MasterDraft::StockGroup(d) => {
-            text_row(ui, 2, "Name", &mut d.name);
+            text_row(
+                ui,
+                2,
+                &crate::i18n::t("voucher.create_form.name"),
+                &mut d.name,
+            );
             let options = sorted_options(
                 masters
                     .stock_groups
@@ -464,21 +465,31 @@ fn draw_fields(
                 ui,
                 1,
                 "sg-parent",
-                "Under",
+                &crate::i18n::t("masters.field.under"),
                 &mut d.parent,
-                "(Primary)",
+                &crate::i18n::t("masters.field.primary"),
                 &options,
             );
         }
         MasterDraft::Godown(d) => draw_godown(ui, masters, d, editing),
-        MasterDraft::CostCategory(d) => text_row(ui, 2, "Name", &mut d.name),
+        MasterDraft::CostCategory(d) => text_row(
+            ui,
+            2,
+            &crate::i18n::t("voucher.create_form.name"),
+            &mut d.name,
+        ),
         MasterDraft::CostCentre(d) => draw_cost_centre(ui, masters, d, editing),
         MasterDraft::StockItem(d) => draw_stock_item(ui, masters, d),
     }
 }
 
 fn draw_godown(ui: &mut Ui, masters: &Masters, d: &mut TreeDraft, editing: Option<u64>) {
-    text_row(ui, 2, "Name", &mut d.name);
+    text_row(
+        ui,
+        2,
+        &crate::i18n::t("voucher.create_form.name"),
+        &mut d.name,
+    );
     let options = sorted_options(
         masters
             .godowns
@@ -490,15 +501,20 @@ fn draw_godown(ui: &mut Ui, masters: &Masters, d: &mut TreeDraft, editing: Optio
         ui,
         1,
         "gd-parent",
-        "Under",
+        &crate::i18n::t("masters.field.under"),
         &mut d.parent,
-        "(Primary)",
+        &crate::i18n::t("masters.field.primary"),
         &options,
     );
 }
 
 fn draw_cost_centre(ui: &mut Ui, masters: &Masters, d: &mut CostCentreDraft, editing: Option<u64>) {
-    text_row(ui, 2, "Name", &mut d.name);
+    text_row(
+        ui,
+        2,
+        &crate::i18n::t("voucher.create_form.name"),
+        &mut d.name,
+    );
     let categories = sorted_options(
         masters
             .cost_categories
@@ -510,9 +526,9 @@ fn draw_cost_centre(ui: &mut Ui, masters: &Masters, d: &mut CostCentreDraft, edi
         ui,
         1,
         "cc-category",
-        "Category",
+        &crate::i18n::t("masters.field.category"),
         &mut d.category,
-        "(choose)",
+        &crate::i18n::t("masters.field.choose"),
         &categories,
     );
     let centres = sorted_options(
@@ -526,16 +542,26 @@ fn draw_cost_centre(ui: &mut Ui, masters: &Masters, d: &mut CostCentreDraft, edi
         ui,
         1,
         "cc-parent",
-        "Under",
+        &crate::i18n::t("masters.field.under"),
         &mut d.parent,
-        "(Primary)",
+        &crate::i18n::t("masters.field.primary"),
         &centres,
     );
 }
 
 fn draw_group(ui: &mut Ui, masters: &Masters, d: &mut GroupDraft, editing: Option<u64>) {
-    text_row(ui, 2, "Name", &mut d.name);
-    text_row(ui, 1, "Alias", &mut d.aliases);
+    text_row(
+        ui,
+        2,
+        &crate::i18n::t("voucher.create_form.name"),
+        &mut d.name,
+    );
+    text_row(
+        ui,
+        1,
+        &crate::i18n::t("masters.field.alias"),
+        &mut d.aliases,
+    );
     let groups = sorted_options(
         masters
             .groups
@@ -547,9 +573,9 @@ fn draw_group(ui: &mut Ui, masters: &Masters, d: &mut GroupDraft, editing: Optio
         ui,
         1,
         "g-parent",
-        "Under",
+        &crate::i18n::t("masters.field.under"),
         &mut d.parent,
-        "(Primary)",
+        &crate::i18n::t("masters.field.primary"),
         &groups,
     );
     ui.end_row();
@@ -558,17 +584,19 @@ fn draw_group(ui: &mut Ui, masters: &Masters, d: &mut GroupDraft, editing: Optio
             ui,
             1,
             "g-nature",
-            "Nature",
+            &crate::i18n::t("masters.field.nature"),
             &mut d.nature,
-            "(choose)",
+            &crate::i18n::t("masters.field.choose"),
             &named(&NATURES, nature_label),
         );
-        switch_row(ui, 1, "Affects gross profit", &mut d.affects_gross_profit);
-    } else {
-        sheet_note(
+        switch_row(
             ui,
-            "Nature and gross-profit treatment come from the primary group.",
+            1,
+            &crate::i18n::t("masters.field.affects_gross_profit"),
+            &mut d.affects_gross_profit,
         );
+    } else {
+        sheet_note(ui, &crate::i18n::t("masters.field.nature_note"));
     }
 }
 
@@ -604,11 +632,25 @@ fn more_in_use(d: &LedgerDraft, altering: bool) -> bool {
 /// GSTIN, State and Credit days. An altered ledger (`balance` is its closing balance as the
 /// engine gave it) shows the mock's detail layout: Name, Alias, Under; then Bill-wise and Balance.
 /// Everything else the master holds sits under "More details".
+#[allow(
+    clippy::too_many_lines,
+    reason = "one drawing pass of the screen, a line for each part of it"
+)]
 fn draw_ledger(ui: &mut Ui, masters: &Masters, d: &mut LedgerDraft, balance: Option<&str>) {
     let altering = balance.is_some();
-    text_row(ui, 2, "Name", &mut d.name);
+    text_row(
+        ui,
+        2,
+        &crate::i18n::t("voucher.create_form.name"),
+        &mut d.name,
+    );
     if altering {
-        text_row(ui, 1, "Alias", &mut d.aliases);
+        text_row(
+            ui,
+            1,
+            &crate::i18n::t("masters.field.alias"),
+            &mut d.aliases,
+        );
     }
     let groups = sorted_options(
         masters
@@ -617,9 +659,22 @@ fn draw_ledger(ui: &mut Ui, masters: &Masters, d: &mut LedgerDraft, balance: Opt
             .map(|g| (g.id, g.id.0, g.name.clone())),
         None,
     );
-    choose_opt(ui, 1, "l-group", "Under", &mut d.group, "(choose)", &groups);
+    choose_opt(
+        ui,
+        1,
+        "l-group",
+        &crate::i18n::t("masters.field.under"),
+        &mut d.group,
+        &crate::i18n::t("masters.field.choose"),
+        &groups,
+    );
     if !altering {
-        switch_row(ui, 1, "Bill-wise", &mut d.bill_wise);
+        switch_row(
+            ui,
+            1,
+            &crate::i18n::t("masters.field.bill_wise"),
+            &mut d.bill_wise,
+        );
     }
     ui.end_row();
     if let Some(p) = d.party.as_mut() {
@@ -627,19 +682,34 @@ fn draw_ledger(ui: &mut Ui, masters: &Masters, d: &mut LedgerDraft, balance: Opt
     } else {
         // The mock always shows the GSTIN line; ours is the party section's, so its switch takes
         // the line's place until it is on (it is then switched off under "More details").
-        section_switch(ui, "Party details", &mut d.party, PartyDraft::default);
+        section_switch(
+            ui,
+            &crate::i18n::t("masters.field.party_details"),
+            &mut d.party,
+            PartyDraft::default,
+        );
     }
     if d.bill_wise {
-        number_row(ui, 1, "Credit days", &mut d.credit_days);
+        number_row(
+            ui,
+            1,
+            &crate::i18n::t("masters.field.credit_days"),
+            &mut d.credit_days,
+        );
     }
     ui.end_row();
     if altering {
         // Spacer: Bill-wise and Balance sit under the name's two columns, as the mock's City does.
         fld(ui, 2, "", |_| {});
-        switch_row(ui, 1, "Bill-wise", &mut d.bill_wise);
+        switch_row(
+            ui,
+            1,
+            &crate::i18n::t("masters.field.bill_wise"),
+            &mut d.bill_wise,
+        );
     }
     if let Some(text) = balance {
-        read_only_row(ui, 1, "Balance", text);
+        read_only_row(ui, 1, &crate::i18n::t("masters.col.balance"), text);
     }
     if altering {
         ui.end_row();
@@ -656,14 +726,20 @@ fn draw_ledger(ui: &mut Ui, masters: &Masters, d: &mut LedgerDraft, balance: Opt
     fld(ui, COLUMNS, "", |ui| {
         let t = tokens(ui);
         let text = if open {
-            "Fewer details"
+            crate::i18n::t("masters.more.fewer")
         } else {
-            "More details: opening balance, party, bank and tax"
+            crate::i18n::t("masters.more.more")
         };
         let r = ui.add(
-            egui::Button::new(RichText::new(text).size(TEXT_META).color(t.accent_ink)).frame(false),
+            egui::Button::new(RichText::new(&text).size(TEXT_META).color(t.accent_ink))
+                .frame(false),
         );
-        crate::ui::a11y::name(ui, &r, egui::accesskit::Role::Button, "More details");
+        crate::ui::a11y::name(
+            ui,
+            &r,
+            egui::accesskit::Role::Button,
+            &crate::i18n::t("masters.more.name"),
+        );
         if r.clicked() && !more_in_use(d, altering) {
             set_more_details(ui.ctx(), !open);
         }
@@ -676,56 +752,95 @@ fn draw_ledger(ui: &mut Ui, masters: &Masters, d: &mut LedgerDraft, balance: Opt
 
 /// The fields under "More details": alias (on create), opening balance, cost centres and the
 /// optional sections.
+#[allow(
+    clippy::too_many_lines,
+    reason = "one drawing pass of the screen, a line for each part of it"
+)]
 fn draw_ledger_more(ui: &mut Ui, d: &mut LedgerDraft, altering: bool) {
     if !altering {
-        text_row(ui, 1, "Alias", &mut d.aliases);
+        text_row(
+            ui,
+            1,
+            &crate::i18n::t("masters.field.alias"),
+            &mut d.aliases,
+        );
         ui.end_row();
     }
-    fld(ui, 2, "Opening balance", |ui| {
-        ui.horizontal(|ui| {
-            let side_w = 72.0;
-            let text_w = (ui.available_width() - side_w - 8.0).max(40.0);
-            one_line(
-                ui,
-                "Opening balance",
-                egui::TextEdit::singleline(&mut d.opening)
-                    .font(FontId::proportional(TEXT_INPUT))
-                    .align(Align2::RIGHT_CENTER)
-                    .min_size(vec2(0.0, FIELD_HEIGHT))
-                    .desired_width(text_w),
-            );
-            let sides = [(DrCr::Dr, "Dr"), (DrCr::Cr, "Cr")];
-            let shown = if d.opening_side == DrCr::Dr {
-                "Dr"
-            } else {
-                "Cr"
-            };
-            egui::ComboBox::from_id_salt("l-side")
-                .selected_text(shown)
-                .width(side_w)
-                .show_ui(ui, |ui| {
-                    for (value, name) in sides {
-                        ui.selectable_value(&mut d.opening_side, value, name);
-                    }
-                });
-        });
-    });
+    fld(
+        ui,
+        2,
+        &crate::i18n::t("masters.field.opening_balance"),
+        |ui| {
+            ui.horizontal(|ui| {
+                let side_w = 72.0;
+                let text_w = (ui.available_width() - side_w - 8.0).max(40.0);
+                one_line(
+                    ui,
+                    &crate::i18n::t("masters.field.opening_balance"),
+                    egui::TextEdit::singleline(&mut d.opening)
+                        .font(FontId::proportional(TEXT_INPUT))
+                        .align(Align2::RIGHT_CENTER)
+                        .min_size(vec2(0.0, FIELD_HEIGHT))
+                        .desired_width(text_w),
+                );
+                let sides = [(DrCr::Dr, "Dr"), (DrCr::Cr, "Cr")];
+                let shown = if d.opening_side == DrCr::Dr {
+                    "Dr"
+                } else {
+                    "Cr"
+                };
+                egui::ComboBox::from_id_salt("l-side")
+                    .selected_text(shown)
+                    .width(side_w)
+                    .show_ui(ui, |ui| {
+                        for (value, name) in sides {
+                            ui.selectable_value(&mut d.opening_side, value, name);
+                        }
+                    });
+            });
+        },
+    );
     ui.end_row();
-    switch_row(ui, 1, "Cost centres", &mut d.cost_centres);
+    switch_row(
+        ui,
+        1,
+        &crate::i18n::t("masters.kind_plural.cost_centre"),
+        &mut d.cost_centres,
+    );
     if d.party.is_some() {
-        section_switch(ui, "Party details", &mut d.party, PartyDraft::default);
+        section_switch(
+            ui,
+            &crate::i18n::t("masters.field.party_details"),
+            &mut d.party,
+            PartyDraft::default,
+        );
     }
-    section_switch(ui, "Bank details", &mut d.bank, BankDraft::default);
-    section_switch(ui, "Tax details", &mut d.tax, || TaxDraft {
-        kind: TaxLedgerKind::Cgst,
-        rate_percent: String::new(),
-    });
+    section_switch(
+        ui,
+        &crate::i18n::t("masters.field.bank_details"),
+        &mut d.bank,
+        BankDraft::default,
+    );
+    section_switch(
+        ui,
+        &crate::i18n::t("masters.field.tax_details"),
+        &mut d.tax,
+        || TaxDraft {
+            kind: TaxLedgerKind::Cgst,
+            rate_percent: String::new(),
+        },
+    );
     ui.end_row();
-    section_switch(ui, "GST classification", &mut d.gst, || GstDraft {
-        hsn: String::new(),
-        taxability: Taxability::Taxable,
-        rate_percent: String::new(),
-    });
+    section_switch(
+        ui,
+        &crate::i18n::t("masters.field.gst_classification"),
+        &mut d.gst,
+        || GstDraft {
+            hsn: String::new(),
+            taxability: Taxability::Taxable,
+            rate_percent: String::new(),
+        },
+    );
     ui.end_row();
     if let Some(p) = d.party.as_mut() {
         draw_party_rest(ui, p);
@@ -765,14 +880,19 @@ fn draw_party_head(ui: &mut Ui, p: &mut PartyDraft) {
         .ok()
         .and_then(|g| g.state())
         .map_or_else(
-            || "From the GSTIN".to_owned(),
-            |s| format!("{:02} {} (from GSTIN)", s.get(), s.name()),
+            || crate::i18n::t("masters.field.from_gstin"),
+            |s| {
+                crate::i18n::tf(
+                    "masters.state.from_gstin_named",
+                    &[("code", &format!("{:02}", s.get())), ("name", s.name())],
+                )
+            },
         );
     choose_opt(
         ui,
         1,
         "p-state",
-        "State",
+        &crate::i18n::t("masters.field.state"),
         &mut p.state,
         &from_gstin,
         &states,
@@ -785,23 +905,54 @@ fn draw_party_rest(ui: &mut Ui, p: &mut PartyDraft) {
         ui,
         1,
         "p-reg",
-        "Registration",
+        &crate::i18n::t("masters.field.registration"),
         &mut p.registration,
-        &labelled(&REGISTRATIONS, registration_label),
+        &named(&REGISTRATIONS, registration_label),
     );
     text_row(ui, 1, "PAN", &mut p.pan);
-    text_row(ui, 1, "PIN code", &mut p.pincode);
-    text_row(ui, 1, "Country", &mut p.country);
+    text_row(
+        ui,
+        1,
+        &crate::i18n::t("masters.field.pin_code"),
+        &mut p.pincode,
+    );
+    text_row(
+        ui,
+        1,
+        &crate::i18n::t("masters.field.country"),
+        &mut p.country,
+    );
     ui.end_row();
-    area_row(ui, 2, address_id(), "Address", &mut p.address_lines);
+    area_row(
+        ui,
+        2,
+        address_id(),
+        &crate::i18n::t("masters.field.address"),
+        &mut p.address_lines,
+    );
     ui.end_row();
 }
 
 fn draw_bank(ui: &mut Ui, b: &mut BankDraft) {
-    text_row(ui, 1, "Account number", &mut b.account_number);
+    text_row(
+        ui,
+        1,
+        &crate::i18n::t("masters.field.account_number"),
+        &mut b.account_number,
+    );
     text_row(ui, 1, "IFSC", &mut b.ifsc);
-    text_row(ui, 1, "Bank name", &mut b.bank_name);
-    text_row(ui, 1, "Branch", &mut b.branch);
+    text_row(
+        ui,
+        1,
+        &crate::i18n::t("masters.field.bank_name"),
+        &mut b.bank_name,
+    );
+    text_row(
+        ui,
+        1,
+        &crate::i18n::t("masters.field.branch"),
+        &mut b.branch,
+    );
     ui.end_row();
 }
 
@@ -810,11 +961,16 @@ fn draw_tax(ui: &mut Ui, t: &mut TaxDraft) {
         ui,
         1,
         "t-kind",
-        "Tax",
+        &crate::i18n::t("masters.field.tax"),
         &mut t.kind,
-        &labelled(&TAX_KINDS, tax_kind_label),
+        &named(&TAX_KINDS, tax_kind_label),
     );
-    number_row(ui, 1, "Rate %", &mut t.rate_percent);
+    number_row(
+        ui,
+        1,
+        &crate::i18n::t("masters.field.rate_percent"),
+        &mut t.rate_percent,
+    );
     ui.end_row();
 }
 
@@ -824,25 +980,55 @@ fn draw_gst(ui: &mut Ui, g: &mut GstDraft) {
         ui,
         1,
         "g-tax",
-        "Taxability",
+        &crate::i18n::t("masters.field.taxability"),
         &mut g.taxability,
-        &labelled(&TAXABILITIES, taxability_label),
+        &named(&TAXABILITIES, taxability_label),
     );
-    number_row(ui, 1, "Rate %", &mut g.rate_percent);
+    number_row(
+        ui,
+        1,
+        &crate::i18n::t("masters.field.rate_percent"),
+        &mut g.rate_percent,
+    );
     ui.end_row();
 }
 
 fn draw_unit(ui: &mut Ui, d: &mut UnitDraft) {
-    text_row(ui, 1, "Symbol", &mut d.symbol);
-    text_row(ui, 2, "Formal name", &mut d.formal_name);
-    number_row(ui, 1, "Decimal places", &mut d.decimals);
+    text_row(
+        ui,
+        1,
+        &crate::i18n::t("masters.field.symbol"),
+        &mut d.symbol,
+    );
+    text_row(
+        ui,
+        2,
+        &crate::i18n::t("masters.field.formal_name"),
+        &mut d.formal_name,
+    );
+    number_row(
+        ui,
+        1,
+        &crate::i18n::t("masters.field.decimal_places"),
+        &mut d.decimals,
+    );
     ui.end_row();
-    text_row(ui, 1, "GST unit code (UQC)", &mut d.uqc);
+    text_row(ui, 1, &crate::i18n::t("masters.field.uqc"), &mut d.uqc);
 }
 
 fn draw_stock_item(ui: &mut Ui, masters: &Masters, d: &mut StockItemDraft) {
-    text_row(ui, 2, "Name", &mut d.name);
-    text_row(ui, 1, "Alias", &mut d.aliases);
+    text_row(
+        ui,
+        2,
+        &crate::i18n::t("voucher.create_form.name"),
+        &mut d.name,
+    );
+    text_row(
+        ui,
+        1,
+        &crate::i18n::t("masters.field.alias"),
+        &mut d.aliases,
+    );
     let groups = sorted_options(
         masters
             .stock_groups
@@ -850,7 +1036,15 @@ fn draw_stock_item(ui: &mut Ui, masters: &Masters, d: &mut StockItemDraft) {
             .map(|g| (g.id, g.id.0, g.name.clone())),
         None,
     );
-    choose_opt(ui, 1, "i-group", "Under", &mut d.group, "(none)", &groups);
+    choose_opt(
+        ui,
+        1,
+        "i-group",
+        &crate::i18n::t("masters.field.under"),
+        &mut d.group,
+        &crate::i18n::t("masters.field.none"),
+        &groups,
+    );
     ui.end_row();
     let units = sorted_options(
         masters
@@ -859,15 +1053,28 @@ fn draw_stock_item(ui: &mut Ui, masters: &Masters, d: &mut StockItemDraft) {
             .map(|u| (u.id, u.id.0, u.symbol.clone())),
         None,
     );
-    choose_opt(ui, 1, "i-unit", "Unit", &mut d.unit, "(choose)", &units);
+    choose_opt(
+        ui,
+        1,
+        "i-unit",
+        &crate::i18n::t("invoice.col.unit"),
+        &mut d.unit,
+        &crate::i18n::t("masters.field.choose"),
+        &units,
+    );
     choose_one(
         ui,
         1,
         "i-valuation",
-        "Valuation",
+        &crate::i18n::t("masters.field.valuation"),
         &mut d.valuation,
-        &labelled(&VALUATIONS, valuation_label),
+        &named(&VALUATIONS, valuation_label),
     );
     text_row(ui, 1, "HSN/SAC", &mut d.hsn);
-    switch_row(ui, 1, "Track batches", &mut d.batches);
+    switch_row(
+        ui,
+        1,
+        &crate::i18n::t("masters.field.track_batches"),
+        &mut d.batches,
+    );
 }

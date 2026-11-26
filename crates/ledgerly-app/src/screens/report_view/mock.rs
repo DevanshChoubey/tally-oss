@@ -353,51 +353,46 @@ impl Mock {
 
     /// The line under the title. `as_of` is the report's balance date and `period` its period.
     pub(super) fn subtitle(self, as_of: Date, period: Period, detail: ViewDetail) -> String {
+        use crate::i18n::tf;
         let day = crate::ui::format::date;
         match self {
-            Mock::Trial => format!(
-                "As at {} \u{b7} every ledger with a balance \u{b7} Enter opens a ledger",
-                day(as_of)
-            ),
-            Mock::Outstanding { .. } => format!(
-                "As at {} \u{b7} bill-wise, with the due date from the party's credit days",
-                day(as_of)
-            ),
-            Mock::Stock => format!(
-                "As at {} \u{b7} quantity and value from the stock engine",
-                day(as_of)
-            ),
+            Mock::Trial => tf("report.sub.trial", &[("date", &day(as_of))]),
+            Mock::Outstanding { .. } => tf("report.sub.outstanding", &[("date", &day(as_of))]),
+            Mock::Stock => tf("report.sub.stock", &[("date", &day(as_of))]),
             Mock::ProfitLoss => {
                 let from = period.from();
                 let to = period.to();
                 let start = format!(
                     "{} {}",
                     from.day(),
-                    crate::ui::format::month_abbrev(from.month())
+                    crate::ui::format::month_abbrev_in(from.month(), &crate::i18n::current())
                 );
                 // index.html:2235 `plScreen`: "... · by group" or "... · ledgers under each
                 // group" in the detailed view.
-                let form = match detail {
+                let form = crate::i18n::lit(match detail {
                     ViewDetail::Condensed => "by group",
                     ViewDetail::Detailed => "ledgers under each group",
-                };
+                });
                 match ledgerly_core::FinancialYear::containing(to) {
-                    Ok(fy) => format!(
-                        "From {start} to {} \u{b7} FY {} \u{b7} {form}",
-                        day(to),
-                        fy.label()
+                    Ok(fy) => tf(
+                        "report.sub.pl",
+                        &[
+                            ("start", &start),
+                            ("end", &day(to)),
+                            ("fy", &fy.label()),
+                            ("form", &form),
+                        ],
                     ),
-                    Err(_) => format!("From {start} to {} \u{b7} {form}", day(to)),
+                    Err(_) => tf(
+                        "report.sub.pl_no_fy",
+                        &[("start", &start), ("end", &day(to)), ("form", &form)],
+                    ),
                 }
             }
-            Mock::Audit(AuditTab::Integrity) => {
-                "Read-only. Nothing here changes a voucher. The check covers every event in the log."
-                    .to_owned()
-            }
-            Mock::Audit(AuditTab::EditLog | AuditTab::AfterLock) => format!(
-                "Read-only. Nothing here changes a voucher. Period from {} to {}",
-                day(period.from()),
-                day(period.to())
+            Mock::Audit(AuditTab::Integrity) => crate::i18n::t("report.sub.audit_integrity"),
+            Mock::Audit(AuditTab::EditLog | AuditTab::AfterLock) => tf(
+                "report.sub.audit_period",
+                &[("from", &day(period.from())), ("to", &day(period.to()))],
             ),
         }
     }

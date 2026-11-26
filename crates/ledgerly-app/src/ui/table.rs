@@ -223,7 +223,7 @@ pub fn paint_engine_tag(ui: &Ui, rect: Rect, label: &str, font: &FontId) {
     let tag_font = FontId::proportional(crate::theme::TEXT_META - 2.0);
     let galley = ui
         .painter()
-        .layout_no_wrap("engine".to_owned(), tag_font, t.ok);
+        .layout_no_wrap(crate::i18n::lit("engine"), tag_font, t.ok);
     let pad = vec2(6.0, 2.0);
     let size = galley.size() + pad * 2.0;
     let left = rect.left() + CELL_PAD_X + label_width + 8.0;

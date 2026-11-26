@@ -4,6 +4,7 @@
 use std::cell::{Cell, RefCell};
 
 use egui::{Event, Key, Modifiers, PointerButton, Pos2, RawInput, Rect, Ui, Vec2};
+use ledgerly_app::i18n::Tr;
 use ledgerly_app::theme::{self, ThemeKind, Tokens};
 use ledgerly_app::ui::badge::{self, BadgeKind};
 use ledgerly_app::ui::button::{self, ButtonKind};
@@ -149,8 +150,8 @@ fn every_kit_component_draws_in_every_theme() {
             ] {
                 prov::prov(ui, prov_kind);
             }
-            conf::conf(ui, Confidence::High);
-            conf::conf(ui, Confidence::Rule);
+            conf::conf(ui, Confidence::High, &Tr::default());
+            conf::conf(ui, Confidence::Rule, &Tr::default());
             page_head::page_head(ui, "Vouchers", Some("3 this month"), |ui| {
                 button::button(ui, "New sale", Some("F8"), ButtonKind::Primary);
             });

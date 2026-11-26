@@ -60,6 +60,6 @@ fn open_stock_items_pushes_the_stock_items_master() {
         std::thread::sleep(Duration::from_millis(2));
     }
     let next = pushed.expect("the button opens a screen");
-    assert_eq!(next.title(), "Masters");
+    assert_eq!(next.title(&ledgerly_app::i18n::Tr::default()), "Masters");
     assert_eq!(next.cursor_label(&ctx).as_deref(), Some("Stock items"));
 }

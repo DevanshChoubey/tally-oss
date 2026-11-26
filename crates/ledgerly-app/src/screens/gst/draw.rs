@@ -24,6 +24,7 @@ use super::{
     UiEvent, amount_cell, date_cell, section_bucket,
 };
 use crate::ScreenAction;
+use crate::i18n::Tr;
 use crate::screens::home::draw::{split, title};
 use crate::screens::wire::unsupported_text;
 use crate::theme::{
@@ -69,12 +70,16 @@ impl GstScreen {
             }
         }
         if let Some((name, json)) = self.take_json_export() {
-            self.notice = Some(save_json_file(&name, &json));
+            self.notice = Some(save_json_file(&name, &json, &self.tr));
         }
         let mut events = Vec::new();
         self.draw_head(ui, &mut events);
         if let Some(error) = self.load_error() {
-            note(ui, NoteKind::Bad, &format!("Error: {error}"));
+            note(
+                ui,
+                NoteKind::Bad,
+                &self.tr.tf("gst.error", &[("text", error)]),
+            );
             ui.add_space(SPACE_3);
         }
         if let Some(text) = &self.notice {
@@ -101,15 +106,17 @@ impl GstScreen {
     /// The page head and the tabs. The period button names the period on show and opens the
     /// period picker, as Alt+F2 does.
     fn draw_head(&self, ui: &mut Ui, events: &mut Vec<UiEvent>) {
-        let subtitle = self.subtitle();
+        let subtitle = self.subtitle_in(&self.tr);
         let blocked = self.export_blocked_reason();
-        crate::ui::page_head::page_head(ui, "GST returns", Some(subtitle.as_str()), |ui| {
+        let title = self.tr.t("gst.title");
+        let export = self.tr.t("gst.export_json");
+        crate::ui::page_head::page_head(ui, &title, Some(subtitle.as_str()), |ui| {
             let response = ui
                 .add_enabled_ui(blocked.is_none(), |ui| {
                     button_icon(
                         ui,
                         Some(Icon::Upload),
-                        "Export JSON",
+                        &export,
                         Some("Ctrl+E"),
                         ButtonKind::Secondary,
                     )
@@ -133,9 +140,11 @@ impl GstScreen {
                 events.push(UiEvent::PeriodPicker);
             }
         });
+        let labels: Vec<String> = GstTab::ALL.iter().map(|t| t.label_in(&self.tr)).collect();
         let items: Vec<(&str, &str)> = GstTab::ALL
             .iter()
-            .map(|t| (t.label(), t.key_hint()))
+            .zip(&labels)
+            .map(|(t, label)| (label.as_str(), t.key_hint()))
             .collect();
         let selected = GstTab::ALL
             .iter()
@@ -183,7 +192,7 @@ impl GstScreen {
     fn draw_feed_card<T>(&self, ui: &mut Ui, name: &str, feed: &Feed<T>) {
         crate::ui::card::card(ui, |ui| {
             title(ui, &format!("{name}, {}", self.period_label));
-            draw_not_ready(ui, feed);
+            draw_not_ready(ui, feed, &self.tr);
         });
     }
 
@@ -217,7 +226,7 @@ impl GstScreen {
                 }
                 if !self.figures1.rows.is_empty() || !self.figures1.notes.is_empty() {
                     ui.add_space(SPACE_3);
-                    draw_figures(ui, &self.figures1);
+                    draw_figures(ui, &self.figures1, &self.tr);
                 }
             },
             |ui| self.draw_side_card(ui, &mut side),
@@ -228,9 +237,9 @@ impl GstScreen {
     /// The button that unfolds or folds the voucher table behind the section table.
     fn draw_voucher_fold(&self, ui: &mut Ui, events: &mut Vec<UiEvent>) {
         let label = match (self.vouchers_shown(), self.item_count(GstTab::Gstr1)) {
-            (true, _) => "Hide vouchers".to_owned(),
-            (false, Some(n)) => format!("Show vouchers ({n})"),
-            (false, None) => "Show vouchers".to_owned(),
+            (true, _) => self.tr.lit("Hide vouchers"),
+            (false, Some(n)) => self.tr.tf("gst.show_vouchers_n", &[("n", &n.to_string())]),
+            (false, None) => self.tr.lit("Show vouchers"),
         };
         if button(ui, &label, None, ButtonKind::Secondary).clicked() {
             events.push(UiEvent::ToggleVouchers);
@@ -245,16 +254,19 @@ impl GstScreen {
             for (col, bucket) in cols.iter_mut().zip(Bucket::ALL) {
                 // The mock's tiles count sections; with no section table, vouchers.
                 let (count, unit) = if self.sections_loaded {
-                    (self.section_count(bucket), "sections")
+                    (self.section_count(bucket), self.tr.lit("sections"))
                 } else {
-                    (self.bucket_count(GstTab::Gstr1, bucket), "vouchers")
+                    (
+                        self.bucket_count(GstTab::Gstr1, bucket),
+                        self.tr.lit("vouchers"),
+                    )
                 };
                 let value = match count {
                     Some(n) => n.to_string(),
-                    None => "Not loaded".to_owned(),
+                    None => self.tr.t("gst.not_loaded"),
                 };
                 let on = self.bucket_filter == Some(bucket);
-                if kpi(col, bucket.label(), &value, unit, on).clicked() {
+                if kpi(col, &self.tr.lit(bucket.label()), &value, &unit, on).clicked() {
                     events.push(UiEvent::Filter(if on { None } else { Some(bucket) }));
                 }
             }
@@ -264,18 +276,34 @@ impl GstScreen {
     /// The section table: one row per table of the return with its records, taxable value, tax
     /// and the engine's status (the mock's `#g1`). The amounts are the engine's; `none` where a
     /// table has no such figure.
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one drawing pass of the screen, a line for each part of it"
+    )]
     fn draw_sections(&self, ui: &mut Ui, events: &mut Vec<UiEvent>) {
         table_card(ui, |ui| {
             let t = tokens(ui);
             let width = ui.available_width();
             let (head, _) = ui.allocate_exact_size(vec2(width, T_HEAD_HEIGHT), Sense::hover());
             let cols = section_columns(head);
-            paint_heads(ui, head, &[(cols[0], "Section"), (cols[4], "Status")], &[]);
+            paint_heads(
+                ui,
+                head,
+                &[
+                    (cols[0], &self.tr.lit("Section")),
+                    (cols[4], &self.tr.lit("Status")),
+                ],
+                &[],
+            );
             paint_heads(
                 ui,
                 head,
                 &[],
-                &[(cols[1], "Records"), (cols[2], "Taxable"), (cols[3], "Tax")],
+                &[
+                    (cols[1], &self.tr.lit("Records")),
+                    (cols[2], &self.tr.lit("Taxable")),
+                    (cols[3], &self.tr.lit("Tax")),
+                ],
             );
             let font = egui::FontId::proportional(TEXT_BODY);
             let left = CellPlace::Left(table::CELL_PAD_X);
@@ -315,7 +343,11 @@ impl GstScreen {
                         .layout(Layout::left_to_right(Align::Center)),
                 );
                 child.spacing_mut().item_spacing = vec2(4.0, 0.0);
-                badge(&mut child, bucket_badge(bucket), bucket.label());
+                badge(
+                    &mut child,
+                    bucket_badge(bucket),
+                    &crate::i18n::lit(bucket.label()),
+                );
                 crate::ui::a11y::name(
                     ui,
                     &response,
@@ -392,9 +424,10 @@ impl GstScreen {
             note(ui, NoteKind::Warn, &text);
             ui.add_space(SPACE_3);
         }
+        let steps = keyed(&NEXT_STEPS, &self.tr);
         crate::ui::card::card(ui, |ui| {
-            title(ui, "What happens next");
-            bullets(ui, &NEXT_STEPS);
+            title(ui, &self.tr.t("gst.next_steps.title"));
+            bullets(ui, &steps);
         });
     }
 
@@ -411,20 +444,32 @@ impl GstScreen {
             let width = ui.available_width();
             let (head, _) = ui.allocate_exact_size(vec2(width, T_HEAD_HEIGHT), Sense::hover());
             let [voucher, detail, status] = exception_columns(head);
+            let voucher_head = self.tr.t("gst.col.voucher");
+            let detail_head = self.tr.t("gst.col.detail");
+            let status_head = self.tr.t("gst.col.status");
             paint_heads(
                 ui,
                 head,
-                &[(voucher, "Voucher"), (detail, "Detail"), (status, "Status")],
+                &[
+                    (voucher, voucher_head.as_str()),
+                    (detail, detail_head.as_str()),
+                    (status, status_head.as_str()),
+                ],
                 &[],
             );
             let Feed::Loaded(items) = feed else {
-                padded(ui, |ui| draw_not_ready(ui, feed));
+                padded(ui, |ui| draw_not_ready(ui, feed, &self.tr));
                 return;
             };
             let visible = self.visible_exceptions(feed);
             if visible.is_empty() {
                 padded(ui, |ui| {
-                    para(ui, "No vouchers here.", TEXT_BODY, tokens(ui).text_3);
+                    para(
+                        ui,
+                        &self.tr.t("gst.no_vouchers"),
+                        TEXT_BODY,
+                        tokens(ui).text_3,
+                    );
                 });
             }
             for (pos, &index) in visible.iter().enumerate() {
@@ -438,7 +483,7 @@ impl GstScreen {
                     hovered: response.hovered(),
                     sub: false,
                 };
-                paint_exception(ui, rect, item, state);
+                paint_exception(ui, rect, item, state, &self.tr);
                 crate::ui::a11y::name(
                     ui,
                     &response,
@@ -471,12 +516,13 @@ impl GstScreen {
             |ui| self.draw_3b_table(ui),
             |ui| {
                 crate::ui::card::card(ui, |ui| {
-                    title(ui, "Read this before filing");
-                    bullets(ui, &GSTR3B_NOTES);
+                    title(ui, &self.tr.t("gst.notes.title"));
+                    let notes = keyed(&GSTR3B_NOTES, &self.tr);
+                    bullets(ui, &notes);
                     ui.add_space(10.0);
                     let tab = GstTab::Reconciliation;
-                    if button(ui, tab.label(), Some(tab.key_hint()), ButtonKind::Secondary)
-                        .clicked()
+                    let tab_label = tab.label_in(&self.tr);
+                    if button(ui, &tab_label, Some(tab.key_hint()), ButtonKind::Secondary).clicked()
                     {
                         side.push(UiEvent::Tab(tab));
                     }
@@ -493,14 +539,19 @@ impl GstScreen {
             let (head, _) = ui.allocate_exact_size(vec2(width, T_HEAD_HEIGHT), Sense::hover());
             let [label, figures @ ..] = gstr3b_columns(head);
             let [heading, numeric @ ..] = look::GSTR3B_COLUMNS;
-            let right: Vec<(Rect, &str)> = figures.into_iter().zip(numeric).collect();
-            paint_heads(ui, head, &[(label, heading)], &right);
+            let heading = look::text_in(heading, &self.tr);
+            let numeric = keyed_words(&numeric, &self.tr);
+            let right: Vec<(Rect, &str)> = figures
+                .into_iter()
+                .zip(numeric.iter().map(String::as_str))
+                .collect();
+            paint_heads(ui, head, &[(label, heading.as_str())], &right);
             if self.lines3b.is_empty() {
-                padded(ui, |ui| draw_not_ready(ui, &self.gstr3b));
+                padded(ui, |ui| draw_not_ready(ui, &self.gstr3b, &self.tr));
                 return;
             }
             for line in &self.lines3b {
-                paint_3b_line(ui, width, line);
+                paint_3b_line(ui, width, line, &self.tr);
             }
             if !self.figures3b.notes.is_empty() {
                 padded(ui, |ui| {
@@ -531,7 +582,7 @@ impl GstScreen {
             Feed::Unsupported(_) => {
                 crate::ui::card::card(ui, |ui| {
                     ui.set_min_width(ui.available_width());
-                    draw_not_ready(ui, &self.recon);
+                    draw_not_ready(ui, &self.recon, &self.tr);
                 });
                 return;
             }
@@ -670,19 +721,29 @@ impl GstScreen {
         let badges = Rect::from_min_size(c[5].min + vec2(0.0, 12.0), vec2(c[5].width(), 20.0));
         match decision {
             Some(action) => cell_row(ui, badges, |ui| {
-                badge(ui, action_kind(action), action.label());
+                badge(ui, action_kind(action), &crate::i18n::lit(action.label()));
             }),
-            None => paint_wrapped(ui, c[5], 0.0, "No action", font, t.text_2),
+            None => paint_wrapped(
+                ui,
+                c[5],
+                0.0,
+                &crate::i18n::lit("No action"),
+                font,
+                t.text_2,
+            ),
         }
         if locked {
             if decision.is_some() {
                 let second = badges.translate(vec2(0.0, 22.0));
                 cell_row(ui, second, |ui| {
-                    badge(ui, BadgeKind::Neutral, "Final");
+                    badge(ui, BadgeKind::Neutral, &crate::i18n::lit("Final"));
                 });
             }
         } else {
-            let text = format!("Suggested: {}", row.suggested.label());
+            let text = crate::i18n::tf(
+                "gst.suggested_row",
+                &[("action", &crate::i18n::lit(row.suggested.label()))],
+            );
             paint_wrapped(ui, c[5], LINE_H, &text, meta, t.text_3);
         }
     }
@@ -722,7 +783,14 @@ impl GstScreen {
                         ImsAction::Reject => "R",
                         ImsAction::Pending => "P",
                     };
-                    if button(ui, action.label(), Some(key), ButtonKind::Secondary).clicked() {
+                    if button(
+                        ui,
+                        &crate::i18n::lit(action.label()),
+                        Some(key),
+                        ButtonKind::Secondary,
+                    )
+                    .clicked()
+                    {
                         events.push(UiEvent::Decide(index, action));
                     }
                 }
@@ -891,9 +959,10 @@ fn status_text(row: &ReconRow) -> String {
         | MatchState::NotIn2b
         | MatchState::NotComparable => row.state.label(),
     };
+    let word = crate::i18n::lit(word);
     match row.level {
         Some(level) => format!("{word} \u{00B7} {level}"),
-        None => word.to_owned(),
+        None => word,
     }
 }
 
@@ -1030,7 +1099,7 @@ fn kpi(ui: &mut Ui, label: &str, value: &str, foot: &str, on: bool) -> Response 
 }
 
 /// A bulleted list in secondary ink (the mock's `ul.t2` with `gap:6px`).
-fn bullets(ui: &mut Ui, lines: &[&str]) {
+fn bullets(ui: &mut Ui, lines: &[String]) {
     let t = tokens(ui);
     for (i, line) in lines.iter().enumerate() {
         if i > 0 {
@@ -1041,7 +1110,10 @@ fn bullets(ui: &mut Ui, lines: &[&str]) {
             ui.add_space(6.0);
             ui.label(RichText::new("\u{2022}").size(TEXT_BODY).color(t.text_2));
             ui.add_space(8.0);
-            ui.add(egui::Label::new(RichText::new(*line).size(TEXT_BODY).color(t.text_2)).wrap());
+            ui.add(
+                egui::Label::new(RichText::new(line.as_str()).size(TEXT_BODY).color(t.text_2))
+                    .wrap(),
+            );
         });
     }
 }
@@ -1115,7 +1187,7 @@ fn exception_name(item: &ExceptionItem) -> String {
 }
 
 /// One GSTR-1 voucher: its title, the engine's detail and its bucket as a badge.
-fn paint_exception(ui: &mut Ui, rect: Rect, item: &ExceptionItem, state: RowState) {
+fn paint_exception(ui: &mut Ui, rect: Rect, item: &ExceptionItem, state: RowState, tr: &Tr) {
     let t = tokens(ui);
     table::paint_row(ui, rect, state);
     let [voucher, detail, status] = exception_columns(rect);
@@ -1131,7 +1203,8 @@ fn paint_exception(ui: &mut Ui, rect: Rect, item: &ExceptionItem, state: RowStat
     );
     // The table zeroes item spacing; the badge spaces its icon and word with it.
     child.spacing_mut().item_spacing = vec2(4.0, 0.0);
-    badge(&mut child, bucket_badge(item.bucket), item.bucket.label());
+    let bucket = item.bucket.label_in(tr);
+    badge(&mut child, bucket_badge(item.bucket), &bucket);
 }
 
 /// The Table cell and the five figure cells of a GSTR-3B line.
@@ -1237,7 +1310,7 @@ fn paint_3b_sub_sourced(ui: &mut Ui, width: f32, label: &str, source: &str) {
 /// One line of the GSTR-3B table: a sub-heading, or a row of the engine's figures with its
 /// source chip after the label, or under it when the two do not fit on one line.
 #[allow(clippy::float_arithmetic, reason = "placing the label and its chip")]
-fn paint_3b_line(ui: &mut Ui, width: f32, line: &Line3b) {
+fn paint_3b_line(ui: &mut Ui, width: f32, line: &Line3b, tr: &Tr) {
     let t = tokens(ui);
     let font = egui::FontId::proportional(TEXT_BODY);
     match line {
@@ -1255,16 +1328,16 @@ fn paint_3b_line(ui: &mut Ui, width: f32, line: &Line3b) {
             taxable,
             tax,
         } => {
+            let label_text = look::text_in(label, tr);
+            let source_text = source.map(|s| look::text_in(s, tr));
             let pad = table::CELL_PAD_X + if *indent { table::indent(1) } else { 0.0 };
             let probe = Rect::from_min_size(egui::pos2(0.0, 0.0), vec2(width, T_ROW_HEIGHT));
             let [label_cell, ..] = gstr3b_columns(probe);
             let wrap = (label_cell.width() - pad - table::CELL_PAD_X).max(40.0);
-            let galley = ui
-                .painter()
-                .layout((*label).to_owned(), font.clone(), t.text, wrap);
+            let galley = ui.painter().layout(label_text, font.clone(), t.text, wrap);
             let text = galley.size();
             let one_row = galley.rows.len() <= 1;
-            let chip_w = source.map_or(0.0, |s| chip_width(ui, s));
+            let chip_w = source_text.as_deref().map_or(0.0, |s| chip_width(ui, s));
             // The chip follows the label on its line when both fit, else it goes under it.
             let chip_inline = one_row && text.x + CHIP_GAP + chip_w <= wrap;
             let chip_below = source.is_some() && !chip_inline;
@@ -1288,7 +1361,7 @@ fn paint_3b_line(ui: &mut Ui, width: f32, line: &Line3b) {
             ui.painter()
                 .with_clip_rect(label_rect)
                 .galley(text_pos, galley, t.text);
-            if let Some(s) = source {
+            if let Some(s) = source_text.as_deref() {
                 let chip_rect = if chip_inline {
                     Rect::from_min_size(
                         egui::pos2(
@@ -1354,17 +1427,19 @@ fn source_chip(ui: &mut Ui, text: &str) {
 
 /// The figures a return holds, one per line, in a card table, and the notes about what is not
 /// drawn.
-fn draw_figures(ui: &mut Ui, figures: &Figures) {
+fn draw_figures(ui: &mut Ui, figures: &Figures, tr: &Tr) {
     table_card(ui, |ui| {
         let t = tokens(ui);
         let width = ui.available_width();
         let (head, _) = ui.allocate_exact_size(vec2(width, T_HEAD_HEIGHT), Sense::hover());
         let (label, amount) = figure_columns(head);
+        let from_return = look::text_in("From the return", tr);
+        let amount_head = look::text_in("Amount", tr);
         paint_heads(
             ui,
             head,
-            &[(label, "From the return")],
-            &[(amount, "Amount")],
+            &[(label, from_return.as_str())],
+            &[(amount, amount_head.as_str())],
         );
         let font = egui::FontId::proportional(TEXT_BODY);
         for figure in &figures.rows {
@@ -1400,12 +1475,12 @@ fn figure_columns(line: Rect) -> (Rect, Rect) {
 }
 
 /// Says why a feed shows no table.
-fn draw_not_ready<T>(ui: &mut Ui, feed: &Feed<T>) {
+fn draw_not_ready<T>(ui: &mut Ui, feed: &Feed<T>, tr: &Tr) {
     let t = tokens(ui);
     match feed {
         Feed::Loaded(_) => {}
         Feed::NotLoaded => {
-            para(ui, "Not loaded for this period yet.", TEXT_BODY, t.text_3);
+            para(ui, &tr.t("gst.not_loaded_period"), TEXT_BODY, t.text_3);
         }
         Feed::Unsupported(u) => {
             para(ui, &unsupported_text(u), TEXT_BODY, t.bad);
@@ -1419,11 +1494,10 @@ fn draw_not_ready<T>(ui: &mut Ui, feed: &Feed<T>) {
 /// (<https://www.gst.gov.in/help/returns>, read 2026-11-22), and the module notes of
 /// `ledgerly-gst/src/gstr3b.rs`, which say that Ledgerly does not file.
 const NEXT_STEPS: [&str; 4] = [
-    "Fix anything marked Needs correction or Mismatch. Enter opens the voucher to fix.",
-    "Export JSON (Ctrl+E) writes the GSTR-1 JSON for the GST portal's offline tool. The engine \
-     writes it only when every voucher is Ready or Not relevant.",
-    "Upload and file on the GST portal yourself. Ledgerly does not file.",
-    "Ledgerly does not yet record a return as filed or lock its period.",
+    "gst.next_steps.fix",
+    "gst.next_steps.export",
+    "gst.next_steps.upload",
+    "gst.next_steps.not_filed",
 ];
 
 /// The "Read this before filing" lines of GSTR-3B. They follow the engine's module notes in
@@ -1446,17 +1520,36 @@ const GSTR3B_NOTES: [&str; 6] = [
      ineligible purchase lines is never added to 4(A)(5).",
 ];
 
+/// The translations of translation keys, in order.
+fn keyed(keys: &[&str], tr: &Tr) -> Vec<String> {
+    keys.iter().map(|key| tr.t(key)).collect()
+}
+
+/// The GSTR-3B words of `words` in the words of `tr`, in order (see [`look::text_in`]).
+fn keyed_words(words: &[&str], tr: &Tr) -> Vec<String> {
+    words.iter().map(|word| look::text_in(word, tr)).collect()
+}
+
 /// Asks where to save the GSTR-1 JSON and writes it there. Cancelling writes nothing. The dialog
 /// is the user's own choice of place; nothing is uploaded.
-fn save_json_file(name: &str, json: &str) -> String {
-    let Some(path) =
-        crate::ui::dialogs::save_file("Save GSTR-1 JSON", Some(name), &[("JSON", &["json"])])
-    else {
-        return "Export cancelled. Nothing was written.".to_owned();
+fn save_json_file(name: &str, json: &str, tr: &Tr) -> String {
+    let Some(path) = crate::ui::dialogs::save_file(
+        &tr.t("gst.export.dialog_title"),
+        Some(name),
+        &[("JSON", &["json"])],
+    ) else {
+        return tr.t("gst.export.cancelled");
     };
+    let shown = path.display().to_string();
     match std::fs::write(&path, json) {
-        Ok(()) => format!("Saved the GSTR-1 JSON to {}.", path.display()),
-        Err(error) => format!("Could not write {}: {error}.", path.display()),
+        Ok(()) => tr.tf("gst.export.saved", &[("path", shown.as_str())]),
+        Err(error) => tr.tf(
+            "gst.export.failed",
+            &[
+                ("path", shown.as_str()),
+                ("error", error.to_string().as_str()),
+            ],
+        ),
     }
 }
 

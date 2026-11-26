@@ -17,6 +17,7 @@ use ledgerly_model::{BaseVoucherKind, Books};
 
 use super::chrome::ChromeCmd;
 use super::navigate::{self, NavError, SidebarEntry, SidebarGroup};
+use crate::i18n::Tr;
 use crate::keymap::Action;
 use crate::palette::{PaletteTarget, RunCommand};
 use crate::screens::voucher_entry::VoucherEntryScreen;
@@ -249,19 +250,59 @@ fn entry_screen(ctx: &AppCtx, kind: BaseVoucherKind) -> Result<Box<dyn Screen>, 
 /// or is the label and " invoice" (`Sales invoice`: the invoice screen of the Sales row),
 /// ignoring case. `None` when no entry names it (the screen is not in the sidebar).
 #[must_use]
-pub fn selected_label(top_title: &str) -> Option<&'static str> {
+pub fn selected_label(top_title: &str, tr: &Tr) -> Option<&'static str> {
     let top = top_title.to_lowercase();
     let groups = visible_groups();
     groups
         .iter()
         .flat_map(|group| group.entries.iter())
         .find(|entry| {
-            let label = entry.label.to_lowercase();
+            let label = shown_label(entry.label, tr).to_lowercase();
             top == label
                 || top.starts_with(&format!("{label}:"))
-                || top == format!("{label} invoice")
+                || top == format!("{label} {}", tr.t("sidebar.invoice_suffix"))
         })
         .map(|entry| entry.label)
+}
+
+/// The words a sidebar entry shows: its label's text in the language `tr`. The label itself (the
+/// English name, such as `Day book`) is the entry's identity, so icons and the drill selection do
+/// not depend on the language. A label with no translation shows its English name.
+#[must_use]
+pub fn shown_label(label: &str, tr: &Tr) -> String {
+    let key = match label {
+        "Home" => "sidebar.home",
+        "Review queue" => "sidebar.review_queue",
+        "Sales" => "sidebar.sales",
+        "Purchase" => "sidebar.purchase",
+        "Payment" => "sidebar.payment",
+        "Receipt" => "sidebar.receipt",
+        "Plain-words entry" => "sidebar.plain_words",
+        "Day book" => "sidebar.day_book",
+        "Balance sheet" => "sidebar.balance_sheet",
+        "Masters" => "sidebar.masters",
+        "GST returns" => "sidebar.gst_returns",
+        "Bank reconciliation" => "sidebar.bank_recon",
+        "AI and privacy" => "sidebar.ai_privacy",
+        "Keyboard map" => "sidebar.keymap",
+        "Company setup" => "sidebar.company_setup",
+        other => return other.to_owned(),
+    };
+    tr.t(key)
+}
+
+/// The heading a sidebar group shows, in the language `tr`. Unknown titles show as they are.
+#[must_use]
+pub fn shown_group_title(title: &str, tr: &Tr) -> String {
+    let key = match title {
+        "Overview" => "sidebar.group.overview",
+        "Enter" => "sidebar.group.enter",
+        "Books" => "sidebar.group.books",
+        "Compliance" => "sidebar.group.compliance",
+        "Settings" => "sidebar.group.settings",
+        other => return other.to_owned(),
+    };
+    tr.t(key)
 }
 
 /// The icon of a sidebar entry, by its label (`NAV` in the mock). `None` for a label the mock has
@@ -296,22 +337,23 @@ pub(super) fn sidebar(
     rail: bool,
     selected: Option<&'static str>,
     t: &Tokens,
+    tr: &Tr,
 ) -> Vec<ChromeCmd> {
     let mut cmds = Vec::new();
     ui.spacing_mut().item_spacing.y = 1.0;
     for group in visible_groups() {
         if !rail {
-            group_heading(ui, group.title, t);
+            group_heading(ui, &shown_group_title(group.title, tr), t);
         }
         for entry in &group.entries {
             let is_selected = selected == Some(entry.label);
-            if let Some(cmd) = entry_row(ui, entry, rail, is_selected, t) {
+            if let Some(cmd) = entry_row(ui, entry, rail, is_selected, t, tr) {
                 cmds.push(cmd);
             }
         }
     }
     if !rail {
-        footer(ui, t);
+        footer(ui, t, tr);
     }
     cmds
 }
@@ -337,7 +379,7 @@ fn group_heading(ui: &mut Ui, title: &str, t: &Tokens) {
 
 /// The footer at the bottom of the sidebar (`nav.side .foot`): the app's version, and where the
 /// company file is kept.
-fn footer(ui: &mut Ui, t: &Tokens) {
+fn footer(ui: &mut Ui, t: &Tokens, tr: &Tr) {
     let version = format!("Ledgerly {}", env!("CARGO_PKG_VERSION"));
     ui.with_layout(egui::Layout::bottom_up(egui::Align::Min), |ui| {
         ui.add_space(8.0);
@@ -346,7 +388,7 @@ fn footer(ui: &mut Ui, t: &Tokens) {
             ui.add_space(ROW_PAD_X);
             ui.spacing_mut().item_spacing.x = 4.0;
             ui.label(
-                egui::RichText::new("Saved on this computer")
+                egui::RichText::new(tr.t("footer.saved"))
                     .size(TEXT_CAP)
                     .color(t.text_3),
             );
@@ -369,7 +411,9 @@ fn entry_row(
     rail: bool,
     selected: bool,
     t: &Tokens,
+    tr: &Tr,
 ) -> Option<ChromeCmd> {
+    let shown = shown_label(entry.label, tr);
     let (rect, response) = ui.allocate_exact_size(
         Vec2::new(ui.available_width(), ROW_HEIGHT),
         egui::Sense::click(),
@@ -407,7 +451,7 @@ fn entry_row(
         painter.text(
             Pos2::new(icon_x + ICON_SIZE + ROW_GAP, mid),
             egui::Align2::LEFT_CENTER,
-            entry.label,
+            shown.as_str(),
             font,
             ink,
         );
@@ -431,7 +475,7 @@ fn entry_row(
     }
     a11y::focus_ring(ui, &response, rect);
     let response = if rail {
-        response.on_hover_text(entry.label)
+        response.on_hover_text(shown.as_str())
     } else {
         response
     };

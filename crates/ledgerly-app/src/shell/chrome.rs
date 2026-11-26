@@ -7,6 +7,7 @@
 use egui::{RichText, Ui};
 
 use super::stack::Tabs;
+use crate::i18n::Tr;
 use crate::screen::KeyHint;
 use crate::theme::{TEXT_META, Tokens, border_width};
 use crate::ui::button::{ButtonKind, button_icon};
@@ -65,11 +66,11 @@ pub fn unique_tab_labels(titles: &[String]) -> Vec<String> {
 /// Tab strip: the open tabs in the kit's tab style (the active one underlined, a rule beneath),
 /// then the new-tab and close-tab buttons at the right in the kit's buttons. Close-tab shows
 /// only when more than one tab is open, because the last tab stays.
-pub(super) fn tab_strip(ui: &mut Ui, tabs_set: &Tabs, t: &Tokens) -> Vec<ChromeCmd> {
+pub(super) fn tab_strip(ui: &mut Ui, tabs_set: &Tabs, t: &Tokens, tr: &Tr) -> Vec<ChromeCmd> {
     let mut cmds = Vec::new();
     let slot = ui.painter().add(egui::Shape::Noop);
     let row = ui.horizontal(|ui| {
-        let titles = unique_tab_labels(&tabs_set.titles());
+        let titles = unique_tab_labels(&tabs_set.titles(tr));
         let labels: Vec<&str> = titles.iter().map(String::as_str).collect();
         let response = tabs::tab_strip(ui, &labels, Some(tabs_set.active_index()));
         if let Some(index) = response.clicked {
@@ -79,7 +80,7 @@ pub(super) fn tab_strip(ui: &mut Ui, tabs_set: &Tabs, t: &Tokens) -> Vec<ChromeC
             if button_icon(
                 ui,
                 Some(Icon::Plus),
-                "New tab",
+                &tr.t("chrome.new_tab"),
                 Some("Ctrl+T"),
                 ButtonKind::Secondary,
             )
@@ -91,7 +92,7 @@ pub(super) fn tab_strip(ui: &mut Ui, tabs_set: &Tabs, t: &Tokens) -> Vec<ChromeC
                 && button_icon(
                     ui,
                     Some(Icon::X),
-                    "Close tab",
+                    &tr.t("chrome.close_tab"),
                     Some("Ctrl+W"),
                     ButtonKind::Secondary,
                 )
@@ -149,6 +150,12 @@ pub(super) fn breadcrumbs(ui: &mut Ui, trail: &[String], t: &Tokens) -> Vec<Chro
 /// mock's `renderKeys` draws them; the tab and sidebar keys are in the keyboard map.
 #[must_use]
 pub fn key_hints(screen: &[KeyHint], can_go_back: bool) -> Vec<(String, String)> {
+    key_hints_in(screen, can_go_back, &Tr::default())
+}
+
+/// [`key_hints`] with the shell's own words (Esc Back) in the language `tr`.
+#[must_use]
+pub fn key_hints_in(screen: &[KeyHint], can_go_back: bool, tr: &Tr) -> Vec<(String, String)> {
     // A first hint with no key is the screen's name (index.html:913 draws it as `.ctx`); the bar
     // already draws the name as its context, so it is not a keycap.
     let named = usize::from(screen.first().is_some_and(|hint| hint.keys.is_empty()));
@@ -159,7 +166,7 @@ pub fn key_hints(screen: &[KeyHint], can_go_back: bool) -> Vec<(String, String)>
         .collect();
     // A screen that names Esc itself (such as "Esc Back up") gets no second Esc.
     if can_go_back && !screen.iter().any(|hint| hint.keys == "Esc") {
-        out.push(("Esc".to_owned(), "Back".to_owned()));
+        out.push(("Esc".to_owned(), tr.t("chrome.back")));
     }
     out
 }
@@ -258,6 +265,15 @@ pub const KEY_BAR_HOLD_HINT: &str = "Hold Alt or Ctrl for more \u{00B7}";
 /// The right end of the key bar: each keycap and the words after it (`.keys .right`).
 pub const KEY_BAR_RIGHT: [(&str, &str); 2] = [("Ctrl+K", "anything \u{00B7}"), ("?", "all keys")];
 
+/// [`KEY_BAR_RIGHT`] with its words in the language `tr`.
+#[must_use]
+pub fn key_bar_right(tr: &Tr) -> [(&'static str, String); 2] {
+    [
+        ("Ctrl+K", tr.t("chrome.anything")),
+        ("?", tr.t("chrome.all_keys")),
+    ]
+}
+
 /// Gap between key bar entries, in points (`.keys{gap:14px}`).
 const ENTRY_GAP: f32 = 14.0;
 /// Gap between a keycap and its words (`.keys span{gap:5px}`).
@@ -271,6 +287,7 @@ pub(super) fn key_bar(
     hints: &[(String, String)],
     held: Option<Held>,
     t: &Tokens,
+    tr: &Tr,
 ) {
     ui.spacing_mut().item_spacing.x = KEY_GAP;
     ui.horizontal_centered(|ui| {
@@ -317,13 +334,17 @@ pub(super) fn key_bar(
         }
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
             ui.spacing_mut().item_spacing.x = KEY_GAP;
-            for (keys, label) in KEY_BAR_RIGHT.iter().rev() {
-                ui.label(RichText::new(*label).size(TEXT_META).color(t.text_3));
+            for (keys, label) in key_bar_right(tr).iter().rev() {
+                ui.label(
+                    RichText::new(label.as_str())
+                        .size(TEXT_META)
+                        .color(t.text_3),
+                );
                 keycap::keycap(ui, keys);
             }
             if held.is_none() {
                 ui.label(
-                    RichText::new(KEY_BAR_HOLD_HINT)
+                    RichText::new(crate::i18n::lit(KEY_BAR_HOLD_HINT))
                         .size(TEXT_META)
                         .color(t.text_3),
                 );
@@ -350,7 +371,7 @@ mod tab_strip_order {
 
     struct Leaf;
     impl Screen for Leaf {
-        fn title(&self) -> String {
+        fn title(&self, _tr: &crate::i18n::Tr) -> String {
             "Leaf".to_owned()
         }
         fn ui(&mut self, _ui: &mut Ui, _ctx: &mut AppCtx) -> ScreenAction {
@@ -391,7 +412,7 @@ mod tab_strip_order {
         let ctx = egui::Context::default();
         let out = ctx.run_ui(egui::RawInput::default(), |ui| {
             let t = crate::ui::tokens(ui);
-            let _cmds = tab_strip(ui, &tabs, &t);
+            let _cmds = tab_strip(ui, &tabs, &t, &Tr::default());
         });
         let close = x_of(&out.shapes, "Close tab");
         let new = x_of(&out.shapes, "New tab");
@@ -476,7 +497,7 @@ mod key_bar_fit {
         for _ in 0..2 {
             let out = ctx.run_ui(input.clone(), |ui| {
                 let t = crate::ui::tokens(ui);
-                key_bar(ui, "Home", &hints, None, &t);
+                key_bar(ui, "Home", &hints, None, &t, &Tr::default());
             });
             texts = text_rects(&out.shapes);
             out.drop_without_applying_deltas();

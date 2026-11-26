@@ -150,6 +150,7 @@ fn setup(name: &str, ineligible: Option<bool>, hsn: Option<&str>) -> (Api, Books
 
 fn app(books: &Books, api: Option<Api>) -> AppCtx {
     AppCtx {
+        tr: ledgerly_app::i18n::Tr::default(),
         books: Some(books.clone()),
         api: api.map(|a| ApiWorker::spawn(a).unwrap()),
         lock_date: None,

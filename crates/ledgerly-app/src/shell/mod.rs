@@ -56,11 +56,12 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use egui::{Key, Modifiers};
 
+use crate::i18n::{Catalog, FALLBACK, Tr};
 use crate::keymap::{self, Action, Keymap};
 use crate::palette::{
     Palette, PaletteChoice, PaletteEntry, PaletteMode, PaletteSearch, PaletteTarget, RunCommand,
 };
-use crate::screens::setup::{SETUP_TITLE, SetupScreen};
+use crate::screens::setup::SetupScreen;
 use crate::theme::{self, ThemeKind, Tokens};
 use crate::worker::{Poll, Ticket};
 use crate::{AppCtx, Screen, ScreenAction};
@@ -103,6 +104,24 @@ pub(crate) fn ask_for_palette() {
     PALETTE_WANTED.store(true, Ordering::SeqCst);
 }
 
+/// The built-in translation files, then the community files next to the executable. A broken
+/// built-in file is logged and leaves the catalog empty, so the screens show keys, not blanks.
+fn load_catalog() -> Catalog {
+    let mut catalog = match Catalog::builtin() {
+        Ok(catalog) => catalog,
+        Err(e) => {
+            tracing::error!("built-in translation files are broken: {e}");
+            Catalog::default()
+        }
+    };
+    if let Some(dir) = crate::i18n::external_dir() {
+        for problem in catalog.load_dir(&dir) {
+            tracing::warn!("translation file skipped: {problem}");
+        }
+    }
+    catalog
+}
+
 /// The palette rows the shell offers: every keymap command that has a route (see
 /// [`sidebar::command_route`]), then the report menu. A command with no route is left out, so no
 /// row is a dead command (rule B3).
@@ -114,11 +133,18 @@ pub fn palette_rows(keymap: &Keymap) -> Vec<PaletteEntry> {
         .collect()
 }
 
+/// The palette target a language row uses. It is not a setting yet: choosing it cycles the
+/// language, and the settings screen will take it over.
+pub const LANGUAGE_SETTING: &str = "language";
+
 /// The application: tabs of screen stacks, the active theme and the shared screen context.
 pub struct Shell {
     tabs: Tabs,
     app_ctx: AppCtx,
     theme: ThemeKind,
+    /// Every loaded translation file (`i18n`), and the language the screens draw in.
+    catalog: Catalog,
+    tr: Tr,
     applied_theme: Option<ThemeKind>,
     /// Whether the sidebar is the 60 px rail (Ctrl+\) rather than the full 208 px.
     rail: bool,
@@ -179,10 +205,18 @@ impl Shell {
                 )),
             ),
         };
+        let catalog = load_catalog();
+        let tr = catalog.tr(FALLBACK);
+        let app_ctx = AppCtx {
+            tr: tr.clone(),
+            ..AppCtx::default()
+        };
         Self {
             tabs: Tabs::new(root),
-            app_ctx: AppCtx::default(),
+            app_ctx,
             theme: ThemeKind::default(),
+            catalog,
+            tr,
             applied_theme: None,
             rail: false,
             books_seen: submit::change_count(),
@@ -231,13 +265,17 @@ impl Shell {
     /// The sidebar entry selected for the screen on top of the active stack, if one names it.
     #[must_use]
     pub fn selected_sidebar(&self) -> Option<&'static str> {
-        let title = self.tabs.active_stack()?.top_sidebar_title();
-        sidebar::selected_label(&title)
+        let title = self.tabs.active_stack()?.top_sidebar_title(&self.tr);
+        sidebar::selected_label(&title, &self.tr)
     }
 
     /// Opens the palette for `action` (open-palette or switch-palette) with today's rows.
     fn open_palette(&mut self, action: Action) {
         let mut entries = palette_rows(&self.keymap);
+        entries.push(PaletteEntry::new(
+            PaletteTarget::Setting(LANGUAGE_SETTING.to_owned()),
+            self.tr.t("palette.language"),
+        ));
         entries.extend(navigate::screen_entries(self.app_ctx.books.as_ref()));
         self.palette.set_entries(entries);
         if self.palette.open_for(action) {
@@ -315,6 +353,7 @@ impl Shell {
                     .shadow(theme::shadow_2(kind))
                     .show(ui, |ui| {
                         ui.set_width(rect.width());
+                        self.palette.set_tr(&self.tr);
                         self.palette.ui(ui)
                     })
                     .inner
@@ -326,6 +365,30 @@ impl Shell {
         choice
     }
 
+    /// Switches to the next loaded language (the palette's language row).
+    fn next_language(&mut self) {
+        let codes: Vec<String> = self
+            .catalog
+            .languages()
+            .into_iter()
+            .map(|l| l.code)
+            .collect();
+        let at = codes
+            .iter()
+            .position(|code| code == self.tr.code())
+            .unwrap_or(0);
+        if let Some(code) = codes.get((at + 1) % codes.len().max(1)).cloned() {
+            self.set_language(&code);
+            let name = self
+                .catalog
+                .languages()
+                .into_iter()
+                .find(|l| l.code == code)
+                .map_or_else(String::new, |l| l.name);
+            self.notice = Some(self.tr.tf("chrome.language_switched", &[("name", &name)]));
+        }
+    }
+
     /// Runs a palette pick: a screen opens in the active tab, a shell command runs, and an
     /// assistant request says it is not connected yet.
     fn pick(&mut self, choice: &PaletteChoice) {
@@ -335,6 +398,7 @@ impl Shell {
             PaletteTarget::Run(RunCommand::CollapseSideBar) => {
                 self.run_shell_cmd(ChromeCmd::ToggleRail);
             }
+            PaletteTarget::Setting(name) if name == LANGUAGE_SETTING => self.next_language(),
             PaletteTarget::AiIntent(name) => {
                 self.notice = Some(format!(
                     "Not supported yet: the assistant request \"{name}\" (the assistant is not \
@@ -562,6 +626,27 @@ impl Shell {
         }
     }
 
+    /// The language the screens draw in: its code, such as `en` or `hi`.
+    #[must_use]
+    pub fn language(&self) -> &str {
+        self.tr.code()
+    }
+
+    /// Chooses the language, from the loaded translation files. The screens draw in it from the
+    /// next frame, with no restart. A code that is not loaded leaves the language as it was.
+    pub fn set_language(&mut self, code: &str) {
+        if self.catalog.has(code) {
+            self.tr = self.catalog.tr(code);
+            self.app_ctx.tr = self.tr.clone();
+        }
+    }
+
+    /// The strings in the language in use.
+    #[must_use]
+    pub fn tr(&self) -> &Tr {
+        &self.tr
+    }
+
     /// Chooses the theme; it is applied on the next frame.
     pub fn set_theme(&mut self, theme: ThemeKind) {
         self.theme = theme;
@@ -598,7 +683,7 @@ impl Shell {
     pub fn top_key_bar_name(&self) -> String {
         self.tabs
             .active_stack()
-            .map_or_default(ScreenStack::top_key_bar_name)
+            .map_or_default(|stack| stack.top_key_bar_name(&self.tr))
     }
 
     /// The context handed to screens.
@@ -621,7 +706,7 @@ impl Shell {
         egui::CentralPanel::default().frame(stage).show(ui, |ui| {
             // The mock has one page and no tab strip.
             if self.tabs.len() > 1 {
-                cmds.extend(chrome::tab_strip(ui, &self.tabs, t));
+                cmds.extend(chrome::tab_strip(ui, &self.tabs, t, &self.tr));
             }
             // The root screen has no breadcrumbs (`phead(null, ..)` on Home in the mock).
             let top = self.tabs.active_stack_mut().and_then(ScreenStack::top_mut);
@@ -629,6 +714,7 @@ impl Shell {
                 cmds.extend(chrome::breadcrumbs(ui, trail, t));
             }
             if let Some(screen) = top {
+                crate::i18n::set_current(&self.app_ctx.tr);
                 screen_action = screen.ui(ui, &mut self.app_ctx);
             }
         });
@@ -641,6 +727,7 @@ impl Shell {
     /// Draws one frame into `ui`: the top bar, the key bar, the sidebar, the tab strip and
     /// breadcrumbs, the palette, the top screen of the active tab, then key handling.
     pub fn show(&mut self, ui: &mut egui::Ui) {
+        crate::i18n::set_current(&self.tr);
         if self.applied_theme != Some(self.theme) {
             theme::apply(ui.ctx(), self.theme);
             self.applied_theme = Some(self.theme);
@@ -653,13 +740,13 @@ impl Shell {
         let trail = self
             .tabs
             .active_stack()
-            .map_or_default(ScreenStack::breadcrumbs);
+            .map_or_default(|stack| stack.breadcrumbs(&self.tr));
         let can_go_back = trail.len() > 1;
         let keys = self
             .tabs
             .active_stack_mut()
             .and_then(ScreenStack::top_mut)
-            .map_or_default(|screen| screen.keys());
+            .map_or_default(|screen| screen.keys(&self.tr));
         let held = chrome::Held::of(ui.input(|i| i.modifiers));
         let (context, hints) = if let (Some(held), false) = (held, self.palette.is_open()) {
             (String::new(), chrome::held_hints(&self.keymap, held))
@@ -669,8 +756,8 @@ impl Shell {
             let name = self
                 .tabs
                 .active_stack()
-                .map_or_default(ScreenStack::top_key_bar_name);
-            (name, chrome::key_hints(&keys, can_go_back))
+                .map_or_default(|stack| stack.top_key_bar_name(&self.tr));
+            (name, chrome::key_hints_in(&keys, can_go_back, &self.tr))
         };
         let rail = self.rail;
         let selected = self.selected_sidebar();
@@ -680,7 +767,7 @@ impl Shell {
             && self
                 .tabs
                 .active_stack()
-                .is_some_and(|stack| stack.top_title() == SETUP_TITLE);
+                .is_some_and(|stack| stack.top_title(&self.tr) == self.tr.t("setup.title"));
 
         let mut cmds = Vec::new();
         egui::Panel::top("topbar")
@@ -701,7 +788,7 @@ impl Shell {
             .frame(panel_frame(&t, egui::Margin::symmetric(12, 0)))
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
-                    chrome::key_bar(ui, &context, &hints, held, &t);
+                    chrome::key_bar(ui, &context, &hints, held, &t, &self.tr);
                 });
             });
         let width = if rail {
@@ -713,7 +800,7 @@ impl Shell {
             .exact_size(width)
             .frame(panel_frame(&t, egui::Margin::same(8)))
             .show(ui, |ui| {
-                cmds.extend(sidebar::sidebar(ui, rail, selected, &t));
+                cmds.extend(sidebar::sidebar(ui, rail, selected, &t, &self.tr));
             });
         self.palette_frame(ui);
 
@@ -843,7 +930,7 @@ impl Shell {
     fn go_to_setup(&mut self) {
         if let Some(stack) = self.tabs.active_stack_mut() {
             stack.truncate_to(1);
-            if stack.top_title() != SETUP_TITLE {
+            if stack.top_title(&self.tr) != self.tr.t("setup.title") {
                 stack.replace(Box::new(SetupScreen::default()));
             }
         }

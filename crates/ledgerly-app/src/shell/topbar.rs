@@ -22,6 +22,7 @@ use time::Weekday;
 use super::chrome::ChromeCmd;
 use super::navigate::{AI_SETTINGS_KEY, KEYS_KEY};
 use crate::AppCtx;
+use crate::i18n::Tr;
 use crate::palette::PaletteTarget;
 use crate::screen::AiTier;
 use crate::theme::{ThemeKind, Tokens};
@@ -30,7 +31,6 @@ use crate::ui::icon::Icon;
 use crate::ui::{bold_font, format};
 
 /// The search chip's words (`design/mock-v2/index.html`, `renderShell`).
-const SEARCH_TEXT: &str = "Search, jump, ask or type an entry";
 /// Side of the brand mark, in points (`.brand svg{width:24px}`).
 const BRAND_MARK: f32 = 24.0;
 /// The brand's size, in points (`.brand{font-size:15px}`).
@@ -44,7 +44,7 @@ const GAP: f32 = 8.0;
 pub fn company_chip(ctx: &AppCtx) -> String {
     match company_parts(ctx) {
         Some((name, fy)) => format!("{name} {fy}"),
-        None => "No company open".to_owned(),
+        None => ctx.tr.t("topbar.no_company"),
     }
 }
 
@@ -53,55 +53,69 @@ fn company_parts(ctx: &AppCtx) -> Option<(String, String)> {
     ctx.books.as_ref().map(|books| {
         (
             books.company.name.clone(),
-            format!(
-                "FY {}",
-                FinancialYear {
-                    start: books.company.fy_start
-                }
-                .label()
+            ctx.tr.tf(
+                "topbar.fy",
+                &[(
+                    "year",
+                    &FinancialYear {
+                        start: books.company.fy_start,
+                    }
+                    .label(),
+                )],
             ),
         )
     })
 }
 
+/// A theme's name in `tr`.
+#[must_use]
+pub fn theme_name(theme: ThemeKind, tr: &Tr) -> String {
+    match theme {
+        ThemeKind::Light => tr.t("theme.light"),
+        ThemeKind::Dark => tr.t("theme.dark"),
+        ThemeKind::HighContrast => tr.t("theme.high_contrast"),
+    }
+}
+
 /// The date chip's words, such as `Sat, 21 Nov 2026` (the mock's top bar).
 #[must_use]
-pub fn date_chip(today: Date) -> String {
+pub fn date_chip(today: Date, tr: &Tr) -> String {
     format!(
         "{}, {}",
-        weekday_abbrev(today.weekday()),
+        weekday_abbrev(today.weekday(), tr),
         format::date(today)
     )
 }
 
 /// The three-letter English abbreviation of a weekday.
-fn weekday_abbrev(day: Weekday) -> &'static str {
-    match day {
-        Weekday::Monday => "Mon",
-        Weekday::Tuesday => "Tue",
-        Weekday::Wednesday => "Wed",
-        Weekday::Thursday => "Thu",
-        Weekday::Friday => "Fri",
-        Weekday::Saturday => "Sat",
-        Weekday::Sunday => "Sun",
-    }
+fn weekday_abbrev(day: Weekday, tr: &Tr) -> String {
+    let key = match day {
+        Weekday::Monday => "topbar.weekday.mon",
+        Weekday::Tuesday => "topbar.weekday.tue",
+        Weekday::Wednesday => "topbar.weekday.wed",
+        Weekday::Thursday => "topbar.weekday.thu",
+        Weekday::Friday => "topbar.weekday.fri",
+        Weekday::Saturday => "topbar.weekday.sat",
+        Weekday::Sunday => "topbar.weekday.sun",
+    };
+    tr.t(key)
 }
 
 /// The lock chip's words, `Locked to 31 Mar 2026`, or `None` while no lock date is known (the
 /// chip is then not drawn).
 #[must_use]
-pub fn lock_chip(lock: Option<Date>) -> Option<String> {
-    lock.map(|date| format!("Locked to {}", format::date(date)))
+pub fn lock_chip(lock: Option<Date>, tr: &Tr) -> Option<String> {
+    lock.map(|date| tr.tf("topbar.locked_to", &[("date", &format::date_in(date, tr))]))
 }
 
 /// The AI chip's words: the stored tier, or "AI: not set up" while none is stored.
 #[must_use]
-pub fn ai_chip(tier: Option<AiTier>) -> String {
+pub fn ai_chip(tier: Option<AiTier>, tr: &Tr) -> String {
     match tier {
-        None => "AI: not set up".to_owned(),
-        Some(AiTier::Off) => "AI off".to_owned(),
-        Some(AiTier::Local) => "AI on this computer".to_owned(),
-        Some(AiTier::Cloud) => "AI cloud, your key".to_owned(),
+        None => tr.t("topbar.ai_not_set"),
+        Some(AiTier::Off) => tr.t("topbar.ai_off"),
+        Some(AiTier::Local) => tr.t("topbar.ai_local"),
+        Some(AiTier::Cloud) => tr.t("topbar.ai_cloud"),
     }
 }
 
@@ -176,10 +190,13 @@ pub(super) fn top_bar(
         );
         let response = ui
             .scope_builder(egui::UiBuilder::new().max_rect(search), |ui| {
-                chip::search_chip(ui, width, SEARCH_TEXT, "Ctrl+K")
+                chip::search_chip(ui, width, &ctx.tr.t("topbar.search_text"), "Ctrl+K")
             })
             .inner;
-        if response.on_hover_text("Open the command palette").clicked() {
+        if response
+            .on_hover_text(ctx.tr.t("topbar.palette_hover"))
+            .clicked()
+        {
             cmds.push(ChromeCmd::OpenPalette);
         }
     });
@@ -212,20 +229,18 @@ fn left_chips(ui: &mut Ui, ctx: &AppCtx, today: Date, setting_up: bool) -> Vec<C
         },
         None => Chip {
             icon: Some(Icon::Building),
-            text: "No company open",
+            text: &ctx.tr.t("topbar.no_company"),
             key: Some("F3"),
             ..Chip::default()
         },
     };
     if chip::chip_parts(ui, company)
-        .on_hover_text("Switch company (F3)")
+        .on_hover_text(ctx.tr.t("topbar.switch_company_hover"))
         .clicked()
     {
-        cmds.push(ChromeCmd::Say(
-            "Switch company (F3) has no screen yet, so it cannot open from here.".to_owned(),
-        ));
+        cmds.push(ChromeCmd::Say(ctx.tr.t("topbar.switch_company_missing")));
     }
-    let date = date_chip(today);
+    let date = date_chip(today, &ctx.tr);
     let date_parts = Chip {
         icon: Some(Icon::Cal),
         bold: Some(date.as_str()),
@@ -233,14 +248,12 @@ fn left_chips(ui: &mut Ui, ctx: &AppCtx, today: Date, setting_up: bool) -> Vec<C
         ..Chip::default()
     };
     if chip::chip_parts(ui, date_parts)
-        .on_hover_text("Change date or period (F2)")
+        .on_hover_text(ctx.tr.t("topbar.date_hover"))
         .clicked()
     {
-        cmds.push(ChromeCmd::Say(
-            "Change date or period (F2) has no screen yet, so it cannot open from here.".to_owned(),
-        ));
+        cmds.push(ChromeCmd::Say(ctx.tr.t("topbar.date_missing")));
     }
-    if let Some(text) = lock_chip(ctx.lock_date) {
+    if let Some(text) = lock_chip(ctx.lock_date, &ctx.tr) {
         chip::chip_parts(
             ui,
             Chip {
@@ -249,7 +262,7 @@ fn left_chips(ui: &mut Ui, ctx: &AppCtx, today: Date, setting_up: bool) -> Vec<C
                 ..Chip::default()
             },
         )
-        .on_hover_text("Period lock: no create, alter or delete on or before this date");
+        .on_hover_text(ctx.tr.t("topbar.lock_hover"));
     }
     cmds
 }
@@ -270,7 +283,7 @@ fn right_items(
             .layout(Layout::right_to_left(Align::Center)),
         |ui| {
             ui.spacing_mut().item_spacing.x = GAP;
-            if chip::icon_button(ui, Icon::Kbd, "Keyboard map (?)").clicked() {
+            if chip::icon_button(ui, Icon::Kbd, &ctx.tr.t("topbar.keymap_hover")).clicked() {
                 cmds.push(ChromeCmd::OpenOnTop(PaletteTarget::Report(
                     KEYS_KEY.to_owned(),
                 )));
@@ -282,14 +295,17 @@ fn right_items(
             if chip::icon_button(
                 ui,
                 theme_icon,
-                &format!("Theme: {} (switch)", theme.label()),
+                &ctx.tr.tf(
+                    "topbar.theme_hover",
+                    &[("theme", &theme_name(theme, &ctx.tr))],
+                ),
             )
             .clicked()
             {
                 cmds.push(ChromeCmd::CycleTheme);
             }
             let (icon, tint) = ai_look(ctx.ai_tier, t);
-            let words = ai_chip(ctx.ai_tier);
+            let words = ai_chip(ctx.ai_tier, &ctx.tr);
             if chip::chip_parts(
                 ui,
                 Chip {
@@ -299,7 +315,7 @@ fn right_items(
                     ..Chip::default()
                 },
             )
-            .on_hover_text("AI and privacy")
+            .on_hover_text(ctx.tr.t("topbar.ai_privacy_hover"))
             .clicked()
             {
                 cmds.push(ChromeCmd::OpenOnTop(PaletteTarget::Report(

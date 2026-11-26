@@ -19,10 +19,6 @@ use crate::ui::note::{NoteKind, colors};
 use crate::ui::prov::{ProvKind, prov};
 use crate::ui::{bold_font, format, kind, para, tokens};
 
-/// The line under the cards, as the mock says it.
-const FOOTER: &str =
-    "Nudges come from rules and the calendar, not from a model. Each names its rule.";
-
 /// What a nudge tone is drawn as.
 fn note_kind(tone: NudgeTone) -> NoteKind {
     match tone {
@@ -49,7 +45,7 @@ struct CardText<'a> {
     body: &'a str,
     source: &'a str,
     /// The button's label, when the card has one.
-    button: Option<&'a str>,
+    button: Option<String>,
 }
 
 /// Width a secondary button reading `label` needs (12 points of padding each side).
@@ -97,7 +93,10 @@ fn card(ui: &mut Ui, text: &CardText<'_>) -> bool {
                     }
                     ui.add_space(4.0);
                     let row_w = ui.available_width();
-                    let btn_w = text.button.map_or(0.0, |b| button_width(ui, b) + SPACE_2);
+                    let btn_w = text
+                        .button
+                        .as_deref()
+                        .map_or(0.0, |b| button_width(ui, b) + SPACE_2);
                     ui.horizontal(|ui| {
                         ui.allocate_ui_with_layout(
                             vec2((row_w - btn_w).max(60.0), 0.0),
@@ -110,7 +109,7 @@ fn card(ui: &mut Ui, text: &CardText<'_>) -> bool {
                                 });
                             },
                         );
-                        if let Some(label) = text.button {
+                        if let Some(label) = text.button.as_deref() {
                             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                                 clicked = button(ui, label, None, ButtonKind::Secondary).clicked();
                             });
@@ -134,7 +133,7 @@ pub(super) fn list(
     let t = tokens(ui);
     if nudges.is_empty() && attention.is_empty() {
         ui.label(
-            RichText::new("Nothing needs a look right now.")
+            RichText::new(crate::i18n::t("home.nudge.nothing"))
                 .size(TEXT_BODY)
                 .color(t.text_2),
         );
@@ -147,7 +146,7 @@ pub(super) fn list(
             title: &n.title,
             body: &n.body,
             source: &n.source,
-            button: Some(n.action_label),
+            button: Some(n.action_label.clone()),
         };
         if card(ui, &text) {
             *go = Some(n.action.clone());
@@ -159,15 +158,19 @@ pub(super) fn list(
             icon: Icon::Info,
             title: &item.headline,
             body: &item.detail,
-            source: item.kind.word(),
-            button: item.target.as_ref().map(|_| "Open"),
+            source: &item.kind.word_in(&crate::i18n::current()),
+            button: item.target.as_ref().map(|_| crate::i18n::t("common.open")),
         };
         if card(ui, &text) {
             chosen.clone_from(&item.target);
         }
     }
     ui.add_space(SPACE_2);
-    ui.label(RichText::new(FOOTER).size(TEXT_META).color(t.text_3));
+    ui.label(
+        RichText::new(crate::i18n::t("home.nudge.footer"))
+            .size(TEXT_META)
+            .color(t.text_3),
+    );
 }
 
 /// What the user did in the comparison dialog this frame.
@@ -190,9 +193,12 @@ const LABEL_COL: f32 = 104.0;
 
 /// "PY/0304", or "payment of 28 Oct 2026" for a payment without a number.
 fn column_name(p: &ledgerly_api::PaymentRef) -> String {
-    p.number
-        .clone()
-        .unwrap_or_else(|| format!("Payment of {}", format::date(p.date)))
+    p.number.clone().unwrap_or_else(|| {
+        crate::i18n::tf(
+            "home.cmp.payment_of",
+            &[("date", &format::date_in(p.date, &crate::i18n::current()))],
+        )
+    })
 }
 
 /// A table cell of exactly `size`: egui shrinks an allocated child to its content, which would
@@ -325,12 +331,12 @@ fn proposal(ui: &mut Ui, pair: &DuplicatePayment) -> DialogChoice {
                     ui.horizontal_wrapped(|ui| {
                         icon::icon(ui, Icon::Spark, t.ai_ink);
                         ui.label(
-                            RichText::new("Possible duplicate")
+                            RichText::new(crate::i18n::t("home.cmp.possible"))
                                 .font(bold_font(ui, TEXT_BODY))
                                 .color(t.ai_ink),
                         );
                         ui.label(
-                            RichText::new("suggested by rule D-02")
+                            RichText::new(crate::i18n::t("home.cmp.suggested"))
                                 .size(TEXT_BODY)
                                 .color(t.ai_ink),
                         );
@@ -338,15 +344,17 @@ fn proposal(ui: &mut Ui, pair: &DuplicatePayment) -> DialogChoice {
                     ui.horizontal(|ui| {
                         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                             ui.label(
-                                RichText::new("Rule, deterministic")
+                                RichText::new(crate::i18n::t("home.cmp.deterministic"))
                                     .font(bold_font(ui, TEXT_META))
                                     .color(t.ai_ink),
                             );
                             icon::icon_sized(ui, Icon::Check, t.ai_ink, 12.0);
-                            let both = format!(
-                                "{} and {}",
-                                column_name(&pair.first),
-                                column_name(&pair.second)
+                            let both = crate::i18n::tf(
+                                "home.cmp.and",
+                                &[
+                                    ("first", &column_name(&pair.first)),
+                                    ("second", &column_name(&pair.second)),
+                                ],
                             );
                             crate::ui::chip::chip_parts(
                                 ui,
@@ -372,17 +380,15 @@ fn proposal(ui: &mut Ui, pair: &DuplicatePayment) -> DialogChoice {
                     ui.set_min_width(ui.available_width());
                     ui.horizontal(|ui| {
                         ui.label(
-                            RichText::new(
-                                "Rule D-02: same ledger, amount and narration within 30 days",
-                            )
-                            .size(TEXT_META)
-                            .color(t.text_2),
+                            RichText::new(crate::i18n::t("home.cmp.rule"))
+                                .size(TEXT_META)
+                                .color(t.text_2),
                         );
                         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                             if button_icon(
                                 ui,
                                 Some(Icon::Check),
-                                "Investigate",
+                                &crate::i18n::t("home.cmp.investigate"),
                                 Some("Ctrl+A"),
                                 ButtonKind::Primary,
                             )
@@ -409,10 +415,15 @@ fn proposal(ui: &mut Ui, pair: &DuplicatePayment) -> DialogChoice {
 )]
 fn body(ui: &mut Ui, pair: &DuplicatePayment) {
     let t = tokens(ui);
+    let tr = crate::i18n::current();
     let days = pair.days_apart;
-    let sentence = format!(
-        "Same ledger, same amount, same narration, {days} day{} apart. The rule flags it; you decide.",
-        if days == 1 { "" } else { "s" }
+    let sentence = crate::i18n::tf(
+        if days == 1 {
+            "home.cmp.sentence_one"
+        } else {
+            "home.cmp.sentence_many"
+        },
+        &[("days", &days.to_string())],
     );
     ui.label(RichText::new(sentence).size(TEXT_BODY).color(t.text_2));
     ui.add_space(SPACE_2);
@@ -445,25 +456,25 @@ fn body(ui: &mut Ui, pair: &DuplicatePayment) {
     let first_locked = pair.first.locked;
     let second_locked = pair.second.locked;
     let date_cell = |p: &ledgerly_api::PaymentRef, locked: bool| {
-        let text = format::date(p.date);
+        let text = format::date_in(p.date, &crate::i18n::current());
         move |ui: &mut Ui| {
             let t = tokens(ui);
             ui.label(RichText::new(text).size(TEXT_BODY).color(t.text));
             if locked {
-                badge(ui, BadgeKind::Neutral, "Locked period");
+                badge(ui, BadgeKind::Neutral, &crate::i18n::t("home.cmp.locked"));
             }
         }
     };
     row(
         ui,
-        "Date",
+        &tr.t("home.cmp.date"),
         cell_w,
         date_cell(&pair.first, first_locked),
         date_cell(&pair.second, second_locked),
     );
     row(
         ui,
-        "Ledger",
+        &tr.t("home.cmp.ledger"),
         cell_w,
         plain(pair.ledger.clone()),
         plain(pair.ledger.clone()),
@@ -471,28 +482,31 @@ fn body(ui: &mut Ui, pair: &DuplicatePayment) {
     let amount = pair.amount;
     row(
         ui,
-        "Amount",
+        &tr.t("home.cmp.amount"),
         cell_w,
         move |ui| amount_cell(ui, amount, cell_w),
         move |ui| amount_cell(ui, amount, cell_w),
     );
     row(
         ui,
-        "Narration",
+        &tr.t("home.cmp.narration"),
         cell_w,
         plain(pair.narration.clone()),
         plain(pair.narration.clone()),
     );
     let bank_cell = |p: &ledgerly_api::PaymentRef| {
         let text = p.bank_date.map_or_else(
-            || "Not matched to a statement".to_owned(),
-            |d| format!("{} (statement)", format::date(d)),
+            || crate::i18n::t("home.cmp.unmatched"),
+            |d| {
+                let tr = crate::i18n::current();
+                tr.tf("home.cmp.statement", &[("date", &format::date_in(d, &tr))])
+            },
         );
         plain(text)
     };
     row(
         ui,
-        "Bank date",
+        &tr.t("home.cmp.bank_date"),
         cell_w,
         bank_cell(&pair.first),
         bank_cell(&pair.second),
@@ -503,18 +517,16 @@ fn body(ui: &mut Ui, pair: &DuplicatePayment) {
         if pair.first.bank_date.is_some() && pair.second.bank_date.is_some() {
             icon::icon_sized(ui, Icon::Check, t.ok, 14.0);
             ui.label(
-                RichText::new("Both payments are on bank statements, so both left the account.")
+                RichText::new(tr.t("home.cmp.both_banked"))
                     .size(TEXT_BODY)
                     .color(t.ok),
             );
         } else {
             icon::icon_sized(ui, Icon::Info, t.text_2, 14.0);
             ui.label(
-                RichText::new(
-                    "A payment not matched to a bank statement may not have left the account. Match them in Bank reconciliation.",
-                )
-                .size(TEXT_BODY)
-                .color(t.text_2),
+                RichText::new(tr.t("home.cmp.not_banked"))
+                    .size(TEXT_BODY)
+                    .color(t.text_2),
             );
         }
     });
@@ -524,12 +536,9 @@ fn body(ui: &mut Ui, pair: &DuplicatePayment) {
             ui.horizontal(|ui| {
                 icon::icon_sized(ui, Icon::Alert, t.warn, 14.0);
                 ui.label(
-                    RichText::new(format!(
-                        "{} is in a locked period, so it cannot be edited. Correct it with a new entry in an open period.",
-                        column_name(p)
-                    ))
-                    .size(TEXT_BODY)
-                    .color(t.warn),
+                    RichText::new(tr.tf("home.cmp.locked_note", &[("name", &column_name(p))]))
+                        .size(TEXT_BODY)
+                        .color(t.warn),
                 );
             });
         }

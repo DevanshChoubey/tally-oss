@@ -253,7 +253,7 @@ pub fn ledger_detail(masters: &Masters, id: u64) -> Option<LedgerDetail> {
 /// The name of the group `ledger` sits under.
 fn group_name(masters: &Masters, ledger: &Ledger) -> String {
     masters.groups.get(&ledger.group).map_or_else(
-        || "Group not found in the books".to_owned(),
+        || crate::i18n::t("masters.group_not_found"),
         |g| g.name.clone(),
     )
 }
@@ -302,9 +302,15 @@ fn address_text(ledger: &Ledger) -> String {
 /// (mock v2 index.html:1796 for the ledgers: "name, group, GSTIN or alias").
 #[must_use]
 pub fn filter_hint(kind: MasterKind) -> String {
+    filter_hint_in(kind, &crate::i18n::Tr::default())
+}
+
+/// The filter hint in language `tr`.
+#[must_use]
+pub fn filter_hint_in(kind: MasterKind, tr: &crate::i18n::Tr) -> String {
     match kind {
-        MasterKind::Ledger => "Filter ledgers: name, group, GSTIN or alias".to_owned(),
-        MasterKind::StockItem => "Filter stock items: name or alias".to_owned(),
+        MasterKind::Ledger => tr.t("masters.filter.ledger"),
+        MasterKind::StockItem => tr.t("masters.filter.stock_item"),
         MasterKind::Group
         | MasterKind::VoucherType
         | MasterKind::Unit
@@ -312,9 +318,10 @@ pub fn filter_hint(kind: MasterKind) -> String {
         | MasterKind::Godown
         | MasterKind::Batch
         | MasterKind::CostCategory
-        | MasterKind::CostCentre => {
-            format!("Filter {}: name or alias", kind.plural().to_lowercase())
-        }
+        | MasterKind::CostCentre => tr.tf(
+            "masters.filter.other",
+            &[("plural", &kind.plural_in(tr).to_lowercase())],
+        ),
     }
 }
 
@@ -326,7 +333,14 @@ pub fn gstin_hint(text: &str) -> Option<String> {
     let gstin = Gstin::parse(text.trim()).ok()?;
     let pan = gstin.pan_str();
     Some(match gstin.state() {
-        Some(code) => format!("PAN {pan} \u{00B7} state {:02} {}", code.get(), code.name()),
-        None => format!("PAN {pan}"),
+        Some(code) => crate::i18n::tf(
+            "masters.gstin_hint.pan_state",
+            &[
+                ("pan", pan),
+                ("code", &format!("{:02}", code.get())),
+                ("state", code.name()),
+            ],
+        ),
+        None => crate::i18n::tf("masters.gstin_hint.pan", &[("pan", pan)]),
     })
 }

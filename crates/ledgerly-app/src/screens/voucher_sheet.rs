@@ -185,7 +185,7 @@ pub fn caption(ui: &mut Ui, text: &str, key: Option<&str>) {
     let t = tokens(ui);
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing.x = 6.0;
-        ui.label(para_text(text, TEXT_META, t.text_2));
+        ui.label(para_text(&crate::i18n::lit(text), TEXT_META, t.text_2));
         if let Some(key) = key {
             keycap(ui, key);
         }
@@ -284,7 +284,11 @@ pub fn input(ui: &mut Ui, text: &mut String, spec: &InputSpec<'_>) -> Response {
             .margin(Margin::ZERO)
             .font(FontId::proportional(TEXT_INPUT))
             .text_color(if spec.bad_ink { t.bad } else { t.text })
-            .hint_text(RichText::new(spec.hint).size(TEXT_INPUT).color(t.text_3))
+            .hint_text(
+                RichText::new(crate::i18n::lit(spec.hint))
+                    .size(TEXT_INPUT)
+                    .color(t.text_3),
+            )
             .align(align)
             .min_size(inner.size())
             .desired_width(inner.width()),
@@ -410,8 +414,13 @@ pub fn lines(
                 Align2::LEFT_CENTER,
             )
         };
-        ui.painter()
-            .text(pos, anchor, col.label, bold_font(ui, TEXT_META), t.text_3);
+        ui.painter().text(
+            pos,
+            anchor,
+            crate::i18n::lit(col.label),
+            bold_font(ui, TEXT_META),
+            t.text_3,
+        );
         heads.push(rect);
         x += *w;
     }

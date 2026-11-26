@@ -217,6 +217,7 @@ fn fill_ledgers(s: &mut ItemInvoiceScreen, books: &Books) {
 
 fn app_for(books: &Books) -> AppCtx {
     AppCtx {
+        tr: ledgerly_app::i18n::Tr::default(),
         books: Some(books.clone()),
         api: None,
         lock_date: None,

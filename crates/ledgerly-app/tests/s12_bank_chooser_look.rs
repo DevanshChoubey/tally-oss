@@ -30,8 +30,8 @@ use time::macros::date;
 struct Shared(Rc<RefCell<BankChooserScreen>>);
 
 impl Screen for Shared {
-    fn title(&self) -> String {
-        self.0.borrow().title()
+    fn title(&self, tr: &ledgerly_app::i18n::Tr) -> String {
+        self.0.borrow().title(tr)
     }
     fn ui(&mut self, ui: &mut egui::Ui, ctx: &mut AppCtx) -> ScreenAction {
         self.0.borrow_mut().ui(ui, ctx)

@@ -172,7 +172,7 @@ fn every_feature_row_is_either_a_working_switch_or_says_why_it_is_not_available(
     let rows = feature_rows();
     assert_eq!(rows.len(), 7, "index.html:1872 lists seven features");
     for row in &rows {
-        match (row.switch.is_some(), row.unavailable) {
+        match (row.switch.is_some(), row.unavailable.as_deref()) {
             (true, None) => {}
             (false, Some(reason)) => assert_ne!(reason, ""),
             (true, Some(_)) | (false, None) => {
@@ -242,7 +242,7 @@ fn the_steps_that_cannot_save_their_choice_say_so_on_that_step() {
     for step in [Step::Keyboard, Step::Backup] {
         let notice = unsaved_notice(step);
         assert!(
-            notice.is_some_and(|n| n.contains("not saved")),
+            notice.as_deref().is_some_and(|n| n.contains("not saved")),
             "{step:?} must say its choice is not saved, got {notice:?}"
         );
     }

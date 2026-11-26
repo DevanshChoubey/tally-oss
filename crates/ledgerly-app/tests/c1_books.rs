@@ -33,7 +33,7 @@ use time::macros::date;
 struct Blank;
 
 impl Screen for Blank {
-    fn title(&self) -> String {
+    fn title(&self, _tr: &ledgerly_app::i18n::Tr) -> String {
         "Blank".to_owned()
     }
     fn ui(&mut self, _ui: &mut egui::Ui, _ctx: &mut AppCtx) -> ScreenAction {

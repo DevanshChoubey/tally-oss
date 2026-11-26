@@ -22,6 +22,7 @@ use egui::{Event, InputState, Key, Modifiers, Ui};
 use ledgerly_api::{Candidate, DuplicatePayment, ReviewItem, ReviewQueue, ReviewSource};
 use ledgerly_core::{BankStatementId, LedgerId, Outcome, Paise};
 
+use crate::i18n::Tr;
 use crate::screen::{KeyHint, ScreenAction};
 use crate::screens::home::draw::{split, title};
 use crate::screens::wire::{Done, Latest, unsupported_text};
@@ -40,19 +41,11 @@ use crate::ui::{
 use crate::worker::ApiWorker;
 use crate::{AppCtx, Screen};
 
-/// Subtitle of the page head (the mock's `review` head line).
-const SUBTITLE: &str = "Every open AI proposal and rule check in one place. Decide here or in context; it is the same proposal.";
-/// The mock's empty-state heading and sentence, shown only when every source is connected and
-/// none has a proposal.
-const EMPTY_TITLE: &str = "Nothing to review";
-/// See [`EMPTY_TITLE`].
-const EMPTY_SENTENCE: &str = "New bill photos, bank suggestions and 2B explanations will appear here. Ledgerly never acts on them without you.";
-
 /// One row of the queue as the screen shows it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct QueueRow {
-    /// The kind of proposal: "Bank match", "Draft payment" or "Draft receipt".
-    pub kind: &'static str,
+    /// The kind of proposal ("Bank match", "Draft payment" or "Draft receipt"), in the language the row was made in.
+    pub kind: String,
     /// What the proposal is about: the statement line text and where it goes.
     pub what: String,
     /// Where it came from: the statement lines and the bank statement date.
@@ -120,14 +113,14 @@ pub struct QueuePanel {
 
 /// The name of a source, in the words the screen shows.
 #[must_use]
-pub fn source_label(source: ReviewSource) -> &'static str {
+pub fn source_label(source: ReviewSource) -> String {
     match source {
-        ReviewSource::BillDraft => "Bill photos",
-        ReviewSource::PlainWordsDraft => "Plain-words drafts",
-        ReviewSource::BankSuggestion => "Bank matches",
-        ReviewSource::NewLedgerSuggestion => "New ledger suggestions",
-        ReviewSource::DuplicateCheck => "Possible duplicates",
-        ReviewSource::Gstr2bExplanation => "GSTR-2B explanations",
+        ReviewSource::BillDraft => crate::i18n::t("review.source.bill_draft"),
+        ReviewSource::PlainWordsDraft => crate::i18n::t("review.source.plain_words"),
+        ReviewSource::BankSuggestion => crate::i18n::t("review.source.bank"),
+        ReviewSource::NewLedgerSuggestion => crate::i18n::t("review.source.new_ledger"),
+        ReviewSource::DuplicateCheck => crate::i18n::t("review.source.duplicate"),
+        ReviewSource::Gstr2bExplanation => crate::i18n::t("review.source.gstr2b"),
     }
 }
 
@@ -138,24 +131,30 @@ pub fn row_of(item: &ReviewItem) -> QueueRow {
     // The matcher produces only exact and rule suggestions (`ledgerly_bank::matcher`). The other
     // kinds have no matcher output, so they are shown as rule drafts rather than dropped.
     let (kind, level) = match candidate.kind {
-        ledgerly_model::MatchKind::Exact if candidate.ambiguous => ("Bank match", Confidence::Low),
-        ledgerly_model::MatchKind::Exact => ("Bank match", Confidence::High),
+        ledgerly_model::MatchKind::Exact if candidate.ambiguous => {
+            (crate::i18n::t("review.kind.bank_match"), Confidence::Low)
+        }
+        ledgerly_model::MatchKind::Exact => {
+            (crate::i18n::t("review.kind.bank_match"), Confidence::High)
+        }
         ledgerly_model::MatchKind::Rule
         | ledgerly_model::MatchKind::AiSuggested
         | ledgerly_model::MatchKind::Manual => {
             let kind = if item.money_in {
-                "Draft receipt"
+                crate::i18n::t("review.kind.draft_receipt")
             } else {
-                "Draft payment"
+                crate::i18n::t("review.kind.draft_payment")
             };
             (kind, Confidence::Rule)
         }
     };
     let target = match (candidate.vouchers.as_slice(), candidate.suggested_ledger) {
-        ([], Some(ledger)) => format!("to ledger {}", ledger.0),
+        ([], Some(ledger)) => {
+            crate::i18n::tf("review.to_ledger", &[("ledger", &ledger.0.to_string())])
+        }
         (vouchers, _) => vouchers
             .iter()
-            .map(|v| format!("voucher {}", v.0))
+            .map(|v| crate::i18n::tf("review.voucher", &[("number", &v.0.to_string())]))
             .collect::<Vec<_>>()
             .join(", "),
     };
@@ -168,9 +167,15 @@ pub fn row_of(item: &ReviewItem) -> QueueRow {
     QueueRow {
         kind,
         what: format!("{} {}", item.description, target).trim().to_owned(),
-        source: format!(
-            "Bank statement line {lines} \u{b7} {}",
-            format::date(candidate.proposed_bank_date)
+        source: crate::i18n::tf(
+            "review.source_line",
+            &[
+                ("lines", &lines),
+                (
+                    "date",
+                    &format::date_in(candidate.proposed_bank_date, &crate::i18n::current()),
+                ),
+            ],
         ),
         confidence: level,
         amount: item.amount,
@@ -189,31 +194,40 @@ pub fn row_of(item: &ReviewItem) -> QueueRow {
 /// The name of a payment in the queue's words: its number, or "Voucher N" ("voucher N" inside a
 /// sentence) when it has none.
 fn payment_name(p: &ledgerly_api::PaymentRef, starts_sentence: bool) -> String {
-    let word = if starts_sentence {
-        "Voucher"
-    } else {
-        "voucher"
-    };
-    p.number
-        .clone()
-        .unwrap_or_else(|| format!("{word} {}", p.id.0))
+    p.number.clone().unwrap_or_else(|| {
+        let key = if starts_sentence {
+            "review.voucher_cap"
+        } else {
+            "review.voucher"
+        };
+        crate::i18n::tf(key, &[("number", &p.id.0.to_string())])
+    })
 }
 
 /// The row for one possible duplicate payment (rule D-02).
 #[must_use]
 pub fn duplicate_row(pair: &DuplicatePayment) -> QueueRow {
-    let days = if pair.days_apart == 1 { "day" } else { "days" };
+    let tr = crate::i18n::current();
     QueueRow {
-        kind: "Possible duplicate",
-        what: format!(
-            "{} on {} repeats {} on {}: same ledger ({}), amount and narration.",
-            payment_name(&pair.second, true),
-            format::date(pair.second.date),
-            payment_name(&pair.first, false),
-            format::date(pair.first.date),
-            pair.ledger
+        kind: crate::i18n::t("gst.match.possible_duplicate"),
+        what: crate::i18n::tf(
+            "review.dup.what",
+            &[
+                ("second", &payment_name(&pair.second, true)),
+                ("second_date", &format::date_in(pair.second.date, &tr)),
+                ("first", &payment_name(&pair.first, false)),
+                ("first_date", &format::date_in(pair.first.date, &tr)),
+                ("ledger", &pair.ledger.clone()),
+            ],
         ),
-        source: format!("Rule D-02 \u{b7} {} {days} apart", pair.days_apart),
+        source: crate::i18n::tf(
+            if pair.days_apart == 1 {
+                "review.dup.source_one"
+            } else {
+                "review.dup.source_many"
+            },
+            &[("days", &pair.days_apart.to_string())],
+        ),
         confidence: Confidence::Rule,
         amount: Some(pair.amount),
         ledger: None,
@@ -233,10 +247,7 @@ pub fn accept_verdict(row: &QueueRow) -> Verdict {
             statement: *statement,
             candidate: Box::new(candidate.clone()),
         },
-        RowOrigin::Duplicate => Verdict::Say(
-            "Nothing to accept: this is a warning, not a draft. Open it (Enter) to compare the two payments in the day book and cancel the second one, or press N if both are right."
-                .to_owned(),
-        ),
+        RowOrigin::Duplicate => Verdict::Say(crate::i18n::t("review.dup.nothing_to_accept")),
     }
 }
 
@@ -244,7 +255,7 @@ pub fn accept_verdict(row: &QueueRow) -> Verdict {
 #[must_use]
 pub fn reject_notice(row: &QueueRow) -> String {
     match row.origin {
-        RowOrigin::Bank { .. } | RowOrigin::Duplicate => "Rejected for this session. Nothing was posted or changed. Ledgerly keeps no record of a rejection yet, so it returns the next time the queue is opened.".to_owned(),
+        RowOrigin::Bank { .. } | RowOrigin::Duplicate => crate::i18n::t("review.rejected"),
     }
 }
 
@@ -390,17 +401,11 @@ impl ReviewScreen {
                     candidate,
                 } => {
                     let Some(handle) = worker else {
-                        self.notice = Some((
-                            NoteKind::Bad,
-                            "No company is open, so nothing can be accepted.".to_owned(),
-                        ));
+                        self.notice =
+                            Some((NoteKind::Bad, crate::i18n::t("review.no_company_accept")));
                         return;
                     };
-                    self.notice = Some((
-                        NoteKind::Info,
-                        "Accepting: the engine checks the match again before it saves it."
-                            .to_owned(),
-                    ));
+                    self.notice = Some((NoteKind::Info, crate::i18n::t("review.accepting")));
                     self.confirm.start(handle, move |api| {
                         api.confirm_bank_match(statement, &candidate)
                             .map(|out| out.map(|_| ()))
@@ -448,31 +453,29 @@ impl ReviewScreen {
             }
             Some(Done::Ready(Err(e))) => self.error = Some(e),
             Some(Done::Lost) => {
-                self.error = Some(
-                    "The background worker stopped, so the queue could not be read.".to_owned(),
-                );
+                self.error = Some(crate::i18n::t("review.worker_stopped"));
             }
             None => {}
         }
         match self.confirm.poll() {
             Some(Done::Ready(Ok(Outcome::Value(())))) => {
                 crate::shell::submit::note_changed();
-                self.notice = Some((
-                    NoteKind::Ok,
-                    "Accepted. The engine checked the match again and saved it; the bank line is matched to its voucher.".to_owned(),
-                ));
+                self.notice = Some((NoteKind::Ok, crate::i18n::t("review.accepted")));
                 self.want = true;
             }
             Some(Done::Ready(Ok(Outcome::Unsupported(u)))) => {
                 self.notice = Some((NoteKind::Warn, unsupported_text(&u)));
             }
             Some(Done::Ready(Err(e))) => {
-                self.notice = Some((NoteKind::Bad, format!("Not accepted: {e}")));
+                self.notice = Some((
+                    NoteKind::Bad,
+                    crate::i18n::tf("review.not_accepted", &[("error", &e)]),
+                ));
             }
             Some(Done::Lost) => {
                 self.notice = Some((
                     NoteKind::Bad,
-                    "The background worker stopped, so nothing was accepted.".to_owned(),
+                    crate::i18n::t("review.worker_stopped_accept"),
                 ));
             }
             None => {}
@@ -482,7 +485,7 @@ impl ReviewScreen {
         }
         self.want = false;
         let Some(handle) = worker else {
-            self.error = Some("No company is open, so there is no queue to show.".to_owned());
+            self.error = Some(crate::i18n::t("review.no_company"));
             return;
         };
         self.latest.start(handle, |api| {
@@ -509,7 +512,7 @@ impl ReviewScreen {
                 crate::shell::navigate::open_report(ledgerly_api::ReportKind::DayBook, ctx)
             }
             (Some(_), None) => {
-                self.error = Some("No company is open, so the bank ledger cannot open.".to_owned());
+                self.error = Some(crate::i18n::t("review.no_company_bank"));
                 return ScreenAction::Stay;
             }
         };
@@ -544,10 +547,10 @@ impl ReviewScreen {
                 if !panel.not_connected.is_empty() {
                     ui.add_space(crate::theme::SPACE_3);
                     card(ui, |ui| {
-                        title(ui, "Not connected yet");
+                        title(ui, &crate::i18n::t("review.not_connected_title"));
                         para(
                             ui,
-                            "These proposals are not listed. Nothing is shown for them here, and nothing is posted.",
+                            &crate::i18n::t("review.not_connected_note"),
                             crate::theme::TEXT_BODY,
                             crate::ui::tokens(ui).text_2,
                         );
@@ -569,6 +572,10 @@ impl ReviewScreen {
     }
 
     /// The proposals table: an icon, the proposal, its source, the confidence and the amount.
+    #[allow(
+        clippy::too_many_lines,
+        reason = "one drawing pass of the screen, a line for each part of it"
+    )]
     fn draw_rows(&self, ui: &mut Ui, panel: &QueuePanel) -> Option<usize> {
         let widths = [
             Width::Fixed(46.0),
@@ -577,7 +584,13 @@ impl ReviewScreen {
             Width::Fixed(112.0),
             Width::Fixed(112.0),
         ];
-        let head = ["", "Proposal", "Source", "Confidence", "Amount"];
+        let head = [
+            String::new(),
+            crate::i18n::t("review.col.proposal"),
+            crate::i18n::t("review.col.source"),
+            crate::i18n::t("review.col.confidence"),
+            crate::i18n::t("invoice.col.amount"),
+        ];
         let rows: Vec<Vec<Cell<'_>>> = panel
             .rows
             .iter()
@@ -585,7 +598,7 @@ impl ReviewScreen {
                 let proposal: Cell<'_> = Box::new(move |ui| {
                     let t = crate::ui::tokens(ui);
                     ui.label(
-                        egui::RichText::new(row.kind)
+                        egui::RichText::new(&row.kind)
                             .font(bold_font(ui, crate::theme::TEXT_BODY))
                             .color(t.text),
                     );
@@ -608,7 +621,7 @@ impl ReviewScreen {
                     crate::ui::icon::icon(ui, glyph, t.text_2);
                 });
                 let confidence: Cell<'_> = Box::new(move |ui| {
-                    conf(ui, row.confidence);
+                    conf(ui, row.confidence, &crate::i18n::current());
                 });
                 let amount: Cell<'_> = Box::new(move |ui| {
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
@@ -620,7 +633,7 @@ impl ReviewScreen {
                                     .color(t.text),
                             ),
                             None => ui.label(
-                                egui::RichText::new("none")
+                                egui::RichText::new(crate::i18n::lit("none"))
                                     .font(egui::FontId::proportional(crate::theme::TEXT_BODY))
                                     .color(t.text_3),
                             ),
@@ -636,8 +649,13 @@ impl ReviewScreen {
                 ]
             })
             .collect();
-        let (_, lines) =
-            mock_table::table_rows(ui, &widths, Some(&head), rows, Some(self.selected));
+        let (_, lines) = mock_table::table_rows(
+            ui,
+            &widths,
+            Some(&head.each_ref().map(String::as_str)),
+            rows,
+            Some(self.selected),
+        );
         let mut clicked = None;
         for (index, line) in lines.into_iter().enumerate() {
             let response = ui.interact(
@@ -655,13 +673,17 @@ impl ReviewScreen {
     /// The empty state: when no source is left unlisted, the mock's; otherwise it says what the
     /// connected sources hold and names the ones that are not connected.
     fn draw_empty(&self, ui: &mut Ui) {
-        let (title, sentence, lines): (&str, &str, Vec<String>) = match self.empty.clone() {
+        let (title, sentence, lines): (String, String, Vec<String>) = match self.empty.clone() {
             Some(EmptyView::NotConnected(lines)) => (
-                "Nothing waiting from the connected sources",
-                "Bank matches appear here when a statement is imported. These sources are not connected, so nothing is shown for them:",
+                crate::i18n::t("review.waiting_connected"),
+                crate::i18n::t("review.empty_not_connected"),
                 lines,
             ),
-            Some(EmptyView::Nothing) | None => (EMPTY_TITLE, EMPTY_SENTENCE, Vec::new()),
+            Some(EmptyView::Nothing) | None => (
+                crate::i18n::t("review.empty_title"),
+                crate::i18n::t("review.empty_sentence"),
+                Vec::new(),
+            ),
         };
         card(ui, |ui| {
             ui.set_min_width(ui.available_width());
@@ -670,13 +692,13 @@ impl ReviewScreen {
                 ui.add_space(crate::theme::SPACE_6);
                 crate::ui::icon::icon_sized(ui, Icon::Inbox, t.text_3, 36.0);
                 ui.add_space(10.0);
-                draw_empty_heading(ui, title);
+                draw_empty_heading(ui, &title);
                 ui.add_space(crate::theme::SPACE_4 / 2.0);
                 ui.scope(|ui| {
                     ui.set_max_width(520.0_f32.min(ui.available_width()));
                     ui.add(
                         egui::Label::new(crate::ui::para_text(
-                            sentence,
+                            &sentence,
                             crate::theme::TEXT_BODY,
                             t.text_2,
                         ))
@@ -705,22 +727,13 @@ impl ReviewScreen {
 fn draw_how_decisions_work(ui: &mut Ui) {
     let t = crate::ui::tokens(ui);
     card(ui, |ui| {
-        title(ui, "How decisions work");
-        let lines: [(&[&str], &str); 5] = [
-            (
-                &["Y", "Ctrl+A"],
-                "Accept. A bank match is checked again by the engine before it is saved; a failed check blocks it. A duplicate warning has nothing to post.",
-            ),
-            (
-                &["Enter"],
-                "Open in context: the bank reconciliation of the proposal's account, or the day book for a possible duplicate.",
-            ),
-            (
-                &["N", "Alt+D"],
-                "Reject for this session. Nothing is posted; the engine keeps no record of it yet.",
-            ),
-            (&["J", "K"], "Next and previous."),
-            (&["Esc"], "Back."),
+        title(ui, &crate::i18n::t("review.how.title"));
+        let lines: [(&[&str], String); 5] = [
+            (&["Y", "Ctrl+A"], crate::i18n::t("review.how.accept")),
+            (&["Enter"], crate::i18n::t("review.how.open")),
+            (&["N", "Alt+D"], crate::i18n::t("review.how.reject")),
+            (&["J", "K"], crate::i18n::t("review.how.next_previous")),
+            (&["Esc"], crate::i18n::t("review.how.back")),
         ];
         for (keys, what) in lines {
             ui.horizontal_top(|ui| {
@@ -733,7 +746,7 @@ fn draw_how_decisions_work(ui: &mut Ui) {
                     });
                 });
                 ui.add(
-                    egui::Label::new(crate::ui::para_text(what, crate::theme::TEXT_BODY, t.text))
+                    egui::Label::new(crate::ui::para_text(&what, crate::theme::TEXT_BODY, t.text))
                         .wrap(),
                 );
             });
@@ -741,7 +754,7 @@ fn draw_how_decisions_work(ui: &mut Ui) {
         }
         para(
             ui,
-            "Amounts in this list are the bank line as imported or the payment as posted, never a total computed here.",
+            &crate::i18n::t("review.how.amounts"),
             crate::theme::TEXT_META,
             t.text_2,
         );
@@ -754,25 +767,25 @@ fn draw_empty_heading(ui: &mut Ui, text: &str) {
 }
 
 impl Screen for ReviewScreen {
-    fn title(&self) -> String {
-        "Review queue".to_owned()
+    fn title(&self, tr: &Tr) -> String {
+        tr.t("sidebar.review_queue")
     }
 
-    fn subtitle(&self) -> Option<String> {
+    fn subtitle(&self, _tr: &Tr) -> Option<String> {
         None
     }
 
-    fn keys(&self) -> Vec<KeyHint> {
+    fn keys(&self, tr: &Tr) -> Vec<KeyHint> {
         [
-            ("", "Review queue"),
-            ("J / K", "Move"),
-            ("Y", "Accept"),
-            ("Enter", "Open to edit"),
-            ("N", "Reject"),
-            ("Esc", "Back"),
+            ("", tr.t("sidebar.review_queue")),
+            ("J / K", tr.t("keys.move")),
+            ("Y", tr.t("gst.ims.accept")),
+            ("Enter", tr.t("review.key.open")),
+            ("N", tr.t("gst.ims.reject")),
+            ("Esc", tr.t("chrome.back")),
         ]
-        .iter()
-        .map(|(keys, label)| KeyHint::new(*keys, *label))
+        .into_iter()
+        .map(|(keys, label)| KeyHint::new(keys, label))
         .collect()
     }
 
@@ -812,7 +825,12 @@ impl Screen for ReviewScreen {
         } else {
             ScreenAction::Stay
         };
-        page_head(ui, "Review queue", Some(SUBTITLE), |_| {});
+        page_head(
+            ui,
+            &crate::i18n::t("sidebar.review_queue"),
+            Some(&crate::i18n::t("review.subtitle")),
+            |_| {},
+        );
         if let Some(error) = self.error.clone() {
             note(ui, NoteKind::Bad, &error);
         }
@@ -824,7 +842,7 @@ impl Screen for ReviewScreen {
             // An error is on screen already; "loading" beside it would say the opposite.
             None if self.error.is_some() => {}
             None => {
-                note(ui, NoteKind::Info, "Loading the queue from the engine.");
+                note(ui, NoteKind::Info, &crate::i18n::t("review.loading"));
             }
             Some(panel) => self.draw_panel(ui, &panel),
         }

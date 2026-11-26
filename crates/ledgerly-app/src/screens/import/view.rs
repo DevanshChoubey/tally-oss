@@ -1,5 +1,6 @@
 //! The screen: drawing and key handling for the wizard.
 
+use crate::i18n::Tr;
 use std::path::PathBuf;
 
 use egui::{Key, Modifiers, RichText, Sense, Stroke, Ui};
@@ -199,25 +200,25 @@ const STEP_BY_STEP_CONNECTED: bool = false;
 const COLUMN_MAX_WIDTH: f32 = 980.0;
 
 impl Screen for ImportScreen {
-    fn title(&self) -> String {
-        "Import from another app".to_owned()
+    fn title(&self, tr: &Tr) -> String {
+        tr.t("import.title")
     }
 
-    fn key_bar_name(&self) -> String {
+    fn key_bar_name(&self, tr: &Tr) -> String {
         if self.direct.state == DirectState::Running {
-            "Importing".to_owned()
+            tr.t("import.key_bar_running")
         } else {
-            self.title()
+            self.title(tr)
         }
     }
 
-    fn keys(&self) -> Vec<KeyHint> {
+    fn keys(&self, tr: &Tr) -> Vec<KeyHint> {
         if self.direct.state == DirectState::Running {
-            return vec![KeyHint::new("Esc", "Back")];
+            return vec![KeyHint::new("Esc", tr.t("chrome.back"))];
         }
         vec![
-            KeyHint::new("Enter", "Import the company"),
-            KeyHint::new("Esc", "Back"),
+            KeyHint::new("Enter", tr.t("import.key_import")),
+            KeyHint::new("Esc", tr.t("chrome.back")),
         ]
     }
 
@@ -258,8 +259,8 @@ impl Screen for ImportScreen {
             ui.set_max_width(width);
             page_head(
                 ui,
-                "Import from another app",
-                Some("Bring your masters and vouchers in from another accounting app. Everything is read on this computer, and a report shows what moved."),
+                &crate::i18n::lit("Import from another app"),
+                Some(&crate::i18n::lit("Bring your masters and vouchers in from another accounting app. Everything is read on this computer, and a report shows what moved.")),
                 |_| {},
             );
             {
@@ -273,7 +274,7 @@ impl Screen for ImportScreen {
                             note(
                                 ui,
                                 NoteKind::Warn,
-                                "No company is open yet. An import fills an empty company file, so create a company first (Company setup), then come back here.",
+                                &crate::i18n::lit("No company is open yet. An import fills an empty company file, so create a company first (Company setup), then come back here."),
                             );
                             ui.add_space(8.0);
                             if button(ui, "Back to setup", Some("Esc"), ButtonKind::Secondary)
@@ -349,11 +350,16 @@ fn draw_steps(ui: &mut Ui, wizard: &ImportWizard) {
         let label = ui.painter().text(
             egui::pos2(number.right() + 4.0, rect.center().y),
             egui::Align2::LEFT_CENTER,
-            step.label(),
+            crate::i18n::lit(step.label()),
             egui::FontId::proportional(TEXT_BODY),
             ink,
         );
-        let name = format!("Step {} of {}: {}", i + 1, Step::ALL.len(), step.label());
+        let name = format!(
+            "Step {} of {}: {}",
+            i + 1,
+            Step::ALL.len(),
+            crate::i18n::lit(step.label())
+        );
         let r = ui.interact(
             egui::Rect::from_min_max(
                 egui::pos2(x, rect.top()),
@@ -437,17 +443,15 @@ fn draw_detect(
     clicks: &mut Vec<Click>,
 ) {
     panel(ui, |ui| {
-        heading(ui, "Step by step, with a report");
+        heading(ui, &crate::i18n::lit("Step by step, with a report"));
         meta(
             ui,
-            &format!(
-                "Ledgerly looks for a running app on this computer, port {TALLY_PORT}, or reads an XML file exported from your previous accounting app. Nothing is sent anywhere else."
-            ),
+            &crate::i18n::tf("import.looks_for_app", &[("port", &TALLY_PORT.to_string())]),
         );
         let usable = STEP_BY_STEP_CONNECTED && *wizard.detect_state() != DetectState::Checking;
         if kit_button(
             ui,
-            "Look for a running app",
+            &crate::i18n::lit("Look for a running app"),
             None,
             ButtonKind::Secondary,
             usable,
@@ -456,15 +460,15 @@ fn draw_detect(
         }
         labelled_field(
             ui,
-            "Exported XML file",
+            &crate::i18n::lit("Exported XML file"),
             export_path,
-            "path of the exported file",
+            &crate::i18n::lit("path of the exported file"),
             STEP_BY_STEP_CONNECTED,
         );
         ui.add_space(8.0);
         if kit_button(
             ui,
-            "Read exported file",
+            &crate::i18n::lit("Read exported file"),
             None,
             ButtonKind::Secondary,
             usable,
@@ -476,13 +480,19 @@ fn draw_detect(
             note(
                 ui,
                 NoteKind::Info,
-                "Not available yet: the step-by-step import and its reconciliation report are not connected to the app. Use the one-step import above.",
+                &crate::i18n::lit(
+                    "Not available yet: the step-by-step import and its reconciliation report are not connected to the app. Use the one-step import above.",
+                ),
             );
         }
         match wizard.detect_state() {
             DetectState::NotChecked | DetectState::Found => {}
             DetectState::Checking => {
-                note(ui, NoteKind::Info, "Looking for companies...");
+                note(
+                    ui,
+                    NoteKind::Info,
+                    &crate::i18n::lit("Looking for companies..."),
+                );
             }
             DetectState::NotRunning { port } => {
                 note(
@@ -504,22 +514,36 @@ fn draw_detect(
 fn draw_direct(ui: &mut Ui, direct: &mut DirectImport, can_run: bool) -> bool {
     let mut pressed = false;
     panel(ui, |ui| {
-        heading(ui, "Import in one step");
+        heading(ui, &crate::i18n::lit("Import in one step"));
         meta(
             ui,
-            "Reads the whole company from a running app into the open, empty company file.",
+            &crate::i18n::lit(
+                "Reads the whole company from a running app into the open, empty company file.",
+            ),
         );
         // Plain rows, not an `egui::Grid`: a grid's first layout asks egui to run the frame again,
         // and the second pass would no longer see a key (Esc) the first pass consumed.
         ui.columns(3, |cols| {
             if let [host, port, company] = cols {
-                labelled_field(host, "Host", &mut direct.host, "", can_run);
-                labelled_field(port, "Port", &mut direct.port, "", can_run);
+                labelled_field(
+                    host,
+                    &crate::i18n::lit("Host"),
+                    &mut direct.host,
+                    "",
+                    can_run,
+                );
+                labelled_field(
+                    port,
+                    &crate::i18n::lit("Port"),
+                    &mut direct.port,
+                    "",
+                    can_run,
+                );
                 labelled_field(
                     company,
-                    "Company in the other app",
+                    &crate::i18n::lit("Company in the other app"),
                     &mut direct.company,
-                    "its exact name",
+                    &crate::i18n::lit("its exact name"),
                     can_run,
                 );
             }
@@ -531,7 +555,7 @@ fn draw_direct(ui: &mut Ui, direct: &mut DirectImport, can_run: bool) -> bool {
                 pressed = button_icon(
                     ui,
                     Some(Icon::Upload),
-                    "Import the company",
+                    &crate::i18n::lit("Import the company"),
                     None,
                     ButtonKind::Primary,
                 )
@@ -608,10 +632,10 @@ fn nav(
 }
 
 fn draw_choose(ui: &mut Ui, wizard: &ImportWizard, clicks: &mut Vec<Click>) {
-    heading(ui, "Choose a company");
+    heading(ui, &crate::i18n::lit("Choose a company"));
     meta(
         ui,
-        "The companies the other app lists. Pick the one to bring in.",
+        &crate::i18n::lit("The companies the other app lists. Pick the one to bring in."),
     );
     for (i, name) in wizard.companies().iter().enumerate() {
         if choice_row(ui, name.as_str(), wizard.selected() == Some(i)).clicked() {
@@ -622,7 +646,7 @@ fn draw_choose(ui: &mut Ui, wizard: &ImportWizard, clicks: &mut Vec<Click>) {
     ui.add_space(8.0);
     rule(ui);
     ui.add_space(10.0);
-    heading(ui, "Years to pull");
+    heading(ui, &crate::i18n::lit("Years to pull"));
     meta(ui, "Indian financial years, April to March.");
     let (mut first, mut last) = wizard.years();
     ui.horizontal(|ui| {
@@ -630,7 +654,7 @@ fn draw_choose(ui: &mut Ui, wizard: &ImportWizard, clicks: &mut Vec<Click>) {
         year_combo(
             ui,
             "u10-first-year",
-            "From",
+            &crate::i18n::lit("From"),
             wizard.fy_options(),
             &mut first,
         );
@@ -672,16 +696,16 @@ fn year_combo(
     let t = tokens(ui);
     ui.label(RichText::new(label).size(TEXT_META).color(t.text_2));
     egui::ComboBox::from_id_salt(id)
-        .selected_text(value.label())
+        .selected_text(&*crate::i18n::lit(&value.label()))
         .show_ui(ui, |ui| {
             for option in options {
-                ui.selectable_value(value, *option, option.label());
+                ui.selectable_value(value, *option, &*crate::i18n::lit(&option.label()));
             }
         });
 }
 
 fn draw_pull(ui: &mut Ui, wizard: &ImportWizard, clicks: &mut Vec<Click>) {
-    heading(ui, "Pull");
+    heading(ui, &crate::i18n::lit("Pull"));
     match wizard.pull_state() {
         PullState::Idle => {
             meta(ui, "Not started.");
@@ -699,7 +723,9 @@ fn draw_pull(ui: &mut Ui, wizard: &ImportWizard, clicks: &mut Vec<Click>) {
             note(
                 ui,
                 NoteKind::Info,
-                "Cancelling: waiting for the current request to stop. Nothing is imported.",
+                &crate::i18n::lit(
+                    "Cancelling: waiting for the current request to stop. Nothing is imported.",
+                ),
             );
         }
         PullState::Done(summary) => {
@@ -746,7 +772,11 @@ fn draw_progress(ui: &mut Ui, progress: &PullProgress) {
             std::cmp::Ordering::Greater => (BadgeKind::Neutral, "Waiting"),
         };
         ui.horizontal(|ui| {
-            ui.label(RichText::new(stage.label()).size(TEXT_BODY).color(t.text));
+            ui.label(
+                RichText::new(crate::i18n::lit(stage.label()))
+                    .size(TEXT_BODY)
+                    .color(t.text),
+            );
             badge(ui, kind_of, word);
         });
         ui.add_space(2.0);
@@ -776,13 +806,17 @@ fn draw_progress(ui: &mut Ui, progress: &PullProgress) {
 }
 
 fn draw_map(ui: &mut Ui, wizard: &ImportWizard, clicks: &mut Vec<Click>) {
-    heading(ui, "Map");
+    heading(ui, &crate::i18n::lit("Map"));
     match wizard.map_state() {
         MapState::NotStarted => {
             meta(ui, "Not started.");
         }
         MapState::Working => {
-            note(ui, NoteKind::Info, "Staging and mapping...");
+            note(
+                ui,
+                NoteKind::Info,
+                &crate::i18n::lit("Staging and mapping..."),
+            );
         }
         MapState::Failed(reason) => {
             note(ui, NoteKind::Bad, &format!("Error: {reason}"));
@@ -797,7 +831,7 @@ fn draw_map_report(ui: &mut Ui, report: &MapReport, clicks: &mut Vec<Click>) {
     let counts: Vec<String> = report
         .kind_counts()
         .iter()
-        .map(|(kind, n)| format!("{} {n}", kind.label()))
+        .map(|(kind, n)| format!("{} {n}", crate::i18n::lit(kind.label())))
         .collect();
     meta(ui, &counts.join(", "));
     let unmapped = report.unmapped_count();
@@ -826,7 +860,7 @@ fn draw_map_report(ui: &mut Ui, report: &MapReport, clicks: &mut Vec<Click>) {
                 .show(ui, |ui| {
                     for row in &report.rows {
                         ui.label(
-                            RichText::new(row.kind.label())
+                            RichText::new(crate::i18n::lit(row.kind.label()))
                                 .size(TEXT_META)
                                 .color(t.text_2),
                         );
@@ -837,7 +871,7 @@ fn draw_map_report(ui: &mut Ui, report: &MapReport, clicks: &mut Vec<Click>) {
                         );
                         match &row.status {
                             MapStatus::Mapped => {
-                                badge(ui, BadgeKind::Ok, "Mapped");
+                                badge(ui, BadgeKind::Ok, &crate::i18n::lit("Mapped"));
                             }
                             MapStatus::Warning(w) => {
                                 badge(ui, BadgeKind::Warn, &format!("Warning: {w}"));
@@ -868,7 +902,7 @@ fn draw_reconcile(
     differences_only: &mut bool,
     clicks: &mut Vec<Click>,
 ) {
-    heading(ui, "Reconciliation");
+    heading(ui, &crate::i18n::lit("Reconciliation"));
     match wizard.recon_state() {
         ReconState::NotStarted => {
             meta(ui, "Not started.");
@@ -877,7 +911,7 @@ fn draw_reconcile(
             note(
                 ui,
                 NoteKind::Info,
-                "Writing to the books. This cannot be interrupted.",
+                &crate::i18n::lit("Writing to the books. This cannot be interrupted."),
             );
         }
         ReconState::CommitFailed(reason) => {
@@ -892,7 +926,7 @@ fn draw_reconcile(
             note(
                 ui,
                 NoteKind::Info,
-                "Imported. Comparing with the source app's own reports...",
+                &crate::i18n::lit("Imported. Comparing with the source app's own reports..."),
             );
         }
         ReconState::Failed(reason) => {
@@ -941,7 +975,7 @@ fn draw_report(ui: &mut Ui, report: &ReconReport, differences_only: &mut bool) {
         ui.add_space(4.0);
         para(
             ui,
-            &format!("Not compared: {}", section.label()),
+            &format!("Not compared: {}", crate::i18n::lit(section.label())),
             TEXT_META,
             t.text_2,
         );
@@ -962,7 +996,7 @@ fn draw_section(ui: &mut Ui, n: usize, section: &ReconSectionReport, differences
     let t = tokens(ui);
     ui.add_space(8.0);
     ui.label(
-        RichText::new(section.section.label())
+        RichText::new(crate::i18n::lit(section.section.label()))
             .font(bold_font(ui, TEXT_H2))
             .color(t.text),
     );
@@ -1016,7 +1050,7 @@ fn draw_section(ui: &mut Ui, n: usize, section: &ReconSectionReport, differences
                             }
                             RowStatus::NotReported => BadgeKind::Warn,
                         };
-                        badge(ui, badge_kind, status.label());
+                        badge(ui, badge_kind, &crate::i18n::lit(status.label()));
                         ui.end_row();
                     }
                 });

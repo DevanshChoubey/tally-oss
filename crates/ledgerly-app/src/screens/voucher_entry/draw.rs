@@ -4,6 +4,7 @@
 //! the account once, then the particulars lines; the other kinds draw every line with its own
 //! Dr / Cr switch. The type-ahead list floats under the field it belongs to.
 
+use crate::i18n::Tr;
 use egui::{Id, Key, Rect, Response, Ui};
 use ledgerly_core::SignedAmount;
 use ledgerly_model::Masters;
@@ -94,7 +95,7 @@ pub(super) struct Cx<'a> {
     pub(super) anchor: &'a mut Option<Rect>,
 }
 
-fn item_label(item: &PickerItem) -> String {
+fn item_label(item: &PickerItem, tr: &Tr) -> String {
     match item {
         PickerItem::Ledger(hit) => {
             let mut parts = vec![hit.name.clone()];
@@ -109,7 +110,7 @@ fn item_label(item: &PickerItem) -> String {
             }
             parts.join("   ")
         }
-        PickerItem::Create { name } => format!("+ Create ledger \"{name}\"   (Alt+C)"),
+        PickerItem::Create { name } => tr.tf("voucher.create_ledger_row", &[("name", name)]),
     }
 }
 
@@ -285,17 +286,20 @@ const LIST_CAPTION: &str = "Ledgers";
 
 impl VoucherEntryScreen {
     /// The entry aid under the lines: whether the lines as typed balance.
-    pub(super) fn balance_text(&self) -> String {
+    pub(super) fn balance_text(&self, tr: &Tr) -> String {
         match self.draft.balance() {
-            Ok(Balance::Balanced) => {
-                "Lines as typed balance (the engine checks again when it posts).".to_owned()
-            }
-            Ok(Balance::Needs { side, amount }) => format!(
-                "Lines as typed do not balance: a {} line of {} would balance them.",
-                side_label(side),
-                format_amount(amount)
+            Ok(Balance::Balanced) => tr.t("voucher.balance_ok"),
+            Ok(Balance::Needs { side, amount }) => tr.tf(
+                "voucher.balance_needs",
+                &[
+                    ("side", side_label(side)),
+                    ("amount", &format_amount(amount)),
+                ],
             ),
-            Err(e) => format!("Difference not available: {e}"),
+            Err(e) => tr.tf(
+                "voucher.difference_unavailable",
+                &[("error", &e.to_string())],
+            ),
         }
     }
 
@@ -352,7 +356,7 @@ impl VoucherEntryScreen {
                     ui,
                     total,
                     1,
-                    |ui| sheet::caption(ui, "Date", Some("F2")),
+                    |ui| sheet::caption(ui, &crate::i18n::lit("Date"), Some("F2")),
                     |ui| {
                         // Bare like the mock's read-only date until the keyboard or pointer is on
                         // it; it stays a field so Tab and a screen reader still reach it.
@@ -384,7 +388,7 @@ impl VoucherEntryScreen {
                         ui,
                         total,
                         2,
-                        |ui| sheet::caption(ui, "Account", None),
+                        |ui| sheet::caption(ui, &crate::i18n::lit("Account"), None),
                         |ui| {
                             ledger_field(
                                 ui,
@@ -412,7 +416,7 @@ impl VoucherEntryScreen {
                         ui,
                         total,
                         1,
-                        |ui| sheet::caption(ui, "Mode", None),
+                        |ui| sheet::caption(ui, &crate::i18n::lit("Mode"), None),
                         |ui| {
                             // The mock writes the mode as plain text (index.html:1405, "NEFT /
                             // UPI"); it stays a field with a list. Until the keyboard is on it, a
@@ -550,10 +554,11 @@ impl VoucherEntryScreen {
     fn draw_foot(&mut self, ui: &mut Ui, base: Id, masters: &Masters, cx: &mut Cx<'_>) {
         let single = self.draft.is_single_entry();
         let aid = if single {
-            "The account takes the total of the particulars. The engine checks the voucher when it posts."
-                .to_owned()
+            crate::i18n::lit(
+                "The account takes the total of the particulars. The engine checks the voucher when it posts.",
+            )
         } else {
-            self.balance_text()
+            self.balance_text(&crate::i18n::current())
         };
         let spec = FieldSpec {
             id: base.with("narration"),
@@ -569,7 +574,7 @@ impl VoucherEntryScreen {
                 left,
                 left.available_width(),
                 4,
-                |ui| sheet::caption(ui, "Narration", None),
+                |ui| sheet::caption(ui, &crate::i18n::lit("Narration"), None),
                 |ui| {
                     narration = Some(
                         text_field(
@@ -767,11 +772,11 @@ impl VoucherEntryScreen {
         }
     }
 
-    pub(super) fn draw_create_form(&mut self, ui: &mut Ui, masters: &Masters) {
+    pub(super) fn draw_create_form(&mut self, ui: &mut Ui, tr: &Tr, masters: &Masters) {
         let Some(form) = self.create.as_mut() else {
             return;
         };
-        match create_form_ui(ui, form, masters, "u4-create-group") {
+        match create_form_ui(ui, tr, form, masters, "u4-create-group") {
             FormAnswer::Open => {}
             FormAnswer::Confirm => {
                 let (name, group) = (form.name.clone(), form.group);
@@ -786,6 +791,7 @@ impl VoucherEntryScreen {
         reason = "one sheet drawn top to bottom; splitting would only pass the same borrows around"
     )]
     pub(super) fn draw(&mut self, ui: &mut Ui, masters: &Masters) -> ScreenAction {
+        let tr = &crate::i18n::current();
         self.shown = Shown::default();
         let base = ui.scope_id().with("voucher-entry");
         // While a save is out the sheet stays on screen but takes no keys.
@@ -821,15 +827,12 @@ impl VoucherEntryScreen {
         if !keys.is_empty() {
             items = self.picker_items(masters);
         }
-        let title = self.page_title();
+        let title = self.page_title(tr);
         let number = self.extras.number.clone();
-        let subtitle = self.subtitle();
+        let subtitle = self.subtitle(tr);
         let save_key = self.keymap.shortcut_label(Action::Save);
         if self.confirm_discard {
-            ui.colored_label(
-                ui.visuals().warn_fg_color,
-                "Warning: discard this voucher? Press Y to discard, N to keep it.",
-            );
+            ui.colored_label(ui.visuals().warn_fg_color, tr.t("voucher.confirm_discard"));
         }
         let differ = matches!(
             self.draft.kind,
@@ -849,7 +852,7 @@ impl VoucherEntryScreen {
                         button_icon(
                             ui,
                             Some(Icon::Save),
-                            "Save",
+                            &crate::i18n::lit("Save"),
                             save_key.as_deref(),
                             ButtonKind::Primary,
                         )
@@ -873,15 +876,21 @@ impl VoucherEntryScreen {
         if let Some(anchor) = anchor
             && !items.is_empty()
         {
-            let labels: Vec<String> = items.iter().map(item_label).collect();
-            let (rect, clicked) =
-                sheet::type_ahead(ui, base.with("list"), anchor, LIST_CAPTION, &labels, pick);
+            let labels: Vec<String> = items.iter().map(|i| item_label(i, tr)).collect();
+            let (rect, clicked) = sheet::type_ahead(
+                ui,
+                base.with("list"),
+                anchor,
+                &tr.lit(LIST_CAPTION),
+                &labels,
+                pick,
+            );
             self.shown.picker = Some(rect);
             if let Some(j) = clicked {
                 events.push(UiEvent::Pick(j));
             }
         }
-        self.draw_create_form(ui, masters);
+        self.draw_create_form(ui, tr, masters);
         // The bill-wise popup's fields are drawn only once the engine has sent the open bills,
         // some frames after Enter on the amount: the keyboard is asked for until they are there.
         let waiting_for_bills = matches!(self.focus, Field::Bill(_))
@@ -944,7 +953,10 @@ fn side_switch(ui: &mut Ui, cx: &mut Cx<'_>, i: usize, side: ledgerly_core::DrCr
         egui::Label::new(para_text(side_label(side), TEXT_BODY, t.text_2))
             .sense(egui::Sense::click()),
     );
-    if label.on_hover_text("Click to switch Dr and Cr").clicked() {
+    if label
+        .on_hover_text(crate::i18n::lit("Click to switch Dr and Cr"))
+        .clicked()
+    {
         cx.events.push(UiEvent::Side(i));
     }
 }

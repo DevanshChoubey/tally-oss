@@ -23,7 +23,7 @@ use egui::{Event, Key, Modifiers, RawInput};
 use ledgerly_api::{Api, ApiError, Command, CommandResult};
 use ledgerly_app::screens::bank::{BankChoice, BankChooserScreen};
 use ledgerly_app::shell::submit;
-use ledgerly_app::shell::{GatewayScreen, ScreenStack, Shell};
+use ledgerly_app::shell::{GatewayScreen, Shell};
 use ledgerly_app::worker::ApiWorker;
 use ledgerly_app::{AppCtx, Screen, ScreenAction};
 use ledgerly_core::{
@@ -238,7 +238,7 @@ fn titles(shell: &Shell) -> Vec<String> {
     shell
         .tabs()
         .active_stack()
-        .map_or_default(ScreenStack::breadcrumbs)
+        .map_or_default(|stack| stack.breadcrumbs(&ledgerly_app::i18n::Tr::default()))
 }
 
 fn choose(ctx: &egui::Context, shell: &mut Shell, query: &str) {
@@ -261,8 +261,8 @@ fn shell_with(ctx: &egui::Context, api: Api, root: Box<dyn Screen>) -> Shell {
 struct Shared<S: Screen>(Rc<RefCell<S>>);
 
 impl<S: Screen> Screen for Shared<S> {
-    fn title(&self) -> String {
-        self.0.borrow().title()
+    fn title(&self, _tr: &ledgerly_app::i18n::Tr) -> String {
+        self.0.borrow().title(&ledgerly_app::i18n::Tr::default())
     }
     fn ui(&mut self, ui: &mut egui::Ui, ctx: &mut AppCtx) -> ScreenAction {
         self.0.borrow_mut().ui(ui, ctx)

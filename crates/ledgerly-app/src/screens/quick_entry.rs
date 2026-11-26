@@ -12,6 +12,7 @@
 //! All five mock states (`quick-entry.proposal`, `.hinglish`, `.unknown-ledger`, `.loading`,
 //! `.rejected`) need a draft and are listed in `design/PARITY-GAPS.md`.
 
+use crate::i18n::Tr;
 use egui::{Key, Modifiers, RichText, Ui};
 use egui_extras::{Size, StripBuilder};
 
@@ -50,9 +51,9 @@ pub const TYPE_IT_TITLE: &str = "Type it myself";
 #[must_use]
 pub fn key_hints() -> Vec<KeyHint> {
     vec![
-        KeyHint::new("", TITLE),
-        KeyHint::new("F5", "Payment"),
-        KeyHint::new("F6", "Receipt"),
+        KeyHint::new("", crate::i18n::lit(TITLE)),
+        KeyHint::new("F5", crate::i18n::lit("Payment")),
+        KeyHint::new("F6", crate::i18n::lit("Receipt")),
     ]
 }
 
@@ -110,13 +111,20 @@ enum Ask {
     Settings,
 }
 
+/// The gate note's words for `gate` in the language of `tr`: the shared wording of
+/// [`ai_gate::reason_in`] for this screen's feature.
+#[must_use]
+pub fn gate_line_in(gate: &Gate, tr: &Tr) -> Option<String> {
+    ai_gate::reason_in(Feature::PlainWords, gate, tr)
+}
+
 /// The left card: the note with its AI and privacy button, then the voucher forms.
-fn draw_left(ui: &mut Ui, gate: &Gate, notice: Option<&str>) -> Ask {
+fn draw_left(ui: &mut Ui, gate: &Gate, notice: Option<&str>, tr: &Tr) -> Ask {
     let t = tokens(ui);
     let mut asked = Ask::Nothing;
     card(ui, |ui| {
         ui.set_width(ui.available_width());
-        if ai_gate::gate_note(ui, Feature::PlainWords, gate) {
+        if ai_gate::gate_note_in(ui, Feature::PlainWords, gate, tr) {
             asked = Ask::Settings;
         }
         if let Some(line) = notice {
@@ -125,16 +133,30 @@ fn draw_left(ui: &mut Ui, gate: &Gate, notice: Option<&str>) -> Ask {
         }
         ui.add_space(12.0);
         ui.label(
-            RichText::new(TYPE_IT_TITLE)
+            RichText::new(crate::i18n::lit(TYPE_IT_TITLE))
                 .font(bold_font(ui, TEXT_H2))
                 .color(t.text),
         );
         ui.add_space(8.0);
         ui.horizontal(|ui| {
-            if button(ui, "Payment", Some("F5"), ButtonKind::Secondary).clicked() {
+            if button(
+                ui,
+                &crate::i18n::lit("Payment"),
+                Some("F5"),
+                ButtonKind::Secondary,
+            )
+            .clicked()
+            {
                 asked = Ask::Voucher(Action::NewPayment);
             }
-            if button(ui, "Receipt", Some("F6"), ButtonKind::Secondary).clicked() {
+            if button(
+                ui,
+                &crate::i18n::lit("Receipt"),
+                Some("F6"),
+                ButtonKind::Secondary,
+            )
+            .clicked()
+            {
                 asked = Ask::Voucher(Action::NewReceipt);
             }
         });
@@ -149,7 +171,7 @@ fn draw_rules(ui: &mut Ui) {
     card(ui, |ui| {
         ui.set_width(ui.available_width());
         ui.label(
-            RichText::new(RULES_TITLE)
+            RichText::new(crate::i18n::lit(RULES_TITLE))
                 .font(bold_font(ui, TEXT_H2))
                 .color(t.text),
         );
@@ -157,22 +179,22 @@ fn draw_rules(ui: &mut Ui) {
         for line in RULES {
             ui.horizontal_wrapped(|ui| {
                 ui.label(RichText::new("•").color(t.text_2));
-                ui.label(para_text(line, TEXT_BODY, t.text_2));
+                ui.label(para_text(&crate::i18n::lit(line), TEXT_BODY, t.text_2));
             });
         }
     });
 }
 
 impl Screen for QuickEntryScreen {
-    fn title(&self) -> String {
-        TITLE.to_owned()
+    fn title(&self, _tr: &Tr) -> String {
+        crate::i18n::lit(TITLE)
     }
 
-    fn subtitle(&self) -> Option<String> {
-        Some(SUBTITLE.to_owned())
+    fn subtitle(&self, _tr: &Tr) -> Option<String> {
+        Some(crate::i18n::lit(SUBTITLE))
     }
 
-    fn keys(&self) -> Vec<KeyHint> {
+    fn keys(&self, _tr: &Tr) -> Vec<KeyHint> {
         key_hints()
     }
 
@@ -192,8 +214,13 @@ impl Screen for QuickEntryScreen {
             return self.opened(ai_gate::open_voucher(Action::NewReceipt, ctx));
         }
 
-        page_head(ui, TITLE, Some(SUBTITLE), |_| {});
-        ai_gate::input_box(ui, Icon::Chat, SENTENCE_HINT);
+        page_head(
+            ui,
+            &crate::i18n::lit(TITLE),
+            Some(&crate::i18n::lit(SUBTITLE)),
+            |_| {},
+        );
+        ai_gate::input_box(ui, Icon::Chat, &crate::i18n::lit(SENTENCE_HINT));
         ui.add_space(14.0);
 
         let notice = self.notice.clone();
@@ -202,7 +229,7 @@ impl Screen for QuickEntryScreen {
             .size(Size::relative(LEFT_SHARE))
             .size(Size::remainder())
             .horizontal(|mut strip| {
-                strip.cell(|ui| asked = draw_left(ui, &gate, notice.as_deref()));
+                strip.cell(|ui| asked = draw_left(ui, &gate, notice.as_deref(), &ctx.tr));
                 strip.cell(draw_rules);
             });
         match asked {
