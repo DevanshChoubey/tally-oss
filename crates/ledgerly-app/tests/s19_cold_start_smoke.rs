@@ -151,7 +151,11 @@ fn a_fresh_install_reaches_the_welcome_and_creates_a_company_with_ai_off() {
     }
 
     let api = Api::open(&file).unwrap();
-    assert_eq!(api.ai_tier().unwrap(), Some(AiTier::Off), "AI must start off");
+    assert_eq!(
+        api.ai_tier().unwrap(),
+        Some(AiTier::Off),
+        "AI must start off"
+    );
     let ledgerly_core::Outcome::Value(books) = api.books().unwrap() else {
         panic!("the books of the new company are unsupported");
     };
