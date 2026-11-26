@@ -5,12 +5,15 @@
 //! Reports have no print layout yet (no crate renders them), so [`Api::print_report`] says so.
 
 use ledgerly_core::format::format_inr;
+use ledgerly_core::{Decimal, Rate, RoundingRule, round_rupees_to_paise};
 use ledgerly_core::{DrCr, Outcome, Paise, VoucherId};
-use ledgerly_model::{BaseVoucherKind, Books, Voucher, VoucherStatus};
+use ledgerly_gst::compute::LineSource;
+use ledgerly_gst::pack::load_pack;
+use ledgerly_model::{BaseVoucherKind, Books, StoredGst, TaxLedgerKind, Voucher, VoucherStatus};
 use ledgerly_print::TAX_INVOICE_A4;
 use ledgerly_print::pdf::{
-    ColumnAlign, PrintedDocument, ReportPage, RowStyle, render_invoice_pages_with,
-    render_report_pages_with,
+    ColumnAlign, GroupTax, PrintedDocument, ReportPage, RowStyle, TaxGroup,
+    render_invoice_pages_grouped, render_report_pages_with,
 };
 use ledgerly_print::setup::PrintSetup;
 use ledgerly_print::template::{PrintError, load_template};
@@ -19,6 +22,8 @@ use ledgerly_reports::{ReportKind, ReportParams};
 
 use crate::error::ApiError;
 use crate::facade::Api;
+use crate::gst::BUNDLED_RATE_PACK;
+use crate::voucher_gst::compute_for;
 
 impl Api {
     /// Renders saved voucher `id` as a PDF on the built-in A4 tax invoice template.
@@ -84,7 +89,8 @@ impl Api {
                     ));
                 };
                 let template = load_template(TAX_INVOICE_A4)?;
-                render_invoice_pages_with(&template, voucher, books, gst, None, setup)
+                let groups = tax_groups(books, voucher, gst)?;
+                render_invoice_pages_grouped(&template, voucher, books, gst, None, setup, &groups)
             }
             Layout::Accounts(title) => match voucher_page(books, voucher, title) {
                 Ok(page) => render_report_pages_with(&page, setup),
@@ -394,4 +400,126 @@ fn item_rows(books: &Books, voucher: &Voucher, out: &mut VoucherRows) -> Result<
 
 fn overflow(_: ledgerly_core::MoneyError) -> PrintError {
     render_error("an amount on the voucher is too large to add")
+}
+
+/// The tax of an item invoice grouped by HSN or SAC code and rate, from the engine's own
+/// per-line figures (the stored GST lines carry neither). Each head is summed unrounded over the
+/// group's lines and rounded once to the paisa, as the engine rounds a voucher's heads; the
+/// printer checks the groups add up to the stored lines. Empty (the stored lines alone are used)
+/// when the voucher has no item lines, an item has no HSN, the engine does not answer, or a head
+/// rate is not found on the stored lines.
+fn tax_groups(books: &Books, v: &Voucher, gst: &StoredGst) -> Result<Vec<TaxGroup>, ApiError> {
+    if v.inventory_lines.is_empty() {
+        return Ok(Vec::new());
+    }
+    let pack = load_pack(BUNDLED_RATE_PACK)?;
+    let ledgerly_core::Outcome::Value(breakup) = compute_for(books, v, &pack)? else {
+        return Ok(Vec::new());
+    };
+    Ok(group_lines(books, v, gst, &breakup).unwrap_or_default())
+}
+
+/// One group being added up.
+struct Acc {
+    hsn: String,
+    total_rate: Decimal,
+    lines: Vec<usize>,
+    taxable: Paise,
+    cgst: Decimal,
+    sgst: Decimal,
+    igst: Decimal,
+}
+
+fn group_lines(
+    books: &Books,
+    v: &Voucher,
+    gst: &StoredGst,
+    breakup: &ledgerly_gst::compute::GstBreakup,
+) -> Option<Vec<TaxGroup>> {
+    let mut accs: Vec<Acc> = Vec::new();
+    for line in &breakup.lines {
+        let LineSource::Inventory { index } = line.source else {
+            return None;
+        };
+        let inv = v.inventory_lines.get(index)?;
+        let hsn = books
+            .masters
+            .stock_items
+            .get(&inv.item)?
+            .hsn
+            .as_ref()?
+            .as_str();
+        let at = accs
+            .iter()
+            .position(|a| a.hsn == hsn && a.total_rate == line.rate_percent);
+        let acc = match at {
+            Some(at) => accs.get_mut(at)?,
+            None => {
+                accs.push(Acc {
+                    hsn: hsn.to_owned(),
+                    total_rate: line.rate_percent,
+                    lines: Vec::new(),
+                    taxable: Paise::ZERO,
+                    cgst: Decimal::ZERO,
+                    sgst: Decimal::ZERO,
+                    igst: Decimal::ZERO,
+                });
+                accs.last_mut()?
+            }
+        };
+        acc.lines.push(index);
+        acc.taxable = acc.taxable.checked_add(line.taxable).ok()?;
+        acc.cgst = acc.cgst.checked_add(line.cgst)?;
+        acc.sgst = acc.sgst.checked_add(line.sgst.checked_add(line.utgst)?)?;
+        acc.igst = acc.igst.checked_add(line.igst)?;
+    }
+    let head_rate = |kinds: &[TaxLedgerKind], total: Decimal, half: bool| -> Option<Rate> {
+        gst.lines
+            .iter()
+            .filter(|l| kinds.contains(&l.kind))
+            .map(|l| l.rate_percent)
+            .find(|r| {
+                if half {
+                    r.0.checked_add(r.0) == Some(total)
+                } else {
+                    r.0 == total
+                }
+            })
+    };
+    let round = |d: Decimal| round_rupees_to_paise(d, RoundingRule::HalfUpToPaise).ok();
+    accs.into_iter()
+        .map(|a| {
+            let intra = !a.cgst.is_zero() || !a.sgst.is_zero();
+            let tax = |kinds: &[TaxLedgerKind], amount: Decimal, half: bool| {
+                Some(GroupTax {
+                    rate: head_rate(kinds, a.total_rate, half)?,
+                    tax: round(amount)?,
+                })
+            };
+            Some(TaxGroup {
+                hsn: a.hsn.clone(),
+                lines: a.lines.clone(),
+                taxable: a.taxable,
+                central: if intra {
+                    Some(tax(&[TaxLedgerKind::Cgst], a.cgst, true)?)
+                } else {
+                    None
+                },
+                state: if intra {
+                    Some(tax(
+                        &[TaxLedgerKind::Sgst, TaxLedgerKind::Utgst],
+                        a.sgst,
+                        true,
+                    )?)
+                } else {
+                    None
+                },
+                integrated: if intra {
+                    None
+                } else {
+                    Some(tax(&[TaxLedgerKind::Igst], a.igst, false)?)
+                },
+            })
+        })
+        .collect()
 }

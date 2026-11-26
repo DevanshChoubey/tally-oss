@@ -2221,8 +2221,7 @@ fn s13_shots() -> Vec<Shot> {
             .wait(60)
             .expect_bar("Profit and loss", "Print preview"),
         // The invoice, the day book and a journal printed through the page renderer.
-        // An invoice with one HSN code and one rate: the print template needs both on the page
-        // (SI/0412 has two items with different codes, which the engine refuses to print).
+        // SI/0412, two items with two HSN codes: the tax summary has one row for each code.
         shot(
             "sales-invoice.print-preview",
             &[(Key::D, NONE), (Key::F2, Modifiers::ALT)],
@@ -2232,12 +2231,12 @@ fn s13_shots() -> Vec<Shot> {
         .press(&[(Key::Tab, NONE), SELECT_ALL])
         .type_text("20-11-2026")
         .press(&[(Key::Enter, NONE)])
-        .seek_by(Key::K, NONE, "Lakshmi Farm Supplies")
+        .seek_by(Key::K, NONE, "SI/0412")
         .press(&[(Key::Enter, NONE)])
-        .expect("SI/0405", None)
+        .expect("SI/0412", None)
         .press(&[(Key::P, Modifiers::COMMAND)])
         .wait(60)
-        .expect_bar("SI/0405", "Print preview"),
+        .expect_bar("SI/0412", "Print preview"),
         shot("day-book.print-preview", &[(Key::D, NONE)])
             .expect("Day book", None)
             .press(&[(Key::P, Modifiers::COMMAND)])

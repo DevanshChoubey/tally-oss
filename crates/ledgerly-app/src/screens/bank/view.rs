@@ -839,11 +839,57 @@ fn statement_lines(ui: &mut Ui, rows: &[BrsRow]) {
             ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
             let width = ui.available_width();
             for row in rows {
-                let height = brs_line_height(row.kind);
+                let height = statement_line_height(ui, row, width);
                 let (rect, _) = ui.allocate_exact_size(vec2(width, height), Sense::hover());
                 paint_statement_line(ui, rect, row);
             }
         });
+}
+
+/// The height of statement line `row` when the line is `width` wide: its usual height, or taller
+/// when the label does not fit beside the amount column on one line and wraps onto more.
+fn statement_line_height(ui: &Ui, row: &BrsRow, width: f32) -> f32 {
+    let usual = brs_line_height(row.kind);
+    let galley = statement_label_galley(ui, row, width);
+    (galley.size().y + 2.0 * LABEL_PAD_Y).max(usual)
+}
+
+/// Vertical padding above and below a wrapped statement label.
+const LABEL_PAD_Y: f32 = 8.0;
+
+/// The depth a statement line's label is indented to.
+fn statement_depth(kind: BrsRowKind) -> u8 {
+    match kind {
+        BrsRowKind::Uncleared => 1,
+        BrsRowKind::Item => 2,
+        BrsRowKind::Books
+        | BrsRowKind::Expected
+        | BrsRowKind::Statement
+        | BrsRowKind::Difference => 0,
+    }
+}
+
+/// The font of a statement line: bold for the books, expected and difference lines.
+fn statement_font(ui: &Ui, kind: BrsRowKind) -> FontId {
+    match kind {
+        BrsRowKind::Books | BrsRowKind::Expected | BrsRowKind::Difference => {
+            bold_font(ui, TEXT_BODY)
+        }
+        BrsRowKind::Uncleared | BrsRowKind::Item | BrsRowKind::Statement => {
+            FontId::proportional(TEXT_BODY)
+        }
+    }
+}
+
+/// The label of `row` laid out to wrap before the amount column, in a line `width` wide.
+fn statement_label_galley(ui: &Ui, row: &BrsRow, width: f32) -> std::sync::Arc<egui::Galley> {
+    let room = (width - BRS_AMOUNT_WIDTH - table::indent(statement_depth(row.kind))).max(40.0);
+    ui.painter().layout(
+        row.label.clone(),
+        statement_font(ui, row.kind),
+        tokens(ui).text,
+        room,
+    )
 }
 
 /// One line of the reconciliation statement: its fill and rules, the label and the amount.
@@ -885,21 +931,13 @@ fn paint_statement_line(ui: &Ui, rect: Rect, row: &BrsRow) {
     } else {
         FontId::proportional(TEXT_BODY)
     };
-    let label = Rect::from_min_max(
-        rect.min,
-        pos2(
-            (rect.right() - BRS_AMOUNT_WIDTH).max(rect.left()),
-            rect.bottom(),
-        ),
-    );
-    table::paint_cell_text(
-        ui,
-        label,
-        rule,
-        &row.label,
-        font.clone(),
+    // The label wraps before the amount column; its lines are centred in the row.
+    let galley = statement_label_galley(ui, row, rect.width());
+    let y = rect.top() + (rect.height() - rule - galley.size().y) / 2.0;
+    ui.painter().with_clip_rect(rect).galley(
+        pos2(rect.left() + table::indent(depth), y),
+        galley,
         t.text,
-        CellPlace::Left(table::indent(depth)),
     );
     table::paint_cell_text(
         ui,
@@ -950,6 +988,38 @@ fn draw_verdict(ui: &mut Ui, verdict: BrsVerdict) {
 #[cfg(test)]
 mod a11y_names {
     use super::*;
+
+    #[test]
+    fn a_long_uncleared_line_wraps_and_grows_the_row_instead_of_running_under_the_amount() {
+        // derived: the mock shows "... Kaveri Packaging Pvt Ltd . cheque 004512" whole. In a
+        // statement 400 points wide the label has 400 - 200 (amount column) - 16 (indent)
+        // = 184 points, far less than the 70-odd characters need at body size, so the label
+        // wraps onto two or more lines and the row is taller than the usual 34 points.
+        let ctx = egui::Context::default();
+        let row = BrsRow {
+            label: "12 Nov 2026 \u{b7} PY/0321 \u{b7} Kaveri Packaging Pvt Ltd \u{b7} cheque 004512"
+                .to_owned(),
+            amount: ledgerly_core::Paise::new(1_250_000),
+            kind: BrsRowKind::Item,
+        };
+        let usual = crate::screens::bank::brs_line_height(row.kind);
+        let mut taller = false;
+        ctx.run_ui(egui::RawInput::default(), |ui| {
+            taller = statement_line_height(ui, &row, 400.0) > usual;
+        })
+        .drop_without_applying_deltas();
+        assert!(taller, "the long label must wrap and make the row taller");
+        let short = BrsRow {
+            label: "Cheque 1".to_owned(),
+            ..row
+        };
+        let mut same = false;
+        ctx.run_ui(egui::RawInput::default(), |ui| {
+            same = (statement_line_height(ui, &short, 400.0) - usual).abs() < f32::EPSILON;
+        })
+        .drop_without_applying_deltas();
+        assert!(same, "a short label keeps the usual height");
+    }
 
     #[test]
     fn a_statement_line_reads_its_cells_and_leaves_out_the_empty_ones() {

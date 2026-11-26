@@ -41,8 +41,8 @@ pub use ledgerly_gst::recon2b::{DocAmounts, ImsAction, MatchLevel, ReconState};
 pub use recon::{Gstr2bReconciliation, Gstr2bRow};
 // Report types the app names when it builds and reads reports (card W7). The app depends on this
 // crate only, so the report model is re-exported here instead of adding a manifest dependency.
-pub use brs_statement::{BrsLine, BrsStatement};
 pub use as_voucher::is_gst_tax_ledger;
+pub use brs_statement::{BrsLine, BrsStatement};
 pub use day_book_meta::EntryOrigin;
 pub use error::ApiError;
 pub use facade::Api;

@@ -2373,11 +2373,12 @@ function paperHead(title,sub){return `<h2 style="margin:0;color:#1c1b19">${esc(C
 function ptable(heads,rows,aligns){return `<table class="t" style="color:#1c1b19;margin-top:14px"><thead><tr>${heads.map((h,i)=>`<th class="${aligns[i]==='r'?'num':''}">${h}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr class="${r.total?'total':''}">${r.c.map((c,i)=>`<td class="${aligns[i]==='r'?'num':''}">${c}</td>`).join('')}</tr>`).join('')}</tbody></table>`}
 const PRINT_DEFAULT={size:'A4',copies:1,range:'',first:1,pages:1,shown:1,err:false};
 function printPaperInvoice(){
-  const v=VCH['SI/0405'], p=LED[v.party], inv=computeInvoice(v.lines.map(([item,qty,rate])=>({item,qty,rate})),p.st);
-  const it0=ITEM[v.lines[0][0]];
+  const v=VCH['SI/0412'], p=LED[v.party], inv=computeInvoice(v.lines.map(([item,qty,rate])=>({item,qty,rate})),p.st);
   const items=v.lines.map(([it,q,r],i)=>({c:[i+1,esc(ITEM[it].name),ITEM[it].hsn,q,ITEM[it].unit,inr(r),inr(q*r),ITEM[it].gst+'%',inr(q*r)]}));
-  const g=inv.rows[0], dot='.', pct=g.rate+'%';
-  const tax=[{c:[it0.hsn,inr(g.taxable),g.cgst?pct:dot,g.cgst?inr(g.cgst):dot,g.sgst?pct:dot,g.sgst?inr(g.sgst):dot,g.igst?pct:dot,g.igst?inr(g.igst):dot,inr((g.cgst||0)+(g.sgst||0)+(g.igst||0))]}];
+  /* the tax summary has one row for each HSN code (the stored tax lines carry none, so the printer groups the item lines and the engine taxes each group) */
+  const dot='.', hsns=[...new Set(v.lines.map(l=>ITEM[l[0]].hsn))];
+  const tax=hsns.map(h=>{const g=computeInvoice(v.lines.filter(l=>ITEM[l[0]].hsn===h).map(([item,qty,rate])=>({item,qty,rate})),p.st).rows[0], pct=g.rate+'%';
+    return {c:[h,inr(g.taxable),g.cgst?pct:dot,g.cgst?inr(g.cgst):dot,g.sgst?pct:dot,g.sgst?inr(g.sgst):dot,g.igst?pct:dot,g.igst?inr(g.igst):dot,inr((g.cgst||0)+(g.sgst||0)+(g.igst||0))]}});
   const inWords='Rupees '+words(inv.total).replace(/ rupees only$/,'').split(/[ -]/).map(w=>w[0].toUpperCase()+w.slice(1)).join(' ')+' Only';
   return `<h2 style="margin:0;color:#1c1b19">${esc(CO.name)}</h2><div style="color:#4a4741">Plot 14, Sample Industrial Estate, Pune, Maharashtra<br>GSTIN: ${CO.gstin}</div>`
    +`<h2 style="margin:6px 0 0;color:#1c1b19">Tax Invoice</h2><div style="color:#4a4741">Invoice No: ${v.id}<br>Date: ${v.date}</div>`
@@ -2410,7 +2411,7 @@ function addPrintPreview(id,crumbs,title,sub,paper,sel){
   s.keys=function(st){ return st==='print-preview'?PRINT_KEYS:keys.call(this,st) };
   s.mount=function(st,p){ if(st==='print-preview')return; if(mount)return mount.call(this,st,p) };
 }
-addPrintPreview('sales-invoice',[['Home',hashFor('home')],['Sales invoice']],'Sales invoice SI/0405','Saved · Lakshmi Farm Supplies · 6 Nov 2026',printPaperInvoice,false);
+addPrintPreview('sales-invoice',[['Home',hashFor('home')],['Sales invoice']],'Sales invoice SI/0412','Saved · Shree Ganesh Traders · 14 Nov 2026',printPaperInvoice,false);
 addPrintPreview('day-book',[['Home',hashFor('home')],['Day book']],'Day book','20 Nov 2026 · F2 another date · Alt+F2 a period',printPaperDayBook,true);
 addPrintPreview('journal',[['Home',hashFor('home')],['Journal']],'Journal JV/0032','Saved · 20 Nov 2026',printPaperJournal,false);
 { /* profit and loss: the settings states */

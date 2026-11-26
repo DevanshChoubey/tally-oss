@@ -145,6 +145,34 @@ mod data {
         tax: Paise,
     }
 
+    /// One head's own rate and the tax it gives on a [`TaxGroup`].
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub struct GroupTax {
+        /// The head's own rate in percent.
+        pub rate: Rate,
+        /// The head's tax on the group, rounded once to the paisa.
+        pub tax: Paise,
+    }
+
+    /// The item lines that share one HSN or SAC code and one rate, with the tax the engine works
+    /// out on them. The stored GST lines carry neither an HSN nor an item link, so a tax table by
+    /// HSN code is built from these; they are checked against the stored lines before use.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub struct TaxGroup {
+        /// The HSN or SAC code.
+        pub hsn: String,
+        /// Positions in `Voucher::inventory_lines` of the lines in this group.
+        pub lines: Vec<usize>,
+        /// The taxable value of the group.
+        pub taxable: Paise,
+        /// Central GST, when the supply is intra-state.
+        pub central: Option<GroupTax>,
+        /// State or union territory GST, when the supply is intra-state.
+        pub state: Option<GroupTax>,
+        /// Integrated GST, when the supply is inter-state.
+        pub integrated: Option<GroupTax>,
+    }
+
     /// One row of the tax table: a taxable value and the tax on it.
     #[derive(Debug, Clone, Copy)]
     struct TaxRow {
@@ -282,6 +310,7 @@ mod data {
         books: &'a Books,
         v: &'a Voucher,
         gst: &'a StoredGst,
+        groups: &'a [TaxGroup],
         kind: DocKind,
     }
 
@@ -291,11 +320,13 @@ mod data {
             books: &'a Books,
             v: &'a Voucher,
             gst: &'a StoredGst,
+            groups: &'a [TaxGroup],
         ) -> Result<Self, PrintError> {
             let mut inv = Self {
                 books,
                 v,
                 gst,
+                groups,
                 kind: DocKind::TaxInvoice,
             };
             match v.status {
@@ -320,7 +351,53 @@ mod data {
                 )));
             }
             inv.kind = inv.doc_kind()?;
+            inv.check_groups()?;
             Ok(inv)
+        }
+
+        /// Checks that the tax groups cover every item line once and add up, head by head, to
+        /// the stored tax lines: a table that disagreed with the posting would be a wrong number.
+        fn check_groups(&self) -> Result<(), PrintError> {
+            if self.groups.is_empty() {
+                return Ok(());
+            }
+            let bad = |why: &str| {
+                unsupported(format!(
+                    "{}: the tax by HSN code does not agree with the stored GST ({why})",
+                    self.label()
+                ))
+            };
+            let count = self.v.inventory_lines.len();
+            let mut seen = vec![false; count];
+            for g in self.groups {
+                for at in &g.lines {
+                    match seen.get_mut(*at) {
+                        Some(flag) if !*flag => *flag = true,
+                        Some(_) | None => {
+                            return Err(bad("an item line is listed twice or not at all"));
+                        }
+                    }
+                }
+            }
+            if seen.iter().any(|flag| !flag) {
+                return Err(bad("an item line is in no group"));
+            }
+            let rows = tax_rows(self.gst)?;
+            let heads = |pick: fn(&TaxRow) -> Option<Component>| -> Result<Paise, PrintError> {
+                sum(rows.iter().filter_map(pick).map(|c| c.tax))
+            };
+            let from_groups =
+                |pick: fn(&TaxGroup) -> Option<GroupTax>| -> Result<Paise, PrintError> {
+                    sum(self.groups.iter().filter_map(pick).map(|c| c.tax))
+                };
+            if sum(rows.iter().map(|r| r.taxable))? != sum(self.groups.iter().map(|g| g.taxable))?
+                || heads(|r| r.central)? != from_groups(|g| g.central)?
+                || heads(|r| r.state)? != from_groups(|g| g.state)?
+                || heads(|r| r.integrated)? != from_groups(|g| g.integrated)?
+            {
+                return Err(bad("the taxable value or a head's total differs"));
+            }
+            Ok(())
         }
 
         fn label(&self) -> String {
@@ -580,6 +657,12 @@ mod data {
 
         /// The single HSN or SAC of every item line.
         fn single_hsn(&self) -> Result<String, PrintError> {
+            if !self.groups.is_empty() {
+                return Err(unsupported(format!(
+                    "{}: the single HSN code is not used when the tax is grouped by HSN",
+                    self.label()
+                )));
+            }
             let mut codes = BTreeSet::new();
             for line in &self.v.inventory_lines {
                 let item = self.item(line)?;
@@ -619,6 +702,22 @@ mod data {
             }
         }
 
+        /// The GST rate of item line `at`, from the group it is in.
+        fn group_rate(&self, at: usize) -> Result<String, PrintError> {
+            let group = self
+                .groups
+                .iter()
+                .find(|g| g.lines.contains(&at))
+                .ok_or_else(|| {
+                    missing(format!("{}: an item line is in no tax group", self.label()))
+                })?;
+            let total = [group.central, group.state, group.integrated]
+                .into_iter()
+                .flatten()
+                .try_fold(Decimal::ZERO, |a, c| add_decimal(a, c.rate.0))?;
+            Ok(format!("{}%", plain(total)))
+        }
+
         /// Cells of the item table, one row per inventory line.
         pub(super) fn item_rows(
             &self,
@@ -631,15 +730,21 @@ mod data {
                 )));
             }
             self.totals()?;
-            let rate = if cols.contains(&ItemColumn::TaxRate) {
+            let wants_rate = cols.contains(&ItemColumn::TaxRate);
+            let single = if wants_rate && self.groups.is_empty() {
                 self.single_rate()?
             } else {
                 String::new()
             };
             let mut rows = Vec::with_capacity(self.v.inventory_lines.len());
             let mut serial: u32 = 0;
-            for line in &self.v.inventory_lines {
+            for (at, line) in self.v.inventory_lines.iter().enumerate() {
                 serial = serial.saturating_add(1);
+                let rate = if wants_rate && !self.groups.is_empty() {
+                    self.group_rate(at)?
+                } else {
+                    single.clone()
+                };
                 let item = self.item(line)?;
                 let unit = self.unit(line)?;
                 let mut row = Vec::with_capacity(cols.len());
@@ -683,12 +788,51 @@ mod data {
             })
         }
 
+        /// Cells of the tax table, one row per HSN group.
+        fn grouped_tax_rows(&self, cols: &[TaxColumn]) -> Result<Vec<Vec<String>>, PrintError> {
+            let comp = |c: Option<GroupTax>| {
+                c.map(|c| Component {
+                    rate: c.rate,
+                    tax: c.tax,
+                })
+            };
+            let mut out = Vec::new();
+            for g in self.groups {
+                let (central, state, integrated) =
+                    (comp(g.central), comp(g.state), comp(g.integrated));
+                let total = sum([central, state, integrated]
+                    .into_iter()
+                    .flatten()
+                    .map(|c| c.tax))?;
+                let mut cells = Vec::with_capacity(cols.len());
+                for col in cols {
+                    cells.push(match col {
+                        TaxColumn::Hsn => g.hsn.clone(),
+                        TaxColumn::TaxableValue => format_inr(g.taxable),
+                        TaxColumn::CgstRate => rate_cell(central),
+                        TaxColumn::CgstAmount => tax_cell(central),
+                        TaxColumn::SgstRate => rate_cell(state),
+                        TaxColumn::SgstAmount => tax_cell(state),
+                        TaxColumn::IgstRate => rate_cell(integrated),
+                        TaxColumn::IgstAmount => tax_cell(integrated),
+                        TaxColumn::CessAmount => "-".to_owned(),
+                        TaxColumn::TotalTax => format_inr(total),
+                    });
+                }
+                out.push(cells);
+            }
+            Ok(out)
+        }
+
         /// Cells of the tax table, one row per tax row.
         pub(super) fn tax_table_rows(
             &self,
             cols: &[TaxColumn],
         ) -> Result<Vec<Vec<String>>, PrintError> {
             self.totals()?;
+            if !self.groups.is_empty() {
+                return self.grouped_tax_rows(cols);
+            }
             let hsn = if cols.contains(&TaxColumn::Hsn) {
                 self.single_hsn()?
             } else {
@@ -1394,6 +1538,7 @@ use qrcode::{Color, QrCode};
 
 use crate::setup::{Paper, PrintSetup};
 use crate::template::{Block, BlockBody, ItemColumn, PrintError, Slot, TaxColumn, Template};
+pub use data::{GroupTax, TaxGroup};
 use data::{Invoice, unsupported};
 use page::{Align, BODY, Canvas, Column};
 pub use page::{PageItem, PageLayout, PrintedDocument};
@@ -1487,8 +1632,28 @@ pub fn render_invoice_pages_with(
     upi: Option<&UpiPayee<'_>>,
     setup: &PrintSetup,
 ) -> Result<PrintedDocument, PrintError> {
+    render_invoice_pages_grouped(t, v, books, gst, upi, setup, &[])
+}
+
+/// Like [`render_invoice_pages_with`], with the tax worked out by the engine for each HSN or SAC
+/// code (`groups`). The tax table then has one row per group and the item table's rate column
+/// reads each line's own rate. Groups are checked against the stored GST lines first; an
+/// empty slice prints as [`render_invoice_pages_with`] does.
+///
+/// # Errors
+/// As [`render_invoice_pages_with`]; `Unsupported` when the groups do not cover every item line
+/// once or do not add up to the stored tax.
+pub fn render_invoice_pages_grouped(
+    t: &Template,
+    v: &Voucher,
+    books: &Books,
+    gst: &StoredGst,
+    upi: Option<&UpiPayee<'_>>,
+    setup: &PrintSetup,
+    groups: &[TaxGroup],
+) -> Result<PrintedDocument, PrintError> {
     setup.check()?;
-    let invoice = Invoice::new(books, v, gst)?;
+    let invoice = Invoice::new(books, v, gst, groups)?;
     let (width_mm, height_mm) = setup
         .paper
         .map_or_else(|| t.page.millimetres(), Paper::millimetres);
