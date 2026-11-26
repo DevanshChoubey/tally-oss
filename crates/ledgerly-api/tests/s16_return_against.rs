@@ -21,18 +21,17 @@ use std::fmt::Debug;
 
 use ledgerly_api::{Api, ApiError, Command};
 use ledgerly_core::{
-    Clock, CompanyId, Decimal, DrCr, GodownId, GroupId, Gstin, LedgerId, Outcome, Paise,
-    Qty, Rate, SignedAmount, StateCode, StockItemId, UnitId, VoucherId, VoucherTypeId,
-    gstin_check_character,
+    Clock, CompanyId, Decimal, DrCr, GodownId, GroupId, Gstin, LedgerId, Outcome, Paise, Qty, Rate,
+    SignedAmount, StateCode, StockItemId, UnitId, VoucherId, VoucherTypeId, gstin_check_character,
 };
 use ledgerly_model::seed_godowns::MAIN_LOCATION;
 use ledgerly_model::seed_groups::reserved_groups;
 use ledgerly_model::seed_voucher_types::default_voucher_types;
 use ledgerly_model::{
-    Address, BaseVoucherKind, Company, EntityKind, Features, GodownAllocation,
-    GstHistory, GstRegistration, InventoryLine, Ledger, LedgerLine, NegativeStockPolicy,
-    PartyDetails, RegistrationType, ReservedGroup, StockItem, TaxDetails, TaxLedgerKind,
-    Taxability, Unit, UnitKind, ValuationMethod, Voucher, VoucherMode, VoucherStatus,
+    Address, BaseVoucherKind, Company, EntityKind, Features, GodownAllocation, GstHistory,
+    GstRegistration, InventoryLine, Ledger, LedgerLine, NegativeStockPolicy, PartyDetails,
+    RegistrationType, ReservedGroup, StockItem, TaxDetails, TaxLedgerKind, Taxability, Unit,
+    UnitKind, ValuationMethod, Voucher, VoucherMode, VoucherStatus,
 };
 use time::OffsetDateTime;
 use time::macros::date;
@@ -321,7 +320,6 @@ fn item_sale(party: LedgerId, pos: Option<u8>, qty: i64, amount: i64) -> Voucher
     }
 }
 
-
 use ledgerly_model::BaseVoucherKind as Kind;
 
 fn post_sale(api: &mut Api, qty: i64) -> Voucher {
@@ -356,7 +354,10 @@ fn another_partys_invoice_is_not_found() {
     let (_dir, mut api) = company_file();
     let sale = post_sale(&mut api, 67);
     let number = sale.number.unwrap();
-    match api.invoiced_against(Kind::CreditNote, MH_BUYER, &number).unwrap() {
+    match api
+        .invoiced_against(Kind::CreditNote, MH_BUYER, &number)
+        .unwrap()
+    {
         Outcome::Unsupported(u) => assert!(u.reason.contains(&number), "{u:?}"),
         other @ Outcome::Value(_) => panic!("expected Unsupported, got {other:?}"),
     }
@@ -368,7 +369,8 @@ fn an_unknown_number_is_not_found() {
     let (_dir, mut api) = company_file();
     post_sale(&mut api, 5);
     assert!(matches!(
-        api.invoiced_against(Kind::CreditNote, KA_BUYER, "NOPE/1").unwrap(),
+        api.invoiced_against(Kind::CreditNote, KA_BUYER, "NOPE/1")
+            .unwrap(),
         Outcome::Unsupported(_)
     ));
 }

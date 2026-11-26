@@ -71,7 +71,7 @@ fn is_settled(bucket: Bucket) -> bool {
 ///
 /// # Errors
 /// [`ApiError::Gst`] when the bundled pack does not load (a build defect).
-fn bundled_pack() -> Result<RulePack, ApiError> {
+pub(crate) fn bundled_pack() -> Result<RulePack, ApiError> {
     Ok(load_pack(BUNDLED_RATE_PACK)?.merge(&load_pack(BUNDLED_RULES_PACK)?)?)
 }
 

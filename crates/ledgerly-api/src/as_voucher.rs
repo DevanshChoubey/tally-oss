@@ -175,11 +175,5 @@ pub(crate) fn invoice(
     if let Outcome::Unsupported(u) = check_heads(&breakup, &parts.tax_ledgers) {
         return Ok(Outcome::Unsupported(u));
     }
-    build_invoice(
-        books,
-        &parts.accounting,
-        breakup,
-        bills,
-        &parts.tax_ledgers,
-    )
+    build_invoice(books, &parts.accounting, breakup, bills, &parts.tax_ledgers)
 }

@@ -74,6 +74,20 @@ pub struct InvoiceGst {
     /// head totals alone, since showing rows that disagree with the posting would be a wrong
     /// number).
     pub rate_rows: Vec<RateRow>,
+    /// The input credit of a purchase draft; `None` for any other kind of voucher (never zero).
+    pub eligible_itc: Option<Outcome<EligibleItc>>,
+}
+
+/// The input tax credit of a purchase draft, by the rule GSTR-3B 4(A) uses. It cannot know the
+/// s.16(2) conditions (the supplier's bill in 2B, receipt, payment within 180 days), so it is the
+/// credit that is eligible before those are met.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EligibleItc {
+    /// Tax on lines whose credit the rule allows: each head summed unrounded over those lines,
+    /// rounded once to the paisa, then added.
+    pub eligible: Paise,
+    /// Tax on lines whose credit is ineligible or blocked.
+    pub not_claimable: Paise,
 }
 
 /// One row of the tax box: a tax head at one rate.
@@ -775,12 +789,18 @@ pub(crate) fn build_invoice(
         ));
     }
     let rate_rows = rate_rows(&breakup)?;
+    let with_lines = Voucher {
+        ledger_lines: lines.clone(),
+        ..v.clone()
+    };
+    let eligible_itc = crate::itc_draft::eligible_itc(books, &with_lines, &breakup)?;
     Ok(Outcome::Value(InvoiceGst {
         breakup,
         invoice_total,
         ledger_lines: lines,
         stored,
         rate_rows,
+        eligible_itc,
     }))
 }
 
