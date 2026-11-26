@@ -9,9 +9,11 @@
 //! ```
 //!
 //! The JSON follows the NIC INV-01 schema, version 1.1 (notified under N.60/2020-CT; reproduced by
-//! ICAI, see `docs/research/04-gst.md` section 2.13). Field names and length limits are recalled
-//! from that schema and are **not yet quoted** from the notified text (rule A4): check them against
-//! the official schema before release.
+//! ICAI, see `docs/research/04-gst.md` section 2.13). The field names, the key order and the party
+//! length limits (`Addr2` 3 to 100; `Loc` 3 to 50 for the seller, 3 to 100 for the recipient) were
+//! checked against the NIC e-Invoice sandbox schema page,
+//! <https://einv-apisandbox.nic.in/version1.03/generate-irn.html>, read 2026-11-26. The other limits
+//! are still as recalled from the schema: check them against that page before release.
 //!
 //! Validation is local and strict: amounts that must equal a sum are compared exactly, in paise,
 //! because the IRP's rounding tolerance is unconfirmed (research 04, section 2.13). A strict check
@@ -97,9 +99,9 @@ pub struct EInvParty {
     pub trade_name: Option<String>,
     /// `Addr1`, 1 to 100 characters.
     pub address1: String,
-    /// `Addr2`, 1 to 100 characters when present.
+    /// `Addr2`, 3 to 100 characters when present.
     pub address2: Option<String>,
-    /// `Loc`, 3 to 50 characters.
+    /// `Loc`, 3 to 50 characters for the seller and 3 to 100 for the recipient.
     pub location: String,
     /// `Pin`, a 6-digit code from 100000 to 999999.
     pub pin: u32,
@@ -294,13 +296,13 @@ fn validate_doc(e: &EInvoice, errs: &mut Vec<FormatError>) {
     }
 }
 
-fn validate_party(section: &str, p: &EInvParty, errs: &mut Vec<FormatError>) {
+fn validate_party(section: &str, loc_max: usize, p: &EInvParty, errs: &mut Vec<FormatError>) {
     let name = |f: &str| format!("{section}.{f}");
     check_len(errs, &name("LglNm"), &p.legal_name, 3, 100);
     check_opt_len(errs, &name("TrdNm"), p.trade_name.as_deref(), 3, 100);
     check_len(errs, &name("Addr1"), &p.address1, 1, 100);
-    check_opt_len(errs, &name("Addr2"), p.address2.as_deref(), 1, 100);
-    check_len(errs, &name("Loc"), &p.location, 3, 50);
+    check_opt_len(errs, &name("Addr2"), p.address2.as_deref(), 3, 100);
+    check_len(errs, &name("Loc"), &p.location, 3, loc_max);
     if !(100_000..=999_999).contains(&p.pin) {
         errs.push(field_err(
             &name("Pin"),
@@ -617,8 +619,8 @@ fn validate_totals(e: &EInvoice, errs: &mut Vec<FormatError>) {
 pub fn validate_einvoice(e: &EInvoice) -> Result<(), Vec<FormatError>> {
     let mut errs = Vec::new();
     validate_doc(e, &mut errs);
-    validate_party("SellerDtls", &e.seller, &mut errs);
-    validate_party("BuyerDtls", &e.buyer, &mut errs);
+    validate_party("SellerDtls", 50, &e.seller, &mut errs);
+    validate_party("BuyerDtls", 100, &e.buyer, &mut errs);
     if e.items.is_empty() || e.items.len() > 1000 {
         errs.push(field_err(
             "ItemList",
