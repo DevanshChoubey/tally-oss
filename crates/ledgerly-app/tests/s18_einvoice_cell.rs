@@ -292,10 +292,12 @@ fn note_for(name: &str, pin: bool) -> Option<String> {
         lock_date: None,
         ai_tier: None,
     };
-    until(&mut screen, &mut app, "e-invoice answer", |s, _| {
-        s.einvoice_note().is_some()
+    until(&mut screen, &mut app, "e-invoice answer", |s, masters| {
+        s.einvoice_note(masters).is_some()
     });
-    screen.einvoice_note().map(str::to_owned)
+    screen
+        .einvoice_note(&app.books.as_ref().unwrap().masters)
+        .map(str::to_owned)
 }
 
 #[test]
@@ -312,4 +314,37 @@ fn a_company_without_a_pin_says_what_is_missing() {
         note_for("s18_cell_pin", false).as_deref(),
         Some("the company has no PIN code (Pin is required)")
     );
+}
+
+/// Derived: a ready answer is about the invoice that was checked. With the quantity of the only
+/// line cleared the invoice is no longer complete, the tax box shows dashes, and the cell must not
+/// go on saying "JSON ready".
+#[test]
+fn an_incomplete_invoice_does_not_say_json_ready() {
+    let (worker, books) = setup("s18_cell_stale", true);
+    let fy = FinancialYear::april(2026).unwrap();
+    let sales = default_voucher_types()
+        .into_iter()
+        .find(|t| t.base == BaseVoucherKind::Sales)
+        .unwrap()
+        .id;
+    let Outcome::Value(mut screen) =
+        ItemInvoiceScreen::open(&books, sales, fy, date!(2026 - 10 - 05)).unwrap()
+    else {
+        panic!("the sales type is entered on this screen");
+    };
+    fill(&mut screen, &books.masters);
+    let mut app = AppCtx {
+        books: Some(books),
+        api: Some(worker),
+        lock_date: None,
+        ai_tier: None,
+    };
+    until(&mut screen, &mut app, "e-invoice answer", |s, masters| {
+        s.einvoice_note(masters) == Some("JSON ready (INV-01)")
+    });
+    screen.draft_mut().rows[0].qty_text.clear();
+    frame(&mut screen, &mut app);
+    let masters = &app.books.as_ref().unwrap().masters;
+    assert_eq!(screen.einvoice_note(masters), None);
 }

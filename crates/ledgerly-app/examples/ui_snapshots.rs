@@ -1793,15 +1793,28 @@ fn light_shots() -> Vec<Shot> {
             "640",
         )
         .press(&[(Key::Enter, NONE)]),
-        // An item picked with no quantity, then Ctrl+A: the save is refused with the reason.
+        // Line 2 has an item and its quantity is cleared again, line 3 has a name that is no item
+        // (Enter refuses it, so it stays typed in the row), then Ctrl+A: the save is refused and
+        // both reasons are listed. Shift+Enter goes back from line 3 to line 2's quantity.
         invoice_line(
-            godavari_invoice("sales-invoice.validation-error", "Shree Ganesh", "27", ""),
-            "Drip lateral",
-            "25",
-            "3850",
+            invoice_line(
+                godavari_invoice("sales-invoice.validation-error", "Shree Ganesh", "27", ""),
+                "Drip lateral",
+                "25",
+                "3850",
+            ),
+            "Brass nozzle",
+            "67",
+            "505",
         )
-        .type_text("Brass nozzle")
-        .press(&[(Key::Enter, NONE), (Key::A, Modifiers::COMMAND)]),
+        .type_text("Drip kit deluxe")
+        .press(&[
+            (Key::Enter, Modifiers::SHIFT),
+            (Key::Enter, Modifiers::SHIFT),
+        ])
+        .press(&[(Key::End, NONE)])
+        .press(&[(Key::Backspace, NONE); 4])
+        .press(&[(Key::A, Modifiers::COMMAND)]),
         // The mock's `sales-invoice.period-locked` (index.html `SCREENS['sales-invoice']`, state
         // period-locked): SI/0418 to Shree Ganesh Traders dated 28 Oct 2026, two lines (25 drip
         // laterals at 3,850.00 and 67 brass nozzle sets at 505.00), no order number and no

@@ -1127,7 +1127,13 @@ impl ItemInvoiceScreen {
     /// invoice cannot be written as e-invoice JSON. `None` until it has answered, and for an
     /// invoice that is not a sale.
     #[must_use]
-    pub fn einvoice_note(&self) -> Option<&str> {
+    pub fn einvoice_note(&self, masters: &Masters) -> Option<&str> {
+        // The answer is about the invoice that was checked: while the draft is not the complete,
+        // computed invoice (a quantity cleared, a line added) the cell says nothing, as the tax
+        // box shows dashes.
+        if !matches!(self.gst_status(masters), GstStatus::Computed(_)) {
+            return None;
+        }
         match &self.einvoice {
             EInvoiceState::Ready => Some("JSON ready (INV-01)"),
             EInvoiceState::NotReady(reason) => Some(reason),

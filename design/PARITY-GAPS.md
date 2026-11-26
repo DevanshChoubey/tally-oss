@@ -285,11 +285,14 @@ Classes:
 - **DELIBERATE** while a line is invalid Save is disabled and the error is a red box with an alert
   icon naming the line. The valid lines keep the engine's amount and rate (the engine is asked about
   them alone); the tax box shows dashes, not figures for the half-entered invoice (never a wrong number).
-- **NOT BUILT** the item list shows name and unit only; the free-text item row of
-  `sales-invoice.validation-error` is not offered. Re-read 2026-11-26: the sales and purchase pages
-  (help.tallysolutions.com/tally-prime/purchase-process/purchase-goods-and-services-tally/ and the
-  sales pages) document Alt+C creating a master only on the party field, and no page read documents a
-  typed free-text item on a voucher line, so the app keeps the unknown-item error.
+- **DELIBERATE** a typed name that is no item stays typed in its row, and Enter is refused ("No item
+  matches; create it on the masters screen."): no page read documents a free-text item on a voucher line
+  (re-read 2026-11-26: help.tallysolutions.com/tally-prime/purchase-process/purchase-goods-and-services-tally/
+  and the sales pages document Alt+C creating a master on the party field only). So the quantity and rate of
+  that row cannot be typed, and the mock's `sales-invoice.validation-error` row 3 now shows the name alone
+  (was "Drip kit deluxe", 4, 2,200.00: unreachable). The app lists both reasons (2 things to fix) as the
+  mock does. Left over: the refusal's amber note stays under the red box, the Save button is disabled while
+  a line is wrong, and the tax box shows dashes where the mock shows the valid line's partial total.
 - **DELIBERATE** the unknown-item error ends "create it in Masters", where the mock said "with Alt+C": the
   pages read document Alt+C on ledger fields only and the screen cannot make an item, so the mock's
   sentence would promise what the app does not do (mock corrected in round s17).
@@ -403,7 +406,8 @@ Credit (`ledgerly_reports::print_text` places the engine's figures only).
 - **DELIBERATE** Alt+P is not bound: the help page lists it as the Print menu (printer set-up), not as
   print-current (help.tallysolutions.com/print-invoices-reports/, read 2026-11-26).
 - **NOT BUILT** "print after saving" (a voucher-type option in the accounting product): `VoucherType` has no
-  such field and the masters screen has no mock state for it. An accounting invoice previews as "not
+  such field, the voucher-type master has no screen or mock state to set it, and adding one changes the
+  stored schema; so it is open, not decided. An accounting invoice previews as "not
   printed" with the print crate's own reason (it has no item table to lay out).
 
 ## Accessibility, themes, keys

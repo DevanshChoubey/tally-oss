@@ -956,7 +956,13 @@ impl ItemInvoiceScreen {
                         |ui| sheet::caption(ui, "e-Invoice", None),
                         |ui| {
                             sheet::read_only(ui, |ui| {
-                                einvoice_cell(ui, masters, party, &self.einvoice);
+                                let state =
+                                    if matches!(self.gst_status(masters), GstStatus::Computed(_)) {
+                                        &self.einvoice
+                                    } else {
+                                        &EInvoiceState::Unknown
+                                    };
+                                einvoice_cell(ui, masters, party, state);
                             });
                         },
                     );
