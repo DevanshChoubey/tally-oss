@@ -505,6 +505,17 @@ impl ReportViewScreen {
         self.print.preview()
     }
 
+    /// The settings typed in the print preview's card.
+    pub fn print_form_mut(&mut self) -> &mut crate::screens::print_preview::PrintForm {
+        self.print.form_mut()
+    }
+
+    /// Why the last Update preview was refused, when it was.
+    #[must_use]
+    pub fn print_setup_error(&self) -> Option<&str> {
+        self.print.setup_error()
+    }
+
     /// `true` while the PDF is being prepared (the busy note is on screen).
     #[must_use]
     pub fn is_print_rendering(&self) -> bool {
@@ -527,8 +538,8 @@ impl ReportViewScreen {
         };
         let params = run.engine.clone();
         let title = self.report.title.clone();
-        self.print.start(handle, &title, move |api| {
-            api.print_report_document(&params)
+        self.print.start(handle, &title, move |api, setup| {
+            api.print_report_document_with(&params, setup)
         });
     }
 
@@ -1268,15 +1279,7 @@ impl ReportViewScreen {
         self.draw_head(ui, look);
         self.footer = None;
         self.selected_line = None;
-        let action = match self.print.preview() {
-            Some(doc) => crate::screens::print_preview::show(ui, doc),
-            None => crate::screens::print_preview::PreviewAction::None,
-        };
-        match action {
-            crate::screens::print_preview::PreviewAction::Save => self.print.request_save(),
-            crate::screens::print_preview::PreviewAction::Close => self.print.close_preview(),
-            crate::screens::print_preview::PreviewAction::None => {}
-        }
+        self.print.draw_preview(ui);
         ui.ctx().request_repaint();
         ScreenAction::Stay
     }
@@ -1750,6 +1753,7 @@ impl Screen for ReportViewScreen {
             // The preview opens on a clean page: an older note is not about this print.
             self.notice = None;
         }
+        self.print.run_update(ctx.api.as_ref());
         self.run_print_request(ctx.api.as_ref());
         if self.is_exporting() || self.print.is_busy() {
             ui.ctx().request_repaint();

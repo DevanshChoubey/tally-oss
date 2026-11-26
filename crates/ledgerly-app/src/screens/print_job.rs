@@ -10,11 +10,13 @@
 
 use std::fmt;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::sync::mpsc::{Receiver, TryRecvError};
 
-use ledgerly_api::{Api, PrintedDocument};
+use ledgerly_api::{Api, PrintSetup, PrintedDocument};
 use ledgerly_core::Outcome;
 
+use crate::screens::print_preview::{self, PreviewAction, PrintForm};
 use crate::screens::report_view::{Notice, export_file_name};
 use crate::screens::wire::{Done, Latest, unsupported_text};
 use crate::shell::spawn_file_job;
@@ -23,9 +25,32 @@ use crate::worker::ApiWorker;
 /// Opens the save dialog for a PDF: given the suggested file name, the path chosen, or `None`.
 pub type SavePicker = Box<dyn FnMut(&str) -> Option<PathBuf>>;
 
+/// The engine's refusal of the print settings as the card says it under the field: without the
+/// lead "the print settings cannot be used: ", starting with a capital and ending with a full
+/// stop (the mock's `profit-and-loss.print-range-error`).
+#[must_use]
+pub fn setup_words(error: &str) -> String {
+    let reason = error
+        .strip_prefix("the print settings cannot be used: ")
+        .unwrap_or(error);
+    let mut chars = reason.chars();
+    let mut said: String = chars
+        .next()
+        .map_or_else(String::new, |c| c.to_uppercase().chain(chars).collect());
+    if !said.ends_with('.') {
+        said.push('.');
+    }
+    said
+}
+
 /// What a print run brings back: the document (PDF and pages), or the engine's refusal, or an
 /// error text.
 type Rendered = Result<Outcome<PrintedDocument>, String>;
+
+/// A print the preview can run again with other settings.
+type PrintFn = dyn Fn(&mut Api, &PrintSetup) -> Result<Outcome<PrintedDocument>, ledgerly_api::ApiError>
+    + Send
+    + Sync;
 
 /// The system save dialog, offering PDF.
 fn save_pdf_dialog(suggested: &str) -> Option<PathBuf> {
@@ -92,6 +117,17 @@ pub struct PrintJob {
     preview: Option<PrintedDocument>,
     /// Save was asked for in the preview; the dialog opens on the next tick.
     save_wanted: bool,
+    /// What the preview prints, kept so it can run again with new settings.
+    job: Option<Arc<PrintFn>>,
+    /// The settings as typed in the preview's card.
+    form: PrintForm,
+    /// Why the last update was refused: the words under the card's Pages field. The preview
+    /// keeps the last good pages while this is set.
+    setup_error: Option<String>,
+    /// Update preview was asked for; it starts on the next frame.
+    update_wanted: bool,
+    /// The running render replaces an open preview rather than opening one.
+    updating: bool,
 }
 
 impl fmt::Debug for PrintJob {
@@ -121,6 +157,66 @@ impl PrintJob {
             saved: None,
             preview: None,
             save_wanted: false,
+            job: None,
+            form: PrintForm::default(),
+            setup_error: None,
+            update_wanted: false,
+            updating: false,
+        }
+    }
+
+    /// The settings as typed in the preview's card.
+    pub fn form_mut(&mut self) -> &mut PrintForm {
+        &mut self.form
+    }
+
+    /// Draws the preview (pages and card) and acts on what the user did: Save and Close are
+    /// handled here, and Update is run by [`PrintJob::run_update`] on the next frame.
+    pub fn draw_preview(&mut self, ui: &mut egui::Ui) -> PreviewAction {
+        let Some(doc) = self.preview.as_ref() else {
+            return PreviewAction::None;
+        };
+        let action = print_preview::show(ui, doc, &mut self.form, self.setup_error.as_deref());
+        match action {
+            PreviewAction::Save => self.request_save(),
+            PreviewAction::Close => self.close_preview(),
+            PreviewAction::Update => self.update_wanted = true,
+            PreviewAction::None => {}
+        }
+        action
+    }
+
+    /// Starts the update the card asked for, when it did: see [`PrintJob::update`].
+    pub fn run_update(&mut self, worker: Option<&ApiWorker>) {
+        if std::mem::take(&mut self.update_wanted)
+            && let Some(worker) = worker
+        {
+            self.update(worker);
+        }
+    }
+
+    /// Why the last update of the preview was refused, when it was.
+    #[must_use]
+    pub fn setup_error(&self) -> Option<&str> {
+        self.setup_error.as_deref()
+    }
+
+    /// Prints again with the settings in the card (Update preview, or Enter). Settings that are
+    /// not numbers, or that the engine refuses, are said under the card's fields and the preview
+    /// keeps its last good pages; nothing is written either way.
+    pub fn update(&mut self, worker: &ApiWorker) {
+        let Some(job) = self.job.clone() else {
+            return;
+        };
+        match self.form.to_setup() {
+            Err(why) => self.setup_error = Some(setup_words(&why)),
+            Ok(setup) => {
+                self.setup_error = None;
+                self.updating = true;
+                self.render.start(worker, move |api| {
+                    job(api, &setup).map_err(|e| e.to_string())
+                });
+            }
         }
     }
 
@@ -139,6 +235,8 @@ impl PrintJob {
     pub fn close_preview(&mut self) {
         self.preview = None;
         self.save_wanted = false;
+        self.updating = false;
+        self.setup_error = None;
     }
 
     /// Asks to save the previewed PDF (Ctrl+P in the preview, or its Save as PDF button): the
@@ -178,14 +276,20 @@ impl PrintJob {
     /// running is dropped, as a newer request replaces it, and an open preview is closed.
     pub fn start<F>(&mut self, worker: &ApiWorker, title: &str, job: F)
     where
-        F: FnOnce(&mut Api) -> Result<Outcome<PrintedDocument>, ledgerly_api::ApiError>
+        F: Fn(&mut Api, &PrintSetup) -> Result<Outcome<PrintedDocument>, ledgerly_api::ApiError>
             + Send
+            + Sync
             + 'static,
     {
         self.close_preview();
         title.clone_into(&mut self.title);
-        self.render
-            .start(worker, move |api| job(api).map_err(|e| e.to_string()));
+        self.form = PrintForm::default();
+        let job: Arc<PrintFn> = Arc::new(job);
+        self.job = Some(Arc::clone(&job));
+        let setup = PrintSetup::default();
+        self.render.start(worker, move |api| {
+            job(api, &setup).map_err(|e| e.to_string())
+        });
     }
 
     /// Moves the job on: when the document is ready, opens the preview; when save was asked for,
@@ -225,7 +329,17 @@ impl PrintJob {
         match self.render.poll() {
             None => None,
             Some(Done::Ready(Ok(Outcome::Value(doc)))) => {
+                self.updating = false;
                 self.preview = Some(doc);
+                None
+            }
+            Some(Done::Ready(refused)) if std::mem::take(&mut self.updating) => {
+                // An update that the engine refuses leaves the last good pages in view.
+                self.setup_error = Some(match refused {
+                    Ok(Outcome::Unsupported(u)) => unsupported_text(&u),
+                    Ok(Outcome::Value(_)) => return None,
+                    Err(e) => setup_words(&e),
+                });
                 None
             }
             Some(Done::Ready(other)) => Some(print_notice(&self.title, &other)),
@@ -292,6 +406,24 @@ mod tests {
     use ledgerly_core::{Outcome, Unsupported};
 
     use super::*;
+
+    #[test]
+    fn a_refused_setting_is_said_under_the_field_as_a_sentence() {
+        // provenance: derived from the mock's wording (index.html, `profit-and-loss.print-range-error`):
+        // "The pages to print (5-6) select no page: the document has pages 1 to 1." The engine's
+        // error leads with "the print settings cannot be used: ", which the card does not repeat.
+        assert_eq!(
+            setup_words(
+                "the print settings cannot be used: the pages to print (5-6) select no page: the document has pages 1 to 1"
+            ),
+            "The pages to print (5-6) select no page: the document has pages 1 to 1."
+        );
+        assert_eq!(
+            setup_words("Copies must be a number."),
+            "Copies must be a number."
+        );
+        assert_eq!(setup_words(""), ".");
+    }
 
     #[test]
     fn a_failed_write_says_what_failed_why_and_that_nothing_was_written() {

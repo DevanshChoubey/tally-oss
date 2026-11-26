@@ -461,6 +461,11 @@ mark{background:var(--accent-soft);color:var(--accent-ink);border-radius:2px;pad
 {"id":"masters.create-item","kind":"happy","hash":"screen=masters&state=create-item","title":"Masters, new stock item","description":"The stock item form: name, alias, under, unit, valuation, HSN/SAC and batches; Save needs a unit."},
 {"id":"home.new-tab","kind":"happy","hash":"screen=home&state=default&tabs=2","title":"Home, new tab with a company open","description":"Ctrl+T with a company open opens Home in a second tab; the tab strip shows both, New tab and Close tab."},
 {"id":"profit-and-loss.print-error","kind":"error","hash":"screen=profit-and-loss&state=print-error","title":"Profit and loss, not printed","description":"The PDF could not be made from the engine answer; the reason is said in words, the report stays on screen and nothing is written."},
+{"id":"profit-and-loss.print-config","kind":"happy","hash":"screen=profit-and-loss&state=print-config","title":"Profit and loss, print settings","description":"The print preview with the settings changed: A5 paper, 2 copies, Pages to print and First page number set; the page and the facts beside it follow."},
+{"id":"profit-and-loss.print-range-error","kind":"validation-error","hash":"screen=profit-and-loss&state=print-range-error","title":"Profit and loss, pages to print past the end","description":"Pages to print names a page the document does not have; the settings are refused in words, the preview keeps the last good pages and nothing is written."},
+{"id":"sales-invoice.print-preview","kind":"happy","hash":"screen=sales-invoice&state=print-preview","title":"Sales invoice, print preview","description":"Ctrl+P on a saved invoice shows the tax invoice page as it will print, with the print settings and Save as PDF."},
+{"id":"day-book.print-preview","kind":"happy","hash":"screen=day-book&state=print-preview","title":"Day book, print preview","description":"Ctrl+P shows the day book as it will print: date, voucher type, number, particulars and amount, without the audit columns."},
+{"id":"journal.print-preview","kind":"happy","hash":"screen=journal&state=print-preview","title":"Journal, print preview","description":"Ctrl+P on a saved voucher without a tax invoice (journal, and likewise payment, receipt, contra and purchase) shows the voucher page: particulars with debit and credit, total and narration."},
 {"id":"gst.gstr1-failed","kind":"error","hash":"screen=gst&state=gstr1-failed","title":"GSTR-1, sections could not be built","description":"The engine could not build the GSTR-1 sections; the error is said in words and no table is shown."},
 {"id":"home.gst-unsupported","kind":"error","hash":"screen=home&state=gst-unsupported","title":"Home, GST tile not readable","description":"The GST cash payable tile says Needs GSTR-2B and not readable yet; no figure is shown."},
 {"id":"profit-and-loss.loading","kind":"loading","hash":"screen=profit-and-loss&state=loading","title":"Profit and loss, computing","description":"Report computing; Esc cancels; the last result is not shown as current."},
@@ -2330,6 +2335,93 @@ function plScreen(){
  };
 }
 SCREENS['profit-and-loss'] = plScreen();
+
+/* ---------- print settings and the pages of other documents (card S16) ----------
+   Settings follow the help page "Configure for Print, Export, Share" (read 2026-11-26): number of
+   copies, Pages to Print (Number to start from first page, Page Range), and A5 paper. The paper size,
+   copies, page range and first page number are set on the card beside the page; nothing here is
+   drawn that the print engine cannot honour (no printer choice, no margins, no "Set Preview as
+   Default": the preview always opens, because paper printing is not built). */
+function printPanel(o){
+  const a5=o.size==='A5', err=o.err;
+  const tab=(n,sel)=>`<button data-cmd="paper" aria-selected="${sel}">${n}</button>`;
+  const field=(label,val,ph,bad,hint)=>`<div class="fld"><label>${label}</label><input class="${bad?'invalid':''}" value="${val}" placeholder="${ph||''}" aria-label="${label}" title="${hint||''}">${bad?`<div class="err">${ic('alert')}${bad}</div>`:''}</div>`;
+  return `<div class="card pad"><h2>Print preview</h2>
+   <div style="display:grid;gap:8px;margin:8px 0">
+    <div class="fld"><label>Paper</label><div class="tabs" style="margin:0;border:0">${tab('A4',!a5)}${tab('A5',a5)}</div></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">${field('Copies',o.copies,'',null,'In the PDF, one after another')}${field('First page number',o.first,'',null,'The next pages count up from it')}</div>
+    ${field('Pages to print',o.range,'All',err?'The pages to print ('+o.range+') select no page: the document has pages 1 to '+o.pages+'.':null,'Pages and ranges, such as 1, 3-5')}
+   </div>
+   <table class="t"><tbody><tr><td class="t2">Pages</td><td>${o.shown}</td></tr><tr><td class="t2">Destination</td><td>PDF file</td></tr></tbody></table>
+   <p class="meta">Paper printing is not built yet. The PDF is written to a folder you choose.</p>
+   <div class="actions"><button class="btn" data-cmd="update">Update preview ${kb('Enter')}</button><button class="btn primary" data-cmd="pdf">${ic('upload')}Save as PDF ${kb('Ctrl+P')}</button><button class="btn" data-go="${o.close}">Close ${kb('Esc')}</button></div></div>`;
+}
+function printLayout(paperHtml,panelOpts){
+  const a5=panelOpts.size==='A5';
+  return `<div style="display:grid;grid-template-columns:1fr 280px;gap:16px;align-items:start">
+   <div class="card" style="background:#fff;color:#1c1b19;padding:24px 32px;min-height:460px;${a5?'max-width:420px;font-size:11px;':''}">${a5?'<style>.a5 .t th,.a5 .t td{padding:6px 4px;font-size:11px}</style>':''}<div class="${a5?'a5':''}">${paperHtml}</div></div>${printPanel(panelOpts)}</div>`;
+}
+const PRINT_KEYS=[['','Print preview'],['Ctrl+P','Save as PDF'],['Esc','Close']];
+function paperHead(title,sub){return `<h2 style="margin:0;color:#1c1b19">${esc(CO.name)}</h2><div style="color:#4a4741">${title}${sub?', '+sub:''}</div>`}
+function ptable(heads,rows,aligns){return `<table class="t" style="color:#1c1b19;margin-top:14px"><thead><tr>${heads.map((h,i)=>`<th class="${aligns[i]==='r'?'num':''}">${h}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr class="${r.total?'total':''}">${r.c.map((c,i)=>`<td class="${aligns[i]==='r'?'num':''}">${c}</td>`).join('')}</tr>`).join('')}</tbody></table>`}
+const PRINT_DEFAULT={size:'A4',copies:1,range:'',first:1,pages:1,shown:1,err:false};
+function printPaperInvoice(){
+  const v=VCH['SI/0405'], p=LED[v.party], inv=computeInvoice(v.lines.map(([item,qty,rate])=>({item,qty,rate})),p.st);
+  const it0=ITEM[v.lines[0][0]];
+  const items=v.lines.map(([it,q,r],i)=>({c:[i+1,esc(ITEM[it].name),ITEM[it].hsn,q,ITEM[it].unit,inr(r),inr(q*r),ITEM[it].gst+'%',inr(q*r)]}));
+  const g=inv.rows[0], dot='.', pct=g.rate+'%';
+  const tax=[{c:[it0.hsn,inr(g.taxable),g.cgst?pct:dot,g.cgst?inr(g.cgst):dot,g.sgst?pct:dot,g.sgst?inr(g.sgst):dot,g.igst?pct:dot,g.igst?inr(g.igst):dot,inr((g.cgst||0)+(g.sgst||0)+(g.igst||0))]}];
+  const inWords='Rupees '+words(inv.total).replace(/ rupees only$/,'').split(/[ -]/).map(w=>w[0].toUpperCase()+w.slice(1)).join(' ')+' Only';
+  return `<h2 style="margin:0;color:#1c1b19">${esc(CO.name)}</h2><div style="color:#4a4741">Plot 14, Sample Industrial Estate, Pune, Maharashtra<br>GSTIN: ${CO.gstin}</div>`
+   +`<h2 style="margin:6px 0 0;color:#1c1b19">Tax Invoice</h2><div style="color:#4a4741">Invoice No: ${v.id}<br>Date: ${v.date}</div>`
+   +`<div style="margin-top:8px;color:#4a4741"><b>Bill to:</b><br>Name: ${esc(p.name)}<br>Address: ${p.city}, ${STATES[p.st]}<br>GSTIN: ${p.gstin||'Unregistered'}<br>Place of supply: ${p.st}-${STATES[p.st]}</div>`
+   +ptable(['#','Description','HSN/SAC','Qty','Unit','Rate','Taxable value','GST','Amount'],items,['l','l','l','r','l','r','r','r','r'])
+   +'<div style="margin-top:10px;font-weight:600">Tax summary</div>'
+   +ptable(['HSN/SAC','Taxable value','CGST rate','CGST','SGST rate','SGST','IGST rate','IGST','Total tax'],tax,['l','r','r','r','r','r','r','r','r'])
+   +`<div style="margin-top:12px;text-align:right">Taxable value ${inr(inv.taxable)}<br>Total tax ${inr((inv.cgst||0)+(inv.sgst||0)+(inv.igst||0))}<br>Round off ${inr(inv.ro)}<br><b>Grand total ${inr(inv.total)}</b></div><div style="margin-top:10px;font-weight:600">Amount in words</div><div style="color:#4a4741">${inWords}</div><div style="margin-top:10px;color:#4a4741">Goods once sold will not be taken back.</div>`;
+}
+function printPaperDayBook(){
+  const day=VOUCHERS.filter(v=>v.date==='20-11-2026');
+  const pp=v=>v.type==='Sales'?LED[v.party].name:LED[(v.type==='Purchase'?v.cr:v.dr)[0][0]].name;
+  const rows=day.map(v=>({c:[esc(pp(v)),v.date.replace(/-(\d\d)-/,(m,mo)=>'-'+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+mo-1]+'-').replace(/^(.*)$/,'<span style="white-space:nowrap">$1</span>'),v.type,v.id,inr(vTotal(v))+' Dr',esc(v.narr||'')]}));
+  const tot=day.reduce((s,v)=>s+vTotal(v),0);
+  rows.push({total:1,c:['Total','','','',inr(tot)+' Dr','']});
+  return paperHead('Day Book','20-11-2026 to 20-11-2026')+ptable(['Particulars','Date','Voucher type','Voucher no.','Amount','Narration'],rows,['l','l','l','l','r','l']);
+}
+function printPaperJournal(){
+  const v=VOUCHERS.find(x=>x.id==='JV/0032'), amt=v.dr[0][1];
+  const rows=[{c:[esc(LED[v.dr[0][0]].name),inr(amt),'']},{c:[esc(LED[v.cr[0][0]].name),'',inr(amt)]},{total:1,c:['Total',inr(amt),inr(amt)]},{c:['Narration: '+esc(v.narr),'','']}];
+  return paperHead('Journal Voucher','')+`<div style="margin-top:8px;color:#4a4741">No. ${v.id}, dated ${v.date}</div>`+ptable(['Particulars','Debit','Credit'],rows,['l','r','r']);
+}
+function addPrintPreview(id,crumbs,title,sub,paper,sel){
+  const s=SCREENS[id], render=s.render, key=s.key, keys=s.keys, mount=s.mount;
+  s.render=function(st,p){ if(st!=='print-preview')return render.call(this,st,p);
+    return phead(crumbs,title,sub,'')+printLayout(paper(),{...PRINT_DEFAULT,close:hashFor(id)}); };
+  s.key=function(k,e,st,p){ if(st==='print-preview'){ if(k==='Escape'){go(hashFor(id));return true} if(k==='Ctrl+P'){go(hashFor(id));toast('PDF saved (mock).',true);return true} return false }
+    if(k==='Ctrl+P'&&sel){go(hashFor(id,'print-preview'));return true}
+    return key?key.call(this,k,e,st,p):false };
+  s.keys=function(st){ return st==='print-preview'?PRINT_KEYS:keys.call(this,st) };
+  s.mount=function(st,p){ if(st==='print-preview')return; if(mount)return mount.call(this,st,p) };
+}
+addPrintPreview('sales-invoice',[['Home',hashFor('home')],['Sales invoice']],'Sales invoice SI/0405','Saved · Lakshmi Farm Supplies · 6 Nov 2026',printPaperInvoice,false);
+addPrintPreview('day-book',[['Home',hashFor('home')],['Day book']],'Day book','20 Nov 2026 · F2 another date · Alt+F2 a period',printPaperDayBook,true);
+addPrintPreview('journal',[['Home',hashFor('home')],['Journal']],'Journal JV/0032','Saved · 20 Nov 2026',printPaperJournal,false);
+{ /* profit and loss: the settings states */
+  const pl=SCREENS['profit-and-loss'], render=pl.render, key=pl.key, keys=pl.keys;
+  pl.render=function(st,p){
+    if(st!=='print-config'&&st!=='print-range-error'&&st!=='print-preview')return render.call(this,st,p);
+    const base=render.call(this,'print-preview',p);
+    const cut=base.indexOf('<div style="display:grid;grid-template-columns:1fr 280px');
+    const head=base.slice(0,cut), table=/<table class="t"[^>]*id="pl"[\s\S]*?<\/table>/.exec(base)[0];
+    const paper=`<h2 style="margin:0;color:#1c1b19">${esc(CO.name)}</h2><div style="color:#4a4741">Profit and loss, 1 Apr to 20 Nov 2026</div><div style="margin-top:14px">${table.replace(/class="t"/,'class="t" style="color:#1c1b19"')}</div>`;
+    const o={...PRINT_DEFAULT,close:hashFor('profit-and-loss')};
+    if(st==='print-config')Object.assign(o,{size:'A5',copies:2,range:'1',first:1,shown:'1, in 2 copies'});
+    if(st==='print-range-error')Object.assign(o,{range:'5-6',err:true});
+    return head+printLayout(paper,o);
+  };
+  pl.key=function(k,e,st,p){ if((st==='print-config'||st==='print-range-error')&&k==='Escape'){go(hashFor('profit-and-loss'));return true} return key.call(this,k,e,st,p) };
+  pl.keys=function(st){ return (st==='print-config'||st==='print-range-error')?PRINT_KEYS:keys.call(this,st) };
+}
 
 /* trial balance. Rows are the sample company's ledgers with a balance (crates/ledgerly-sample/assets/godavari.toml),
    one per ledger, with the group names the engine uses ("Capital Account", "Duties & Taxes", ...). The sample has one

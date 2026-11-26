@@ -280,7 +280,7 @@ Classes:
   first address line because `Address` has no city field.
 - **DELIBERATE** the mock's sample is prefilled and the wizard starts blank; refusals are a toast.
 
-## Print (`*.print-preview`, `*.print-busy`, `*.print-saved`, `*.print-failed`)
+## Print (`*.print-preview`, `*.print-config`, `*.print-range-error`, `*.print-busy`, `*.print-saved`, `*.print-failed`)
 
 Ctrl+P (or the Print preview button) prepares the PDF on the worker, shows the pages the print
 engine laid out with the mock's card (paper, pages, destination, Save as PDF, Close), and Save writes
@@ -290,14 +290,42 @@ Printed reports use Indian digit grouping and the screens' Dr/Cr rule; profit an
 two-sided account, the balance sheet as one vertical statement, the trial balance as Debit and
 Credit (`ledgerly_reports::print_text` places the engine's figures only).
 
-- **NOT BUILT** print configuration: printer, paper size, Pages to Print (F10), margin, page start
-  number, "Set Preview as Default" (help.tallysolutions.com/configure-for-print-export-share/, read
-  2026-11-26). The engine writes one A4 PDF (A5 by template) and has no page-range output; the card
-  states paper and destination as facts. The preview scrolls and has no zoom.
-- **NOT BUILT** printing to a device; the day book; any voucher but sales invoices, credit notes and
-  debit notes; a UPI QR (no UPI address is held).
-- **NOT BUILT** the mock has no preview state for an invoice; the same card and key bar are used
-  there and no capture exists (reported to the mock round).
+- **MATCHES** print configuration as the help page documents it
+  (help.tallysolutions.com/configure-for-print-export-share/, read 2026-11-26): the card holds
+  Paper (A4 or A5), Copies, First page number and Pages to print (`3`, `2-4`, `1, 3-5`; blank is
+  all); Update preview (Enter) prints again with them and the preview shows the new pages. A
+  range that selects no page of the document, or a setting that is not a number, is said under the
+  field and the preview keeps its last good pages (`profit-and-loss.print-range-error`). Pages are
+  numbered from the first page number and a range selects by the printed number.
+- **DELIBERATE** the settings the engine cannot produce are not drawn: printer choice, margins,
+  Type of Copy and Show Page Number (the page number always prints) and "Set Preview as Default"
+  (there is no stored preference to set). The help page lists them; they come with printing to a
+  device.
+- **DELIBERATE** Copies repeats the kept pages in the one PDF, in order; the card says "1, in 2
+  copies". The help page's copies go to the printer; there is no printer.
+- **MATCHES** the day book and the payment, receipt, journal, contra and purchase vouchers print
+  through the page renderer (`day-book.print-preview`, `journal.print-preview`). The help pages
+  give no layout for them, so they follow the screen: the day book prints the shown period with
+  Particulars, Date, Voucher type, Voucher no., Amount and Narration (the screen's Entered by and
+  Origin are audit facts and are not printed; Status and Narration are dropped when empty); a
+  voucher prints "<Type> Voucher" with its ledger lines as Particulars, Debit and Credit, an items
+  band for item lines, the total, and Reference and Narration. The mock has one state for each
+  family; `journal.print-preview` stands for payment, receipt, contra and purchase too.
+- **NOT BUILT** printing to a device; a UPI QR (no UPI address is held); a voucher of any other
+  kind than sales, credit note, debit note, payment, receipt, journal, contra and purchase
+  (memorandum, optional and cancelled vouchers answer Unsupported with the reason).
+- **NOT BUILT** an invoice with several HSN codes or several tax rates: the stored GST lines hold
+  neither, so the engine answers Unsupported rather than guess an item's code from the master.
+  The sample's SI/0412 is such an invoice, so `sales-invoice.print-preview` shows SI/0405 (one
+  item, one code, one rate) and the mock's state follows.
+- **DELIBERATE** the preview has no zoom; it scrolls. The app's paper is the full A4 or A5 page
+  at the width of the pane, so a short document sits at the top of a tall white page; the mock's
+  paper is cut to its content. The voucher preview's page head reads "Voucher SI/0405" and its
+  crumbs "Day book" (the screen the voucher was opened from), where the mock reads "Sales invoice
+  SI/0405" under "Sales invoice".
+- **DELIBERATE** the printed invoice, day book and voucher pages are the engine's own layout
+  (company address block, tax summary by HSN code, Particulars/Date/Voucher type/Voucher no./
+  Amount/Narration); the mock's paper was written to the same content and wording.
 - **DELIBERATE** the preview sets each text in the app's font inside the box the engine gave it
   (shrunk if wider): the PDF uses Helvetica, which the app does not embed.
 - **DELIBERATE** the printed page has horizontal rules and bold only: the mock's vertical rule

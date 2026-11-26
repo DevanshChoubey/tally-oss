@@ -161,6 +161,13 @@
    "description": "Ctrl+H, As voucher: ledger lines with the CGST and SGST ledgers chosen; the engine fills the party and tax amounts."
   },
   {
+   "id": "sales-invoice.mode-list",
+   "kind": "happy",
+   "hash": "screen=sales-invoice&state=mode-list",
+   "title": "Sales invoice, change mode",
+   "description": "Ctrl+H opens the list of modes: Item Invoice, Accounting Invoice, As Voucher; Enter or a click picks one."
+  },
+  {
    "id": "sales-invoice.item-list",
    "kind": "happy",
    "hash": "screen=sales-invoice&state=item-list",
@@ -663,6 +670,41 @@
    "hash": "screen=profit-and-loss&state=print-error",
    "title": "Profit and loss, not printed",
    "description": "The PDF could not be made from the engine answer; the reason is said in words, the report stays on screen and nothing is written."
+  },
+  {
+   "id": "profit-and-loss.print-config",
+   "kind": "happy",
+   "hash": "screen=profit-and-loss&state=print-config",
+   "title": "Profit and loss, print settings",
+   "description": "The print preview with the settings changed: A5 paper, 2 copies, Pages to print and First page number set; the page and the facts beside it follow."
+  },
+  {
+   "id": "profit-and-loss.print-range-error",
+   "kind": "validation-error",
+   "hash": "screen=profit-and-loss&state=print-range-error",
+   "title": "Profit and loss, pages to print past the end",
+   "description": "Pages to print names a page the document does not have; the settings are refused in words, the preview keeps the last good pages and nothing is written."
+  },
+  {
+   "id": "sales-invoice.print-preview",
+   "kind": "happy",
+   "hash": "screen=sales-invoice&state=print-preview",
+   "title": "Sales invoice, print preview",
+   "description": "Ctrl+P on a saved invoice shows the tax invoice page as it will print, with the print settings and Save as PDF."
+  },
+  {
+   "id": "day-book.print-preview",
+   "kind": "happy",
+   "hash": "screen=day-book&state=print-preview",
+   "title": "Day book, print preview",
+   "description": "Ctrl+P shows the day book as it will print: date, voucher type, number, particulars and amount, without the audit columns."
+  },
+  {
+   "id": "journal.print-preview",
+   "kind": "happy",
+   "hash": "screen=journal&state=print-preview",
+   "title": "Journal, print preview",
+   "description": "Ctrl+P on a saved voucher without a tax invoice (journal, and likewise payment, receipt, contra and purchase) shows the voucher page: particulars with debit and credit, total and narration."
   },
   {
    "id": "gst.gstr1-failed",

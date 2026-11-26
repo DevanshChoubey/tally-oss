@@ -222,6 +222,12 @@ fn ctrl_h_on_the_screen_opens_the_mode_list_and_a_pick_changes_the_mode() {
         lock_date: None,
         ai_tier: None,
     };
+    let label_ctx = AppCtx {
+        books: None,
+        api: None,
+        lock_date: None,
+        ai_tier: None,
+    };
     let ctx = egui::Context::default();
     let mut frame = |s: &mut ItemInvoiceScreen, input: RawInput| {
         let out = ctx.run_ui(input, |ui| {
@@ -230,8 +236,12 @@ fn ctrl_h_on_the_screen_opens_the_mode_list_and_a_pick_changes_the_mode() {
         out.drop_without_applying_deltas();
     };
     frame(&mut s, RawInput::default());
+    assert_eq!(s.cursor_label(&label_ctx), None, "no list, no cursor row");
     frame(&mut s, ctrl_h());
     assert_eq!(s.mode_list(), Some(0));
+    // The capture harness reads the highlighted row of the open list (rows are named as the
+    // mock's `sales-invoice.mode-list` names them).
+    assert_eq!(s.cursor_label(&label_ctx).as_deref(), Some("Item invoice"));
     assert_eq!(
         s.mode(),
         InvoiceMode::Item,
@@ -239,6 +249,10 @@ fn ctrl_h_on_the_screen_opens_the_mode_list_and_a_pick_changes_the_mode() {
     );
     frame(&mut s, press(Key::ArrowDown, Modifiers::NONE));
     assert_eq!(s.mode_list(), Some(1));
+    assert_eq!(
+        s.cursor_label(&label_ctx).as_deref(),
+        Some("Accounting invoice")
+    );
     frame(&mut s, press(Key::Enter, Modifiers::NONE));
     assert_eq!(s.mode(), InvoiceMode::Accounting);
     assert_eq!(s.mode_list(), None);

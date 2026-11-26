@@ -170,10 +170,19 @@ fn report_params(kind: ReportKind) -> ReportParams {
 
 #[test]
 fn a_voucher_without_a_gst_block_prints_as_unsupported_with_a_reason() {
-    // Derived: a payment is not a sales invoice, so the print crate refuses it. The facade
-    // passes that refusal on as Unsupported with a reason, not as a blank PDF.
+    // Derived: a sales voucher with no GST block is not a tax document, so the print crate
+    // cannot make an invoice of it. The facade passes that refusal on as Unsupported with a
+    // reason, not as a blank PDF. (A payment used to be the example here; since card S16 a
+    // payment prints as a payment voucher, see `s16_print_vouchers.rs`.)
     let (_dir, _path, mut api) = setup();
-    value(api.execute(Command::PostVoucher(payment(1, date!(2026 - 06 - 01), 500))));
+    let mut sale = payment(1, date!(2026 - 06 - 01), 500);
+    sale.type_id = default_voucher_types()
+        .into_iter()
+        .find(|t| t.base == BaseVoucherKind::Sales)
+        .unwrap()
+        .id;
+    sale.party = Some(RENT);
+    value(api.execute(Command::PostVoucher(sale)));
     match api.print_voucher(VoucherId(1)) {
         Ok(Outcome::Unsupported(u)) => {
             assert!(
@@ -182,7 +191,7 @@ fn a_voucher_without_a_gst_block_prints_as_unsupported_with_a_reason() {
                 u.reason
             );
         }
-        other => panic!("expected Unsupported for a payment, got {other:?}"),
+        other => panic!("expected Unsupported for a sale without GST, got {other:?}"),
     }
 }
 
@@ -312,7 +321,15 @@ fn a_document_that_cannot_print_is_unsupported_with_the_same_reason() {
         Ok(Outcome::Unsupported(u)) => assert!(u.reason.contains("CSV"), "{:?}", u.reason),
         other => panic!("expected Unsupported, got {other:?}"),
     }
-    value(api.execute(Command::PostVoucher(payment(1, date!(2026 - 06 - 01), 500))));
+    // A sale with no GST block (a payment prints since card S16).
+    let mut sale = payment(1, date!(2026 - 06 - 01), 500);
+    sale.type_id = default_voucher_types()
+        .into_iter()
+        .find(|t| t.base == BaseVoucherKind::Sales)
+        .unwrap()
+        .id;
+    sale.party = Some(RENT);
+    value(api.execute(Command::PostVoucher(sale)));
     match api.print_voucher_document(VoucherId(1)) {
         Ok(Outcome::Unsupported(u)) => assert!(u.reason.contains("GST"), "{:?}", u.reason),
         other => panic!("expected Unsupported, got {other:?}"),

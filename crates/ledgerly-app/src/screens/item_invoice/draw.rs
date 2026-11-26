@@ -2110,6 +2110,13 @@ impl Screen for ItemInvoiceScreen {
         }
     }
 
+    fn cursor_label(&self, _ctx: &AppCtx) -> Option<String> {
+        let at = self.mode_list?;
+        self.mode_choices()
+            .get(at)
+            .map(|m| mode_name(*m).to_owned())
+    }
+
     fn subtitle(&self) -> Option<String> {
         let note = match self.draft.kind {
             InvoiceKind::Sales | InvoiceKind::Purchase => None,

@@ -366,6 +366,17 @@ impl VoucherViewScreen {
         self.print.preview()
     }
 
+    /// The settings typed in the print preview's card.
+    pub fn print_form_mut(&mut self) -> &mut crate::screens::print_preview::PrintForm {
+        self.print.form_mut()
+    }
+
+    /// Why the last Update preview was refused, when it was.
+    #[must_use]
+    pub fn print_setup_error(&self) -> Option<&str> {
+        self.print.setup_error()
+    }
+
     /// `true` while the PDF is being prepared (the busy note is on screen).
     #[must_use]
     pub fn is_print_rendering(&self) -> bool {
@@ -381,17 +392,8 @@ impl VoucherViewScreen {
     /// The print preview in place of the voucher: the page head, then the engine's pages and the
     /// card that saves them (the same preview as every report).
     fn draw_print_preview(&mut self, ui: &mut Ui) -> ScreenAction {
-        use crate::screens::print_preview::{PreviewAction, show};
         page_head(ui, &self.page_title(), self.subtitle().as_deref(), |_| {});
-        let action = match self.print.preview() {
-            Some(doc) => show(ui, doc),
-            None => PreviewAction::None,
-        };
-        match action {
-            PreviewAction::Save => self.print.request_save(),
-            PreviewAction::Close => self.print.close_preview(),
-            PreviewAction::None => {}
-        }
+        self.print.draw_preview(ui);
         ui.ctx().request_repaint();
         ScreenAction::Stay
     }
@@ -812,6 +814,7 @@ impl Screen for VoucherViewScreen {
             // The preview opens on a clean page: an older note is not about this print.
             self.notice = None;
         }
+        self.print.run_update(ctx.api.as_ref());
         self.tick_detail(ctx.api.as_ref());
         if self.detail.is_pending() {
             ui.ctx().request_repaint();
@@ -833,8 +836,9 @@ impl Screen for VoucherViewScreen {
                 Some(handle) => {
                     let id = self.id;
                     let title = format!("Voucher {}", id.0);
-                    self.print
-                        .start(handle, &title, move |api| api.print_voucher_document(id));
+                    self.print.start(handle, &title, move |api, setup| {
+                        api.print_voucher_document_with(id, setup)
+                    });
                 }
             }
         }

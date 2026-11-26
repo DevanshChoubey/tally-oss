@@ -1460,8 +1460,8 @@ fn light_shots() -> Vec<Shot> {
         .press(&[(Key::Enter, NONE)])
         .type_text(SI_NARRATION),
         // The mock's `sales-invoice.mode-list`: the default invoice with Ctrl+H pressed; the list of
-        // modes is open on Item invoice. The key bar names the list's keys, so the check proves
-        // the list is showing.
+        // modes is open on Item invoice. The list's highlighted row is the cursor, so the check
+        // proves the list is showing.
         three_lines(godavari_invoice(
             "sales-invoice.mode-list",
             "Shree Ganesh",
@@ -1471,7 +1471,7 @@ fn light_shots() -> Vec<Shot> {
         .press(&[(Key::Enter, NONE)])
         .type_text(SI_NARRATION)
         .press(&[(Key::H, Modifiers::COMMAND)])
-        .expect_bar("Sales invoice", "Pick"),
+        .expect_in("Sales invoice", "Sales invoice", "Item invoice"),
         // The mock's `sales-invoice.as-voucher`: Ctrl+H, Down, Down, Enter (As voucher in the list), then the party, the Sales ledger
         // for the taxable 1,30,085.00 (25 x 3,850.00 + 67 x 505.00) and the two GST ledgers with
         // no amount typed (the engine fills them). A blank ledger ends the lines; the narration is typed.
@@ -2163,6 +2163,65 @@ fn s13_shots() -> Vec<Shot> {
             .press(&[(Key::P, Modifiers::COMMAND)])
             .wait(120)
             .expect_bar("Profit and loss", "Profit and loss"),
+        // The settings in the preview's card: A5, 2 copies, page 1 only (the mock's
+        // `profit-and-loss.print-config`), then a range past the last page.
+        shot("profit-and-loss.print-config", &[palette])
+            .query("Profit and Loss")
+            .then(&[(Key::Enter, NONE)])
+            .expect_bar("Profit and loss", "Profit and loss")
+            .press(&[(Key::P, Modifiers::COMMAND)])
+            .expect_bar("Profit and loss", "Print preview")
+            .click_named("A5")
+            .click_named("Copies")
+            .press(&[SELECT_ALL])
+            .type_text("2")
+            .click_named("Pages to print")
+            .type_text("1")
+            .press(&[(Key::Enter, NONE)])
+            .wait(60)
+            .expect_bar("Profit and loss", "Print preview"),
+        shot("profit-and-loss.print-range-error", &[palette])
+            .query("Profit and Loss")
+            .then(&[(Key::Enter, NONE)])
+            .expect_bar("Profit and loss", "Profit and loss")
+            .press(&[(Key::P, Modifiers::COMMAND)])
+            .expect_bar("Profit and loss", "Print preview")
+            .click_named("Pages to print")
+            .type_text("5-6")
+            .press(&[(Key::Enter, NONE)])
+            .wait(60)
+            .expect_bar("Profit and loss", "Print preview"),
+        // The invoice, the day book and a journal printed through the page renderer.
+        // An invoice with one HSN code and one rate: the print template needs both on the page
+        // (SI/0412 has two items with different codes, which the engine refuses to print).
+        shot(
+            "sales-invoice.print-preview",
+            &[(Key::D, NONE), (Key::F2, Modifiers::ALT)],
+        )
+        .then(&[SELECT_ALL])
+        .type_text("01-11-2026")
+        .press(&[(Key::Tab, NONE), SELECT_ALL])
+        .type_text("20-11-2026")
+        .press(&[(Key::Enter, NONE)])
+        .seek_by(Key::K, NONE, "Lakshmi Farm Supplies")
+        .press(&[(Key::Enter, NONE)])
+        .expect("SI/0405", None)
+        .press(&[(Key::P, Modifiers::COMMAND)])
+        .wait(60)
+        .expect_bar("SI/0405", "Print preview"),
+        shot("day-book.print-preview", &[(Key::D, NONE)])
+            .expect("Day book", None)
+            .press(&[(Key::P, Modifiers::COMMAND)])
+            .wait(60)
+            .expect_bar("Day book", "Print preview"),
+        shot("journal.print-preview", &[(Key::D, NONE)])
+            .expect("Day book", None)
+            .seek("Depreciation")
+            .press(&[(Key::Enter, NONE)])
+            .expect("JV/0032", None)
+            .press(&[(Key::P, Modifiers::COMMAND)])
+            .wait(60)
+            .expect_bar("JV/0032", "Print preview"),
         // The worker is held: the GST returns have not been asked for yet.
         shot("gst.gstr1-not-loaded", &[(Key::G, NONE), (Key::Num1, NONE)])
             .on(Fixture::GodavariHeld)
