@@ -40,6 +40,14 @@ OUT="$ROOT/design/app-captures"
 RAW="${CAPTURE_RAW:-$TMPDIR/app-snapshots}"
 
 if [[ -z "${CAPTURE_RAW:-}" ]]; then
+  # The app opens real windows. They belong in a nested X display (Xephyr :<n>), never on the
+  # desktop session: winit picks Wayland whenever WAYLAND_DISPLAY is set, and :0 is the desktop.
+  if [[ -n "${WAYLAND_DISPLAY:-}" || -z "${DISPLAY:-}" || "${DISPLAY}" == ":0" || "${DISPLAY}" == ":0.0" ]]; then
+    echo "capture.sh: run captures in a nested X display only, e.g." >&2
+    echo "  Xephyr :57 -screen 1600x1000 &  then" >&2
+    echo "  env -u WAYLAND_DISPLAY DISPLAY=:57 WINIT_UNIX_BACKEND=x11 design/app-captures/capture.sh ..." >&2
+    exit 2
+  fi
   rm -rf "$RAW"
   mkdir -p "$RAW"
   cd "$ROOT" || exit 1
