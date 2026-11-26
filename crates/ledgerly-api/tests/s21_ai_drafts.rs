@@ -186,7 +186,7 @@ fn a_new_file_has_no_drafts() {
 }
 
 #[test]
-fn a_recorded_draft_is_open_and_listed_with_the_engine_total() {
+fn a_recorded_draft_without_a_date_is_listed_blocked_on_the_date() {
     let mut api = books("s21-drafts-listed.ledgerly", Vec::new());
     let id = api.record_ai_draft(rent_draft()).unwrap();
     let drafts = api.ai_drafts().unwrap();
@@ -195,6 +195,23 @@ fn a_recorded_draft_is_open_and_listed_with_the_engine_total() {
     assert_eq!(drafts[0].feature, AiFeature::PlainWords);
     let queue = api.review_queue_on(TODAY).unwrap();
     assert_eq!(queue.drafts.len(), 1);
+    assert!(
+        matches!(&queue.drafts[0].engine, DraftFigure::Blocked(reason) if reason.contains("date")),
+        "no date was typed, so the queue shows no figure and says why: {:?}",
+        queue.drafts[0].engine
+    );
+}
+
+#[test]
+fn a_dated_draft_is_listed_with_the_engine_total() {
+    let mut api = books("s21-drafts-listed-dated.ledgerly", Vec::new());
+    let mut draft = rent_draft();
+    let Proposal::VoucherDraft(v) = &mut draft.proposal else {
+        panic!()
+    };
+    v.date = Some(typed(TODAY, 0, 0));
+    api.record_ai_draft(draft).unwrap();
+    let queue = api.review_queue_on(TODAY).unwrap();
     assert_eq!(
         queue.drafts[0].engine,
         DraftFigure::Total(Paise::new(2_500_000))

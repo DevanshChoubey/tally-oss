@@ -18,7 +18,8 @@
 //! it again; accepting a duplicate has nothing to post and says so. Rejecting hides the row for
 //! this session only, because the engine keeps no record of a rejection.
 //!
-//! Assistant drafts (later release, `release::ai_enabled`) are listed after them. Accepting one
+//! Assistant drafts (later release, `release::ai_enabled`) are listed first, as the mock lists
+//! its bill-photo draft. Accepting one
 //! sends it to `Api::accept_ai_draft`, which validates it and posts it through the engine or says
 //! why not; rejecting one is stored (`Api::reject_ai_draft`) in the AI activity log.
 
@@ -403,17 +404,12 @@ pub fn reject_notice(row: &QueueRow) -> String {
 #[must_use]
 pub fn rows(queue: &ReviewQueue) -> Vec<QueueRow> {
     queue
-        .items
+        .drafts
         .iter()
-        .map(row_of)
+        .filter(|_| crate::release::ai_enabled())
+        .map(draft_row)
+        .chain(queue.items.iter().map(row_of))
         .chain(queue.duplicates.iter().map(duplicate_row))
-        .chain(
-            queue
-                .drafts
-                .iter()
-                .filter(|_| crate::release::ai_enabled())
-                .map(draft_row),
-        )
         .collect()
 }
 
@@ -500,28 +496,17 @@ pub enum DraftDecided {
     Rejected,
 }
 
-/// Accepts draft `id` with the date the voucher form offers (the draft's own, else `today`).
+/// Accepts draft `id` as it stands, with no edits: a draft the engine blocks (no date read, say)
+/// posts nothing and comes back as `Blocked` with the engine's reason.
 ///
 /// # Errors
 /// As `Api::accept_ai_draft`.
 pub fn accept_draft_on(
     api: &mut ledgerly_api::Api,
     id: EventSeq,
-    today: ledgerly_core::Date,
 ) -> Result<Outcome<DraftDecided>, ledgerly_api::ApiError> {
-    let draft = api.ai_draft(id)?;
-    let date = match &draft.proposal {
-        ledgerly_api::Proposal::VoucherDraft(d) => d.date.as_ref().map(|t| t.value),
-        ledgerly_api::Proposal::MatchSuggestion(_)
-        | ledgerly_api::Proposal::ReportQuery(_)
-        | ledgerly_api::Proposal::MappingSuggestion(_) => None,
-    };
-    let edits = ledgerly_api::DraftEdits {
-        date: Some(date.unwrap_or(today)),
-        place_of_supply: None,
-    };
     Ok(api
-        .accept_ai_draft(id, &edits)?
+        .accept_ai_draft(id, &ledgerly_api::DraftEdits::default())?
         .map(|accepted| match accepted {
             ledgerly_api::Accepted::Posted(v) => {
                 DraftDecided::Posted(v.number.clone().unwrap_or_else(|| v.id.0.to_string()))
@@ -567,6 +552,10 @@ impl ReviewScreen {
     /// Applies a decision to the highlighted row. Accepting a bank match sends it to the engine
     /// through `worker`; rejecting hides the row for this session.
     pub fn decide(&mut self, decision: Decision, worker: Option<&ApiWorker>) {
+        if self.draft_decision.is_pending() {
+            // One decision on a draft at a time: a second press would race the first.
+            return;
+        }
         let Some(row) = self
             .panel
             .as_ref()
@@ -608,9 +597,8 @@ impl ReviewScreen {
                         return;
                     };
                     self.notice = Some((NoteKind::Info, crate::i18n::t("review.draft_accepting")));
-                    let today = crate::shell::navigate::today();
                     self.draft_decision.start(handle, move |api| {
-                        accept_draft_on(api, id, today).map_err(|e| e.to_string())
+                        accept_draft_on(api, id).map_err(|e| e.to_string())
                     });
                 }
                 Verdict::Confirm {
@@ -762,6 +750,10 @@ impl ReviewScreen {
         else {
             return ScreenAction::Stay;
         };
+        if matches!(row.origin, RowOrigin::Draft { .. }) {
+            self.notice = Some((NoteKind::Info, crate::i18n::t("review.draft_open_later")));
+            return ScreenAction::Stay;
+        }
         let opened = match (row.ledger, ctx.books.as_ref()) {
             (Some(ledger), Some(books)) => crate::shell::navigate::bank_screen(books, ledger)
                 .map(|s| Box::new(s) as Box<dyn Screen>),
@@ -1027,6 +1019,13 @@ fn draw_empty_heading(ui: &mut Ui, text: &str) {
 impl Screen for ReviewScreen {
     fn title(&self, tr: &Tr) -> String {
         tr.t("sidebar.review_queue")
+    }
+
+    fn cursor_label(&self, _ctx: &AppCtx) -> Option<String> {
+        self.panel
+            .as_ref()
+            .and_then(|p| p.rows.get(self.selected))
+            .map(|row| row.what.clone())
     }
 
     fn subtitle(&self, _tr: &Tr) -> Option<String> {

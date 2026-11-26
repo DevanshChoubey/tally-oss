@@ -17,7 +17,7 @@
 //!   this build (choosing one is the owner's decision, as is any download), so it reports
 //!   [`ProviderStatus::NotInstalled`] and every request is `Unsupported`. It never touches the
 //!   network.
-//! * [`CloudProvider`] wraps [`crate::cloud::CloudClient`] (redaction first, key from the OS
+//! * [`CloudModel`] wraps [`crate::cloud::CloudClient`] (redaction first, key from the OS
 //!   keychain). It refuses documents: pixels cannot be redacted.
 //! * [`FixedAnswers`] answers from recordings given to it, for tests and screen captures. It
 //!   feeds the real readers, so every figure still comes from the readers and the engine. An input
@@ -73,7 +73,7 @@ pub enum ProviderStatus {
     },
 }
 
-/// A model behind the assistant. Implementations: [`LocalModel`], [`CloudProvider`],
+/// A model behind the assistant. Implementations: [`LocalModel`], [`CloudModel`],
 /// [`FixedAnswers`].
 pub trait AiProvider: Send + fmt::Debug {
     /// The provider's name, version and place.
@@ -284,18 +284,18 @@ impl AiProvider for LocalModel {
 /// The user's cloud provider, with their key (privacy tier 2). Text only: documents are refused
 /// because an image cannot be redacted.
 #[derive(Debug)]
-pub struct CloudProvider {
+pub struct CloudModel {
     client: CloudClient,
 }
 
-impl CloudProvider {
+impl CloudModel {
     /// The provider over `client`.
     pub fn new(client: CloudClient) -> Self {
-        CloudProvider { client }
+        CloudModel { client }
     }
 }
 
-impl AiProvider for CloudProvider {
+impl AiProvider for CloudModel {
     fn info(&self) -> ProviderInfo {
         ProviderInfo {
             name: self.client.config().model.clone(),

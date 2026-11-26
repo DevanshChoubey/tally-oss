@@ -14,7 +14,6 @@
 
 use std::collections::BTreeMap;
 
-use ledgerly_assist::Proposal;
 use ledgerly_assist::validate::DraftCheck;
 use ledgerly_bank::matcher::Candidate;
 use ledgerly_bank::statement::BankStatement;
@@ -91,8 +90,9 @@ pub struct ReviewQueue {
 pub struct ReviewDraft {
     /// The draft, as stored.
     pub draft: AiDraft,
-    /// The engine's check of the draft with the date the voucher form offers (the draft's own,
-    /// else today): the voucher total when it passes, or why there is none.
+    /// The engine's check of the draft as it stands, with no edits (a draft with no date read
+    /// is blocked on the date, as accepting it from the queue would be): the voucher total when
+    /// it passes, or why there is none.
     pub engine: DraftFigure,
 }
 
@@ -218,7 +218,7 @@ impl Api {
                 Vec::new()
             }
         };
-        let drafts = self.review_drafts(today)?;
+        let drafts = self.review_drafts()?;
         if self.assistant_attached() {
             unlisted.retain(|u| {
                 !matches!(
@@ -236,14 +236,10 @@ impl Api {
     }
 
     /// The open drafts with the engine's figure for each.
-    fn review_drafts(&self, today: Date) -> Result<Vec<ReviewDraft>, ApiError> {
+    fn review_drafts(&self) -> Result<Vec<ReviewDraft>, ApiError> {
         let mut out = Vec::new();
         for draft in self.ai_drafts()? {
-            let edits = DraftEdits {
-                date: draft_date(&draft.proposal).or(Some(today)),
-                place_of_supply: None,
-            };
-            let engine = match self.check_proposal(&draft.proposal, &edits)? {
+            let engine = match self.check_proposal(&draft.proposal, &DraftEdits::default())? {
                 Outcome::Value(DraftCheck::Ok(voucher)) => match debit_total(&voucher) {
                     Some(total) => DraftFigure::Total(total),
                     None => DraftFigure::Unsupported(
@@ -291,16 +287,6 @@ fn item_of(
         description,
         amount,
         money_in,
-    }
-}
-
-/// The date a draft carries, if it has one (the queue offers today otherwise, as the form does).
-fn draft_date(proposal: &Proposal) -> Option<Date> {
-    match proposal {
-        Proposal::VoucherDraft(d) => d.date.as_ref().map(|t| t.value),
-        Proposal::MatchSuggestion(_)
-        | Proposal::ReportQuery(_)
-        | Proposal::MappingSuggestion(_) => None,
     }
 }
 

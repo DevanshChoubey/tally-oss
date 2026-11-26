@@ -91,3 +91,13 @@ untracked), look at each, update `PARITY-GAPS.md`.
   binding): each is a new dependency and a model download. The seams and the Not installed state
   are built; no runtime is linked.
 - The real cloud provider(s) and their default endpoints.
+
+## Status (kept current each round)
+
+- Round A: committed (draft store, provider seam, review queue drafts, `ai.review.default` mock
+  state with the `ai=on` hash switch and its capture). Open: the bill-wise New Ref (round D).
+- Honesty notes: round A's API tests (`s21_ai_drafts`) were written after the code and checked by
+  mutation (ignoring decisions fails two); the app row test (`s21_review_drafts`) and the provider
+  tests were checked failing by mutation too. Two 1.0.0 test files (`tally-bridge/tests/w3_import.rs`,
+  `app/tests/i18n_ai.rs`) were touched for compile only (a new enum arm, a new struct field). The
+  commit trailer names Claude Opus 5.5, the session's model, where the brief's template says Sonnet.

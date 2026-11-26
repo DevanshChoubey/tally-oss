@@ -371,6 +371,7 @@ mark{background:var(--accent-soft);color:var(--accent-ink);border-radius:2px;pad
 "ready": "document.documentElement.dataset.ready === '1'",
 "states": [
  {"id":"home.default","kind":"happy","hash":"screen=home&state=default","title":"Home","description":"Dashboard: engine KPIs, plain-words entry bar, review queue and rule-based nudges."},
+ {"id":"ai.review.default","kind":"happy","hash":"screen=review&state=default&ai=on","title":"Review queue, AI on (later release)","description":"The queue with the assistant on: a bill-photo draft beside the bank matches. Its amount is the engine's total of the draft; a draft the engine blocks shows none."},
  {"id":"hi.home.default","kind":"happy","hash":"screen=home&state=default&lang=hi","title":"Home, Hindi","description":"The default Home with every word the app translates shown in Hindi; figures, dates and digit grouping unchanged."},
  {"id":"hi.sales-invoice.default","kind":"happy","hash":"screen=sales-invoice&state=default&lang=hi","title":"Sales invoice, Hindi","description":"The intra-state item invoice in Hindi."},
  {"id":"hi.sales-invoice.print-preview","kind":"happy","hash":"screen=sales-invoice&state=print-preview&lang=hi","title":"Sales invoice, print preview, Hindi","description":"The print preview chrome in Hindi; the printed page stays English (the PDF font is Latin-only)."},
@@ -976,13 +977,16 @@ const skelRows = (n,w) => Array.from({length:n},(_,i)=>`<div class="skel" style=
 /* ---------- params, theme, AI tier ---------- */
 function parseHash(){const h=location.hash.replace(/^#/,'');const p={};for(const kv of h.split('&')){if(!kv)continue;const i=kv.indexOf('=');const k=i<0?kv:kv.slice(0,i);try{p[k]=i<0?'':decodeURIComponent(kv.slice(i+1))}catch(e){p[k]=kv.slice(i+1)}}return p}
 const buildHash = p => Object.entries(p).filter(([,v])=>v!=null&&v!=='').map(([k,v])=>k+'='+encodeURIComponent(v).replace(/%20/g,'%20')).join('&');
-function hashFor(screen,state,extra){const p={screen};if(state)p.state=state;Object.assign(p,extra||{});const cur=parseHash();if(cur.theme)p.theme=cur.theme;if(cur.lang)p.lang=cur.lang;return buildHash(p)}
+function hashFor(screen,state,extra){const p={screen};if(state)p.state=state;Object.assign(p,extra||{});const cur=parseHash();if(cur.theme)p.theme=cur.theme;if(cur.lang)p.lang=cur.lang;if(cur.ai)p.ai=cur.ai;return buildHash(p)}
 const readFreeze = ()=>{const m=/[?&]freeze=(\d+)/.exec(location.search)||/[#&]freeze=(\d+)/.exec(location.hash);return m?+m[1]:null};
 let FREEZE = readFreeze();
 function resolveTheme(p){const t=p.theme||store.get('ledgerly.theme')||'system';if(t==='system')return matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';return ['light','dark','hc'].includes(t)?t:'light'}
 /* Release switch (owner decision 2026-11-26): Ledgerly 1.0.0 ships WITHOUT the AI assistant. The AI-only states below stay in the mock
    as the later-release design; every other screen shows the company with AI Off. A later release sets this to true. */
-const AI_IN_RELEASE=false;
+// The release switch: false, so 1.0.x shows no AI. A page shows the later-release AI design
+// with the hash parameter ai=on (states ai.*), read again on every render.
+const AI_RELEASE_SWITCH=false;
+let AI_IN_RELEASE=AI_RELEASE_SWITCH||/(^#|&)ai=on(&|$)/.test(location.hash);
 const AI_ONLY=p=>['quick-entry','ask','purchase-bill'].includes(p.screen)||(p.screen==='bank'&&/ai-suggestions|suggested-ledger/.test(p.state||''))||(p.screen==='masters'&&p.state==='suggested-ledger')||(p.screen==='gst'&&p.state==='recon-explain');
 function aiTier(p){const s=p.state||'';if(p.screen==='ai-settings')return AI_IN_RELEASE?(s==='cloud'?'cloud':s==='off'?'off':'local'):'off';if(/ai-off|offline-ai/.test(s))return 'off';if(!AI_IN_RELEASE&&!AI_ONLY(p))return 'off';return 'local'}
 const TIER = {local:{icon:'cpu',label:'AI on this computer',tip:'Local model. Nothing leaves this computer.'},cloud:{icon:'cloud',label:'AI cloud, your key',tip:'Your own provider key. Redacted fields never leave.'},off:{icon:'off',label:'AI off',tip:'No AI features for this company.'}};
@@ -1062,7 +1066,7 @@ function translateDom(lang){
 }
 function render(){
   FREEZE=readFreeze();
-  const p=parseHash(); if(!SCREENS[p.screen])p.screen=p.screen==='palette'?'palette':'home';
+  const p=parseHash(); AI_IN_RELEASE=AI_RELEASE_SWITCH||p.ai==='on'; if(!SCREENS[p.screen])p.screen=p.screen==='palette'?'palette':'home';
   const theme=resolveTheme(p); document.documentElement.dataset.theme=theme;
   const def=SCREENS[p.screen]; const state=p.state||def.default;
   document.body.classList.toggle('frozen',FREEZE!=null);

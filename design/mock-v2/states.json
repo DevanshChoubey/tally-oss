@@ -21,6 +21,13 @@
    "description": "Dashboard: engine KPIs, plain-words entry bar, review queue and rule-based nudges."
   },
   {
+   "id": "ai.review.default",
+   "kind": "happy",
+   "hash": "screen=review&state=default&ai=on",
+   "title": "Review queue, AI on (later release)",
+   "description": "The queue with the assistant on: a bill-photo draft beside the bank matches. Its amount is the engine's total of the draft; a draft the engine blocks shows none."
+  },
+  {
    "id": "hi.home.default",
    "kind": "happy",
    "hash": "screen=home&state=default&lang=hi",
