@@ -5,6 +5,7 @@
 //! settings. Every figure comes from the engine or the report engines (spec section 4).
 
 mod ai;
+mod as_voucher;
 mod balance;
 mod bank;
 mod brs_statement;
@@ -18,11 +19,13 @@ mod gst_filing;
 mod gstr1_sections;
 mod gstr3b_payment;
 mod home;
+mod itc_draft;
 mod maintenance;
 mod nudges;
 mod print;
 mod recon;
 mod report;
+mod return_against;
 mod review;
 mod search;
 mod tally_import;
@@ -39,6 +42,7 @@ pub use recon::{Gstr2bReconciliation, Gstr2bRow};
 // Report types the app names when it builds and reads reports (card W7). The app depends on this
 // crate only, so the report model is re-exported here instead of adding a manifest dependency.
 pub use brs_statement::{BrsLine, BrsStatement};
+pub use as_voucher::is_gst_tax_ledger;
 pub use day_book_meta::EntryOrigin;
 pub use error::ApiError;
 pub use facade::Api;
@@ -57,6 +61,7 @@ pub use ledgerly_model::{
     Address, Books, Company, EntityKind, Features, NegativeStockPolicy, Voucher,
 };
 pub use ledgerly_print::pdf::{PageItem, PageLayout, PrintedDocument};
+pub use ledgerly_print::setup::{MAX_COPIES, PageSelection, Paper, PrintSetup};
 pub use ledgerly_reports::outstanding::days_overdue;
 pub use ledgerly_reports::{
     AuditReportKind, Cell, ColumnHeader, ColumnSpec, Detail, DrillKey, Report, ReportFilter,
@@ -67,10 +72,11 @@ pub use ledgerly_store::verify::{ChainProblem, VerifyReport};
 pub use maintenance::{VoucherCheck, verify_file};
 pub use nudges::{DuplicatePayment, Gstr1Due, HomeNudges, PaymentRef, gstr1_next_due};
 pub use report::ExportFormat;
+pub use return_against::{InvoicedAgainst, InvoicedLine};
 pub use search::{MatchedOn, SearchHit};
 pub use tally_import::ImportSummary;
 pub use voucher_audit::{ChangeKind, VoucherAudit, VoucherChange, VoucherDetail};
-pub use voucher_gst::{InvoiceGst, PartyBill, RateRow};
+pub use voucher_gst::{EligibleItc, InvoiceGst, PartyBill, RateRow};
 
 pub use ledgerly_bank::brs::Brs;
 pub use ledgerly_bank::matcher::{Candidate, LineDirection, MatchRule};

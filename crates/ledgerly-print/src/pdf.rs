@@ -728,6 +728,7 @@ mod page {
 
     use pdf_writer::{Content, Name, Pdf, Rect, Ref, Str};
 
+    use crate::setup::{PrintSetup, setup_error};
     use crate::template::PrintError;
 
     /// Page margin in points.
@@ -735,11 +736,11 @@ mod page {
     /// Space kept free at the bottom of every page for the page number.
     const FOOTER: i32 = 28;
     /// Padding inside table cells.
-    const PAD: i32 = 3;
+    pub(super) const PAD: i32 = 3;
     /// Body text size.
     pub(super) const BODY: i32 = 10;
     /// Table text size.
-    const TABLE: i32 = 9;
+    pub(super) const TABLE: i32 = 9;
 
     /// Advance widths of Helvetica for code points 32 to 126, in 1000ths of the font size.
     ///
@@ -844,8 +845,10 @@ mod page {
     pub struct PrintedDocument {
         /// The PDF bytes.
         pub pdf: Vec<u8>,
-        /// The pages, in order.
+        /// The pages of one copy, in order.
         pub pages: Vec<PageLayout>,
+        /// How many times the PDF holds those pages (one copy after another).
+        pub copies: u32,
     }
 
     /// One page of a [`PrintedDocument`]. All values are whole points from the top-left.
@@ -900,6 +903,7 @@ mod page {
     }
 
     /// One drawing operation on a page. Positions are in points from the top-left.
+    #[derive(Clone)]
     enum Op {
         Text {
             x: i32,
@@ -1239,23 +1243,42 @@ mod page {
             Ok(())
         }
 
-        /// Adds the page numbers and writes the document, returning the PDF with the pages it was
-        /// written from.
-        pub(super) fn finish(mut self) -> Result<PrintedDocument, PrintError> {
+        /// Adds the page numbers and writes the document as `setup` says, returning the PDF
+        /// with the pages of one copy.
+        ///
+        /// Pages are numbered from `first_page_number`; the pages in the selection (by those
+        /// numbers) are kept, and the file holds them once per copy.
+        pub(super) fn finish(mut self, setup: &PrintSetup) -> Result<PrintedDocument, PrintError> {
+            setup.check()?;
             self.done.push(std::mem::take(&mut self.current));
-            let total = self.done.len();
+            let count = u32::try_from(self.done.len()).map_err(|_| too_large())?;
+            let first = setup.first_page_number;
+            let last = first.checked_add(count - 1).ok_or_else(too_large)?;
             let baseline = self.height.saturating_sub(MARGIN);
             let centre = self.width / 2;
-            let mut number = 0_usize;
-            for ops in &mut self.done {
-                number = number.saturating_add(1);
-                let label = format!("Page {number} of {total}");
+            let mut kept: Vec<Vec<Op>> = Vec::new();
+            for (ops, number) in std::mem::take(&mut self.done).into_iter().zip(first..) {
+                if !setup.pages.contains(number) {
+                    continue;
+                }
+                let mut ops = ops;
+                let label = format!("Page {number} of {last}");
                 let x = centre.saturating_sub(text_width(&label, TABLE, false) / 2);
-                push_text(ops, x, baseline, TABLE, false, &label)?;
+                push_text(&mut ops, x, baseline, TABLE, false, &label)?;
+                kept.push(ops);
             }
-            let pdf = write_pdf(self.width, self.height, &self.done)?;
-            let pages = self
-                .done
+            if kept.is_empty() {
+                return Err(setup_error(format!(
+                    "the pages to print ({}) select no page: the document has pages {first} to {last}",
+                    setup.pages.describe()
+                )));
+            }
+            let mut file: Vec<Vec<Op>> = Vec::new();
+            for _ in 0..setup.copies {
+                file.extend(kept.iter().cloned());
+            }
+            let pdf = write_pdf(self.width, self.height, &file)?;
+            let pages = kept
                 .iter()
                 .map(|ops| PageLayout {
                     width: self.width,
@@ -1263,7 +1286,11 @@ mod page {
                     items: ops.iter().map(Op::item).collect(),
                 })
                 .collect();
-            Ok(PrintedDocument { pdf, pages })
+            Ok(PrintedDocument {
+                pdf,
+                pages,
+                copies: u32::from(setup.copies),
+            })
         }
     }
 
@@ -1365,6 +1392,7 @@ use ledgerly_core::Paise;
 use ledgerly_model::{Books, StoredGst, Voucher};
 use qrcode::{Color, QrCode};
 
+use crate::setup::{Paper, PrintSetup};
 use crate::template::{Block, BlockBody, ItemColumn, PrintError, Slot, TaxColumn, Template};
 use data::{Invoice, unsupported};
 use page::{Align, BODY, Canvas, Column};
@@ -1442,14 +1470,34 @@ pub fn render_invoice_with_upi_pages(
     gst: &StoredGst,
     upi: Option<&UpiPayee<'_>>,
 ) -> Result<PrintedDocument, PrintError> {
+    render_invoice_pages_with(t, v, books, gst, upi, &PrintSetup::default())
+}
+
+/// Like [`render_invoice_with_upi_pages`], laid out and cut as `setup` says (its paper, when
+/// set, replaces the template's page size).
+///
+/// # Errors
+/// As [`render_invoice_with_upi_pages`], and [`PrintError::Setup`] as
+/// [`render_report_pages_with`].
+pub fn render_invoice_pages_with(
+    t: &Template,
+    v: &Voucher,
+    books: &Books,
+    gst: &StoredGst,
+    upi: Option<&UpiPayee<'_>>,
+    setup: &PrintSetup,
+) -> Result<PrintedDocument, PrintError> {
+    setup.check()?;
     let invoice = Invoice::new(books, v, gst)?;
-    let (width_mm, height_mm) = t.page.millimetres();
+    let (width_mm, height_mm) = setup
+        .paper
+        .map_or_else(|| t.page.millimetres(), Paper::millimetres);
     let mut canvas = Canvas::new(mm_to_points(width_mm), mm_to_points(height_mm));
     for block in &t.blocks {
         render_block(&mut canvas, &invoice, block, upi)?;
         canvas.skip(8);
     }
-    canvas.finish()
+    canvas.finish(setup)
 }
 
 /// Millimetres to whole points (72 per 25.4 mm), rounded to the nearest point.
@@ -1633,6 +1681,65 @@ pub enum RowStyle {
     Total,
 }
 
+/// The share of the text width each column of a report gets, in points. A right-aligned column
+/// (figures) is as wide as its widest figure or heading, so a figure never breaks across lines;
+/// the left-aligned columns share the rest, the first (the label) a third more than the others.
+/// When the figures alone would take more than three quarters of the width, the old fixed shares
+/// (label 4, left 3, right 2) are used instead.
+fn report_weights(page: &ReportPage, width: i32) -> Vec<i32> {
+    let right = |n: usize| match page.aligns.get(n).copied() {
+        Some(ColumnAlign::Left) => false,
+        None if n == 0 => false,
+        Some(ColumnAlign::Right) | None => true,
+    };
+    let fixed: Vec<i32> = (0..page.headings.len())
+        .map(|n| match (right(n), n) {
+            (false, 0) => 4,
+            (false, _) => 3,
+            (true, _) => 2,
+        })
+        .collect();
+    let natural: Vec<i32> = (0..page.headings.len())
+        .map(|n| {
+            if !right(n) {
+                return 0;
+            }
+            let heading = page
+                .headings
+                .get(n)
+                .map_or(0, |h| page::text_width(h, page::TABLE, true));
+            page.rows
+                .iter()
+                .filter_map(|r| r.get(n))
+                .map(|c| page::text_width(c, page::TABLE, true))
+                .fold(heading, i32::max)
+                .saturating_add(page::PAD.saturating_mul(2))
+                .saturating_add(2)
+        })
+        .collect();
+    let figures: i32 = natural.iter().fold(0_i32, |a, w| a.saturating_add(*w));
+    if figures.saturating_mul(4) > width.saturating_mul(3) {
+        return fixed;
+    }
+    let left_share: i32 = fixed
+        .iter()
+        .zip(&natural)
+        .filter(|(_, w)| **w == 0)
+        .fold(0_i32, |a, (f, _)| a.saturating_add(*f));
+    let rest = width.saturating_sub(figures);
+    fixed
+        .iter()
+        .zip(&natural)
+        .map(|(f, w)| {
+            if *w == 0 {
+                (rest.saturating_mul(*f) / left_share.max(1)).max(1)
+            } else {
+                *w
+            }
+        })
+        .collect()
+}
+
 /// Renders a report as an A4 PDF: the company, title and period, then the table, with the
 /// heading repeated on each page and "Page n of N" at the foot.
 ///
@@ -1650,7 +1757,21 @@ pub fn render_report(page: &ReportPage) -> Result<Vec<u8>, PrintError> {
 /// # Errors
 /// As [`render_report`].
 pub fn render_report_pages(page: &ReportPage) -> Result<PrintedDocument, PrintError> {
-    let mut canvas = Canvas::new(mm_to_points(210), mm_to_points(297));
+    render_report_pages_with(page, &PrintSetup::default())
+}
+
+/// Like [`render_report_pages`], laid out and cut as `setup` says: the paper, the number the
+/// first page carries, the pages that print and the copies in the file.
+///
+/// # Errors
+/// As [`render_report`], and [`PrintError::Setup`] when the copies, the first page number or the
+/// page range cannot be used (a range that selects no page of the document is one).
+pub fn render_report_pages_with(
+    page: &ReportPage,
+    setup: &PrintSetup,
+) -> Result<PrintedDocument, PrintError> {
+    let (w, h) = setup.paper.unwrap_or(Paper::A4).millimetres();
+    let mut canvas = Canvas::new(mm_to_points(w), mm_to_points(h));
     canvas.paragraph(&page.company, BODY, true)?;
     canvas.paragraph(&page.title, BODY, true)?;
     canvas.paragraph(&page.period, BODY, false)?;
@@ -1661,6 +1782,7 @@ pub fn render_report_pages(page: &ReportPage) -> Result<PrintedDocument, PrintEr
                 .to_owned(),
         });
     }
+    let widths = report_weights(page, canvas.content_width());
     let columns: Vec<Column<'_>> = page
         .headings
         .iter()
@@ -1672,14 +1794,9 @@ pub fn render_report_pages(page: &ReportPage) -> Result<PrintedDocument, PrintEr
                 None if n == 0 => Align::Left,
                 Some(ColumnAlign::Right) | None => Align::Right,
             };
-            let weight = match (explicit, n) {
-                (None, 0) => 4,
-                (None | Some(ColumnAlign::Right), _) => 2,
-                (Some(ColumnAlign::Left), _) => 3,
-            };
             Column {
                 title: heading.as_str(),
-                weight,
+                weight: widths.get(n).copied().unwrap_or(1),
                 align,
             }
         })
@@ -1694,5 +1811,5 @@ pub fn render_report_pages(page: &ReportPage) -> Result<PrintedDocument, PrintEr
         canvas.skip(6);
         canvas.paragraph(&format!("Note: {note}"), BODY, false)?;
     }
-    canvas.finish()
+    canvas.finish(setup)
 }

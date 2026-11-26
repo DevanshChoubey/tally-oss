@@ -3,9 +3,9 @@
 //! narration). Both come from the API through the worker; the screen shows the answers and adds
 //! nothing to them (rule C4).
 
-use ledgerly_api::{Api, BalanceChange, OpenBill};
+use ledgerly_api::{Api, BalanceChange, InvoicedAgainst, OpenBill};
 use ledgerly_core::{Date, LedgerId, Outcome, VoucherTypeId};
-use ledgerly_model::Voucher;
+use ledgerly_model::{BaseVoucherKind, Voucher};
 
 use crate::worker::{ApiWorker, Poll, Ticket};
 
@@ -17,6 +17,12 @@ type BalanceReply = Result<Outcome<BalanceChange>, String>;
 
 /// The worker's answer for a ledger's open bills.
 type OpenReply = Result<Outcome<Vec<OpenBill>>, String>;
+
+/// The worker's answer for the invoice a note is against.
+type InvoicedReply = Result<Outcome<InvoicedAgainst>, String>;
+
+/// What the invoiced-quantity answer is for: the note's kind, its party and the reference typed.
+pub(crate) type InvoicedKey = (BaseVoucherKind, LedgerId, String);
 
 /// The balance line's content.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -45,6 +51,11 @@ pub(crate) struct Extras {
     /// The open bills of that ledger on that date, when the engine gave them.
     pub(crate) open: Option<Vec<OpenBill>>,
     open_ticket: Option<((LedgerId, Date), Ticket<OpenReply>)>,
+    /// What the invoiced answer is for.
+    invoiced_for: Option<InvoicedKey>,
+    /// The invoice the note is against, when the engine found it.
+    pub(crate) invoiced: Option<InvoicedAgainst>,
+    invoiced_ticket: Option<(InvoicedKey, Ticket<InvoicedReply>)>,
 }
 
 impl Extras {
@@ -166,6 +177,49 @@ impl Extras {
             self.open_ticket = Some((key, ticket));
         }
         self.open_ticket.is_some()
+    }
+
+    /// As [`Self::drive_number`] for the invoice a note is against. `None` for `want` forgets the
+    /// answer. Returns whether a request is in flight.
+    pub(crate) fn drive_invoiced(&mut self, worker: &ApiWorker, want: Option<InvoicedKey>) -> bool {
+        if let Some((key, mut ticket)) = self.invoiced_ticket.take() {
+            match ticket.poll() {
+                Poll::Pending | Poll::Taken => self.invoiced_ticket = Some((key, ticket)),
+                Poll::Ready(reply) => {
+                    self.invoiced = match reply {
+                        Ok(Outcome::Value(found)) => Some(found),
+                        Ok(Outcome::Unsupported(_)) | Err(_) => None,
+                    };
+                    self.invoiced_for = Some(key);
+                }
+                Poll::Lost => {
+                    self.invoiced = None;
+                    self.invoiced_for = Some(key);
+                }
+            }
+        }
+        let Some(key) = want else {
+            self.invoiced_for = None;
+            self.invoiced = None;
+            return self.invoiced_ticket.is_some();
+        };
+        if self.invoiced_ticket.is_none() && self.invoiced_for.as_ref() != Some(&key) {
+            let (kind, party, reference) = key.clone();
+            let ticket = worker.run(move |api: &mut Api| {
+                api.invoiced_against(kind, party, &reference)
+                    .map_err(|e| e.to_string())
+            });
+            self.invoiced_ticket = Some((key, ticket));
+        }
+        self.invoiced_ticket.is_some()
+    }
+
+    /// The invoice found, when the answer held is for exactly `key`.
+    pub(crate) fn invoiced_for(&self, key: &InvoicedKey) -> Option<&InvoicedAgainst> {
+        match &self.invoiced_for {
+            Some(held) if held == key => self.invoiced.as_ref(),
+            Some(_) | None => None,
+        }
     }
 
     /// The open bills, when the answer held is for exactly `ledger` on `date`.

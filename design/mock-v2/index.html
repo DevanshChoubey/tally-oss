@@ -387,6 +387,8 @@ mark{background:var(--accent-soft);color:var(--accent-ink);border-radius:2px;pad
  {"id":"sales-invoice.default","kind":"happy","hash":"screen=sales-invoice&state=default","title":"Sales invoice, intra-state","description":"F8 item invoice to a Maharashtra party: CGST + SGST recomputed live on every keystroke."},
  {"id":"sales-invoice.gst-inter-state","kind":"happy","hash":"screen=sales-invoice&state=gst-inter-state","title":"Sales invoice, inter-state","description":"Party in Gujarat: place of supply differs, so the engine applies IGST."},
  {"id":"sales-invoice.b2c","kind":"happy","hash":"screen=sales-invoice&state=b2c","title":"Sales invoice, unregistered buyer","description":"Cash sale to an unregistered buyer: B2C, no GSTIN, e-invoice not applicable."},
+ {"id":"sales-invoice.as-voucher","kind":"happy","hash":"screen=sales-invoice&state=as-voucher","title":"Sales invoice, as voucher","description":"Ctrl+H, As voucher: ledger lines with the CGST and SGST ledgers chosen; the engine fills the party and tax amounts."},
+ {"id":"sales-invoice.mode-list","kind":"happy","hash":"screen=sales-invoice&state=mode-list","title":"Sales invoice, change mode","description":"Ctrl+H opens the list of modes: Item Invoice, Accounting Invoice, As Voucher; Enter or a click picks one."},
  {"id":"sales-invoice.item-list","kind":"happy","hash":"screen=sales-invoice&state=item-list","title":"Sales invoice, item list open","description":"Type-ahead over item masters with HSN, rate, GST and stock; Alt+C creates a new item."},
  {"id":"sales-invoice.validation-error","kind":"validation-error","hash":"screen=sales-invoice&state=validation-error","title":"Sales invoice, validation errors","description":"Missing quantity and an unknown item block saving; each error says where and what to do."},
  {"id":"sales-invoice.period-locked","kind":"period-locked","hash":"screen=sales-invoice&state=period-locked","title":"Sales invoice, period locked","description":"Date falls on or before the lock date 31 Oct 2026: saving is blocked and the reason is shown."},
@@ -460,6 +462,11 @@ mark{background:var(--accent-soft);color:var(--accent-ink);border-radius:2px;pad
 {"id":"masters.create-item","kind":"happy","hash":"screen=masters&state=create-item","title":"Masters, new stock item","description":"The stock item form: name, alias, under, unit, valuation, HSN/SAC and batches; Save needs a unit."},
 {"id":"home.new-tab","kind":"happy","hash":"screen=home&state=default&tabs=2","title":"Home, new tab with a company open","description":"Ctrl+T with a company open opens Home in a second tab; the tab strip shows both, New tab and Close tab."},
 {"id":"profit-and-loss.print-error","kind":"error","hash":"screen=profit-and-loss&state=print-error","title":"Profit and loss, not printed","description":"The PDF could not be made from the engine answer; the reason is said in words, the report stays on screen and nothing is written."},
+{"id":"profit-and-loss.print-config","kind":"happy","hash":"screen=profit-and-loss&state=print-config","title":"Profit and loss, print settings","description":"The print preview with the settings changed: A5 paper, 2 copies, Pages to print and First page number set; the page and the facts beside it follow."},
+{"id":"profit-and-loss.print-range-error","kind":"validation-error","hash":"screen=profit-and-loss&state=print-range-error","title":"Profit and loss, pages to print past the end","description":"Pages to print names a page the document does not have; the settings are refused in words, the preview keeps the last good pages and nothing is written."},
+{"id":"sales-invoice.print-preview","kind":"happy","hash":"screen=sales-invoice&state=print-preview","title":"Sales invoice, print preview","description":"Ctrl+P on a saved invoice shows the tax invoice page as it will print, with the print settings and Save as PDF."},
+{"id":"day-book.print-preview","kind":"happy","hash":"screen=day-book&state=print-preview","title":"Day book, print preview","description":"Ctrl+P shows the day book as it will print: date, voucher type, number, particulars and amount, without the audit columns."},
+{"id":"journal.print-preview","kind":"happy","hash":"screen=journal&state=print-preview","title":"Journal, print preview","description":"Ctrl+P on a saved voucher without a tax invoice (journal, and likewise payment, receipt, contra and purchase) shows the voucher page: particulars with debit and credit, total and narration."},
 {"id":"gst.gstr1-failed","kind":"error","hash":"screen=gst&state=gstr1-failed","title":"GSTR-1, sections could not be built","description":"The engine could not build the GSTR-1 sections; the error is said in words and no table is shown."},
 {"id":"home.gst-unsupported","kind":"error","hash":"screen=home&state=gst-unsupported","title":"Home, GST tile not readable","description":"The GST cash payable tile says Needs GSTR-2B and not readable yet; no figure is shown."},
 {"id":"profit-and-loss.loading","kind":"loading","hash":"screen=profit-and-loss&state=loading","title":"Profit and loss, computing","description":"Report computing; Esc cancels; the last result is not shown as current."},
@@ -1350,8 +1357,55 @@ function invErrors(){const e=[];INV.lines.forEach((l,i)=>{if(!l.item&&l.text)e.p
   if(l.item&&!(l.qty>0))e.push([i,'qty',`Line ${i+1}: quantity is missing.`])});
   if(ddiff(INV.date,CO.lock)<=0)e.push([-1,'date',`Date ${fmtDate(INV.date)} is on or before the lock date ${fmtDate(CO.lock)}. Choose a later date with F2, or ask the owner to move the lock.`]);
   return e}
+/* Change mode (Ctrl+H on a sales or purchase invoice) opens a list of the modes in the order the sales help page names them:
+   Item Invoice, Accounting Invoice, As Voucher (help.tallysolutions.com/sales-of-goods-services/ and
+   help.tallysolutions.com/tally-prime/purchase-process/purchase-goods-and-services-tally/, read 2026-11-26). The pages say "Press Ctrl+H
+   (Change Mode) > select" a mode and do not describe the list itself; the list drawn here is our own look, with the current mode on
+   the highlighted row. */
+const MODES=[['Item invoice','Stock items, quantity and rate','default'],['Accounting invoice','Ledgers and amounts','accounting'],['As voucher','Dr and Cr ledger lines','as-voucher']];
+function modeList(cur){
+  const ta=$('#ta'),b=$('[data-cmd="mode"]');if(!ta||!b)return;
+  TA.inp=null;
+  ta.innerHTML=`<div class="cap">Change mode</div>`+MODES.map((m,i)=>`<div class="opt ${i===cur?'hi':''}" data-m="${i}"><span>${m[0]}</span><span class="s">${m[1]}</span></div>`).join('');
+  const r=b.getBoundingClientRect();ta.style.left=Math.max(8,Math.min(r.left,innerWidth-470))+'px';ta.style.top=(r.bottom+4)+'px';ta.classList.add('open');
+  $$('#ta .opt[data-m]').forEach(el=>el.onmousedown=ev=>{ev.preventDefault();modePick(+el.dataset.m)});
+}
+document.addEventListener('keydown',e=>{const ta=$('#ta');if(!ta||!ta.classList.contains('open')||!$('#ta .opt[data-m]'))return;
+  const opts=$$('#ta .opt[data-m]');let i=opts.findIndex(o=>o.classList.contains('hi'));
+  if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();e.stopPropagation();i=Math.max(0,Math.min(opts.length-1,i+(e.key==='ArrowDown'?1:-1)));opts.forEach((o,j)=>o.classList.toggle('hi',j===i))}
+  else if(e.key==='Enter'){e.preventDefault();e.stopPropagation();modePick(Math.max(0,i))}
+  else if(e.key==='Escape'){e.preventDefault();e.stopPropagation();taClose()}},true);
+function modePick(i){taClose();const m=MODES[i];if(m[2]==='accounting'){toast('Accounting invoice: not drawn in this mock.');return}go(hashFor('sales-invoice',m[2]==='default'?'default':m[2]))}
+/* as voucher (Ctrl+H, As Voucher, on a sales invoice). Lines as the user chose them: the party, the Sales ledger (taxable, 18%) and the two local
+   tax ledgers, the way the sales help pages describe selecting the party, the Sales ledger and the applicable GST ledgers
+   (help.tallysolutions.com/tally-prime/gst-regular-sales/gst-sales-tally/, read 2026-11-26). The engine gives every tax and party amount.
+   Hand check: lat16 25 x 3,850.00 = 96,250.00; noz6 67 x 505.00 = 33,835.00; taxable 1,30,085.00 on the Sales ledger; Nashik is in
+   Maharashtra (27) like the company, so CGST 9% = 11,707.65 and SGST 9% = 11,707.65; gross 1,53,500.30; round off -0.30; the party is
+   debited 1,53,500.00, the round-off ledger 0.30. The pages show By and To instead of Dr and Cr; ours says Dr and Cr, which the same pages
+   offer as an option. */
+function asVoucherSheet(){
+  const inv=computeInvoice([{item:'lat16',qty:25,rate:R(3850)},{item:'noz6',qty:67,rate:R(505)}],LED.sgt.st);const p=LED.sgt;
+  const rows=[['sgt','Dr',inv.total],['sales','Cr',inv.taxable],['cgstout','Cr',inv.cgst],['sgstout','Cr',inv.sgst],['roundoff','Dr',-inv.ro]];
+  const body=rows.map(([l,side,amt],i)=>`<tr class="${i===0?'active':''}"><td class="n">${i+1}</td><td>${esc(LED[l].name)}</td><td class="t2">${side}</td><td class="num">${inr(amt)} ${prov('eng','')}</td></tr>`).join('');
+  return `${phead([['Home',hashFor('home')],['Sales invoice']],`Sales invoice <span class="t2" style="font-weight:500">SI/0418</span>`,'As voucher mode · ledger lines · tax is recomputed by the GST engine on every keystroke',
+    `<button class="btn" data-cmd="mode" title="Change mode (Ctrl+H)">As voucher ${kb('Ctrl+H')}</button><button class="btn" data-cmd="more">More details ${kb('Ctrl+I')}</button><button class="btn primary" data-cmd="save">${ic('save')}Save ${kb('Ctrl+A')}</button>`)}
+  <div class="card vsheet" id="sheet"><div class="vhead">
+    <div class="fld"><label>Date ${kb('F2')}</label><div class="ro">21 Nov 2026</div></div>
+    <div class="fld span2"><label>Party</label><div class="ro">${esc(p.name)}</div></div>
+    <div class="fld"><label>Place of supply</label><div class="ro">${p.st} ${STATES[p.st]}</div></div>
+    <div class="fld"><label>Party GSTIN</label><div class="ro">${p.gstin} ${badge('Check OK','b-ok','check')}</div></div></div>
+   <table class="lines"><thead><tr><th class="n">#</th><th>Ledger</th><th style="width:60px">Dr / Cr</th><th class="num" style="width:170px">Amount</th></tr></thead><tbody>${body}
+    <tr><td class="n">${rows.length+1}</td><td><input placeholder="Next ledger, or Enter on empty to finish" aria-label="Ledger"></td><td></td><td></td></tr></tbody></table>
+   <div class="vfoot"><div class="stack"><div class="fld"><label>Narration</label><input value="Against PO SGT/PO/1131"></div>
+     <div class="meta">Pick the party, the Sales ledger and the tax ledgers for the supply: CGST and SGST here, IGST for another state. The engine fills the party and tax amounts; an amount typed on a tax line is replaced.</div></div>
+    <div><div class="taxbox"><div class="taxrow"><span class="lab">Taxable value</span><span class="num">${inr(inv.taxable)}</span></div>
+     <div class="taxrow"><span class="lab">CGST 9%</span><span class="num">${inr(inv.cgst)}</span></div><div class="taxrow"><span class="lab">SGST 9%</span><span class="num">${inr(inv.sgst)}</span></div>
+     <div class="taxrow"><span class="lab">Round off</span><span class="num">${inr(inv.ro)}</span></div>
+     <div class="taxrow tot"><span class="lab">Invoice total ${prov('eng','engine')}</span><span class="num">${inr(inv.total)}</span></div></div></div></div></div>`;
+}
 SCREENS['sales-invoice']={title:'Sales invoice',default:'default',
  render(st){
+  if(st==='as-voucher')return asVoucherSheet();
   const s=INV_SEED[st]||INV_SEED.default; INV={party:s.party,pos:null,date:s.date,no:s.no||'SI/0418',lines:s.lines.map(([item,qty,rate,text])=>({item,qty,rate,text:text||''})),st};
   if(INV.lines.length<4&&st!=='validation-error')INV.lines.push({item:null,qty:null,rate:null,text:''});
   const p=LED[INV.party]; const locked=ddiff(INV.date,CO.lock)<=0;
@@ -1366,12 +1420,12 @@ SCREENS['sales-invoice']={title:'Sales invoice',default:'default',
     <div class="fld"><label for="v-pos">Place of supply</label><input id="v-pos" class="flow" data-ta="pos" value="${p.st} ${STATES[p.st]}" autocomplete="off"></div>
     <div class="fld"><label>Party GSTIN</label><div class="ro" id="v-gstin">${p.gstin?`${p.gstin} ${gc.ok?badge('Check OK','b-ok','check'):badge('Invalid','b-bad','x')}`:'<span class="t2">Unregistered (B2C)</span>'}</div></div>
     <div class="fld"><label>Sales ledger</label><div class="ro">Sales</div></div>
-    <div class="fld"><label for="v-ref">Buyer's order no.</label><input id="v-ref" class="flow" value="${st==='default'?'SGT/PO/1131':''}"></div>
+    <div class="fld"><label for="v-ref">Buyer's order no.</label><input id="v-ref" class="flow" value="${st==='default'||st==='mode-list'?'SGT/PO/1131':''}"></div>
     <div class="fld"><label>e-Invoice</label><div class="ro" id="v-einv"></div></div>
    </div>
    <table class="lines" id="lines"><thead><tr><th class="n">#</th><th>Item</th><th style="width:70px">HSN</th><th style="width:90px" class="num">Qty</th><th style="width:60px">Unit</th><th style="width:120px" class="num">Rate</th><th style="width:60px" class="num">GST</th><th style="width:140px" class="num">Amount</th></tr></thead><tbody></tbody></table>
    <div class="vfoot"><div class="stack">
-     <div class="fld"><label for="v-narr">Narration ${kb('Alt+R')} <span class="meta">recalls the last one for this party</span></label><input id="v-narr" class="flow" value="${st==='default'||st==='save-confirm'?'Against PO SGT/PO/1131':''}"></div>
+     <div class="fld"><label for="v-narr">Narration ${kb('Alt+R')} <span class="meta">recalls the last one for this party</span></label><input id="v-narr" class="flow" value="${st==='default'||st==='save-confirm'||st==='mode-list'?'Against PO SGT/PO/1131':''}"></div>
      <div id="v-errs"></div><div class="pos" id="v-pos-note"></div>
      <div class="meta" id="v-after"></div></div>
     <div><div class="taxbox" id="taxbox"></div><div class="words" id="v-words"></div></div></div>
@@ -1379,6 +1433,7 @@ SCREENS['sales-invoice']={title:'Sales invoice',default:'default',
   </div>`;
  },
  mount(st){
+  if(st==='as-voucher'){const i=$('.lines tbody tr:last-child input');i&&i.focus();return}
   buildLines(); recalcInv(false);
   if(st==='saved'&&parseHash().toast!=='none'){const last=window.__lastInv||{party:'Shree Ganesh Traders',total:computeInvoice([{item:'lat16',qty:25,rate:R(3850)},{item:'noz6',qty:67,rate:R(505)},{item:'spr16',qty:40,rate:R(1450)}],'27').total};window.__lastInv=null;toast(`Saved SI/0418 · ${esc(last.party)} · ₹${inr(last.total)}`,true,FREEZE!=null)}
   const sheet=$('#sheet');
@@ -1408,15 +1463,16 @@ SCREENS['sales-invoice']={title:'Sales invoice',default:'default',
   else if(st==='saved'||st==='default'||st==='gst-inter-state'||st==='b2c'){const f=$$('#lines .li-item').find(x=>!x.value);(st==='saved'?$('#v-party'):f||$('#v-party')).focus()}
   else if(st==='save-confirm'){$('#savebar .btn.ok').focus()}
   TA.quiet=false;
+  if(st==='mode-list')modeList(0);
  },
  key(k,e,st){
   if(k==='Ctrl+A'||k==='Ctrl+S'){if(invErrors().length){recalcInv(false);toast('Cannot save yet: fix the items marked in red.');return true}window.__lastInv={party:LED[INV.party].name,total:invTotals().total};go(hashFor('sales-invoice','saved'),'toast-in');return true}
   if(st==='save-confirm'&&k==='Escape'){go(hashFor('sales-invoice','default'));return true}
   if(k==='Ctrl+I'){toast('More details: dispatch, e-way bill and buyer order fields open below the line.');return true}
-  if(k==='Ctrl+H'){toast('Ctrl+H switches between item invoice and accounting invoice.');return true}
+  if(k==='Ctrl+H'){modeList(st==='as-voucher'?2:0);return true}
   if(k==='Ctrl+D'){const r=document.activeElement&&document.activeElement.closest('tr[data-i]');if(r){INV.lines.splice(+r.dataset.i,1);buildLines();recalcInv(true)}return true}
   return false},
- cmd(c){if(c==='save'){go(hashFor('sales-invoice','saved'),'toast-in')}if(c==='nosave')go(hashFor('sales-invoice','default'));if(c==='more'||c==='mode')toast('Not drawn in this mock.')},
+ cmd(c,el,p){const st=p&&p.state;if(c==='save'){go(hashFor('sales-invoice','saved'),'toast-in')}if(c==='nosave')go(hashFor('sales-invoice','default'));if(c==='mode'){modeList(st==='as-voucher'?2:0);return}if(c==='more')toast('Not drawn in this mock.')},
  back(st){return st==='save-confirm'?hashFor('sales-invoice'):hashFor('home')},
  keys(st){return st==='save-confirm'?[['','Confirm save'],['Enter','Yes'],['Esc','No']]:[['','Sales invoice'],['Enter','Next field'],['Shift+Enter','Previous'],['↑ ↓','List'],['Alt+C','Create master'],['Ctrl+D','Delete line'],['Ctrl+A','Save'],['Esc','Back']]}
 };
@@ -2029,7 +2085,10 @@ const errNote = (lines) => `<div class="note bad" role="alert" style="margin:0 1
    moved to the recipient is where the movement ends; https://taxguru.in/goods-and-service-tax/section-10-igst-act-2017-place-supply-goods.html, read 2026-11-25). Supplier in 29, place of supply 27, so the supply is inter-State and the engine
    charges IGST, never CGST and SGST. The next purchase number in the sample is PB/0145 (highest posted PB/0144).
    Hand check: HDPE 10 x 2,050.00 = 20,500.00; valves 100 x 228.40 = 22,840.00; taxable 43,340.00;
-   IGST 18% = 7,801.20; gross 51,141.20; round off -0.20; invoice total 51,141.00. */
+   IGST 18% = 7,801.20; gross 51,141.20; round off -0.20; invoice total 51,141.00.
+   Eligible input credit: the Purchases ledger is marked eligible (CGST Act s.16(1); the accounting product marks a purchase ineligible with
+   "Is ineligible for input credit?", help.tallysolutions.com/docs/te9rel66/Tax_India/gst/gst_accounting_for_ineligible_itc.htm, read 2026-11-26),
+   so all of the IGST, 7,801.20, is eligible. It is the credit before the s.16(2) conditions (the bill in 2B, receipt, payment) are met. */
 const PURCH_LINES = [['hdpe32',10,R(2050)],['bv50',100,R(228.4)]];
 SCREENS.purchase = {title:'Purchase',default:'default',
  render(st){
@@ -2056,7 +2115,8 @@ SCREENS.purchase = {title:'Purchase',default:'default',
     <div><div class="taxbox"><div class="taxrow"><span class="lab">Taxable value</span><span class="num">${bad?'Not computed':inr(inv.taxable)}</span></div>
      <div class="taxrow"><span class="lab">IGST 18%</span><span class="num">${bad?'Not computed':inr(inv.igst)}</span></div>
      <div class="taxrow"><span class="lab">Round off</span><span class="num">${bad?'Not computed':inr(inv.ro)}</span></div>
-     <div class="taxrow tot"><span class="lab">Invoice total ${prov('eng','engine')}</span><span class="num">${bad?'Not computed':inr(inv.total)}</span></div></div></div></div>
+     <div class="taxrow tot"><span class="lab">Invoice total ${prov('eng','engine')}</span><span class="num">${bad?'Not computed':inr(inv.total)}</span></div></div>
+     <div class="meta" style="margin-top:6px">Input credit eligible before the 2B match ${prov('eng','engine')} <b>${bad?'Not computed':inr(inv.igst)}</b></div></div></div>
   </div>`;
  },
  mount(st){const i=$('.lines tbody tr.active input, .lines tbody tr input');i&&i.focus()},
@@ -2079,13 +2139,14 @@ SCREENS.purchase = {title:'Purchase',default:'default',
    18% = 738.00; total 4,838.00, round off 0.00.
    Validation (the app's refusal, crates/ledgerly-app/src/screens/item_invoice/draft.rs): a line whose item is chosen but whose quantity is
    blank is refused, "line 2: quantity: type a number", and the tax and total stay "Not computed". The engine has no rule that compares
-   a returned quantity with the invoiced quantity, so the mock shows none. */
+   a returned quantity with the invoiced quantity, so the mock shows none: it only tells the user what the original invoice carried
+   (SI/0412 of 14 Nov 2026 has 67 sets of the brass nozzle set; RP/5398 of 15 Oct 2026 has 58 coils of HDPE pipe, both read from the sample). */
 const NOTE_SEED = {
  credit:{default:{lines:[['noz6',10,R(505)]],narr:'Returned 10 sets, damaged in transit'},'validation-error':{lines:[['noz6',10,R(505)],['lat16',null,null]],narr:''}},
  debit:{default:{lines:[['hdpe32',2,R(2050)]],narr:'Returned 2 coils, cracked in transit'},'validation-error':{lines:[['hdpe32',2,R(2050)],['bv50',null,null]],narr:''}}};
 function noteScreen(kind){
- const cfg = kind==='credit'?{title:'Credit Note',no:'CN/0001',party:'sgt',bad:'Sales return',refLabel:'Against sales invoice',ref:'SI/0412',refDate:'14 Nov 2026',hint:'Credit note, CGST Act s.34(1): reduces the tax on an invoice already issued'}
-   : {title:'Debit Note',no:'DN/0001',party:'rupa',bad:'Purchase return',refLabel:'Against purchase bill',ref:'RP/5398',refDate:'15 Oct 2026',hint:'Debit note, purchase return: reduces what Godavari owes the supplier'};
+ const cfg = kind==='credit'?{title:'Credit Note',no:'CN/0001',party:'sgt',bad:'Sales return',refLabel:'Against sales invoice',ref:'SI/0412',refDate:'14 Nov 2026',invoiced:'67 set of Brass nozzle set (6 pc)',hint:'Credit note, CGST Act s.34(1): reduces the tax on an invoice already issued'}
+   : {title:'Debit Note',no:'DN/0001',party:'rupa',bad:'Purchase return',refLabel:'Against purchase bill',ref:'RP/5398',refDate:'15 Oct 2026',invoiced:'58 coil of HDPE pipe coil 32 mm',hint:'Debit note, purchase return: reduces what Godavari owes the supplier'};
  return {title:cfg.title,default:'default',
  render(st){
   const s = NOTE_SEED[kind][st]||NOTE_SEED[kind].default; const p=LED[cfg.party]; const bad = st==='validation-error';
@@ -2107,7 +2168,8 @@ function noteScreen(kind){
     <div class="fld"><label>${kind==='credit'?'Sales ledger':'Purchase ledger'}</label><div class="ro">${kind==='credit'?'Sales':'Purchases'}</div></div>`)}
    <table class="lines"><thead><tr><th class="n">#</th><th>Item</th><th style="width:70px">HSN</th><th class="num" style="width:90px">Qty</th><th class="num" style="width:120px">Rate</th><th class="num" style="width:60px">GST</th><th class="num" style="width:140px">Amount</th></tr></thead><tbody>${body}</tbody></table>
    <div class="vfoot"><div class="stack"><div class="fld"><label>Narration</label><input value="${esc(s.narr)}"></div>
-     ${errs.length?errNote(errs):''}<div class="meta">${meta}</div></div>
+     ${errs.length?errNote(errs):''}<div class="meta">${meta}</div>
+     <div class="meta">Invoiced on ${cfg.ref}, ${cfg.refDate}: ${cfg.invoiced} ${prov('eng','engine')}</div></div>
     <div><div class="taxbox"><div class="taxrow"><span class="lab">Taxable value</span><span class="num">${bad?'Not computed':inr(inv.taxable)}</span></div>
      ${kind==='credit'?`<div class="taxrow"><span class="lab">CGST 9%</span><span class="num">${bad?'Not computed':inr(inv.cgst)}</span></div><div class="taxrow"><span class="lab">SGST 9%</span><span class="num">${bad?'Not computed':inr(inv.sgst)}</span></div>`:`<div class="taxrow"><span class="lab">IGST 18%</span><span class="num">${bad?'Not computed':inr(inv.igst)}</span></div>`}
      <div class="taxrow tot"><span class="lab">Note total ${prov('eng','engine')}</span><span class="num">${bad?'Not computed':inr(inv.total)}</span></div></div></div></div>
@@ -2280,6 +2342,93 @@ function plScreen(){
  };
 }
 SCREENS['profit-and-loss'] = plScreen();
+
+/* ---------- print settings and the pages of other documents (card S16) ----------
+   Settings follow the help page "Configure for Print, Export, Share" (read 2026-11-26): number of
+   copies, Pages to Print (Number to start from first page, Page Range), and A5 paper. The paper size,
+   copies, page range and first page number are set on the card beside the page; nothing here is
+   drawn that the print engine cannot honour (no printer choice, no margins, no "Set Preview as
+   Default": the preview always opens, because paper printing is not built). */
+function printPanel(o){
+  const a5=o.size==='A5', err=o.err;
+  const tab=(n,sel)=>`<button data-cmd="paper" aria-selected="${sel}">${n}</button>`;
+  const field=(label,val,ph,bad,hint)=>`<div class="fld"><label>${label}</label><input class="${bad?'invalid':''}" value="${val}" placeholder="${ph||''}" aria-label="${label}" title="${hint||''}">${bad?`<div class="err">${ic('alert')}${bad}</div>`:''}</div>`;
+  return `<div class="card pad"><h2>Print preview</h2>
+   <div style="display:grid;gap:8px;margin:8px 0">
+    <div class="fld"><label>Paper</label><div class="tabs" style="margin:0;border:0">${tab('A4',!a5)}${tab('A5',a5)}</div></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">${field('Copies',o.copies,'',null,'In the PDF, one after another')}${field('First page number',o.first,'',null,'The next pages count up from it')}</div>
+    ${field('Pages to print',o.range,'All',err?'The pages to print ('+o.range+') select no page: the document has pages 1 to '+o.pages+'.':null,'Pages and ranges, such as 1, 3-5')}
+   </div>
+   <table class="t"><tbody><tr><td class="t2">Pages</td><td>${o.shown}</td></tr><tr><td class="t2">Destination</td><td>PDF file</td></tr></tbody></table>
+   <p class="meta">Paper printing is not built yet. The PDF is written to a folder you choose.</p>
+   <div class="actions"><button class="btn" data-cmd="update">Update preview ${kb('Enter')}</button><button class="btn primary" data-cmd="pdf">${ic('upload')}Save as PDF ${kb('Ctrl+P')}</button><button class="btn" data-go="${o.close}">Close ${kb('Esc')}</button></div></div>`;
+}
+function printLayout(paperHtml,panelOpts){
+  const a5=panelOpts.size==='A5';
+  return `<div style="display:grid;grid-template-columns:1fr 280px;gap:16px;align-items:start">
+   <div class="card" style="background:#fff;color:#1c1b19;padding:24px 32px;min-height:460px;${a5?'max-width:420px;font-size:11px;':''}">${a5?'<style>.a5 .t th,.a5 .t td{padding:6px 4px;font-size:11px}</style>':''}<div class="${a5?'a5':''}">${paperHtml}</div></div>${printPanel(panelOpts)}</div>`;
+}
+const PRINT_KEYS=[['','Print preview'],['Ctrl+P','Save as PDF'],['Esc','Close']];
+function paperHead(title,sub){return `<h2 style="margin:0;color:#1c1b19">${esc(CO.name)}</h2><div style="color:#4a4741">${title}${sub?', '+sub:''}</div>`}
+function ptable(heads,rows,aligns){return `<table class="t" style="color:#1c1b19;margin-top:14px"><thead><tr>${heads.map((h,i)=>`<th class="${aligns[i]==='r'?'num':''}">${h}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr class="${r.total?'total':''}">${r.c.map((c,i)=>`<td class="${aligns[i]==='r'?'num':''}">${c}</td>`).join('')}</tr>`).join('')}</tbody></table>`}
+const PRINT_DEFAULT={size:'A4',copies:1,range:'',first:1,pages:1,shown:1,err:false};
+function printPaperInvoice(){
+  const v=VCH['SI/0405'], p=LED[v.party], inv=computeInvoice(v.lines.map(([item,qty,rate])=>({item,qty,rate})),p.st);
+  const it0=ITEM[v.lines[0][0]];
+  const items=v.lines.map(([it,q,r],i)=>({c:[i+1,esc(ITEM[it].name),ITEM[it].hsn,q,ITEM[it].unit,inr(r),inr(q*r),ITEM[it].gst+'%',inr(q*r)]}));
+  const g=inv.rows[0], dot='.', pct=g.rate+'%';
+  const tax=[{c:[it0.hsn,inr(g.taxable),g.cgst?pct:dot,g.cgst?inr(g.cgst):dot,g.sgst?pct:dot,g.sgst?inr(g.sgst):dot,g.igst?pct:dot,g.igst?inr(g.igst):dot,inr((g.cgst||0)+(g.sgst||0)+(g.igst||0))]}];
+  const inWords='Rupees '+words(inv.total).replace(/ rupees only$/,'').split(/[ -]/).map(w=>w[0].toUpperCase()+w.slice(1)).join(' ')+' Only';
+  return `<h2 style="margin:0;color:#1c1b19">${esc(CO.name)}</h2><div style="color:#4a4741">Plot 14, Sample Industrial Estate, Pune, Maharashtra<br>GSTIN: ${CO.gstin}</div>`
+   +`<h2 style="margin:6px 0 0;color:#1c1b19">Tax Invoice</h2><div style="color:#4a4741">Invoice No: ${v.id}<br>Date: ${v.date}</div>`
+   +`<div style="margin-top:8px;color:#4a4741"><b>Bill to:</b><br>Name: ${esc(p.name)}<br>Address: ${p.city}, ${STATES[p.st]}<br>GSTIN: ${p.gstin||'Unregistered'}<br>Place of supply: ${p.st}-${STATES[p.st]}</div>`
+   +ptable(['#','Description','HSN/SAC','Qty','Unit','Rate','Taxable value','GST','Amount'],items,['l','l','l','r','l','r','r','r','r'])
+   +'<div style="margin-top:10px;font-weight:600">Tax summary</div>'
+   +ptable(['HSN/SAC','Taxable value','CGST rate','CGST','SGST rate','SGST','IGST rate','IGST','Total tax'],tax,['l','r','r','r','r','r','r','r','r'])
+   +`<div style="margin-top:12px;text-align:right">Taxable value ${inr(inv.taxable)}<br>Total tax ${inr((inv.cgst||0)+(inv.sgst||0)+(inv.igst||0))}<br>Round off ${inr(inv.ro)}<br><b>Grand total ${inr(inv.total)}</b></div><div style="margin-top:10px;font-weight:600">Amount in words</div><div style="color:#4a4741">${inWords}</div><div style="margin-top:10px;color:#4a4741">Goods once sold will not be taken back.</div>`;
+}
+function printPaperDayBook(){
+  const day=VOUCHERS.filter(v=>v.date==='20-11-2026');
+  const pp=v=>v.type==='Sales'?LED[v.party].name:LED[(v.type==='Purchase'?v.cr:v.dr)[0][0]].name;
+  const rows=day.map(v=>({c:[esc(pp(v)),v.date.replace(/-(\d\d)-/,(m,mo)=>'-'+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][+mo-1]+'-').replace(/^(.*)$/,'<span style="white-space:nowrap">$1</span>'),v.type,v.id,inr(vTotal(v))+' Dr',esc(v.narr||'')]}));
+  const tot=day.reduce((s,v)=>s+vTotal(v),0);
+  rows.push({total:1,c:['Total','','','',inr(tot)+' Dr','']});
+  return paperHead('Day Book','20-11-2026 to 20-11-2026')+ptable(['Particulars','Date','Voucher type','Voucher no.','Amount','Narration'],rows,['l','l','l','l','r','l']);
+}
+function printPaperJournal(){
+  const v=VOUCHERS.find(x=>x.id==='JV/0032'), amt=v.dr[0][1];
+  const rows=[{c:[esc(LED[v.dr[0][0]].name),inr(amt),'']},{c:[esc(LED[v.cr[0][0]].name),'',inr(amt)]},{total:1,c:['Total',inr(amt),inr(amt)]},{c:['Narration: '+esc(v.narr),'','']}];
+  return paperHead('Journal Voucher','')+`<div style="margin-top:8px;color:#4a4741">No. ${v.id}, dated ${v.date}</div>`+ptable(['Particulars','Debit','Credit'],rows,['l','r','r']);
+}
+function addPrintPreview(id,crumbs,title,sub,paper,sel){
+  const s=SCREENS[id], render=s.render, key=s.key, keys=s.keys, mount=s.mount;
+  s.render=function(st,p){ if(st!=='print-preview')return render.call(this,st,p);
+    return phead(crumbs,title,sub,'')+printLayout(paper(),{...PRINT_DEFAULT,close:hashFor(id)}); };
+  s.key=function(k,e,st,p){ if(st==='print-preview'){ if(k==='Escape'){go(hashFor(id));return true} if(k==='Ctrl+P'){go(hashFor(id));toast('PDF saved (mock).',true);return true} return false }
+    if(k==='Ctrl+P'&&sel){go(hashFor(id,'print-preview'));return true}
+    return key?key.call(this,k,e,st,p):false };
+  s.keys=function(st){ return st==='print-preview'?PRINT_KEYS:keys.call(this,st) };
+  s.mount=function(st,p){ if(st==='print-preview')return; if(mount)return mount.call(this,st,p) };
+}
+addPrintPreview('sales-invoice',[['Home',hashFor('home')],['Sales invoice']],'Sales invoice SI/0405','Saved · Lakshmi Farm Supplies · 6 Nov 2026',printPaperInvoice,false);
+addPrintPreview('day-book',[['Home',hashFor('home')],['Day book']],'Day book','20 Nov 2026 · F2 another date · Alt+F2 a period',printPaperDayBook,true);
+addPrintPreview('journal',[['Home',hashFor('home')],['Journal']],'Journal JV/0032','Saved · 20 Nov 2026',printPaperJournal,false);
+{ /* profit and loss: the settings states */
+  const pl=SCREENS['profit-and-loss'], render=pl.render, key=pl.key, keys=pl.keys;
+  pl.render=function(st,p){
+    if(st!=='print-config'&&st!=='print-range-error'&&st!=='print-preview')return render.call(this,st,p);
+    const base=render.call(this,'print-preview',p);
+    const cut=base.indexOf('<div style="display:grid;grid-template-columns:1fr 280px');
+    const head=base.slice(0,cut), table=/<table class="t"[^>]*id="pl"[\s\S]*?<\/table>/.exec(base)[0];
+    const paper=`<h2 style="margin:0;color:#1c1b19">${esc(CO.name)}</h2><div style="color:#4a4741">Profit and loss, 1 Apr to 20 Nov 2026</div><div style="margin-top:14px">${table.replace(/class="t"/,'class="t" style="color:#1c1b19"')}</div>`;
+    const o={...PRINT_DEFAULT,close:hashFor('profit-and-loss')};
+    if(st==='print-config')Object.assign(o,{size:'A5',copies:2,range:'1',first:1,shown:'1, in 2 copies'});
+    if(st==='print-range-error')Object.assign(o,{range:'5-6',err:true});
+    return head+printLayout(paper,o);
+  };
+  pl.key=function(k,e,st,p){ if((st==='print-config'||st==='print-range-error')&&k==='Escape'){go(hashFor('profit-and-loss'));return true} return key.call(this,k,e,st,p) };
+  pl.keys=function(st){ return (st==='print-config'||st==='print-range-error')?PRINT_KEYS:keys.call(this,st) };
+}
 
 /* trial balance. Rows are the sample company's ledgers with a balance (crates/ledgerly-sample/assets/godavari.toml),
    one per ledger, with the group names the engine uses ("Capital Account", "Duties & Taxes", ...). The sample has one

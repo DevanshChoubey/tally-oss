@@ -39,6 +39,8 @@ pub(super) struct Prompt {
     pub(super) discard: bool,
     /// "Save this invoice?" is showing.
     pub(super) save: bool,
+    /// The mode list is showing: Up, Down and Enter move in it and pick from it.
+    pub(super) modes: bool,
 }
 
 pub(super) fn read_keys(
@@ -60,6 +62,17 @@ pub(super) fn read_keys(
         }
         if prompt.save && consume_exact(i, Key::Enter, Modifiers::NONE) {
             out.push(KeyCmd::ConfirmSave);
+        }
+        if prompt.modes {
+            if consume_exact(i, Key::Enter, Modifiers::NONE) {
+                out.push(KeyCmd::ConfirmMode);
+            }
+            if i.consume_key(Modifiers::NONE, Key::ArrowDown) {
+                out.push(KeyCmd::PickDown);
+            }
+            if i.consume_key(Modifiers::NONE, Key::ArrowUp) {
+                out.push(KeyCmd::PickUp);
+            }
         }
         let mut save = false;
         for (modifiers, key) in SAVE_KEYS {
@@ -110,11 +123,14 @@ impl ItemInvoiceScreen {
     ) -> ScreenAction {
         match cmd {
             KeyCmd::Save | KeyCmd::ConfirmSave => self.save(masters),
+            KeyCmd::PickUp if self.mode_list.is_some() => self.step_mode_list(false),
+            KeyCmd::PickDown if self.mode_list.is_some() => self.step_mode_list(true),
             KeyCmd::PickUp => self.pick_index = self.pick_index.saturating_sub(1),
             KeyCmd::PickDown => {
                 let last = list_len.saturating_sub(1);
                 self.pick_index = self.pick_index.saturating_add(1).min(last);
             }
+            KeyCmd::ConfirmMode => self.pick_listed_mode(),
             KeyCmd::DiscardYes => {
                 if self.answer_discard(true) {
                     return ScreenAction::Pop;
@@ -124,7 +140,7 @@ impl ItemInvoiceScreen {
                 self.answer_discard(false);
             }
             KeyCmd::Create => self.begin_create(),
-            KeyCmd::ChangeMode => self.change_mode(),
+            KeyCmd::ChangeMode => self.open_mode_list(),
             KeyCmd::DeleteLine => self.delete_line(),
             KeyCmd::RecallNarration => self.recall_narration(),
             KeyCmd::ToggleDiscount => self.toggle_discount(),
@@ -132,6 +148,8 @@ impl ItemInvoiceScreen {
             KeyCmd::Escape => {
                 if self.confirm_discard {
                     self.confirm_discard = false;
+                } else if self.mode_list.is_some() {
+                    self.mode_list = None;
                 } else if self.create.is_some() {
                     self.cancel_create();
                 } else if self.confirming_save {

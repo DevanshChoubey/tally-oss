@@ -358,6 +358,7 @@ fn block_for_10000() -> GstBlock {
             ],
             round_off: Paise::ZERO,
         },
+        eligible_itc: None,
     }
 }
 

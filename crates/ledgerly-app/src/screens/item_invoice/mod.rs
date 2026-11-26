@@ -71,14 +71,14 @@ use crate::screens::voucher_entry::{
 use crate::shell::submit::CommandReply;
 use crate::ui::format;
 use crate::worker::Ticket;
-use ledgerly_api::PartyBill;
+use ledgerly_api::{EligibleItc, PartyBill};
 use ledgerly_core::format::amount_in_words;
 use ledgerly_core::{
     Date, Decimal, FinancialYear, LedgerId, MoneyError, Outcome, Paise, SignedAmount, StateCode,
     Unsupported, VoucherTypeId,
 };
 use ledgerly_model::{
-    BaseVoucherKind, Books, LedgerLine, Masters, NumberingMethod, StoredGst, Voucher,
+    BaseVoucherKind, Books, LedgerLine, Masters, NumberingMethod, StoredGst, Voucher, VoucherMode,
 };
 use std::collections::{BTreeMap, VecDeque};
 use std::str::FromStr;
@@ -191,6 +191,9 @@ pub enum InvoiceMode {
     /// Ledgers under Particulars with their amounts; no stock lines and no sales or purchase
     /// ledger field.
     Accounting,
+    /// Ledger lines as in accounting mode, but the user also picks the GST ledgers (CGST and SGST,
+    /// or IGST) and the engine fills the party line and every tax amount. Sales and purchase only.
+    AsVoucher,
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -369,6 +372,9 @@ pub struct GstBlock {
     pub ledger_lines: Vec<LedgerLine>,
     /// What is stored on the voucher.
     pub stored: StoredGst,
+    /// The input credit a purchase draft is eligible for, from the engine; `None` for any other
+    /// invoice.
+    pub eligible_itc: Option<Outcome<EligibleItc>>,
 }
 
 /// The engine's answer to a compute request.
@@ -398,6 +404,37 @@ pub enum GstStatus<'a> {
     Failed(&'a str),
 }
 
+/// The caption and value of the eligible-credit line for `block`; `None` when the engine gave
+/// none (not a purchase).
+pub(super) fn itc_line_text(block: &GstBlock) -> Option<(String, String)> {
+    let value = match block.eligible_itc.as_ref()? {
+        Outcome::Value(itc) if itc.not_claimable.is_zero() => format::amount(itc.eligible),
+        Outcome::Value(itc) => format!(
+            "{} ({} not claimable)",
+            format::amount(itc.eligible),
+            format::amount(itc.not_claimable)
+        ),
+        Outcome::Unsupported(u) => format!("Not computed: {}", u.reason),
+    };
+    Some((
+        "Input credit eligible before the 2B match".to_owned(),
+        value,
+    ))
+}
+
+/// The voucher with the engine's accounting lines and stored GST on it. An as-voucher entry is
+/// stored as an accounting invoice: the engine's lines are the whole voucher then, and the GST
+/// returns read that mode.
+pub(super) fn with_engine_lines(mut voucher: Voucher, block: &GstBlock) -> Voucher {
+    voucher.ledger_lines.clone_from(&block.ledger_lines);
+    voucher.gst = Some(block.stored.clone());
+    match voucher.mode {
+        VoucherMode::AsVoucher => voucher.mode = VoucherMode::AccountingInvoice,
+        VoucherMode::ItemInvoice | VoucherMode::AccountingInvoice => {}
+    }
+    voucher
+}
+
 /// Checks that a block describes `voucher` (same lines, party amount equals the invoice total).
 /// The engine's lines are the inventory lines of an item invoice and the particulars of an
 /// accounting invoice.
@@ -411,8 +448,18 @@ fn check_block(voucher: &Voucher, block: &GstBlock) -> Result<(), String> {
     } else {
         voucher.inventory_lines.iter().map(|l| l.amount).collect()
     };
-    let same_lines = block.lines.len() == typed.len()
-        && block.lines.iter().zip(&typed).all(|(b, v)| b.taxable == *v);
+    let same_lines = match voucher.mode {
+        // As voucher: the engine taxes the lines that are not GST ledgers, so its lines are some
+        // of the typed ones, in the typed order.
+        VoucherMode::AsVoucher => {
+            let mut rest = typed.iter();
+            block.lines.iter().all(|b| rest.any(|v| b.taxable == *v))
+        }
+        VoucherMode::ItemInvoice | VoucherMode::AccountingInvoice => {
+            block.lines.len() == typed.len()
+                && block.lines.iter().zip(&typed).all(|(b, v)| b.taxable == *v)
+        }
+    };
     if !same_lines {
         return Err(
             "the engine's lines do not match the invoice lines; nothing is shown".to_owned(),
@@ -520,7 +567,10 @@ enum KeyCmd {
     DiscardYes,
     DiscardNo,
     Create,
+    /// Ctrl+H: opens or closes the mode list.
     ChangeMode,
+    /// Enter in the open mode list.
+    ConfirmMode,
 }
 
 /// Whether the company maintains inventory.
@@ -582,6 +632,8 @@ pub struct ItemInvoiceScreen {
     more_open: bool,
     /// Whether the type-ahead list was asked for with an arrow key on a field with no text yet.
     list_open: bool,
+    /// The open mode list (Ctrl+H) and its highlighted row; `None` when it is closed.
+    mode_list: Option<usize>,
     /// What the worker told the screen for the title and the balance line.
     extras: extras::Extras,
     /// The company's own state, for the note under the head.
@@ -675,6 +727,7 @@ impl ItemInvoiceScreen {
             show_discount: false,
             more_open: false,
             list_open: false,
+            mode_list: None,
             extras: extras::Extras::default(),
             home_state: books.company.state,
             last_narration: None,
@@ -858,6 +911,74 @@ impl ItemInvoiceScreen {
         }
     }
 
+    /// The line under a purchase's tax box: its caption and the engine's eligible input credit,
+    /// or "Not computed" with the engine's reason. `None` unless the engine's answer for this
+    /// exact invoice is on screen and it is a purchase. The figure is the engine's; the screen
+    /// only formats it. It is the credit before the 2B match: the s.16(2) conditions cannot be
+    /// known on a draft.
+    #[must_use]
+    pub fn eligible_itc_line(&self, masters: &Masters) -> Option<(String, String)> {
+        let GstStatus::Computed(block) = self.gst_status(masters) else {
+            return None;
+        };
+        itc_line_text(block)
+    }
+
+    /// What a note's answer is asked for: its kind, the party and the reference typed. `None` for
+    /// an invoice, or a note without a party or a reference.
+    pub(super) fn invoiced_key(&self) -> Option<extras::InvoicedKey> {
+        let kind = match self.draft.kind {
+            InvoiceKind::CreditNote => BaseVoucherKind::CreditNote,
+            InvoiceKind::DebitNote => BaseVoucherKind::DebitNote,
+            InvoiceKind::Sales | InvoiceKind::Purchase => return None,
+        };
+        let reference = self.draft.reference_text.trim();
+        let party = self.draft.party?;
+        (!reference.is_empty()).then(|| (kind, party, reference.to_owned()))
+    }
+
+    /// The line a note shows about the invoice it is against: the invoice's number and date, then
+    /// the quantity invoiced of each item on the note (every item of the invoice while the note
+    /// has none yet). All of it is the engine's: the screen only words it. `None` until the engine
+    /// has found the invoice.
+    #[must_use]
+    pub fn invoiced_line(&self, masters: &Masters) -> Option<String> {
+        let key = self.invoiced_key()?;
+        let found = self.extras.invoiced_for(&key)?;
+        let amount = |q: &ledgerly_api::InvoicedLine| {
+            format!("{} {} of {}", q.qty.0.normalize(), q.unit_symbol, q.name)
+        };
+        let items: Vec<_> = self.draft.rows.iter().filter_map(|r| r.item).collect();
+        let parts: Vec<String> = if items.is_empty() {
+            found.lines.iter().map(amount).collect()
+        } else {
+            let mut seen = Vec::new();
+            let mut parts = Vec::new();
+            for item in items {
+                if seen.contains(&item) {
+                    continue;
+                }
+                seen.push(item);
+                if let Some(line) = found.lines.iter().find(|l| l.item == item) {
+                    parts.push(amount(line));
+                } else {
+                    let name = masters
+                        .stock_items
+                        .get(&item)
+                        .map_or("an item", |i| i.name.as_str());
+                    parts.push(format!("{name} is not on it"));
+                }
+            }
+            parts
+        };
+        let head = format!("Invoiced on {}, {}", found.number, format::date(found.date));
+        Some(if parts.is_empty() {
+            head
+        } else {
+            format!("{head}: {}", parts.join(", "))
+        })
+    }
+
     /// The invoice total in words, from the engine's total; `None` unless the engine's answer for
     /// this exact invoice is on screen.
     #[must_use]
@@ -910,10 +1031,7 @@ impl ItemInvoiceScreen {
                 return Err("Tax has not been computed for this invoice yet.".to_owned());
             }
         };
-        let mut final_voucher = voucher;
-        final_voucher.ledger_lines.clone_from(&block.ledger_lines);
-        final_voucher.gst = Some(block.stored.clone());
-        Ok(final_voucher)
+        Ok(with_engine_lines(voucher, block))
     }
 
     /// Ctrl+A: queues the voucher for the host when the engine's answer for this exact invoice is
@@ -1131,31 +1249,105 @@ impl ItemInvoiceScreen {
         self.fail(format!("Not saved: {reason}"));
     }
 
-    /// Ctrl+H: changes the mode between item invoice and accounting invoice. TallyPrime: "Press
-    /// Ctrl+H (Change Mode) > select" the mode (help.tallysolutions.com/sales-of-goods-services/,
-    /// read 2026-11-23); As Voucher is the third mode there and is not built here.
+    /// The modes Ctrl+H lists, in the order the accounting product's sales page names them: Item
+    /// Invoice, Accounting Invoice, As Voucher (help.tallysolutions.com/sales-of-goods-services/,
+    /// read 2026-11-26). As Voucher is offered on a sales or purchase invoice only: the engine
+    /// taxes an as-voucher entry for those, and a note keeps its two modes (product choice).
+    #[must_use]
+    pub fn mode_choices(&self) -> Vec<InvoiceMode> {
+        match self.draft.kind {
+            InvoiceKind::Sales | InvoiceKind::Purchase => vec![
+                InvoiceMode::Item,
+                InvoiceMode::Accounting,
+                InvoiceMode::AsVoucher,
+            ],
+            InvoiceKind::CreditNote | InvoiceKind::DebitNote => {
+                vec![InvoiceMode::Item, InvoiceMode::Accounting]
+            }
+        }
+    }
+
+    /// The highlighted row of the open mode list, or `None` when the list is closed.
+    #[must_use]
+    pub fn mode_list(&self) -> Option<usize> {
+        self.mode_list
+    }
+
+    /// Ctrl+H: opens the list of modes with the current mode highlighted, or closes it when it is
+    /// open. TallyPrime: "Press Ctrl+H (Change Mode) > select" the mode
+    /// (help.tallysolutions.com/sales-of-goods-services/ and
+    /// help.tallysolutions.com/tally-prime/purchase-process/purchase-goods-and-services-tally/,
+    /// read 2026-11-26). The pages do not describe the list; this is our own chooser.
+    pub fn open_mode_list(&mut self) {
+        if self.mode_list.is_some() {
+            self.mode_list = None;
+            return;
+        }
+        let at = self
+            .mode_choices()
+            .iter()
+            .position(|m| *m == self.draft.mode)
+            .unwrap_or(0);
+        self.mode_list = Some(at);
+        self.create = None;
+    }
+
+    /// Up and Down in the open mode list.
+    pub fn step_mode_list(&mut self, down: bool) {
+        let last = self.mode_choices().len().saturating_sub(1);
+        if let Some(at) = self.mode_list.as_mut() {
+            *at = if down {
+                at.saturating_add(1).min(last)
+            } else {
+                at.saturating_sub(1)
+            };
+        }
+    }
+
+    /// Enter in the open mode list: picks the highlighted mode.
+    pub fn pick_listed_mode(&mut self) {
+        let choices = self.mode_choices();
+        let picked = self.mode_list.and_then(|at| choices.get(at).copied());
+        if let Some(mode) = picked {
+            self.choose_mode(mode);
+        }
+    }
+
+    /// Picks `next` from the mode list and closes it.
     ///
     /// Product choices (the pages read are silent on them): the header is kept, each mode keeps
     /// its own lines so switching back brings them back, and the keyboard moves to the first line
     /// field of the new mode when it was on a field the new mode does not have. A company that does
-    /// not maintain inventory refuses the item mode: it has no stock items to pick.
-    pub fn change_mode(&mut self) {
-        let next = match self.draft.mode {
-            InvoiceMode::Item => InvoiceMode::Accounting,
-            InvoiceMode::Accounting => InvoiceMode::Item,
-        };
+    /// not maintain inventory refuses the item mode: it has no stock items to pick. A mode the
+    /// list does not offer for this kind of voucher is refused with the reason.
+    pub fn choose_mode(&mut self, next: InvoiceMode) {
+        self.mode_list = None;
+        if !self.mode_choices().contains(&next) {
+            return self.fail(
+                "As voucher is for sales and purchase invoices; a note has item and accounting mode."
+                    .to_owned(),
+            );
+        }
         if next == InvoiceMode::Item && self.stock == Stock::NotKept {
             return self.fail(
                 "Item invoice needs stock items: this company does not maintain inventory."
                     .to_owned(),
             );
         }
+        if next != self.draft.mode {
+            self.set_mode(next);
+        }
+    }
+
+    /// Makes `next` the mode: the header and each mode's lines stay, the keyboard moves to the
+    /// first line field when it was on a field the new mode does not have.
+    fn set_mode(&mut self, next: InvoiceMode) {
         self.draft.mode = next;
         self.pick_index = 0;
         self.confirming_save = false;
         self.create = None;
         let (moved, label) = match next {
-            InvoiceMode::Accounting => (
+            InvoiceMode::Accounting | InvoiceMode::AsVoucher => (
                 matches!(
                     self.focus,
                     Field::Account
@@ -1165,7 +1357,10 @@ impl ItemInvoiceScreen {
                         | Field::Discount(_)
                         | Field::Amount(_)
                 ),
-                "Accounting invoice",
+                match next {
+                    InvoiceMode::AsVoucher => "As voucher",
+                    InvoiceMode::Accounting | InvoiceMode::Item => "Accounting invoice",
+                },
             ),
             InvoiceMode::Item => (
                 matches!(self.focus, Field::Ledger(_) | Field::LedgerAmount(_)),
@@ -1174,7 +1369,7 @@ impl ItemInvoiceScreen {
         };
         if moved {
             self.focus = match next {
-                InvoiceMode::Accounting => Field::Ledger(0),
+                InvoiceMode::Accounting | InvoiceMode::AsVoucher => Field::Ledger(0),
                 InvoiceMode::Item => Field::Account,
             };
         }
