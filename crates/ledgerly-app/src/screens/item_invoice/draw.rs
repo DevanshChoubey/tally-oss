@@ -1517,9 +1517,8 @@ impl ItemInvoiceScreen {
                             name: "Amount",
                             hint: if on_it { "Amount" } else { "" },
                         };
-                        let engine_owns = cells
-                            .ledger
-                            .is_some_and(|l| is_gst_tax_ledger(masters, l));
+                        let engine_owns =
+                            cells.ledger.is_some_and(|l| is_gst_tax_ledger(masters, l));
                         let text = Some(shown.amount.clone())
                             .filter(|a| !a.is_empty() && (engine_owns || !on_it));
                         text_field_shown(ui, cx, &s, &mut cells.amount_text, CELL_NUM, text);

@@ -16,7 +16,6 @@
     reason = "test code: rule B2 lets tests unwrap and panic"
 )]
 
-
 use std::time::{Duration, Instant};
 
 use ledgerly_api::{Api, Command};
@@ -24,17 +23,16 @@ use ledgerly_app::screens::item_invoice::ItemInvoiceScreen;
 use ledgerly_app::worker::ApiWorker;
 use ledgerly_app::{AppCtx, Screen};
 use ledgerly_core::{
-    Clock, CompanyId, Decimal, FinancialYear, GroupId, Gstin, Hsn, LedgerId, Outcome, Paise,
-    Rate, SignedAmount, StateCode, StockItemId, UnitId, gstin_check_character,
+    Clock, CompanyId, Decimal, FinancialYear, GroupId, Gstin, Hsn, LedgerId, Outcome, Paise, Rate,
+    SignedAmount, StateCode, StockItemId, UnitId, gstin_check_character,
 };
 use ledgerly_model::seed_godowns::default_godowns;
 use ledgerly_model::seed_groups::reserved_groups;
 use ledgerly_model::seed_voucher_types::default_voucher_types;
 use ledgerly_model::{
     Address, BaseVoucherKind, Books, Company, EntityKind, Features, GstHistory, GstRegistration,
-    Ledger, Masters, NegativeStockPolicy, PartyDetails, RegistrationType,
-    ReservedGroup, StockItem, TaxDetails, TaxLedgerKind, Taxability, Unit, UnitKind,
-    ValuationMethod,
+    Ledger, Masters, NegativeStockPolicy, PartyDetails, RegistrationType, ReservedGroup, StockItem,
+    TaxDetails, TaxLedgerKind, Taxability, Unit, UnitKind, ValuationMethod,
 };
 use time::OffsetDateTime;
 use time::macros::date;
@@ -325,13 +323,18 @@ fn every_invalid_line_is_named_in_the_error() {
         screen.error_text(),
         Some("Line 2: quantity: type a number.")
     );
-    screen.draft_mut().rows.push(ledgerly_app::screens::item_invoice::InvoiceRow {
-        item_text: "Drip kit".to_owned(),
-        ..Default::default()
-    });
+    screen
+        .draft_mut()
+        .rows
+        .push(ledgerly_app::screens::item_invoice::InvoiceRow {
+            item_text: "Drip kit".to_owned(),
+            ..Default::default()
+        });
     screen.save(masters);
     assert_eq!(
         screen.error_text(),
-        Some("2 things to fix before saving\nLine 2: quantity: type a number.\nLine 3: choose an item.")
+        Some(
+            "2 things to fix before saving\nLine 2: quantity: type a number.\nLine 3: choose an item."
+        )
     );
 }

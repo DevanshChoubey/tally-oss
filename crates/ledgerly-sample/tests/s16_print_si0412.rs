@@ -71,6 +71,9 @@ fn si_0412_prints_with_one_tax_row_per_hsn_code() {
         "1,30,085.00",
         "1,53,500.00",
     ] {
-        assert!(t.iter().any(|s| s.contains(want)), "{want} not printed in {t:?}");
+        assert!(
+            t.iter().any(|s| s.contains(want)),
+            "{want} not printed in {t:?}"
+        );
     }
 }

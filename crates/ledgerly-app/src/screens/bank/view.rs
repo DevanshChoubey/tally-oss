@@ -997,8 +997,9 @@ mod a11y_names {
         // wraps onto two or more lines and the row is taller than the usual 34 points.
         let ctx = egui::Context::default();
         let row = BrsRow {
-            label: "12 Nov 2026 \u{b7} PY/0321 \u{b7} Kaveri Packaging Pvt Ltd \u{b7} cheque 004512"
-                .to_owned(),
+            label:
+                "12 Nov 2026 \u{b7} PY/0321 \u{b7} Kaveri Packaging Pvt Ltd \u{b7} cheque 004512"
+                    .to_owned(),
             amount: ledgerly_core::Paise::new(1_250_000),
             kind: BrsRowKind::Item,
         };

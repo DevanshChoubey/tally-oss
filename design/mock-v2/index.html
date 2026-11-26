@@ -2377,8 +2377,8 @@ function printPaperInvoice(){
   const items=v.lines.map(([it,q,r],i)=>({c:[i+1,esc(ITEM[it].name),ITEM[it].hsn,q,ITEM[it].unit,inr(r),inr(q*r),ITEM[it].gst+'%',inr(q*r)]}));
   /* the tax summary has one row for each HSN code (the stored tax lines carry none, so the printer groups the item lines and the engine taxes each group) */
   const dot='.', hsns=[...new Set(v.lines.map(l=>ITEM[l[0]].hsn))];
-  const tax=hsns.map(h=>{const g=computeInvoice(v.lines.filter(l=>ITEM[l[0]].hsn===h).map(([item,qty,rate])=>({item,qty,rate})),p.st).rows[0], pct=g.rate+'%';
-    return {c:[h,inr(g.taxable),g.cgst?pct:dot,g.cgst?inr(g.cgst):dot,g.sgst?pct:dot,g.sgst?inr(g.sgst):dot,g.igst?pct:dot,g.igst?inr(g.igst):dot,inr((g.cgst||0)+(g.sgst||0)+(g.igst||0))]}});
+  const tax=hsns.map(h=>{const g=computeInvoice(v.lines.filter(l=>ITEM[l[0]].hsn===h).map(([item,qty,rate])=>({item,qty,rate})),p.st).rows[0], pct=g.rate+'%', half=(g.rate/2)+'%';
+    return {c:[h,inr(g.taxable),g.cgst?half:dot,g.cgst?inr(g.cgst):dot,g.sgst?half:dot,g.sgst?inr(g.sgst):dot,g.igst?pct:dot,g.igst?inr(g.igst):dot,inr((g.cgst||0)+(g.sgst||0)+(g.igst||0))]}});
   const inWords='Rupees '+words(inv.total).replace(/ rupees only$/,'').split(/[ -]/).map(w=>w[0].toUpperCase()+w.slice(1)).join(' ')+' Only';
   return `<h2 style="margin:0;color:#1c1b19">${esc(CO.name)}</h2><div style="color:#4a4741">Plot 14, Sample Industrial Estate, Pune, Maharashtra<br>GSTIN: ${CO.gstin}</div>`
    +`<h2 style="margin:6px 0 0;color:#1c1b19">Tax Invoice</h2><div style="color:#4a4741">Invoice No: ${v.id}<br>Date: ${v.date}</div>`

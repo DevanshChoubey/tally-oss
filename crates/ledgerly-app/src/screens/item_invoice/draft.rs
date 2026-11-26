@@ -412,13 +412,12 @@ impl InvoiceDraft {
                 .enumerate()
                 .filter(|(_, row)| !row.is_blank())
                 .filter_map(|(i, row)| {
-                    self.particular_problem(masters, i, row)
-                        .map(|reason| {
-                            sentence(&InvoiceError::Line {
-                                line: i.saturating_add(1),
-                                reason,
-                            })
+                    self.particular_problem(masters, i, row).map(|reason| {
+                        sentence(&InvoiceError::Line {
+                            line: i.saturating_add(1),
+                            reason,
                         })
+                    })
                 })
                 .collect(),
         }
@@ -549,7 +548,9 @@ impl InvoiceDraft {
                     reason: format!("amount: {reason}"),
                 })?
             };
-            let ledger = row.ledger.ok_or(InvoiceError::Missing { field: "a ledger" })?;
+            let ledger = row
+                .ledger
+                .ok_or(InvoiceError::Missing { field: "a ledger" })?;
             lines.push(LedgerLine {
                 ledger,
                 amount: SignedAmount { amount, side },
