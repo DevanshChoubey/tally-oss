@@ -176,10 +176,12 @@ pub(super) fn top_bar(
                 .color(t.text),
         );
         ui.add_space(6.0);
-        cmds.extend(left_chips(ui, ctx, today, setting_up));
-        let left_end = ui.cursor().min.x;
-        // The right side first, from the right edge, so the search chip can take what is left.
+        // The right side first, from the right edge, so the left chips and the search chip can
+        // take what is left without running under it.
         let right = right_items(ui, ctx, theme, t, &mut cmds, full);
+        let limit = right - 2.0 * GAP - chip::SEARCH_MIN_WIDTH;
+        cmds.extend(left_chips(ui, ctx, today, setting_up, limit));
+        let left_end = ui.cursor().min.x;
         let room = (right - left_end - 2.0 * GAP).max(0.0);
         let width = room.min(SEARCH_MAX_WIDTH);
         // `margin:0 auto`: centred in the free space between the two sides.
@@ -212,8 +214,17 @@ pub(super) fn top_bar(
     cmds
 }
 
-/// The company, date and lock chips.
-fn left_chips(ui: &mut Ui, ctx: &AppCtx, today: Date, setting_up: bool) -> Vec<ChromeCmd> {
+/// The company, date and lock chips. On a narrow window the ones that would end past `limit`
+/// are left out, the lock chip first and then the date chip, so no chip runs under the search
+/// chip or the right side (S22). The company chip always shows.
+#[allow(clippy::float_arithmetic, reason = "adding chip widths")]
+fn left_chips(
+    ui: &mut Ui,
+    ctx: &AppCtx,
+    today: Date,
+    setting_up: bool,
+    limit: f32,
+) -> Vec<ChromeCmd> {
     let mut cmds = Vec::new();
     if setting_up {
         // The first run (`index.html:896`): one chip, with no key, no date and no lock.
@@ -243,12 +254,6 @@ fn left_chips(ui: &mut Ui, ctx: &AppCtx, today: Date, setting_up: bool) -> Vec<C
             ..Chip::default()
         },
     };
-    if chip::chip_parts(ui, company)
-        .on_hover_text(ctx.tr.t("topbar.switch_company_hover"))
-        .clicked()
-    {
-        cmds.push(ChromeCmd::Say(ctx.tr.t("topbar.switch_company_missing")));
-    }
     let date = date_chip(today, &ctx.tr);
     let date_parts = Chip {
         icon: Some(Icon::Cal),
@@ -256,22 +261,33 @@ fn left_chips(ui: &mut Ui, ctx: &AppCtx, today: Date, setting_up: bool) -> Vec<C
         key: Some("F2"),
         ..Chip::default()
     };
-    if chip::chip_parts(ui, date_parts)
-        .on_hover_text(ctx.tr.t("topbar.date_hover"))
+    let lock = lock_chip(ctx.lock_date, &ctx.tr);
+    let lock_parts = lock.as_deref().map(|text| Chip {
+        icon: Some(Icon::Lock),
+        text,
+        ..Chip::default()
+    });
+    let start = ui.cursor().min.x;
+    let company_end = start + chip::chip_width(ui, company);
+    let date_end = company_end + GAP + chip::chip_width(ui, date_parts);
+    let lock_end = lock_parts.map(|l| date_end + GAP + chip::chip_width(ui, l));
+    let show_date = date_end <= limit;
+    let show_lock = show_date && lock_end.is_some_and(|end| end <= limit);
+    if chip::chip_parts(ui, company)
+        .on_hover_text(ctx.tr.t("topbar.switch_company_hover"))
         .clicked()
+    {
+        cmds.push(ChromeCmd::Say(ctx.tr.t("topbar.switch_company_missing")));
+    }
+    if show_date
+        && chip::chip_parts(ui, date_parts)
+            .on_hover_text(ctx.tr.t("topbar.date_hover"))
+            .clicked()
     {
         cmds.push(ChromeCmd::Say(ctx.tr.t("topbar.date_missing")));
     }
-    if let Some(text) = lock_chip(ctx.lock_date, &ctx.tr) {
-        chip::chip_parts(
-            ui,
-            Chip {
-                icon: Some(Icon::Lock),
-                text: text.as_str(),
-                ..Chip::default()
-            },
-        )
-        .on_hover_text(ctx.tr.t("topbar.lock_hover"));
+    if let Some(parts) = lock_parts.filter(|_| show_lock) {
+        chip::chip_parts(ui, parts).on_hover_text(ctx.tr.t("topbar.lock_hover"));
     }
     cmds
 }
@@ -286,54 +302,53 @@ fn right_items(
     cmds: &mut Vec<ChromeCmd>,
     full: Rect,
 ) -> f32 {
-    ui.scope_builder(
+    // A child that does not move the bar's cursor: the left chips are drawn after it.
+    let mut child = ui.new_child(
         egui::UiBuilder::new()
             .max_rect(full)
             .layout(Layout::right_to_left(Align::Center)),
-        |ui| {
-            ui.spacing_mut().item_spacing.x = GAP;
-            if chip::icon_button(ui, Icon::Kbd, &ctx.tr.t("topbar.keymap_hover")).clicked() {
-                cmds.push(ChromeCmd::OpenOnTop(PaletteTarget::Report(
-                    KEYS_KEY.to_owned(),
-                )));
-            }
-            let theme_icon = match theme {
-                ThemeKind::Light => Icon::Sun,
-                ThemeKind::Dark | ThemeKind::HighContrast => Icon::Contrast,
-            };
-            if chip::icon_button(
-                ui,
-                theme_icon,
-                &ctx.tr.tf(
-                    "topbar.theme_hover",
-                    &[("theme", &theme_name(theme, &ctx.tr))],
-                ),
-            )
-            .clicked()
-            {
-                cmds.push(ChromeCmd::CycleTheme);
-            }
-            let tier = crate::release::effective_tier(ctx.ai_tier);
-            let (icon, tint) = ai_look(tier, t);
-            let words = ai_chip(tier, &ctx.tr);
-            if chip::chip_parts(
-                ui,
-                Chip {
-                    icon: Some(icon),
-                    text: words.as_str(),
-                    tint: Some(tint),
-                    ..Chip::default()
-                },
-            )
-            .on_hover_text(ctx.tr.t("topbar.ai_privacy_hover"))
-            .clicked()
-            {
-                cmds.push(ChromeCmd::OpenOnTop(PaletteTarget::Report(
-                    AI_SETTINGS_KEY.to_owned(),
-                )));
-            }
-            ui.min_rect().min.x
+    );
+    let ui = &mut child;
+    ui.spacing_mut().item_spacing.x = GAP;
+    if chip::icon_button(ui, Icon::Kbd, &ctx.tr.t("topbar.keymap_hover")).clicked() {
+        cmds.push(ChromeCmd::OpenOnTop(PaletteTarget::Report(
+            KEYS_KEY.to_owned(),
+        )));
+    }
+    let theme_icon = match theme {
+        ThemeKind::Light => Icon::Sun,
+        ThemeKind::Dark | ThemeKind::HighContrast => Icon::Contrast,
+    };
+    if chip::icon_button(
+        ui,
+        theme_icon,
+        &ctx.tr.tf(
+            "topbar.theme_hover",
+            &[("theme", &theme_name(theme, &ctx.tr))],
+        ),
+    )
+    .clicked()
+    {
+        cmds.push(ChromeCmd::CycleTheme);
+    }
+    let tier = crate::release::effective_tier(ctx.ai_tier);
+    let (icon, tint) = ai_look(tier, t);
+    let words = ai_chip(tier, &ctx.tr);
+    if chip::chip_parts(
+        ui,
+        Chip {
+            icon: Some(icon),
+            text: words.as_str(),
+            tint: Some(tint),
+            ..Chip::default()
         },
     )
-    .inner
+    .on_hover_text(ctx.tr.t("topbar.ai_privacy_hover"))
+    .clicked()
+    {
+        cmds.push(ChromeCmd::OpenOnTop(PaletteTarget::Report(
+            AI_SETTINGS_KEY.to_owned(),
+        )));
+    }
+    ui.min_rect().min.x
 }
