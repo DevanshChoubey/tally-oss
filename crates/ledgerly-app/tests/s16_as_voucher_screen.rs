@@ -1,11 +1,13 @@
-//! S16: the sales invoice entered as a voucher (Ctrl+Shift+H, "As voucher"): ledger lines with the
-//! tax ledgers chosen by the user; the engine gives the party line and every tax amount.
+//! S16: the sales invoice entered as a voucher (Ctrl+H, then "As voucher" in the list): ledger
+//! lines with the tax ledgers chosen by the user; the engine gives the party line and every tax
+//! amount.
 //!
 //! The accounting product's pages say: "Press Ctrl+H (Change mode) > select As Voucher"
 //! (help.tallysolutions.com/sales-of-goods-services/, read 2026-11-26) and that the GST ledgers
 //! are selected on the voucher (help.tallysolutions.com/tally-prime/gst-regular-sales/gst-sales-tally/,
-//! read 2026-11-26). Product choice, not documented: Ctrl+H keeps toggling item and accounting
-//! mode, and As voucher is Ctrl+Shift+H; the two ledger-line modes share their lines.
+//! read 2026-11-26). The list Ctrl+H opens names Item Invoice, Accounting Invoice and As Voucher in
+//! that order (the sales page); a note is offered the first two only (product choice, as is the two
+//! ledger-line modes sharing their lines).
 //!
 //! Every expected value is derived by hand and the derivation is written next to it.
 #![allow(
@@ -214,27 +216,61 @@ fn fill_voucher(s: &mut ItemInvoiceScreen, books: &Books) {
     }
 }
 
+/// Ctrl+H, then the row for `mode` with Down and Enter: what the user does with the keys.
+fn choose(s: &mut ItemInvoiceScreen, mode: InvoiceMode) {
+    s.open_mode_list();
+    let row = s.mode_choices().iter().position(|m| *m == mode).unwrap();
+    while s.mode_list() != Some(row) {
+        s.step_mode_list(s.mode_list().unwrap() < row);
+    }
+    s.pick_listed_mode();
+}
+
 #[test]
-fn ctrl_shift_h_switches_to_as_voucher_and_back() {
+fn the_mode_list_names_the_three_modes_in_the_order_the_sales_page_gives() {
+    // provenance: help.tallysolutions.com/sales-of-goods-services/ (read 2026-11-26) names the
+    // modes Item Invoice, Accounting Invoice, As Voucher, in that order. A sales and a purchase
+    // invoice offer all three; the list opens on the current mode.
+    let (_api, books) = setup("s16_vch_list.ledgerly");
+    let mut s = open(&books);
+    assert_eq!(
+        s.mode_choices(),
+        vec![
+            InvoiceMode::Item,
+            InvoiceMode::Accounting,
+            InvoiceMode::AsVoucher
+        ]
+    );
+    s.open_mode_list();
+    assert_eq!(
+        s.mode_list(),
+        Some(1),
+        "the screen opens in accounting mode"
+    );
+}
+
+#[test]
+fn picking_as_voucher_in_the_mode_list_switches_and_picking_accounting_goes_back() {
     // provenance: help.tallysolutions.com/sales-of-goods-services/ (Change mode, select As
-    // Voucher). Derived: from accounting mode one switch gives as voucher with the same party; a
-    // second goes back to accounting; the subtitle names the mode.
+    // Voucher). Derived: from accounting mode picking As Voucher gives as voucher with the same
+    // party; picking Accounting Invoice goes back; the subtitle names the mode.
     let (_api, books) = setup("s16_vch_toggle.ledgerly");
     let mut s = open(&books);
     s.set_party_text("sharma");
     s.submit(&books.masters);
     let party = s.draft().party;
-    s.toggle_as_voucher();
+    choose(&mut s, InvoiceMode::AsVoucher);
     assert_eq!(s.mode(), InvoiceMode::AsVoucher, "{:?}", s.error_text());
     assert_eq!(s.draft().party, party);
     assert!(s.subtitle().unwrap().starts_with("As voucher"));
-    s.toggle_as_voucher();
+    choose(&mut s, InvoiceMode::Accounting);
     assert_eq!(s.mode(), InvoiceMode::Accounting);
 }
 
 #[test]
-fn ctrl_shift_h_on_the_screen_is_the_same_switch() {
-    // provenance: derived. One Ctrl+Shift+H press reaches as voucher; a plain Ctrl+H does not.
+fn ctrl_h_down_enter_on_the_screen_reaches_as_voucher() {
+    // provenance: derived. Ctrl+H opens the list on the current row (Accounting invoice, row 1);
+    // Down moves to row 2 (As voucher); Enter picks it. Ctrl+H alone changes no mode.
     let (_api, books) = setup("s16_vch_key.ledgerly");
     let mut s = open(&books);
     let mut app = AppCtx {
@@ -244,21 +280,27 @@ fn ctrl_shift_h_on_the_screen_is_the_same_switch() {
         ai_tier: None,
     };
     let ctx = egui::Context::default();
-    let press = |shift: bool| RawInput {
+    let press = |key: Key, modifiers: Modifiers| RawInput {
         events: vec![Event::Key {
-            key: Key::H,
+            key,
             physical_key: None,
             pressed: true,
             repeat: false,
-            modifiers: Modifiers {
-                shift,
-                ..Modifiers::COMMAND
-            },
+            modifiers,
         }],
         ..RawInput::default()
     };
     frames(&mut s, &mut app, &ctx, RawInput::default());
-    frames(&mut s, &mut app, &ctx, press(true));
+    frames(&mut s, &mut app, &ctx, press(Key::H, Modifiers::COMMAND));
+    assert_eq!(s.mode(), InvoiceMode::Accounting);
+    assert_eq!(s.mode_list(), Some(1));
+    frames(
+        &mut s,
+        &mut app,
+        &ctx,
+        press(Key::ArrowDown, Modifiers::NONE),
+    );
+    frames(&mut s, &mut app, &ctx, press(Key::Enter, Modifiers::NONE));
     assert_eq!(s.mode(), InvoiceMode::AsVoucher);
 }
 
@@ -269,7 +311,7 @@ fn as_voucher_hands_the_engine_the_lines_the_user_chose() {
     // (no amount typed; the engine fills them).
     let (_api, books) = setup("s16_vch_build.ledgerly");
     let mut s = open(&books);
-    s.toggle_as_voucher();
+    choose(&mut s, InvoiceMode::AsVoucher);
     fill_voucher(&mut s, &books);
     let v = s.take_compute_request(&books.masters).unwrap();
     assert_eq!(v.mode, VoucherMode::AsVoucher);
@@ -299,7 +341,7 @@ fn as_voucher_is_taxed_by_the_engine_and_saved_as_an_accounting_invoice() {
     // GST returns read that mode): party Dr 11,800.00, Output CGST Cr 900.00, Output SGST Cr 900.00.
     let (api, books) = setup("s16_vch_save.ledgerly");
     let mut s = open(&books);
-    s.toggle_as_voucher();
+    choose(&mut s, InvoiceMode::AsVoucher);
     fill_voucher(&mut s, &books);
     let mut app = AppCtx {
         books: Some(books.clone()),
@@ -364,7 +406,7 @@ fn a_missing_tax_ledger_shows_the_engine_s_reason_and_does_not_save() {
     let (api, books) = setup("s16_vch_mismatch.ledgerly");
     let m = &books.masters;
     let mut s = open(&books);
-    s.toggle_as_voucher();
+    choose(&mut s, InvoiceMode::AsVoucher);
     fill_voucher(&mut s, &books);
     s.set_particular_text(2, "");
     "".clone_into(&mut s.draft_mut().particulars.get_mut(2).unwrap().amount_text);

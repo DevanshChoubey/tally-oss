@@ -1,10 +1,10 @@
-//! Wave 2 S-B: Ctrl+H changes the invoice's mode between item invoice and accounting invoice.
+//! Wave 2 S-B: Ctrl+H opens the list of modes and picking one changes the invoice's mode.
 //!
 //! TallyPrime: "Press Ctrl+H (Change Mode) > select" the mode; the modes named are Item
 //! Invoice, Accounting Invoice and As Voucher (help.tallysolutions.com/sales-of-goods-services/,
-//! read 2026-11-23). The mock's invoice has an "Item invoice Ctrl+H" button, and its Ctrl+H
-//! "switches between item invoice and accounting invoice" (design/mock-v2/index.html, the
-//! `sales-invoice` screen). As Voucher is not built, so Ctrl+H switches between the two.
+//! read 2026-11-23, again 2026-11-26). The mock's invoice has an "Item invoice Ctrl+H" button, and
+//! its Ctrl+H opens the list of modes (design/mock-v2/index.html, `sales-invoice.mode-list`);
+//! picking Item invoice or Accounting invoice in it is what these tests do.
 //!
 //! Product choices, not documented by the pages read (they are silent on what a mode change
 //! does to details already entered): the header (date, party, place, reference, narration) is
@@ -138,7 +138,7 @@ fn switching_to_accounting_keeps_the_header_and_goes_to_the_first_particular() {
     "27".clone_into(&mut s.draft_mut().place_text);
     s.submit(m);
     assert_eq!(s.focus(), Field::Account, "{:?}", s.error_text());
-    s.change_mode();
+    choose(&mut s, InvoiceMode::Accounting);
     assert_eq!(s.mode(), InvoiceMode::Accounting);
     assert_eq!(s.draft().party, party);
     assert_eq!(s.focus(), Field::Ledger(0));
@@ -154,9 +154,9 @@ fn switching_back_brings_back_the_particulars_typed_before() {
     let mut s = open(&books, InvoiceMode::Accounting);
     s.set_particular_text(0, "service");
     "500".clone_into(&mut s.draft_mut().particulars.get_mut(0).unwrap().amount_text);
-    s.change_mode();
+    choose(&mut s, InvoiceMode::Item);
     assert_eq!(s.mode(), InvoiceMode::Item);
-    s.change_mode();
+    choose(&mut s, InvoiceMode::Accounting);
     assert_eq!(s.mode(), InvoiceMode::Accounting);
     let row = s.draft().particulars.first().unwrap();
     assert_eq!(row.ledger_text, "service");
@@ -169,7 +169,7 @@ fn a_company_without_inventory_refuses_the_item_mode_and_says_why() {
     // screen shows an error naming inventory.
     let books = setup("w2_mode_no_inv.ledgerly", false);
     let mut s = open(&books, InvoiceMode::Accounting);
-    s.change_mode();
+    choose(&mut s, InvoiceMode::Item);
     assert_eq!(s.mode(), InvoiceMode::Accounting);
     assert!(
         s.error_text().unwrap().contains("inventory"),
@@ -178,24 +178,41 @@ fn a_company_without_inventory_refuses_the_item_mode_and_says_why() {
     );
 }
 
-fn ctrl_h() -> RawInput {
+/// Ctrl+H, then the row for `mode` in the list that opens: what the user does with the keys.
+fn choose(s: &mut ItemInvoiceScreen, mode: InvoiceMode) {
+    s.open_mode_list();
+    let row = s.mode_choices().iter().position(|m| *m == mode).unwrap();
+    while s.mode_list() != Some(row) {
+        s.step_mode_list(s.mode_list().unwrap() < row);
+    }
+    s.pick_listed_mode();
+}
+
+fn press(key: Key, modifiers: Modifiers) -> RawInput {
     RawInput {
         events: vec![Event::Key {
-            key: Key::H,
+            key,
             physical_key: None,
             pressed: true,
             repeat: false,
-            modifiers: Modifiers::COMMAND,
+            modifiers,
         }],
         ..RawInput::default()
     }
 }
 
+fn ctrl_h() -> RawInput {
+    press(Key::H, Modifiers::COMMAND)
+}
+
 #[test]
-fn ctrl_h_on_the_screen_changes_the_mode_and_the_key_bar_names_it() {
-    // provenance: the mock's keymap (index.html KEYMAP, "Inside a voucher": Ctrl+H Change mode).
-    // Derived: one Ctrl+H press on an item invoice makes it an accounting invoice; the key bar
-    // lists Ctrl+H.
+fn ctrl_h_on_the_screen_opens_the_mode_list_and_a_pick_changes_the_mode() {
+    // provenance: the mock's keymap (index.html KEYMAP, "Inside a voucher": Ctrl+H Change mode)
+    // and `sales-invoice.mode-list`; help.tallysolutions.com/sales-of-goods-services/ ("Press
+    // Ctrl+H (Change Mode) > select" the mode), read 2026-11-26. Derived: Ctrl+H on an item
+    // invoice opens the list on its current row (Item invoice, row 0) and changes nothing; Down
+    // moves to row 1 (Accounting invoice); Enter picks it: the mode is accounting and the list
+    // is closed. The key bar lists Ctrl+H.
     let books = setup("w2_mode_key.ledgerly", true);
     let mut s = open(&books, InvoiceMode::Item);
     assert!(s.keys().iter().any(|k| k.keys == "Ctrl+H"));
@@ -206,13 +223,25 @@ fn ctrl_h_on_the_screen_changes_the_mode_and_the_key_bar_names_it() {
         ai_tier: None,
     };
     let ctx = egui::Context::default();
-    for input in [RawInput::default(), ctrl_h()] {
+    let mut frame = |s: &mut ItemInvoiceScreen, input: RawInput| {
         let out = ctx.run_ui(input, |ui| {
             let _stay = s.ui(ui, &mut app);
         });
         out.drop_without_applying_deltas();
-    }
+    };
+    frame(&mut s, RawInput::default());
+    frame(&mut s, ctrl_h());
+    assert_eq!(s.mode_list(), Some(0));
+    assert_eq!(
+        s.mode(),
+        InvoiceMode::Item,
+        "opening the list changes nothing"
+    );
+    frame(&mut s, press(Key::ArrowDown, Modifiers::NONE));
+    assert_eq!(s.mode_list(), Some(1));
+    frame(&mut s, press(Key::Enter, Modifiers::NONE));
     assert_eq!(s.mode(), InvoiceMode::Accounting);
+    assert_eq!(s.mode_list(), None);
 }
 
 #[test]

@@ -1459,18 +1459,30 @@ fn light_shots() -> Vec<Shot> {
         ))
         .press(&[(Key::Enter, NONE)])
         .type_text(SI_NARRATION),
-        // The mock's `sales-invoice.as-voucher`: Ctrl+Shift+H, then the party, the Sales ledger
+        // The mock's `sales-invoice.mode-list`: the default invoice with Ctrl+H pressed; the list of
+        // modes is open on Item invoice. The key bar names the list's keys, so the check proves
+        // the list is showing.
+        three_lines(godavari_invoice(
+            "sales-invoice.mode-list",
+            "Shree Ganesh",
+            "27",
+            "SGT/PO/1131",
+        ))
+        .press(&[(Key::Enter, NONE)])
+        .type_text(SI_NARRATION)
+        .press(&[(Key::H, Modifiers::COMMAND)])
+        .expect_bar("Sales invoice", "Pick"),
+        // The mock's `sales-invoice.as-voucher`: Ctrl+H, Down, Down, Enter (As voucher in the list), then the party, the Sales ledger
         // for the taxable 1,30,085.00 (25 x 3,850.00 + 67 x 505.00) and the two GST ledgers with
         // no amount typed (the engine fills them). A blank ledger ends the lines; the narration is typed.
         shot("sales-invoice.as-voucher", &[(Key::F8, NONE)])
             .on(Fixture::Godavari)
-            .press(&[(
-                Key::H,
-                Modifiers {
-                    shift: true,
-                    ..Modifiers::COMMAND
-                },
-            )])
+            .press(&[
+                (Key::H, Modifiers::COMMAND),
+                (Key::ArrowDown, NONE),
+                (Key::ArrowDown, NONE),
+                (Key::Enter, NONE),
+            ])
             .type_text("Shree Ganesh")
             .press(&[(Key::Enter, NONE)])
             .type_text("27")

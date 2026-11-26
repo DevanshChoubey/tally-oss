@@ -185,10 +185,8 @@ enum Click {
     Save,
     /// No on the save question.
     Cancel,
-    /// Change the mode (Ctrl+H).
+    /// Open the mode list (Ctrl+H).
     ChangeMode,
-    /// Switch to As voucher, or back (Ctrl+Shift+H).
-    AsVoucher,
     /// Open or close the More details panel (Ctrl+I).
     More,
     /// Read a bill photo into a purchase (Alt+O): opens the bill screen.
@@ -1639,6 +1637,30 @@ impl ItemInvoiceScreen {
         }
     }
 
+    /// The mode list (Ctrl+H): a card under the mode button (or under the head's right edge when
+    /// the voucher has no mode button), one row per mode with the current highlighted row.
+    /// Returns the mode a click picked.
+    fn draw_mode_list(&mut self, ui: &Ui, base: Id, button: Option<Rect>) -> Option<InvoiceMode> {
+        let at = self.mode_list?;
+        let choices = self.mode_choices();
+        let anchor = button.or_else(|| {
+            self.shown.sheet.map(|sheet| {
+                Rect::from_min_size(
+                    egui::pos2(sheet.right() - 360.0, sheet.top() - 8.0),
+                    egui::vec2(360.0, 0.0),
+                )
+            })
+        })?;
+        let labels: Vec<String> = choices
+            .iter()
+            .map(|m| format!("{}   {}", mode_name(*m), mode_blurb(*m)))
+            .collect();
+        let (rect, clicked) =
+            sheet::type_ahead(ui, base.with("modes"), anchor, "Change mode", &labels, at);
+        self.shown.picker = Some(rect);
+        clicked.and_then(|j| choices.get(j).copied())
+    }
+
     /// The note's "Invoiced on ..." line with the engine tag, when the engine has found the
     /// invoice.
     fn draw_invoiced_line(&self, ui: &mut Ui, masters: &Masters) {
@@ -1797,6 +1819,7 @@ impl ItemInvoiceScreen {
     /// asked to close the screen.
     fn run_keys(&mut self, ui: &Ui, masters: &Masters, labels: &[String]) -> (bool, bool) {
         let escape_wanted = self.confirm_discard
+            || self.mode_list.is_some()
             || self.create.is_some()
             || self.confirming_save
             || self.searching()
@@ -1804,6 +1827,7 @@ impl ItemInvoiceScreen {
         let prompt = Prompt {
             discard: self.confirm_discard,
             save: self.confirming_save,
+            modes: self.mode_list.is_some(),
         };
         let keys = read_keys(ui, !labels.is_empty(), escape_wanted, prompt);
         let mut pop = false;
@@ -1854,10 +1878,12 @@ impl ItemInvoiceScreen {
         }
 
         let mut clicks: Option<Click> = None;
+        let mut mode_anchor: Option<Rect> = None;
         let mut bill_photo = !busy
             && self.draft.kind == InvoiceKind::Purchase
             && !self.confirm_discard
             && !self.confirming_save
+            && self.mode_list.is_none()
             && self.create.is_none()
             && super::keys::consume_alt_o(ui);
         let locked = self.locked_on();
@@ -1905,15 +1931,11 @@ impl ItemInvoiceScreen {
                         {
                             clicks = Some(Click::More);
                         }
-                        // As voucher has its own key; the button then switches back.
-                        let (keys, click) = match self.draft.mode {
-                            InvoiceMode::AsVoucher => ("Ctrl+Shift+H", Click::AsVoucher),
-                            InvoiceMode::Item | InvoiceMode::Accounting => {
-                                ("Ctrl+H", Click::ChangeMode)
-                            }
-                        };
-                        if button(ui, mode_label, Some(keys), ButtonKind::Secondary).clicked() {
-                            clicks = Some(click);
+                        let mode_button =
+                            button(ui, mode_label, Some("Ctrl+H"), ButtonKind::Secondary);
+                        mode_anchor = Some(mode_button.rect);
+                        if mode_button.clicked() {
+                            clicks = Some(Click::ChangeMode);
                         }
                     }
                     InvoiceKind::Purchase => {
@@ -1931,7 +1953,8 @@ impl ItemInvoiceScreen {
 
         let mut events = Vec::new();
         let mut anchor = None;
-        let enabled = !self.confirm_discard && self.create.is_none() && !busy;
+        let enabled =
+            !self.confirm_discard && self.mode_list.is_none() && self.create.is_none() && !busy;
         let (focus, pick) = (self.focus, self.pick_index);
         let want = self.focus_pending.then_some(self.focus);
         ui.add_enabled_ui(enabled, |ui| {
@@ -1991,13 +2014,16 @@ impl ItemInvoiceScreen {
             }
         }
         self.focus_pending = false;
+        let listed = self.draw_mode_list(ui, base, mode_anchor);
+        if let Some(mode) = listed {
+            self.choose_mode(mode);
+        }
 
         self.apply_events(masters, events);
         match clicks {
             Some(Click::Cancel) => self.confirming_save = false,
             Some(Click::Save) => self.save(masters),
-            Some(Click::ChangeMode) => self.change_mode(),
-            Some(Click::AsVoucher) => self.toggle_as_voucher(),
+            Some(Click::ChangeMode) => self.open_mode_list(),
             Some(Click::More) => self.toggle_more(masters),
             Some(Click::BillPhoto) => bill_photo = true,
             None => {}
@@ -2118,6 +2144,13 @@ impl Screen for ItemInvoiceScreen {
             return vec![
                 KeyHint::new("Enter", "Save"),
                 KeyHint::new("Esc", "Keep editing"),
+            ];
+        }
+        if self.mode_list.is_some() {
+            return vec![
+                KeyHint::new("\u{2191} \u{2193}", "Choose"),
+                KeyHint::new("Enter", "Pick"),
+                KeyHint::new("Esc", "Close"),
             ];
         }
         match self.draft.kind {
@@ -2351,5 +2384,23 @@ pub fn place_note_parts(
         Some((intra, bold, rates))
     } else {
         None
+    }
+}
+
+/// A mode as the mode list names it.
+fn mode_name(mode: InvoiceMode) -> &'static str {
+    match mode {
+        InvoiceMode::Item => "Item invoice",
+        InvoiceMode::Accounting => "Accounting invoice",
+        InvoiceMode::AsVoucher => "As voucher",
+    }
+}
+
+/// The few words under a mode's name in the mode list.
+fn mode_blurb(mode: InvoiceMode) -> &'static str {
+    match mode {
+        InvoiceMode::Item => "Stock items, quantity and rate",
+        InvoiceMode::Accounting => "Ledgers and amounts",
+        InvoiceMode::AsVoucher => "Dr and Cr ledger lines",
     }
 }

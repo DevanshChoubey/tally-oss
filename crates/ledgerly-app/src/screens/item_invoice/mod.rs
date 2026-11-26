@@ -567,9 +567,10 @@ enum KeyCmd {
     DiscardYes,
     DiscardNo,
     Create,
+    /// Ctrl+H: opens or closes the mode list.
     ChangeMode,
-    /// Ctrl+Shift+H.
-    AsVoucher,
+    /// Enter in the open mode list.
+    ConfirmMode,
 }
 
 /// Whether the company maintains inventory.
@@ -631,6 +632,8 @@ pub struct ItemInvoiceScreen {
     more_open: bool,
     /// Whether the type-ahead list was asked for with an arrow key on a field with no text yet.
     list_open: bool,
+    /// The open mode list (Ctrl+H) and its highlighted row; `None` when it is closed.
+    mode_list: Option<usize>,
     /// What the worker told the screen for the title and the balance line.
     extras: extras::Extras,
     /// The company's own state, for the note under the head.
@@ -724,6 +727,7 @@ impl ItemInvoiceScreen {
             show_discount: false,
             more_open: false,
             list_open: false,
+            mode_list: None,
             extras: extras::Extras::default(),
             home_state: books.company.state,
             last_narration: None,
@@ -1245,45 +1249,93 @@ impl ItemInvoiceScreen {
         self.fail(format!("Not saved: {reason}"));
     }
 
-    /// Ctrl+H: changes the mode between item invoice and accounting invoice. TallyPrime: "Press
-    /// Ctrl+H (Change Mode) > select" the mode (help.tallysolutions.com/sales-of-goods-services/,
-    /// read 2026-11-23); As Voucher is the third mode there and is not built here.
+    /// The modes Ctrl+H lists, in the order the accounting product's sales page names them: Item
+    /// Invoice, Accounting Invoice, As Voucher (help.tallysolutions.com/sales-of-goods-services/,
+    /// read 2026-11-26). As Voucher is offered on a sales or purchase invoice only: the engine
+    /// taxes an as-voucher entry for those, and a note keeps its two modes (product choice).
+    #[must_use]
+    pub fn mode_choices(&self) -> Vec<InvoiceMode> {
+        match self.draft.kind {
+            InvoiceKind::Sales | InvoiceKind::Purchase => vec![
+                InvoiceMode::Item,
+                InvoiceMode::Accounting,
+                InvoiceMode::AsVoucher,
+            ],
+            InvoiceKind::CreditNote | InvoiceKind::DebitNote => {
+                vec![InvoiceMode::Item, InvoiceMode::Accounting]
+            }
+        }
+    }
+
+    /// The highlighted row of the open mode list, or `None` when the list is closed.
+    #[must_use]
+    pub fn mode_list(&self) -> Option<usize> {
+        self.mode_list
+    }
+
+    /// Ctrl+H: opens the list of modes with the current mode highlighted, or closes it when it is
+    /// open. TallyPrime: "Press Ctrl+H (Change Mode) > select" the mode
+    /// (help.tallysolutions.com/sales-of-goods-services/ and
+    /// help.tallysolutions.com/tally-prime/purchase-process/purchase-goods-and-services-tally/,
+    /// read 2026-11-26). The pages do not describe the list; this is our own chooser.
+    pub fn open_mode_list(&mut self) {
+        if self.mode_list.is_some() {
+            self.mode_list = None;
+            return;
+        }
+        let at = self
+            .mode_choices()
+            .iter()
+            .position(|m| *m == self.draft.mode)
+            .unwrap_or(0);
+        self.mode_list = Some(at);
+        self.create = None;
+    }
+
+    /// Up and Down in the open mode list.
+    pub fn step_mode_list(&mut self, down: bool) {
+        let last = self.mode_choices().len().saturating_sub(1);
+        if let Some(at) = self.mode_list.as_mut() {
+            *at = if down {
+                at.saturating_add(1).min(last)
+            } else {
+                at.saturating_sub(1)
+            };
+        }
+    }
+
+    /// Enter in the open mode list: picks the highlighted mode.
+    pub fn pick_listed_mode(&mut self) {
+        let choices = self.mode_choices();
+        let picked = self.mode_list.and_then(|at| choices.get(at).copied());
+        if let Some(mode) = picked {
+            self.choose_mode(mode);
+        }
+    }
+
+    /// Picks `next` from the mode list and closes it.
     ///
     /// Product choices (the pages read are silent on them): the header is kept, each mode keeps
     /// its own lines so switching back brings them back, and the keyboard moves to the first line
     /// field of the new mode when it was on a field the new mode does not have. A company that does
-    /// not maintain inventory refuses the item mode: it has no stock items to pick.
-    pub fn change_mode(&mut self) {
-        let next = match self.draft.mode {
-            InvoiceMode::Item => InvoiceMode::Accounting,
-            InvoiceMode::AsVoucher if self.stock == Stock::NotKept => InvoiceMode::Accounting,
-            InvoiceMode::Accounting | InvoiceMode::AsVoucher => InvoiceMode::Item,
-        };
+    /// not maintain inventory refuses the item mode: it has no stock items to pick. A mode the
+    /// list does not offer for this kind of voucher is refused with the reason.
+    pub fn choose_mode(&mut self, next: InvoiceMode) {
+        self.mode_list = None;
+        if !self.mode_choices().contains(&next) {
+            return self.fail(
+                "As voucher is for sales and purchase invoices; a note has item and accounting mode."
+                    .to_owned(),
+            );
+        }
         if next == InvoiceMode::Item && self.stock == Stock::NotKept {
             return self.fail(
                 "Item invoice needs stock items: this company does not maintain inventory."
                     .to_owned(),
             );
         }
-        self.set_mode(next);
-    }
-
-    /// Ctrl+Shift+H: switches to As voucher, or back to accounting mode when already there. The
-    /// accounting product lists As Voucher among the modes Ctrl+H offers
-    /// (help.tallysolutions.com/sales-of-goods-services/, read 2026-11-26); this screen keeps
-    /// Ctrl+H as the item and accounting toggle and gives As voucher its own key (product choice).
-    /// Only sales and purchase invoices have it: the engine taxes an as-voucher entry for those,
-    /// and a note keeps its two modes.
-    pub fn toggle_as_voucher(&mut self) {
-        match self.draft.mode {
-            InvoiceMode::AsVoucher => self.set_mode(InvoiceMode::Accounting),
-            InvoiceMode::Item | InvoiceMode::Accounting => match self.draft.kind {
-                InvoiceKind::Sales | InvoiceKind::Purchase => self.set_mode(InvoiceMode::AsVoucher),
-                InvoiceKind::CreditNote | InvoiceKind::DebitNote => self.fail(
-                    "As voucher is for sales and purchase invoices; a note has item and accounting mode."
-                        .to_owned(),
-                ),
-            },
+        if next != self.draft.mode {
+            self.set_mode(next);
         }
     }
 

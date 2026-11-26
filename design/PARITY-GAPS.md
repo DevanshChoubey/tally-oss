@@ -204,10 +204,20 @@ Classes:
 - **DELIBERATE** a company without inventory gets an accounting invoice
   (help.tallysolutions.com/sales-of-goods-services/ and
   help.tallysolutions.com/tally-prime/sales-process/faq-sales/, both read 2026-11-23).
-- **DELIBERATE** As voucher mode is Ctrl+Shift+H, not a choice in Ctrl+H's list
-  (help.tallysolutions.com/sales-of-goods-services/, read 2026-11-26, says Ctrl+H then select the mode):
-  Ctrl+H keeps toggling item and accounting mode. It is for sales and purchase only; a note keeps two
-  modes. Accounting and as voucher share their ledger lines.
+- **DELIBERATE** Ctrl+H opens a list of the modes and a pick changes the mode, as the sales and
+  purchase pages say ("Press Ctrl+H (Change Mode) > select" a mode; Item Invoice, Accounting Invoice,
+  As Voucher in that order; help.tallysolutions.com/sales-of-goods-services/ and
+  help.tallysolutions.com/tally-prime/purchase-process/purchase-goods-and-services-tally/, read
+  2026-11-26). The pages do not describe the list, so its look is ours (`sales-invoice.mode-list`):
+  a card under the mode button, opening on the current mode, Up and Down, Enter or a click. A note
+  is offered Item and Accounting only (the engine taxes an as-voucher entry for sales and purchase
+  invoices). Accounting and as voucher share their ledger lines.
+- **DELIBERATE** the party of an as-voucher entry stays in the header. The pages say the user enters
+  the party ledger on the Dr line (help.tallysolutions.com/sales-of-goods-services/, read 2026-11-26)
+  and the Sales ledger on the Cr line; here the header's Party and Place of supply come first because
+  the engine needs them to know the supply and the GST heads before any ledger line, and the header
+  is shared by the three modes. The Sales ledger and the GST ledgers are typed as lines, as the pages
+  say.
 - **DELIBERATE** As voucher shows Dr and Cr, not By and To (the pages offer both), asks the party in
   the header and lists only the lines the user typed; the engine's party line, tax amounts and round-off
   show in the tax box and are posted, not listed as rows as the mock's `sales-invoice.as-voucher` does.

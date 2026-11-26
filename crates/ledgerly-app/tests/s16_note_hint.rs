@@ -159,3 +159,24 @@ fn a_sales_invoice_has_no_such_line() {
     let s = open_note(&books, BaseVoucherKind::Sales);
     assert_eq!(s.invoiced_line(&books.masters), None);
 }
+
+#[test]
+fn a_note_s_mode_list_offers_item_and_accounting_only() {
+    // provenance: product choice (the engine taxes an as-voucher entry for sales and purchase
+    // invoices only; the pages read, help.tallysolutions.com/sales-of-goods-services/ on
+    // 2026-11-26, name the three modes for those). Derived: a credit note is offered Item and
+    // Accounting; asking for As Voucher anyway leaves the mode as it was and says why.
+    let (_api, books) = sample("s16_note_modes.ledgerly");
+    let mut s = open_note(&books, BaseVoucherKind::CreditNote);
+    assert_eq!(
+        s.mode_choices(),
+        vec![InvoiceMode::Item, InvoiceMode::Accounting]
+    );
+    s.choose_mode(InvoiceMode::AsVoucher);
+    assert_eq!(s.mode(), InvoiceMode::Item);
+    assert!(
+        s.error_text().unwrap().contains("sales and purchase"),
+        "{:?}",
+        s.error_text()
+    );
+}
