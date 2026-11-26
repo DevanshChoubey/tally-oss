@@ -165,7 +165,12 @@ pub(super) fn outstanding(report: ViewReport, receivable: bool) -> ViewReport {
         Vec::new()
     } else {
         vec![
-            ViewCell::Empty,
+            // "7 open bills": the engine's count, in the total line's Bill-date cell.
+            report
+                .totals
+                .get(bill_date)
+                .cloned()
+                .unwrap_or(ViewCell::Empty),
             ViewCell::Empty,
             ViewCell::Empty,
             report
@@ -1035,6 +1040,18 @@ mod tests {
         assert_eq!(out.rows[0].cells[4], text("31-60 days"));
         assert_eq!(out.rows[1].cells[4], text("Not yet due"));
         assert_eq!(out.totals[3], dr(5));
+    }
+
+    #[test]
+    fn the_total_line_carries_the_engines_count_of_open_bills() {
+        // provenance: derived from `outstanding.receivables` in the mock: the total row reads "N
+        // open bills" in the leading cells (index.html, `${bills.length} open bills`). The count is
+        // the engine's, in its total line (outstanding.rs, `bills_label`); the screen copies it.
+        let e = ViewCell::Empty;
+        let mut totals = vec![e.clone(); 11];
+        totals[0] = text("7 open bills");
+        let out = outstanding(base(&outstanding_columns(), Vec::new(), totals), true);
+        assert_eq!(out.totals[0], text("7 open bills"));
     }
 
     #[test]

@@ -15,6 +15,7 @@ pub mod facade;
 mod gst;
 mod gst_filing;
 mod gstr1_sections;
+mod gstr3b_payment;
 mod home;
 mod maintenance;
 mod nudges;
@@ -43,6 +44,8 @@ pub use gst::{
     Bucket, BucketedVoucher, Gstr1, Gstr1Return, Gstr3bTaxAmounts, Gstr3bWorking, RulePack,
 };
 pub use gstr1_sections::{Gstr1Section, TaxableAgreement};
+pub use gstr3b_payment::Gstr3bPayment;
+pub use ledgerly_gst::setoff::SetOff;
 pub use home::{
     CUSTOMER_LATE_DAYS, CashAndBank, HomeFigures, LateBills, MonthSales, SUPPLIER_LATE_DAYS,
 };

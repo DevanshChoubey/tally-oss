@@ -12,6 +12,7 @@ pub mod pack;
 pub mod pos;
 pub mod rcm;
 pub mod recon2b;
+pub mod setoff;
 pub mod time_of_supply;
 
 pub use error::GstError;

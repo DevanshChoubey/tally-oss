@@ -92,12 +92,12 @@ fn month_name(month: Month) -> &'static str {
     }
 }
 
-fn same_gstin(a: &str, b: &str) -> bool {
+pub(crate) fn same_gstin(a: &str, b: &str) -> bool {
     a.trim().eq_ignore_ascii_case(b.trim())
 }
 
 /// The last 2B import of the company for the period, as (file name, file text).
-fn last_import<'a>(
+pub(crate) fn last_import<'a>(
     records: &'a [AuditRecord],
     gstin: &Gstin,
     period: Period,
@@ -131,7 +131,7 @@ fn last_import<'a>(
     })
 }
 
-fn filed_on(records: &[AuditRecord], gstin: &Gstin, period: Period) -> Option<Date> {
+pub(crate) fn filed_on(records: &[AuditRecord], gstin: &Gstin, period: Period) -> Option<Date> {
     records.iter().rev().find_map(|r| match &r.event {
         Event::Gstr3bFiled {
             gstin: g,

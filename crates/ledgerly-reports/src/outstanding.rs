@@ -450,9 +450,20 @@ fn amount_cell(amount: Paise) -> Result<Cell, MoneyError> {
     }
 }
 
+/// "7 open bills", "1 open bill": the count the total line carries.
+fn bills_label(count: usize) -> String {
+    if count == 1 {
+        "1 open bill".to_owned()
+    } else {
+        format!("{count} open bills")
+    }
+}
+
 /// Running totals of the whole report.
 #[derive(Default)]
 struct Totals {
+    /// How many open bills the report lists, on every party.
+    bills: usize,
     pending: Paise,
     buckets: Buckets,
     on_account: Paise,
@@ -461,7 +472,11 @@ struct Totals {
 impl Totals {
     fn cells(&self) -> Result<Vec<Cell>, MoneyError> {
         summary_cells(
-            &Cell::Empty,
+            &if self.bills == 0 {
+                Cell::Empty
+            } else {
+                Cell::Text(bills_label(self.bills))
+            },
             &Cell::Empty,
             self.pending,
             &self.buckets,
@@ -525,6 +540,7 @@ fn build_report(
                 rows.push(on_account_row(block)?);
             }
         }
+        totals.bills = totals.bills.saturating_add(block.bills.len());
         totals.pending = totals.pending.checked_add(pending)?;
         totals.buckets.merge(&buckets)?;
         totals.on_account = totals.on_account.checked_add(block.on_account)?;

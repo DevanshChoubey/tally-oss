@@ -1067,3 +1067,27 @@ fn days_overdue_counts_whole_days_past_the_due_date() {
     );
     assert_eq!(days_overdue(d(2026, Month::June, 30), None), None);
 }
+
+#[test]
+fn the_total_line_counts_the_open_bills() {
+    // provenance: derived (round s16, the mock's total line "N open bills", index.html
+    // `outstanding`). Asha Traders has nine open bills A-1 to A-9 (A-8 is part settled, so 100,000
+    // is still open; A-9's settling receipt is dated after the report date). Bharat Stores has
+    // B-1 and the credit note CN-1 opened as a bill: 9 + 2 = 11. The on-account amounts are not
+    // bills. The count is the same condensed and detailed.
+    for detail in [Detail::Condensed, Detail::Detailed] {
+        let r = hand_report(true, detail);
+        assert_eq!(
+            r.totals[C_BILL_DATE],
+            Cell::Text("11 open bills".to_owned()),
+            "{detail:?}"
+        );
+    }
+}
+
+#[test]
+fn the_total_line_says_one_open_bill_in_the_singular() {
+    // provenance: derived: Zed Supplies has one bill, P-1 10,000 Cr (the 2,000 Dr is on account).
+    let r = hand_report(false, Detail::Detailed);
+    assert_eq!(r.totals[C_BILL_DATE], Cell::Text("1 open bill".to_owned()));
+}
