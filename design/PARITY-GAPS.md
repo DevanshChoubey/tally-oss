@@ -325,8 +325,11 @@ Classes:
 
 ## Setup (`setup.*`)
 
-- **NOT BUILT** the Keyboard step's preset and the cloud AI choice are shown but not stored (no
-  store, no keychain); the backup folder is not saved and no backup runs on a schedule.
+- **NOT BUILT** the Keyboard step's preset is shown but not stored; the backup folder is not saved
+  and no backup runs on a schedule.
+- **DELIBERATE** release 1.0.0 ships without the AI assistant: the AI step starts on Off (the mock
+  starts on "On this computer"), and choosing On this computer or Cloud says it is not available in
+  this release and the company starts with AI off. Nothing but Off is stored by the wizard.
 - **DELIBERATE** the import card on Start opens the Import screen with no company open; that screen
   says to create or open one first and offers Back to setup, as the mock's `import.no-company` does,
   so nothing can finish wrongly.
@@ -443,7 +446,8 @@ Credit (`ledgerly_reports::print_text` places the engine's figures only).
 Seen in the release binary under a nested X server with an empty config and data directory.
 
 - **DELIBERATE** the title bar shows today's date and "AI: not set up" on a cold start; the fixture
-  captures pin the date to 21 Nov 2026 and show "AI on this computer". Both are the app's real state.
+  captures pin the date to 21 Nov 2026 and some show "AI on this computer" (the AI and privacy
+  screen still lets a company file hold that tier; a new company starts with AI off). Both are the app's real state.
 - **DELIBERATE** the key bar drops the hint that does not fit before it would overlap the right-hand
   hint ("Enter Open" on Home at 1280 points; the mock shows it). The mock's bar is wider than the
   app's text at that size; overlapping text would be worse than a missing hint.

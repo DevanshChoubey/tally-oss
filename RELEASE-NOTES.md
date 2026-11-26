@@ -1,65 +1,73 @@
-# Ledgerly 1.0.1
+# Ledgerly 1.0.0
 
-## Changes in 1.0.1
+The first release of Ledgerly: a local-first, keyboard-driven desktop accounting app for Indian
+small businesses, written in Rust. Your books stay in one company file on your computer. Nothing
+is sent anywhere. The full list of changes is in [CHANGELOG.md](CHANGELOG.md).
 
-- **macOS:** the app is now signed ad hoc, so macOS no longer calls it "damaged". It is still not
-  signed with an Apple Developer ID: on first launch, allow it in System Settings > Privacy &
-  Security > Open Anyway.
-
-Everything else is as in 1.0.0, described below.
-
-## Ledgerly 1.0.0
-
-First release. A local-first desktop accounting app for Indian small businesses, written in Rust.
-Your books stay in one company file on your computer; nothing is sent anywhere unless you turn a
-cloud feature on.
+Early builds published under the version numbers 1.0.0 and 1.0.1 on 24 November 2026 were
+withdrawn. This release replaces them.
 
 ## What is in 1.0.0
 
-- **Books:** ledgers, groups, cost centres, all the usual voucher types (sales, purchase, payment,
-  receipt, journal, contra, credit and debit notes), numbering, period locks, an append-only event
-  log with a hash chain (`ledgerly verify` checks it), backups.
-- **Reports:** balance sheet, profit and loss, trial balance, day book, ledger vouchers and
-  outstanding bills, with drill-down to the voucher, and export to CSV / XLSX.
-- **GST:** place of supply, tax on vouchers, GSTR-1 / GSTR-1A and GSTR-3B working with offline
-  JSON export, IMS actions, e-invoice and e-way bill JSON (no portal API calls in 1.0).
-- **Interop:** import from Tally XML (an exported file, or pulled from a running Tally over its
-  XML port) with a reconciliation report.
-- **Banking and stock:** bank statement import (CSV, XLSX, MT940), matching and bank
-  reconciliation, cheques; stock items, units, godowns, item invoices and stock valuation.
-- **Printing:** sales invoices, credit and debit notes and five reports (balance sheet, profit and
-  loss, trial balance, day book, ledger vouchers) save as PDF with Ctrl+P, then open in your PDF
-  viewer.
-- **AI assistant:** an MCP server (`ledgerly mcp --company <file>`) gives AI clients read tools
-  and draft proposals only; it cannot post. The in-app assistant screens (plain-words entry, bill
-  photos, "ask your books") are present but do not run yet: no local model or OCR engine ships,
-  and the cloud tier is refused because no keychain store is wired in. The assistant never writes
-  a number you see: the engine computes them.
-- **Look and access:** light, dark and high-contrast themes; screen-reader names and roles on
-  every control; Tab order in reading order; Ctrl+= / Ctrl+- / Ctrl+0 zoom; no signal carried by
-  colour alone.
-- **Builds:** Linux (tar.gz, .deb), Windows (zip, installer) and macOS (.dmg); Linux release
-  builds are reproducible (`scripts/repro-check.sh`); `SHA256SUMS.txt` lists every file.
+- **Companies and books:** a setup wizard and a sample company; ledgers, groups, cost centres,
+  stock items and godowns; sales, purchase, payment, receipt, journal, contra, credit note and
+  debit note vouchers; numbering, period locks, backups; an append-only event log with a hash
+  chain (`ledgerly verify` checks it).
+- **Item invoices:** sales and purchase invoices with items, HSN, quantities and rates, tax worked
+  out by the engine, and stock valuation.
+- **GST returns:** GSTR-1 and GSTR-1A by section with JSON export; GSTR-3B working with the set-off
+  of input credit in the order the law gives; GSTR-2B and IMS actions with reconciliation; e-invoice
+  JSON export for a sales invoice.
+- **Banking:** statement import (CSV, XLSX, MT940), matching, bank reconciliation and cheques.
+- **Reports:** balance sheet, profit and loss, trial balance, day book, ledger vouchers,
+  outstanding bills, stock and the audit screen, with drill-down; CSV and XLSX export.
+- **Print and PDF:** a print preview (Ctrl+P) with paper, copies and page range, then Save as PDF.
+- **Import:** read an accounting file exported by another product, or pull a company from one on
+  your network, with a reconciliation report.
+- **Hindi and English** on every screen; light, dark and high-contrast themes; function keys, a
+  command palette (Ctrl+K) and a keyboard map; zoom; screen-reader names.
+- **Command line and MCP server:** `ledgerly verify`, `rebuild-check`, `export gstr1`, `conformance`
+  and `ledgerly mcp` (read tools and draft proposals only; it cannot post).
 
-## Known gaps
+## Not in this release
 
-- English only. Hindi is planned for 1.1.
-- The in-app AI assistant does not run yet (see above); the MCP server does.
-- GSTR-3B working refuses any period with a purchase in it: the bundled rule pack does not yet
-  list the blocked-credit items of CGST Act s.17(5).
-- No export to Tally XML from the app yet, and no Excel import of masters or vouchers.
-- No print preview inside the app, no printer output (save as PDF, then print), no print
-  configuration, no UPI QR code on invoices yet; other reports do not print yet.
-- The Windows and macOS packages are built by CI and were not tried by hand before release; the
-  Windows installer has no icon.
-- The packages are not signed with a developer certificate. macOS asks you to allow the app in
-  Privacy & Security > Open Anyway (the 1.0.0 app, which had no signature at all, needs
-  `xattr -dr com.apple.quarantine /Applications/Ledgerly.app` instead); Windows SmartScreen asks
-  before the first run.
-- The theme choice and zoom level are not remembered between runs.
-- The divider line colour is below the 3:1 contrast guideline in light and dark.
-- Payment bill-wise allocation and the overdraft warning are not built; the 2B reconciliation
-  reader is not built.
-- Smaller differences from the design are tracked in `design/PARITY-GAPS.md`.
+- **The AI assistant.** A new company starts with AI off, and the AI screens show their AI-off
+  state. Nothing in this release contacts a network for AI.
+- **Printing straight to a printer.** Save as PDF, then print from your PDF viewer.
+- **GSTR-3B JSON export.** The working and the set-off are on screen; no file is written.
+- **e-Invoice upload.** Ledgerly writes the JSON; you upload it on the portal.
 
-Ledgerly is an independent project and is not affiliated with or endorsed by Tally Solutions.
+Smaller differences from the design are tracked in `design/PARITY-GAPS.md`.
+
+## Installing (the installers are not signed)
+
+The Windows and macOS packages are **not signed** with a developer certificate, so each system
+warns you the first time. The warnings are expected; the steps below get past them. First check
+the download (see "Check your download").
+
+- **Windows** (`ledgerly-1.0.0-windows-x86_64-setup.exe` or the `.zip`): when SmartScreen says
+  "Windows protected your PC", choose **More info**, then **Run anyway**.
+- **macOS** (`ledgerly-1.0.0-macos-arm64.dmg`, Apple silicon): drag Ledgerly to Applications. The
+  first time, right-click (or Control-click) the app and choose **Open**, then **Open** again. On
+  macOS 15 and later that route may not offer Open: try to open the app once, then go to
+  **System Settings > Privacy & Security**, scroll to the message about Ledgerly and choose
+  **Open Anyway**.
+- **Linux** (x86_64): `sudo apt install ./ledgerly_1.0.0_amd64.deb` (it installs `ledgerly-app`
+  and `ledgerly`), or unpack `ledgerly-1.0.0-linux-x86_64.tar.gz` anywhere and run
+  `ledgerly-app`. No signing warning applies.
+
+## Check your download
+
+Every file is listed in `SHA256SUMS.txt` on this release, and every file has signed build
+provenance.
+
+```bash
+# in the folder with the files you downloaded and SHA256SUMS.txt
+sha256sum --ignore-missing -c SHA256SUMS.txt          # Linux
+shasum -a 256 --ignore-missing -c SHA256SUMS.txt      # macOS
+# Windows (PowerShell): compare with the line for your file in SHA256SUMS.txt
+Get-FileHash .\ledgerly-1.0.0-windows-x86_64-setup.exe -Algorithm SHA256
+
+# build provenance (GitHub CLI): proves the file was built by this repository's release workflow
+gh attestation verify ledgerly_1.0.0_amd64.deb --repo DevanshChoubey/tally-oss
+```

@@ -1,0 +1,62 @@
+name: cold-start smoke
+
+# A fresh install, on every platform we ship: build the release binaries, start the app's shell
+# with an empty home folder, reach the first screen, create a company through the setup wizard
+# with the keyboard, and check the company file with `ledgerly verify`. Runs on pull requests and
+# on version tags (the release workflow's trigger), so a package that cannot start is seen before
+# anyone installs it.
+#
+# The headless test (`crates/ledgerly-app/tests/s19_cold_start_smoke.rs`) needs no window or GPU,
+# so it is the gate. The windowed capture after it opens the real window; hosted runners may have
+# no usable GPU, so that step is best effort and uploads whatever it captured.
+#
+# Every action is pinned to a full commit SHA, as in ci.yml and release.yml.
+
+on:
+  pull_request:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  cold-start:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      LEDGERLY_SMOKE_HOME: ${{ runner.temp }}/ledgerly-smoke-home
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: dtolnay/rust-toolchain@d5e4d57b030548f435d0befec15ff413a2c60eff # 1.100
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - name: Build the release binaries
+        run: cargo build --release --locked -p ledgerly-app -p ledgerly-cli
+      - name: The command line starts
+        run: ./target/release/ledgerly --version
+      - name: Cold start with a fresh home, create a company through the wizard
+        run: cargo test --release --locked -p ledgerly-app --test s19_cold_start_smoke -- --nocapture
+      - name: The company file the wizard made verifies
+        run: |
+          file=$(ls "$LEDGERLY_SMOKE_HOME"/Documents/Ledgerly/*.ledgerly | head -n 1)
+          echo "verifying $file"
+          ./target/release/ledgerly verify "$file"
+      - name: Windowed capture of the first run (best effort, needs a GPU or a software renderer)
+        if: runner.os != 'Linux'
+        continue-on-error: true
+        run: cargo run --release --locked -p ledgerly-app --example ui_snapshots -- smoke-shots --only 'setup.welcome|setup.done'
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: cold-start-${{ runner.os }}
+          path: smoke-shots/**
+          if-no-files-found: ignore

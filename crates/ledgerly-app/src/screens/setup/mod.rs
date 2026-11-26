@@ -290,6 +290,12 @@ impl std::fmt::Debug for SetupScreen {
 }
 
 impl SetupScreen {
+    /// The tier selected on the AI step.
+    #[must_use]
+    pub fn ai_choice(&self) -> AiTier {
+        self.ai
+    }
+
     /// A wizard whose financial year and audit stamps come from `clock`.
     #[must_use]
     pub fn with_clock(clock: Clock) -> Self {
@@ -309,7 +315,7 @@ impl SetupScreen {
             books_begin: long_date(fy_start),
             features: default_features(),
             keyboard_classic: true,
-            ai: AiTier::Local,
+            ai: AiTier::Off,
             filing: GstFiling::Monthly,
             backup_folder: String::new(),
             notice: None,
@@ -504,7 +510,7 @@ impl SetupScreen {
                 return;
             }
         };
-        let (clock, ai, filing) = (self.clock, self.ai, self.filing);
+        let (clock, ai, filing) = (self.clock, form::stored_ai_tier(self.ai), self.filing);
         let dir = self.recent_dir.clone();
         match spawn_file_job(move || {
             let made = form::create_company_with_filing(&path, &company, clock, ai, filing)?;

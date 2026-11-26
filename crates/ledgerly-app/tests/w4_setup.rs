@@ -305,9 +305,11 @@ fn a_cloud_choice_creates_the_company_with_no_tier_and_says_the_engines_reason()
 }
 
 #[test]
-fn only_the_cloud_choice_says_on_the_ai_step_that_it_is_not_saved() {
-    // provenance: as above: Off and Local are stored, Cloud is refused by the engine.
-    assert!(ai_notice(AiTier::Cloud).is_some_and(|n| n.contains("not saved")));
+fn only_the_off_choice_is_silent_on_the_ai_step() {
+    // provenance: owner decision for release 1.0.0 (no AI assistant ships): the wizard stores Off
+    // only, so Cloud (refused by the engine) and On this computer (no local model) both say they
+    // are not available. Before 1.0.0 Local was stored and said nothing; the premise changed.
+    assert!(ai_notice(AiTier::Cloud).is_some_and(|n| n.contains("not available")));
     assert_eq!(ai_notice(AiTier::Off), None);
-    assert_eq!(ai_notice(AiTier::Local), None);
+    assert!(ai_notice(AiTier::Local).is_some_and(|n| n.contains("not available")));
 }

@@ -2204,7 +2204,7 @@ checksum = "20870f649af7073d53e38067b2a84312175d56ea15217e1b15bc83506ec50afb"
 
 [[package]]
 name = "ledgerly-api"
-version = "1.0.1"
+version = "1.0.0"
 dependencies = [
  "ledgerly-assist",
  "ledgerly-bank",
@@ -2229,7 +2229,7 @@ dependencies = [
 
 [[package]]
 name = "ledgerly-app"
-version = "1.0.1"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "eframe",
@@ -2253,7 +2253,7 @@ dependencies = [
 
 [[package]]
 name = "ledgerly-assist"
-version = "1.0.1"
+version = "1.0.0"
 dependencies = [
  "insta",
  "keyring",
@@ -2272,7 +2272,7 @@ dependencies = [
 
 [[package]]
 name = "ledgerly-bank"
-version = "1.0.1"
+version = "1.0.0"
 dependencies = [
  "hex",
  "ledgerly-bankfmt",
@@ -2289,7 +2289,7 @@ dependencies = [
 
 [[package]]
 name = "ledgerly-bankfmt"
-version = "1.0.1"
+version = "1.0.0"
 dependencies = [
  "calamine",
  "csv",
@@ -2304,7 +2304,7 @@ dependencies = [
 
 [[package]]
 name = "ledgerly-cli"
-version = "1.0.1"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -2321,7 +2321,7 @@ dependencies = [
 
 [[package]]
 name = "ledgerly-conformance"
-version = "1.0.1"
+version = "1.0.0"
 dependencies = [
  "criterion",
  "ledgerly-core",
@@ -2342,7 +2342,7 @@ dependencies = [
 
 [[package]]
 name = "ledgerly-core"
-version = "1.0.1"
+version = "1.0.0"
 dependencies = [
  "proptest",
  "rust_decimal",
@@ -2353,7 +2353,7 @@ dependencies = [
 
 [[package]]
 name = "ledgerly-engine"
-version = "1.0.1"
+version = "1.0.0"
 dependencies = [
  "ledgerly-core",
  "ledgerly-model",
@@ -2367,7 +2367,7 @@ dependencies = [
 
 [[package]]
 name = "ledgerly-gst"
-version = "1.0.1"
+version = "1.0.0"
 dependencies = [
  "insta",
  "ledgerly-core",
@@ -2384,7 +2384,7 @@ dependencies = [
 
 [[package]]
 name = "ledgerly-gst-formats"
-version = "1.0.1"
+version = "1.0.0"
 dependencies = [
  "calamine",
  "insta",
@@ -2399,7 +2399,7 @@ dependencies = [
 
 [[package]]
 name = "ledgerly-mcp"
-version = "1.0.1"
+version = "1.0.0"
 dependencies = [
  "insta",
  "ledgerly-api",
@@ -2412,7 +2412,7 @@ dependencies = [
 
 [[package]]
 name = "ledgerly-model"
-version = "1.0.1"
+version = "1.0.0"
 dependencies = [
  "ledgerly-core",
  "proptest",
@@ -2424,7 +2424,7 @@ dependencies = [
 
 [[package]]
 name = "ledgerly-print"
-version = "1.0.1"
+version = "1.0.0"
 dependencies = [
  "insta",
  "ledgerly-bank",
@@ -2439,7 +2439,7 @@ dependencies = [
 
 [[package]]
 name = "ledgerly-reports"
-version = "1.0.1"
+version = "1.0.0"
 dependencies = [
  "calamine",
  "csv",
@@ -2461,7 +2461,7 @@ dependencies = [
 
 [[package]]
 name = "ledgerly-sample"
-version = "1.0.1"
+version = "1.0.0"
 dependencies = [
  "ledgerly-api",
  "ledgerly-core",
@@ -2477,7 +2477,7 @@ dependencies = [
 
 [[package]]
 name = "ledgerly-stock"
-version = "1.0.1"
+version = "1.0.0"
 dependencies = [
  "ledgerly-core",
  "ledgerly-model",
@@ -2490,7 +2490,7 @@ dependencies = [
 
 [[package]]
 name = "ledgerly-store"
-version = "1.0.1"
+version = "1.0.0"
 dependencies = [
  "ciborium",
  "hex",
@@ -2508,7 +2508,7 @@ dependencies = [
 
 [[package]]
 name = "ledgerly-tally-bridge"
-version = "1.0.1"
+version = "1.0.0"
 dependencies = [
  "insta",
  "ledgerly-core",
@@ -2525,7 +2525,7 @@ dependencies = [
 
 [[package]]
 name = "ledgerly-tally-xml"
-version = "1.0.1"
+version = "1.0.0"
 dependencies = [
  "encoding_rs",
  "insta",

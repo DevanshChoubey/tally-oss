@@ -142,13 +142,24 @@ pub fn unsaved_notice_in(step: Step, tr: &Tr) -> Option<String> {
 }
 
 /// What the AI step says under the cards for `choice`, or `None` when the choice is stored with
-/// the company. Off and On this computer are stored ([`create_company`]); the cloud tier is
-/// refused by the engine until a keychain store exists (design/PARITY-GAPS.md).
+/// the company. Only Off is stored in this release ([`stored_ai_tier`]); the other two say they
+/// are not available and that the company starts with AI off.
 #[must_use]
 pub fn ai_notice(choice: AiTier) -> Option<String> {
     match choice {
-        AiTier::Off | AiTier::Local => None,
+        AiTier::Off => None,
+        AiTier::Local => Some(crate::i18n::t("setup.notice.local_unavailable")),
         AiTier::Cloud => Some(crate::i18n::t("setup.notice.cloud_unsaved")),
+    }
+}
+
+/// The AI tier the wizard stores for the choice on the AI step.
+#[must_use]
+pub fn stored_ai_tier(choice: AiTier) -> AiTier {
+    // Release 1.0.0 ships without the AI assistant: no local model client, no reader and no key
+    // store exist, so every company starts with AI off, whichever card was clicked.
+    match choice {
+        AiTier::Off | AiTier::Local | AiTier::Cloud => AiTier::Off,
     }
 }
 
