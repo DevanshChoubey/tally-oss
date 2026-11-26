@@ -40,7 +40,8 @@
 //! original decimal. A figure that does not (an amount above 2^53 paise, a quantity with more than
 //! about 15 significant digits) is a [`ReportError::Export`], never a silently rounded cell. CSV
 //! carries every digit and has no such limit. CSV text cells that start with `=`, `+`, `-`,
-//! `@`, tab or carriage return get a leading `'` so a spreadsheet does not run them as formulas.
+//! `@` (or their full-width forms), tab, carriage return or line feed, after any leading spaces
+//! (a nested row's indent), get a leading `'` so a spreadsheet does not run them as formulas.
 //!
 //! JSON is the serde form of [`Report`] (pretty printed), so it round-trips exactly, including
 //! the side of every amount.
@@ -291,7 +292,13 @@ fn csv_field(value: &Value) -> String {
         Value::Blank => String::new(),
         Value::Number { text, .. } => text.clone(),
         Value::Text(text) => {
-            if text.starts_with(['=', '+', '-', '@', '\t', '\r']) {
+            // OWASP "CSV Injection" (read 2026-11-27): = + - @, tab, CR, LF and their
+            // full-width forms. Leading spaces (a nested row's indent) are looked past, since a
+            // reader that trims them would see the formula first (S22).
+            if text.trim_start_matches(' ').starts_with([
+                '=', '+', '-', '@', '\t', '\r', '\n', '\u{ff1d}', '\u{ff0b}', '\u{ff0d}',
+                '\u{ff20}',
+            ]) {
                 format!("'{text}")
             } else {
                 text.clone()
