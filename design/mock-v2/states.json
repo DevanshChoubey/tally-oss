@@ -210,6 +210,13 @@
    "description": "Cash sale to an unregistered buyer: B2C, no GSTIN, e-invoice not applicable."
   },
   {
+   "id": "sales-invoice.einvoice-not-ready",
+   "kind": "happy",
+   "hash": "screen=sales-invoice&state=einvoice-not-ready",
+   "title": "Sales invoice, e-invoice not ready",
+   "description": "A registered buyer whose address has no PIN code: the e-Invoice cell says what the JSON still needs, in the schema's words; nothing is guessed."
+  },
+  {
    "id": "sales-invoice.as-voucher",
    "kind": "happy",
    "hash": "screen=sales-invoice&state=as-voucher",
@@ -411,6 +418,13 @@
    "hash": "screen=balance-sheet&state=ledger",
    "title": "Balance sheet, ledger vouchers",
    "description": "Shree Ganesh Traders: opening, vouchers and running balance."
+  },
+  {
+   "id": "balance-sheet.voucher-einvoice-exported",
+   "kind": "happy",
+   "hash": "screen=balance-sheet&state=voucher-einvoice-exported",
+   "title": "Balance sheet, voucher, e-invoice exported",
+   "description": "Ctrl+E on a saved sales invoice wrote its e-invoice JSON (INV-01) to a file; a note says where. Upload is done by the user on the government portal."
   },
   {
    "id": "balance-sheet.voucher",

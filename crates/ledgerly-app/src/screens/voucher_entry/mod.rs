@@ -62,7 +62,9 @@ use egui::Ui;
 
 use crate::keymap::Action;
 use crate::screen::KeyHint;
+use crate::screens::entry_print::PrintKey;
 use crate::{AppCtx, Screen, ScreenAction};
+use state::Notice;
 
 impl Screen for VoucherEntryScreen {
     fn title(&self, tr: &Tr) -> String {
@@ -70,7 +72,10 @@ impl Screen for VoucherEntryScreen {
     }
 
     fn page_title(&self, tr: &Tr) -> String {
-        self.shown_type_name(tr)
+        match self.entry_print.page_title() {
+            Some(title) => title.to_owned(),
+            None => self.shown_type_name(tr),
+        }
     }
 
     /// The sidebar row of the voucher type stays selected, as the mock marks the open screen's
@@ -80,6 +85,9 @@ impl Screen for VoucherEntryScreen {
     }
 
     fn subtitle(&self, tr: &Tr) -> Option<String> {
+        if let Some(saved) = self.entry_print.subtitle() {
+            return Some(saved.to_owned());
+        }
         let (action, text) = match self.draft.kind {
             EntryKind::Payment => (
                 Action::NewPayment,
@@ -109,6 +117,13 @@ impl Screen for VoucherEntryScreen {
     }
 
     fn keys(&self, tr: &Tr) -> Vec<KeyHint> {
+        if self.entry_print.preview().is_some() {
+            // index.html:2272: the preview's key bar.
+            return vec![
+                KeyHint::new("Ctrl+P", tr.lit("Save as PDF")),
+                KeyHint::new("Esc", tr.lit("Close")),
+            ];
+        }
         let mut hints = vec![KeyHint::new("Enter", tr.t("voucher.key.next_field"))];
         let bound = [
             (Action::CreateMaster, tr.t("voucher.key.create_ledger")),
@@ -126,6 +141,9 @@ impl Screen for VoucherEntryScreen {
 
     fn ui(&mut self, ui: &mut Ui, ctx: &mut AppCtx) -> ScreenAction {
         self.tr = ctx.tr.clone();
+        if self.draw_print(ui, ctx) {
+            return ScreenAction::Stay;
+        }
         self.poll_ledger_create(ui);
         // A save that is out is polled first; the sheet is drawn either way, taking no input
         // while it waits.
@@ -154,6 +172,29 @@ impl VoucherEntryScreen {
         } else {
             self.type_name.clone()
         }
+    }
+
+    /// Ctrl+P and the print preview. `true` while the preview (or its busy note) takes the
+    /// screen, so the entry sheet is not drawn and takes no key.
+    fn draw_print(&mut self, ui: &mut Ui, ctx: &AppCtx) -> bool {
+        if let Some(note) = self.entry_print.tick(ctx) {
+            self.notice = Some(match note {
+                crate::screens::report_view::Notice::Info(s) => Notice::Info(s),
+                crate::screens::report_view::Notice::Error(s) => Notice::Error(s),
+            });
+        }
+        let busy = self.posting.is_some() || self.creating.is_some() || self.create.is_some();
+        if !busy {
+            let title = self.shown_type_name(&ctx.tr);
+            match self
+                .entry_print
+                .on_ctrl_p(ui, ctx, &title, !self.draft.is_blank())
+            {
+                PrintKey::None | PrintKey::Started => {}
+                PrintKey::Said(text) => self.notice = Some(Notice::Info(text)),
+            }
+        }
+        self.entry_print.show(ui)
     }
 
     /// Asks the engine for the number the voucher will get and, for a single-entry voucher, the

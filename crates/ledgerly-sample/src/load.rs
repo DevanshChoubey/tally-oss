@@ -246,7 +246,7 @@ fn company(seed: &Seed) -> Result<Company, SampleError> {
         mailing_name: None,
         address: Address {
             lines: c.address.clone(),
-            pincode: None,
+            pincode: Some(c.pincode.clone()),
             state: Some(state),
             country: String::new(),
         },
@@ -299,8 +299,8 @@ fn ledger(l: &LedgerSeed, id: LedgerId) -> Result<Ledger, SampleError> {
                 pan: None,
                 state: Some(state_code(&field, state)?),
                 address: Address {
-                    lines: l.city.iter().cloned().collect(),
-                    pincode: None,
+                    lines: l.street.iter().chain(l.city.iter()).cloned().collect(),
+                    pincode: l.pincode.clone(),
                     state: Some(state_code(&field, state)?),
                     country: String::new(),
                 },

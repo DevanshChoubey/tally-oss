@@ -30,6 +30,8 @@ pub(crate) struct CompanySeed {
     pub(crate) gstin: String,
     pub(crate) state: u8,
     pub(crate) address: Vec<String>,
+    /// The company's PIN code, six digits.
+    pub(crate) pincode: String,
     pub(crate) entity: EntitySeed,
     pub(crate) fy_start: String,
     pub(crate) books_begin: String,
@@ -131,6 +133,10 @@ pub(crate) struct LedgerSeed {
     pub(crate) tax: Option<TaxSeed>,
     pub(crate) state: Option<u8>,
     pub(crate) city: Option<String>,
+    /// The street line of a party's address, written before the city.
+    pub(crate) street: Option<String>,
+    /// The party's PIN code, six digits.
+    pub(crate) pincode: Option<String>,
     pub(crate) registration: Option<RegistrationSeed>,
     pub(crate) gstin: Option<String>,
     #[serde(default)]

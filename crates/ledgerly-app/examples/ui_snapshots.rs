@@ -412,6 +412,10 @@ enum Fixture {
     /// The sample company with no 2B file imported and no IMS action or filing recorded
     /// ([`ledgerly_sample::create_without_2b`]): the mock's `recon-empty` and `recon-error`.
     GodavariNo2b,
+    /// The sample company with the PIN code removed from Shree Ganesh Traders' address, the buyer
+    /// of the mock's `sales-invoice.einvoice-not-ready` ("A registered buyer whose address has no
+    /// PIN code"). Capture-only: the sample's own seed holds the PIN.
+    GodavariBuyerNoPin,
     /// Fictional Traders ([`company_file`]): the shots whose key paths or typed names need its
     /// data, or that show a state the sample does not have.
     Main,
@@ -437,6 +441,7 @@ impl Fixture {
         match self {
             Fixture::Godavari | Fixture::GodavariHeld => Some(godavari_company_file(dir)),
             Fixture::GodavariNo2b => Some(godavari_no_2b_file(dir)),
+            Fixture::GodavariBuyerNoPin => Some(godavari_buyer_no_pin_file(dir)),
             Fixture::GodavariShortStock => Some(godavari_short_stock_file(dir)),
             Fixture::Main => Some(company_file(dir)),
             Fixture::New => Some(new_company_file(dir)),
@@ -460,6 +465,7 @@ impl Fixture {
                     },
                     Fixture::Godavari
                     | Fixture::GodavariNo2b
+                    | Fixture::GodavariBuyerNoPin
                     | Fixture::GodavariShortStock
                     | Fixture::Main
                     | Fixture::New
@@ -507,6 +513,29 @@ impl Fixture {
 /// own "today" (21 Nov 2026, noon IST), so audit stamps and dates agree with the mock.
 fn godavari_company_file(dir: &Path) -> Api {
     let (api, _path) = ledgerly_sample::create_under(dir, sample_clock()).unwrap();
+    api
+}
+
+/// The sample company with Shree Ganesh Traders' PIN code taken out of its address, so the
+/// e-Invoice cell of an invoice to it says what is missing.
+fn godavari_buyer_no_pin_file(dir: &Path) -> Api {
+    let mut api = godavari_company_file(dir);
+    let books = match api.books() {
+        Ok(ledgerly_core::Outcome::Value(b)) => b,
+        other => panic!("no books: {other:?}"),
+    };
+    let mut buyer = books
+        .masters
+        .ledgers
+        .values()
+        .find(|l| l.name == "Shree Ganesh Traders")
+        .cloned()
+        .unwrap();
+    buyer.party.as_mut().unwrap().address.pincode = None;
+    match api.execute(ledgerly_api::Command::AlterLedger(buyer)) {
+        Ok(ledgerly_core::Outcome::Value(_)) => {}
+        other => panic!("the ledger was not altered: {other:?}"),
+    }
     api
 }
 
@@ -1811,6 +1840,17 @@ fn light_shots() -> Vec<Shot> {
             "",
         ))
         .press(&[(Key::Enter, NONE)]),
+        // The buyer's address has no PIN code, which the e-invoice schema requires: the e-Invoice
+        // cell says what is missing (the mock's `sales-invoice.einvoice-not-ready`).
+        three_lines(godavari_invoice(
+            "sales-invoice.einvoice-not-ready",
+            "Shree Ganesh",
+            "27",
+            "",
+        ))
+        .on(Fixture::GodavariBuyerNoPin)
+        .press(&[(Key::Enter, NONE)])
+        .expect("Sales invoice", None),
         // A cash sale: Cash has no GSTIN, so the sale is B2C.
         invoice_line(
             invoice_line(
@@ -1824,15 +1864,28 @@ fn light_shots() -> Vec<Shot> {
             "640",
         )
         .press(&[(Key::Enter, NONE)]),
-        // An item picked with no quantity, then Ctrl+A: the save is refused with the reason.
+        // Line 2 has an item and its quantity is cleared again, line 3 has a name that is no item
+        // (Enter refuses it, so it stays typed in the row), then Ctrl+A: the save is refused and
+        // both reasons are listed. Shift+Enter goes back from line 3 to line 2's quantity.
         invoice_line(
-            godavari_invoice("sales-invoice.validation-error", "Shree Ganesh", "27", ""),
-            "Drip lateral",
-            "25",
-            "3850",
+            invoice_line(
+                godavari_invoice("sales-invoice.validation-error", "Shree Ganesh", "27", ""),
+                "Drip lateral",
+                "25",
+                "3850",
+            ),
+            "Brass nozzle",
+            "67",
+            "505",
         )
-        .type_text("Brass nozzle")
-        .press(&[(Key::Enter, NONE), (Key::A, Modifiers::COMMAND)]),
+        .type_text("Drip kit deluxe")
+        .press(&[
+            (Key::Enter, Modifiers::SHIFT),
+            (Key::Enter, Modifiers::SHIFT),
+        ])
+        .press(&[(Key::End, NONE)])
+        .press(&[(Key::Backspace, NONE); 4])
+        .press(&[(Key::A, Modifiers::COMMAND)]),
         // The mock's `sales-invoice.period-locked` (index.html `SCREENS['sales-invoice']`, state
         // period-locked): SI/0418 to Shree Ganesh Traders dated 28 Oct 2026, two lines (25 drip
         // laterals at 3,850.00 and 67 brass nozzle sets at 505.00), no order number and no

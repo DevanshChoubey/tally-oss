@@ -395,6 +395,7 @@ mark{background:var(--accent-soft);color:var(--accent-ink);border-radius:2px;pad
  {"id":"sales-invoice.default","kind":"happy","hash":"screen=sales-invoice&state=default","title":"Sales invoice, intra-state","description":"F8 item invoice to a Maharashtra party: CGST + SGST recomputed live on every keystroke."},
  {"id":"sales-invoice.gst-inter-state","kind":"happy","hash":"screen=sales-invoice&state=gst-inter-state","title":"Sales invoice, inter-state","description":"Party in Gujarat: place of supply differs, so the engine applies IGST."},
  {"id":"sales-invoice.b2c","kind":"happy","hash":"screen=sales-invoice&state=b2c","title":"Sales invoice, unregistered buyer","description":"Cash sale to an unregistered buyer: B2C, no GSTIN, e-invoice not applicable."},
+ {"id":"sales-invoice.einvoice-not-ready","kind":"happy","hash":"screen=sales-invoice&state=einvoice-not-ready","title":"Sales invoice, e-invoice not ready","description":"A registered buyer whose address has no PIN code: the e-Invoice cell says what the JSON still needs, in the schema's words; nothing is guessed."},
  {"id":"sales-invoice.as-voucher","kind":"happy","hash":"screen=sales-invoice&state=as-voucher","title":"Sales invoice, as voucher","description":"Ctrl+H, As voucher: ledger lines with the CGST and SGST ledgers chosen; the engine fills the party and tax amounts."},
  {"id":"sales-invoice.mode-list","kind":"happy","hash":"screen=sales-invoice&state=mode-list","title":"Sales invoice, change mode","description":"Ctrl+H opens the list of modes: Item Invoice, Accounting Invoice, As Voucher; Enter or a click picks one."},
  {"id":"sales-invoice.item-list","kind":"happy","hash":"screen=sales-invoice&state=item-list","title":"Sales invoice, item list open","description":"Type-ahead over item masters with HSN, rate, GST and stock; Alt+C creates a new item."},
@@ -424,6 +425,7 @@ mark{background:var(--accent-soft);color:var(--accent-ink);border-radius:2px;pad
  {"id":"balance-sheet.detailed","kind":"happy","hash":"screen=balance-sheet&state=detailed","title":"Balance sheet, detailed","description":"Alt+F1 expands every group to ledgers."},
  {"id":"balance-sheet.group","kind":"happy","hash":"screen=balance-sheet&state=group","title":"Balance sheet, group drill","description":"Drilled into Sundry debtors: ledgers with balances that sum to the group figure."},
  {"id":"balance-sheet.ledger","kind":"happy","hash":"screen=balance-sheet&state=ledger","title":"Balance sheet, ledger vouchers","description":"Shree Ganesh Traders: opening, vouchers and running balance."},
+ {"id":"balance-sheet.voucher-einvoice-exported","kind":"happy","hash":"screen=balance-sheet&state=voucher-einvoice-exported","title":"Balance sheet, voucher, e-invoice exported","description":"Ctrl+E on a saved sales invoice wrote its e-invoice JSON (INV-01) to a file; a note says where. Upload is done by the user on the government portal."},
  {"id":"balance-sheet.voucher","kind":"happy","hash":"screen=balance-sheet&state=voucher","title":"Balance sheet, voucher","description":"Voucher SI/0412 read-only, with its audit line."},
  {"id":"balance-sheet.loading","kind":"loading","hash":"screen=balance-sheet&state=loading","title":"Balance sheet, computing","description":"Report is computing; cancellable; the last result is never shown as current."},
  {"id":"balance-sheet.provisional","kind":"error","hash":"screen=balance-sheet&state=provisional","title":"Balance sheet, provisional stock","description":"Negative stock makes closing stock Provisional; the figure is marked and explained, never silently used."},
@@ -591,20 +593,20 @@ const LEDGERS = [
  ['ananya','Ananya Kulkarni, capital','capital',-R(1500000)],
  ['rohan','Rohan Deshpande, capital','capital',-R(500000)],
  ['mulaloan','Mula Valley Co-op Bank, term loan','secured',-R(840000)],
- ['kaveri','Kaveri Packaging Pvt Ltd','creditors',-R(214300),{gstin:'29ZZZZZ0001Z1ZL',st:'29',city:'Mysuru',days:30}],
- ['nilgiri','Nilgiri Steel Traders','creditors',-R(200150),{gstin:'29ZZZZZ0002Z1ZK',st:'29',city:'Bengaluru',days:30}],
- ['vardhaman','Vardhaman Logistics','creditors',-R(150000),{gstin:'27ZZZZZ0003Z1ZN',st:'27',city:'Pune',days:15}],
- ['rupa','Rupa Polymers','creditors',0,{gstin:'24ZZZZZ0004Z1ZS',st:'24',city:'Ahmedabad',days:30}],
+ ['kaveri','Kaveri Packaging Pvt Ltd','creditors',-R(214300),{gstin:'29ZZZZZ0001Z1ZL',st:'29',city:'Mysuru',street:'Unit 7, Sample Industrial Layout',pin:'570016',days:30}],
+ ['nilgiri','Nilgiri Steel Traders','creditors',-R(200150),{gstin:'29ZZZZZ0002Z1ZK',st:'29',city:'Bengaluru',street:'Shed 22, Sample Steel Yard',pin:'560058',days:30}],
+ ['vardhaman','Vardhaman Logistics','creditors',-R(150000),{gstin:'27ZZZZZ0003Z1ZN',st:'27',city:'Pune',street:'Gate 3, Sample Transport Nagar',pin:'411044',days:15}],
+ ['rupa','Rupa Polymers','creditors',0,{gstin:'24ZZZZZ0004Z1ZS',st:'24',city:'Ahmedabad',street:'Unit 12, Sample Polymer Park',pin:'382445',days:30}],
  ['cgstout','CGST output','duties',0],['sgstout','SGST output','duties',0],['igstout','IGST output','duties',0],
  ['cgstin','CGST input','duties',0],['sgstin','SGST input','duties',0],['igstin','IGST input','duties',0],
  ['tdspay','TDS payable','duties',-R(12500)],
  ['audit','Audit fee payable','provisions',-R(45000)],['salpay','Salary payable','provisions',-R(286000)],
  ['plant','Plant and machinery','fixed',R(1840000)],['furn','Furniture and fixtures','fixed',R(235000)],['comp','Computers','fixed',R(303179)],
- ['sgt','Shree Ganesh Traders','debtors',R(120000),{gstin:'27ZZZZZ0005Z1ZL',st:'27',city:'Nashik',days:30,alias:'SGT'}],
- ['mai','Mehta Agro Industries','debtors',0,{gstin:'24ZZZZZ0006Z1ZQ',st:'24',city:'Rajkot',days:30}],
- ['lfs','Lakshmi Farm Supplies','debtors',R(96250),{gstin:'33ZZZZZ0007Z1ZQ',st:'33',city:'Coimbatore',days:30}],
- ['phs','Patil Hardware Stores','debtors',R(88420),{gstin:'27ZZZZZ0008Z1ZI',st:'27',city:'Satara',days:30}],
- ['ksk','Kisan Seva Kendra','debtors',R(147384.5),{gstin:'23ZZZZZ0009Z1ZP',st:'23',city:'Indore',days:30,alias:'KSK'}],
+ ['sgt','Shree Ganesh Traders','debtors',R(120000),{gstin:'27ZZZZZ0005Z1ZL',st:'27',city:'Nashik',street:'Shop 5, Sample Market Road',pin:'422001',days:30,alias:'SGT'}],
+ ['mai','Mehta Agro Industries','debtors',0,{gstin:'24ZZZZZ0006Z1ZQ',st:'24',city:'Rajkot',street:'Godown 3, Sample Agro Estate',pin:'360003',days:30}],
+ ['lfs','Lakshmi Farm Supplies','debtors',R(96250),{gstin:'33ZZZZZ0007Z1ZQ',st:'33',city:'Coimbatore',street:'Survey 88, Sample Farm Road',pin:'641012',days:30}],
+ ['phs','Patil Hardware Stores','debtors',R(88420),{gstin:'27ZZZZZ0008Z1ZI',st:'27',city:'Satara',street:'Gala 9, Sample Trade Centre',pin:'415001',days:30}],
+ ['ksk','Kisan Seva Kendra','debtors',R(147384.5),{gstin:'23ZZZZZ0009Z1ZP',st:'23',city:'Indore',street:'Block C, Sample Krishi Mandi Road',pin:'452001',days:30,alias:'KSK'}],
  ['cashsale','Cash sale (unregistered)','debtors',0,{gstin:'',st:'27',city:'Pune',days:0}],
  ['cash','Cash','cash',R(48215.5)],
  ['saptagiri','Saptagiri Commercial Bank A/c','bank',R(610000),{acct:'XXXX 4471'}],
@@ -1369,8 +1371,9 @@ const INV_SEED={
  default:{party:'sgt',date:'21-11-2026',lines:[['lat16',25,R(3850)],['noz6',67,R(505)],['spr16',40,R(1450)]]},
  'gst-inter-state':{party:'mai',date:'21-11-2026',lines:[['lat16',25,R(3850)],['noz6',67,R(505)],['spr16',40,R(1450)]]},
  b2c:{party:'cashsale',date:'21-11-2026',lines:[['spr16',2,R(1450)],['pick',3,R(640)]]},
+ 'einvoice-not-ready':{party:'sgt',date:'21-11-2026',lines:[['lat16',25,R(3850)],['noz6',67,R(505)],['spr16',40,R(1450)]]},
  'item-list':{party:'sgt',date:'21-11-2026',lines:[['lat16',25,R(3850)],['noz6',67,R(505)]],openItem:'p'},
- 'validation-error':{party:'sgt',date:'21-11-2026',lines:[['lat16',25,R(3850)],['noz6',null,R(505)],[null,4,R(2200),'Drip kit deluxe']]},
+ 'validation-error':{party:'sgt',date:'21-11-2026',lines:[['lat16',25,R(3850)],['noz6',null,R(505)],[null,null,null,'Drip kit deluxe']]},
  'period-locked':{party:'sgt',date:'28-10-2026',lines:[['lat16',25,R(3850)],['noz6',67,R(505)]]},
  'save-confirm':{party:'sgt',date:'21-11-2026',lines:[['lat16',25,R(3850)],['noz6',67,R(505)],['spr16',40,R(1450)]]},
  saved:{party:'sgt',date:'21-11-2026',lines:[],no:'SI/0419'}};
@@ -1526,7 +1529,7 @@ function recalcInv(flash){
   $('#taxbox').innerHTML=h;
   $('#v-words').textContent=res.total?words(res.total):'';
   $('#v-pos-note').innerHTML=`${ic('info')}<span>${res.inter?`Place of supply ${STATES[pos]} (${pos}), you are in Maharashtra (27). <b>IGST applies.</b>`:`Place of supply and your state are both Maharashtra (27). <b>Tax splits into CGST and SGST.</b>`} Rates come from the item masters and rule pack 2026.11.</span>`;
-  $('#v-einv').innerHTML=p.gstin?`${badge('JSON ready (INV-01)','b-acc','file')} <span class="meta">upload: v1.1</span>`:`<span class="t2">Not applicable: B2C</span>`;
+  $('#v-einv').innerHTML=p.gstin&&parseHash().state==='einvoice-not-ready'?`${badge('Not ready','b-warn','alert')} <span class="meta">the buyer ${esc(p.name)} has no PIN code (Pin is required)</span>`:p.gstin?`${badge('JSON ready (INV-01)','b-acc','file')} <span class="meta">upload: v1.1</span>`:`<span class="t2">Not applicable: B2C</span>`;
   const bal=balances()[INV.party];
   $('#v-after').innerHTML=INV.party==='cashsale'?'Cash sale: amount goes to Cash.':`${esc(p.name)}: balance now ₹${inr(Math.abs(bal))} ${bal>=0?'Dr':'Cr'}, after saving ₹${inr(Math.abs(bal+res.total))} Dr (engine).`;
   const errs=invErrors(); $('#v-errs').innerHTML=errs.length?`<div class="note bad" role="alert">${ic('alert')}<div><b>${errs.length} thing${errs.length>1?'s':''} to fix before saving</b>${errs.map(x=>`<div>${esc(x[2])}</div>`).join('')}</div></div>`:'';
@@ -1720,7 +1723,7 @@ function listKeys(sel,k){ // shared J/K/arrows + Enter for tables with tr[data-r
   return false}
 
 /* ---------- balance sheet with drill-down ---------- */
-const BS_LEVEL={default:0,detailed:0,provisional:0,loading:0,group:1,ledger:2,voucher:3};
+const BS_LEVEL={default:0,detailed:0,provisional:0,loading:0,group:1,ledger:2,voucher:3,'voucher-einvoice-exported':3};
 SCREENS['balance-sheet']={title:'Balance sheet',default:'default',
  render(st,p){
   const g=p.g||'debtors', l=p.l||'sgt', vid=p.v||'SI/0412';
@@ -1763,7 +1766,7 @@ SCREENS['balance-sheet']={title:'Balance sheet',default:'default',
     <div class="actions" style="margin-top:12px"><button class="btn" data-go="${hashFor('masters','ledger-detail')}">Alter ledger ${kb('Ctrl+Enter')}</button></div></div></div>`;
   } else {
    const v=VCH[vid]; const ps=postings(v);
-   body=`<div class="grid g-main"><div class="card" id="report-body"><div class="vhead"><div class="fld"><label>Type</label><div class="ro">${v.type}</div></div><div class="fld"><label>Number</label><div class="ro">${v.id}</div></div><div class="fld"><label>Date</label><div class="ro">${fmtDate(v.date)}</div></div><div class="fld"><label>Status</label><div class="ro">${badge('Posted','b-ok','check')}</div></div></div>
+   body=`${st==='voucher-einvoice-exported'?`<div class="note" role="status" style="margin-bottom:12px">${ic('info')}<span>Exported the e-invoice JSON (INV-01) to /home/asha/Documents/e-invoice-SI-0412.json. Upload it on the government portal's bulk page; nothing is sent from here.</span></div>`:''}<div class="grid g-main"><div class="card" id="report-body"><div class="vhead"><div class="fld"><label>Type</label><div class="ro">${v.type}</div></div><div class="fld"><label>Number</label><div class="ro">${v.id}</div></div><div class="fld"><label>Date</label><div class="ro">${fmtDate(v.date)}</div></div><div class="fld"><label>Status</label><div class="ro">${badge('Posted','b-ok','check')}</div></div></div>
     ${v.lines?`<table class="t"><thead><tr><th>Item</th><th class="num">Qty</th><th class="num">Rate</th><th class="num">Amount</th></tr></thead><tbody>${v.lines.map(([it,q,r])=>`<tr><td>${esc(ITEM[it].name)}</td><td class="num">${q} ${ITEM[it].unit}</td><td class="num">${inr(r)}</td><td class="num">${inr(q*r)}</td></tr>`).join('')}</tbody></table>`:''}
     <table class="t" style="margin-top:8px"><thead><tr><th>Ledger posting ${prov('eng','engine')}</th><th class="num">Debit</th><th class="num">Credit</th></tr></thead><tbody>
     ${ps.map(([lid,a])=>`<tr><td>${esc(LED[lid].name)}</td><td class="num">${a>0?inr(a):''}</td><td class="num">${a<0?inr(-a):''}</td></tr>`).join('')}
@@ -1776,6 +1779,7 @@ SCREENS['balance-sheet']={title:'Balance sheet',default:'default',
  mount(){if(!$('#bs tr.sel[data-row]')){const r=$('#bs tr[data-row]');r&&r.classList.add('sel')}},
  key(k,e,st,p){
   if(k==='Alt+F1'&&BS_LEVEL[st]===0){go(hashFor('balance-sheet',st==='detailed'?'default':'detailed'));return true}
+  if(k==='Ctrl+E'&&st==='voucher'&&String(p.v||'SI/0412').startsWith('SI/')){go(hashFor('balance-sheet','voucher-einvoice-exported',{g:p.g,l:p.l,v:p.v||'SI/0412'}));return true}
   if(k==='Ctrl+E'){toast('Export: PDF, XLSX or CSV of exactly what is on screen (mock).');return true}
   if(st==='loading'&&k==='Escape'){go(hashFor('home'),'screen-pop');toast('Report cancelled.');return true}
   return listKeys('#bs',k)},
@@ -1783,7 +1787,7 @@ SCREENS['balance-sheet']={title:'Balance sheet',default:'default',
  back(st,p){const g=p.g||'debtors',l=p.l||'sgt';
   if(st==='group')return hashFor('balance-sheet','default',{sel:groupOf(g).name});
   if(st==='ledger')return hashFor('balance-sheet','group',{g});
-  if(st==='voucher')return hashFor('balance-sheet','ledger',{g,l});
+  if(st==='voucher'||st==='voucher-einvoice-exported')return hashFor('balance-sheet','ledger',{g,l});
   return hashFor('home')},
  backTx(st){return BS_LEVEL[st]>0?'drill-up':'screen-pop'},
  keys(st){return st==='loading'?[['','Computing'],['Esc','Cancel']]:[['','Balance sheet'],['J / K','Move'],['Enter','Drill in'],['Esc','Back up'],['Alt+F1','Detailed'],['Ctrl+E','Export'],['F2','Date']]}
@@ -2402,9 +2406,9 @@ function printPaperInvoice(){
   const tax=hsns.map(h=>{const g=computeInvoice(v.lines.filter(l=>ITEM[l[0]].hsn===h).map(([item,qty,rate])=>({item,qty,rate})),p.st).rows[0], pct=g.rate+'%', half=(g.rate/2)+'%';
     return {c:[h,inr(g.taxable),g.cgst?half:dot,g.cgst?inr(g.cgst):dot,g.sgst?half:dot,g.sgst?inr(g.sgst):dot,g.igst?pct:dot,g.igst?inr(g.igst):dot,inr((g.cgst||0)+(g.sgst||0)+(g.igst||0))]}});
   const inWords='Rupees '+words(inv.total).replace(/ rupees only$/,'').split(/[ -]/).map(w=>w[0].toUpperCase()+w.slice(1)).join(' ')+' Only';
-  return `<h2 style="margin:0;color:#1c1b19">${esc(CO.name)}</h2><div style="color:#4a4741">Plot 14, Sample Industrial Estate, Pune, Maharashtra<br>GSTIN: ${CO.gstin}</div>`
+  return `<h2 style="margin:0;color:#1c1b19">${esc(CO.name)}</h2><div style="color:#4a4741">Plot 14, Sample Industrial Estate, Pune, Maharashtra, 411026<br>GSTIN: ${CO.gstin}</div>`
    +`<h2 style="margin:6px 0 0;color:#1c1b19">Tax Invoice</h2><div style="color:#4a4741">Invoice No: ${v.id}<br>Date: ${v.date}</div>`
-   +`<div style="margin-top:8px;color:#4a4741"><b>Bill to:</b><br>Name: ${esc(p.name)}<br>Address: ${p.city}, ${STATES[p.st]}<br>GSTIN: ${p.gstin||'Unregistered'}<br>Place of supply: ${p.st}-${STATES[p.st]}</div>`
+   +`<div style="margin-top:8px;color:#4a4741"><b>Bill to:</b><br>Name: ${esc(p.name)}<br>Address: ${p.street}, ${p.city}, ${STATES[p.st]}, ${p.pin}<br>GSTIN: ${p.gstin||'Unregistered'}<br>Place of supply: ${p.st}-${STATES[p.st]}</div>`
    +ptable(['#','Description','HSN/SAC','Qty','Unit','Rate','Taxable value','GST','Amount'],items,['l','l','l','r','l','r','r','r','r'])
    +'<div style="margin-top:10px;font-weight:600">Tax summary</div>'
    +ptable(['HSN/SAC','Taxable value','CGST rate','CGST','SGST rate','SGST','IGST rate','IGST','Total tax'],tax,['l','r','r','r','r','r','r','r','r'])

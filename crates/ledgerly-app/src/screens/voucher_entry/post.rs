@@ -40,7 +40,10 @@ impl VoucherEntryScreen {
     /// draft and says why nothing was saved.
     pub(super) fn finish_post(&mut self, reply: CommandReply) {
         match reply {
-            CommandReply::Booked(_) => self.confirm_saved(),
+            CommandReply::Booked(result) => {
+                self.entry_print.remember(result.posted);
+                self.confirm_saved();
+            }
             CommandReply::Unsupported(u) => {
                 self.save_failed(&format!("not supported yet: {} ({})", u.what, u.reason));
             }

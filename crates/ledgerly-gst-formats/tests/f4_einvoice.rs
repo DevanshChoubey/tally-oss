@@ -575,3 +575,34 @@ fn item_gross_amount_is_qty_times_unit_price() {
         "{fields:?}"
     );
 }
+
+// provenance: observed from the NIC e-Invoice sandbox schema page for INV-01 v1.03,
+// https://einv-apisandbox.nic.in/version1.03/generate-irn.html, read 2026-11-26: SellerDtls.Addr2 and
+// BuyerDtls.Addr2 are 3 to 100 characters; SellerDtls.Loc is 3 to 50 characters; BuyerDtls.Loc is
+// 3 to 100 characters.
+#[test]
+fn addr2_is_three_to_one_hundred_characters() {
+    let mut e = intra_sample();
+    e.seller.address2 = Some("AB".to_owned());
+    assert_eq!(invalid_fields(&e), vec!["SellerDtls.Addr2".to_owned()]);
+
+    let mut e = intra_sample();
+    e.buyer.address2 = Some("ABC".to_owned());
+    assert!(validate_einvoice(&e).is_ok());
+}
+
+#[test]
+fn the_buyers_location_may_run_to_one_hundred_characters_the_sellers_to_fifty() {
+    let long = "L".repeat(60);
+    let mut e = intra_sample();
+    e.buyer.location.clone_from(&long);
+    assert!(validate_einvoice(&e).is_ok());
+
+    let mut e = intra_sample();
+    e.seller.location = long;
+    assert_eq!(invalid_fields(&e), vec!["SellerDtls.Loc".to_owned()]);
+
+    let mut e = intra_sample();
+    e.buyer.location = "L".repeat(101);
+    assert_eq!(invalid_fields(&e), vec!["BuyerDtls.Loc".to_owned()]);
+}

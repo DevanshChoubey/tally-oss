@@ -104,7 +104,10 @@ Classes:
 
 - **DELIBERATE** the GSTR-3B key bar stays "1 2 3 Tabs, Esc Back": the engine has no GSTR-3B JSON
   and the tab has no openable rows, so J/K, Enter and Ctrl+E would be dead keys (Ctrl+E is shown
-  disabled).
+  disabled). Re-checked 2026-11-26: help.tallysolutions.com/tallyprime-json-file-gstr-3b/ and
+  /file-gstr-3b-offline-tool/ describe the export and upload steps but not the file's schema, and no
+  GSTN-published schema for the GSTR-3B offline-tool JSON was found (only third-party descriptions),
+  so no writer is built (rule A5: no shape without a source).
 - **NOT BUILT** set-off starts from the month's liability and the credit the user accepted in IMS;
   the electronic credit ledger's opening balance and earlier periods are not modelled, and credit
   that is only deemed accepted is treated as not used (rule `pending observed`: IMS no-action
@@ -119,7 +122,10 @@ Classes:
   found; the parser keeps its `items[]` shape.
 - **NOT BUILT** the 2B tab leaves out deemed acceptance and the amendment line: no public source found.
 - **NOT BUILT** Re-apply masters and Export IMS action file: the shell takes neither request, so the
-  buttons are not drawn.
+  buttons are not drawn. Read 2026-11-26: help.tallysolutions.com/upload-ims-inward-invoices/ documents
+  only an online upload (Alt+Z, All GST Options, Upload IMS Inward Invoices; Ctrl+B filters; S Send
+  (Online)); no page read describes an offline IMS action file or a "Re-apply masters" action, and the
+  mock has no such button, so nothing is built and nothing is drawn.
 - **DELIBERATE** the 2B tab's "Mark GSTR-3B filed" button and stacked IMS cell: the mock has no way
   to record a filing.
 - **DELIBERATE** GSTR-1 by section with a side card, a folded voucher table and the agreement line
@@ -243,7 +249,30 @@ Classes:
   cess ledger, no GST ledger or the wrong heads show "Not supported yet" with the reason.
 - **DELIBERATE** an as-voucher entry is saved as an accounting invoice (the GST returns read that
   mode); it opens again as one.
-- **NOT BUILT** the e-Invoice cell says "Not built yet": nothing maps a voucher to an `EInvoice`.
+- **DELIBERATE** the e-Invoice cell shows the API's answer: "JSON ready (INV-01)" only when the invoice
+  mapped to the schema and passed the local check, "Not ready" with the API's reason (the mock's
+  `sales-invoice.einvoice-not-ready`), "Not applicable: B2C" for an unregistered buyer, a dash until the
+  engine has answered. Source: NIC schema page (einv-apisandbox.nic.in/version1.03/generate-irn.html,
+  read 2026-11-26). The sample company and its registered parties have two-line addresses and PIN
+  codes (synthetic street lines, PINs in each city's India Post range), so the default invoice says
+  "JSON ready (INV-01)" as the mock does; the printed paper and the mock's paper both carry the street,
+  city, state and PIN. The mock's not-ready state is a buyer with no PIN: the capture removes Shree
+  Ganesh Traders' PIN from a copy of the sample (`Fixture::GodavariBuyerNoPin`), and the reason is the
+  API's: "the buyer Shree Ganesh Traders has no PIN code (Pin is required)".
+- **NOT BUILT** in accounting and as-voucher modes the app still draws the Buyer's order no. and
+  e-Invoice cells (the mock's `sales-invoice.as-voucher` draws neither); the cell then says "Not ready:
+  an accounting invoice has no items to list (ItemList needs HSN codes)", which is the API's true
+  answer. Hiding the cells in those modes is a layout change left for the mock and app to agree on.
+- **NOT BUILT** the mock's "upload: v1.1" note is shown only beside "JSON ready"; upload itself has no
+  network and is the user's step on the IRP bulk-upload page (help.tallysolutions.com/generate-e-invoice-offline-tallyhelp/,
+  read 2026-11-26). Credit and debit notes, accounting invoices, reverse charge, UTGST and cess invoices
+  are `Unsupported` for e-invoice JSON with the reason; no document type other than INV is written.
+- **DELIBERATE** Ctrl+E on a saved sales invoice's voucher view exports its e-invoice JSON to a chosen
+  file and says where in a note (the mock's `balance-sheet.voucher-einvoice-exported`); the key bar keeps
+  the mock's generic "Ctrl+E Export". The export is covered by headless tests
+  (`tests/s18_einvoice_export.rs`, and the sample's SI/0405 in `ledgerly-sample/tests/s18_einvoice_pins.rs`).
+- **NOT BUILT** the accounting product exports from a list of vouchers (Alt+Z, Send for e-Invoicing,
+  Offline Export, files split under 2 MB; read 2026-11-26): this build exports one voucher at a time.
 - **DELIBERATE** the sample GSTIN is synthetic and the rule pack reads "2026.1-slabs".
 - **NOT BUILT** the toast has no Undo Ctrl+Z: no undo exists.
 - **DELIBERATE** the empty tax box shows dashes, not 0.00, until the engine has answered (never a
@@ -257,8 +286,14 @@ Classes:
 - **DELIBERATE** while a line is invalid Save is disabled and the error is a red box with an alert
   icon naming the line. The valid lines keep the engine's amount and rate (the engine is asked about
   them alone); the tax box shows dashes, not figures for the half-entered invoice (never a wrong number).
-- **NOT BUILT** the item list shows name and unit only; the free-text item row of
-  `sales-invoice.validation-error` is not offered.
+- **DELIBERATE** a typed name that is no item stays typed in its row, and Enter is refused ("No item
+  matches; create it on the masters screen."): no page read documents a free-text item on a voucher line
+  (re-read 2026-11-26: help.tallysolutions.com/tally-prime/purchase-process/purchase-goods-and-services-tally/
+  and the sales pages document Alt+C creating a master on the party field only). So the quantity and rate of
+  that row cannot be typed, and the mock's `sales-invoice.validation-error` row 3 now shows the name alone
+  (was "Drip kit deluxe", 4, 2,200.00: unreachable). The app lists both reasons (2 things to fix) as the
+  mock does. Left over: the refusal's amber note stays under the red box, the Save button is disabled while
+  a line is wrong, and the tax box shows dashes where the mock shows the valid line's partial total.
 - **DELIBERATE** the unknown-item error ends "create it in Masters", where the mock said "with Alt+C": the
   pages read document Alt+C on ledger fields only and the screen cannot make an item, so the mock's
   sentence would promise what the app does not do (mock corrected in round s17).
@@ -362,7 +397,19 @@ Credit (`ledgerly_reports::print_text` places the engine's figures only).
 - **DELIBERATE** a voucher's preview reads as the entry screen names it ("Sales invoice SI/0412", crumb
   "Sales invoice", subtitle "Saved · party · date", as the mock). The app reaches it from the voucher view,
   which a drill from the Day book opens, so the crumb is Home, Day book, Sales invoice; the mock's is Home,
-  Sales invoice because it has no such drill. The invoice entry screen has no Ctrl+P on a saved invoice.
+  Sales invoice because it has no such drill. Ctrl+P on an entry screen (every voucher screen and the item
+  invoice) previews the voucher that screen saved last, headed the same ("Journal JV/0033", "Saved · date"),
+  with the entry screen's own crumb; Esc returns to the empty next voucher (tests/s18_entry_print*.rs).
+  Source: help.tallysolutions.com/print-documents/ and /print-invoices-reports/, read 2026-11-26.
+- **DELIBERATE** the product has no voucher alteration screen yet, so Ctrl+P prints only the voucher this
+  screen saved; unsaved lines get "Save the voucher first with Ctrl+A", a screen that saved nothing says so.
+  Printing a voucher opened from a list is the voucher view's Ctrl+P (above).
+- **DELIBERATE** Alt+P is not bound: the help page lists it as the Print menu (printer set-up), not as
+  print-current (help.tallysolutions.com/print-invoices-reports/, read 2026-11-26).
+- **NOT BUILT** "print after saving" (a voucher-type option in the accounting product): `VoucherType` has no
+  such field, the voucher-type master has no screen or mock state to set it, and adding one changes the
+  stored schema; so it is open, not decided. An accounting invoice previews as "not
+  printed" with the print crate's own reason (it has no item table to lay out).
 
 ## Accessibility, themes, keys
 

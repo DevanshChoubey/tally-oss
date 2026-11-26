@@ -14,28 +14,30 @@ use super::extras::BalanceShown;
 use super::keys::{Prompt, read_keys};
 use super::with_engine_lines;
 use super::{
-    Field, GstBlock, GstResult, GstStatus, InvoiceKind, InvoiceMode, ItemInvoiceScreen, Notice,
-    UiEvent, place_label,
+    EInvoiceState, Field, GstBlock, GstResult, GstStatus, InvoiceKind, InvoiceMode,
+    ItemInvoiceScreen, Notice, UiEvent, place_label,
 };
 use crate::i18n::Tr;
 use crate::screen::KeyHint;
+use crate::screens::entry_print::PrintKey;
 use crate::screens::voucher_entry::parse_entry_date;
 use crate::screens::voucher_sheet::{self as sheet, Col, InputSpec, Look, Total};
 use crate::shell::submit::{self, CommandReply};
-use crate::theme::TEXT_BODY;
+use crate::theme::{TEXT_BODY, TEXT_META};
 use crate::ui::a11y;
-use crate::ui::badge::{BadgeKind, badge};
+use crate::ui::badge::{BadgeKind, badge, badge_with_icon};
 use crate::ui::button::{ButtonKind, button, button_icon};
 use crate::ui::icon::Icon;
 use crate::ui::note::{NoteKind, note};
 use crate::ui::page_head::page_head_numbered;
 use crate::ui::prov::{ProvKind, prov};
 use crate::ui::{format, para_text, tokens};
+use crate::worker::Poll;
 use crate::{AppCtx, Screen, ScreenAction};
 use egui::{Frame, Id, Margin, Rect, Response, RichText, Ui};
 use ledgerly_api::{Command, is_gst_tax_ledger};
 use ledgerly_core::format::amount_in_words;
-use ledgerly_core::{DrCr, LedgerId, StateCode};
+use ledgerly_core::{DrCr, LedgerId, Outcome, StateCode};
 use ledgerly_model::{Masters, Voucher};
 
 /// The one-line purpose under the page title of an item invoice (index.html:1282). The screen asks
@@ -575,10 +577,10 @@ fn gstin_line(ui: &mut Ui, masters: &Masters, party: Option<LedgerId>) {
         }
     }
 }
-/// The e-Invoice cell. This build writes no e-Invoice JSON from a voucher yet (the INV-01 writer
-/// in `ledgerly-gst-formats` is not wired to the invoice screen), so a registered buyer's cell says
-/// so rather than claiming a file is ready; an unregistered buyer is B2C, which has none.
-fn einvoice_cell(ui: &mut Ui, masters: &Masters, party: Option<LedgerId>) {
+/// The e-Invoice cell (index.html: "JSON ready (INV-01)", "Not ready" with the reason, "Not
+/// applicable: B2C"). It says "JSON ready" only when the API mapped this invoice to the schema;
+/// until it has answered the cell shows a dash, as the tax box does.
+fn einvoice_cell(ui: &mut Ui, masters: &Masters, party: Option<LedgerId>, state: &EInvoiceState) {
     let t = tokens(ui);
     let Some(party) = party else {
         return;
@@ -588,12 +590,45 @@ fn einvoice_cell(ui: &mut Ui, masters: &Masters, party: Option<LedgerId>) {
         .get(&party)
         .and_then(|l| l.party.as_ref())
         .is_some_and(|p| p.gstin.is_some());
-    let (text, ink) = if registered {
-        (crate::i18n::lit("Not built yet"), t.text_3)
-    } else {
-        (crate::i18n::lit("Not applicable: B2C"), t.text_2)
-    };
-    ui.label(RichText::new(text).size(TEXT_BODY).color(ink));
+    if !registered {
+        ui.label(
+            RichText::new(crate::i18n::lit("Not applicable: B2C"))
+                .size(TEXT_BODY)
+                .color(t.text_2),
+        );
+        return;
+    }
+    match state {
+        EInvoiceState::Unknown | EInvoiceState::Checking(_) => {
+            ui.label(RichText::new("\u{2013}").size(TEXT_BODY).color(t.text_3));
+        }
+        EInvoiceState::Ready => {
+            ui.horizontal(|ui| {
+                badge_with_icon(
+                    ui,
+                    BadgeKind::Accent,
+                    &crate::i18n::lit("JSON ready (INV-01)"),
+                    Some(Icon::File),
+                );
+                ui.label(
+                    RichText::new(crate::i18n::lit("upload: v1.1"))
+                        .size(TEXT_META)
+                        .color(t.text_3),
+                );
+            });
+        }
+        EInvoiceState::NotReady(reason) => {
+            ui.horizontal_wrapped(|ui| {
+                badge_with_icon(
+                    ui,
+                    BadgeKind::Warn,
+                    &crate::i18n::lit("Not ready"),
+                    Some(Icon::Alert),
+                );
+                ui.label(RichText::new(reason).size(TEXT_META).color(t.text_3));
+            });
+        }
+    }
 }
 
 /// The tax box for an answer the engine computed: its rows, then the invoice total with its
@@ -958,7 +993,17 @@ impl ItemInvoiceScreen {
                         total,
                         1,
                         |ui| sheet::caption(ui, &crate::i18n::lit("e-Invoice"), None),
-                        |ui| sheet::read_only(ui, |ui| einvoice_cell(ui, masters, party)),
+                        |ui| {
+                            sheet::read_only(ui, |ui| {
+                                let state =
+                                    if matches!(self.gst_status(masters), GstStatus::Computed(_)) {
+                                        &self.einvoice
+                                    } else {
+                                        &EInvoiceState::Unknown
+                                    };
+                                einvoice_cell(ui, masters, party, state);
+                            });
+                        },
                     );
                     note_field("e-Invoice", shown.response.rect);
                 }
@@ -2435,6 +2480,9 @@ impl Screen for ItemInvoiceScreen {
     }
 
     fn subtitle(&self, tr: &Tr) -> Option<String> {
+        if let Some(saved) = self.entry_print.subtitle() {
+            return Some(saved.to_owned());
+        }
         let note = match self.draft.kind {
             InvoiceKind::Sales | InvoiceKind::Purchase => None,
             InvoiceKind::CreditNote => Some(tr.lit("Credit note")),
@@ -2461,6 +2509,13 @@ impl Screen for ItemInvoiceScreen {
     }
 
     fn keys(&self, tr: &Tr) -> Vec<KeyHint> {
+        if self.entry_print.preview().is_some() {
+            // index.html:2272: the preview's key bar.
+            return vec![
+                KeyHint::new("Ctrl+P", tr.lit("Save as PDF")),
+                KeyHint::new("Esc", tr.lit("Close")),
+            ];
+        }
         if self.confirm_discard {
             return vec![
                 KeyHint::new("Y", tr.t("invoice.discard")),
@@ -2511,6 +2566,9 @@ impl Screen for ItemInvoiceScreen {
         // A save that is out is polled first; the form is drawn either way, taking no input while
         // it waits.
         self.wait_for_post(ui);
+        if self.draw_print(ui, ctx) {
+            return ScreenAction::Stay;
+        }
         self.lock_date = ctx.lock_date;
         self.drive_compute(ui, ctx);
         self.drive_extras(ui, ctx);
@@ -2539,6 +2597,33 @@ fn no_books_text(ctx: &AppCtx, tr: &Tr) -> String {
 }
 
 impl ItemInvoiceScreen {
+    /// Ctrl+P and the print preview. `true` while the preview (or its busy note) takes the
+    /// screen, so the sheet is not drawn and takes no key.
+    fn draw_print(&mut self, ui: &mut Ui, ctx: &AppCtx) -> bool {
+        if let Some(note) = self.entry_print.tick(ctx) {
+            self.notice = Some(match note {
+                crate::screens::report_view::Notice::Info(s) => Notice::Info(s),
+                crate::screens::report_view::Notice::Error(s) => Notice::Error(s),
+            });
+        }
+        let busy = self.posting.is_some()
+            || self.creating.is_some()
+            || self.create.is_some()
+            || self.confirming_save
+            || self.confirm_discard;
+        if !busy {
+            let title = self.title(&ctx.tr);
+            match self
+                .entry_print
+                .on_ctrl_p(ui, ctx, &title, self.has_unsaved_lines())
+            {
+                PrintKey::None | PrintKey::Started => {}
+                PrintKey::Said(text) => self.notice = Some(Notice::Info(text)),
+            }
+        }
+        self.entry_print.show(ui)
+    }
+
     /// Hands in the tax answer when the worker has it, and asks for the tax of the invoice as it
     /// now stands when it is complete and no answer or request exists for it (card C2). Without a
     /// worker nothing is asked, and the screen keeps saying tax is not computed.
@@ -2548,19 +2633,48 @@ impl ItemInvoiceScreen {
         };
         if let Some((voucher, mut ticket)) = self.computing.take() {
             match compute::settle(&mut ticket) {
-                Some(reply) => self.set_gst(voucher, compute::to_result(reply)),
+                Some(reply) => {
+                    let computed = matches!(reply, Ok(Outcome::Value(_)));
+                    if computed && self.draft.kind == InvoiceKind::Sales {
+                        let draft = voucher.clone();
+                        self.einvoice =
+                            EInvoiceState::Checking(worker.run(move |api| {
+                                api.einvoice_check(&draft).map_err(|e| e.to_string())
+                            }));
+                    }
+                    self.set_gst(voucher, compute::to_result(reply));
+                }
                 None => self.computing = Some((voucher, ticket)),
             }
         }
+        self.poll_einvoice();
         if self.computing.is_none()
             && let Some(voucher) = self.take_compute_request(&books.masters)
         {
+            self.einvoice = EInvoiceState::Unknown;
             let ticket = compute::send(worker, voucher.clone(), self.requested_bills().to_vec());
             self.computing = Some((voucher, ticket));
         }
         if self.computing.is_some() {
             ui.ctx().request_repaint();
         }
+    }
+
+    /// Takes the e-invoice check's answer when the worker has it.
+    fn poll_einvoice(&mut self) {
+        let EInvoiceState::Checking(ticket) = &mut self.einvoice else {
+            return;
+        };
+        let answer = match ticket.poll() {
+            Poll::Pending | Poll::Taken => return,
+            Poll::Ready(reply) => reply,
+            Poll::Lost => Err("the engine stopped before it answered".to_owned()),
+        };
+        self.einvoice = match answer {
+            Ok(Outcome::Value(())) => EInvoiceState::Ready,
+            Ok(Outcome::Unsupported(u)) => EInvoiceState::NotReady(u.reason),
+            Err(message) => EInvoiceState::NotReady(message),
+        };
     }
 
     /// Asks the engine for the number the voucher will get and the party's balance after it, and
@@ -2641,6 +2755,7 @@ impl ItemInvoiceScreen {
         match reply {
             CommandReply::Booked(result) => {
                 let number = result.posted.as_ref().and_then(|v| v.number.clone());
+                self.entry_print.remember(result.posted);
                 self.confirm_saved_as(number.as_deref());
             }
             CommandReply::Unsupported(u) => {

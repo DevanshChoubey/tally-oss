@@ -662,6 +662,23 @@ pub struct ItemInvoiceScreen {
     waiting: Vec<(create::CreateFor, String)>,
     /// Where parts of the screen were drawn in the last frame.
     shown: draw::Shown,
+    /// Ctrl+P: the voucher saved last and its print preview.
+    entry_print: crate::screens::entry_print::EntryPrint,
+    /// What the e-Invoice cell says about the invoice on screen.
+    einvoice: EInvoiceState,
+}
+
+/// The API's answer on whether the invoice on screen maps to e-invoice JSON (INV-01).
+#[derive(Debug)]
+enum EInvoiceState {
+    /// Not asked: no tax answer yet, or the invoice changed since the last answer.
+    Unknown,
+    /// Asked; the worker has not answered.
+    Checking(Ticket<Result<Outcome<()>, String>>),
+    /// The API mapped the invoice and the schema check passed.
+    Ready,
+    /// The API said why it cannot, in words.
+    NotReady(String),
 }
 
 impl ItemInvoiceScreen {
@@ -751,6 +768,8 @@ impl ItemInvoiceScreen {
             creating: None,
             waiting: Vec::new(),
             shown: draw::Shown::default(),
+            entry_print: crate::screens::entry_print::EntryPrint::default(),
+            einvoice: EInvoiceState::Unknown,
         };
         screen.focus = screen.first_field();
         Ok(Outcome::Value(screen))
@@ -1109,6 +1128,41 @@ impl ItemInvoiceScreen {
             }
             Err(message) => self.fail(message),
         }
+    }
+
+    /// What the e-Invoice cell says once the API has answered: "JSON ready (INV-01)", or why the
+    /// invoice cannot be written as e-invoice JSON. `None` until it has answered, and for an
+    /// invoice that is not a sale.
+    #[must_use]
+    pub fn einvoice_note(&self, masters: &Masters) -> Option<&str> {
+        // The answer is about the invoice that was checked: while the draft is not the complete,
+        // computed invoice (a quantity cleared, a line added) the cell says nothing, as the tax
+        // box shows dashes.
+        if !matches!(self.gst_status(masters), GstStatus::Computed(_)) {
+            return None;
+        }
+        match &self.einvoice {
+            EInvoiceState::Ready => Some("JSON ready (INV-01)"),
+            EInvoiceState::NotReady(reason) => Some(reason),
+            EInvoiceState::Unknown | EInvoiceState::Checking(_) => None,
+        }
+    }
+
+    /// The pages the print preview shows, when it is open.
+    #[must_use]
+    pub fn print_preview(&self) -> Option<&ledgerly_api::PrintedDocument> {
+        self.entry_print.preview()
+    }
+
+    /// Replaces the save dialog the print preview opens.
+    pub fn set_print_picker(&mut self, picker: crate::screens::print_job::SavePicker) {
+        self.entry_print.set_picker(picker);
+    }
+
+    /// `true` while lines are typed that are not saved: Ctrl+P then asks to save first.
+    fn has_unsaved_lines(&self) -> bool {
+        !self.draft.rows.iter().all(InvoiceRow::is_blank)
+            || !self.draft.particulars.iter().all(ParticularRow::is_blank)
     }
 
     /// The voucher queued by [`Self::save`], for the host to post.

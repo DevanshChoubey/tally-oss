@@ -11,6 +11,7 @@ mod bank;
 mod brs_statement;
 mod command;
 mod day_book_meta;
+mod einvoice;
 mod error;
 mod events;
 pub mod facade;
