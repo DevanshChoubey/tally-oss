@@ -261,7 +261,9 @@ fn each_statement_row_says_which_line_of_the_mock_it_is() {
     // amounts not yet in the bank are indented lines, the expected bank balance is the
     // `tr.total`, the statement's closing balance a plain line and the difference bold. Our rows
     // in order (the labels asserted above): books, deposits, payments, bank, imported statement,
-    // difference.
+    // difference. Round s16: each entry the bank has not cleared is listed under its total (the
+    // mock's `brs` lists them, index.html `st==='brs'`); here the one deposit, voucher 1 for
+    // 50,000, sits under the deposits total.
     let worker = ApiWorker::spawn(setup("c3_screen_kinds.ledgerly")).unwrap();
     let mut screen = BankScreen::worker("Bank Current Account", BANK, date!(2026 - 04 - 30));
     settle(&mut screen, &worker);
@@ -274,6 +276,7 @@ fn each_statement_row_says_which_line_of_the_mock_it_is() {
         [
             BrsRowKind::Books,
             BrsRowKind::Uncleared,
+            BrsRowKind::Item,
             BrsRowKind::Uncleared,
             BrsRowKind::Expected,
             BrsRowKind::Statement,

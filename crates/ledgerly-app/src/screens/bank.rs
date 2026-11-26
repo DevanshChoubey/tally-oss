@@ -145,6 +145,9 @@ pub enum BrsRowKind {
     Books,
     /// An amount not yet reflected in the bank: a plain line, indented one level (`td.ind1`).
     Uncleared,
+    /// One entry under such a total (voucher date, number and the other side): a plain line,
+    /// indented one level further.
+    Item,
     /// The balance the bank should show: the total line (`tr.total`).
     Expected,
     /// The balance in the imported statement: a plain line.
@@ -199,6 +202,7 @@ fn brs_line_height(kind: BrsRowKind) -> f32 {
         BrsRowKind::Expected => crate::ui::table::T_TOTAL_HEIGHT,
         BrsRowKind::Books
         | BrsRowKind::Uncleared
+        | BrsRowKind::Item
         | BrsRowKind::Statement
         | BrsRowKind::Difference => crate::ui::table::T_ROW_HEIGHT,
     }
@@ -370,6 +374,8 @@ pub struct BankScreen {
     import_layout: &'static str,
     /// Why the last import was refused or the file could not be read. Cleared by the next import.
     import_notice: Option<String>,
+    /// How the last export of the reconciliation statement went, in words.
+    export_notice: Option<String>,
     /// The engine's working when the last import was refused because the file does not add up.
     /// Cleared by the next import.
     import_working: Option<ledgerly_api::BalanceRefusal>,
@@ -479,6 +485,7 @@ impl BankScreen {
             run: None,
             import_layout: import::DEFAULT_LAYOUT,
             import_notice: None,
+            export_notice: None,
             import_working: None,
             account: None,
             can_switch: false,
@@ -848,6 +855,13 @@ impl BankScreen {
         self.import_layout = layout;
     }
 
+    /// How the last export of the reconciliation statement went ("Exported to ..." or why it was
+    /// not written), until the next one.
+    #[must_use]
+    pub fn export_notice(&self) -> Option<&str> {
+        self.export_notice.as_deref()
+    }
+
     /// Why the last import was refused, until the next import attempt.
     pub(super) fn import_notice(&self) -> Option<&str> {
         self.import_notice.as_deref()
@@ -929,6 +943,7 @@ impl Screen for BankScreen {
             ],
             Tab::Statement => vec![
                 KeyHint::new("B", "All lines"),
+                KeyHint::new("Ctrl+E", "Export"),
                 KeyHint::new("Ctrl+O", "Import statement"),
             ],
         }

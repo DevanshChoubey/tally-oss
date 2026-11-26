@@ -87,10 +87,11 @@ enum KeyCmd {
     CloseManual,
     Import,
     ChangeAccount,
+    Export,
 }
 
 /// Reads this frame's keys. Esc is left to the shell unless the manual panel is open.
-fn read_keys(ui: &Ui, manual_open: bool) -> Vec<KeyCmd> {
+fn read_keys(ui: &Ui, manual_open: bool, statement_tab: bool) -> Vec<KeyCmd> {
     let mut out = Vec::new();
     ui.input_mut(|i| {
         let none = egui::Modifiers::NONE;
@@ -120,6 +121,9 @@ fn read_keys(ui: &Ui, manual_open: bool) -> Vec<KeyCmd> {
         }
         if i.consume_key(egui::Modifiers::COMMAND, egui::Key::O) {
             out.push(KeyCmd::Import);
+        }
+        if statement_tab && i.consume_key(egui::Modifiers::COMMAND, egui::Key::E) {
+            out.push(KeyCmd::Export);
         }
         if !manual_open && i.consume_key(none, egui::Key::C) {
             out.push(KeyCmd::ChangeAccount);
@@ -172,7 +176,7 @@ fn action_text(line: &LineState, suggestion: Option<&SuggestionView>) -> String 
 impl BankScreen {
     /// Draws the whole screen for one frame, and applies the keys and clicks it produced.
     pub(super) fn draw(&mut self, ui: &mut Ui) {
-        for cmd in read_keys(ui, self.manual_open) {
+        for cmd in read_keys(ui, self.manual_open, self.tab() == Tab::Statement) {
             self.run_key(cmd);
         }
         let mut events = Vec::new();
@@ -193,6 +197,10 @@ impl BankScreen {
                 NoteKind::Bad,
                 &format!("Not imported. {text} Nothing was imported."),
             );
+        }
+        if let Some(text) = self.export_notice() {
+            let bad = text.contains("was not written");
+            note(ui, if bad { NoteKind::Bad } else { NoteKind::Info }, text);
         }
         match self.tab() {
             Tab::Matching => self.draw_matching(ui, &mut events),
@@ -265,6 +273,7 @@ impl BankScreen {
             }
             KeyCmd::CloseManual => self.close_manual(),
             KeyCmd::Import => self.choose_statement_file(),
+            KeyCmd::Export => self.choose_export_file(),
             KeyCmd::ChangeAccount => self.switch_requested = true,
         }
     }
@@ -662,6 +671,21 @@ impl BankScreen {
 }
 
 impl BankScreen {
+    /// Asks where to save the reconciliation statement and writes it there (Ctrl+E on the
+    /// statement tab). Cancelling writes nothing. Host mode has no export.
+    pub(super) fn choose_export_file(&mut self) {
+        if !self.is_worker() {
+            return;
+        }
+        if let Some(path) = crate::ui::dialogs::save_file(
+            "Save the reconciliation statement",
+            Some("bank-reconciliation-statement.csv"),
+            &[("CSV", &["csv"]), ("Excel workbook", &["xlsx"])],
+        ) {
+            self.export_statement_to(path);
+        }
+    }
+
     /// Asks the user for a statement file and queues it for the import. The file is read here,
     /// on the UI thread; the engine parses and checks it on the worker. A cancelled dialog does
     /// nothing. Host mode has no import.
@@ -842,6 +866,10 @@ fn paint_statement_line(ui: &Ui, rect: Rect, row: &BrsRow) {
         BrsRowKind::Expected => {
             table::paint_total_rules(ui, rect);
             (3.0, true, 0)
+        }
+        BrsRowKind::Item => {
+            table::paint_row(ui, rect, plain);
+            (1.0, false, 2)
         }
         BrsRowKind::Statement => {
             table::paint_row(ui, rect, plain);

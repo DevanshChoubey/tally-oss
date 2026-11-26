@@ -26,7 +26,7 @@
 
 use std::collections::{BTreeSet, VecDeque};
 
-use ledgerly_api::{Brs, Candidate};
+use ledgerly_api::{BrsLine, BrsStatement, Candidate, ExportFormat};
 use ledgerly_core::{BankStatementId, Date, LedgerId, Outcome, Paise};
 use ledgerly_model::{BankMatch, MatchKind};
 
@@ -47,7 +47,9 @@ pub(super) struct Loaded {
 
 /// `None`: the ledger has no stored statement.
 type LoadAnswer = Result<Outcome<Option<Loaded>>, String>;
-type BrsAnswer = (Date, Result<Outcome<Brs>, String>);
+type BrsAnswer = (Date, Result<Outcome<BrsStatement>, String>);
+/// The file the statement was written to, or why it was not.
+type ExportAnswer = (std::path::PathBuf, Result<Outcome<()>, String>);
 type ConfirmAnswer = (BankMatch, Result<Outcome<()>, String>);
 /// The new statement's id, or why the file was refused.
 type ImportAnswer = Result<Outcome<BankStatementId>, ImportFailure>;
@@ -86,6 +88,10 @@ pub(super) struct Run {
     import_pending: Option<PendingImport>,
     /// The import the worker is running.
     import: Latest<ImportAnswer>,
+    /// A file the statement is to be written to; the next tick sends it to the worker.
+    export_pending: Option<std::path::PathBuf>,
+    /// The export the worker is running.
+    export: Latest<ExportAnswer>,
     /// The matcher's candidates behind `BankScreen::suggestions`, in the same order.
     candidates: Vec<Candidate>,
     /// Statement lines the user matched in this session; kept across a reload.
@@ -142,11 +148,14 @@ impl BankScreen {
                 in_flight: false,
                 import_pending: None,
                 import: Latest::default(),
+                export_pending: None,
+                export: Latest::default(),
                 candidates: Vec::new(),
                 matched: BTreeSet::new(),
             }),
             import_layout: import::DEFAULT_LAYOUT,
             import_notice: None,
+            export_notice: None,
             import_working: None,
             account: None,
             can_switch: false,
@@ -179,6 +188,8 @@ impl BankScreen {
                 || run.confirm.is_pending()
                 || run.import.is_pending()
                 || run.import_pending.is_some()
+                || run.export.is_pending()
+                || run.export_pending.is_some()
                 || !run.queue.is_empty()
         })
     }
@@ -197,6 +208,7 @@ impl BankScreen {
         };
         self.send_confirm(handle);
         self.send_import(handle);
+        self.send_export(handle);
         self.send_load(handle);
     }
 
@@ -256,6 +268,12 @@ impl BankScreen {
                 self.notice = Some(LOST.to_owned());
                 self.release_in_flight();
             }
+            None => {}
+        }
+        let finished = self.run.as_mut().and_then(|run| run.export.poll());
+        match finished {
+            Some(Done::Ready((path, answer))) => self.apply_export(&path, answer),
+            Some(Done::Lost) => self.export_notice = Some(LOST.to_owned()),
             None => {}
         }
         let finished = self.run.as_mut().and_then(|run| run.import.poll());
@@ -353,7 +371,7 @@ impl BankScreen {
         }
     }
 
-    fn apply_brs(&mut self, as_of: Date, answer: Result<Outcome<Brs>, String>) {
+    fn apply_brs(&mut self, as_of: Date, answer: Result<Outcome<BrsStatement>, String>) {
         match answer {
             Err(text) => self.notice = Some(text),
             Ok(Outcome::Unsupported(u)) => {
@@ -492,8 +510,55 @@ impl BankScreen {
         run.load
             .start(handle, move |api| load_statement(api, ledger));
         run.brs.start(handle, move |api| {
-            let answer = api.brs(ledger, as_of).map_err(|e| e.to_string());
+            let answer = api.brs_statement(ledger, as_of).map_err(|e| e.to_string());
             (as_of, answer)
+        });
+    }
+
+    /// Writes the reconciliation statement on screen to `path`, as CSV or XLSX by the file's
+    /// extension (the report export's rule). The next tick sends it to the worker; the screen
+    /// then says where the file went or why it was not written ([`BankScreen::export_notice`]).
+    pub fn export_statement_to(&mut self, path: std::path::PathBuf) {
+        if ExportFormat::from_path(&path).is_none() {
+            self.export_notice = Some(format!(
+                "\"{}\" was not written: choose a file name ending in .csv or .xlsx.",
+                path.display()
+            ));
+            return;
+        }
+        self.export_notice = None;
+        if let Some(run) = self.run.as_mut() {
+            run.export_pending = Some(path);
+        }
+    }
+
+    fn send_export(&mut self, handle: &ApiWorker) {
+        let Some(run) = self.run.as_mut() else {
+            return;
+        };
+        if run.export.is_pending() {
+            return;
+        }
+        let Some(path) = run.export_pending.take() else {
+            return;
+        };
+        let Some(format) = ExportFormat::from_path(&path) else {
+            return;
+        };
+        let (ledger, as_of) = (run.ledger, run.as_of);
+        run.export.start(handle, move |api| {
+            let done = api
+                .export_brs(ledger, as_of, format, &path)
+                .map_err(|e| e.to_string());
+            (path, done)
+        });
+    }
+
+    fn apply_export(&mut self, path: &std::path::Path, answer: Result<Outcome<()>, String>) {
+        self.export_notice = Some(match answer {
+            Ok(Outcome::Value(())) => format!("Exported to {}.", path.display()),
+            Ok(Outcome::Unsupported(u)) => unsupported_text(&u),
+            Err(text) => format!("\"{}\" was not written: {text}", path.display()),
         });
     }
 
@@ -581,31 +646,33 @@ fn view_of(candidate: &Candidate) -> SuggestionView {
     }
 }
 
-/// The rows of the reconciliation statement, every amount as the engine computed it. The note
-/// says why the statement side is missing when it is.
-fn brs_view(as_of: Date, brs: &Brs) -> (BrsView, Option<String>) {
-    let mut rows = vec![
-        row(
-            "Balance as per company books",
-            brs.books_balance,
-            BrsRowKind::Books,
-        ),
-        row(
-            "Amounts not reflected in bank: deposits",
-            brs.uncleared_deposits_total,
-            BrsRowKind::Uncleared,
-        ),
-        row(
-            "Amounts not reflected in bank: payments",
-            brs.uncleared_payments_total,
-            BrsRowKind::Uncleared,
-        ),
-        row(
-            "Balance as per bank",
-            brs.balance_as_per_bank,
-            BrsRowKind::Expected,
-        ),
-    ];
+/// The rows of the reconciliation statement, every amount as the engine computed it, with each
+/// entry the bank has not cleared under its total. The note says why the statement side is
+/// missing when it is.
+fn brs_view(as_of: Date, statement: &BrsStatement) -> (BrsView, Option<String>) {
+    let brs = &statement.brs;
+    let mut rows = vec![row(
+        "Balance as per company books",
+        brs.books_balance,
+        BrsRowKind::Books,
+    )];
+    rows.push(row(
+        "Amounts not reflected in bank: deposits",
+        brs.uncleared_deposits_total,
+        BrsRowKind::Uncleared,
+    ));
+    rows.extend(statement.deposits.iter().map(item_row));
+    rows.push(row(
+        "Amounts not reflected in bank: payments",
+        brs.uncleared_payments_total,
+        BrsRowKind::Uncleared,
+    ));
+    rows.extend(statement.payments.iter().map(item_row));
+    rows.push(row(
+        "Balance as per bank",
+        brs.balance_as_per_bank,
+        BrsRowKind::Expected,
+    ));
     let mut note = None;
     match &brs.statement_balance {
         Outcome::Value(paise) => rows.push(row(
@@ -624,6 +691,25 @@ fn brs_view(as_of: Date, brs: &Brs) -> (BrsView, Option<String>) {
         rows.push(row("Difference", *paise, BrsRowKind::Difference));
     }
     (BrsView { as_of, rows }, note)
+}
+
+/// One entry under a total: "10 Nov 2026 · RC/0215 · Shree Ganesh Traders", with the cheque or
+/// reference number after it when the entry has one.
+fn item_row(line: &BrsLine) -> BrsRow {
+    let mut label = crate::ui::format::date(line.date);
+    if let Some(number) = &line.number {
+        label.push_str(" \u{b7} ");
+        label.push_str(number);
+    }
+    if !line.particulars.is_empty() {
+        label.push_str(" \u{b7} ");
+        label.push_str(&line.particulars);
+    }
+    if let Some(instrument) = &line.instrument {
+        label.push_str(" \u{b7} cheque ");
+        label.push_str(instrument);
+    }
+    row(&label, line.amount, BrsRowKind::Item)
 }
 
 fn row(label: &str, amount: Paise, kind: BrsRowKind) -> BrsRow {
