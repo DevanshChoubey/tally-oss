@@ -1579,6 +1579,9 @@ fn light_shots() -> Vec<Shot> {
             // the first particular.
             .press(&[SHIFT_ENTER, SHIFT_ENTER])
             .expect("Payment", None),
+        // A payment just opened: the keyboard is on the Account, whose list holds only the cash
+        // and bank ledgers (mock `payment.account-list`).
+        shot("payment.account-list", &[(Key::F5, NONE)]).expect("Payment", None),
         // The mock's bill allocation: 1,50,000 to Vardhaman Logistics against VL/861.
         shot("payment.bill-wise", &[(Key::F5, NONE)])
             .type_text("Saptagiri")
@@ -2895,10 +2898,19 @@ fn main() -> eframe::Result<()> {
         modifiers_held: false,
         scroll_at: None,
     };
+    // CAPTURE_SIZE=<width>x<height> (points) captures at another window size, to check that
+    // nothing is cut off on wide or small windows; the registry captures are 1280 x 800.
+    let size = std::env::var("CAPTURE_SIZE")
+        .ok()
+        .and_then(|v| {
+            let (w, h) = v.split_once('x')?;
+            Some([w.parse::<f32>().ok()?, h.parse::<f32>().ok()?])
+        })
+        .unwrap_or([1280.0, 800.0]);
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title("Ledgerly snapshots")
-            .with_inner_size([1280.0, 800.0]),
+            .with_inner_size(size),
         ..eframe::NativeOptions::default()
     };
     eframe::run_native(

@@ -378,6 +378,7 @@ mark{background:var(--accent-soft);color:var(--accent-ink);border-radius:2px;pad
  {"id":"hi.balance-sheet.default","kind":"happy","hash":"screen=balance-sheet&state=default&lang=hi","title":"Balance sheet, Hindi","description":"The balance sheet in Hindi; Dr and Cr stay as the books write them."},
  {"id":"hi.gst.gstr1","kind":"happy","hash":"screen=gst&state=gstr1&lang=hi","title":"GSTR-1, Hindi","description":"GSTR-1 in Hindi; return names and table numbers stay as the portal writes them."},
  {"id":"hi.bank.default","kind":"happy","hash":"screen=bank&state=default&lang=hi","title":"Bank reconciliation, Hindi","description":"The bank reconciliation screen in Hindi."},
+ {"id":"hi.payment.account-list","kind":"happy","hash":"screen=payment&state=account-list&lang=hi","title":"Payment, account list open, Hindi","description":"The payment's cash and bank account list in Hindi."},
  {"id":"hi.setup.welcome","kind":"happy","hash":"screen=setup&state=welcome&lang=hi","title":"First run, welcome, Hindi","description":"The welcome screen in Hindi."},
  {"id":"home.loading","kind":"loading","hash":"screen=home&state=loading","title":"Home, company opening","description":"Skeleton rows while the company file opens and projections load; no figure is shown until the engine returns it."},
  {"id":"home.empty","kind":"empty","hash":"screen=home&state=empty","title":"Home, new company","description":"A new company with no vouchers: first steps instead of zero-filled KPIs."},
@@ -419,6 +420,7 @@ mark{background:var(--accent-soft);color:var(--accent-ink);border-radius:2px;pad
  {"id":"quick-entry.loading","kind":"loading","hash":"screen=quick-entry&state=loading","title":"Plain-words entry, drafting","description":"The local model is drafting; the text stays editable and Esc cancels."},
  {"id":"quick-entry.rejected","kind":"happy","hash":"screen=quick-entry&state=rejected","title":"Plain-words entry, rejected","description":"The user rejected the draft; nothing was posted and an optional reason is asked."},
  {"id":"payment.default","kind":"happy","hash":"screen=payment&state=default","title":"Payment","description":"F5 payment in single-entry style: bank balance now and after saving."},
+ {"id":"payment.account-list","kind":"happy","hash":"screen=payment&state=account-list","title":"Payment, account list open","description":"A fresh payment with the keyboard on Account: the list under the field holds only the cash and bank ledgers (Cash-in-hand, Bank accounts, Bank OD) and the form stays in view."},
  {"id":"payment.bill-wise","kind":"happy","hash":"screen=payment&state=bill-wise","title":"Payment, bill allocation","description":"Paying a supplier pops the bill-wise allocation with open bills from the engine."},
  {"id":"payment.overdraft","kind":"validation-error","hash":"screen=payment&state=overdraft","title":"Payment, overdraft warning","description":"Amount exceeds the bank balance: a warning, with the shortfall computed by the engine."},
  {"id":"receipt.default","kind":"happy","hash":"screen=receipt&state=default","title":"Receipt","description":"F6 receipt against an open sales bill."},
@@ -1352,6 +1354,8 @@ function taSource(kind){
   if(kind==='party')return LEDGERS.filter(l=>l.group==='debtors').map(l=>({v:l.name,id:l.id,s:(l.gstin||'Unregistered')+' · '+l.city+' · '+inr(Math.abs(balances()[l.id]))+(balances()[l.id]>=0?' Dr':' Cr')}));
   if(kind==='item')return ITEMS.map(i=>{const q=stockPosition().qty[i.id];return {v:i.name,id:i.id,s:`HSN ${i.hsn||'missing'} · ${i.gst}% · ₹${inr(i.rate)} · ${q} ${i.unit} in stock`}});
   if(kind==='pos')return Object.entries(STATES).map(([k,v])=>({v:k+' '+v,id:k,s:k===CO.state?'Your state: CGST + SGST':'Inter-state: IGST'}));
+  // S22: a payment's or receipt's Account, and each contra line, take only cash and bank ledgers.
+  if(kind==='cashbank')return LEDGERS.filter(l=>['cash','bank','bankod'].includes(l.group)).map(l=>({v:l.name,id:l.id,s:groupOf(l.group).name}));
   if(kind==='ledger')return LEDGERS.filter(l=>!['debtors'].includes(l.group)||true).map(l=>({v:l.name,id:l.id,s:groupOf(l.group).name}));
   return []; }
 function taOpen(inp,kind){
@@ -1359,10 +1363,10 @@ function taOpen(inp,kind){
   const all=taSource(kind);const exact=all.find(o=>o.v.toLowerCase()===q);
   TA.list=exact?all:all.filter(o=>!q||o.v.toLowerCase().includes(q)||o.s.toLowerCase().includes(q));
   TA.hi=Math.max(0,TA.list.findIndex(o=>exact&&o===exact));
-  const cap={party:'Parties',item:'Stock items',pos:'Place of supply',ledger:'Ledgers'}[kind];
+  const cap={party:'Parties',item:'Stock items',pos:'Place of supply',ledger:'Ledgers',cashbank:'Ledgers'}[kind];
   const ta=$('#ta');
   ta.innerHTML=`<div class="cap">${cap} · ${TA.list.length} of ${all.length}</div>`+TA.list.slice(0,8).map((o,i)=>`<div class="opt ${i===TA.hi?'hi':''}" data-j="${i}"><span>${hl(o.v,inp.value.trim())}</span><span class="s">${esc(o.s)}</span></div>`).join('')+
-   (kind==='pos'?'':`<div class="opt" data-j="-1"><span>${ic('plus')} Create ${kind==='item'?'item':'ledger'}${q?` "${esc(inp.value.trim())}"`:''}</span>${kb('Alt+C')}</div>`);
+   (kind==='pos'||kind==='cashbank'?'':`<div class="opt" data-j="-1"><span>${ic('plus')} Create ${kind==='item'?'item':'ledger'}${q?` "${esc(inp.value.trim())}"`:''}</span>${kb('Alt+C')}</div>`);
   const r=inp.getBoundingClientRect();ta.style.left=Math.min(r.left,innerWidth-470)+'px';ta.style.top=(r.bottom+4)+'px';ta.classList.add('open');
   $$('#ta .opt[data-j]').forEach(el=>el.onmousedown=ev=>{ev.preventDefault();TA.hi=+el.dataset.j;taPick()}); }
 function taClose(){$('#ta').classList.remove('open');TA.inp=null}
@@ -1541,17 +1545,18 @@ function recalcInv(flash){
 /* ---------- payment and receipt (single-entry) ---------- */
 const PAY_SEED={
  'payment.default':{type:'Payment',no:'PY/0319',acct:'saptagiri',lines:[['freight',R(6500)]],narr:'Freight, Vardhaman Logistics, LR 4471'},
+ 'payment.account-list':{type:'Payment',no:'PY/0319',acct:null,lines:[],narr:''},
  'payment.bill-wise':{type:'Payment',no:'PY/0319',acct:'saptagiri',lines:[['vardhaman',R(150000)]],narr:'NEFT, against VL/861',bills:'vardhaman'},
  'payment.overdraft':{type:'Payment',no:'PY/0319',acct:'mulacur',lines:[['nilgiri',R(250000)]],narr:'RTGS to Nilgiri Steel Traders'},
  'receipt.default':{type:'Receipt',no:'RC/0220',acct:'saptagiri',lines:[['mai',R(100000)]],narr:'NEFT, part against SI/0401',bills:'mai'}};
 function payScreen(kind){return {title:kind==='payment'?'Payment':'Receipt',default:'default',
  render(st){const s=PAY_SEED[kind+'.'+st]||PAY_SEED[kind+'.default'];const b=balances();const tot=s.lines.reduce((a,l)=>a+l[1],0);
-  const now=b[s.acct], after=kind==='payment'?now-tot:now+tot; const od=after<0;
+  const now=s.acct?b[s.acct]:0, after=kind==='payment'?now-tot:now+tot; const od=after<0;
   const bills=s.bills?openBills().filter(x=>x.led===s.bills):[];
   return `${phead([['Home',hashFor('home')],[s.type]],`${s.type} <span class="t2" style="font-weight:500">${s.no}</span>`,`${kind==='payment'?'F5':'F6'} · single entry: pick the cash or bank account once, then the ledgers`,`<button class="btn primary" data-cmd="save">${ic('save')}Save ${kb('Ctrl+A')}</button>`)}
    <div class="card vsheet"><div class="vhead">
     <div class="fld"><label>Date ${kb('F2')}</label><div class="ro">21 Nov 2026</div></div>
-    <div class="fld span2"><label for="p-acct">Account</label><input id="p-acct" value="${esc(LED[s.acct].name)}"><span class="hint">${esc(LED[s.acct].acct||'')} · balance now ₹${inr(Math.abs(now))} ${now>=0?'Dr':'Cr'} (engine)</span></div>
+    <div class="fld span2"><label for="p-acct">Account</label>${s.acct?`<input id="p-acct" value="${esc(LED[s.acct].name)}"><span class="hint">${esc(LED[s.acct].acct||'')} · balance now ₹${inr(Math.abs(now))} ${now>=0?'Dr':'Cr'} (engine)</span>`:`<input id="p-acct" placeholder="Cash or bank ledger">`}</div>
     <div class="fld"><label>Mode</label><div class="ro">${st==='overdraft'?'RTGS':'NEFT / UPI'}</div></div></div>
    <table class="lines"><thead><tr><th class="n">#</th><th>Particulars</th><th>Group</th><th style="width:170px" class="num">Amount</th></tr></thead><tbody>
     ${s.lines.map((l,i)=>`<tr class="${i===0?'active':''}"><td class="n">${i+1}</td><td><input value="${esc(LED[l[0]].name)}" aria-label="Ledger"></td><td class="t2">${esc(groupOf(LED[l[0]].group).name)}</td><td><input class="num" value="${inr(l[1])}" aria-label="Amount"></td></tr>`).join('')}
@@ -1564,7 +1569,7 @@ function payScreen(kind){return {title:kind==='payment'?'Payment':'Receipt',defa
     ${bills.map(x=>{const al=Math.min(-1*Math.sign(balances()[s.bills])*0+Math.abs(x.open),s.lines[0][1]);return `<tr class="sel"><td>Against</td><td>${x.ref}</td><td>${fmtDate(x.date)}</td><td class="num">${inr(Math.abs(x.open))}</td><td class="num">${inr(al)}</td></tr><tr><td colspan="4" class="t2">Left open on ${x.ref} after saving</td><td class="num">${inr(Math.abs(x.open)-al)}</td></tr>`}).join('')}
     </tbody></table></div>`:''}`;
  },
- mount(st){const i=$('.lines input');i&&i.focus()},
+ mount(st){if(st==='account-list'){const a=$('#p-acct');a.focus();taOpen(a,'cashbank');return}const i=$('.lines input');i&&i.focus()},
  key(k){if(k==='Ctrl+A'||k==='Ctrl+S'){toast(`${kind==='payment'?'Payment PY/0319':'Receipt RC/0220'} saved (mock). A fresh ${kind} opens.`,true);return true}return false},
  cmd(c){if(c==='save')toast('Saved (mock).',true)},
  back(){return hashFor('home')},

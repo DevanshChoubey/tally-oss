@@ -70,6 +70,13 @@
    "description": "The bank reconciliation screen in Hindi."
   },
   {
+   "id": "hi.payment.account-list",
+   "kind": "happy",
+   "hash": "screen=payment&state=account-list&lang=hi",
+   "title": "Payment, account list open, Hindi",
+   "description": "The payment's cash and bank account list in Hindi."
+  },
+  {
    "id": "hi.setup.welcome",
    "kind": "happy",
    "hash": "screen=setup&state=welcome&lang=hi",
@@ -355,6 +362,13 @@
    "hash": "screen=payment&state=default",
    "title": "Payment",
    "description": "F5 payment in single-entry style: bank balance now and after saving."
+  },
+  {
+   "id": "payment.account-list",
+   "kind": "happy",
+   "hash": "screen=payment&state=account-list",
+   "title": "Payment, account list open",
+   "description": "A fresh payment with the keyboard on Account: the list under the field holds only the cash and bank ledgers (Cash-in-hand, Bank accounts, Bank OD) and the form stays in view."
   },
   {
    "id": "payment.bill-wise",

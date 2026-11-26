@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 
 use ledgerly_core::{LedgerId, SignedAmount};
-use ledgerly_model::{Ledger, Masters};
+use ledgerly_model::{Ledger, Masters, ReservedGroup};
 
 /// How many type-ahead items are listed at most.
 const PICKER_LIMIT: usize = 50;
@@ -85,6 +85,20 @@ pub fn search_ledgers(
     recents: &[LedgerId],
     balances: &BTreeMap<LedgerId, SignedAmount>,
 ) -> Vec<PickerItem> {
+    search_ledgers_where(masters, query, recents, balances, |_| true)
+}
+
+/// [`search_ledgers`] over the ledgers `keep` accepts (the Account field of a payment, receipt
+/// or contra lists only cash and bank ledgers, [`is_cash_or_bank`]). The Create item is still
+/// offered only when no ledger at all has the typed name, so a name is never offered twice.
+#[must_use]
+pub fn search_ledgers_where(
+    masters: &Masters,
+    query: &str,
+    recents: &[LedgerId],
+    balances: &BTreeMap<LedgerId, SignedAmount>,
+    keep: impl Fn(&Ledger) -> bool,
+) -> Vec<PickerItem> {
     type SortKey = (u8, usize, u8, String, LedgerId);
     let typed = query.trim();
     let q = typed.to_lowercase();
@@ -93,6 +107,9 @@ pub fn search_ledgers(
     for ledger in masters.ledgers.values() {
         let name_lower = ledger.name.to_lowercase();
         exists = exists || name_lower == q;
+        if !keep(ledger) {
+            continue;
+        }
         let Some((rank, via_alias)) = best_match(ledger, &name_lower, &q) else {
             continue;
         };
@@ -137,4 +154,35 @@ pub fn search_ledgers(
         });
     }
     items
+}
+
+/// Whether `ledger` sits under Cash-in-Hand, Bank Accounts or Bank OD A/c (directly or through
+/// sub-groups): the ledgers a single-entry Account field and a contra line take.
+///
+/// The accounting product's pages say to "select the Cash ledger under Account" or "Under
+/// Account, select the required Bank ledger" for a payment
+/// (<https://help.tallysolutions.com/payments-and-receipts-tally/>), "Select the Cash ledger under
+/// Account" for a receipt (<https://help.tallysolutions.com/record-receipt-transactions/>) and
+/// "Select the Cash/Bank ledger account ... in the Account field" for a contra
+/// (<https://help.tallysolutions.com/record-contra-entry/>), all read 2026-11-27. No page lists
+/// the field's choices outright, so the three reserved groups that hold cash and bank accounts
+/// are a derived rule.
+#[must_use]
+pub fn is_cash_or_bank(masters: &Masters, ledger: &Ledger) -> bool {
+    let mut group = Some(ledger.group);
+    // A parent loop cannot hold more groups than there are, so the walk always ends.
+    for _ in 0..=masters.groups.len() {
+        let Some(g) = group.and_then(|id| masters.groups.get(&id)) else {
+            return false;
+        };
+        match g.reserved {
+            Some(
+                ReservedGroup::CashInHand | ReservedGroup::BankAccounts | ReservedGroup::BankOd,
+            ) => {
+                return true;
+            }
+            Some(_) | None => group = g.parent,
+        }
+    }
+    false
 }
