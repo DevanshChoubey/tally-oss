@@ -145,7 +145,18 @@ pub(super) fn line_amount(
     line: usize,
 ) -> Result<Paise, InvoiceError> {
     let bad = |reason: String| InvoiceError::Line { line, reason };
-    let item_id = row.item.ok_or_else(|| bad("choose an item".to_owned()))?;
+    // Text that names no item: say what was typed and where to make the item (the screen cannot
+    // create one: Alt+C is documented on ledger fields only).
+    let item_id = row.item.ok_or_else(|| {
+        let typed = row.item_text.trim();
+        if typed.is_empty() {
+            bad("choose an item".to_owned())
+        } else {
+            bad(format!(
+                "no item named \"{typed}\". Pick one from the list or create it in Masters."
+            ))
+        }
+    })?;
     let item = masters
         .stock_items
         .get(&item_id)
@@ -154,6 +165,9 @@ pub(super) fn line_amount(
         .units
         .get(&item.unit)
         .ok_or_else(|| bad(format!("unit of '{}' is not in the masters", item.name)))?;
+    if row.qty_text.trim().is_empty() {
+        return Err(bad("quantity is missing".to_owned()));
+    }
     let qty = parse_decimal(&row.qty_text).map_err(|e| bad(format!("quantity: {e}")))?;
     if qty.is_zero() {
         return Err(bad("quantity must be more than zero".to_owned()));

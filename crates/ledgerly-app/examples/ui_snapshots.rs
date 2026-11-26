@@ -1847,23 +1847,29 @@ fn light_shots() -> Vec<Shot> {
         )
         .press(&[(Key::Enter, NONE)])
         .type_text("Hand-typed, Nilgiri quote 19 Nov"),
-        // A line with an item and no quantity, then Ctrl+A: the save is refused with the reason.
-        invoice_line(
-            godavari_bill(
-                purchase_start("purchase.validation-error"),
-                "Purchase",
-                "Nilgiri",
-                "27",
-                "Purchases",
-                "NST/1150",
-                "21-11-2026",
-            ),
-            "HDPE",
-            "10",
-            "2050",
+        // The mock's `purchase.validation-error`: line 1 is HDPE at 2,050.00 with the quantity
+        // left out (Tab skips it; Enter on an empty quantity is refused), line 2 is a name no item
+        // has, "Brass elbow 25 mm", 50 at 228.40. Ctrl+A is refused with both reasons.
+        godavari_bill(
+            purchase_start("purchase.validation-error"),
+            "Purchase",
+            "Nilgiri",
+            "27",
+            "Purchases",
+            "NST/1150",
+            "21-11-2026",
         )
-        .type_text("PVC ball")
-        .press(&[(Key::Enter, NONE), (Key::A, Modifiers::COMMAND)]),
+        .type_text("HDPE")
+        .press(&[(Key::Enter, NONE), (Key::Tab, NONE)])
+        .type_text("2050")
+        .press(&[(Key::Enter, NONE)])
+        .type_text("Brass elbow 25 mm")
+        .press(&[(Key::Tab, NONE)])
+        .type_text("50")
+        .press(&[(Key::Tab, NONE)])
+        .type_text("228.40")
+        .press(&[(Key::A, Modifiers::COMMAND)])
+        .expect("Purchase", None),
         // The mock's `credit-note.default` (index.html:2004): 10 sets of brass nozzles (6 pc)
         // returned by Shree Ganesh Traders against SI/0412 of 14 Nov, at the invoiced 505.00.
         invoice_line(
@@ -2236,7 +2242,7 @@ fn s13_shots() -> Vec<Shot> {
         .expect("SI/0412", None)
         .press(&[(Key::P, Modifiers::COMMAND)])
         .wait(60)
-        .expect_bar("SI/0412", "Print preview"),
+        .expect_bar("Sales invoice", "Print preview"),
         shot("day-book.print-preview", &[(Key::D, NONE)])
             .expect("Day book", None)
             .press(&[(Key::P, Modifiers::COMMAND)])
@@ -2249,7 +2255,7 @@ fn s13_shots() -> Vec<Shot> {
             .expect("JV/0032", None)
             .press(&[(Key::P, Modifiers::COMMAND)])
             .wait(60)
-            .expect_bar("JV/0032", "Print preview"),
+            .expect_bar("Journal", "Print preview"),
         // The worker is held: the GST returns have not been asked for yet.
         shot("gst.gstr1-not-loaded", &[(Key::G, NONE), (Key::Num1, NONE)])
             .on(Fixture::GodavariHeld)

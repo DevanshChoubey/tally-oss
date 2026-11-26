@@ -116,7 +116,7 @@ const LINE_COLS_DISCOUNT: [Col; 10] = [
 /// Where an as-voucher row comes from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum RowAt {
-    /// The party, read from the header.
+    /// The party: the input on line 1.
     Party,
     /// Typed particular `n` (a blank entry row included).
     Typed(usize),
@@ -836,18 +836,22 @@ impl ItemInvoiceScreen {
                     },
                 );
                 note_field("Date", shown.response.rect);
-                let label = kind.party_label();
-                let shown = sheet::fld(
-                    ui,
-                    total,
-                    2,
-                    |ui| sheet::caption(ui, label, None),
-                    |ui| {
-                        let s = spec("party", label, Field::Party, "type to search");
-                        text_field(ui, cx, &s, &mut self.draft.party_text, BOXED);
-                    },
-                );
-                note_field(label, shown.response.rect);
+                // As voucher: the party is typed on line 1 of the table (the product's Dr line),
+                // so the head has no Party box.
+                if mode != InvoiceMode::AsVoucher {
+                    let label = kind.party_label();
+                    let shown = sheet::fld(
+                        ui,
+                        total,
+                        2,
+                        |ui| sheet::caption(ui, label, None),
+                        |ui| {
+                            let s = spec("party", label, Field::Party, "type to search");
+                            text_field(ui, cx, &s, &mut self.draft.party_text, BOXED);
+                        },
+                    );
+                    note_field(label, shown.response.rect);
+                }
                 let shown = sheet::fld(
                     ui,
                     total,
@@ -993,18 +997,21 @@ impl ItemInvoiceScreen {
         let mut note_field = |name: &'static str, rect: Rect| fields.push((name, rect));
         sheet::head(ui, |ui, total| {
             sheet::head_row(ui, |ui| {
-                let label = kind.party_label();
-                let shown = sheet::fld(
-                    ui,
-                    total,
-                    2,
-                    |ui| sheet::caption(ui, label, None),
-                    |ui| {
-                        let s = spec("party", label, Field::Party, "type to search");
-                        party_inline(ui, cx, &s, &mut self.draft.party_text, masters, party);
-                    },
-                );
-                note_field(label, shown.response.rect);
+                // As voucher: the party is line 1 of the table, not a head box.
+                if mode != InvoiceMode::AsVoucher {
+                    let label = kind.party_label();
+                    let shown = sheet::fld(
+                        ui,
+                        total,
+                        2,
+                        |ui| sheet::caption(ui, label, None),
+                        |ui| {
+                            let s = spec("party", label, Field::Party, "type to search");
+                            party_inline(ui, cx, &s, &mut self.draft.party_text, masters, party);
+                        },
+                    );
+                    note_field(label, shown.response.rect);
+                }
                 if purchase {
                     let label = kind.reference_label();
                     let shown = sheet::fld(
@@ -1446,8 +1453,13 @@ impl ItemInvoiceScreen {
         self.shown.heads = cols.iter().map(|c| c.label).zip(rects).collect();
     }
 
-    /// The as-voucher lines: the party first, each typed ledger, the engine's round-off. The
-    /// party row and the engine's round-off are read-only; a GST ledger's amount is the engine's.
+    /// The as-voucher lines: the party first (an input: the product's Dr line), each typed ledger,
+    /// the engine's round-off. The engine's round-off is read-only; a GST ledger's amount is the
+    /// engine's.
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one table drawn column by column, each named by its heading"
+    )]
     fn draw_voucher_lines(&mut self, ui: &mut Ui, base: Id, masters: &Masters, cx: &mut Cx<'_>) {
         let display = self.voucher_display(masters);
         let focused_row = match self.focus {
@@ -1469,6 +1481,10 @@ impl ItemInvoiceScreen {
             | Field::BillAmount(_)
             | Field::Narration => None,
         };
+        let party_focused = self.focus == Field::Party;
+        let party_label = self.draft.kind.party_label();
+        let mut party_rect: Option<Rect> = None;
+        let party_text = &mut self.draft.party_text;
         let parts = &mut self.draft.particulars;
         let rects = sheet::lines(
             ui,
@@ -1477,7 +1493,8 @@ impl ItemInvoiceScreen {
             |r| {
                 display.get(r).is_some_and(|(at, _)| match at {
                     RowAt::Typed(i) => focused_row == Some(*i),
-                    RowAt::Party | RowAt::Engine => false,
+                    RowAt::Party => party_focused,
+                    RowAt::Engine => false,
                 })
             },
             |ui, r, c| {
@@ -1498,7 +1515,16 @@ impl ItemInvoiceScreen {
                         };
                         text_field(ui, cx, &s, &mut cells.ledger_text, CELL);
                     }
-                    (1, RowAt::Party | RowAt::Engine) => cell_text(ui, &shown.ledger, true),
+                    (1, RowAt::Party) => {
+                        let s = FieldSpec {
+                            id: base.with("party"),
+                            field: Field::Party,
+                            name: party_label,
+                            hint: "Party: type to search",
+                        };
+                        party_rect = Some(text_field(ui, cx, &s, party_text, CELL).rect);
+                    }
+                    (1, RowAt::Engine) => cell_text(ui, &shown.ledger, true),
                     (2, _) => {
                         if !shown.ledger.is_empty() {
                             cell_text(ui, shown.side, false);
@@ -1528,6 +1554,9 @@ impl ItemInvoiceScreen {
                 }
             },
         );
+        if let Some(rect) = party_rect {
+            self.shown.fields.push((party_label, rect));
+        }
         self.shown.heads = VOUCHER_COLS.iter().map(|c| c.label).zip(rects).collect();
     }
 

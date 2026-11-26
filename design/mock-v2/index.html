@@ -1353,7 +1353,7 @@ const INV_SEED={
  saved:{party:'sgt',date:'21-11-2026',lines:[],no:'SI/0419'}};
 let INV=null;
 function invTotals(){const p=LED[INV.party];return computeInvoice(INV.lines.map(l=>({item:l.item,qty:l.qty,rate:l.rate})),INV.pos||p.st)}
-function invErrors(){const e=[];INV.lines.forEach((l,i)=>{if(!l.item&&l.text)e.push([i,'item',`Line ${i+1}: no item named "${l.text}". Pick one from the list or create it with Alt+C.`]);
+function invErrors(){const e=[];INV.lines.forEach((l,i)=>{if(!l.item&&l.text)e.push([i,'item',`Line ${i+1}: no item named "${l.text}". Pick one from the list or create it in Masters.`]);
   if(l.item&&!(l.qty>0))e.push([i,'qty',`Line ${i+1}: quantity is missing.`])});
   if(ddiff(INV.date,CO.lock)<=0)e.push([-1,'date',`Date ${fmtDate(INV.date)} is on or before the lock date ${fmtDate(CO.lock)}. Choose a later date with F2, or ask the owner to move the lock.`]);
   return e}
@@ -1391,7 +1391,6 @@ function asVoucherSheet(){
     `<button class="btn" data-cmd="mode" title="Change mode (Ctrl+H)">As voucher ${kb('Ctrl+H')}</button><button class="btn" data-cmd="more">More details ${kb('Ctrl+I')}</button><button class="btn primary" data-cmd="save">${ic('save')}Save ${kb('Ctrl+A')}</button>`)}
   <div class="card vsheet" id="sheet"><div class="vhead">
     <div class="fld"><label>Date ${kb('F2')}</label><div class="ro">21 Nov 2026</div></div>
-    <div class="fld span2"><label>Party</label><div class="ro">${esc(p.name)}</div></div>
     <div class="fld"><label>Place of supply</label><div class="ro">${p.st} ${STATES[p.st]}</div></div>
     <div class="fld"><label>Party GSTIN</label><div class="ro">${p.gstin} ${badge('Check OK','b-ok','check')}</div></div></div>
    <table class="lines"><thead><tr><th class="n">#</th><th>Ledger</th><th style="width:60px">Dr / Cr</th><th class="num" style="width:170px">Amount</th></tr></thead><tbody>${body}
@@ -2095,7 +2094,7 @@ SCREENS.purchase = {title:'Purchase',default:'default',
   const bad = st==='validation-error';
   const lines = bad ? [['hdpe32',null,R(2050)],[null,50,R(228.4),'Brass elbow 25 mm']] : PURCH_LINES;
   const inv = computeInvoice(lines.filter(l=>l[0]).map(([item,qty,rate])=>({item,qty,rate})), LED.nilgiri.st);
-  const errs = bad ? [`Line 1: quantity is missing.`,`Line 2: no item named "Brass elbow 25 mm". Pick one from the list or create it with Alt+C.`] : [];
+  const errs = bad ? [`Line 1: quantity is missing.`,`Line 2: no item named "Brass elbow 25 mm". Pick one from the list or create it in Masters.`] : [];
   const rows = lines.map(([item,qty,rate,text],i)=>{const it=item?ITEM[item]:null;
     const amt = it&&qty?qty*rate:null;
     return `<tr class="${i===0?'active':''}"><td class="n">${i+1}</td><td>${it?esc(it.name):`<input value="${esc(text||'')}" style="color:var(--bad)" aria-label="Item">`}</td><td class="t2">${it?it.hsn:''}</td>
@@ -2480,14 +2479,15 @@ function outstandingScreen(){
  render(st){
   if(st==='loading') return reportLoading(phead([['Home',hashFor('home')],['Receivables']],'Bills receivable','As at 20 Nov 2026 · bill-wise, with the due date from the party\'s credit days'));
   const rec = st!=='payables';
-  const bills = openBills().filter(b=>LED[b.led].group===(rec?'debtors':'creditors')).sort((a,b)=>b.overdue-a.overdue);
+  const bills = openBills().filter(b=>LED[b.led].group===(rec?'debtors':'creditors')).sort((a,b)=>LED[a.led].name.localeCompare(LED[b.led].name)||ddiff(a.date,b.date)); /* grouped by party, then bill date: the bill-party report's order (help.tallysolutions.com/docs/te9rel53/Reports/MIS_Reports/BillParty_wise_Outstanding_Report.htm, read 2026-11-26) */
+  const bucket=b=>!LED[b.led].days?'No due date':b.overdue<0?'Not yet due':b.overdue===0?'Due today':b.overdue<=30?'0-30 days':b.overdue<=60?'31-60 days':b.overdue<=90?'61-90 days':'Over 90 days';
   const total = bills.reduce((s,b)=>s+Math.abs(b.open),0);
   const tabs = `<div class="tabs" style="margin:0;border:0"><button data-go="${hashFor('outstanding','receivables')}" aria-selected="${rec}">Receivables</button><button data-go="${hashFor('outstanding','payables')}" aria-selected="${!rec}">Payables</button></div>`;
   return `${phead([['Home',hashFor('home')],[rec?'Receivables':'Payables']],rec?'Bills receivable':'Bills payable','As at 20 Nov 2026 · bill-wise, with the due date from the party\'s credit days',tabs)}
    <div class="card"><table class="t" id="ob"><thead><tr><th>${rec?'Customer':'Supplier'}</th><th>Bill</th><th>Bill date</th><th>Due</th><th class="num">Open</th><th class="num">Overdue</th></tr></thead><tbody>
-    ${bills.map((b,i)=>`<tr data-row="${i}" class="${i===0?'sel':''}"><td>${esc(LED[b.led].name)}</td><td>${b.ref}</td><td>${fmtDate(b.date)}</td><td>${fmtDate(addDays(b.date,LED[b.led].days||0))}</td><td class="num">${inr(Math.abs(b.open))}</td><td class="num">${b.overdue>0?`<span style="color:var(--bad)">${b.overdue} days</span>`:(LED[b.led].days?'not due':'on demand')}</td></tr>`).join('')}
-    <tr class="total"><td colspan="4">${bills.length} open bills</td><td class="num">${inr(total)}</td><td></td></tr></tbody></table></div>
-   <p class="meta">Overdue days are counted from the due date. A bill with no credit days is on demand and never overdue.</p>`;
+    ${bills.map((b,i)=>`<tr data-row="${i}" class="${i===0?'sel':''}"><td>${esc(LED[b.led].name)}</td><td>${b.ref}</td><td>${fmtDate(b.date)}</td><td>${fmtDate(addDays(b.date,LED[b.led].days||0))}</td><td class="num">${inr(Math.abs(b.open))}</td><td class="num">${b.overdue>0?`<span style="color:var(--bad)">${bucket(b)}</span>`:bucket(b)}</td></tr>`).join('')}
+    <tr class="total"><td>Total</td><td colspan="3">${bills.length} open bills</td><td class="num">${inr(total)}</td><td></td></tr></tbody></table></div>
+   <p class="meta">Ageing counts whole days past the due date as of 20 Nov 2026; a bill due on that date is 0 days overdue. The engine gives the age band, not a day count.</p>`;
  },
  key(k){return listKeys('#ob',k)},
  back(){return hashFor('home')},

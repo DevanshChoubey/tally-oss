@@ -319,10 +319,7 @@ fn every_invalid_line_is_named_in_the_error() {
     let (mut screen, app) = screen_with_a_bad_second_line("named");
     let masters = &app.books.as_ref().unwrap().masters;
     screen.save(masters);
-    assert_eq!(
-        screen.error_text(),
-        Some("Line 2: quantity: type a number.")
-    );
+    assert_eq!(screen.error_text(), Some("Line 2: quantity is missing."));
     screen
         .draft_mut()
         .rows
@@ -334,7 +331,28 @@ fn every_invalid_line_is_named_in_the_error() {
     assert_eq!(
         screen.error_text(),
         Some(
-            "2 things to fix before saving\nLine 2: quantity: type a number.\nLine 3: choose an item."
+            "2 things to fix before saving\nLine 2: quantity is missing.\nLine 3: no item named \"Drip kit\". Pick one from the list or create it in Masters."
+        )
+    );
+}
+
+#[test]
+fn a_line_whose_text_names_no_item_says_so_in_the_mocks_words() {
+    // provenance: derived from the mock's `purchase.validation-error` (index.html: `Line 2: no
+    // item named "Brass elbow 25 mm". Pick one from the list or create it with Alt+C.`). The
+    // screen cannot create an item with Alt+C (the pages read document Alt+C on ledger fields
+    // only; see item_invoice/create.rs), so the last sentence names Masters, where an item is
+    // made. A line with a quantity typed and text that names no item: the item is the problem.
+    let (mut screen, app) = screen_with_a_bad_second_line("unknown_item");
+    let masters = &app.books.as_ref().unwrap().masters;
+    "50".clone_into(&mut screen.draft_mut().rows[1].qty_text);
+    "Brass elbow 25 mm".clone_into(&mut screen.draft_mut().rows[1].item_text);
+    screen.draft_mut().rows[1].item = None;
+    screen.save(masters);
+    assert_eq!(
+        screen.error_text(),
+        Some(
+            "Line 2: no item named \"Brass elbow 25 mm\". Pick one from the list or create it in Masters."
         )
     );
 }

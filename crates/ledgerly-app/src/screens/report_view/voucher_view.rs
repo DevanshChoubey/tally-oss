@@ -25,7 +25,7 @@
 use egui::{Frame, Key, Margin, Modifiers, Rect, RichText, Sense, Stroke, Ui, pos2, vec2};
 use ledgerly_api::{ChangeKind, EntryOrigin, VoucherDetail};
 use ledgerly_core::{Date, DrCr, Paise, Qty, Rate, SignedAmount, VoucherId, format::format_inr};
-use ledgerly_model::{Books, InventoryLine, VoucherStatus};
+use ledgerly_model::{BaseVoucherKind, Books, InventoryLine, VoucherStatus};
 use thiserror::Error;
 
 use super::Notice;
@@ -342,11 +342,42 @@ pub struct VoucherViewScreen {
     notice: Option<Notice>,
     /// The voucher's number and page title, once the books have been read (the breadcrumb is
     /// asked for without the books).
-    shown: std::cell::RefCell<Option<(String, String)>>,
+    shown: std::cell::RefCell<Option<Shown>>,
     /// The totals and audit facts, asked of the engine on the worker.
     detail: Latest<Result<Outcome<VoucherDetail>, String>>,
     detail_state: DetailState,
     asked: bool,
+}
+
+/// What the screen read from the books for its heads.
+#[derive(Debug, Clone)]
+struct Shown {
+    /// The voucher number (or its title when it has none): the crumb.
+    number: String,
+    /// The voucher view's page title, "Voucher SI/0412".
+    title: String,
+    /// The print preview's crumb: the entry screen's name for the type, "Sales invoice".
+    type_label: String,
+    /// The print preview's page title, "Sales invoice SI/0412".
+    preview_title: String,
+    /// The print preview's subtitle, "Saved · Shree Ganesh Traders · 14 Nov 2026".
+    preview_subtitle: String,
+}
+
+/// The name the entry screen gives a voucher's type: a sales voucher is entered as an invoice
+/// (index.html `addPrintPreview("sales-invoice", ...)`: "Sales invoice"); the other types keep
+/// their own name.
+fn entry_name(books: &Books, id: VoucherId, view: &VoucherView) -> String {
+    let sales = books
+        .vouchers
+        .get(&id)
+        .and_then(|v| books.masters.voucher_types.get(&v.type_id))
+        .is_some_and(|t| t.base == BaseVoucherKind::Sales);
+    if sales {
+        format!("{} invoice", view.type_name)
+    } else {
+        view.type_name.clone()
+    }
 }
 
 /// The width of the Debit and Credit columns of the posting table (index.html:1621, `.num`).
@@ -767,20 +798,25 @@ fn field(ui: &mut Ui, label: &str, value: impl FnOnce(&mut Ui)) {
 impl Screen for VoucherViewScreen {
     fn title(&self) -> String {
         match self.shown.borrow().as_ref() {
-            Some((number, _)) => number.clone(),
+            Some(s) if self.print.preview().is_some() => s.type_label.clone(),
+            Some(s) => s.number.clone(),
             None => format!("Voucher #{}", self.id.0),
         }
     }
 
     fn page_title(&self) -> String {
         match self.shown.borrow().as_ref() {
-            Some((_, title)) => title.clone(),
+            Some(s) if self.print.preview().is_some() => s.preview_title.clone(),
+            Some(s) => s.title.clone(),
             None => format!("Voucher #{}", self.id.0),
         }
     }
 
     fn subtitle(&self) -> Option<String> {
-        Some("Read-only. Esc goes back up".to_owned())
+        match self.shown.borrow().as_ref() {
+            Some(s) if self.print.preview().is_some() => Some(s.preview_subtitle.clone()),
+            Some(_) | None => Some("Read-only. Esc goes back up".to_owned()),
+        }
     }
 
     fn key_bar_name(&self) -> String {
@@ -862,7 +898,22 @@ impl Screen for VoucherViewScreen {
                 Ok(view) => {
                     let title = voucher_title(&view);
                     let number = view.number.clone().unwrap_or_else(|| title.clone());
-                    *self.shown.borrow_mut() = Some((number, title.clone()));
+                    let type_label = entry_name(books, self.id, &view);
+                    let status = if view.status == "Regular" {
+                        "Saved"
+                    } else {
+                        view.status
+                    };
+                    let mut parts = vec![status.to_owned()];
+                    parts.extend(view.party.clone());
+                    parts.push(crate::ui::format::date(view.date));
+                    *self.shown.borrow_mut() = Some(Shown {
+                        preview_title: format!("{type_label} {number}"),
+                        preview_subtitle: parts.join(" \u{b7} "),
+                        type_label,
+                        number,
+                        title: title.clone(),
+                    });
                     page_head(ui, &title, self.subtitle().as_deref(), |_| {});
                     self.draw_view(ui, &view);
                 }

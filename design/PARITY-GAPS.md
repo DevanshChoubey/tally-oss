@@ -78,12 +78,11 @@ Classes:
 - **DELIBERATE** the integrity certificate is the mock's card (title, one fact per line, no column
   headings, the head hash wrapped in its column) but the facts are the engine's (Result, Events
   checked, Head, First broken event, Checkpoints), not the mock's voucher counts.
-- **DELIBERATE** outstanding bills: Overdue names the engine's ageing bucket ("31-60 days"), not the
-  mock's day count (the engine gives buckets; the UI never works out a figure); a bucket past the
-  due date is red ink as the mock's, and a bill due on the as-at date reads "Due today". The lines
-  are grouped by party in the engine's party order, not the mock's most-overdue-first: the bill-party
-  report documents party order and a bill sort inside it (help.tallysolutions.com/docs/te9rel53/Reports/MIS_Reports/BillParty_wise_Outstanding_Report.htm,
-  read 2026-11-26).
+- **DELIBERATE** outstanding bills: Overdue names the engine's ageing band ("31-60 days", "Not yet due",
+  "Due today"), not a day count (the engine gives bands; the UI never works out a figure); a band past the
+  due date is red ink. The lines are grouped by party in the engine's party order, then by bill date, as the
+  bill-party report documents (help.tallysolutions.com/docs/te9rel53/Reports/MIS_Reports/BillParty_wise_Outstanding_Report.htm,
+  read 2026-11-26). The mock was corrected in round s17 to the same order, bands and footnote.
 - **DELIBERATE** the stock summary's subtitle says "quantity and value from the stock engine" since
   the engine values by each item's own method.
 - **DELIBERATE** the trial balance names groups as the engine does ("Capital Account", "Duties & Taxes").
@@ -223,12 +222,15 @@ Classes:
   a card under the mode button, opening on the current mode, Up and Down, Enter or a click. A note
   is offered Item and Accounting only (the engine taxes an as-voucher entry for sales and purchase
   invoices). Accounting and as voucher share their ledger lines.
-- **DELIBERATE** the party of an as-voucher entry is typed in the header, where the three modes share
-  it, and the table lists it as line 1 on the Dr side (the pages put the party ledger on the Dr line,
-  help.tallysolutions.com/sales-of-goods-services/, read 2026-11-26; the engine needs the party and
-  the place of supply before any ledger line, to know the supply and the GST heads). The line is
-  read-only: edit the header's Party to change it. The Sales ledger and the GST ledgers are typed as
-  lines, as the pages say.
+- **DELIBERATE** in As voucher the party is typed on line 1 of the table, the Dr line of a sale (the Cr
+  line of a purchase), as the page says ("In the Dr field, select the party ledger",
+  help.tallysolutions.com/sales-of-goods-services/, read 2026-11-26); the head has no Party box. The line
+  takes the party list, Alt+C creates a ledger there, Ctrl+D on it empties the party (the engine needs one,
+  so the line cannot be removed) and a mode switch keeps the party. The Enter order stays Party, Place of
+  supply, Reference, then the ledger lines: the engine needs the place before it can name the GST heads,
+  and the product asks it on the Party Details step that follows the party (gst-sales-tally page, read
+  2026-11-26). A purchase in As voucher loses the supplier's GSTIN badge the head showed (it sat next to
+  the Supplier box); Party GSTIN still shows on a sale.
 - **DELIBERATE** As voucher shows Dr and Cr, not By and To (the pages offer both). Its table lists the
   party (Dr), each typed ledger, and the engine's invoice round-off line when there is one, as the
   mock's `sales-invoice.as-voucher` does. Every figure of the party, a GST ledger and the round-off
@@ -257,6 +259,9 @@ Classes:
   them alone); the tax box shows dashes, not figures for the half-entered invoice (never a wrong number).
 - **NOT BUILT** the item list shows name and unit only; the free-text item row of
   `sales-invoice.validation-error` is not offered.
+- **DELIBERATE** the unknown-item error ends "create it in Masters", where the mock said "with Alt+C": the
+  pages read document Alt+C on ledger fields only and the screen cannot make an item, so the mock's
+  sentence would promise what the app does not do (mock corrected in round s17).
 - **DELIBERATE** the period-locked banner reads "lock date"; the date and Sales ledger are bare
   inputs; Disc % and Typed amount hide by default; there is no Discard button (Esc asks).
 - **DELIBERATE** the focus ring is 2 points outside in the accent (index.html:65); hc widens it.
@@ -350,6 +355,14 @@ Credit (`ledgerly_reports::print_text` places the engine's figures only).
   heading prints "Amount" because the print font is ASCII-only (the print crate refuses other
   characters).
 - **DELIBERATE** Ctrl+P is not on the key bars, as the mock's (index.html:1634).
+- **DELIBERATE** the preview draws the whole sheet as the print engine laid it out (A4 or A5 with its margins,
+  scaled to the pane), not the mock's card cut to the content: the page is what will print, and a preview that
+  hid the margins or the empty foot would not show it. The mock's text is larger because its card is not a
+  scaled sheet.
+- **DELIBERATE** a voucher's preview reads as the entry screen names it ("Sales invoice SI/0412", crumb
+  "Sales invoice", subtitle "Saved · party · date", as the mock). The app reaches it from the voucher view,
+  which a drill from the Day book opens, so the crumb is Home, Day book, Sales invoice; the mock's is Home,
+  Sales invoice because it has no such drill. The invoice entry screen has no Ctrl+P on a saved invoice.
 
 ## Accessibility, themes, keys
 

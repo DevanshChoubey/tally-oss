@@ -1212,8 +1212,18 @@ impl ItemInvoiceScreen {
         }
     }
 
-    /// Ctrl+D: removes the line the keyboard is on (a lone line is only emptied).
+    /// Ctrl+D: removes the line the keyboard is on (a lone line, and the party on line 1 of an as-voucher entry, are only emptied).
     pub fn delete_line(&mut self) {
+        // As voucher: line 1 is the party and cannot be removed (the engine needs one), so it is
+        // emptied, like a lone line.
+        if self.focus == Field::Party && self.draft.mode == InvoiceMode::AsVoucher {
+            self.draft.party = None;
+            self.draft.party_text.clear();
+            self.focus_pending = true;
+            self.pick_index = 0;
+            self.confirming_save = false;
+            return;
+        }
         match self.focus {
             Field::Item(i)
             | Field::Qty(i)
