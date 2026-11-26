@@ -434,7 +434,8 @@ mark{background:var(--accent-soft);color:var(--accent-ink);border-radius:2px;pad
  {"id":"bank.empty","kind":"empty","hash":"screen=bank&state=empty","title":"Bank, no statement","description":"No statement imported for this account; import from CSV, XLSX or MT940."},
  {"id":"bank.import-error","kind":"error","hash":"screen=bank&state=import-error","title":"Bank, balance check failed","description":"Opening plus lines does not equal the closing balance in the file; the import is refused."},
  {"id":"bank.offline-ai","kind":"offline-ai","hash":"screen=bank&state=offline-ai","title":"Bank, AI off","description":"Only exact and rule matches; leftover lines wait for manual matching."},
- {"id":"bank.brs","kind":"happy","hash":"screen=bank&state=brs","title":"Bank reconciliation statement","description":"Balance as per books, items not yet in the bank, and the engine's expected bank balance."},
+ {"id":"bank.brs","kind":"happy","hash":"screen=bank&state=brs","title":"Bank reconciliation statement","description":"Balance as per books, each entry the bank has not cleared under its total, the balance as per bank, the statement's balance and the difference."},
+ {"id":"bank.brs-exported","kind":"happy","hash":"screen=bank&state=brs-exported","title":"Bank reconciliation statement, exported","description":"Ctrl+E wrote the statement to a CSV or XLSX file; a note says where it went."},
  {"id":"masters.ledgers","kind":"happy","hash":"screen=masters&state=ledgers","title":"Masters, ledgers","description":"Ledgers by group with engine balances; filter as you type."},
  {"id":"masters.ledger-detail","kind":"happy","hash":"screen=masters&state=ledger-detail","title":"Masters, party detail","description":"Party ledger: GSTIN with check, state, credit days, open bills."},
  {"id":"masters.items","kind":"happy","hash":"screen=masters&state=items","title":"Masters, stock items","description":"Items with HSN, GST rate, stock and value from the stock engine."},
@@ -804,9 +805,10 @@ function gstr3b(actions){
     if(a===null){deemed.igst+=r.igst;deemed.cgst+=r.cgst;deemed.sgst+=r.sgst}}
   const books={igst:0,cgst:0,sgst:0};
   for(const v of VOUCHERS.filter(x=>x.type==='Purchase'))for(const [l,a] of v.dr){if(l==='igstin')books.igst+=a;if(l==='cgstin')books.cgst+=a;if(l==='sgstin')books.sgst+=a}
-  /* set-off: IGST credit first against IGST, then CGST, then SGST; CGST credit against CGST then IGST; SGST against SGST then IGST */
-  const liab={igst:out.igst,cgst:out.cgst,sgst:out.sgst}; const c={...itc}; const use=(from,to)=>{const u=Math.min(c[from],liab[to]);c[from]-=u;liab[to]-=u};
-  use('igst','igst');use('igst','cgst');use('igst','sgst');use('cgst','cgst');use('cgst','igst');use('sgst','sgst');use('sgst','igst');
+  /* set-off, CGST Act s.49(5) and Rule 88A: IGST credit pays IGST first, then CGST and SGST (the share that leaves least cash); CGST credit pays CGST then IGST; SGST credit pays SGST then IGST; CGST credit never pays SGST and SGST credit never pays CGST */
+  const liab={igst:out.igst,cgst:out.cgst,sgst:out.sgst}; const c={...itc}; const use=(from,to,max)=>{const u=Math.min(c[from],liab[to],max===undefined?Infinity:max);c[from]-=u;liab[to]-=u};
+  use('igst','igst');use('igst','cgst',Math.max(0,liab.cgst-c.cgst));use('igst','sgst',Math.max(0,liab.sgst-c.sgst));use('igst','cgst');use('igst','sgst');
+  use('cgst','cgst');use('sgst','sgst');use('cgst','igst');use('sgst','igst');
   const cash={igst:half(liab.igst,100)*100,cgst:half(liab.cgst,100)*100,sgst:half(liab.sgst,100)*100};
   return {out,itc,deemed,books,liabAfter:liab,cash,cashTotal:cash.igst+cash.cgst+cash.sgst}; }
 
@@ -838,13 +840,16 @@ const BANK_MATCH = {
  L09:{kind:'AiSuggested',v:'RC/0219',conf:2,why:'KSK is the alias of Kisan Seva Kendra (Indore); amount equals receipt RC/0219'},
  L10:{kind:'Exact',v:'PY/0318',why:'Cheque number 004512 and amount match'}};
 function brs(accepted){
+  /* the reconciliation statement as the accounting package's help page gives it: the books balance, the entries the bank has not cleared (deposits are subtracted, payments added back), the balance as per bank, the imported statement's closing balance and the difference. An entry is cleared once its match is confirmed. */
   const b=balances().saptagiri; const acc=accepted||{};
-  const matchedV=new Set(Object.entries(BANK_MATCH).filter(([id,m])=>m.v&&(m.kind!=='AiSuggested'||acc[id])).map(([,m])=>m.v));
-  const inBooksNotBank=VOUCHERS.filter(v=>postings(v).some(([l])=>l==='saptagiri')&&!new Set(Object.values(BANK_MATCH).map(m=>m.v)).has(v.id));
-  const notInBooks=STMT.lines.filter(l=>BANK_MATCH[l.id].create);
-  const unrec=notInBooks.reduce((s,l)=>s+l.dep-l.wd,0);
-  const pend=inBooksNotBank.reduce((s,v)=>s-postings(v).find(x=>x[0]==='saptagiri')[1],0);
-  return {books:b,bank:STMT.close,notInBooks,inBooksNotBank,unrec,expected:b+unrec+pend,matchedV}; }
+  const confirmed=new Set(Object.entries(BANK_MATCH).filter(([id,m])=>m.v&&acc[id]).map(([,m])=>m.v));
+  const items=VOUCHERS.filter(v=>postings(v).some(([l])=>l==='saptagiri')&&!confirmed.has(v.id)).map(v=>{
+    const amt=postings(v).find(x=>x[0]==='saptagiri')[1]; const others=postings(v).filter(x=>x[0]!=='saptagiri').map(x=>LED[x[0]].name);
+    return {v,amt,what:[...new Set(others)].join(', ')+(v.chq?' · cheque '+v.chq:'')}; });
+  const deposits=items.filter(i=>i.amt>0), payments=items.filter(i=>i.amt<0);
+  const dTot=deposits.reduce((s,i)=>s+i.amt,0), pTot=payments.reduce((s,i)=>s-i.amt,0);
+  const perBank=b-dTot+pTot;
+  return {books:b,deposits,payments,dTot,pTot,perBank,stmt:STMT.close,diff:STMT.close-perBank}; }
 
 /* ---------- self-check, printed to the console on load ---------- */
 function selfCheck(){
@@ -1761,7 +1766,7 @@ SCREENS.gst={title:'GST returns',default:'gstr1',
     <tr class="sub"><td colspan="5">6.1 Payment of tax ${prov('eng','engine set-off')}</td></tr>
     <tr><td class="ind1">Left after using accepted credit</td><td></td>${c(s.liabAfter.igst,s.liabAfter.cgst,s.liabAfter.sgst)}</tr>
     <tr class="total"><td>Payable in cash, rounded to rupees</td><td class="num">${inr(s.cashTotal)}</td>${c(s.cash.igst,s.cash.cgst,s.cash.sgst)}</tr></tbody></table></div>
-    <div class="card pad"><h2>Read this before filing</h2><ul class="t2" style="padding-left:18px;margin:0;display:grid;gap:6px"><li>Credit counts only what you accepted in IMS. Records with no action are shown apart.</li><li>Set-off order: IGST credit first, then CGST, then SGST, as the rule pack says.</li><li>Your books show ITC of ${inr(s.books.igst)} IGST; accepted 2B shows ${inr(s.itc.igst)}. The 2B and IMS tab explains each record.</li></ul><div class="actions" style="margin-top:10px"><button class="btn" data-go="${hashFor('gst','recon')}">2B and IMS ${kb('3')}</button></div></div></div>`;}
+    <div class="card pad"><h2>Read this before filing</h2><ul class="t2" style="padding-left:18px;margin:0;display:grid;gap:6px"><li>Credit counts only what you accepted in IMS. Records with no action are shown apart and are not used.</li><li>Set-off: IGST credit pays IGST first, then CGST and SGST. CGST credit pays CGST, then IGST. SGST credit pays SGST, then IGST. Cess credit pays cess only.</li><li>Credit left in your electronic credit ledger from earlier months is not known to Ledgerly, so the cash figure assumes none.</li><li>Your books show ITC of ${inr(s.books.igst)} IGST; accepted 2B shows ${inr(s.itc.igst)}. The 2B and IMS tab explains each record.</li></ul><div class="actions" style="margin-top:10px"><button class="btn" data-go="${hashFor('gst','recon')}">2B and IMS ${kb('3')}</button></div></div></div>`;}
   if(st==='recon-empty')return head+`<div class="card"><div class="empty">${ic('upload')}<h2>No 2B file for November yet</h2><p>On the GST portal, open Returns, then GSTR-2B, choose November 2026 and download the JSON. Drop it here or press ${kb('Ctrl+O')}. The engine matches it to your purchase vouchers; nothing is sent anywhere.</p><button class="btn primary" data-go="${hashFor('gst','recon')}">${ic('upload')}Import 2B JSON ${kb('Ctrl+O')}</button></div></div>`;
   if(st==='recon-error')return head+`<div class="note bad" role="alert">${ic('alert')}<div><b>Not imported: this 2B file is for GSTIN 27ZZZZZ0005Z1ZL, not ${CO.gstin}.</b><div>The file looks like a customer's 2B. Nothing was imported or changed. Download the file again while signed in as ${esc(CO.name)}.</div><div class="actions" style="margin-top:8px"><button class="btn" data-go="${hashFor('gst','recon-empty')}">${ic('upload')}Choose another file</button></div></div></div>`;
   const locked=st==='recon-locked'; const rows=locked?OCT_2B.map(r=>({...r,status:'Matched',kind:'Exact',suggest:r.action})):recon();
@@ -1809,14 +1814,16 @@ SCREENS.bank={title:'Bank reconciliation',default:'default',
    `<button class="btn" data-cmd="import">${ic('upload')}Import statement ${kb('Ctrl+O')}</button><button class="btn" data-go="${hashFor('bank','brs')}">Reconciliation statement</button>`);
   if(st==='empty')return head+`<div class="card"><div class="empty">${ic('bank')}<h2>No statement for this account yet</h2><p>Download a statement from your bank's website as CSV, XLSX or MT940, then import it here. The file is read on this computer. Ledgerly never signs in to your bank.</p><button class="btn primary" data-go="${hashFor('bank','default')}">${ic('upload')}Import statement ${kb('Ctrl+O')}</button></div></div>`;
   if(st==='import-error'){const printed=STMT.close+R(640);return head+`<div class="note bad" role="alert">${ic('alert')}<div><b>Not imported: the file does not add up.</b><table class="t" style="margin:8px 0;max-width:520px"><tbody><tr><td>Opening balance in the file</td><td class="num">${inr(STMT.open)}</td></tr><tr><td>Plus deposits, less withdrawals (${STMT.lines.length} lines) ${prov('eng','engine')}</td><td class="num">${inr(STMT.close-STMT.open)}</td></tr><tr class="total"><td>Closing balance, computed</td><td class="num">${inr(STMT.close)}</td></tr><tr><td>Closing balance printed in the file</td><td class="num">${inr(printed)}</td></tr><tr><td><b>Difference</b></td><td class="num"><b>${inr(printed-STMT.close)}</b></td></tr></tbody></table><div>A line is probably missing from the export, or the file was cut. Download the statement again for the full period. Nothing was imported.</div></div></div>`}
-  if(st==='brs'){const b=brs(acc);const pend=b.inBooksNotBank;return head+`<div class="grid g-main"><div class="card"><table class="t"><tbody>
-    <tr class="sub"><td>Balance as per books, 21 Nov 2026 ${prov('books','books')}</td><td class="num">${inr(b.books)}</td></tr>
-    <tr class="sub"><td colspan="2">In the bank, not yet in the books</td></tr>${b.notInBooks.map(l=>`<tr><td class="ind1">${fmtDate(l.date)} · ${esc(l.narr)}</td><td class="num">${inr(l.dep-l.wd)}</td></tr>`).join('')}
-    <tr class="sub"><td colspan="2">In the books, not yet in the bank</td></tr>${pend.length?pend.map(v=>`<tr><td class="ind1">${v.id} · ${esc(v.narr)}</td><td class="num">${inr(-postings(v).find(x=>x[0]==='saptagiri')[1])}</td></tr>`).join(''):`<tr><td class="ind1 t2">None</td><td></td></tr>`}
-    <tr class="total"><td>Expected bank balance ${prov('eng','engine')}</td><td class="num">${inr(b.expected)}</td></tr>
-    <tr><td>Closing balance in the statement ${prov('doc','statement')}</td><td class="num">${inr(b.bank)}</td></tr>
-    <tr><td><b>Difference</b></td><td class="num"><b>${inr(b.bank-b.expected)}</b></td></tr></tbody></table></div>
-    <div class="card pad"><h2>${b.bank===b.expected?ic('check')+' Reconciled':'Not yet reconciled'}</h2><p class="t2">${b.bank===b.expected?'The statement agrees with the books once the listed lines are posted.':'Match or post the lines listed, then this difference closes.'}</p><div class="actions" style="margin-top:10px"><button class="btn" data-go="${hashFor('bank','ai-suggestions')}">Review suggestions</button></div></div></div>`}
+  if(st==='brs'||st==='brs-exported'){const b=brs(acc);const line=i=>`<tr><td class="ind2">${fmtDate(i.v.date)} · ${i.v.id} · ${esc(i.what)}</td><td class="num">${inr(Math.abs(i.amt))}</td></tr>`;
+   const done=b.diff===0;
+   return head+(st==='brs-exported'?`<div class="note" role="status" style="margin-bottom:12px">${ic('info')}<span>Exported to /home/asha/Documents/bank-reconciliation-statement.csv.</span></div>`:'')+`<div class="grid g-main"><div class="card"><table class="t"><tbody>
+    <tr class="sub"><td>Balance as per company books ${prov('books','books')}</td><td class="num">${inr(b.books)}</td></tr>
+    <tr><td class="ind1">Amounts not reflected in bank: deposits</td><td class="num">${inr(b.dTot)}</td></tr>${b.deposits.map(line).join('')}
+    <tr><td class="ind1">Amounts not reflected in bank: payments</td><td class="num">${inr(b.pTot)}</td></tr>${b.payments.map(line).join('')}
+    <tr class="total"><td>Balance as per bank ${prov('eng','engine')}</td><td class="num">${inr(b.perBank)}</td></tr>
+    <tr><td>Balance as per imported bank statement ${prov('doc','statement')}</td><td class="num">${inr(b.stmt)}</td></tr>
+    <tr><td><b>Difference</b></td><td class="num"><b>${inr(b.diff)}</b></td></tr></tbody></table></div>
+    <div class="card pad"><h2>${done?ic('check')+' Reconciled':'Not yet reconciled'}</h2><p class="t2">${done?'The imported statement agrees with the balance as per bank.':'The imported statement differs from the balance as per bank. Match or post the statement lines, then this difference closes.'}</p></div></div>`}
   const off=st==='offline-ai';
   const lines=STMT.lines.filter(l=>st==='ai-suggestions'?BANK_MATCH[l.id].kind==='AiSuggested':st==='suggested-ledger'?String((BANK_MATCH[l.id].create||{}).dr).startsWith('NEW:'):true);
   const kindOf=l=>{const m=BANK_MATCH[l.id];if(acc[l.id])return 'Manual';if(m.kind==='AiSuggested'&&off)return 'Unmatched';return m.kind};
@@ -1853,8 +1860,8 @@ SCREENS.bank={title:'Bank reconciliation',default:'default',
   if(k==='C'){go(hashFor('payment'),'screen-push');return true}
   return false},
  cmd(c){if(c==='import')toast('Ctrl+O imports CSV, XLSX or MT940. A bank profile maps the columns once.')},
- back(st){return ['brs','ai-suggestions','suggested-ledger','import-error'].includes(st)?hashFor('bank'):hashFor('home')},
- keys(st){return st==='brs'?[['','Reconciliation statement'],['Ctrl+E','Export'],['Esc','Back']]:[['','Bank reconciliation'],['J / K','Move'],['Y','Accept suggestion'],['N','Reject'],['E','Edit'],['C','Create voucher'],['Esc','Back']]}
+ back(st){return ['brs','brs-exported','ai-suggestions','suggested-ledger','import-error'].includes(st)?hashFor('bank'):hashFor('home')},
+ keys(st){return st==='brs'||st==='brs-exported'?[['','Reconciliation statement'],['Ctrl+E','Export'],['Esc','Back']]:[['','Bank reconciliation'],['J / K','Move'],['Y','Accept suggestion'],['N','Reject'],['E','Edit'],['C','Create voucher'],['Esc','Back']]}
 };
 
 /* ---------- masters ---------- */

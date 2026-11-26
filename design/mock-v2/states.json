@@ -487,7 +487,14 @@
    "kind": "happy",
    "hash": "screen=bank&state=brs",
    "title": "Bank reconciliation statement",
-   "description": "Balance as per books, items not yet in the bank, and the engine's expected bank balance."
+   "description": "Balance as per books, each entry the bank has not cleared under its total, the balance as per bank, the statement's balance and the difference."
+  },
+  {
+   "id": "bank.brs-exported",
+   "kind": "happy",
+   "hash": "screen=bank&state=brs-exported",
+   "title": "Bank reconciliation statement, exported",
+   "description": "Ctrl+E wrote the statement to a CSV or XLSX file; a note says where it went."
   },
   {
    "id": "masters.ledgers",
