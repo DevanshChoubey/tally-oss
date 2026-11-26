@@ -37,6 +37,7 @@
 
 use std::path::Path;
 
+use ledgerly_assist::provider::AiProvider;
 use ledgerly_core::{Clock, Date, Outcome, Unsupported, UserId, VoucherId};
 use ledgerly_model::seed_godowns::default_godowns;
 use ledgerly_model::seed_groups::reserved_groups;
@@ -71,6 +72,9 @@ pub struct Api {
     /// Bank statements imported in this session (card W5). Not kept in the company file, which
     /// records only the `StatementImported` id; see `bank.rs`.
     pub(crate) bank: Statements,
+    /// The assistant's provider, when one is attached ([`Api::attach_assistant`]). Opening a
+    /// company attaches none, so it touches no network.
+    assistant: Option<Box<dyn AiProvider>>,
 }
 
 /// The state of the books cache.
@@ -115,6 +119,7 @@ impl Api {
             cache: Cache::Stale,
             lock: None,
             bank: Statements::default(),
+            assistant: None,
         };
         api.reload()?;
         Ok(api)
@@ -133,6 +138,7 @@ impl Api {
             cache: Cache::Stale,
             lock: None,
             bank: Statements::default(),
+            assistant: None,
         };
         api.reload()?;
         Ok(api)
@@ -149,6 +155,24 @@ impl Api {
     /// Sets the actor recorded on later changes (the signed-in user).
     pub fn set_actor(&mut self, actor: Actor) {
         self.actor = actor;
+    }
+
+    /// Attaches the assistant's provider for this session. The app attaches the local model or
+    /// the user's cloud provider; tests and captures attach the fixed-answer test provider.
+    pub fn attach_assistant(&mut self, provider: Box<dyn AiProvider>) {
+        self.assistant = Some(provider);
+    }
+
+    /// The attached provider, if any.
+    #[must_use]
+    pub fn assistant(&self) -> Option<&dyn AiProvider> {
+        self.assistant.as_deref()
+    }
+
+    /// Whether a provider is attached.
+    #[must_use]
+    pub fn assistant_attached(&self) -> bool {
+        self.assistant.is_some()
     }
 
     /// Sets the clock that stamps later audit records.
@@ -170,6 +194,21 @@ impl Api {
     ///   succeeded but the books could not be reloaded. In the second case the change is saved
     ///   and the next command reloads the books.
     pub fn execute(&mut self, cmd: Command) -> Result<Outcome<CommandResult>, ApiError> {
+        self.execute_with(cmd, |_| Vec::new())
+    }
+
+    /// [`Api::execute`], committing `extra(engine events)` in the same transaction after the
+    /// engine's events (for example the assistant event that records an accepted draft, which
+    /// names the voucher the engine posted). Nothing extra is written when the engine writes
+    /// nothing.
+    ///
+    /// # Errors
+    /// As [`Api::execute`].
+    pub(crate) fn execute_with(
+        &mut self,
+        cmd: Command,
+        extra: impl FnOnce(&[Event]) -> Vec<Event>,
+    ) -> Result<Outcome<CommandResult>, ApiError> {
         if matches!(self.cache, Cache::Stale) {
             self.reload()?;
         }
@@ -179,13 +218,15 @@ impl Api {
             Cache::Stale => return Err(ApiError::Stale),
         };
         let cmd = command::assign_ids(cmd, books)?;
-        let events = match command::run(cmd, books, self.lock)? {
+        let mut events = match command::run(cmd, books, self.lock)? {
             Outcome::Value(events) => events,
             Outcome::Unsupported(unsupported) => return Ok(Outcome::Unsupported(unsupported)),
         };
         if events.is_empty() {
             return Ok(Outcome::Value(CommandResult::unchanged()));
         }
+        let more = extra(&events);
+        events.extend(more);
         let meta = audit_meta(&self.actor, self.clock);
         let receipt = self.store.commit(&events, &meta)?;
         let result = CommandResult::committed(&events, receipt);

@@ -157,7 +157,8 @@ impl Api {
                 | Event::BankStatementStored { .. }
                 | Event::Gstr2bImported { .. }
                 | Event::ImsActionRecorded { .. }
-                | Event::Gstr3bFiled { .. } => None,
+                | Event::Gstr3bFiled { .. }
+                | Event::AiActivityRecorded(_) => None,
             })
             .collect())
     }
@@ -210,7 +211,8 @@ fn tier_word(event: &Event) -> Option<&String> {
         | Event::BankStatementStored { .. }
         | Event::Gstr2bImported { .. }
         | Event::ImsActionRecorded { .. }
-        | Event::Gstr3bFiled { .. } => None,
+        | Event::Gstr3bFiled { .. }
+        | Event::AiActivityRecorded(_) => None,
     }
 }
 

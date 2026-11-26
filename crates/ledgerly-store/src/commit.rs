@@ -336,6 +336,7 @@ fn project_event(conn: &Connection, seq: u64, event: &Event) -> Result<(), Store
         | Event::Gstr2bImported { .. }
         | Event::ImsActionRecorded { .. }
         | Event::Gstr3bFiled { .. }
+        | Event::AiActivityRecorded(_)
         | Event::AiProposalRecorded(_) => Ok(()),
     }
 }

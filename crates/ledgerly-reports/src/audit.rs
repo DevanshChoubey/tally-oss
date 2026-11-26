@@ -246,6 +246,7 @@ fn vouchers_of(event: &Event) -> Vec<&Voucher> {
         | Event::Gstr2bImported { .. }
         | Event::ImsActionRecorded { .. }
         | Event::Gstr3bFiled { .. }
+        | Event::AiActivityRecorded(_)
         | Event::MatchConfirmed(_)
         | Event::AiProposalRecorded(_) => Vec::new(),
     }
@@ -405,6 +406,7 @@ fn describe(rec: &AuditRecord, books: &Books) -> (ObjectKey, String, String) {
             gst_return_label(gstin, *period_start),
             format!("Marked GSTR-3B filed on {filed_on}"),
         ),
+        Event::AiActivityRecorded(activity) => ai_activity_row(rec.seq, activity),
         Event::AiProposalRecorded(proposal) => (
             ObjectKey::AiProposal(rec.seq),
             format!("assistant proposal by {}", proposal.model),
@@ -702,6 +704,7 @@ fn deleted_altered(
             | Event::Gstr2bImported { .. }
             | Event::ImsActionRecorded { .. }
             | Event::Gstr3bFiled { .. }
+            | Event::AiActivityRecorded(_)
             | Event::MatchConfirmed(_)
             | Event::AiProposalRecorded(_) => false,
         };
@@ -808,4 +811,53 @@ fn edits_after_lock(
         &items,
         notes,
     ))
+}
+
+/// The object, its label and the description of an assistant event. A decision is filed under
+/// the draft it decides, so a draft's history reads stored, then accepted or rejected.
+fn ai_activity_row(
+    seq: EventSeq,
+    activity: &ledgerly_model::AiActivity,
+) -> (ObjectKey, String, String) {
+    use ledgerly_model::AiActivityKind;
+    let label = format!(
+        "assistant {} by {}",
+        activity.input_label, activity.provider
+    );
+    match &activity.kind {
+        AiActivityKind::DraftStored { .. } => (
+            ObjectKey::AiProposal(seq),
+            label,
+            "Assistant draft stored for review".to_owned(),
+        ),
+        AiActivityKind::DraftAccepted { draft, .. } => (
+            ObjectKey::AiProposal(*draft),
+            label,
+            "Assistant draft accepted".to_owned(),
+        ),
+        AiActivityKind::DraftRejected { draft, .. } => (
+            ObjectKey::AiProposal(*draft),
+            label,
+            "Assistant draft rejected".to_owned(),
+        ),
+        AiActivityKind::Answered { .. } => (
+            ObjectKey::AiProposal(seq),
+            label,
+            "Assistant question answered by a report query".to_owned(),
+        ),
+        AiActivityKind::ReadFailed { reason } => (
+            ObjectKey::AiProposal(seq),
+            label,
+            format!("Assistant could not read the input: {reason}"),
+        ),
+        AiActivityKind::CloudConsent { granted } => (
+            ObjectKey::AiProposal(seq),
+            label,
+            if *granted {
+                "Cloud send agreed for one document".to_owned()
+            } else {
+                "Cloud send declined; kept on this computer".to_owned()
+            },
+        ),
+    }
 }

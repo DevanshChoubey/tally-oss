@@ -270,6 +270,7 @@ mod review_screen {
         let queue = ReviewQueue {
             items: Vec::new(),
             duplicates: Vec::new(),
+            drafts: Vec::new(),
             unlisted: vec![UnlistedSource {
                 source: ReviewSource::BillDraft,
                 reason: "the engine's own reason".to_owned(),
