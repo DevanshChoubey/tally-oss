@@ -44,6 +44,11 @@ pub use balance::BalanceChange;
 pub use bank::{BalanceRefusal, balance_refusal};
 pub use command::{Command, CommandResult, CreatedId};
 pub use gst_filing::GstFiling;
+pub use ledgerly_assist::ocr::{OcrLine, OcrOutput};
+pub use ledgerly_assist::provider::{
+    AiProvider, CloudModel, FIXED_ANSWERS_NAME, FixedAnswers, LocalModel, LocalModelFile,
+    ProviderInfo, ProviderPlace, ProviderStatus,
+};
 pub use ledgerly_assist::validate::DraftCheck;
 pub use ledgerly_assist::{
     DraftItem, DraftLine, MappingSuggestion, MatchSuggestion, Proposal, ReportQuery, SourceRef,

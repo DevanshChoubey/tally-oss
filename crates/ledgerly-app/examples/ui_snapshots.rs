@@ -416,6 +416,10 @@ enum Fixture {
     /// of the mock's `sales-invoice.einvoice-not-ready` ("A registered buyer whose address has no
     /// PIN code"). Capture-only: the sample's own seed holds the PIN.
     GodavariBuyerNoPin,
+    /// The sample company with the assistant attached (later release): the fixed-answers test
+    /// provider, never a real model, and one bill-photo draft stored as the bill reader would
+    /// store it ([`godavari_assistant_file`]). Shown only on shots taken with [`Shot::ai_on`].
+    GodavariAssistant,
     /// Fictional Traders ([`company_file`]): the shots whose key paths or typed names need its
     /// data, or that show a state the sample does not have.
     Main,
@@ -443,6 +447,7 @@ impl Fixture {
             Fixture::GodavariNo2b => Some(godavari_no_2b_file(dir)),
             Fixture::GodavariBuyerNoPin => Some(godavari_buyer_no_pin_file(dir)),
             Fixture::GodavariShortStock => Some(godavari_short_stock_file(dir)),
+            Fixture::GodavariAssistant => Some(godavari_assistant_file(dir)),
             Fixture::Main => Some(company_file(dir)),
             Fixture::New => Some(new_company_file(dir)),
             Fixture::Blank => Some(blank_company_file(dir)),
@@ -467,6 +472,7 @@ impl Fixture {
                     | Fixture::GodavariNo2b
                     | Fixture::GodavariBuyerNoPin
                     | Fixture::GodavariShortStock
+                    | Fixture::GodavariAssistant
                     | Fixture::Main
                     | Fixture::New
                     | Fixture::Blank
@@ -545,6 +551,84 @@ fn godavari_no_2b_file(dir: &Path) -> Api {
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     let _removed = std::fs::remove_file(&path);
     ledgerly_sample::create_without_2b(&path, sample_clock()).unwrap()
+}
+
+/// The sample company with the fixed-answers test provider attached and one bill-photo draft,
+/// the mock's review queue row "Rupa Polymers, bill RP/5521" (index.html `REVIEW_ITEMS`, q1, from
+/// the bill of `billDraft`: taxable 68,000.00 and IGST 12,240.00 from a Gujarat supplier). The
+/// draft is stored through `Api::record_ai_draft` as the bill reader stores one; its figure in
+/// the queue is the engine's check of it, not a number written here.
+fn godavari_assistant_file(dir: &Path) -> Api {
+    use ledgerly_api::{
+        AiFeature, DraftLine, FIXED_ANSWERS_NAME, FixedAnswers, NewAiDraft, Proposal, SourceRef,
+        Transcribed, VoucherDraft,
+    };
+    fn on_bill<T>(value: T, top: u32) -> Transcribed<T> {
+        Transcribed {
+            value,
+            source: SourceRef::Document {
+                doc_hash: "9f3c".repeat(16),
+                page: 1,
+                bbox: [40, top, 400, 18],
+            },
+            confidence_permille: 930,
+        }
+    }
+    let mut api = godavari_company_file(dir);
+    let books = match api.books() {
+        Ok(ledgerly_core::Outcome::Value(b)) => b,
+        other => panic!("no books: {other:?}"),
+    };
+    let ledger = |name: &str| {
+        books
+            .masters
+            .ledgers
+            .values()
+            .find(|l| l.name == name)
+            .map(|l| l.id)
+            .unwrap()
+    };
+    let hash = "9f3c".repeat(16);
+    let line = |name: &str, side, rupees: i64, top| DraftLine {
+        ledger_name: on_bill(name.to_owned(), top),
+        ledger: Some(ledger(name)),
+        side,
+        amount: on_bill(Paise::new(rupees * 100), top),
+    };
+    let draft = VoucherDraft {
+        kind: ledgerly_model::BaseVoucherKind::Purchase,
+        date: Some(on_bill(
+            Date::from_calendar_date(2026, time::Month::November, 17).unwrap(),
+            60,
+        )),
+        party_name: Some(on_bill("Rupa Polymers".to_owned(), 20)),
+        party: Some(ledger("Rupa Polymers")),
+        invoice_number: Some(on_bill("RP/5521".to_owned(), 60)),
+        supplier_gstin: Some(on_bill("24ZZZZZ0004Z1ZS".to_owned(), 40)),
+        lines: vec![
+            line("Purchases", ledgerly_core::DrCr::Dr, 68_000, 300),
+            line("IGST", ledgerly_core::DrCr::Dr, 12_240, 330),
+            line("Rupa Polymers", ledgerly_core::DrCr::Cr, 80_240, 360),
+        ],
+        items: Vec::new(),
+        document_total: Some(on_bill(Paise::new(8_024_000), 360)),
+        document_tax: Some(on_bill(Paise::new(1_224_000), 330)),
+        create_ledgers: Vec::new(),
+        narration: "Rupa Polymers, bill RP/5521".to_owned(),
+    };
+    api.attach_assistant(Box::new(FixedAnswers::new()));
+    api.record_ai_draft(NewAiDraft {
+        feature: AiFeature::BillReading,
+        provider: FIXED_ANSWERS_NAME.to_owned(),
+        model_version: "s21-1".to_owned(),
+        prompt_template_version: "ocr/1".to_owned(),
+        input_label: "IMG_2041.jpg".to_owned(),
+        input_hash: hash.clone(),
+        proposal: Proposal::VoucherDraft(Box::new(draft)),
+        confidence_permille: 930,
+    })
+    .unwrap();
+    api
 }
 
 /// The sample company plus two vouchers that leave the pickaxe's stock negative for a day: a
@@ -786,6 +870,8 @@ struct Shot {
     after: Vec<Inject>,
     /// The company file the shot is taken on.
     company: Fixture,
+    /// The assistant is on for this shot (`release::set_ai_enabled`): the later-release design.
+    ai: bool,
 }
 
 /// Frames the `setup.done` shot waits after its keys, so the background company file job can
@@ -1097,6 +1183,12 @@ impl Shot {
         self
     }
 
+    /// The same shot with the assistant on (the later release), as the mock's `ai=on` pages.
+    fn ai_on(mut self) -> Self {
+        self.ai = true;
+        self
+    }
+
     /// The same shot taken on another company file.
     fn on(mut self, company: Fixture) -> Self {
         self.company = company;
@@ -1120,6 +1212,7 @@ fn shot(state: &'static str, keys: &[(Key, Modifiers)]) -> Shot {
         query: None,
         after: Vec::new(),
         company: Fixture::Godavari,
+        ai: false,
     }
 }
 
@@ -1820,6 +1913,13 @@ fn light_shots() -> Vec<Shot> {
         shot("review.default", &[palette])
             .query("Review queue")
             .then(&[(Key::Enter, NONE)]),
+        // Later release: the assistant's bill-photo draft beside the bank matches.
+        shot("ai.review.default", &[palette])
+            .query("Review queue")
+            .then(&[(Key::Enter, NONE)])
+            .expect("Review queue", Some("Rupa Polymers, bill RP/5521"))
+            .on(Fixture::GodavariAssistant)
+            .ai_on(),
         // The item list open on the first line, filtered by what is typed (index.html: type-ahead
         // over item masters).
         invoice_line(
@@ -2824,6 +2924,7 @@ impl eframe::App for Snapshots {
                 let current = &self.shots[self.index];
                 self.shell.set_theme(current.theme.kind());
                 self.shell.set_language(current.lang);
+                ledgerly_app::release::set_ai_enabled(current.ai);
                 self.inject = current
                     .keys
                     .iter()

@@ -311,8 +311,19 @@ Classes:
 
 ## Review queue, AI and privacy, Ask, quick entry, bill photo
 
-- **NOT BUILT** the queue lists bank matches and Rule D-02 duplicates only; bill drafts, plain-words
-  drafts, new-ledger suggestions and 2B explanations need a draft store; the sidebar count stays withheld.
+- **NOT BUILT** with AI out of the release (1.0.x) the queue lists bank matches and Rule D-02
+  duplicates only; the sidebar count stays withheld. The later-release queue (`ai.review.default`,
+  round s21, `release::set_ai_enabled(true)`) lists stored assistant drafts first, with Y accepting
+  through the engine and N storing the rejection in the AI activity log; new-ledger suggestions and
+  2B explanations are still not listed (no assistant produces them yet).
+- **NOT BUILT** `ai.review.default`: the Rupa Polymers draft shows Amount "none" where the mock shows
+  80,240.00. The engine blocks it: Rupa Polymers is bill-wise and the draft carries no bill
+  reference ("the assistant does not propose bill references"). Settled with the bill photo round
+  (a New Ref named by the supplier bill number, as the voucher form offers), not by the queue.
+- **NOT BUILT** `ai.review.default`: Enter on a draft row says the draft's own screen is not built
+  yet instead of opening the purchase bill or plain-words form (rounds C and D).
+- **NOT BUILT** `ai.review.default`: the title bar's AI chip reads "AI: not set up" (the fixture
+  company stores no tier); the mock's reads "AI on this computer" (AI settings round).
 - **NOT BUILT** Home rows do not open their proposal; the empty state's "Read a bill" (Alt+O).
 - **DELIBERATE** no optional-voucher list (help page "Display Optional Vouchers",
   help.tallysolutions.com/docs/te9rel66/Reports/MIS_Reports/Display_Optional_Vouchers.htm).
