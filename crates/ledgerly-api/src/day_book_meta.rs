@@ -51,7 +51,8 @@ fn stored_name(records: &[AuditRecord], user: UserId) -> Option<String> {
         | Event::BankStatementStored { .. }
         | Event::Gstr2bImported { .. }
         | Event::ImsActionRecorded { .. }
-        | Event::Gstr3bFiled { .. } => None,
+        | Event::Gstr3bFiled { .. }
+        | Event::AiActivityRecorded(_) => None,
     })
 }
 

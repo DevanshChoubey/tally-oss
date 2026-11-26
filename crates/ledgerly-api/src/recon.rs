@@ -127,7 +127,8 @@ pub(crate) fn last_import<'a>(
         | Event::BankStatementStored { .. }
         | Event::Gstr2bImported { .. }
         | Event::ImsActionRecorded { .. }
-        | Event::Gstr3bFiled { .. } => None,
+        | Event::Gstr3bFiled { .. }
+        | Event::AiActivityRecorded(_) => None,
     })
 }
 
@@ -153,7 +154,8 @@ pub(crate) fn filed_on(records: &[AuditRecord], gstin: &Gstin, period: Period) -
         | Event::BankStatementStored { .. }
         | Event::Gstr2bImported { .. }
         | Event::ImsActionRecorded { .. }
-        | Event::Gstr3bFiled { .. } => None,
+        | Event::Gstr3bFiled { .. }
+        | Event::AiActivityRecorded(_) => None,
     })
 }
 
@@ -277,7 +279,8 @@ impl Api {
                 | Event::BankStatementStored { .. }
                 | Event::Gstr2bImported { .. }
                 | Event::ImsActionRecorded { .. }
-                | Event::Gstr3bFiled { .. } => None,
+                | Event::Gstr3bFiled { .. }
+                | Event::AiActivityRecorded(_) => None,
             });
             rows.push(Gstr2bRow {
                 supplier_gstin: (*ctin).to_owned(),

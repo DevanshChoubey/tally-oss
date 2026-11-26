@@ -97,6 +97,7 @@ pub(super) fn changes_of(rec: &AuditRecord) -> Result<Vec<Change>, ReportError> 
         | Event::Gstr2bImported { .. }
         | Event::ImsActionRecorded { .. }
         | Event::Gstr3bFiled { .. }
+        | Event::AiActivityRecorded(_)
         | Event::MatchConfirmed(_)
         | Event::AiProposalRecorded(_) => {}
     }

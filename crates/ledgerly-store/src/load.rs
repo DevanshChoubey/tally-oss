@@ -150,6 +150,7 @@ impl Replay {
             | Event::Gstr2bImported { .. }
             | Event::ImsActionRecorded { .. }
             | Event::Gstr3bFiled { .. }
+            | Event::AiActivityRecorded(_)
             | Event::AiProposalRecorded(_) => Ok(()),
         }
     }

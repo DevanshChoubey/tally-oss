@@ -136,6 +136,21 @@ pub enum ApiError {
         /// Why the write failed.
         source: std::io::Error,
     },
+    /// No open assistant draft has this id: it was never stored, or it was already accepted or
+    /// rejected.
+    #[error("no open assistant draft {id}; it was never stored, or it was already decided")]
+    UnknownAiDraft {
+        /// The draft id asked for (the sequence number of its stored event).
+        id: u64,
+    },
+    /// A stored assistant proposal could not be written or read back as JSON.
+    #[error("assistant draft {id} cannot be read by this build: {reason}")]
+    AiDraftUnreadable {
+        /// The draft id (0 when it was not stored yet).
+        id: u64,
+        /// Why.
+        reason: String,
+    },
     /// The voucher is not in the books, so there is nothing to print.
     #[error("voucher {id} is not in the books; nothing to print")]
     UnknownVoucher {

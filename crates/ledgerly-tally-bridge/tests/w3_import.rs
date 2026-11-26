@@ -271,6 +271,7 @@ fn imported_events_match_a_hand_derivation_of_the_fixture() {
             | Event::Gstr2bImported { .. }
             | Event::ImsActionRecorded { .. }
             | Event::Gstr3bFiled { .. }
+            | Event::AiActivityRecorded(_)
             | Event::MatchConfirmed(_)
             | Event::AiProposalRecorded(_) => None,
         })
@@ -298,6 +299,7 @@ fn imported_events_match_a_hand_derivation_of_the_fixture() {
             | Event::Gstr2bImported { .. }
             | Event::ImsActionRecorded { .. }
             | Event::Gstr3bFiled { .. }
+            | Event::AiActivityRecorded(_)
             | Event::MatchConfirmed(_)
             | Event::AiProposalRecorded(_) => None,
         })
