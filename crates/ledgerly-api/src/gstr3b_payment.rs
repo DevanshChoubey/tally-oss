@@ -71,7 +71,10 @@ pub struct Gstr3bPayment {
 }
 
 fn add_heads(a: Gstr3bTaxAmounts, t: TaxAmounts) -> Result<Gstr3bTaxAmounts, ApiError> {
-    let sum = |x: Paise, y: Paise| x.checked_add(y).map_err(|e| ApiError::from(ledgerly_gst::GstError::from(e)));
+    let sum = |x: Paise, y: Paise| {
+        x.checked_add(y)
+            .map_err(|e| ApiError::from(ledgerly_gst::GstError::from(e)))
+    };
     Ok(Gstr3bTaxAmounts {
         integrated: sum(a.integrated, t.igst)?,
         central: sum(a.central, t.cgst)?,
@@ -122,7 +125,66 @@ fn refusal(doc: &InwardDoc, state: ReconState) -> Option<String> {
     }
 }
 
+/// The calendar month holding `day`.
+fn month_of(day: ledgerly_core::Date) -> Option<Period> {
+    let from = day.replace_day(1).ok()?;
+    let last = time::util::days_in_month(from.month(), from.year());
+    let to = from.replace_day(last).ok()?;
+    Period::new(from, to).ok()
+}
+
+/// What Home shows of GST for one month: the cash payable and the IMS count.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HomeGst {
+    /// The tax payable in cash for the month (GSTR-3B 6.1, after the credit accepted in IMS).
+    pub cash_payable: Outcome<Paise>,
+    /// How many 2B records have no IMS action; `None` when there is no 2B file or the return
+    /// was marked filed.
+    pub ims_no_action: Outcome<Option<usize>>,
+}
+
 impl Api {
+    /// What Home shows of GST for the calendar month of `as_of`, for the company's one regular
+    /// registration. A company with none, or more than one, gets `Unsupported` cash and no
+    /// count: Home does not pick a registration.
+    ///
+    /// # Errors
+    /// As [`Api::gstr3b_payment`].
+    pub fn home_gst(&self, as_of: ledgerly_core::Date) -> Result<HomeGst, ApiError> {
+        let Outcome::Value(books) = self.cached_books()? else {
+            return Ok(HomeGst {
+                cash_payable: Outcome::unsupported("Needs GSTR-2B", "the books could not be read"),
+                ims_no_action: Outcome::Value(None),
+            });
+        };
+        let Some(gstin) = crate::nudges::single_regular_gstin(books) else {
+            return Ok(HomeGst {
+                cash_payable: Outcome::unsupported(
+                    "GST cash payable",
+                    "the company needs one regular GST registration",
+                ),
+                ims_no_action: Outcome::Value(None),
+            });
+        };
+        let Some(period) = month_of(as_of) else {
+            return Ok(HomeGst {
+                cash_payable: Outcome::unsupported("GST cash payable", "the month is not a date"),
+                ims_no_action: Outcome::Value(None),
+            });
+        };
+        let cash_payable = match self.gstr3b_payment(&gstin, period)? {
+            Outcome::Value(p) => match p.set_off.cash_total() {
+                Ok(total) => Outcome::Value(total),
+                Err(e) => Outcome::unsupported("GST cash payable", e.to_string()),
+            },
+            Outcome::Unsupported(u) => Outcome::Unsupported(u),
+        };
+        Ok(HomeGst {
+            cash_payable,
+            ims_no_action: self.ims_no_action_count(&gstin, period)?,
+        })
+    }
+
     /// GSTR-3B table 6.1 for `gstin` and `period`: the tax payable in cash after the credit the
     /// user accepted in IMS is set off (see the module docs for what is counted and refused).
     ///

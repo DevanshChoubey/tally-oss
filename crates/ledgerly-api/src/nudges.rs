@@ -184,7 +184,7 @@ fn unsettled(bucket: Bucket) -> bool {
 }
 
 /// The GSTIN of the company's one regular registration, when GST is on and there is exactly one.
-fn single_regular_gstin(books: &Books) -> Option<Gstin> {
+pub(crate) fn single_regular_gstin(books: &Books) -> Option<Gstin> {
     if !books.company.features.gst {
         return None;
     }

@@ -38,10 +38,28 @@ pub(super) fn home_load(api: &Api, as_of: Date, today: Date) -> HomeLoad {
         Outcome::Value(pairs) => pairs.clone(),
         Outcome::Unsupported(_) => Vec::new(),
     };
+    let gst = api.home_gst(as_of);
+    let gst_cash = match &gst {
+        Ok(g) => g.cash_payable.clone(),
+        Err(e) => Outcome::unsupported(
+            "GST cash payable",
+            format!("the figure could not be read: {e}"),
+        ),
+    };
+    let ims = match gst {
+        Ok(g) => g.ims_no_action,
+        Err(e) => Outcome::unsupported("IMS", format!("the 2B file could not be read: {e}")),
+    };
+    let mut nudges = nudge::nudges(&figures, &found);
+    if let Some(card) = nudge::ims_nudge(&ims) {
+        // The mock's order: GSTR-1, then IMS, then the rest.
+        let at = usize::from(found.gstr1.is_some()).min(nudges.len());
+        nudges.insert(at, card);
+    }
     HomeLoad {
-        kpis: kpi::tiles(&figures, as_of),
+        kpis: kpi::tiles(&figures, &gst_cash, as_of),
         chart: chart::chart_of(&figures.sales_by_month),
-        nudges: nudge::nudges(&figures, &found),
+        nudges,
         duplicates,
         user_name: api.actor_name().unwrap_or(None),
     }

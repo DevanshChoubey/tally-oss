@@ -88,6 +88,40 @@ fn gstr1_nudge(due: &Gstr1Due) -> Nudge {
     }
 }
 
+/// The IMS card: how many 2B records have no action. Nothing to review, or no 2B file, raises no
+/// card; a count the engine cannot give is a neutral card with its reason, so silence never reads
+/// as all clear.
+#[must_use]
+pub fn ims_nudge(count: &Outcome<Option<usize>>) -> Option<Nudge> {
+    let tab = || {
+        NudgeAction::Open(HomeTarget::GstReturns {
+            tab: "gstr2b-ims".to_owned(),
+        })
+    };
+    match count {
+        Outcome::Value(Some(n)) if *n > 0 => Some(Nudge {
+            tone: NudgeTone::Warn,
+            icon: Icon::Gst,
+            title: format!(
+                "{n} 2B record{} {} no IMS action",
+                plural(*n),
+                if *n == 1 { "has" } else { "have" }
+            ),
+            body: "With no action they are deemed accepted when 2B is generated. Review them before GSTR-3B."
+                .to_owned(),
+            source: "IMS rule".to_owned(),
+            action_label: "Review 2B",
+            action: tab(),
+        }),
+        Outcome::Value(Some(_) | None) => None,
+        Outcome::Unsupported(u) => Some(Nudge {
+            action: tab(),
+            action_label: "Review 2B",
+            ..not_run("2B records not checked for IMS action", &u.reason, "IMS rule")
+        }),
+    }
+}
+
 /// How a payment is named in a sentence: its number, or "A payment" without one.
 fn payment_name(p: &PaymentRef) -> String {
     p.number.clone().unwrap_or_else(|| "A payment".to_owned())
@@ -135,8 +169,7 @@ fn not_run(title: &str, reason: &str, source: &str) -> Nudge {
 }
 
 /// The nudges for the engine's answers, in the mock's order: GSTR-1, duplicates, late bills.
-/// The mock's "2B records have no IMS action" card is not here: the engine cannot read a 2B
-/// file, so no rule can raise it.
+/// The IMS card is added after the GSTR-1 card by [`ims_nudge`].
 #[must_use]
 pub fn nudges(figures: &HomeFigures, found: &HomeNudges) -> Vec<Nudge> {
     let mut out = Vec::new();

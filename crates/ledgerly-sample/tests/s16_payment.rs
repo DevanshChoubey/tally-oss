@@ -151,3 +151,27 @@ fn an_action_takes_a_record_out_of_the_ims_count() {
         Outcome::Value(Some(2))
     );
 }
+
+#[test]
+fn home_reads_the_month_of_the_as_at_date() {
+    // provenance: derived: the same figures as above, found for the single regular registration
+    // and the calendar month of the as-at date (20 Nov 2026): cash 39,498.00 and 3 records
+    // with no action.
+    let (_d, api) = company(true);
+    let g = api.home_gst(date!(2026 - 11 - 20)).unwrap();
+    assert_eq!(g.cash_payable, Outcome::Value(paise(39_498, 0)));
+    assert_eq!(g.ims_no_action, Outcome::Value(Some(3)));
+}
+
+#[test]
+fn home_without_a_2b_file_says_it_needs_gstr_2b() {
+    // provenance: derived: with no 2B file there is no accepted credit, so no cash figure and no
+    // IMS count (the engine refuses rather than treating the credit as nil).
+    let (_d, api) = company(false);
+    let g = api.home_gst(date!(2026 - 11 - 20)).unwrap();
+    let Outcome::Unsupported(u) = g.cash_payable else {
+        panic!("expected unsupported");
+    };
+    assert_eq!(u.what, "Needs GSTR-2B");
+    assert_eq!(g.ims_no_action, Outcome::Value(None));
+}
