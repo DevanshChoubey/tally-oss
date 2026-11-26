@@ -104,8 +104,14 @@ fn accepting_a_record_that_differs_from_the_books_is_refused() {
     // the books, so crediting it would claim tax the books do not show; the answer is Unsupported
     // and names the document.
     let (_d, mut api) = company(true);
-    api.set_ims_action(&gstin(), november(), "29ZZZZZ0002Z1ZK", "NST/1145", ImsAction::Accept)
-        .unwrap();
+    api.set_ims_action(
+        &gstin(),
+        november(),
+        "29ZZZZZ0002Z1ZK",
+        "NST/1145",
+        ImsAction::Accept,
+    )
+    .unwrap();
     match api.gstr3b_payment(&gstin(), november()).unwrap() {
         Outcome::Unsupported(u) => assert!(u.reason.contains("NST/1145"), "{}", u.reason),
         Outcome::Value(_) => panic!("expected unsupported"),
@@ -144,8 +150,14 @@ fn ims_count_is_three_for_november_and_none_without_a_file() {
 fn an_action_takes_a_record_out_of_the_ims_count() {
     // provenance: derived: Pending is an action, so 3 - 1 = 2 records remain without one.
     let (_d, mut api) = company(true);
-    api.set_ims_action(&gstin(), november(), "24ZZZZZ0004Z1ZS", "RP/5521", ImsAction::Pending)
-        .unwrap();
+    api.set_ims_action(
+        &gstin(),
+        november(),
+        "24ZZZZZ0004Z1ZS",
+        "RP/5521",
+        ImsAction::Pending,
+    )
+    .unwrap();
     assert_eq!(
         api.ims_no_action_count(&gstin(), november()).unwrap(),
         Outcome::Value(Some(2))

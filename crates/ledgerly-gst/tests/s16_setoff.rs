@@ -149,8 +149,14 @@ fn cess_credit_pays_cess_only() {
 #[test]
 fn each_head_rounds_to_the_nearest_rupee_half_up() {
     // provenance: derived, s.170: 49 paise is ignored, 50 paise goes up to the next rupee.
-    assert_eq!(round_to_rupee(Paise::new(1_049)).expect("r"), Paise::new(1_000));
-    assert_eq!(round_to_rupee(Paise::new(1_050)).expect("r"), Paise::new(1_100));
+    assert_eq!(
+        round_to_rupee(Paise::new(1_049)).expect("r"),
+        Paise::new(1_000)
+    );
+    assert_eq!(
+        round_to_rupee(Paise::new(1_050)).expect("r"),
+        Paise::new(1_100)
+    );
     assert_eq!(round_to_rupee(Paise::new(0)).expect("r"), Paise::new(0));
 }
 
@@ -168,8 +174,12 @@ fn a_negative_amount_is_refused() {
 fn section_49a_starts_on_the_first_of_february_2019() {
     // provenance: derived, Circular 98/17/2019-GST para 1: in force from 1 February 2019.
     let d = |y, m: u8, day| {
-        ledgerly_core::Date::from_calendar_date(y, ledgerly_core::Month::try_from(m).expect("m"), day)
-            .expect("date")
+        ledgerly_core::Date::from_calendar_date(
+            y,
+            ledgerly_core::Month::try_from(m).expect("m"),
+            day,
+        )
+        .expect("date")
     };
     assert!(!section_49a_in_force(d(2019, 1, 31)));
     assert!(section_49a_in_force(d(2019, 2, 1)));

@@ -42,7 +42,7 @@
 //! ledger, and the Rule 86B cap on credit use (see the API, which refuses a period it applies
 //! to).
 
-use ledgerly_core::{Date, Month, MoneyError, Paise};
+use ledgerly_core::{Date, MoneyError, Month, Paise};
 
 use crate::GstError;
 use crate::gstr3b::Gstr3bTaxAmounts;

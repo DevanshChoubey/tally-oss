@@ -90,8 +90,50 @@ fn exceeds(accepted: Gstr3bTaxAmounts, books: Gstr3bTaxAmounts) -> bool {
         || accepted.cess > books.cess
 }
 
-fn unsupported<T>(what: &str, reason: String) -> Result<Outcome<T>, ApiError> {
-    Ok(Outcome::unsupported(what, reason))
+fn unsupported<T>(what: &str, reason: String) -> Outcome<T> {
+    Outcome::unsupported(what, reason)
+}
+
+/// The credit the user accepted in IMS and the credit with no action yet, from the period's 2B
+/// file, with the number of documents that have no action.
+fn tally_ims(
+    rows: &[crate::recon::Gstr2bRow],
+    data: &ledgerly_gst_formats::gstr2b::Gstr2b,
+) -> Result<Outcome<(Gstr3bTaxAmounts, Gstr3bTaxAmounts, usize)>, ApiError> {
+    let docs: Vec<(&str, &InwardDoc)> = ledgerly_gst::recon2b::portal_documents(data);
+    let mut accepted = Gstr3bTaxAmounts::default();
+    let mut no_action = Gstr3bTaxAmounts::default();
+    let mut no_action_documents = 0_usize;
+    for row in rows {
+        let Some((_, doc)) = docs
+            .iter()
+            .find(|(ctin, d)| same_gstin(ctin, &row.supplier_gstin) && d.number == row.doc_number)
+        else {
+            continue;
+        };
+        match row.action {
+            Some(ImsAction::Accept) => {
+                if let Some(reason) = refusal(doc, row.state) {
+                    return Ok(unsupported("GSTR-3B payment of tax", reason));
+                }
+                let totals = match doc.tax_totals().map_err(ledgerly_gst::GstError::from)? {
+                    Outcome::Value(t) => t,
+                    Outcome::Unsupported(u) => return Ok(Outcome::Unsupported(u)),
+                };
+                accepted = add_heads(accepted, totals)?;
+            }
+            None => {
+                let totals = match doc.tax_totals().map_err(ledgerly_gst::GstError::from)? {
+                    Outcome::Value(t) => t,
+                    Outcome::Unsupported(u) => return Ok(Outcome::Unsupported(u)),
+                };
+                no_action = add_heads(no_action, totals)?;
+                no_action_documents += 1;
+            }
+            Some(ImsAction::Reject | ImsAction::Pending) => {}
+        }
+    }
+    Ok(Outcome::Value((accepted, no_action, no_action_documents)))
 }
 
 /// Why an accepted document cannot be counted as credit, `None` when it can.
@@ -200,72 +242,44 @@ impl Api {
             Outcome::Unsupported(u) => return Ok(Outcome::Unsupported(u)),
         };
         if !section_49a_in_force(period.from()) {
-            return unsupported(
+            return Ok(unsupported(
                 "GSTR-3B payment of tax",
                 "the set-off order of CGST Act s.49A applies from February 2019 only".to_owned(),
-            );
+            ));
         }
         if !working.reverse_charge_purchases.is_empty() {
-            return unsupported(
+            return Ok(unsupported(
                 "GSTR-3B payment of tax",
                 "the period has purchases under reverse charge, whose tax is paid in cash outside this working".to_owned(),
-            );
+            ));
         }
         if working.outward_taxable_value > RULE_86B_TURNOVER {
-            return unsupported(
+            return Ok(unsupported(
                 "GSTR-3B payment of tax",
                 "taxable supplies of the month exceed 50 lakh rupees, so Rule 86B may cap the credit at 99 per cent of the tax; its exceptions are not checked".to_owned(),
-            );
+            ));
         }
         let records = read_all(self.store())?;
         let Some((_, json)) = last_import(&records, gstin, period) else {
-            return unsupported(
+            return Ok(unsupported(
                 "Needs GSTR-2B",
                 "no GSTR-2B file is imported for the period, so the credit accepted in IMS is not known".to_owned(),
-            );
+            ));
         };
         let rec = match self.gstr2b_reconciliation(gstin, period)? {
             Outcome::Value(r) => r,
             Outcome::Unsupported(u) => return Ok(Outcome::Unsupported(u)),
         };
         let data = parse_gstr2b(json)?;
-        let docs: Vec<(&str, &InwardDoc)> = ledgerly_gst::recon2b::portal_documents(&data);
-        let mut accepted = Gstr3bTaxAmounts::default();
-        let mut no_action = Gstr3bTaxAmounts::default();
-        let mut no_action_documents = 0_usize;
-        for row in &rec.rows {
-            let Some((_, doc)) = docs.iter().find(|(ctin, d)| {
-                same_gstin(ctin, &row.supplier_gstin) && d.number == row.doc_number
-            }) else {
-                continue;
-            };
-            match row.action {
-                Some(ImsAction::Accept) => {
-                    if let Some(reason) = refusal(doc, row.state) {
-                        return unsupported("GSTR-3B payment of tax", reason);
-                    }
-                    let totals = match doc.tax_totals().map_err(ledgerly_gst::GstError::from)? {
-                        Outcome::Value(t) => t,
-                        Outcome::Unsupported(u) => return Ok(Outcome::Unsupported(u)),
-                    };
-                    accepted = add_heads(accepted, totals)?;
-                }
-                None => {
-                    let totals = match doc.tax_totals().map_err(ledgerly_gst::GstError::from)? {
-                        Outcome::Value(t) => t,
-                        Outcome::Unsupported(u) => return Ok(Outcome::Unsupported(u)),
-                    };
-                    no_action = add_heads(no_action, totals)?;
-                    no_action_documents += 1;
-                }
-                Some(ImsAction::Reject | ImsAction::Pending) => {}
-            }
-        }
+        let (accepted, no_action, no_action_documents) = match tally_ims(&rec.rows, &data)? {
+            Outcome::Value(t) => t,
+            Outcome::Unsupported(u) => return Ok(Outcome::Unsupported(u)),
+        };
         if exceeds(accepted, working.itc_all_other) {
-            return unsupported(
+            return Ok(unsupported(
                 "GSTR-3B payment of tax",
                 "the credit accepted in IMS is more than the credit the books show as eligible, so some of it is blocked or ineligible".to_owned(),
-            );
+            ));
         }
         let liability = working.outward_tax;
         let result = set_off(liability, accepted)?;

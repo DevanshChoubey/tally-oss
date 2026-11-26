@@ -1152,6 +1152,88 @@ fn gstr3b_columns(line: Rect) -> [Rect; 6] {
     [label, cell(0.0), cell(1.0), cell(2.0), cell(3.0), cell(4.0)]
 }
 
+/// The 6.1 total row: the label wraps inside its column, as the other rows do, and the row grows
+/// to fit.
+fn paint_3b_total(ui: &mut Ui, width: f32, label: &str, taxable: Paise, tax: &[Paise]) {
+    let t = tokens(ui);
+    let bold = bold_font(ui, TEXT_BODY);
+    // The label wraps inside its column, as the other rows do, and the row grows to fit.
+    let probe = Rect::from_min_size(egui::pos2(0.0, 0.0), vec2(width, T_ROW_HEIGHT));
+    let [probe_label, ..] = gstr3b_columns(probe);
+    let wrap = (probe_label.width() - 2.0 * table::CELL_PAD_X).max(40.0);
+    let galley = ui
+        .painter()
+        .layout(label.to_owned(), bold.clone(), t.text, wrap);
+    let height = (galley.size().y + 2.0 * table::CELL_PAD_X).max(T_ROW_HEIGHT);
+    let (rect, _) = ui.allocate_exact_size(vec2(width, height), Sense::hover());
+    let state = RowState {
+        selected: false,
+        hovered: false,
+        sub: true,
+    };
+    table::paint_row(ui, rect, state);
+    let [label_rect, figures @ ..] = gstr3b_columns(rect);
+    let text_pos = egui::pos2(
+        label_rect.left() + table::CELL_PAD_X,
+        rect.center().y - galley.size().y / 2.0,
+    );
+    ui.painter().galley(text_pos, galley, t.text);
+    let texts = std::iter::once(amount_cell(Some(taxable)))
+        .chain(tax.iter().map(|p| amount_cell(Some(*p))));
+    for (r, text) in figures.into_iter().zip(texts) {
+        table::paint_cell_text(ui, r, 1.0, &text, bold.clone(), t.text, CellPlace::Right);
+    }
+}
+
+/// A sub-heading row.
+fn paint_3b_sub(ui: &mut Ui, width: f32, label: &str) {
+    let t = tokens(ui);
+    let (rect, _) = ui.allocate_exact_size(vec2(width, T_ROW_HEIGHT), Sense::hover());
+    let state = RowState {
+        selected: false,
+        hovered: false,
+        sub: true,
+    };
+    table::paint_row(ui, rect, state);
+    let bold = bold_font(ui, TEXT_BODY);
+    let place = CellPlace::Left(table::CELL_PAD_X);
+    table::paint_cell_text(ui, rect, 1.0, label, bold, t.text, place);
+}
+
+/// A sub-heading with its source chip after it.
+#[allow(clippy::float_arithmetic, reason = "placing the label and its chip")]
+fn paint_3b_sub_sourced(ui: &mut Ui, width: f32, label: &str, source: &str) {
+    let t = tokens(ui);
+    let (rect, _) = ui.allocate_exact_size(vec2(width, T_ROW_HEIGHT), Sense::hover());
+    let state = RowState {
+        selected: false,
+        hovered: false,
+        sub: true,
+    };
+    table::paint_row(ui, rect, state);
+    let bold = bold_font(ui, TEXT_BODY);
+    let place = CellPlace::Left(table::CELL_PAD_X);
+    table::paint_cell_text(ui, rect, 1.0, label, bold.clone(), t.text, place);
+    let text_w = ui
+        .painter()
+        .layout_no_wrap(label.to_owned(), bold, t.text)
+        .size()
+        .x;
+    let chip_rect = Rect::from_min_size(
+        egui::pos2(
+            rect.left() + table::CELL_PAD_X + text_w + CHIP_GAP,
+            rect.top() + (T_ROW_HEIGHT - CHIP_H) / 2.0,
+        ),
+        vec2(chip_width(ui, source), CHIP_H),
+    );
+    let mut child = ui.new_child(
+        UiBuilder::new()
+            .max_rect(chip_rect)
+            .layout(Layout::left_to_right(Align::Center)),
+    );
+    source_chip(&mut child, source);
+}
+
 /// One line of the GSTR-3B table: a sub-heading, or a row of the engine's figures with its
 /// source chip after the label, or under it when the two do not fit on one line.
 #[allow(clippy::float_arithmetic, reason = "placing the label and its chip")]
@@ -1159,81 +1241,13 @@ fn paint_3b_line(ui: &mut Ui, width: f32, line: &Line3b) {
     let t = tokens(ui);
     let font = egui::FontId::proportional(TEXT_BODY);
     match line {
-        Line3b::Sub(label) => {
-            let (rect, _) = ui.allocate_exact_size(vec2(width, T_ROW_HEIGHT), Sense::hover());
-            let state = RowState {
-                selected: false,
-                hovered: false,
-                sub: true,
-            };
-            table::paint_row(ui, rect, state);
-            let bold = bold_font(ui, TEXT_BODY);
-            let place = CellPlace::Left(table::CELL_PAD_X);
-            table::paint_cell_text(ui, rect, 1.0, label, bold, t.text, place);
-        }
-        Line3b::SubSourced { label, source } => {
-            let (rect, _) = ui.allocate_exact_size(vec2(width, T_ROW_HEIGHT), Sense::hover());
-            let state = RowState {
-                selected: false,
-                hovered: false,
-                sub: true,
-            };
-            table::paint_row(ui, rect, state);
-            let bold = bold_font(ui, TEXT_BODY);
-            let place = CellPlace::Left(table::CELL_PAD_X);
-            table::paint_cell_text(ui, rect, 1.0, label, bold.clone(), t.text, place);
-            let text_w = ui
-                .painter()
-                .layout_no_wrap((*label).to_owned(), bold, t.text)
-                .size()
-                .x;
-            let chip_rect = Rect::from_min_size(
-                egui::pos2(
-                    rect.left() + table::CELL_PAD_X + text_w + CHIP_GAP,
-                    rect.top() + (T_ROW_HEIGHT - CHIP_H) / 2.0,
-                ),
-                vec2(chip_width(ui, source), CHIP_H),
-            );
-            let mut child = ui.new_child(
-                UiBuilder::new()
-                    .max_rect(chip_rect)
-                    .layout(Layout::left_to_right(Align::Center)),
-            );
-            source_chip(&mut child, source);
-        }
+        Line3b::Sub(label) => paint_3b_sub(ui, width, label),
+        Line3b::SubSourced { label, source } => paint_3b_sub_sourced(ui, width, label, source),
         Line3b::Total {
             label,
             taxable,
             tax,
-        } => {
-            let bold = bold_font(ui, TEXT_BODY);
-            // The label wraps inside its column, as the other rows do, and the row grows to fit.
-            let probe = Rect::from_min_size(egui::pos2(0.0, 0.0), vec2(width, T_ROW_HEIGHT));
-            let [probe_label, ..] = gstr3b_columns(probe);
-            let wrap = (probe_label.width() - 2.0 * table::CELL_PAD_X).max(40.0);
-            let galley = ui
-                .painter()
-                .layout((*label).to_owned(), bold.clone(), t.text, wrap);
-            let height = (galley.size().y + 2.0 * table::CELL_PAD_X).max(T_ROW_HEIGHT);
-            let (rect, _) = ui.allocate_exact_size(vec2(width, height), Sense::hover());
-            let state = RowState {
-                selected: false,
-                hovered: false,
-                sub: true,
-            };
-            table::paint_row(ui, rect, state);
-            let [label_rect, figures @ ..] = gstr3b_columns(rect);
-            let text_pos = egui::pos2(
-                label_rect.left() + table::CELL_PAD_X,
-                rect.center().y - galley.size().y / 2.0,
-            );
-            ui.painter().galley(text_pos, galley, t.text);
-            let texts = std::iter::once(amount_cell(Some(*taxable)))
-                .chain(tax.iter().map(|p| amount_cell(Some(*p))));
-            for (r, text) in figures.into_iter().zip(texts) {
-                table::paint_cell_text(ui, r, 1.0, &text, bold.clone(), t.text, CellPlace::Right);
-            }
-        }
+        } => paint_3b_total(ui, width, label, *taxable, tax),
         Line3b::Row {
             label,
             source,

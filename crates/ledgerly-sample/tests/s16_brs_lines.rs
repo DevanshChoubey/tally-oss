@@ -3,7 +3,7 @@
 //! derived by hand from the seed's November vouchers (`design/mock-v2/index.html` `VOUCHERS`;
 //! the totals are derived in `s9_bank.rs`); none is copied from engine output. The model is the
 //! one the accounting package's help page gives for its reconciliation statement
-//! (help.tallysolutions.com/docs/te9rel65/Reports/Display_Registers_Ledgers/Bank_Reconciliation.htm,
+//! (`help.tallysolutions.com/docs/te9rel65/Reports/Display_Registers_Ledgers/Bank_Reconciliation.htm`,
 //! as `ledgerly_bank::brs` cites it).
 #![allow(
     clippy::unwrap_used,
@@ -158,5 +158,8 @@ fn the_exported_statement_holds_the_totals_and_every_line() {
 fn an_unknown_ledger_is_an_error_not_an_empty_statement() {
     // provenance: derived: a ledger the books do not hold has no statement.
     let (_d, api, _bank) = sample();
-    assert!(api.brs_statement(LedgerId(99_999), date!(2026 - 11 - 20)).is_err());
+    assert!(
+        api.brs_statement(LedgerId(99_999), date!(2026 - 11 - 20))
+            .is_err()
+    );
 }

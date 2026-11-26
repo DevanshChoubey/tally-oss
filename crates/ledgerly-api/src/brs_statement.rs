@@ -61,10 +61,10 @@ fn line_of(books: &Books, bank: LedgerId, item: &BrsItem) -> BrsLine {
     let mut names: Vec<&str> = Vec::new();
     if let Some(v) = voucher {
         for line in v.ledger_lines.iter().filter(|l| l.ledger != bank) {
-            if let Some(ledger) = books.masters.ledgers.get(&line.ledger) {
-                if !names.contains(&ledger.name.as_str()) {
-                    names.push(&ledger.name);
-                }
+            if let Some(ledger) = books.masters.ledgers.get(&line.ledger)
+                && !names.contains(&ledger.name.as_str())
+            {
+                names.push(&ledger.name);
             }
         }
     }
@@ -97,9 +97,8 @@ fn row(label: &str, depth: u8, kind: RowKind, cells: Vec<Cell>) -> ReportRow {
     }
 }
 
-/// The statement as a report: one amount column, the entries indented under their total.
-fn report_of(ledger: LedgerId, as_of: Date, s: &BrsStatement) -> Result<Report, ApiError> {
-    let period = Period::new(as_of, as_of).map_err(ledgerly_reports::ReportError::from)?;
+/// The statement's rows: the totals at depth 0, the entries indented under their total.
+fn rows_of(s: &BrsStatement) -> Vec<ReportRow> {
     let mut rows = vec![row(
         "Balance as per company books",
         0,
@@ -160,28 +159,24 @@ fn report_of(ledger: LedgerId, as_of: Date, s: &BrsStatement) -> Result<Report, 
         Outcome::Value(v) => Cell::Signed(*v),
         Outcome::Unsupported(u) => Cell::Unsupported(u.clone()),
     };
-    rows.push(row(
-        "Balance as per imported bank statement",
-        0,
-        RowKind::Text,
-        vec![
-            Cell::Empty,
-            Cell::Empty,
-            Cell::Empty,
-            outcome_cell(&s.brs.statement_balance),
-        ],
-    ));
-    rows.push(row(
-        "Difference",
-        0,
-        RowKind::Difference,
-        vec![
-            Cell::Empty,
-            Cell::Empty,
-            Cell::Empty,
-            outcome_cell(&s.brs.difference),
-        ],
-    ));
+    for (label, kind, o) in [
+        (
+            "Balance as per imported bank statement",
+            RowKind::Text,
+            &s.brs.statement_balance,
+        ),
+        ("Difference", RowKind::Difference, &s.brs.difference),
+    ] {
+        let cells = vec![Cell::Empty, Cell::Empty, Cell::Empty, outcome_cell(o)];
+        rows.push(row(label, 0, kind, cells));
+    }
+    rows
+}
+
+/// The statement as a report: one amount column, the entries indented under their total.
+fn report_of(ledger: LedgerId, as_of: Date, s: &BrsStatement) -> Result<Report, ApiError> {
+    let period = Period::new(as_of, as_of).map_err(ledgerly_reports::ReportError::from)?;
+    let rows = rows_of(s);
     let column = |label: &str| ColumnHeader {
         label: label.to_owned(),
         period: None,

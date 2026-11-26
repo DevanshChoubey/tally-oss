@@ -110,9 +110,10 @@ fn the_tab_draws_the_mocks_set_off_rows_in_the_mocks_order() {
         .gstr3b_lines()
         .iter()
         .map(|l| match l {
-            Line3b::Sub(t) => *t,
-            Line3b::SubSourced { label, .. } => *label,
-            Line3b::Row { label, .. } | Line3b::Total { label, .. } => *label,
+            Line3b::Sub(label)
+            | Line3b::SubSourced { label, .. }
+            | Line3b::Row { label, .. }
+            | Line3b::Total { label, .. } => *label,
         })
         .collect();
     assert_eq!(
