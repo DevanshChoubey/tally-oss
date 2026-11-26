@@ -104,7 +104,10 @@ Classes:
 
 - **DELIBERATE** the GSTR-3B key bar stays "1 2 3 Tabs, Esc Back": the engine has no GSTR-3B JSON
   and the tab has no openable rows, so J/K, Enter and Ctrl+E would be dead keys (Ctrl+E is shown
-  disabled).
+  disabled). Re-checked 2026-11-26: help.tallysolutions.com/tallyprime-json-file-gstr-3b/ and
+  /file-gstr-3b-offline-tool/ describe the export and upload steps but not the file's schema, and no
+  GSTN-published schema for the GSTR-3B offline-tool JSON was found (only third-party descriptions),
+  so no writer is built (rule A5: no shape without a source).
 - **NOT BUILT** set-off starts from the month's liability and the credit the user accepted in IMS;
   the electronic credit ledger's opening balance and earlier periods are not modelled, and credit
   that is only deemed accepted is treated as not used (rule `pending observed`: IMS no-action
@@ -119,7 +122,10 @@ Classes:
   found; the parser keeps its `items[]` shape.
 - **NOT BUILT** the 2B tab leaves out deemed acceptance and the amendment line: no public source found.
 - **NOT BUILT** Re-apply masters and Export IMS action file: the shell takes neither request, so the
-  buttons are not drawn.
+  buttons are not drawn. Read 2026-11-26: help.tallysolutions.com/upload-ims-inward-invoices/ documents
+  only an online upload (Alt+Z, All GST Options, Upload IMS Inward Invoices; Ctrl+B filters; S Send
+  (Online)); no page read describes an offline IMS action file or a "Re-apply masters" action, and the
+  mock has no such button, so nothing is built and nothing is drawn.
 - **DELIBERATE** the 2B tab's "Mark GSTR-3B filed" button and stacked IMS cell: the mock has no way
   to record a filing.
 - **DELIBERATE** GSTR-1 by section with a side card, a folded voucher table and the agreement line
@@ -243,7 +249,29 @@ Classes:
   cess ledger, no GST ledger or the wrong heads show "Not supported yet" with the reason.
 - **DELIBERATE** an as-voucher entry is saved as an accounting invoice (the GST returns read that
   mode); it opens again as one.
-- **NOT BUILT** the e-Invoice cell says "Not built yet": nothing maps a voucher to an `EInvoice`.
+- **DELIBERATE** the e-Invoice cell shows the API's answer: "JSON ready (INV-01)" only when the invoice
+  mapped to the schema and passed the local check, "Not ready" with the API's reason (the mock's
+  `sales-invoice.einvoice-not-ready`), "Not applicable: B2C" for an unregistered buyer, a dash until the
+  engine has answered. Source: NIC schema page (einv-apisandbox.nic.in/version1.03/generate-irn.html,
+  read 2026-11-26). The sample company has no PIN code and its parties have one address line, so every
+  sample invoice says "Not ready: the company has no PIN code (Pin is required)" where the mock's default
+  says "JSON ready"; the mock's reason names the buyer because the mock's company has a PIN. Adding PINs
+  and street lines to the sample also changes the printed paper (the mock's paper has neither), so that
+  is left for a mock and sample update.
+- **NOT BUILT** in accounting and as-voucher modes the app still draws the Buyer's order no. and
+  e-Invoice cells (the mock's `sales-invoice.as-voucher` draws neither); the cell then says "Not ready:
+  an accounting invoice has no items to list (ItemList needs HSN codes)", which is the API's true
+  answer. Hiding the cells in those modes is a layout change left for the mock and app to agree on.
+- **NOT BUILT** the mock's "upload: v1.1" note is shown only beside "JSON ready"; upload itself has no
+  network and is the user's step on the IRP bulk-upload page (help.tallysolutions.com/generate-e-invoice-offline-tallyhelp/,
+  read 2026-11-26). Credit and debit notes, accounting invoices, reverse charge, UTGST and cess invoices
+  are `Unsupported` for e-invoice JSON with the reason; no document type other than INV is written.
+- **DELIBERATE** Ctrl+E on a saved sales invoice's voucher view exports its e-invoice JSON to a chosen
+  file and says where in a note (the mock's `balance-sheet.voucher-einvoice-exported`); the key bar keeps
+  the mock's generic "Ctrl+E Export". The sample cannot be exported (no PINs), so this state has a
+  headless test (`tests/s18_einvoice_export.rs`) and no app capture.
+- **NOT BUILT** the accounting product exports from a list of vouchers (Alt+Z, Send for e-Invoicing,
+  Offline Export, files split under 2 MB; read 2026-11-26): this build exports one voucher at a time.
 - **DELIBERATE** the sample GSTIN is synthetic and the rule pack reads "2026.1-slabs".
 - **NOT BUILT** the toast has no Undo Ctrl+Z: no undo exists.
 - **DELIBERATE** the empty tax box shows dashes, not 0.00, until the engine has answered (never a
@@ -258,7 +286,10 @@ Classes:
   icon naming the line. The valid lines keep the engine's amount and rate (the engine is asked about
   them alone); the tax box shows dashes, not figures for the half-entered invoice (never a wrong number).
 - **NOT BUILT** the item list shows name and unit only; the free-text item row of
-  `sales-invoice.validation-error` is not offered.
+  `sales-invoice.validation-error` is not offered. Re-read 2026-11-26: the sales and purchase pages
+  (help.tallysolutions.com/tally-prime/purchase-process/purchase-goods-and-services-tally/ and the
+  sales pages) document Alt+C creating a master only on the party field, and no page read documents a
+  typed free-text item on a voucher line, so the app keeps the unknown-item error.
 - **DELIBERATE** the unknown-item error ends "create it in Masters", where the mock said "with Alt+C": the
   pages read document Alt+C on ledger fields only and the screen cannot make an item, so the mock's
   sentence would promise what the app does not do (mock corrected in round s17).
