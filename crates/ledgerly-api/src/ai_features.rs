@@ -44,6 +44,10 @@ pub enum BillRead {
     Refused(AiGate),
     /// The provider or the reader could not read the photo; logged as a failed read.
     Failed(String),
+    /// The person cancelled the read before the provider ran: nothing ran, nothing is stored and
+    /// nothing is logged. A cancel that comes later is the provider's to honour; a draft read
+    /// in full is stored and waits in the review queue.
+    Cancelled,
 }
 
 /// Whether a feature may run now, and if not, why.
@@ -191,6 +195,9 @@ impl Api {
             | AiGate::NotInstalled(_)
             | AiGate::NotConfigured(_)) => return Ok(BillRead::Refused(refused)),
         };
+        if cancel.is_cancelled() {
+            return Ok(BillRead::Cancelled);
+        }
         let input_hash = hex(&Sha256::digest(bytes));
         let ocr = match self.assistant() {
             Some(provider) => provider.ocr(bytes, &input_hash, cancel),

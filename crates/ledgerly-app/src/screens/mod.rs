@@ -16,6 +16,7 @@ pub mod masters;
 pub mod print_job;
 pub mod print_preview;
 pub mod purchase_bill;
+mod purchase_bill_ai;
 pub mod quick_entry;
 mod quick_entry_ai;
 pub mod report_view;

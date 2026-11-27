@@ -98,6 +98,41 @@
    "description": "On this computer with no model the build can run: the box is disabled, the reason is named, and the voucher forms are offered."
   },
   {
+   "id": "ai.purchase-bill.choose",
+   "kind": "empty",
+   "hash": "screen=purchase-bill&state=choose&ai=on",
+   "title": "Bill photo, choose a file (later release)",
+   "description": "Ctrl+Alt+O: the path of a bill photo (PNG or JPEG) or PDF is typed; Enter reads it on this computer. Nothing is read or kept until then."
+  },
+  {
+   "id": "ai.purchase-bill.reading",
+   "kind": "loading",
+   "hash": "screen=purchase-bill&state=reading&ai=on",
+   "title": "Bill photo, reading (later release)",
+   "description": "A bill photo is being read on this computer; the image never leaves the machine."
+  },
+  {
+   "id": "ai.purchase-bill.ledger-lines",
+   "kind": "validation-error",
+   "hash": "screen=purchase-bill&state=ledger-lines&ai=on",
+   "title": "Bill photo, choose the purchase ledger (later release)",
+   "description": "What the bill reader reads today: the printed supplier, bill number, date, taxable value, tax and total, drafted as ledger lines with a box on the image for each. The taxable value names no purchase ledger, so the person chooses one; the engine checks the draft after every choice and its verdict is the check line. Item rows are not read yet."
+  },
+  {
+   "id": "ai.purchase-bill.rejected",
+   "kind": "empty",
+   "hash": "screen=purchase-bill&state=rejected&ai=on",
+   "title": "Bill photo, draft rejected (later release)",
+   "description": "Alt+D: the draft is rejected and nothing is posted; the rejection is in the AI activity log. Another bill can be read, or the bill typed."
+  },
+  {
+   "id": "ai.purchase-bill.error",
+   "kind": "error",
+   "hash": "screen=purchase-bill&state=error&ai=on",
+   "title": "Bill photo, unreadable file (later release)",
+   "description": "The file is a PDF, which this build does not read (PNG photos only); the error says what failed and what to do."
+  },
+  {
    "id": "hi.home.default",
    "kind": "happy",
    "hash": "screen=home&state=default&lang=hi",
@@ -364,6 +399,27 @@
    "description": "A fresh invoice opens after saving, with a toast naming the voucher saved."
   },
   {
+   "id": "purchase-bill.choose",
+   "kind": "empty",
+   "hash": "screen=purchase-bill&state=choose",
+   "title": "Bill photo, choose a file",
+   "description": "Ctrl+Alt+O: the path of a bill photo (PNG or JPEG) or PDF is typed; Enter reads it on this computer. Nothing is read or kept until then."
+  },
+  {
+   "id": "purchase-bill.ledger-lines",
+   "kind": "validation-error",
+   "hash": "screen=purchase-bill&state=ledger-lines",
+   "title": "Bill photo, choose the purchase ledger",
+   "description": "What the bill reader reads today: the printed supplier, bill number, date, taxable value, tax and total, drafted as ledger lines with a box on the image for each. The taxable value names no purchase ledger, so the person chooses one; the engine checks the draft after every choice and its verdict is the check line. Item rows are not read yet."
+  },
+  {
+   "id": "purchase-bill.rejected",
+   "kind": "empty",
+   "hash": "screen=purchase-bill&state=rejected",
+   "title": "Bill photo, draft rejected",
+   "description": "Alt+D: the draft is rejected and nothing is posted; the rejection is in the AI activity log. Another bill can be read, or the bill typed."
+  },
+  {
    "id": "purchase-bill.reading",
    "kind": "loading",
    "hash": "screen=purchase-bill&state=reading",
@@ -417,7 +473,7 @@
    "kind": "error",
    "hash": "screen=purchase-bill&state=error",
    "title": "Bill photo, unreadable file",
-   "description": "The file is a password-protected PDF; the error says what failed and what to do."
+   "description": "The file is a PDF, which this build does not read (PNG photos only); the error says what failed and what to do."
   },
   {
    "id": "purchase-bill.accepted",

@@ -427,6 +427,10 @@ enum Fixture {
     /// The sample company with the tier set to this computer and no provider attached, as in a
     /// build with no local model runtime: the mock's `quick-entry.not-installed`.
     GodavariNoModel,
+    /// [`Fixture::GodavariAssistant`] with the tier set to this computer and the fixed-answers
+    /// provider holding the text lines of the fixture bill photo `examples/fixtures/rupa-bill.png`
+    /// ([`godavari_bill_file`]): the mock's `purchase-bill.*` states.
+    GodavariBill,
     /// Fictional Traders ([`company_file`]): the shots whose key paths or typed names need its
     /// data, or that show a state the sample does not have.
     Main,
@@ -457,6 +461,7 @@ impl Fixture {
             Fixture::GodavariAssistant => Some(godavari_assistant_file(dir)),
             Fixture::GodavariWords => Some(godavari_words_file(dir)),
             Fixture::GodavariNoModel => Some(godavari_no_model_file(dir)),
+            Fixture::GodavariBill => Some(godavari_bill_file(dir)),
             Fixture::Main => Some(company_file(dir)),
             Fixture::New => Some(new_company_file(dir)),
             Fixture::Blank => Some(blank_company_file(dir)),
@@ -484,6 +489,7 @@ impl Fixture {
                     | Fixture::GodavariAssistant
                     | Fixture::GodavariWords
                     | Fixture::GodavariNoModel
+                    | Fixture::GodavariBill
                     | Fixture::Main
                     | Fixture::New
                     | Fixture::Blank
@@ -684,6 +690,88 @@ fn godavari_words_file(dir: &Path) -> Api {
                 RAMESH_WORDS,
                 "{\"kind\":\"payment\",\"amount_text\":\"5000\",\"date_text\":null,\"party_name\":\"Ramesh\",\"account_name\":\"cash\",\"narration\":\"Ramesh\",\"confidence_permille\":800}",
             ),
+    ));
+    api
+}
+
+/// The fixture bill photo: a fictional Rupa Polymers tax invoice drawn for the captures (the
+/// mock's `billImage`, with a fictional address).
+const BILL_PNG: &str = concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/examples/fixtures/rupa-bill.png"
+);
+/// A stand-in PDF of the same bill, for the mock's `purchase-bill.error`: this build reads PNG
+/// photos only.
+const BILL_PDF: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/examples/fixtures/RP-5521.pdf");
+
+/// [`godavari_assistant_file`] with the tier set to this computer and the fixed-answers provider
+/// holding the text lines of [`BILL_PNG`], as an OCR engine would return them: every printed line
+/// with its box in image pixels, measured when the image was drawn. The real bill reader drafts
+/// them; no figure is written here.
+fn godavari_bill_file(dir: &Path) -> Api {
+    use sha2::{Digest, Sha256};
+    use std::fmt::Write as _;
+    let bytes = std::fs::read(BILL_PNG).unwrap();
+    let doc_hash = Sha256::digest(&bytes)
+        .iter()
+        .fold(String::new(), |mut out, b| {
+            let _ = write!(out, "{b:02x}");
+            out
+        });
+    let lines = [
+        ("RUPA POLYMERS", [193, 35, 172, 16]),
+        (
+            "Unit 12, Sample Polymer Park, Ahmedabad 382445",
+            [72, 65, 415, 14],
+        ),
+        ("GSTIN 24ZZZZZ0004Z1ZS", [185, 87, 190, 11]),
+        ("TAX INVOICE", [230, 119, 99, 11]),
+        ("Supplier: Rupa Polymers", [30, 153, 208, 14]),
+        ("Invoice No: RP/5521", [30, 175, 172, 12]),
+        ("Date: 17/11/2026", [330, 175, 145, 12]),
+        ("To: Godavari Drip & Pump Works, Pune", [30, 203, 325, 14]),
+        ("GSTIN 27ZZZZZ0000Z1ZQ  POS: 27", [30, 225, 271, 13]),
+        (
+            "Description        HSN   Qty    Rate    Amount",
+            [30, 267, 415, 14],
+        ),
+        (
+            "HDPE PIPE COIL 32MM 3917   20 2500.00  50000.00",
+            [30, 297, 424, 11],
+        ),
+        (
+            "BALL VALVE 2\" PVC   8481  100  180.00  18000.00",
+            [30, 321, 424, 11],
+        ),
+        ("Taxable Value 68,000.00", [30, 359, 208, 13]),
+        ("IGST @ 18% 12,240.00", [30, 383, 181, 13]),
+        ("Total 80,240.00", [30, 413, 135, 13]),
+        (
+            "Rupees Eighty Thousand Two Hundred Forty Only",
+            [30, 449, 406, 14],
+        ),
+        (
+            "Bank: Krishnaveni Commercial Bank A/c XXXXXX2210",
+            [30, 479, 434, 12],
+        ),
+        ("for RUPA POLYMERS", [330, 543, 154, 11]),
+    ];
+    let ocr = ledgerly_api::OcrOutput {
+        doc_hash,
+        lines: lines
+            .into_iter()
+            .map(|(text, bbox)| ledgerly_api::OcrLine {
+                page: 1,
+                text: text.to_owned(),
+                bbox,
+                confidence_permille: 930,
+            })
+            .collect(),
+    };
+    let mut api = godavari_assistant_file(dir);
+    api.set_ai_tier(ledgerly_api::AiTier::Local).unwrap();
+    api.attach_assistant(Box::new(
+        ledgerly_api::FixedAnswers::new().with_document(ocr),
     ));
     api
 }
@@ -2083,6 +2171,58 @@ fn light_shots() -> Vec<Shot> {
             .wait(30)
             .expect_bar("Plain-words entry", "Plain-words entry")
             .on(Fixture::GodavariWords)
+            .ai_on(),
+        // Later release: a bill photo to a draft purchase (mock `purchase-bill.*` with `ai=on`).
+        // The path is typed into the file field, which has focus once the gate reads Ready.
+        shot("ai.purchase-bill.choose", &[palette])
+            .query("Purchase from bill photo")
+            .then(&[(Key::Enter, NONE)])
+            .wait(30)
+            .expect_bar("Purchase from bill photo", "Read a bill")
+            .on(Fixture::GodavariBill)
+            .ai_on(),
+        shot("ai.purchase-bill.reading", &[palette])
+            .query("Purchase from bill photo")
+            .then(&[(Key::Enter, NONE)])
+            .wait(30)
+            .type_text(BILL_PNG)
+            .hold_worker()
+            .press(&[(Key::Enter, NONE)])
+            .wait(10)
+            .expect_bar("Purchase from bill photo", "Reading bill")
+            .on(Fixture::GodavariBill)
+            .ai_on(),
+        shot("ai.purchase-bill.ledger-lines", &[palette])
+            .query("Purchase from bill photo")
+            .then(&[(Key::Enter, NONE)])
+            .wait(30)
+            .type_text(BILL_PNG)
+            .press(&[(Key::Enter, NONE)])
+            .wait(40)
+            .expect_bar("Purchase from bill photo", "Draft purchase")
+            .on(Fixture::GodavariBill)
+            .ai_on(),
+        shot("ai.purchase-bill.rejected", &[palette])
+            .query("Purchase from bill photo")
+            .then(&[(Key::Enter, NONE)])
+            .wait(30)
+            .type_text(BILL_PNG)
+            .press(&[(Key::Enter, NONE)])
+            .wait(40)
+            .press(&[(Key::D, Modifiers::ALT)])
+            .wait(30)
+            .expect_bar("Purchase from bill photo", "Rejected")
+            .on(Fixture::GodavariBill)
+            .ai_on(),
+        shot("ai.purchase-bill.error", &[palette])
+            .query("Purchase from bill photo")
+            .then(&[(Key::Enter, NONE)])
+            .wait(30)
+            .type_text(BILL_PDF)
+            .press(&[(Key::Enter, NONE)])
+            .wait(30)
+            .expect_bar("Purchase from bill photo", "Read a bill")
+            .on(Fixture::GodavariBill)
             .ai_on(),
         shot("ai.quick-entry.not-installed", &[palette])
             .query("Plain-words entry")

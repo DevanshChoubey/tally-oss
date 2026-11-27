@@ -335,3 +335,20 @@ fn the_persons_choice_replaces_a_ledger_the_reader_matched() {
         "{voucher:?}"
     );
 }
+
+#[test]
+fn a_cancelled_read_stores_no_draft_and_logs_nothing() {
+    // provenance: derived. The person pressed Esc before the read could store anything: the
+    // token is cancelled, so no draft waits in the queue and the read is reported as cancelled.
+    // The provider did not run (the token is checked before it), so nothing is logged, as for a
+    // refusal.
+    let mut api = books("s21-bill-cancel.ledgerly");
+    api.set_ai_tier(AiTier::Local).unwrap();
+    api.attach_assistant(Box::new(FixedAnswers::new().with_document(bill())));
+    let cancel = CancelToken::new();
+    cancel.cancel();
+    let read = api.read_bill_photo(IMAGE, "IMG_2041.jpg", &cancel).unwrap();
+    assert!(matches!(read, BillRead::Cancelled), "{read:?}");
+    assert_eq!(api.ai_drafts().unwrap().len(), 0);
+    assert_eq!(api.ai_log_rows().unwrap().len(), 0);
+}

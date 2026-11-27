@@ -123,6 +123,12 @@ untracked), look at each, update `PARITY-GAPS.md`.
   "Try" sentences (mock changed first to ones the reader drafts), "High confidence" after the bars.
   Tests first, seen failing. Recorded: Test-provider chip, unknown-ledger balance, PY/0315 duplicate
   line and the "Why Rent" line (PARITY-GAPS).
+- Round D screen: committed. `DraftEdits::line_ledgers` (the person's ledger for an open line,
+  checked by the engine, logged), `BillRead::Cancelled` (a cancel before the provider runs stores
+  and logs nothing), the bill photo screen with the assistant (choose, reading, ledger lines with
+  boxes on the photo, rejected, error), PNG only. Mock states first; tests first, seen failing.
+  NOT BUILT (PARITY-GAPS): item rows, accepted capture, place of supply, duplicate, cloud consent,
+  JPEG/PDF, image store, Esc mid-read. Rounds E and F, and the key form, not started.
 - Honesty notes (C): the app tests' sentence helper was changed to wait for the ready hint
   instead of "Read as:" (the test typed before the gate read Ready); the screen tests were written
   before the screen and seen failing, the accept transition checked by mutation.

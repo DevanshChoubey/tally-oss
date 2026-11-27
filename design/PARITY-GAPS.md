@@ -392,9 +392,34 @@ Classes:
   keys. The "Try" sentences of the `ai=on` mock are the two the reader drafts (the Mehta Agro one
   needs a bill reference, which the assistant never proposes; the mock was changed first). Hindi words for the new lines are unsourced.
 - **NOT BUILT** `ask.result`, `ask.loading`, `ask.low-confidence`, `ask.unsupported`,
-  `purchase-bill.reading`, `.proposal`,
-  `.low-confidence`, `.mismatch`, `.duplicate`, `.cloud-consent`, `.error`, `.accepted` and
   `gst.recon-explain`: no model runs; a screen would show a look with nothing behind it.
+- **FIX** (round D) `ai.purchase-bill.choose`, `.reading`, `.ledger-lines`, `.rejected` and
+  `.error` are built on the bill photo screen with the assistant (mock states added first;
+  `s21-d-sheet-1/2`). The photo is drawn with a box and label on each value the reader took; the
+  taxable line has a ledger list the person chooses from (`DraftEdits::line_ledgers`, logged as a
+  human edit); the engine total is the engine voucher's party line, shown only when the engine
+  makes the voucher, never a sum on screen.
+- **NOT BUILT** `purchase-bill.proposal`, `.low-confidence`, `.mismatch`: the mock drafts item rows
+  (qty, rate, items matched to masters); the bill reader reads no item rows yet, so the app drafts
+  ledger lines (`ai.purchase-bill.ledger-lines`, added to the mock for this). Ctrl+I "Show source"
+  and Enter "Next field" are not built.
+- **NOT BUILT** `ai.purchase-bill.accepted` capture: Accept is reached only after choosing a ledger
+  in a list, which the capture tool cannot drive; it is covered by the app test
+  `choosing_the_purchase_ledger_lets_the_engine_balance_and_accept_post_it`. On the sample company
+  the Rupa Polymers bill would then stop at the engine's Unsupported verdict (a supplier outside
+  the company's registration state, `validate::check_supplier_state`) and Rupa is bill-wise (a
+  draft proposes no bill allocations), so Accept stays off there; recorded, not hidden.
+- **NOT BUILT** the place of supply is not asked on the bill screen, so a GST purchase draft in a
+  registered company stays Unsupported ("the place of supply is never guessed"); an owner/design
+  decision whether to take it from the supplier master.
+- **NOT BUILT** `purchase-bill.duplicate` (no engine check finds an earlier read of the same image or
+  bill number), `.cloud-consent` (cloud provider refuses documents; owner decision on cloud), JPEG
+  and PDF reading (PNG only: JPEG needs the `image` crate's jpeg feature and a cargo deny check;
+  PDF needs a renderer; both refused with a typed reason, mock error state changed to say so), and
+  keeping the image with the voucher (no image store; the choose text says so, mock changed first).
+- **NOT BUILT** Esc while reading is honoured only before the provider runs (`BillRead::Cancelled`);
+  a read already past the provider stores its draft, and the screen says it waits in the review
+  queue. No app test drives Esc mid-read (it races the worker).
 - **NOT BUILT** the AI-off note's AI and privacy button is a secondary button; the mock's is a ghost
   (the kit has no ghost `ButtonKind`).
 - **DELIBERATE** Ask's box holds a hint and is disabled and the key bar lists only the name, because

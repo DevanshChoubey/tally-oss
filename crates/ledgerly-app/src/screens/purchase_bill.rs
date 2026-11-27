@@ -67,12 +67,17 @@ pub struct PurchaseBillScreen {
     last: Option<Gate>,
     /// Why the last button or key did not open its screen.
     notice: Option<String>,
+    /// The screen with the assistant, used when this build has it.
+    ai: crate::screens::purchase_bill_ai::AiBill,
 }
 
 impl PurchaseBillScreen {
     /// Whether the tier has been read (or cannot be: no company, or the read failed).
     #[must_use]
     pub fn loaded(&self) -> bool {
+        if crate::release::ai_enabled() {
+            return self.ai.loaded();
+        }
         match &self.last {
             None | Some(Gate::Reading) => false,
             Some(
@@ -84,6 +89,11 @@ impl PurchaseBillScreen {
                 | Gate::Cloud,
             ) => true,
         }
+    }
+
+    /// Chooses `ledger` for the draft's line `line`, as the line's ledger list does.
+    pub fn choose_ledger(&mut self, line: usize, ledger: ledgerly_core::LedgerId) {
+        self.ai.choose_ledger(line, ledger);
     }
 
     /// Turns a request to open a screen into the stack's action, keeping the reason when it
@@ -209,6 +219,9 @@ impl Screen for PurchaseBillScreen {
     }
 
     fn key_bar_name(&self, _tr: &Tr) -> String {
+        if crate::release::ai_enabled() {
+            return self.ai.key_bar_name();
+        }
         crate::i18n::lit(KEY_BAR_NAME)
     }
 
@@ -217,10 +230,16 @@ impl Screen for PurchaseBillScreen {
     }
 
     fn keys(&self, _tr: &Tr) -> Vec<KeyHint> {
+        if crate::release::ai_enabled() {
+            return self.ai.keys();
+        }
         key_hints()
     }
 
     fn ui(&mut self, ui: &mut Ui, ctx: &mut AppCtx) -> ScreenAction {
+        if crate::release::ai_enabled() {
+            return self.ai.ui(ui, ctx);
+        }
         let gate = self.gate.gate(ui, ctx);
         self.last = Some(gate.clone());
         if ui.input_mut(|i| i.consume_key(Modifiers::NONE, Key::F9)) {
