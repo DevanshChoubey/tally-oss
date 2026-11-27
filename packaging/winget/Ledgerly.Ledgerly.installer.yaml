@@ -1,0 +1,17 @@
+# winget installer manifest template. scripts/fill-package-manifests.sh replaces @VERSION@ and
+# @SHA256@ from the released installer's line in SHA256SUMS.txt; nothing here is typed by hand.
+# Submit the filled files to microsoft/winget-pkgs under manifests/l/Ledgerly/Ledgerly/<version>/.
+PackageIdentifier: Ledgerly.Ledgerly
+PackageVersion: "@VERSION@"
+InstallerType: inno
+Scope: user
+InstallModes:
+  - interactive
+  - silent
+UpgradeBehavior: install
+Installers:
+  - Architecture: x64
+    InstallerUrl: https://github.com/DevanshChoubey/tally-oss/releases/download/v@VERSION@/ledgerly-@VERSION@-windows-x86_64-setup.exe
+    InstallerSha256: "@SHA256@"
+ManifestType: installer
+ManifestVersion: 1.6.0

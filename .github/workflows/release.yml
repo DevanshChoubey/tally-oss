@@ -9,7 +9,9 @@ name: release
 # a release),
 # actions/upload-artifact and actions/download-artifact (GitHub's own), and
 # actions/attest-build-provenance (signed SLSA provenance for every release artifact, checked
-# with `gh attestation verify`). Every action is pinned to a full commit SHA. Everything else is
+# with `gh attestation verify`), and signpath/github-action-submit-signing-request (Authenticode
+# signing of the Windows installer, only when the SignPath secrets are set; docs/signing.md).
+# Every action is pinned to a full commit SHA. Everything else is
 # a shell command on the runner.
 
 on:
@@ -45,6 +47,16 @@ jobs:
 
   windows:
     runs-on: windows-latest
+    permissions:
+      contents: read
+      # The signing service fetches the unsigned installer artifact with this job's token.
+      actions: read
+    env:
+      # Empty when the secrets are not set (forks, and until the SignPath Foundation accepts the
+      # project): the signing steps are then skipped and the installer ships unsigned, as before.
+      # docs/signing.md says how to get them.
+      SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+      SIGNPATH_ORGANIZATION_ID: ${{ secrets.SIGNPATH_ORGANIZATION_ID }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: dtolnay/rust-toolchain@d5e4d57b030548f435d0befec15ff413a2c60eff # 1.100
@@ -71,6 +83,38 @@ jobs:
           name: windows
           path: dist/*.zip
           if-no-files-found: error
+      - name: Upload the unsigned installer for signing
+        id: unsigned
+        if: env.SIGNPATH_API_TOKEN != '' && env.SIGNPATH_ORGANIZATION_ID != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: windows-installer-unsigned
+          path: dist/*-setup.exe
+          if-no-files-found: error
+      - name: Sign the installer (SignPath)
+        if: env.SIGNPATH_API_TOKEN != '' && env.SIGNPATH_ORGANIZATION_ID != ''
+        uses: signpath/github-action-submit-signing-request@a2c5b60d9c75f073142b653c354b632eedce097b # v3.2
+        with:
+          connector-url: https://githubactions.connectors.signpath.io
+          api-token: ${{ env.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ env.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ledgerly
+          signing-policy-slug: release-signing
+          github-artifact-id: ${{ steps.unsigned.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: dist-signed
+      - name: Replace the installer with the signed one
+        if: env.SIGNPATH_API_TOKEN != '' && env.SIGNPATH_ORGANIZATION_ID != ''
+        shell: pwsh
+        run: |
+          # Only the signed installer goes on to SHA256SUMS.txt, the attestation and the
+          # winget and Chocolatey manifests. A signature that does not verify stops the release.
+          $signed = Get-ChildItem dist-signed -Recurse -Filter '*-setup.exe' | Select-Object -First 1
+          if (-not $signed) { throw 'SignPath returned no installer' }
+          $sig = Get-AuthenticodeSignature $signed.FullName
+          if ($sig.Status -ne 'Valid') { throw "The signed installer does not verify: $($sig.Status)" }
+          Remove-Item dist\*-setup.exe
+          Copy-Item $signed.FullName dist\
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: windows-installer
@@ -109,8 +153,15 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          path: artifacts
-          merge-multiple: true
+          path: downloaded
+      - name: Gather the release files
+        # Each artifact is in its own folder. Only these four are released: the unsigned installer
+        # sent to SignPath (windows-installer-unsigned) has the same file name as the signed one,
+        # so it must never be merged in.
+        run: |
+          mkdir artifacts
+          cp downloaded/linux/* downloaded/windows/* downloaded/windows-installer/* downloaded/macos/* artifacts/
+          ls -l artifacts
       - name: Write SHA256SUMS.txt
         working-directory: artifacts
         run: |
@@ -120,6 +171,14 @@ jobs:
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: artifacts/*
+      - name: Fill the winget and Chocolatey manifests
+        # From the installer released above and its line in SHA256SUMS.txt; no hash is typed.
+        run: scripts/fill-package-manifests.sh "$GITHUB_REF_NAME" artifacts/SHA256SUMS.txt package-manifests
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: package-manifests
+          path: package-manifests
+          if-no-files-found: error
       - name: Create the release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
