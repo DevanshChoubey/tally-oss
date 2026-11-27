@@ -2245,6 +2245,7 @@ dependencies = [
  "ledgerly-sample",
  "ledgerly-store",
  "rfd",
+ "rusqlite",
  "serde",
  "sha2",
  "tempfile",
