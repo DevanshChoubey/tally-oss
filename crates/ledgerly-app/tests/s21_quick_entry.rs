@@ -185,6 +185,23 @@ impl Harness {
         }]);
     }
 
+    /// The AI activity log rows, read through the screen's own worker.
+    fn log_rows(&self) -> Vec<ledgerly_api::AiLogRow> {
+        let mut ticket = self
+            .app
+            .api
+            .as_ref()
+            .unwrap()
+            .run(|api: &mut Api| api.ai_log_rows().unwrap());
+        for _ in 0..2000 {
+            if let ledgerly_app::worker::Poll::Ready(rows) = ticket.poll() {
+                return rows;
+            }
+            std::thread::sleep(Duration::from_millis(2));
+        }
+        panic!("the worker never answered");
+    }
+
     fn type_sentence(&mut self, sentence: &str) {
         let _ = self.settle_on("Type an entry, as you would say it");
         let _ = self.frame(vec![Event::Text(sentence.to_owned())]);
@@ -224,6 +241,14 @@ fn reject_posts_nothing_and_says_so() {
     h.key(Key::D, Modifiers::ALT);
     let text = h.settle_on("Nothing was posted.");
     assert!(text.contains("Rejected"), "{text}");
+    // The rejection is recorded in the company's AI activity log, not only drawn.
+    let rows = h.log_rows();
+    assert_eq!(rows.len(), 1, "{rows:?}");
+    assert!(
+        matches!(rows[0].decision, ledgerly_api::AiDecision::Rejected(None)),
+        "{:?}",
+        rows[0]
+    );
 }
 
 #[test]

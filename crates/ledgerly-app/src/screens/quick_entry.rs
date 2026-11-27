@@ -1,16 +1,15 @@
 //! Plain-words entry (mock `SCREENS['quick-entry']`, index.html:1516-1555).
 //!
 //! Spec 6.8: a sentence such as "paid rent 25k to Sharma Properties by HDFC" becomes a
-//! `VoucherDraft` that the engine balances and a person accepts. `ledgerly_assist::nl_entry`
-//! parses a model's answer, but no model client exists in this build (its only `ModelClient` is
-//! the recorded test double), so nothing can be drafted. The sentence box is drawn disabled, the
-//! note says why for the company's stored tier ([`crate::screens::ai_gate`]), and the screen
-//! offers the voucher forms the mock's rejected state offers ("Type it myself", index.html:1554):
-//! F5 Payment and F6 Receipt, the two kinds `nl_entry` drafts. No draft, sample or figure is
-//! drawn.
+//! `VoucherDraft` that the engine balances and a person accepts.
 //!
-//! All five mock states (`quick-entry.proposal`, `.hinglish`, `.unknown-ledger`, `.loading`,
-//! `.rejected`) need a draft and are listed in `design/PARITY-GAPS.md`.
+//! In this release (`release::AI_IN_THIS_RELEASE` is false) nothing is drafted: the sentence box is
+//! drawn disabled, the note says why for the company's stored tier ([`crate::screens::ai_gate`]),
+//! and the screen offers the voucher forms the mock's rejected state offers ("Type it myself"):
+//! F5 Payment and F6 Receipt, the two kinds `nl_entry` drafts. No draft, sample or figure is drawn.
+//!
+//! With the assistant in the build, the screen delegates to `quick_entry_ai`, which reads the
+//! sentence through `Api::read_words` (mock states `ai.quick-entry.*`).
 
 use crate::i18n::Tr;
 use egui::{Key, Modifiers, RichText, Ui};

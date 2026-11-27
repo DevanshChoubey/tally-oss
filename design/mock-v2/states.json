@@ -70,6 +70,27 @@
    "description": "Rejected: nothing was posted, and the rejection is in the AI activity log."
   },
   {
+   "id": "ai.quick-entry.idle",
+   "kind": "empty",
+   "hash": "screen=quick-entry&state=idle&ai=on",
+   "title": "Plain-words entry, ready (later release)",
+   "description": "A model can run: the box has focus and nothing is drafted until Enter."
+  },
+  {
+   "id": "ai.quick-entry.accepted",
+   "kind": "happy",
+   "hash": "screen=quick-entry&state=accepted&ai=on",
+   "title": "Plain-words entry, accepted (later release)",
+   "description": "Ctrl+A posted the draft through the engine; the card says Accepted and names the voucher number the engine gave."
+  },
+  {
+   "id": "ai.quick-entry.read-failed",
+   "kind": "error",
+   "hash": "screen=quick-entry&state=read-failed&ai=on",
+   "title": "Plain-words entry, not read (later release)",
+   "description": "The reader refused the answer (a contra voucher; plain words draft payments and receipts only). Nothing is stored as a draft; the failure is in the AI activity log."
+  },
+  {
    "id": "ai.quick-entry.not-installed",
    "kind": "empty",
    "hash": "screen=quick-entry&state=not-installed&ai=on",

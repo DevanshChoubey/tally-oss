@@ -658,6 +658,9 @@ fn godavari_assistant_file(dir: &Path) -> Api {
 const RENT_WORDS: &str = "paid rent 25k to Sharma Properties from Saptagiri";
 /// The sentence of the mock's `quick-entry.unknown-ledger` (index.html `QE['unknown-ledger']`).
 const RAMESH_WORDS: &str = "Ramesh ko 5000 cash diya";
+/// A sentence the reader refuses: the recorded answer calls it a contra voucher, and plain words
+/// draft payments and receipts only (`nl_entry`), the mock's `quick-entry.read-failed`.
+const CONTRA_WORDS: &str = "moved 10k from cash to Saptagiri";
 
 /// [`godavari_assistant_file`] with the tier set to this computer and the fixed-answers provider
 /// given the model answers for the two sentences above. The answers are written here as a model
@@ -672,6 +675,10 @@ fn godavari_words_file(dir: &Path) -> Api {
             .with_text(
                 RENT_WORDS,
                 "{\"kind\":\"payment\",\"amount_text\":\"25k\",\"date_text\":null,\"party_name\":\"rent\",\"account_name\":\"Saptagiri\",\"narration\":\"rent Sharma Properties\",\"confidence_permille\":900}",
+            )
+            .with_text(
+                CONTRA_WORDS,
+                "{\"kind\":\"contra\",\"amount_text\":\"10k\",\"date_text\":null,\"party_name\":\"Saptagiri\",\"account_name\":\"cash\",\"narration\":\"moved\",\"confidence_permille\":900}",
             )
             .with_text(
                 RAMESH_WORDS,
@@ -2046,6 +2053,35 @@ fn light_shots() -> Vec<Shot> {
             .press(&[(Key::D, Modifiers::ALT)])
             .wait(30)
             .expect_bar("Plain-words entry", "Rejected")
+            .on(Fixture::GodavariWords)
+            .ai_on(),
+        shot("ai.quick-entry.idle", &[palette])
+            .query("Plain-words entry")
+            .then(&[(Key::Enter, NONE)])
+            .wait(30)
+            .expect_bar("Plain-words entry", "Plain-words entry")
+            .on(Fixture::GodavariWords)
+            .ai_on(),
+        shot("ai.quick-entry.accepted", &[palette])
+            .query("Plain-words entry")
+            .then(&[(Key::Enter, NONE)])
+            .wait(30)
+            .type_text(RENT_WORDS)
+            .press(&[(Key::Enter, NONE)])
+            .wait(30)
+            .press(&[(Key::A, Modifiers::CTRL)])
+            .wait(30)
+            .expect_bar("Plain-words entry", "Plain-words entry")
+            .on(Fixture::GodavariWords)
+            .ai_on(),
+        shot("ai.quick-entry.read-failed", &[palette])
+            .query("Plain-words entry")
+            .then(&[(Key::Enter, NONE)])
+            .wait(30)
+            .type_text(CONTRA_WORDS)
+            .press(&[(Key::Enter, NONE)])
+            .wait(30)
+            .expect_bar("Plain-words entry", "Plain-words entry")
             .on(Fixture::GodavariWords)
             .ai_on(),
         shot("ai.quick-entry.not-installed", &[palette])
