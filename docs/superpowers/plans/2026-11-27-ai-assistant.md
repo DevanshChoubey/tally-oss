@@ -108,6 +108,15 @@ untracked), look at each, update `PARITY-GAPS.md`.
   loading, rejected and not-installed states; the Prop footer now wraps its buttons instead of
   widening a narrow card). Open: the Hinglish state, the balance-after taxbox, reject reasons,
   Alt+C, Enter to the voucher form, Esc to cancel (PARITY-GAPS).
+- Round C follow-up: committed (mock and app states idle, accepted, read-failed; the reject
+  test checks the activity log; mutation: skipping the reject call fails it; the screen's own
+  Accept guard on a blocked draft survives mutation because the engine blocks the accept too).
+- Round D: API slice only, committed (`Api::read_bill_photo` through the same gate for bill
+  reading: provider OCR lines, then `ocr::read_bill` against the masters, a purchase draft stored
+  or a failed read logged, the image's SHA-256 and file name in the log). NOT BUILT: the bill
+  photo screen and its mock states with `ai=on` (reading, proposal, low confidence, mismatch,
+  duplicate, cloud consent, error, accepted), the bill-wise New Ref that leaves Rupa Polymers at
+  "none", and the cloud-consent wording (cloud.rs refuses documents). Rounds E and F not started.
 - Honesty notes (C): the app tests' sentence helper was changed to wait for the ready hint
   instead of "Read as:" (the test typed before the gate read Ready); the screen tests were written
   before the screen and seen failing, the accept transition checked by mutation.

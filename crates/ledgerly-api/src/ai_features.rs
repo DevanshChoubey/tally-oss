@@ -9,6 +9,7 @@
 //! queue), a failure as `ReadFailed`. A refused read runs nothing and logs nothing.
 
 use ledgerly_assist::nl_entry::MasterLedger;
+use ledgerly_assist::ocr::{RejectedField, read_bill};
 use ledgerly_assist::provider::{AiProvider, ProviderInfo, ProviderStatus};
 use ledgerly_assist::{AssistError, Proposal};
 use ledgerly_core::{CancelToken, EventSeq, Outcome};
@@ -22,6 +23,28 @@ use crate::facade::Api;
 
 /// The prompt template version the plain-words reader records.
 const WORDS_TEMPLATE: &str = ledgerly_assist::nl_entry::PROMPT_TEMPLATE_VERSION;
+
+/// The version the bill reader records in place of a prompt template: OCR lines are read by
+/// `ledgerly_assist::ocr::read_bill`, a fixed rule set, not a prompt.
+const BILL_READER: &str = "ocr/1";
+
+/// What reading a bill photo gave.
+#[derive(Debug, Clone, PartialEq)]
+pub enum BillRead {
+    /// A purchase draft, stored and waiting for the person's decision.
+    Drafted {
+        /// The stored draft's id.
+        id: EventSeq,
+        /// The draft as read.
+        proposal: Proposal,
+        /// Fields found on the bill but not used, and why.
+        rejected: Vec<RejectedField>,
+    },
+    /// The gate refused; nothing ran and nothing was logged.
+    Refused(AiGate),
+    /// The provider or the reader could not read the photo; logged as a failed read.
+    Failed(String),
+}
 
 /// Whether a feature may run now, and if not, why.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -143,6 +166,79 @@ impl Api {
                     },
                 })?;
                 Ok(WordsRead::Failed(reason))
+            }
+        }
+    }
+
+    /// Reads a bill photo through the gate for bill reading: the provider's OCR lines, then the
+    /// bill reader against the company's masters. The image bytes go to the provider only; the
+    /// log keeps `label` (the file name) and the SHA-256 of the bytes. A draft is stored and
+    /// waits in the review queue; a failure is logged; a refusal runs nothing.
+    ///
+    /// # Errors
+    /// [`ApiError`] when the books cannot be read or the log cannot be written.
+    pub fn read_bill_photo(
+        &mut self,
+        bytes: &[u8],
+        label: &str,
+        cancel: &CancelToken,
+    ) -> Result<BillRead, ApiError> {
+        let info = match self.ai_gate(AiFeature::BillReading)? {
+            AiGate::Ready(info) => info,
+            refused @ (AiGate::NotChosen
+            | AiGate::Off
+            | AiGate::FeatureOff
+            | AiGate::NotInstalled(_)
+            | AiGate::NotConfigured(_)) => return Ok(BillRead::Refused(refused)),
+        };
+        let input_hash = hex(&Sha256::digest(bytes));
+        let ocr = match self.assistant() {
+            Some(provider) => provider.ocr(bytes, &input_hash, cancel),
+            None => Err(AssistError::Output {
+                reason: "no provider is attached".to_owned(),
+            }),
+        };
+        let read = match ocr {
+            Ok(ocr) => match self.books()? {
+                Outcome::Value(books) => read_bill(&ocr, &books.masters),
+                Outcome::Unsupported(u) => Err(AssistError::Unsupported(u)),
+            },
+            Err(e) => Err(e),
+        };
+        match read {
+            Ok(reading) => {
+                let proposal = Proposal::VoucherDraft(Box::new(reading.draft));
+                let confidence_permille = confidence_of(&proposal);
+                let id = self.record_ai_draft(NewAiDraft {
+                    feature: AiFeature::BillReading,
+                    provider: info.name,
+                    model_version: info.version,
+                    prompt_template_version: BILL_READER.to_owned(),
+                    input_label: label.to_owned(),
+                    input_hash,
+                    proposal: proposal.clone(),
+                    confidence_permille,
+                })?;
+                Ok(BillRead::Drafted {
+                    id,
+                    proposal,
+                    rejected: reading.rejected,
+                })
+            }
+            Err(e) => {
+                let reason = e.to_string();
+                self.record_ai_activity(AiActivity {
+                    feature: AiFeature::BillReading,
+                    provider: info.name,
+                    model_version: info.version,
+                    prompt_template_version: BILL_READER.to_owned(),
+                    input_label: label.to_owned(),
+                    input_hash,
+                    kind: AiActivityKind::ReadFailed {
+                        reason: reason.clone(),
+                    },
+                })?;
+                Ok(BillRead::Failed(reason))
             }
         }
     }
