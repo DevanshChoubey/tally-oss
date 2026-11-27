@@ -222,6 +222,20 @@ impl Api {
         )?)
     }
 
+    /// Takes a verified backup now into `folder` instead of the backup folder (the command line's
+    /// `--to`). Like [`Api::back_up_now`], the name never collides with an existing backup.
+    ///
+    /// # Errors
+    /// [`ApiError::Store`] when the backup cannot be written or does not verify.
+    pub fn back_up_into(&self, folder: &Path) -> Result<PathBuf, ApiError> {
+        Ok(write_backup(
+            self.store(),
+            folder,
+            self.clock(),
+            BackupKind::Manual,
+        )?)
+    }
+
     /// The backups of this company in the backup folder, newest first.
     ///
     /// # Errors
