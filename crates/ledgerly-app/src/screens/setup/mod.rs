@@ -4,9 +4,10 @@
 //! This file draws the steps and runs them. Creating the company file runs on a background
 //! thread, as the welcome screen does, and the new company then replaces the open one.
 //!
-//! Two choices have no store yet, so their steps say so and save nothing: the keyboard preset and
-//! the backup folder. The AI tier is stored with the new company, except the cloud tier, which
-//! the engine refuses (see `design/PARITY-GAPS.md`).
+//! The keyboard preset has no store yet, so its step says so and saves nothing. The backup step's
+//! folder, daily schedule and 7 restorable versions are stored with the new company (round s23).
+//! The AI tier is stored with the new company, except the cloud tier, which the engine refuses
+//! (see `design/PARITY-GAPS.md`).
 
 pub mod form;
 
@@ -133,7 +134,7 @@ pub struct SetupScreen {
     ai: AiTier,
     /// How often GST returns are filed, stored with the new company.
     filing: GstFiling,
-    /// The backup folder typed. Not stored yet.
+    /// The backup folder typed; empty means Backups beside the company file.
     backup_folder: String,
     /// What the last action said, shown on the step.
     notice: Option<String>,
@@ -512,8 +513,12 @@ impl SetupScreen {
         };
         let (clock, ai, filing) = (self.clock, form::stored_ai_tier(self.ai), self.filing);
         let dir = self.recent_dir.clone();
+        let backup_folder = self.backup_folder.clone();
         match spawn_file_job(move || {
-            let made = form::create_company_with_filing(&path, &company, clock, ai, filing)?;
+            let (mut api, note) =
+                form::create_company_with_filing(&path, &company, clock, ai, filing)?;
+            let note = note.or_else(|| form::store_backup_settings(&mut api, &backup_folder));
+            let made = (api, note);
             crate::recent::note_opened(&made.0, &path, dir.as_deref());
             Ok(made)
         }) {
@@ -1147,7 +1152,8 @@ impl SetupScreen {
         }
     }
 
-    /// The Backup step (index.html:1885). The folder is not stored and no backup runs on a schedule.
+    /// The Backup step (mock `setup.backup`). The folder, a daily schedule and 7 restorable versions
+    /// are stored with the company when it is created ([`form::store_backup_settings`]).
     fn draw_backup(&mut self, ui: &mut egui::Ui) {
         pane_head(
             ui,
@@ -1171,22 +1177,17 @@ impl SetupScreen {
                     );
                 },
             );
-            field(ui, col, &crate::i18n::t("masters.key.keep"), |ui, _| {
-                read_only(ui, &crate::i18n::t("setup.value.keep"));
-                hint(ui, &crate::i18n::t("setup.hint.not_saved"));
+            field(ui, col, &crate::i18n::t("setup.field.versions"), |ui, _| {
+                read_only(ui, &crate::i18n::t("setup.value.versions"));
             });
             field(ui, col, &crate::i18n::t("setup.field.when"), |ui, _| {
-                read_only(ui, &crate::i18n::t("setup.value.when"));
-                hint(ui, &crate::i18n::t("setup.hint.not_saved"));
+                read_only(ui, &crate::i18n::t("setup.value.daily"));
             });
         });
         ui.add_space(14.0);
         crate::ui::note::note_with_icon(ui, NoteKind::Info, Icon::Info, |ui, ink| {
             para(ui, &crate::i18n::t("setup.backup.law"), TEXT_META, ink);
         });
-        if let Some(notice) = unsaved_notice(Step::Backup) {
-            step_text(ui, &notice);
-        }
     }
 
     /// The Done step (index.html:1889-1894): three launch cards, each with its icon, bold label

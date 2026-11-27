@@ -192,6 +192,24 @@ pub(crate) fn build(
         source: Box::new(source),
     })?;
     let keys = masters(seed, &mut api)?;
+    // The seed gives Cash; Profit & Loss A/c is predefined in every company ("Ledgers in
+    // TallyPrime", help.tallysolutions.com/ledgers-in-tallyprime/, read 2026-11-27), so it is added
+    // here and the sample needs no upgrade when it is opened.
+    match api.add_predefined_ledgers() {
+        Ok(Outcome::Value(_steps)) => {}
+        Ok(Outcome::Unsupported(u)) => {
+            return Err(SampleError::Unsupported {
+                what: format!("adding the predefined ledgers ({})", u.what),
+                reason: u.reason,
+            });
+        }
+        Err(source) => {
+            return Err(SampleError::Api {
+                what: "adding the predefined ledgers".to_owned(),
+                source: Box::new(source),
+            });
+        }
+    }
     number_series(&mut api)?;
     vouchers(seed, &mut api, &keys, clock)?;
     statements(seed, &mut api, &keys)?;

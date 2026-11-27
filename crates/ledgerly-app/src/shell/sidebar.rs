@@ -289,6 +289,7 @@ pub fn shown_label(label: &str, tr: &Tr) -> String {
         "Bank reconciliation" => "sidebar.bank_recon",
         "AI and privacy" => "sidebar.ai_privacy",
         "Keyboard map" => "sidebar.keymap",
+        "Backups and updates" => "sidebar.backup",
         "Company setup" => "sidebar.company_setup",
         other => return other.to_owned(),
     };
@@ -328,6 +329,7 @@ pub fn entry_icon(label: &str) -> Option<Icon> {
         "Bank reconciliation" => Icon::Bank,
         "AI and privacy" => Icon::Shield,
         "Keyboard map" => Icon::Kbd,
+        "Backups and updates" => Icon::Db,
         "Company setup" => Icon::Building,
         _ => return None,
     };

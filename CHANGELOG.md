@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Backups and updates** (Settings). Back up now (Alt+B), a backup folder, a scheduled backup
+  (Off, Daily, Weekly or Monthly) that keeps 1 to 366 versions (7 by default) and is taken when you
+  open the company and one is due, the backups listed newest first, and restore to a new file after
+  the audit chain is checked; a backup with a broken chain is refused. Backup file names never
+  collide, even within one second.
+- `ledgerly backup <file> [--to] [--if-due] [--list]` and `ledgerly restore <backup> <target>`.
+- **Upgrade on open.** A company file made before Cash and Profit & Loss A/c were predefined is
+  backed up, then given them, as one change in the audit trail. A hand-made Cash in Cash-in-Hand
+  takes the role and keeps its balance. If the backup fails, the file opens as it was.
+- **Opt-in update check.** Off by default. It asks only the GitHub releases API of this project,
+  offers a release only when its `SHA256SUMS.txt` agrees with GitHub's digest of each file, and
+  never downloads or installs anything. `ledgerly check-update [--compare <file>]` does the same.
+- Release packaging: a Windows code-signing step (SignPath), skipped until its secrets exist, and
+  winget and Chocolatey manifests filled from `SHA256SUMS.txt` (`docs/signing.md`).
+
+### Changed
+
+- The setup wizard's backup step now stores its folder with a Daily schedule and 7 versions.
+
+### Fixed
+
+- The 1.0.0 notes named backups, cost centres and godowns, and the README named e-way bill JSON,
+  ahead of the code. They now say what works and what does not.
+
 ## [1.0.0] - 2026-11-26
 
 The first release of Ledgerly for people to use. Early builds that were published under the
@@ -18,9 +44,11 @@ Install this one. The full list of what is in it, and the known gaps, is in
 
 - **Companies.** A company is one file on your computer. A setup wizard (company, GST registration,
   features, keyboard, AI choice, backup) creates it; a recent-companies list opens it again; a sample
-  company lets you try everything. Financial years, period locks, backups, and an append-only event
-  log with a hash chain (`ledgerly verify`).
-- **Masters and vouchers.** Ledgers, groups, cost centres, units, stock items, godowns; sales,
+  company lets you try everything. Financial years, period locks, and an append-only event
+  log with a hash chain (`ledgerly verify`). The backup step did not store its choice, and no screen
+  or command took a backup.
+- **Masters and vouchers.** Ledgers, groups, cost-centre masters (no allocation on vouchers), units,
+  stock items, godown masters (item invoices need a company with one godown); sales,
   purchase, payment, receipt, journal, contra, credit note and debit note vouchers, with numbering
   and "as voucher" mode.
 - **Item invoices.** Sales and purchase invoices with items, HSN, quantities, rates and the tax the

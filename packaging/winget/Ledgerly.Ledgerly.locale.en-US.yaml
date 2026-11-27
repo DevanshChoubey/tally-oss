@@ -1,0 +1,19 @@
+# winget default locale manifest template (see Ledgerly.Ledgerly.installer.yaml).
+PackageIdentifier: Ledgerly.Ledgerly
+PackageVersion: "@VERSION@"
+PackageLocale: en-US
+Publisher: Ledgerly contributors
+PublisherUrl: https://github.com/DevanshChoubey/tally-oss
+PublisherSupportUrl: https://github.com/DevanshChoubey/tally-oss/issues
+PackageName: Ledgerly
+PackageUrl: https://github.com/DevanshChoubey/tally-oss
+License: AGPL-3.0-or-later
+LicenseUrl: https://github.com/DevanshChoubey/tally-oss/blob/v@VERSION@/LICENSE-AGPL
+ShortDescription: Desktop accounting for Indian small businesses, with GST returns and an audit trail.
+Tags:
+  - accounting
+  - gst
+  - india
+ReleaseNotesUrl: https://github.com/DevanshChoubey/tally-oss/releases/tag/v@VERSION@
+ManifestType: defaultLocale
+ManifestVersion: 1.6.0

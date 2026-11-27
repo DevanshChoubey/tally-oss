@@ -949,7 +949,77 @@
    "kind": "happy",
    "hash": "screen=setup&state=backup",
    "title": "Setup, backup",
-   "description": "Daily backup folder and the note on keeping a copy on storage in India."
+   "description": "Backup folder (empty: Backups beside the company file), 7 restorable versions, daily; stored with the company. The note on keeping a copy on storage in India."
+  },
+  {
+   "id": "backup.default",
+   "kind": "happy",
+   "hash": "screen=backup&state=default",
+   "title": "Backups and updates",
+   "description": "Backup folder, scheduled backup (Daily) and restorable versions (7), stored with the company; Back up now (Alt+B); the backups in the folder, newest first."
+  },
+  {
+   "id": "backup.backed-up",
+   "kind": "happy",
+   "hash": "screen=backup&state=backed-up",
+   "title": "Backup taken",
+   "description": "Alt+B or the palette took a backup; its audit chain was checked and the file path is shown. Nothing was overwritten."
+  },
+  {
+   "id": "backup.restore",
+   "kind": "happy",
+   "hash": "screen=backup&state=restore",
+   "title": "Restore a backup",
+   "description": "A backup is picked; restore writes a new company file at the path shown and never replaces a file that exists."
+  },
+  {
+   "id": "backup.restored",
+   "kind": "happy",
+   "hash": "screen=backup&state=restored",
+   "title": "Backup restored",
+   "description": "The restored file is written and its audit chain verified (records, no gaps). The open company is unchanged."
+  },
+  {
+   "id": "backup.restore-refused",
+   "kind": "validation-error",
+   "hash": "screen=backup&state=restore-refused",
+   "title": "Restore refused, broken chain",
+   "description": "The backup's audit chain is broken at a named record, so nothing is written and the target is left absent."
+  },
+  {
+   "id": "backup.upgraded",
+   "kind": "happy",
+   "hash": "screen=backup&state=upgraded",
+   "title": "Older company file upgraded on open",
+   "description": "Opened after an upgrade: the older version, the backup taken first, and what happened to Cash and Profit & Loss A/c; the change is in the audit trail."
+  },
+  {
+   "id": "backup.updates-off",
+   "kind": "happy",
+   "hash": "screen=backup&state=updates-off",
+   "title": "Updates, off",
+   "description": "The update check is off by default. Check now is disabled; nothing is sent."
+  },
+  {
+   "id": "backup.updates-available",
+   "kind": "happy",
+   "hash": "screen=backup&state=updates-available",
+   "title": "Updates, a newer release",
+   "description": "A newer release whose SHA256SUMS and GitHub file digests agree: each file with its SHA-256. Nothing is downloaded or installed."
+  },
+  {
+   "id": "backup.updates-none",
+   "kind": "happy",
+   "hash": "screen=backup&state=updates-none",
+   "title": "Updates, up to date",
+   "description": "The latest release is this version."
+  },
+  {
+   "id": "backup.updates-failed",
+   "kind": "validation-error",
+   "hash": "screen=backup&state=updates-failed",
+   "title": "Updates, could not check",
+   "description": "A refused or rate-limited request (403), a 404 or no network reads Could not check, with the reason."
   },
   {
    "id": "setup.done",

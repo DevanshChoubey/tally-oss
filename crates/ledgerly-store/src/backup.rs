@@ -21,6 +21,12 @@
 //! `<company file stem>-backup-<UTC time as YYYYMMDDTHHMMSSZ>.ledgerly`, taken from the injected
 //! [`Clock`] (rule C5).
 //!
+//! [`write_backup`] (S23) is the same backup with a name that never collides: a second backup in
+//! the same second gets `_1`, then `_2`, and a scheduled backup is named
+//! `<stem>-scheduled-<stamp>.ledgerly`. [`list_backups`] lists a company's backups in a folder,
+//! [`prune_scheduled`] keeps the newest scheduled ones, and [`restore_verified`] restores and then
+//! runs the audit-chain verifier on the restored file.
+//!
 //! [`restore_from`] does not repeat the audit-chain check; it compares the newest event of the
 //! backup (WAL included) with the restored file, so events left in a backup's `-wal` file are never
 //! silently lost. Run `verify_chain` on a restored store to re-check its chain.
@@ -155,32 +161,7 @@ pub struct NotCompared {
 pub fn backup_to(store: &SqliteStore, dir: &Path, clock: Clock) -> Result<PathBuf, StoreError> {
     std::fs::create_dir_all(dir).map_err(|source| io_error(dir, source))?;
     let final_path = dir.join(backup_file_name(store.path(), clock));
-    if final_path.exists() {
-        return Err(io_error(
-            &final_path,
-            std::io::Error::from(std::io::ErrorKind::AlreadyExists),
-        ));
-    }
-    let partial = with_suffix(&final_path, PARTIAL_SUFFIX);
-    remove_if_present(&partial)?;
-    let written = write_and_verify(store, &partial);
-    if let Err(e) = written {
-        if let Err(cleanup) = remove_if_present(&partial) {
-            tracing::warn!(error = %cleanup, "could not remove partial backup");
-        }
-        return Err(e);
-    }
-    // `rename` replaces silently on Unix, so the existence check above is repeated right before
-    // it; a writer racing between the two calls is outside what a local company file allows.
-    if final_path.exists() {
-        remove_if_present(&partial)?;
-        return Err(io_error(
-            &final_path,
-            std::io::Error::from(std::io::ErrorKind::AlreadyExists),
-        ));
-    }
-    std::fs::rename(&partial, &final_path).map_err(|source| io_error(&final_path, source))?;
-    tracing::info!(path = %final_path.display(), "backup written");
+    write_verified(store, &final_path)?;
     Ok(final_path)
 }
 
@@ -301,19 +282,11 @@ pub fn rebuild_projections_and_compare(store: &SqliteStore) -> Result<RebuildRep
 
 /// `<stem>-backup-<YYYYMMDDTHHMMSSZ>.ledgerly`, the time in UTC.
 fn backup_file_name(company_file: &Path, clock: Clock) -> String {
-    let stem = company_file
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .unwrap_or("company");
-    let at = clock.now().to_offset(UtcOffset::UTC);
-    format!(
-        "{stem}-backup-{:04}{:02}{:02}T{:02}{:02}{:02}Z.{EXTENSION}",
-        at.year(),
-        u8::from(at.month()),
-        at.day(),
-        at.hour(),
-        at.minute(),
-        at.second()
+    versioned_name(
+        &company_stem(company_file),
+        BackupKind::Manual,
+        &utc_stamp(clock),
+        0,
     )
 }
 
@@ -708,4 +681,271 @@ fn diff_maps<K: Ord + Debug, V: PartialEq + Debug>(
             });
         }
     }
+}
+
+// ---------------------------------------------------------------------------------------------
+// S23: backups that never collide, the list of backups, rotation, verified restore
+// ---------------------------------------------------------------------------------------------
+
+/// Whether a backup was asked for or taken by the schedule.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BackupKind {
+    /// Taken when asked: from the backup screen, the command line, or before an import or an
+    /// upgrade. Never removed by rotation.
+    Manual,
+    /// Taken by the backup schedule. Rotation keeps the newest ones.
+    Scheduled,
+}
+
+/// One backup of a company found in a folder.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BackupFile {
+    /// The backup file.
+    pub path: PathBuf,
+    /// Manual or scheduled, from the file name.
+    pub kind: BackupKind,
+    /// When it was taken (UTC, to the second), from the file name.
+    pub taken_at: time::OffsetDateTime,
+    /// `0` for the first backup in that second, then `1`, `2`, ... (the `_1` suffix).
+    pub sequence: u32,
+}
+
+/// Writes a verified backup into `dir` and returns its path. Like [`backup_to`], but never fails
+/// because the name is taken: the first backup in a second keeps the plain name, a second one in
+/// the same second gets `_1`, the next `_2`, and so on, as TallyPrime names a backup the user
+/// chose not to overwrite (<https://help.tallysolutions.com/local-backup/>, read 2026-11-27).
+///
+/// A manual backup is `<stem>-backup-<stamp>.ledgerly`; a scheduled one is
+/// `<stem>-scheduled-<stamp>.ledgerly`, so rotation can tell them apart (TallyPrime too names a
+/// scheduled backup differently from a manual one).
+///
+/// # Errors
+/// As [`backup_to`], except that a taken name is not an error.
+pub fn write_backup(
+    store: &SqliteStore,
+    dir: &Path,
+    clock: Clock,
+    kind: BackupKind,
+) -> Result<PathBuf, StoreError> {
+    std::fs::create_dir_all(dir).map_err(|source| io_error(dir, source))?;
+    let stem = company_stem(store.path());
+    let stamp = utc_stamp(clock);
+    for sequence in 0..=MAX_SEQUENCE {
+        let name = versioned_name(&stem, kind, &stamp, sequence);
+        let path = dir.join(&name);
+        if path.exists() || with_suffix(&path, PARTIAL_SUFFIX).exists() {
+            continue;
+        }
+        match write_verified(store, &path) {
+            Err(StoreError::Io { source, .. })
+                if source.kind() == std::io::ErrorKind::AlreadyExists =>
+            {
+                // Taken between the check and the rename; try the next number.
+            }
+            other => return other.map(|()| path),
+        }
+    }
+    Err(io_error(
+        dir,
+        std::io::Error::new(
+            std::io::ErrorKind::AlreadyExists,
+            format!("more than {MAX_SEQUENCE} backups in one second"),
+        ),
+    ))
+}
+
+/// The most `_N` numbers tried in one second.
+const MAX_SEQUENCE: u32 = 9_999;
+
+/// The backups of the company file `company_file` in `dir`, newest first (by the time in the
+/// name, then by the `_N` number). Only files named as [`write_backup`] names them for this
+/// company are listed; half-written `.partial` files and look-alikes are left out. A folder that
+/// does not exist has no backups.
+///
+/// # Errors
+/// [`StoreError::Io`] when `dir` exists but cannot be read.
+pub fn list_backups(dir: &Path, company_file: &Path) -> Result<Vec<BackupFile>, StoreError> {
+    let entries = match std::fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(source) => return Err(io_error(dir, source)),
+    };
+    let stem = company_stem(company_file);
+    let mut found = Vec::new();
+    for entry in entries {
+        let entry = entry.map_err(|source| io_error(dir, source))?;
+        let Some(name) = entry.file_name().to_str().map(str::to_owned) else {
+            continue;
+        };
+        if let Some((kind, taken_at, sequence)) = parse_backup_name(&stem, &name) {
+            found.push(BackupFile {
+                path: entry.path(),
+                kind,
+                taken_at,
+                sequence,
+            });
+        }
+    }
+    found.sort_by(|a, b| {
+        b.taken_at
+            .cmp(&a.taken_at)
+            .then(b.sequence.cmp(&a.sequence))
+    });
+    Ok(found)
+}
+
+/// Removes the oldest scheduled backups of `company_file` in `dir` so that the newest `keep`
+/// remain ("No. of Restorable Versions", TallyPrime help "Local Backup",
+/// <https://help.tallysolutions.com/local-backup/>, read 2026-11-27). Manual backups are never
+/// removed. Returns the removed files, oldest first.
+///
+/// # Errors
+/// [`StoreError::Encoding`] when `keep` is 0 (that would remove the backup just taken);
+/// [`StoreError::Io`] when the folder cannot be read or a file cannot be removed.
+pub fn prune_scheduled(
+    dir: &Path,
+    company_file: &Path,
+    keep: u16,
+) -> Result<Vec<PathBuf>, StoreError> {
+    if keep == 0 {
+        return Err(StoreError::Encoding(
+            "the number of backups to keep must be at least 1".to_owned(),
+        ));
+    }
+    let scheduled: Vec<BackupFile> = list_backups(dir, company_file)?
+        .into_iter()
+        .filter(|f| f.kind == BackupKind::Scheduled)
+        .collect();
+    let mut removed = Vec::new();
+    for old in scheduled.iter().skip(usize::from(keep)).rev() {
+        remove_if_present(&old.path)?;
+        removed.push(old.path.clone());
+    }
+    Ok(removed)
+}
+
+/// Restores `backup` to a new company file at `target`, as [`restore_from`] does, then runs the
+/// audit-chain verifier (card S3) on the restored file. A restored file whose chain or
+/// checkpoints do not verify is removed again and the restore is refused.
+///
+/// # Errors
+/// As [`restore_from`]; [`StoreError::ChainBroken`] naming the first bad sequence number when the
+/// restored file does not verify (nothing is left at `target`).
+pub fn restore_verified(
+    backup: &Path,
+    target: &Path,
+) -> Result<(SqliteStore, crate::verify::VerifyReport), StoreError> {
+    let restored = restore_from(backup, target)?;
+    let report = match crate::verify::verify_chain(&restored) {
+        Ok(report) => report,
+        Err(e) => {
+            drop(restored);
+            remove_company_files(target);
+            return Err(e);
+        }
+    };
+    if let Some(seq) = report.first_broken_seq() {
+        drop(restored);
+        remove_company_files(target);
+        return Err(StoreError::ChainBroken(seq));
+    }
+    Ok((restored, report))
+}
+
+/// The company file's stem, as backup names start with it.
+fn company_stem(company_file: &Path) -> String {
+    company_file
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("company")
+        .to_owned()
+}
+
+/// The clock's time in UTC as `YYYYMMDDTHHMMSSZ`.
+fn utc_stamp(clock: Clock) -> String {
+    let at = clock.now().to_offset(UtcOffset::UTC);
+    format!(
+        "{:04}{:02}{:02}T{:02}{:02}{:02}Z",
+        at.year(),
+        u8::from(at.month()),
+        at.day(),
+        at.hour(),
+        at.minute(),
+        at.second()
+    )
+}
+
+/// The word between the stem and the stamp.
+fn kind_word(kind: BackupKind) -> &'static str {
+    match kind {
+        BackupKind::Manual => "backup",
+        BackupKind::Scheduled => "scheduled",
+    }
+}
+
+fn versioned_name(stem: &str, kind: BackupKind, stamp: &str, sequence: u32) -> String {
+    let word = kind_word(kind);
+    if sequence == 0 {
+        format!("{stem}-{word}-{stamp}.{EXTENSION}")
+    } else {
+        format!("{stem}-{word}-{stamp}_{sequence}.{EXTENSION}")
+    }
+}
+
+/// Reads a name made by [`versioned_name`] for `stem`; `None` for any other name.
+fn parse_backup_name(stem: &str, name: &str) -> Option<(BackupKind, time::OffsetDateTime, u32)> {
+    let rest = name.strip_prefix(stem)?.strip_prefix('-')?;
+    let rest = rest.strip_suffix(EXTENSION)?.strip_suffix('.')?;
+    let (kind, rest) = if let Some(r) = rest.strip_prefix("backup-") {
+        (BackupKind::Manual, r)
+    } else {
+        (BackupKind::Scheduled, rest.strip_prefix("scheduled-")?)
+    };
+    let (stamp, sequence) = match rest.split_once('_') {
+        Some((stamp, n)) => {
+            if n.is_empty() || !n.bytes().all(|b| b.is_ascii_digit()) || n.starts_with('0') {
+                return None;
+            }
+            (stamp, n.parse::<u32>().ok()?)
+        }
+        None => (rest, 0),
+    };
+    Some((kind, parse_stamp(stamp)?, sequence))
+}
+
+/// Parses `YYYYMMDDTHHMMSSZ` as a UTC time.
+fn parse_stamp(stamp: &str) -> Option<time::OffsetDateTime> {
+    let format = time::macros::format_description!("[year][month][day]T[hour][minute][second]Z");
+    time::PrimitiveDateTime::parse(stamp, &format)
+        .ok()
+        .map(time::PrimitiveDateTime::assume_utc)
+}
+
+/// Writes a verified copy of `store` to `final_path` through a `.partial` file. Fails with an
+/// `AlreadyExists` I/O error when `final_path` exists; never overwrites.
+fn write_verified(store: &SqliteStore, final_path: &Path) -> Result<(), StoreError> {
+    if final_path.exists() {
+        return Err(io_error(
+            final_path,
+            std::io::Error::from(std::io::ErrorKind::AlreadyExists),
+        ));
+    }
+    let partial = with_suffix(final_path, PARTIAL_SUFFIX);
+    remove_if_present(&partial)?;
+    if let Err(e) = write_and_verify(store, &partial) {
+        if let Err(cleanup) = remove_if_present(&partial) {
+            tracing::warn!(error = %cleanup, "could not remove partial backup");
+        }
+        return Err(e);
+    }
+    if final_path.exists() {
+        remove_if_present(&partial)?;
+        return Err(io_error(
+            final_path,
+            std::io::Error::from(std::io::ErrorKind::AlreadyExists),
+        ));
+    }
+    std::fs::rename(&partial, final_path).map_err(|source| io_error(final_path, source))?;
+    tracing::info!(path = %final_path.display(), "backup written");
+    Ok(())
 }

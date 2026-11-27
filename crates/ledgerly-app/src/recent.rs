@@ -155,14 +155,16 @@ pub fn describe(
     })
 }
 
-/// Opens the company file at `path` and, when the list folder is known, records it there. A list
-/// that cannot be written does not stop the company opening.
+/// Opens the company file at `path` ([`crate::open_company::open_company_noted`]) and, when the
+/// list folder is known, records it there. A list that cannot be written does not stop the
+/// company opening.
 ///
 /// # Errors
 /// The text to show when the file cannot be opened.
 pub fn open_and_record(path: &Path, dir: Option<&Path>) -> Result<ledgerly_api::Api, String> {
-    let api = ledgerly_api::Api::open(path)
-        .map_err(|e| format!("The company file could not be opened: {e}"))?;
+    // Upgrades a file made by an older build (after a backup) and takes a due scheduled backup;
+    // the home screen shows what happened (`crate::open_company`).
+    let api = crate::open_company::open_company_noted(path)?;
     note_opened(&api, path, dir);
     Ok(api)
 }

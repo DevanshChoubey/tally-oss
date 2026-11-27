@@ -260,6 +260,12 @@ impl Screen for GatewayScreen {
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, ctx: &mut AppCtx) -> ScreenAction {
+        // What opening the company did (an upgrade, or a backup that failed) is shown first.
+        if let Some(note) = crate::open_company::take_pending() {
+            return ScreenAction::Push(Box::new(crate::screens::backup::BackupScreen::after_open(
+                note,
+            )));
+        }
         if let Some(books) = ctx.books.as_ref() {
             self.follow(books);
         } else {

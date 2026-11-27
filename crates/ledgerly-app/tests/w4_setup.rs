@@ -19,7 +19,7 @@ use ledgerly_api::Api;
 use ledgerly_app::screens::setup::form::{
     CompanyForm, GstinCheck, KeyInput, KeyOutcome, Step, ai_notice, build_company, check_gstin,
     create_company, default_features, feature_rows, financial_year_start, gstin_allows_continue,
-    parse_books_begin, state_from_gstin, step_outcome, unsaved_notice,
+    parse_books_begin, state_from_gstin, step_outcome, store_backup_settings, unsaved_notice,
 };
 use ledgerly_core::{Clock, OffsetDateTime, Outcome, StateCode};
 use ledgerly_model::EntityKind;
@@ -235,22 +235,23 @@ fn a_company_with_a_mismatched_gstin_is_not_built() {
 
 #[test]
 fn the_steps_that_cannot_save_their_choice_say_so_on_that_step() {
-    // Keyboard preset and backup folder have no store yet (design/PARITY-GAPS.md). Each such step
-    // must say the choice is not saved; the other steps must not claim a gap. The AI step saves
-    // its tier through `Api::set_ai_tier` (the AI and privacy screen's store); only the cloud
-    // choice is refused, and `ai_notice` says so for that choice alone.
-    for step in [Step::Keyboard, Step::Backup] {
-        let notice = unsaved_notice(step);
-        assert!(
-            notice.as_deref().is_some_and(|n| n.contains("not saved")),
-            "{step:?} must say its choice is not saved, got {notice:?}"
-        );
-    }
+    // The keyboard preset has no store yet (design/PARITY-GAPS.md): that step must say the choice
+    // is not saved; the other steps must not claim a gap. The AI step saves its tier through
+    // `Api::set_ai_tier` (the AI and privacy screen's store); only the cloud choice is refused, and
+    // `ai_notice` says so for that choice alone. Round s23: the backup step stores its folder,
+    // frequency and versions (`Api::set_backup_settings`), so it moved from the first list to the
+    // second and must no longer say "not saved".
+    let notice = unsaved_notice(Step::Keyboard);
+    assert!(
+        notice.as_deref().is_some_and(|n| n.contains("not saved")),
+        "Keyboard must say its choice is not saved, got {notice:?}"
+    );
     for step in [
         Step::Welcome,
         Step::Company,
         Step::Ai,
         Step::Features,
+        Step::Backup,
         Step::Done,
     ] {
         assert_eq!(unsaved_notice(step), None, "{step:?} saves what it asks");
@@ -312,4 +313,38 @@ fn only_the_off_choice_is_silent_on_the_ai_step() {
     assert!(ai_notice(AiTier::Cloud).is_some_and(|n| n.contains("not available")));
     assert_eq!(ai_notice(AiTier::Off), None);
     assert!(ai_notice(AiTier::Local).is_some_and(|n| n.contains("not available")));
+}
+
+#[test]
+fn the_backup_step_stores_its_folder_a_daily_schedule_and_seven_versions() {
+    // provenance: derived from TallyPrime help, "Local Backup"
+    // (<https://help.tallysolutions.com/local-backup/>, read 2026-11-27): Schedule Backup's
+    // "Backup Frequency" defaults to Daily and "No. of Restorable Versions" to 7. An empty folder
+    // means the Backups folder beside the company file (`Api::default_backup_folder`).
+    let clock = Clock::Fixed(OffsetDateTime::UNIX_EPOCH);
+    let company = build_company(&godavari_form(), default_features()).unwrap();
+
+    let path = fresh_path("backup-default.ledgerly");
+    let (mut api, _) = create_company(&path, &company, clock, AiTier::Off).unwrap();
+    assert_eq!(store_backup_settings(&mut api, "  "), None);
+    drop(api);
+    let settings = Api::open(&path).unwrap().backup_settings().unwrap();
+    assert_eq!(
+        settings,
+        ledgerly_api::BackupSettings {
+            folder: None,
+            frequency: ledgerly_api::BackupFrequency::Daily,
+            keep: 7,
+        }
+    );
+
+    let path = fresh_path("backup-folder.ledgerly");
+    let folder = path.with_file_name("elsewhere");
+    let (mut api, _) = create_company(&path, &company, clock, AiTier::Off).unwrap();
+    assert_eq!(
+        store_backup_settings(&mut api, &folder.display().to_string()),
+        None
+    );
+    assert_eq!(api.backup_settings().unwrap().folder, Some(folder.clone()));
+    assert_eq!(api.backup_folder().unwrap(), folder);
 }

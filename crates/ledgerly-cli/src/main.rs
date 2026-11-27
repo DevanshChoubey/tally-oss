@@ -1,5 +1,6 @@
-//! `ledgerly` command line (card W2): import from TallyPrime, verify the audit chain, export a
-//! GST return, rebuild check, and the golden conformance cases with the ratchet.
+//! `ledgerly` command line (card W2): import from TallyPrime, verify the audit chain, back up and
+//! restore (S23), export a GST return, rebuild check, and the golden conformance cases with the
+//! ratchet.
 //!
 //! Exit codes: `0` when the command ran and its check passed; `1` when a check failed (a broken
 //! audit chain, projections that differ from the rebuild, a ratchet violation); `2` when the
@@ -18,9 +19,10 @@ use std::process::ExitCode;
 
 use anyhow::{Context, anyhow, bail};
 use clap::{Args, Parser, Subcommand};
-use ledgerly_api::{Api, RebuildOutcome, verify_file};
+use ledgerly_api::{Api, ApiError, BackupKind, RebuildOutcome, restore_backup, verify_file};
 use ledgerly_conformance::runner::{CaseStatus, check_ratchet, run_all};
 use ledgerly_core::{Date, Gstin, Outcome, Period};
+use ledgerly_store::StoreError;
 
 /// Exit code of a check that ran and failed.
 const EXIT_CHECK_FAILED: u8 = 1;
@@ -51,6 +53,28 @@ enum Cmd {
         /// The company file.
         file: PathBuf,
     },
+    /// Take a verified backup of a company file. By default into the backup folder stored for the
+    /// company (else the Backups folder beside the file); a second backup in the same second gets
+    /// its own name, and nothing is overwritten.
+    Backup(BackupArgs),
+    /// Restore a backup to a new company file and verify its audit chain. Exit 1 when the chain
+    /// of the restored file is broken (nothing is left at the target). The target must not exist.
+    Restore {
+        /// The backup file.
+        backup: PathBuf,
+        /// The new company file to write.
+        target: PathBuf,
+    },
+    /// Ask GitHub for the latest release of this project (the only network request the command
+    /// line makes, and only when this command is run). Prints the release and the SHA-256 of
+    /// each file once the release's two checksum records agree; never downloads an installer or
+    /// installs anything. Exit 0 when up to date or a release is found, 1 when the checksums
+    /// disagree or `--compare` does not match, 2 when the check could not run.
+    CheckUpdate {
+        /// A downloaded release file to compare with the release's SHA-256 for that file name.
+        #[arg(long)]
+        compare: Option<PathBuf>,
+    },
     /// Export a return from a company file.
     Export {
         /// What to export.
@@ -67,6 +91,23 @@ enum Cmd {
     /// Serve the MCP server over stdio for an AI client (spec 6.8). Read queries and
     /// `propose_voucher` only; nothing is posted.
     Mcp(McpArgs),
+}
+
+/// Arguments of `backup`.
+#[derive(Debug, Args)]
+struct BackupArgs {
+    /// The company file.
+    file: PathBuf,
+    /// Write the backup into this folder instead of the stored backup folder.
+    #[arg(long, conflicts_with = "if_due")]
+    to: Option<PathBuf>,
+    /// Take the scheduled backup only when the company's schedule says one is due, and keep the
+    /// number of scheduled backups set for it (for running from the system's task scheduler).
+    #[arg(long)]
+    if_due: bool,
+    /// List the company's backups in its backup folder, newest first, and take none.
+    #[arg(long, conflicts_with_all = ["to", "if_due"])]
+    list: bool,
 }
 
 /// Arguments of `mcp`.
@@ -169,6 +210,21 @@ fn run(cmd: &Cmd) -> anyhow::Result<ExitCode> {
             let _span = tracing::info_span!("command", name = "verify").entered();
             verify(file)
         }
+        Cmd::Backup(args) => {
+            let _span = tracing::info_span!("command", name = "backup").entered();
+            backup(args)
+        }
+        Cmd::Restore { backup, target } => {
+            let _span = tracing::info_span!("command", name = "restore").entered();
+            restore(backup, target)
+        }
+        Cmd::CheckUpdate { compare } => {
+            let _span = tracing::info_span!("command", name = "check-update").entered();
+            check_update(
+                &ledgerly_api::update_check::UpdateChecker::github(),
+                compare.as_deref(),
+            )
+        }
         Cmd::Export { what } => {
             let _span = tracing::info_span!("command", name = "export").entered();
             match what {
@@ -197,6 +253,22 @@ fn open_company(file: &Path) -> anyhow::Result<Api> {
     Api::open(file).with_context(|| format!("cannot open the company file {}", file.display()))
 }
 
+/// Opens an existing company file for a command that changes it: a file made by an older build
+/// is backed up and upgraded first (`Api::open_and_upgrade`), and what was done is printed.
+fn open_company_for_changes(file: &Path) -> anyhow::Result<Api> {
+    ensure_company_file(file)?;
+    let (api, upgrade) = Api::open_and_upgrade(file)
+        .with_context(|| format!("cannot open the company file {}", file.display()))?;
+    if let Some(report) = upgrade {
+        eprintln!(
+            "Upgraded the company file (written by {}); backup taken first: {}",
+            report.from_version,
+            report.backup.display()
+        );
+    }
+    Ok(api)
+}
+
 /// Checks that `file` exists as a file, so that no command creates a company file by accident.
 fn ensure_company_file(file: &Path) -> anyhow::Result<()> {
     if file.is_file() {
@@ -210,7 +282,7 @@ fn ensure_company_file(file: &Path) -> anyhow::Result<()> {
 }
 
 fn import_tally(args: &ImportTallyArgs) -> anyhow::Result<ExitCode> {
-    let mut api = open_company(&args.file)?;
+    let mut api = open_company_for_changes(&args.file)?;
     let outcome = api
         .import_tally_http(&args.host, args.port, &args.company)
         .with_context(|| {
@@ -241,6 +313,134 @@ fn verify(file: &Path) -> anyhow::Result<ExitCode> {
     } else {
         ExitCode::from(EXIT_CHECK_FAILED)
     })
+}
+
+fn backup(args: &BackupArgs) -> anyhow::Result<ExitCode> {
+    let api = open_company(&args.file)?;
+    if args.list {
+        let folder = api.backup_folder()?;
+        let backups = api.backups().context("cannot list the backups")?;
+        if backups.is_empty() {
+            println!("No backups of this company in {}.", folder.display());
+        }
+        for b in backups {
+            let kind = match b.kind {
+                BackupKind::Manual => "manual",
+                BackupKind::Scheduled => "scheduled",
+            };
+            println!("{}  {kind}  {}", b.taken_at, b.path.display());
+        }
+        return Ok(ExitCode::SUCCESS);
+    }
+    if args.if_due {
+        match api
+            .run_scheduled_backup()
+            .context("the scheduled backup failed")?
+        {
+            Some(taken) => {
+                println!("Backup written: {}", taken.path.display());
+                for old in taken.removed {
+                    println!("Older scheduled backup removed: {}", old.display());
+                }
+            }
+            None => println!("No scheduled backup is due for this company."),
+        }
+        return Ok(ExitCode::SUCCESS);
+    }
+    let path = match &args.to {
+        Some(folder) => api.back_up_into(folder),
+        None => api.back_up_now(),
+    }
+    .context("the backup failed; nothing was written")?;
+    println!("Backup written: {}", path.display());
+    Ok(ExitCode::SUCCESS)
+}
+
+/// `ledgerly check-update`: see [`Cmd::CheckUpdate`].
+fn check_update(
+    checker: &ledgerly_api::update_check::UpdateChecker,
+    compare: Option<&Path>,
+) -> anyhow::Result<ExitCode> {
+    use ledgerly_api::update_check::{UpdateCheck, sha256_of_file};
+    let this = env!("CARGO_PKG_VERSION");
+    match checker.check(this) {
+        UpdateCheck::UpToDate { latest } => {
+            println!("Ledgerly {this} is up to date (latest release: {latest}).");
+            Ok(ExitCode::SUCCESS)
+        }
+        UpdateCheck::Available(release) => {
+            println!(
+                "Ledgerly {} is available (this is {this}): {}",
+                release.version, release.page_url
+            );
+            println!("The release's checksums agree. SHA-256 of each file:");
+            for asset in &release.assets {
+                println!("  {}  {}", asset.sha256, asset.name);
+            }
+            println!("Nothing was downloaded or installed.");
+            let Some(file) = compare else {
+                return Ok(ExitCode::SUCCESS);
+            };
+            let name = file
+                .file_name()
+                .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+            let Some(asset) = release.assets.iter().find(|a| a.name == name) else {
+                eprintln!("{name} is not a file of release {}.", release.tag);
+                return Ok(ExitCode::from(1));
+            };
+            let actual =
+                sha256_of_file(file).with_context(|| format!("reading {}", file.display()))?;
+            if actual == asset.sha256 {
+                println!("{} matches the release: {actual}", file.display());
+                Ok(ExitCode::SUCCESS)
+            } else {
+                eprintln!(
+                    "{} does NOT match the release: it is {actual}, the release says {}. Do not run it.",
+                    file.display(),
+                    asset.sha256
+                );
+                Ok(ExitCode::from(1))
+            }
+        }
+        UpdateCheck::ChecksumsDisagree { reason } => {
+            eprintln!("The latest release is not offered: its checksums disagree. {reason}");
+            Ok(ExitCode::from(1))
+        }
+        UpdateCheck::CouldNotCheck { reason } => {
+            eprintln!("Could not check for updates: {reason}");
+            Ok(ExitCode::from(2))
+        }
+    }
+}
+
+fn restore(backup: &Path, target: &Path) -> anyhow::Result<ExitCode> {
+    if !backup.is_file() {
+        bail!(
+            "there is no backup file at {}; check the path",
+            backup.display()
+        );
+    }
+    if target.exists() {
+        bail!(
+            "{} already exists; a restore never replaces a company file, so give a new file name",
+            target.display()
+        );
+    }
+    match restore_backup(backup, target) {
+        Ok(restored) => {
+            print!("{}", restored.verify.certificate());
+            println!("Restored to {}", restored.path.display());
+            Ok(ExitCode::SUCCESS)
+        }
+        Err(ApiError::Store(StoreError::ChainBroken(seq))) => {
+            eprintln!(
+                "ledgerly: the restored file's audit chain is broken at event {}; nothing was restored. Run `ledgerly verify` on the backup for the full report.",
+                seq.0
+            );
+            Ok(ExitCode::from(EXIT_CHECK_FAILED))
+        }
+        Err(e) => Err(e).with_context(|| format!("cannot restore {}", backup.display())),
+    }
 }
 
 fn export_gstr1(args: &Gstr1Args) -> anyhow::Result<ExitCode> {

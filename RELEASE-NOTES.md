@@ -9,10 +9,10 @@ withdrawn. This release replaces them.
 
 ## What is in 1.0.0
 
-- **Companies and books:** a setup wizard and a sample company; ledgers, groups, cost centres,
-  stock items and godowns; sales, purchase, payment, receipt, journal, contra, credit note and
-  debit note vouchers; numbering, period locks, backups; an append-only event log with a hash
-  chain (`ledgerly verify` checks it).
+- **Companies and books:** a setup wizard and a sample company; ledgers, groups, cost-centre
+  masters, stock items and godown masters; sales, purchase, payment, receipt, journal, contra,
+  credit note and debit note vouchers; numbering, period locks; an append-only event log with a
+  hash chain (`ledgerly verify` checks it).
 - **Item invoices:** sales and purchase invoices with items, HSN, quantities and rates, tax worked
   out by the engine, and stock valuation.
 - **GST returns:** GSTR-1 and GSTR-1A by section with JSON export; GSTR-3B working with the set-off
@@ -34,10 +34,19 @@ withdrawn. This release replaces them.
 - **The AI assistant.** A new company starts with AI off, and the AI screens show their AI-off
   state. Nothing in this release contacts a network for AI.
 - **Printing straight to a printer.** Save as PDF, then print from your PDF viewer.
+- **Backups you can reach.** The store could write and restore backups, but no screen or command
+  did in 1.0.0 (the setup wizard's backup step did not store its choice). Use a copy of the company
+  file. Backup and restore arrive in the next release (see CHANGELOG.md, Unreleased).
+- **E-way bill.** No screen or command writes e-way bill JSON.
+- **Cost-centre allocation.** Cost-centre masters exist; a ledger that needs cost centres is
+  refused on voucher entry, and there is no cost-centre report.
+- **More than one godown on an item invoice.** A company with more than one godown cannot enter
+  item invoices yet.
 - **GSTR-3B JSON export.** The working and the set-off are on screen; no file is written.
 - **e-Invoice upload.** Ledgerly writes the JSON; you upload it on the portal.
 
-Smaller differences from the design are tracked in `design/PARITY-GAPS.md`.
+Smaller differences from the design are tracked in `design/PARITY-GAPS.md`. The list above was
+corrected after the release: it first named backups, cost centres and godowns without these limits.
 
 ## Installing (the installers are not signed)
 

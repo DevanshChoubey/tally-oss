@@ -2219,12 +2219,14 @@ dependencies = [
  "ledgerly-stock",
  "ledgerly-store",
  "ledgerly-tally-bridge",
+ "rusqlite",
  "serde_json",
  "sha2",
  "tempfile",
  "thiserror 2.0.21",
  "time",
  "tracing",
+ "ureq",
 ]
 
 [[package]]
@@ -2243,6 +2245,7 @@ dependencies = [
  "ledgerly-sample",
  "ledgerly-store",
  "rfd",
+ "rusqlite",
  "serde",
  "sha2",
  "tempfile",
@@ -2319,6 +2322,8 @@ dependencies = [
  "ledgerly-core",
  "ledgerly-mcp",
  "ledgerly-sample",
+ "ledgerly-store",
+ "rusqlite",
  "serde_json",
  "tempfile",
  "time",

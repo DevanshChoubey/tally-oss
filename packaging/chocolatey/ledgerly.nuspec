@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Chocolatey package template. scripts/fill-package-manifests.sh replaces @VERSION@ (and @SHA256@
+     in tools/chocolateyinstall.ps1) from the released installer's line in SHA256SUMS.txt. Pack with
+     `choco pack` in the filled folder and push with `choco push` (the owner's API key). -->
+<package xmlns="http://schemas.microsoft.com/packaging/2015/06/nuspec.xsd">
+  <metadata>
+    <id>ledgerly</id>
+    <version>@VERSION@</version>
+    <title>Ledgerly</title>
+    <authors>Ledgerly contributors</authors>
+    <projectUrl>https://github.com/DevanshChoubey/tally-oss</projectUrl>
+    <licenseUrl>https://github.com/DevanshChoubey/tally-oss/blob/v@VERSION@/LICENSE-AGPL</licenseUrl>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <projectSourceUrl>https://github.com/DevanshChoubey/tally-oss</projectSourceUrl>
+    <bugTrackerUrl>https://github.com/DevanshChoubey/tally-oss/issues</bugTrackerUrl>
+    <releaseNotes>https://github.com/DevanshChoubey/tally-oss/releases/tag/v@VERSION@</releaseNotes>
+    <tags>accounting gst india</tags>
+    <summary>Desktop accounting for Indian small businesses.</summary>
+    <description>Desktop accounting for Indian small businesses, with GST returns and an audit trail. The installer is downloaded from the project's GitHub release and checked against its SHA-256.</description>
+  </metadata>
+  <files>
+    <file src="tools\**" target="tools" />
+  </files>
+</package>

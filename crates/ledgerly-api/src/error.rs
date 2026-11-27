@@ -173,6 +173,17 @@ pub enum ApiError {
     /// The print crate failed on a template or a voucher it should have been able to print.
     #[error(transparent)]
     Print(#[from] ledgerly_print::template::PrintError),
+    /// A backup setting is not valid, or a stored one is not one this build reads. It is never
+    /// guessed.
+    #[error("the backup setting {key} cannot be '{value}': {reason}")]
+    BackupSetting {
+        /// The setting key.
+        key: &'static str,
+        /// The value given or stored.
+        value: String,
+        /// Why it is refused.
+        reason: String,
+    },
     /// A change was saved, but the books could not be reloaded afterwards, so figures are not
     /// computed until a command or [`crate::Api::open`] reloads them.
     #[error(

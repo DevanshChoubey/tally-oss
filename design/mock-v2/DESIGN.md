@@ -52,7 +52,7 @@ bar, the palette and direct keys.
 | Enter | Sales `F8`, Purchase `F9`, Payment `F5`, Receipt `F6`, Plain-words entry |
 | Books | Day book, Balance sheet, Masters |
 | Compliance | GST returns (GSTR-1, GSTR-3B, 2B and IMS), Bank reconciliation |
-| Settings | AI and privacy, Keyboard map `?`, Company setup |
+| Settings | AI and privacy, Keyboard map `?`, Backups and updates, Company setup |
 
 ### Command palette (`Ctrl+K`, also `Alt+G` and `Ctrl+G`)
 
