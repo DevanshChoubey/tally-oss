@@ -199,7 +199,8 @@ untracked), look at each, update `PARITY-GAPS.md`.
   corrected before it first passed (the Cloud tier needs a key and settings to be chosen).
 - Not built at the end of round s21 (reasons in PARITY-GAPS): the cloud consent and cloud bill
   read (decided, Q3); `gst.recon-explain` (decided: a typed template proposal); the
-  `bank.ai-suggestions` tab, card and capture (the sample has no line the assistant could match);
+  `bank.ai-suggestions` tab, card and capture (no room left in this round; a capture also needs a
+  sample line the assistant could match, which Godavari lacks);
   the remaining Ask, bill-photo and bank items already listed as NOT BUILT.
 - OCR model state and download (settings): committed. Mock states `ai.ai-settings.local`,
   `.local-downloading`, `.local-ready`, `.local-download-failed` were added first (hi.js
