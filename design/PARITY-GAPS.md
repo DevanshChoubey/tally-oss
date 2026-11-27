@@ -213,7 +213,9 @@ Classes:
   The mock's KSK INDORE line is an exact match in the app (same amount, same day).
 - **NOT BUILT** `bank.suggested-ledger` (a new ledger for unexplained lines).
 - **NOT BUILT** the cloud prompt for bank lines: the cloud provider refuses (`match_bank_line`'s
-  default), and with a cloud provider each unmatched line logs that refusal on every load.
+  default). A line whose read failed is not asked again with the same provider and model
+  version, so the refusal is logged once per line, not on every load (round G, tested; a read
+  cancelled or failed on the network or the key is asked again).
 - **DELIBERATE** `bank.default` shows the empty state because the fixture has no statement.
 
 ## Payment, receipt, contra, journal (`payment.*`, `receipt.*`, `contra.*`, `journal.*`)
