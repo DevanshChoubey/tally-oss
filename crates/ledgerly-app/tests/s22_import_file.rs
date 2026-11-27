@@ -53,8 +53,12 @@ fn fixture(name: &str, body: &str) -> PathBuf {
     path
 }
 
+/// The import screen with "take a backup first" answered No, so a test that is not about the
+/// backup only makes the choices it is about.
 fn screen() -> ImportScreen {
-    ImportScreen::new(date!(2026 - 11 - 27)).unwrap()
+    let mut screen = ImportScreen::new(date!(2026 - 11 - 27)).unwrap();
+    screen.set_file_backup(Some(false));
+    screen
 }
 
 fn finished(screen: &mut ImportScreen) {
@@ -607,5 +611,198 @@ fn the_drawn_error_note_is_in_hindi_under_hindi() {
         shown.iter().any(|(t, _)| t.contains(want)),
         "{:?}",
         shown.iter().map(|(t, _)| t).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn a_voucher_note_puts_the_voucher_and_the_reason_in_their_own_columns() {
+    // derived: the summary's "Read but not imported" and ignored sections are two columns, the
+    // object and what happened to it (the mock's `impFileCard` result table). A voucher's object
+    // is "<type> voucher <number> dated <date>" (`voucher_label`), which has no quoted name, so
+    // the reason must not be left in the object column. The second import with overwrite off
+    // warns that the GUID is in the books ("a duplicate voucher gets created":
+    // https://help.tallysolutions.com/import-data-faq/, read 2026-11-27).
+    let worker = ApiWorker::spawn(sample("s22-file-columns.ledgerly")).unwrap();
+    let masters = fixture("s22-file-columns-masters.xml", MASTERS);
+    let payment = fixture("s22-file-columns-payment.xml", PAYMENT);
+    let mut screen = screen();
+    screen.set_file_form(
+        Some(FileKind::Masters),
+        &masters.display().to_string(),
+        Some(MasterBehaviour::IgnoreDuplicates),
+    );
+    screen.start_file_import(Some(&worker));
+    finished(&mut screen);
+    for _ in 0..2 {
+        screen.set_file_form(
+            Some(FileKind::Transactions),
+            &payment.display().to_string(),
+            None,
+        );
+        screen.start_file_import(Some(&worker));
+        finished(&mut screen);
+    }
+    let sections = screen.file_note_rows();
+    let warnings = sections
+        .iter()
+        .find(|(key, _)| *key == "import.file.warnings")
+        .map(|(_, rows)| rows.clone())
+        .unwrap();
+    assert_eq!(
+        warnings,
+        vec![(
+            "Payment voucher (no number) dated 2026-11-25".to_owned(),
+            "a voucher with the same GUID is in the books; with overwrite off it is posted again \
+             as a duplicate"
+                .to_owned()
+        )]
+    );
+}
+
+#[test]
+fn alt_o_on_the_import_screen_goes_back_to_the_file_form() {
+    // derived: Alt+O (Import) asks for the file ("Alt+O (Import) > Masters", then the file path:
+    // https://help.tallysolutions.com/import-data-from-xml-or-json/, read 2026-11-27). Pressed on
+    // the import screen it must do the same as from any other screen, not nothing: the file form
+    // comes back into view with the keyboard in the path, so the key bar's Enter imports the file.
+    let ctx = egui::Context::default();
+    let mut shell = Shell::new(Box::new(GatewayScreen::new()));
+    shell.app_ctx_mut().api = Some(ApiWorker::spawn(sample("s22-alt-o-again.ledgerly")).unwrap());
+    submit::note_changed();
+    let start = Instant::now();
+    while shell.app_ctx_mut().books.is_none() {
+        frame(&ctx, &mut shell, Vec::new());
+        assert!(start.elapsed() < Duration::from_secs(10), "books arrive");
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    shell
+        .tabs_mut()
+        .active_stack_mut()
+        .unwrap()
+        .push(Box::new(screen()));
+    for _ in 0..3 {
+        frame(&ctx, &mut shell, Vec::new());
+    }
+    let tr = ledgerly_app::i18n::Tr::default();
+    let enter = |shell: &mut Shell| {
+        shell
+            .tabs_mut()
+            .active_stack_mut()
+            .unwrap()
+            .top_mut()
+            .unwrap()
+            .keys(&tr)
+            .into_iter()
+            .find(|h| h.keys == "Enter")
+            .map(|h| h.label)
+    };
+    assert_eq!(enter(&mut shell).as_deref(), Some("Import the company"));
+    let alt_o = Event::Key {
+        key: Key::O,
+        physical_key: None,
+        pressed: true,
+        repeat: false,
+        modifiers: Modifiers::ALT,
+    };
+    frame(&ctx, &mut shell, vec![alt_o]);
+    for _ in 0..3 {
+        frame(&ctx, &mut shell, Vec::new());
+    }
+    assert_eq!(
+        shell.tabs().active_stack().unwrap().depth(),
+        2,
+        "no second import screen"
+    );
+    assert_eq!(enter(&mut shell).as_deref(), Some("Import the file"));
+}
+
+#[test]
+fn ctrl_alt_o_is_not_import_on_any_screen() {
+    // derived: bill reading moved to Ctrl+Alt+O so that Alt+O is Import on every screen (s21;
+    // help.tallysolutions.com/keyboard-shortcuts-tally-prime/, read 2026-11-27, lists Alt+O as
+    // Import and no Ctrl+Alt+O). A screen that does not take Ctrl+Alt+O must not see it fire
+    // Import, so the keymap matches the modifiers exactly.
+    use ledgerly_app::keymap::{Chord, classic, standard};
+    let ctrl_alt_o = Chord::key(Key::O).with_alt().with_ctrl();
+    assert_eq!(classic().action_for(ctrl_alt_o), None);
+    assert_eq!(standard().action_for(ctrl_alt_o), None);
+    let ctx = egui::Context::default();
+    let mut shell = Shell::new(Box::new(GatewayScreen::new()));
+    shell.app_ctx_mut().api = Some(ApiWorker::spawn(sample("s22-ctrl-alt-o.ledgerly")).unwrap());
+    submit::note_changed();
+    let start = Instant::now();
+    while shell.app_ctx_mut().books.is_none() {
+        frame(&ctx, &mut shell, Vec::new());
+        assert!(start.elapsed() < Duration::from_secs(10), "books arrive");
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    let before = shell.top_key_bar_name();
+    let key = Event::Key {
+        key: Key::O,
+        physical_key: None,
+        pressed: true,
+        repeat: false,
+        modifiers: Modifiers::ALT | Modifiers::COMMAND,
+    };
+    frame(&ctx, &mut shell, vec![key]);
+    frame(&ctx, &mut shell, Vec::new());
+    assert_eq!(shell.top_key_bar_name(), before);
+    assert_ne!(shell.top_key_bar_name(), "Import from another app");
+}
+
+#[test]
+fn the_form_asks_whether_to_back_up_first_and_runs_nothing_until_answered() {
+    // derived: "Select Yes to take a backup of the company data before importing"
+    // (https://help.tallysolutions.com/import-data-from-xml-or-json/, read 2026-11-27): the
+    // import asks, and no answer is made for the user (the help states no default).
+    let worker = ApiWorker::spawn(sample("s22-file-backup-ask.ledgerly")).unwrap();
+    let path = fixture("s22-file-backup-ask.xml", MASTERS);
+    let mut screen = ImportScreen::new(date!(2026 - 11 - 27)).unwrap();
+    screen.set_file_form(
+        Some(FileKind::Masters),
+        &path.display().to_string(),
+        Some(MasterBehaviour::IgnoreDuplicates),
+    );
+    screen.start_file_import(Some(&worker));
+    assert_eq!(
+        failed(&screen),
+        "choose whether to take a backup of the company data first"
+    );
+}
+
+#[test]
+fn yes_takes_a_backup_before_the_import_and_says_where() {
+    // derived: as above; with Yes the backup is written before anything is imported, into the
+    // Backups folder beside the company file (`ledgerly_api::BACKUP_FOLDER`; the help names no
+    // folder), and the result says where it is.
+    let company = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("s22-file-backup-yes");
+    let _removed = std::fs::remove_dir_all(&company);
+    std::fs::create_dir_all(&company).unwrap();
+    let api = ledgerly_sample::create(
+        &company.join("sample.ledgerly"),
+        Clock::Fixed(OffsetDateTime::UNIX_EPOCH),
+    )
+    .unwrap();
+    let worker = ApiWorker::spawn(api).unwrap();
+    let path = fixture("s22-file-backup-yes.xml", MASTERS);
+    let mut screen = ImportScreen::new(date!(2026 - 11 - 27)).unwrap();
+    screen.set_file_form(
+        Some(FileKind::Masters),
+        &path.display().to_string(),
+        Some(MasterBehaviour::IgnoreDuplicates),
+    );
+    screen.set_file_backup(Some(true));
+    screen.start_file_import(Some(&worker));
+    finished(&mut screen);
+    let FileImportState::Imported(summary) = screen.file_state() else {
+        panic!("imported, got {:?}", screen.file_state());
+    };
+    let backup = summary.backup.clone().unwrap();
+    assert_eq!(backup.parent(), Some(company.join("Backups").as_path()));
+    assert!(backup.is_file());
+    let lines = screen.file_lines();
+    assert_eq!(
+        lines[1],
+        format!("Backup taken first: {}", backup.display())
     );
 }

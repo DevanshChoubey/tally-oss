@@ -1720,6 +1720,8 @@ struct FileImportWords {
     transactions: &'static str,
     ignore: &'static str,
     guid_yes: &'static str,
+    backup_yes: &'static str,
+    backup_no: &'static str,
     run: &'static str,
     missing_choice: &'static str,
     imported: &'static str,
@@ -1734,6 +1736,8 @@ const FILE_IMPORT_EN: FileImportWords = FileImportWords {
     transactions: "Transactions (vouchers)",
     ignore: "Ignore duplicates: keep the existing master as it is",
     guid_yes: "Overwrite the voucher in the company with the file's",
+    backup_yes: "Yes: back up the company first, into the Backups folder beside the company file",
+    backup_no: "No: import without a backup",
     run: "Import the file",
     missing_choice: "Error: choose what to do with a master that is already in the company",
     imported: "Masters: 2 created, 0 altered, 0 combined, 0 ignored, 1 not imported.",
@@ -1748,6 +1752,8 @@ const FILE_IMPORT_HI: FileImportWords = FileImportWords {
     transactions: "लेन-देन (वाउचर)",
     ignore: "दोहराव छोड़ें: मौजूदा मास्टर जैसा है वैसा रखें",
     guid_yes: "कंपनी के वाउचर को फ़ाइल के वाउचर से बदलें",
+    backup_yes: "हाँ: पहले कंपनी का बैकअप लें, कंपनी फ़ाइल के पास के Backups फ़ोल्डर में",
+    backup_no: "नहीं: बिना बैकअप के आयात करें",
     run: "फ़ाइल आयात करें",
     missing_choice: "त्रुटि: चुनें कि कंपनी में पहले से मौजूद मास्टर का क्या करें",
     imported: "मास्टर: 2 बने, 0 बदले, 0 जोड़े, 0 छोड़े, 1 आयात नहीं हुए।",
@@ -1768,6 +1774,7 @@ fn file_import_shots(w: &FileImportWords) -> Vec<Shot> {
             .lang(w.lang)
             .click_named(w.masters)
             .click_named(w.ignore)
+            .click_named(w.backup_no)
             .script_file(ScriptedFile::LedgersFromOldApp)
             .press(&[(Key::O, Modifiers::COMMAND)]),
         check(
@@ -1785,6 +1792,7 @@ fn file_import_shots(w: &FileImportWords) -> Vec<Shot> {
                 .lang(w.lang)
                 .click_named(w.masters)
                 .click_named(w.ignore)
+                .click_named(w.backup_no)
                 .script_file(ScriptedFile::LedgersFromOldApp)
                 .press(&[(Key::O, Modifiers::COMMAND)])
                 .click_named(w.run)
@@ -1795,6 +1803,7 @@ fn file_import_shots(w: &FileImportWords) -> Vec<Shot> {
             .lang(w.lang)
             .click_named(w.masters)
             .click_named(w.ignore)
+            .click_named(w.backup_no)
             .script_file(ScriptedFile::NotXml)
             .press(&[(Key::O, Modifiers::COMMAND)])
             .click_named(w.run)
@@ -1803,6 +1812,7 @@ fn file_import_shots(w: &FileImportWords) -> Vec<Shot> {
         shot(id("transactions"), &alt_o)
             .lang(w.lang)
             .click_named(w.transactions)
+            .click_named(w.backup_no)
             .script_file(ScriptedFile::VouchersFromOldApp)
             .press(&[(Key::O, Modifiers::COMMAND)]),
         // The masters first (Hamali Charges is not in the sample), then the payment twice with
@@ -1812,10 +1822,14 @@ fn file_import_shots(w: &FileImportWords) -> Vec<Shot> {
                 .lang(w.lang)
                 .click_named(w.masters)
                 .click_named(w.ignore)
+                .click_named(w.backup_no)
                 .script_file(ScriptedFile::LedgersFromOldApp)
                 .press(&[(Key::O, Modifiers::COMMAND)])
                 .click_named(w.run)
                 .wait(60)
+                // Alt+O on the import screen goes back to the top of the file form.
+                .press(&alt_o)
+                .wait(5)
                 .click_named(w.transactions)
                 .click_named(w.guid_yes)
                 .script_file(ScriptedFile::VouchersFromOldApp)
@@ -1825,6 +1839,19 @@ fn file_import_shots(w: &FileImportWords) -> Vec<Shot> {
                 .click_named(w.run)
                 .wait(60),
             w.overwritten,
+        ),
+        // Yes to the backup: the company is copied into Backups beside it before the import.
+        check(
+            shot(id("backed-up"), &alt_o)
+                .lang(w.lang)
+                .click_named(w.masters)
+                .click_named(w.ignore)
+                .click_named(w.backup_yes)
+                .script_file(ScriptedFile::LedgersFromOldApp)
+                .press(&[(Key::O, Modifiers::COMMAND)])
+                .click_named(w.run)
+                .wait(60),
+            w.imported,
         ),
     ]
 }

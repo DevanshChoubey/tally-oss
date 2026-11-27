@@ -1171,3 +1171,77 @@ mod props {
         }
     }
 }
+
+// S22 round 3: a bill message names the ledger as the user knows it (its name, not its id) and
+// writes amounts as the app writes money (Indian grouping, two decimals).
+// provenance: derived. DEBTOR is ledger 10 named "Debtor A" in `empty_books`; Rs 10,000 open and
+// Rs 12,000 settling are 10,000.00 and 12,000.00 in that format.
+
+#[test]
+fn a_duplicate_bill_message_names_the_ledger() {
+    let inv = invoice(
+        1,
+        date!(2026 - 04 - 10),
+        DEBTOR,
+        BillRefKind::New,
+        "INV-1",
+        rs(10_000),
+    );
+    let books = with(empty_books(), vec![inv]);
+    let again = invoice(
+        2,
+        date!(2026 - 04 - 11),
+        DEBTOR,
+        BillRefKind::New,
+        "INV-1",
+        rs(5_000),
+    );
+    let e = validate_bill_refs(&again, &books).unwrap_err();
+    assert_eq!(
+        e.to_string(),
+        "bill 'INV-1' on ledger 'Debtor A' already exists"
+    );
+}
+
+#[test]
+fn a_missing_bill_message_names_the_ledger() {
+    let r = receipt(
+        1,
+        date!(2026 - 04 - 20),
+        DEBTOR,
+        BillRefKind::Against,
+        "NOPE",
+        rs(1_000),
+    );
+    let e = validate_bill_refs(&r, &empty_books()).unwrap_err();
+    assert_eq!(
+        e.to_string(),
+        "bill 'NOPE' on ledger 'Debtor A' does not exist"
+    );
+}
+
+#[test]
+fn an_over_settle_message_writes_amounts_as_money() {
+    let inv = invoice(
+        1,
+        date!(2026 - 04 - 10),
+        DEBTOR,
+        BillRefKind::New,
+        "INV-1",
+        rs(10_000),
+    );
+    let books = with(empty_books(), vec![inv]);
+    let r = receipt(
+        2,
+        date!(2026 - 04 - 20),
+        DEBTOR,
+        BillRefKind::Against,
+        "INV-1",
+        rs(12_000),
+    );
+    let e = validate_bill_refs(&r, &books).unwrap_err();
+    assert_eq!(
+        e.to_string(),
+        "bill 'INV-1' has 10,000.00 open; 12,000.00 would over-settle it"
+    );
+}

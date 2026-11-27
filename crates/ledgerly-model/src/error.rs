@@ -1,11 +1,16 @@
+use ledgerly_core::format::format_inr;
 use ledgerly_core::{Date, LedgerId, MoneyError, Paise, VoucherTypeId};
 use thiserror::Error;
 
 /// Why a voucher fails the store-free invariants (spec 5).
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum VoucherError {
-    /// Debits and credits differ.
-    #[error("voucher does not balance: debits {dr:?}, credits {cr:?}")]
+    /// Debits and credits differ. The message writes both totals as the app writes money.
+    #[error(
+        "voucher does not balance: debits {}, credits {}",
+        format_inr(*.dr),
+        format_inr(*.cr)
+    )]
     Unbalanced {
         /// Total debits.
         dr: Paise,
@@ -14,7 +19,12 @@ pub enum VoucherError {
     },
     /// Bill allocations on a line do not add up to the line.
     /// The message names the line as people count, from 1.
-    #[error("bill allocations on line {} total {allocated:?}, the line is {expected:?}", line.saturating_add(1))]
+    #[error(
+        "bill allocations on line {} total {}, the line is {}",
+        line.saturating_add(1),
+        format_inr(*.allocated),
+        format_inr(*.expected)
+    )]
     BillAllocationMismatch {
         /// Line index (0-based).
         line: usize,

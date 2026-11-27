@@ -63,6 +63,9 @@ pub struct VoucherBehaviour {
     pub overwrite_same_guid: bool,
 }
 
+/// The folder, beside the company file, that a backup taken before an import goes into.
+pub const BACKUP_FOLDER: &str = "Backups";
+
 /// One object that was not imported, and why.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ImportException {
@@ -70,6 +73,32 @@ pub struct ImportException {
     pub object: String,
     /// Why it was not imported.
     pub reason: String,
+}
+
+/// A note on one object of the file: an object left as it was, or a field read but not imported.
+/// The object and the note are kept apart so a screen can show them in two columns.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ImportNote {
+    /// The object or place, such as `ledger 'Kumar Textiles'`,
+    /// `Sales voucher SO-12 dated 2026-10-05` or `offset 120`.
+    pub object: String,
+    /// What happened to it.
+    pub note: String,
+}
+
+impl ImportNote {
+    fn new(object: impl Into<String>, note: impl Into<String>) -> Self {
+        Self {
+            object: object.into(),
+            note: note.into(),
+        }
+    }
+}
+
+impl fmt::Display for ImportNote {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}: {}", self.object, self.note)
+    }
 }
 
 /// What a file import did, for the user to read. Every exception is listed.
@@ -91,10 +120,14 @@ pub struct FileImportSummary {
     pub errors: usize,
     /// Every object not imported, in the order met.
     pub exceptions: Vec<ImportException>,
-    /// Every object ignored, as `object: reason`.
-    pub ignored_notes: Vec<String>,
-    /// Fields that were read but not imported, and the reader's warnings, as `place: message`.
-    pub warnings: Vec<String>,
+    /// Every object ignored, with why.
+    pub ignored_notes: Vec<ImportNote>,
+    /// Fields that were read but not imported, and the reader's warnings, each with its object
+    /// or place in the file.
+    pub warnings: Vec<ImportNote>,
+    /// The backup of the company taken before the import, when one was asked for
+    /// ([`Api::back_up_and_import_tally_xml_file`]).
+    pub backup: Option<PathBuf>,
 }
 
 impl fmt::Display for FileImportSummary {
@@ -132,6 +165,7 @@ impl FileImportSummary {
             exceptions: Vec::new(),
             ignored_notes: Vec::new(),
             warnings: Vec::new(),
+            backup: None,
         }
     }
 
@@ -154,6 +188,34 @@ enum Applied {
 }
 
 impl Api {
+    /// Takes a backup of the company, then imports the file as
+    /// [`Api::import_tally_xml_file`] does. The import screen asks whether to take one first:
+    /// "Select Yes to take a backup of the company data before importing"
+    /// (<https://help.tallysolutions.com/import-data-from-xml-or-json/>, read 2026-11-27). The
+    /// backup goes into the `Backups` folder beside the company file ([`BACKUP_FOLDER`]; the
+    /// help names no folder) and its path is in [`FileImportSummary::backup`].
+    ///
+    /// # Errors
+    /// [`ApiError::Store`] when the backup cannot be written or does not verify: nothing is
+    /// imported. Then as [`Api::import_tally_xml_file`].
+    pub fn back_up_and_import_tally_xml_file(
+        &mut self,
+        what: XmlImport,
+        path: &Path,
+    ) -> Result<Outcome<FileImportSummary>, ApiError> {
+        let folder = self
+            .store()
+            .path()
+            .parent()
+            .unwrap_or_else(|| Path::new("."))
+            .join(BACKUP_FOLDER);
+        let backup = self.backup_to(&folder)?;
+        Ok(self.import_tally_xml_file(what, path)?.map(|mut summary| {
+            summary.backup = Some(backup);
+            summary
+        }))
+    }
+
     /// Imports the masters or transactions in the XML file at `path` into the open company. See
     /// the module docs for the rules.
     ///
@@ -183,14 +245,22 @@ impl Api {
             XmlImport::Masters(behaviour) => {
                 let contents = read_masters(&bytes).map_err(failed);
                 contents.and_then(|c| {
-                    summary.warnings.extend(c.warnings);
+                    summary.warnings.extend(
+                        c.warnings
+                            .into_iter()
+                            .map(|w| ImportNote::new(format!("offset {}", w.offset), w.message)),
+                    );
                     self.import_masters(&c.items, behaviour, &mut summary)
                 })
             }
             XmlImport::Transactions(behaviour) => {
                 let contents = read_vouchers(&bytes).map_err(failed);
                 contents.and_then(|c| {
-                    summary.warnings.extend(c.warnings);
+                    summary.warnings.extend(
+                        c.warnings
+                            .into_iter()
+                            .map(|w| ImportNote::new(format!("offset {}", w.offset), w.message)),
+                    );
                     self.import_vouchers(&c.items, behaviour, &mut summary)
                 })
             }
@@ -283,7 +353,7 @@ impl Api {
         let (command, applied) = match plan.step {
             MasterStep::Ignore(why) => {
                 summary.ignored = summary.ignored.saturating_add(1);
-                summary.ignored_notes.push(format!("{object}: {why}"));
+                summary.ignored_notes.push(ImportNote::new(object, why));
                 return Ok(());
             }
             MasterStep::CreateGroup(g) => (Command::CreateGroup(g), Applied::Created),
@@ -299,9 +369,11 @@ impl Api {
             ),
         };
         if self.run(command, object.clone(), applied, summary)? {
-            summary
-                .warnings
-                .extend(plan.dropped.into_iter().map(|d| format!("{object}: {d}")));
+            summary.warnings.extend(
+                plan.dropped
+                    .into_iter()
+                    .map(|d| ImportNote::new(object.clone(), d)),
+            );
         }
         Ok(())
     }
@@ -334,9 +406,10 @@ impl Api {
                 (true, [.., last]) | (false, [_, .., last]) => Some(*last),
             };
             if target.is_none() && !same_guid.is_empty() {
-                summary.warnings.push(format!(
-                    "{object}: a voucher with the same GUID is in the books; with overwrite off \
-                     it is posted again as a duplicate"
+                summary.warnings.push(ImportNote::new(
+                    object.clone(),
+                    "a voucher with the same GUID is in the books; with overwrite off it is \
+                     posted again as a duplicate",
                 ));
             }
             let id = if let Some(existing) = target {
@@ -372,9 +445,11 @@ impl Api {
                 None => (Command::PostVoucher(voucher), Applied::Created),
             };
             if self.run(command, object.clone(), applied, summary)? {
-                summary
-                    .warnings
-                    .extend(dropped.into_iter().map(|d| format!("{object}: {d}")));
+                summary.warnings.extend(
+                    dropped
+                        .into_iter()
+                        .map(|d| ImportNote::new(object.clone(), d)),
+                );
             }
         }
         Ok(())

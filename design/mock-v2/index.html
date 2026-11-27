@@ -406,6 +406,7 @@ mark{background:var(--accent-soft);color:var(--accent-ink);border-radius:2px;pad
  {"id":"hi.import.file-error","kind":"error","hash":"screen=import&state=file-error&lang=hi","title":"Import from a file, not an XML file, Hindi","description":"The unreadable file in Hindi; the engine's reason stays as written."},
  {"id":"hi.import.file-transactions","kind":"happy","hash":"screen=import&state=file-transactions&lang=hi","title":"Import from a file, transactions chosen, Hindi","description":"The GUID choice in Hindi."},
  {"id":"hi.import.file-overwritten","kind":"happy","hash":"screen=import&state=file-overwritten&lang=hi","title":"Import from a file, imported again with overwrite, Hindi","description":"The summary line in Hindi; the file path stays as written."},
+ {"id":"hi.import.file-backed-up","kind":"happy","hash":"screen=import&state=file-backed-up&lang=hi","title":"Import from a file, backed up first, Hindi","description":"The backup line in Hindi; the paths stay as written."},
  {"id":"hi.payment.account-list","kind":"happy","hash":"screen=payment&state=account-list&lang=hi","title":"Payment, account list open, Hindi","description":"The payment's cash and bank account list in Hindi."},
  {"id":"hi.setup.welcome","kind":"happy","hash":"screen=setup&state=welcome&lang=hi","title":"First run, welcome, Hindi","description":"The welcome screen in Hindi."},
  {"id":"home.loading","kind":"loading","hash":"screen=home&state=loading","title":"Home, company opening","description":"Skeleton rows while the company file opens and projections load; no figure is shown until the engine returns it."},
@@ -539,6 +540,7 @@ mark{background:var(--accent-soft);color:var(--accent-ink);border-radius:2px;pad
 {"id":"import.file-error","kind":"error","hash":"screen=import&state=file-error","title":"Import from a file, not an XML file","description":"The file is not an XML document: the error names the file and the cause, and nothing is imported."},
 {"id":"import.file-transactions","kind":"happy","hash":"screen=import&state=file-transactions","title":"Import from a file, transactions chosen","description":"Transactions chosen: the choice for a voucher whose GUID is already in the company, Do not overwrite picked as the default, and the file path filled; Enter imports the file."},
 {"id":"import.file-overwritten","kind":"happy","hash":"screen=import&state=file-overwritten","title":"Import from a file, imported again with overwrite","description":"The same vouchers file imported a second time with Overwrite chosen: the voucher in the company is altered, not doubled."},
+{"id":"import.file-backed-up","kind":"happy","hash":"screen=import&state=file-backed-up","title":"Import from a file, backed up first","description":"Yes chosen for the backup before importing: the company is copied into the Backups folder beside the company file first, and the summary says where the copy is."},
 {"id":"import.failed","kind":"error","hash":"screen=import&state=failed","title":"Import, failed with a reason","description":"The other app could not be read; the error names the company, the host and port, and the cause. Nothing is written."},
 {"id":"setup.new-tab","kind":"happy","hash":"screen=setup&state=welcome&tabs=2","title":"Cold start, new tab","description":"Ctrl+T with no company open opens a second Company setup tab; the tab strip shows both and New tab and Close tab."},
 {"id":"setup.rail","kind":"happy","hash":"screen=setup&state=welcome&rail=1","title":"Cold start, sidebar collapsed to the rail","description":"Ctrl+\\ folds the sidebar to its 60 px rail: icons only, labels hidden."},
@@ -1092,7 +1094,7 @@ function translateDom(lang){
   const tr=t=>{const k=t.trim();if(!k)return t;if(W[k])return t.replace(k,W[k]);
     return t.replace(dre,(m,d,mo,y)=>d+' '+(M[mo]||mo)+' '+y).replace(mre,m=>F[m]||m)};
   const w=document.createTreeWalker(document.body,NodeFilter.SHOW_TEXT);let n;
-  while((n=w.nextNode())){if(n.parentNode&&/^(SCRIPT|STYLE)$/.test(n.parentNode.nodeName))continue;const v=tr(n.nodeValue);if(v!==n.nodeValue)n.nodeValue=v}
+  while((n=w.nextNode())){if(n.parentNode&&/^(SCRIPT|STYLE|KBD)$/.test(n.parentNode.nodeName))continue;/* a keycap names the key as printed: Enter stays Enter */const v=tr(n.nodeValue);if(v!==n.nodeValue)n.nodeValue=v}
   for(const el of document.querySelectorAll('[title],[placeholder],[aria-label]'))for(const a of['title','placeholder','aria-label']){const v=el.getAttribute(a);if(v){const t=tr(v);if(t!==v)el.setAttribute(a,t)}}
 }
 function render(){
@@ -2766,6 +2768,7 @@ function impNote(kind,text){const cls={bad:'bad',ok:'ok',info:''}[kind];const ic
    none is preselected. The imported state is the app's own text for the fictional fixture of
    crates/ledgerly-app/tests/s22_import_file.rs (Meena Fabrics, Hamali Charges, Lost Ledger), imported into the sample. */
 const IMP_FILE_PATH='/home/ananya/Documents/ledgers-from-old-app.xml';
+const IMP_BACKUP_PATH='/home/ananya/Documents/Ledgerly/Backups/godavari-drip-pump-works-backup-20261121T103000Z.ledgerly';
 function impChoice(label,sel,dis){return `<button role="radio" aria-checked="${sel}" ${dis?'disabled':''} style="display:block;width:100%;text-align:left;height:36px;padding:0 12px;margin-bottom:4px;font:inherit;font-size:var(--t-body);cursor:pointer;border-radius:var(--r-s);${sel?'background:var(--accent-soft);border:calc(var(--bw) + 1px) solid var(--accent);color:var(--accent-ink);font-weight:600':'background:var(--surface);border:var(--bw) solid var(--border);color:var(--text)'}">${esc(label)}</button>`}
 /* the app's own en/hi text for an import.file.* key (gen-hi.py copies them into hi.js), so the summary and
    error lines read in Hindi as the app's do (S22). An unknown key shows itself, so a gap is seen. */
@@ -2776,7 +2779,7 @@ function impT(key,vars){const e=((window.HI||{}).keys||{})[key];let s=e?(parseHa
    PAYMENT fixture of s22_import_file.rs (Hamali Charges paid in cash, GUID g-app-pay-1) imported a second time
    with overwrite Yes: the voucher in the company is altered, not doubled. */
 function impFileCard(fs,noCo){
-  const masters = fs==='masters'||fs==='imported'||fs==='missing-choice'||fs==='error';
+  const masters = fs==='masters'||fs==='imported'||fs==='missing-choice'||fs==='error'||fs==='backed-up';
   const vouchers = fs==='transactions'||fs==='overwritten';
   const beh = fs==='missing-choice'?'':(masters?'ignore':'');
   const file = fs==='error'?'notes.xml':vouchers?'vouchers-from-old-app.xml':'ledgers-from-old-app.xml';
@@ -2791,12 +2794,18 @@ function impFileCard(fs,noCo){
     <div style="margin-top:12px"><b>${esc(impT('import.file.exceptions',{count:1}))}</b></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:4px"><div>ledger 'Lost Ledger'</div><div class="t2">its parent group 'No Such Group' is not in the company or the file</div></div>`;
   if(fs==='overwritten') res=impNote('ok',sum('import.file.what_transactions',0,1,0,0,0)+'\n'+path);
+  if(fs==='backed-up') res=`<div class="note warn" role="status" style="margin-top:12px">${ic('alert')}<div style="white-space:pre-line">${esc(sum('import.file.what_masters',2,0,0,0,1)+'\n'+impT('import.file.backup_taken',{path:IMP_BACKUP_PATH})+'\n'+path)}</div></div>
+    <div style="margin-top:12px"><b>${esc(impT('import.file.exceptions',{count:1}))}</b></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:4px"><div>ledger 'Lost Ledger'</div><div class="t2">its parent group 'No Such Group' is not in the company or the file</div></div>`;
+  /* S22 round 3: "Select Yes to take a backup of the company data before importing" (help.tallysolutions.com/import-data-from-xml-or-json/, read 2026-11-27); no default is documented, so nothing is picked until the user answers. */
+  const backup = fs==='backed-up'?'yes':(fs&&fs!=='missing-choice'?'no':'');
   return `<div class="card pad" style="margin-top:12px" id="imp-file"><h2>Import from an XML file</h2><p class="meta">Masters or vouchers from an XML file in your previous accounting app's import format, into the company that is open. Each object is checked as if typed in; anything that cannot go in is listed with the reason.</p>
     ${noCo?`<div class="note warn" role="status" style="margin-top:8px">${ic('alert')}<div>Importing from a file needs an open company. Create or open one, then press Alt+O.</div></div>`:''}
     <div class="fld" style="margin-top:10px"><label>What to import</label></div>
     <div role="radiogroup" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">${impChoice('Masters (groups and ledgers)',masters,dis)}${impChoice('Transactions (vouchers)',vouchers,dis)}</div>
     ${masters?`<div class="fld" style="margin-top:8px"><label>When a master is already in the company</label></div><div role="radiogroup">${behs.map(([k,l])=>impChoice(l,beh===k,dis)).join('')}</div>`:''}
-    ${vouchers?`<div class="fld" style="margin-top:8px"><label>When a voucher with the same GUID is in the company</label></div><div role="radiogroup">${impChoice('Do not overwrite: import it as a new voucher (a later import overwrites that copy)',fs!=='overwritten',dis)}${impChoice("Overwrite the voucher in the company with the file's",fs==='overwritten',dis)}</div>`:''}
+    ${vouchers?`<div class="fld" style="margin-top:8px"><label>When a voucher with the same GUID is in the company</label></div><div role="radiogroup">${impChoice('Do not overwrite: import it as a new voucher (a later import overwrites that copy)',fs!=='overwritten',dis)}${impChoice("Overwrite the voucher in the company with the file's",fs==='overwritten',dis)}</div><p class="meta" style="margin-top:6px">To import the same file again without doubling its vouchers, choose Overwrite. With Do not overwrite, every voucher in the file is posted again.</p>`:''}
+    ${masters||vouchers?`<div class="fld" style="margin-top:8px"><label>Take a backup of the company data before importing</label></div><div role="radiogroup">${impChoice('Yes: back up the company first, into the Backups folder beside the company file',backup==='yes',dis)}${impChoice('No: import without a backup',backup==='no',dis)}</div>`:''}
     <div class="fld" style="margin-top:8px"><label>XML file</label><div style="display:flex;gap:8px"><input style="flex:1" value="${esc(path)}" placeholder="path of the XML file" ${dis?'disabled':''}><button class="btn" ${dis?'disabled':''}>${ic('file')}Choose file ${kb('Ctrl+O')}</button></div></div>
     <div class="actions" style="margin-top:10px"><button class="btn primary" ${dis?'disabled':''}>${ic('upload')}Import the file</button></div>${res}</div>`;
 }

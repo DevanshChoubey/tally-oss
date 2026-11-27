@@ -101,10 +101,15 @@ impl ImportScreen {
     /// As [`ImportScreen::new`].
     pub fn for_file(today: Date) -> Result<Self, PeriodError> {
         let mut screen = Self::new(today)?;
-        screen.file.reveal = 3;
-        screen.file.focus_path = true;
-        screen.file.active = true;
+        screen.go_to_file_form();
         Ok(screen)
+    }
+
+    /// Scrolls to the import from a file and puts the keyboard in its path, as Alt+O does.
+    fn go_to_file_form(&mut self) {
+        self.file.reveal = 3;
+        self.file.focus_path = true;
+        self.file.active = true;
     }
 
     /// Sets the form of the import from a file: what the file holds, its path, and what to do
@@ -118,6 +123,12 @@ impl ImportScreen {
         self.file.kind = kind;
         path.clone_into(&mut self.file.path);
         self.file.behaviour = behaviour;
+    }
+
+    /// Answers "Take a backup of the company data before importing" for the import from a file
+    /// (`None`: not answered, and the import waits for an answer).
+    pub fn set_file_backup(&mut self, backup: Option<bool>) {
+        self.file.backup = backup;
     }
 
     /// Sets "Overwrite voucher when a voucher with same GUID exists" for a transactions file
@@ -143,6 +154,21 @@ impl ImportScreen {
     #[must_use]
     pub fn file_lines(&self) -> Vec<String> {
         state_lines(&self.file.state)
+    }
+
+    /// The notes of a finished import from a file as the screen draws them: each section's
+    /// title key (`import.file.exceptions`, `import.file.ignored`, `import.file.warnings`) with
+    /// its rows, a row being the object (left column) and what happened to it (right column).
+    /// Empty before an import has finished.
+    #[must_use]
+    pub fn file_note_rows(&self) -> Vec<(&'static str, Vec<(String, String)>)> {
+        match &self.file.state {
+            FileImportState::Imported(summary) => super::file::note_sections(summary).to_vec(),
+            FileImportState::Idle
+            | FileImportState::Running
+            | FileImportState::Refused(_)
+            | FileImportState::Failed(_) => Vec::new(),
+        }
     }
 
     /// The state machine, for the host to read.
@@ -358,6 +384,15 @@ const COLUMN_MAX_WIDTH: f32 = 980.0;
 impl Screen for ImportScreen {
     fn title(&self, tr: &Tr) -> String {
         tr.t("import.title")
+    }
+
+    fn reopen(&mut self, action: crate::keymap::Action) -> bool {
+        if action == crate::keymap::Action::ImportFile {
+            self.go_to_file_form();
+            true
+        } else {
+            false
+        }
     }
 
     fn key_bar_name(&self, tr: &Tr) -> String {

@@ -381,9 +381,13 @@ window.HI={
 "Home": "होम",
 "Totals stay hidden until there is data. Ledgerly never shows a zero it did not compute.": "डेटा आने तक कुल योग छिपे रहते हैं। Ledgerly कभी वह शून्य नहीं दिखाता जिसकी गणना नहीं हुई।",
 "Waiting for your review": "आपकी समीक्षा की प्रतीक्षा है",
+"Take a backup of the company data before importing": "आयात से पहले कंपनी के डेटा का बैकअप लें",
+"No: import without a backup": "नहीं: बिना बैकअप के आयात करें",
+"Yes: back up the company first, into the Backups folder beside the company file": "हाँ: पहले कंपनी का बैकअप लें, कंपनी फ़ाइल के पास के Backups फ़ोल्डर में",
 "Choose file": "फ़ाइल चुनें",
 "Combine opening balance: add the file's opening balance to the existing one": "प्रारंभिक शेष जोड़ें: फ़ाइल का प्रारंभिक शेष मौजूदा शेष में जोड़ें",
 "Choose the XML file to import": "आयात के लिए XML फ़ाइल चुनें",
+"choose whether to take a backup of the company data first": "चुनें कि पहले कंपनी के डेटा का बैकअप लेना है या नहीं",
 "choose what to do with a master that is already in the company": "चुनें कि कंपनी में पहले से मौजूद मास्टर का क्या करें",
 "choose Masters or Transactions": "मास्टर या लेन-देन चुनें",
 "the background worker stopped before the import finished": "आयात पूरा होने से पहले पृष्ठभूमि का काम रुक गया",
@@ -401,6 +405,7 @@ window.HI={
 "Modify with new data: replace the existing master's details with the file's": "नए डेटा से बदलें: मौजूदा मास्टर का विवरण फ़ाइल के विवरण से बदलें",
 "Importing from a file needs an open company. Create or open one, then press Alt+O.": "फ़ाइल से आयात के लिए कंपनी खुली होनी चाहिए। कंपनी बनाएँ या खोलें, फिर Alt+O दबाएँ।",
 "path of the XML file": "XML फ़ाइल का पथ",
+"To import the same file again without doubling its vouchers, choose Overwrite. With Do not overwrite, every voucher in the file is posted again.": "उसी फ़ाइल को दोबारा आयात करते समय वाउचर दोहरे न हों, इसके लिए बदलें चुनें। न बदलें चुनने पर फ़ाइल का हर वाउचर फिर से दर्ज होता है।",
 "Import the file": "फ़ाइल आयात करें",
 "Importing the file...": "फ़ाइल आयात हो रही है...",
 "Transactions (vouchers)": "लेन-देन (वाउचर)",
@@ -1175,6 +1180,22 @@ window.HI={
 "Sunday": "रविवार"
 },
 "keys": {
+"import.file.backup": [
+"Take a backup of the company data before importing",
+"आयात से पहले कंपनी के डेटा का बैकअप लें"
+],
+"import.file.backup_no": [
+"No: import without a backup",
+"नहीं: बिना बैकअप के आयात करें"
+],
+"import.file.backup_taken": [
+"Backup taken first: {path}",
+"पहले बैकअप लिया गया: {path}"
+],
+"import.file.backup_yes": [
+"Yes: back up the company first, into the Backups folder beside the company file",
+"हाँ: पहले कंपनी का बैकअप लें, कंपनी फ़ाइल के पास के Backups फ़ोल्डर में"
+],
 "import.file.choose": [
 "Choose file",
 "फ़ाइल चुनें"
@@ -1186,6 +1207,10 @@ window.HI={
 "import.file.dialog_title": [
 "Choose the XML file to import",
 "आयात के लिए XML फ़ाइल चुनें"
+],
+"import.file.err_backup": [
+"choose whether to take a backup of the company data first",
+"चुनें कि पहले कंपनी के डेटा का बैकअप लेना है या नहीं"
 ],
 "import.file.err_behaviour": [
 "choose what to do with a master that is already in the company",
@@ -1270,6 +1295,10 @@ window.HI={
 "import.file.path_hint": [
 "path of the XML file",
 "XML फ़ाइल का पथ"
+],
+"import.file.reimport": [
+"To import the same file again without doubling its vouchers, choose Overwrite. With Do not overwrite, every voucher in the file is posted again.",
+"उसी फ़ाइल को दोबारा आयात करते समय वाउचर दोहरे न हों, इसके लिए बदलें चुनें। न बदलें चुनने पर फ़ाइल का हर वाउचर फिर से दर्ज होता है।"
 ],
 "import.file.run": [
 "Import the file",

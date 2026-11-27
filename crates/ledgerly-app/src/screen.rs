@@ -78,6 +78,13 @@ pub trait Screen {
         None
     }
 
+    /// A shell key that would open this same screen was pressed while it is on top (Alt+O on
+    /// the import screen). The screen goes to the part that key opens; returns whether it did.
+    /// Defaults to `false`: nothing happens.
+    fn reopen(&mut self, _action: crate::keymap::Action) -> bool {
+        false
+    }
+
     /// Draws the screen and returns what the stack should do next.
     fn ui(&mut self, ui: &mut egui::Ui, ctx: &mut AppCtx) -> ScreenAction;
 }

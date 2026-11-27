@@ -892,7 +892,7 @@ impl Shell {
     /// <https://help.tallysolutions.com/import-data-from-xml-or-json/>, read 2026-11-27). Runs
     /// after the screen. Alt+O is Import on every screen: the purchase's bill photo is Ctrl+Alt+O
     /// (index.html:2182), which this does not match. On the
-    /// import screen itself it does nothing: the screen is already there.
+    /// import screen itself the screen goes back to the file form ([`Screen::reopen`]).
     fn import_key_cmd(&self, ui: &egui::Ui) -> Option<ChromeCmd> {
         if self.palette.is_open() {
             return None;
@@ -902,8 +902,12 @@ impl Shell {
             .active_stack()
             .is_some_and(|stack| stack.top_title(&self.tr) == self.tr.t("import.title"));
         let pressed = ui.input_mut(|i| self.keymap.consume_action(i, Action::ImportFile));
-        (pressed && !on_import).then(|| {
-            ChromeCmd::OpenOnTop(PaletteTarget::Report(navigate::IMPORT_FILE_KEY.to_owned()))
+        pressed.then(|| {
+            if on_import {
+                ChromeCmd::Reopen(Action::ImportFile)
+            } else {
+                ChromeCmd::OpenOnTop(PaletteTarget::Report(navigate::IMPORT_FILE_KEY.to_owned()))
+            }
         })
     }
 
@@ -933,6 +937,11 @@ impl Shell {
                 }
             }
             ChromeCmd::CycleTheme => self.theme = self.theme.next(),
+            ChromeCmd::Reopen(action) => {
+                if let Some(top) = self.tabs.active_stack_mut().and_then(ScreenStack::top_mut) {
+                    let _went = top.reopen(action);
+                }
+            }
             ChromeCmd::OpenPalette => self.open_palette(Action::OpenPalette),
             ChromeCmd::ToggleRail => self.rail = !self.rail,
             ChromeCmd::OpenOnTop(target) => self.open_in_tab(&target, PaletteMode::OnTop),

@@ -476,7 +476,7 @@ fn bills_on_a_ledger_that_is_not_bill_wise_are_left_out_and_said() {
     assert!(
         s.warnings
             .iter()
-            .any(|w| w.contains("Walk-in") && w.contains("bill-by-bill")),
+            .any(|w| w.to_string().contains("Walk-in") && w.to_string().contains("bill-by-bill")),
         "{:?}",
         s.warnings
     );
@@ -503,7 +503,7 @@ fn a_line_on_a_bill_wise_ledger_with_no_bills_is_on_account() {
     assert!(
         s.warnings
             .iter()
-            .any(|w| w.contains("Customer ABC") && w.contains("On Account")),
+            .any(|w| w.to_string().contains("Customer ABC") && w.to_string().contains("On Account")),
         "{:?}",
         s.warnings
     );
@@ -544,7 +544,10 @@ fn with_overwrite_off_a_second_import_duplicates_and_a_third_overwrites_the_dupl
     let again = import(&mut api, behaviour, &first);
     assert_eq!(counts(&again), [1, 0, 0, 0, 0], "{again}");
     assert!(
-        again.warnings.iter().any(|w| w.contains("duplicate")),
+        again
+            .warnings
+            .iter()
+            .any(|w| w.to_string().contains("duplicate")),
         "{:?}",
         again.warnings
     );
@@ -615,4 +618,88 @@ fn a_duplicate_of_a_sale_that_opens_a_bill_is_refused_by_the_bill_check() {
         "{again}"
     );
     assert_eq!(vouchers(&api).len(), 1);
+}
+
+// A backup before the import (S22 round 3).
+//
+// provenance: derived. <https://help.tallysolutions.com/import-data-from-xml-or-json/> (read
+// 2026-11-27), masters step 4 and transactions step 3: "Select Yes to take a backup of the
+// company data before importing." The backup is taken before anything is imported, so it holds
+// the books as they were; a backup that cannot be written stops the import (nothing to restore
+// from otherwise). Where it goes is this app's choice (no folder is documented): a `Backups`
+// folder beside the company file.
+
+fn back_up_and_import(api: &mut Api, what: XmlImport, path: &Path) -> FileImportSummary {
+    match api.back_up_and_import_tally_xml_file(what, path).unwrap() {
+        Outcome::Value(s) => s,
+        Outcome::Unsupported(u) => panic!("import unsupported: {u:?}"),
+    }
+}
+
+#[test]
+fn a_backup_before_the_import_holds_the_books_as_they_were() {
+    let (dir, mut api) = setup();
+    let path = write(dir.path(), "masters.xml", &masters_file());
+    let s = back_up_and_import(
+        &mut api,
+        XmlImport::Masters(MasterBehaviour::IgnoreDuplicates),
+        &path,
+    );
+    let backup = s.backup.clone().unwrap();
+    assert_eq!(backup.parent(), Some(dir.path().join("Backups").as_path()));
+    assert!(
+        books(&api)
+            .masters
+            .ledgers
+            .values()
+            .any(|l| l.name == "Kumar Textiles")
+    );
+    let copy = Api::open(&backup).unwrap();
+    let before = match copy.books().unwrap() {
+        Outcome::Value(b) => b,
+        Outcome::Unsupported(u) => panic!("{u:?}"),
+    };
+    assert!(
+        !before
+            .masters
+            .ledgers
+            .values()
+            .any(|l| l.name == "Kumar Textiles")
+    );
+    assert!(before.masters.ledgers.values().any(|l| l.name == "Cash"));
+}
+
+#[test]
+fn an_import_without_a_backup_says_none_was_taken() {
+    let (dir, mut api) = setup();
+    let path = write(dir.path(), "masters.xml", &masters_file());
+    let s = import(
+        &mut api,
+        XmlImport::Masters(MasterBehaviour::IgnoreDuplicates),
+        &path,
+    );
+    assert_eq!(s.backup, None);
+    assert!(!dir.path().join("Backups").exists());
+}
+
+#[test]
+fn a_backup_that_cannot_be_written_stops_the_import() {
+    let (dir, mut api) = setup();
+    let path = write(dir.path(), "masters.xml", &masters_file());
+    // A file where the Backups folder would go: the folder cannot be made.
+    std::fs::write(dir.path().join("Backups"), "not a folder").unwrap();
+    let err = api
+        .back_up_and_import_tally_xml_file(
+            XmlImport::Masters(MasterBehaviour::IgnoreDuplicates),
+            &path,
+        )
+        .unwrap_err();
+    assert!(matches!(err, ApiError::Store(_)), "{err:?}");
+    assert!(
+        !books(&api)
+            .masters
+            .ledgers
+            .values()
+            .any(|l| l.name == "Kumar Textiles")
+    );
 }

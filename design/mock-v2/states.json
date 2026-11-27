@@ -266,6 +266,13 @@
    "description": "The summary line in Hindi; the file path stays as written."
   },
   {
+   "id": "hi.import.file-backed-up",
+   "kind": "happy",
+   "hash": "screen=import&state=file-backed-up&lang=hi",
+   "title": "Import from a file, backed up first, Hindi",
+   "description": "The backup line in Hindi; the paths stay as written."
+  },
+  {
    "id": "hi.payment.account-list",
    "kind": "happy",
    "hash": "screen=payment&state=account-list&lang=hi",
@@ -1195,6 +1202,13 @@
    "hash": "screen=import&state=file-overwritten",
    "title": "Import from a file, imported again with overwrite",
    "description": "The same vouchers file imported a second time with Overwrite chosen: the voucher in the company is altered, not doubled."
+  },
+  {
+   "id": "import.file-backed-up",
+   "kind": "happy",
+   "hash": "screen=import&state=file-backed-up",
+   "title": "Import from a file, backed up first",
+   "description": "Yes chosen for the backup before importing: the company is copied into the Backups folder beside the company file first, and the summary says where the copy is."
   },
   {
    "id": "import.failed",

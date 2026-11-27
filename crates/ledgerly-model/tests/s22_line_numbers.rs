@@ -33,3 +33,34 @@ fn a_bill_mismatch_on_the_first_line_says_line_1() {
         "{e}"
     );
 }
+
+// S22 round 3: amounts in messages are written as the app writes money, with Indian digit
+// grouping and two decimals (`ledgerly_core::format::format_inr`, the same text as the app's
+// `ui::format::amount`: "1,00,000.00"), never as the debug form `Paise(10000000)`.
+// provenance: derived. Rs 1,000 is 1,00,000 paise and Rs 900 is 90,000 paise; the mock writes
+// amounts this way (design/mock-v2/index.html, for example "7,27,524.50").
+
+#[test]
+fn an_unbalanced_voucher_names_its_totals_as_money() {
+    let e = VoucherError::Unbalanced {
+        dr: Paise::new(100_000),
+        cr: Paise::new(90_000),
+    };
+    assert_eq!(
+        e.to_string(),
+        "voucher does not balance: debits 1,000.00, credits 900.00"
+    );
+}
+
+#[test]
+fn a_bill_mismatch_names_its_amounts_as_money() {
+    let e = VoucherError::BillAllocationMismatch {
+        line: 1,
+        expected: Paise::new(12_345_678),
+        allocated: Paise::new(10_000_000),
+    };
+    assert_eq!(
+        e.to_string(),
+        "bill allocations on line 2 total 1,00,000.00, the line is 1,23,456.78"
+    );
+}

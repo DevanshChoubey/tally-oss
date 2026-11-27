@@ -119,13 +119,22 @@ pub struct MasterPlan {
     pub dropped: Vec<String>,
 }
 
-/// What a file holds, with the reader's warnings as `offset N: message`.
+/// A non-fatal problem the reader met, at a byte offset of the file.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FileWarning {
+    /// Byte offset in the file.
+    pub offset: usize,
+    /// What the reader met.
+    pub message: String,
+}
+
+/// What a file holds, with the reader's warnings.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FileContents<T> {
     /// The objects, in document order.
     pub items: Vec<T>,
     /// Non-fatal problems the reader met.
-    pub warnings: Vec<String>,
+    pub warnings: Vec<FileWarning>,
 }
 
 /// Reads the masters of an import file.
@@ -139,7 +148,10 @@ pub fn read_masters(bytes: &[u8]) -> Result<FileContents<ImportMaster>, String> 
         warnings: parsed
             .warnings
             .iter()
-            .map(|w| format!("offset {}: {}", w.offset, w.message))
+            .map(|w| FileWarning {
+                offset: w.offset,
+                message: w.message.clone(),
+            })
             .collect(),
     })
 }
@@ -156,7 +168,10 @@ pub fn read_vouchers(bytes: &[u8]) -> Result<FileContents<TVoucher>, String> {
         items,
         warnings: warnings
             .iter()
-            .map(|w| format!("offset {}: {}", w.offset, w.message))
+            .map(|w| FileWarning {
+                offset: w.offset,
+                message: w.message.clone(),
+            })
             .collect(),
     })
 }

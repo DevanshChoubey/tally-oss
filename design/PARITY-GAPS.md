@@ -639,13 +639,26 @@ Credit (`ledgerly_reports::print_text` places the engine's figures only).
   transactions file, default No (the import FAQ, help.tallysolutions.com/import-data-faq/, read
   2026-11-27, describes both settings but states no default; No is the coordinator's brief). With No a voucher whose GUID is in the company is posted again as a new voucher, with
   a warning, and a later import overwrites the newest copy; with Yes it alters the voucher in place.
-  So importing the same file twice is safe only with Yes: with the documented default the second
+  So importing the same file twice is safe only with Yes: with No, the default here, the second
   import duplicates the vouchers that the engine accepts again.
 - **DELIBERATE** with overwrite No, a second import of a sales voucher whose New Ref bill name is
   already on the party is refused by the engine ("bill ... already exists") and listed as an
   exception; the other product's behaviour for that case is not in the pages read.
-- **NOT BUILT** no backup prompt before an import (the FAQ advises a backup first); voucher types named
-  in a file are not created, a voucher of an unknown type is an exception.
+- Fixed in s22: the file form asks "Take a backup of the company data before importing", Yes or
+  No, for both masters and transactions, as the import help page's steps do ("Select Yes to take a
+  backup of the company data before importing", help.tallysolutions.com/import-data-from-xml-or-json,
+  read 2026-11-27). The page states no default, so the form has none: Import refuses until one is
+  chosen. With Yes the company is backed up first and the summary names the backup; if the backup
+  fails nothing is imported.
+- **DELIBERATE** the backup goes to a `Backups` folder beside the company file, with the app's
+  ordinary backup name; the help page does not say where the other product puts it. The name is to
+  the second, so two backups of one company in the same second fail (and so the import does not run).
+- Re-importing the same file: choose Overwrite = Yes. The import FAQ says of a file imported again
+  and again that "transactions will get duplicated" (help.tallysolutions.com/import-data-faq/, read
+  2026-11-27); here, with Overwrite = No every voucher in the file is posted again. The file form
+  says this under the GUID choice.
+- **NOT BUILT** voucher types named in a file are not created, a voucher of an unknown type is an
+  exception.
 - Fixed in s22: a ledger created by an import under Sundry Debtors or Sundry Creditors (or a group
   under them) with no ISBILLWISEON keeps balances bill-by-bill, as one created by hand under those
   groups (help.tallysolutions.com/set-up-party-ledger/ and /sample-xml/, read 2026-11-27); an explicit
@@ -672,6 +685,16 @@ Credit (`ledgerly_reports::print_text` places the engine's figures only).
   unsourced (`hi.toml`).
 - Fixed in s22: engine messages count lines from 1 ("line 2" is the second line); the line fields
   of the errors stay 0-based.
+- Fixed in s22: the bill messages name the ledger ("bill 'INV-1' on ledger 'Debtor A' already
+  exists"), and the unbalanced, bill-allocation and over-settle messages print amounts in the app's
+  money format (10,000.00), not debug form. The reserved-ledger and reserved-group messages and
+  "unknown ledger" still print an internal name or id.
+- Fixed in s22: the "Read but not imported" and warning lists of a file import show the object and
+  the note in their own columns for every row; a note whose text held ": " was split in the wrong
+  place before.
+- Fixed in s22: the Hindi mock keeps keycaps as written ("Enter", not translated), as the app does.
+- Fixed in s22: Alt+O while the import screen is open goes back to the file form (scrolls to it and
+  gives the path the keyboard) instead of opening a second import screen.
 - **FIX** (s21) bill reading moved from Alt+O to Ctrl+Alt+O in mock and app, so Alt+O is Import on
   every screen, the purchase form included. Checked against
   help.tallysolutions.com/keyboard-shortcuts-tally-prime/ (read 2026-11-27, page updated
