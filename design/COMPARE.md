@@ -1,6 +1,6 @@
 # App against mock
 
-471 app captures are paired with a mock capture of the same theme and state id. SSIM is 1 for identical images; lower is a bigger difference, and the list runs worst first.
+501 app captures are paired with a mock capture of the same theme and state id. SSIM is 1 for identical images; lower is a bigger difference, and the list runs worst first.
 
 | Theme | State | SSIM |
 | --- | --- | --- |
@@ -29,7 +29,6 @@
 | hc | profit-and-loss.detailed | 0.5196 |
 | hc | home.nudge-open | 0.5217 |
 | hc | hi.import.file-missing-choice | 0.5221 |
-| hc | ai.ai-settings.cloud | 0.5260 |
 | hc | home.gst-unsupported | 0.5345 |
 | hc | import.port-error | 0.5380 |
 | hc | import.validation-error | 0.5391 |
@@ -37,7 +36,7 @@
 | hc | bank.default | 0.5402 |
 | hc | bank.offline-ai | 0.5402 |
 | hc | ai.ai-settings.local | 0.5419 |
-| hc | import.imported | 0.5423 |
+| hc | import.imported | 0.5424 |
 | hc | stock-summary.provisional | 0.5436 |
 | dark | import.file-transactions | 0.5438 |
 | hc | sales-invoice.einvoice-not-ready | 0.5462 |
@@ -47,6 +46,7 @@
 | hc | hi.bank.default | 0.5516 |
 | light | import.file-transactions | 0.5518 |
 | light | import.file-masters | 0.5534 |
+| hc | ai.purchase-bill.ledger-lines | 0.5536 |
 | hc | profit-and-loss.print-range-error | 0.5536 |
 | dark | profit-and-loss.print-range-error | 0.5546 |
 | hc | import.failed | 0.5574 |
@@ -54,6 +54,8 @@
 | dark | import.file-overwritten | 0.5592 |
 | light | import.file-overwritten | 0.5595 |
 | hc | trial-balance.default | 0.5631 |
+| hc | ai.quick-entry.proposal | 0.5640 |
+| hc | ai.quick-entry.rejected | 0.5650 |
 | light | import.file-error | 0.5657 |
 | dark | profit-and-loss.print-preview | 0.5658 |
 | hc | ai-settings.off | 0.5659 |
@@ -65,6 +67,7 @@
 | dark | import.file-imported | 0.5702 |
 | light | hi.import.file-transactions | 0.5749 |
 | light | import.file-imported | 0.5761 |
+| hc | ai.ai-settings.cloud | 0.5766 |
 | hc | sales-invoice.item-list | 0.5780 |
 | hc | home.ai-off | 0.5795 |
 | hc | home.default | 0.5795 |
@@ -84,28 +87,31 @@
 | hc | sales-invoice.validation-error | 0.5887 |
 | hc | keys.standard | 0.5894 |
 | light | import.file-missing-choice | 0.5897 |
-| hc | ai.quick-entry.proposal | 0.5897 |
 | hc | balance-sheet.provisional | 0.5904 |
 | light | hi.import.file-backed-up | 0.5925 |
+| hc | ai.ask.result | 0.5926 |
 | hc | sales-invoice.mode-list | 0.5939 |
 | light | review.default | 0.5943 |
 | dark | review.default | 0.5952 |
 | light | sales-invoice.save-confirm | 0.5953 |
 | light | masters.ledgers | 0.5955 |
 | hc | balance-sheet.detailed | 0.5957 |
-| hc | ai.quick-entry.rejected | 0.5963 |
 | dark | hi.import.file-overwritten | 0.5964 |
 | dark | audit.default | 0.5965 |
 | hc | gst.gstr1-correction | 0.5968 |
 | hc | gst.gstr1 | 0.5969 |
+| hc | ai.quick-entry.unknown-ledger | 0.5975 |
 | dark | bank.default | 0.5992 |
 | dark | bank.offline-ai | 0.5992 |
 | hc | keys.classic | 0.5997 |
+| light | ai.purchase-bill.ledger-lines | 0.5998 |
 | light | hi.import.file-overwritten | 0.5998 |
 | hc | masters.items | 0.6005 |
+| hc | ai.ai-settings.cloud-edit | 0.6014 |
 | light | ai.review.default | 0.6018 |
 | hc | balance-sheet.default | 0.6022 |
 | hc | profit-and-loss.print-busy | 0.6023 |
+| dark | ai.purchase-bill.ledger-lines | 0.6048 |
 | hc | profit-and-loss.print-saved | 0.6056 |
 | dark | import.file-missing-choice | 0.6061 |
 | light | balance-sheet.provisional | 0.6061 |
@@ -113,6 +119,7 @@
 | dark | ai.review.default | 0.6065 |
 | light | hi.masters.ledgers | 0.6075 |
 | hc | masters.no-match | 0.6075 |
+| hc | ai.quick-entry.accepted | 0.6075 |
 | light | sales-invoice.einvoice-not-ready | 0.6079 |
 | dark | hi.import.file-imported | 0.6080 |
 | dark | sales-invoice.save-confirm | 0.6087 |
@@ -125,7 +132,7 @@
 | hc | sales-invoice.default | 0.6120 |
 | hc | hi.gst.gstr1 | 0.6131 |
 | hc | hi.balance-sheet.default | 0.6137 |
-| light | ai.ai-settings.local | 0.6158 |
+| light | ai.ai-settings.local | 0.6160 |
 | dark | home.nudge-open | 0.6170 |
 | light | hi.import.file-imported | 0.6170 |
 | dark | hi.bank.default | 0.6170 |
@@ -139,16 +146,17 @@
 | dark | home.gst-unsupported | 0.6211 |
 | light | sales-invoice.as-voucher | 0.6215 |
 | light | sales-invoice.item-list | 0.6217 |
+| hc | ai.purchase-bill.reading | 0.6222 |
 | hc | sales-invoice.print-preview | 0.6223 |
 | hc | hi.sales-invoice.default | 0.6231 |
 | light | gst.gstr3b | 0.6246 |
 | light | hi.import.file-missing-choice | 0.6246 |
 | light | sales-invoice.gst-inter-state | 0.6249 |
-| light | ai.ai-settings.cloud | 0.6252 |
 | hc | day-book.print-preview | 0.6252 |
 | dark | sales-invoice.einvoice-not-ready | 0.6254 |
 | hc | hi.home.default | 0.6256 |
 | dark | masters.ledgers | 0.6260 |
+| dark | ai.quick-entry.proposal | 0.6265 |
 | dark | gst.gstr3b | 0.6266 |
 | dark | sales-invoice.print-preview | 0.6267 |
 | dark | day-book.print-preview | 0.6278 |
@@ -156,18 +164,20 @@
 | dark | sales-invoice.validation-error | 0.6289 |
 | light | home.gst-unsupported | 0.6292 |
 | dark | sales-invoice.item-list | 0.6293 |
-| dark | ai.ai-settings.local | 0.6311 |
+| light | ai.quick-entry.proposal | 0.6301 |
+| dark | ai.ai-settings.local | 0.6314 |
 | hc | credit-note.validation-error | 0.6314 |
-| dark | ai.ai-settings.cloud | 0.6315 |
-| hc | ai.quick-entry.unknown-ledger | 0.6328 |
 | hc | hi.sales-invoice.print-preview | 0.6337 |
 | light | sales-invoice.mode-list | 0.6339 |
 | dark | sales-invoice.as-voucher | 0.6340 |
 | light | hi.sales-invoice.default | 0.6341 |
+| light | ai.quick-entry.rejected | 0.6346 |
+| dark | ai.quick-entry.rejected | 0.6348 |
 | hc | debit-note.validation-error | 0.6348 |
 | light | profit-and-loss.provisional | 0.6363 |
 | dark | sales-invoice.mode-list | 0.6363 |
 | dark | hi.import.file-missing-choice | 0.6369 |
+| light | ai.ai-settings.cloud | 0.6370 |
 | dark | hi.masters.ledgers | 0.6381 |
 | light | hi.bank.default | 0.6391 |
 | hc | sales-invoice.b2c | 0.6392 |
@@ -175,6 +185,7 @@
 | dark | balance-sheet.provisional | 0.6401 |
 | dark | sales-invoice.default | 0.6405 |
 | dark | bank.brs-exported | 0.6406 |
+| dark | ai.ai-settings.cloud | 0.6412 |
 | dark | import.default | 0.6416 |
 | dark | profit-and-loss.detailed | 0.6417 |
 | light | bank.brs-exported | 0.6430 |
@@ -183,28 +194,27 @@
 | light | profit-and-loss.print-busy | 0.6447 |
 | hc | palette.default | 0.6447 |
 | dark | profit-and-loss.provisional | 0.6449 |
-| hc | ai.quick-entry.accepted | 0.6450 |
 | hc | palette.voucher | 0.6453 |
 | dark | sales-invoice.gst-inter-state | 0.6460 |
 | light | keys.standard | 0.6461 |
 | light | home.new-tab | 0.6468 |
 | dark | keys.standard | 0.6470 |
-| dark | ai.quick-entry.proposal | 0.6472 |
 | dark | import.refused | 0.6475 |
-| dark | ai.quick-entry.rejected | 0.6478 |
 | hc | purchase.default | 0.6479 |
 | light | import.refused | 0.6481 |
 | dark | import.port-error | 0.6481 |
 | light | import.default | 0.6481 |
 | dark | import.failed | 0.6484 |
 | light | import.failed | 0.6484 |
+| light | ai.ask.result | 0.6486 |
 | light | balance-sheet.detailed | 0.6487 |
+| dark | ai.ask.result | 0.6490 |
 | dark | import.validation-error | 0.6496 |
 | hc | palette.no-results | 0.6498 |
 | light | profit-and-loss.print-failed | 0.6501 |
 | dark | profit-and-loss.print-failed | 0.6511 |
-| light | ai.quick-entry.rejected | 0.6513 |
 | light | import.port-error | 0.6514 |
+| dark | ai.ai-settings.cloud-edit | 0.6516 |
 | dark | stock-summary.provisional | 0.6521 |
 | light | stock-summary.provisional | 0.6521 |
 | hc | sales-invoice.saved | 0.6525 |
@@ -215,12 +225,12 @@
 | dark | home.ai-off | 0.6540 |
 | dark | home.default | 0.6540 |
 | light | profit-and-loss.print-range-error | 0.6542 |
-| light | ai.quick-entry.proposal | 0.6548 |
 | light | balance-sheet.default | 0.6564 |
 | hc | profit-and-loss.default | 0.6566 |
 | hc | journal.print-preview | 0.6567 |
 | light | keys.classic | 0.6576 |
 | light | sales-invoice.print-preview | 0.6577 |
+| light | ai.ai-settings.cloud-edit | 0.6579 |
 | dark | keys.classic | 0.6579 |
 | hc | balance-sheet.voucher | 0.6583 |
 | light | home.ai-off | 0.6584 |
@@ -237,9 +247,12 @@
 | light | bank.brs | 0.6641 |
 | light | import.running | 0.6647 |
 | light | profit-and-loss.print-preview | 0.6648 |
+| dark | ai.purchase-bill.reading | 0.6654 |
 | light | hi.balance-sheet.default | 0.6671 |
 | light | gst.gstr1 | 0.6674 |
+| dark | ai.quick-entry.unknown-ledger | 0.6680 |
 | dark | bank.brs | 0.6683 |
+| light | ai.quick-entry.unknown-ledger | 0.6685 |
 | light | import.no-company | 0.6712 |
 | dark | gst.gstr1 | 0.6716 |
 | dark | journal.print-preview | 0.6727 |
@@ -254,16 +267,16 @@
 | light | hi.gst.gstr1 | 0.6825 |
 | dark | gst.gstr1-correction | 0.6828 |
 | hc | receipt.default | 0.6832 |
-| dark | ai.quick-entry.unknown-ledger | 0.6833 |
 | hc | payment.bill-wise | 0.6847 |
 | dark | masters.no-match | 0.6854 |
-| light | ai.quick-entry.unknown-ledger | 0.6861 |
 | light | hi.home.default | 0.6864 |
 | light | outstanding.receivables | 0.6866 |
 | hc | credit-note.default | 0.6868 |
+| dark | ai.quick-entry.accepted | 0.6869 |
 | dark | hi.gst.gstr1 | 0.6875 |
 | dark | sales-invoice.saved | 0.6882 |
 | dark | balance-sheet.detailed | 0.6885 |
+| light | ai.quick-entry.accepted | 0.6891 |
 | dark | hi.home.default | 0.6907 |
 | light | purchase.validation-error | 0.6915 |
 | light | masters.no-match | 0.6918 |
@@ -275,6 +288,7 @@
 | dark | outstanding.receivables | 0.6991 |
 | light | purchase.default | 0.6995 |
 | hc | balance-sheet.group | 0.7008 |
+| hc | ai.ask.unsupported | 0.7020 |
 | hc | gst.recon | 0.7022 |
 | hc | setup.features | 0.7034 |
 | light | palette.default | 0.7037 |
@@ -300,38 +314,38 @@
 | light | credit-note.validation-error | 0.7140 |
 | hc | home.loading | 0.7146 |
 | light | debit-note.validation-error | 0.7152 |
+| hc | ai.quick-entry.loading | 0.7158 |
 | hc | payment.account-list | 0.7158 |
 | light | balance-sheet.voucher | 0.7161 |
 | hc | setup.new-tab | 0.7181 |
+| hc | ai.quick-entry.not-installed | 0.7181 |
 | light | receipt.default | 0.7186 |
 | dark | masters.loading | 0.7188 |
 | light | payment.bill-wise | 0.7203 |
-| dark | ai.quick-entry.accepted | 0.7204 |
 | light | stock-summary.default | 0.7207 |
 | dark | credit-note.validation-error | 0.7209 |
-| light | ai.quick-entry.accepted | 0.7215 |
 | light | balance-sheet.group | 0.7216 |
 | dark | debit-note.validation-error | 0.7224 |
 | dark | palette.search | 0.7233 |
 | dark | palette.commands | 0.7238 |
 | hc | masters.ledger-detail | 0.7252 |
 | dark | balance-sheet.voucher | 0.7256 |
+| hc | ai.ask.failed | 0.7256 |
 | light | gst.recon | 0.7258 |
 | hc | contra.validation-error | 0.7269 |
 | dark | palette.no-results | 0.7271 |
 | dark | receipt.default | 0.7277 |
 | dark | palette.voucher | 0.7281 |
-| hc | ai.quick-entry.loading | 0.7287 |
 | dark | balance-sheet.ledger | 0.7292 |
 | dark | payment.bill-wise | 0.7294 |
 | hc | day-book.default | 0.7299 |
 | light | balance-sheet.ledger | 0.7302 |
 | dark | balance-sheet.group | 0.7304 |
-| hc | ai.quick-entry.not-installed | 0.7310 |
 | dark | gst.recon | 0.7319 |
 | light | outstanding.payables | 0.7322 |
 | dark | stock-summary.default | 0.7333 |
 | hc | outstanding.payables | 0.7354 |
+| hc | ai.quick-entry.read-failed | 0.7382 |
 | light | payment.default | 0.7396 |
 | dark | outstanding.payables | 0.7405 |
 | hc | bank.import-error | 0.7416 |
@@ -339,49 +353,60 @@
 | hc | masters.create-ledger | 0.7450 |
 | light | credit-note.default | 0.7462 |
 | dark | payment.default | 0.7465 |
+| hc | ai.purchase-bill.rejected | 0.7485 |
+| hc | ai.ask.idle | 0.7489 |
 | light | day-book.default | 0.7495 |
 | light | debit-note.default | 0.7504 |
-| hc | ai.quick-entry.read-failed | 0.7511 |
 | hc | home.empty | 0.7513 |
 | dark | credit-note.default | 0.7521 |
 | light | setup.features | 0.7528 |
 | light | payment.account-list | 0.7529 |
 | hc | balance-sheet.loading | 0.7537 |
 | hc | audit.integrity | 0.7537 |
+| light | ai.quick-entry.loading | 0.7539 |
 | hc | masters.gstin-error | 0.7548 |
+| light | ai.ask.unsupported | 0.7563 |
 | dark | debit-note.default | 0.7571 |
 | light | journal.validation-error | 0.7572 |
 | light | contra.default | 0.7577 |
 | dark | masters.ledger-detail | 0.7578 |
 | dark | day-book.default | 0.7587 |
 | dark | payment.account-list | 0.7598 |
+| dark | ai.purchase-bill.rejected | 0.7600 |
 | hc | stock-summary.loading | 0.7605 |
 | light | setup.new-tab | 0.7606 |
 | dark | journal.validation-error | 0.7608 |
+| hc | ai.quick-entry.idle | 0.7609 |
+| light | ai.purchase-bill.rejected | 0.7611 |
 | hc | audit.loading | 0.7612 |
 | hc | outstanding.loading | 0.7614 |
 | dark | setup.features | 0.7615 |
+| dark | ai.ask.unsupported | 0.7617 |
 | hc | trial-balance.loading | 0.7620 |
-| light | ai.quick-entry.loading | 0.7634 |
+| light | ai.purchase-bill.reading | 0.7632 |
 | dark | contra.default | 0.7634 |
+| dark | ai.quick-entry.loading | 0.7641 |
+| light | ai.quick-entry.not-installed | 0.7654 |
 | dark | setup.new-tab | 0.7655 |
 | light | masters.ledger-detail | 0.7658 |
+| dark | ai.quick-entry.not-installed | 0.7660 |
 | light | journal.print-preview | 0.7691 |
 | hc | setup.company | 0.7710 |
 | light | journal.default | 0.7712 |
-| dark | ai.quick-entry.loading | 0.7724 |
-| hc | ai.quick-entry.idle | 0.7738 |
-| dark | ai.quick-entry.not-installed | 0.7743 |
+| light | ai.ask.failed | 0.7715 |
 | light | contra.validation-error | 0.7746 |
-| light | ai.quick-entry.not-installed | 0.7750 |
+| dark | ai.ask.failed | 0.7748 |
 | dark | journal.default | 0.7755 |
 | hc | masters.create-item | 0.7774 |
 | hc | bank.empty | 0.7774 |
+| dark | ai.quick-entry.read-failed | 0.7782 |
+| light | ai.quick-entry.read-failed | 0.7802 |
+| light | ai.ask.idle | 0.7807 |
 | dark | contra.validation-error | 0.7813 |
+| dark | ai.ask.idle | 0.7825 |
 | hc | gst.recon-locked | 0.7836 |
 | hc | masters.items-empty | 0.7858 |
 | hc | masters.empty | 0.7868 |
-| dark | ai.quick-entry.read-failed | 0.7878 |
 | dark | setup.company | 0.7886 |
 | light | masters.gstin-error | 0.7887 |
 | dark | masters.gstin-error | 0.7894 |
@@ -390,23 +415,24 @@
 | light | setup.company | 0.7906 |
 | dark | home.empty | 0.7916 |
 | hc | audit.unsupported | 0.7920 |
-| light | ai.quick-entry.read-failed | 0.7921 |
 | dark | bank.import-error | 0.7926 |
 | hc | setup.gstin-error | 0.7942 |
+| light | ai.quick-entry.idle | 0.7943 |
 | light | home.loading | 0.7947 |
 | light | audit.loading | 0.7955 |
+| dark | ai.quick-entry.idle | 0.7956 |
 | light | home.empty | 0.7962 |
 | hc | gst.recon-empty | 0.7973 |
 | light | bank.import-error | 0.7989 |
 | light | profit-and-loss.loading | 0.7990 |
 | hc | day-book.empty | 0.7998 |
 | hc | setup.backup | 0.7999 |
+| hc | ai.purchase-bill.error | 0.8035 |
 | dark | bank.empty | 0.8045 |
 | light | bank.empty | 0.8049 |
 | hc | setup.ai | 0.8051 |
-| dark | ai.quick-entry.idle | 0.8052 |
 | hc | review.empty | 0.8062 |
-| light | ai.quick-entry.idle | 0.8063 |
+| hc | ai.purchase-bill.choose | 0.8063 |
 | dark | gst.recon-locked | 0.8063 |
 | hc | bank-chooser.default | 0.8068 |
 | light | gst.recon-locked | 0.8072 |
@@ -435,8 +461,10 @@
 | dark | balance-sheet.loading | 0.8241 |
 | light | masters.empty | 0.8241 |
 | dark | review.empty | 0.8244 |
+| light | ai.purchase-bill.choose | 0.8256 |
 | hc | hi.setup.welcome | 0.8265 |
 | dark | audit.loading | 0.8268 |
+| dark | ai.purchase-bill.choose | 0.8278 |
 | light | setup.backup | 0.8286 |
 | light | review.empty | 0.8289 |
 | light | day-book.empty | 0.8293 |
@@ -450,12 +478,14 @@
 | hc | gst.gstr3b-unsupported | 0.8361 |
 | dark | gst.recon-error | 0.8364 |
 | light | setup.welcome | 0.8369 |
+| dark | ai.purchase-bill.error | 0.8381 |
 | light | setup.keyboard | 0.8384 |
 | dark | setup.keyboard | 0.8387 |
 | light | bank-chooser.default | 0.8396 |
 | hc | start.recent | 0.8397 |
 | hc | setup.rail | 0.8409 |
 | dark | bank-chooser.default | 0.8410 |
+| light | ai.purchase-bill.error | 0.8412 |
 | light | gst.recon-error | 0.8413 |
 | dark | setup.welcome | 0.8415 |
 | hc | gst.gstr1-not-loaded | 0.8427 |
@@ -776,18 +806,6 @@ SSIM 0.5221
 </tr>
 </table>
 
-## hc / ai.ai-settings.cloud
-
-SSIM 0.5260
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/hc/ai.ai-settings.cloud.webp" width="480" alt="mock hc ai.ai-settings.cloud"></td>
-<td><img src="app-captures/hc/ai.ai-settings.cloud.webp" width="480" alt="app hc ai.ai-settings.cloud"></td>
-</tr>
-</table>
-
 ## hc / home.gst-unsupported
 
 SSIM 0.5345
@@ -874,7 +892,7 @@ SSIM 0.5419
 
 ## hc / import.imported
 
-SSIM 0.5423
+SSIM 0.5424
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -992,6 +1010,18 @@ SSIM 0.5534
 </tr>
 </table>
 
+## hc / ai.purchase-bill.ledger-lines
+
+SSIM 0.5536
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/hc/ai.purchase-bill.ledger-lines.webp" width="480" alt="mock hc ai.purchase-bill.ledger-lines"></td>
+<td><img src="app-captures/hc/ai.purchase-bill.ledger-lines.webp" width="480" alt="app hc ai.purchase-bill.ledger-lines"></td>
+</tr>
+</table>
+
 ## hc / profit-and-loss.print-range-error
 
 SSIM 0.5536
@@ -1073,6 +1103,30 @@ SSIM 0.5631
 <tr>
 <td><img src="mock-v2/captures/states/hc/trial-balance.default.webp" width="480" alt="mock hc trial-balance.default"></td>
 <td><img src="app-captures/hc/trial-balance.default.webp" width="480" alt="app hc trial-balance.default"></td>
+</tr>
+</table>
+
+## hc / ai.quick-entry.proposal
+
+SSIM 0.5640
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/hc/ai.quick-entry.proposal.webp" width="480" alt="mock hc ai.quick-entry.proposal"></td>
+<td><img src="app-captures/hc/ai.quick-entry.proposal.webp" width="480" alt="app hc ai.quick-entry.proposal"></td>
+</tr>
+</table>
+
+## hc / ai.quick-entry.rejected
+
+SSIM 0.5650
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/hc/ai.quick-entry.rejected.webp" width="480" alt="mock hc ai.quick-entry.rejected"></td>
+<td><img src="app-captures/hc/ai.quick-entry.rejected.webp" width="480" alt="app hc ai.quick-entry.rejected"></td>
 </tr>
 </table>
 
@@ -1205,6 +1259,18 @@ SSIM 0.5761
 <tr>
 <td><img src="mock-v2/captures/states/light/import.file-imported.webp" width="480" alt="mock light import.file-imported"></td>
 <td><img src="app-captures/light/import.file-imported.webp" width="480" alt="app light import.file-imported"></td>
+</tr>
+</table>
+
+## hc / ai.ai-settings.cloud
+
+SSIM 0.5766
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/hc/ai.ai-settings.cloud.webp" width="480" alt="mock hc ai.ai-settings.cloud"></td>
+<td><img src="app-captures/hc/ai.ai-settings.cloud.webp" width="480" alt="app hc ai.ai-settings.cloud"></td>
 </tr>
 </table>
 
@@ -1436,18 +1502,6 @@ SSIM 0.5897
 </tr>
 </table>
 
-## hc / ai.quick-entry.proposal
-
-SSIM 0.5897
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/hc/ai.quick-entry.proposal.webp" width="480" alt="mock hc ai.quick-entry.proposal"></td>
-<td><img src="app-captures/hc/ai.quick-entry.proposal.webp" width="480" alt="app hc ai.quick-entry.proposal"></td>
-</tr>
-</table>
-
 ## hc / balance-sheet.provisional
 
 SSIM 0.5904
@@ -1469,6 +1523,18 @@ SSIM 0.5925
 <tr>
 <td><img src="mock-v2/captures/states/light/hi.import.file-backed-up.webp" width="480" alt="mock light hi.import.file-backed-up"></td>
 <td><img src="app-captures/light/hi.import.file-backed-up.webp" width="480" alt="app light hi.import.file-backed-up"></td>
+</tr>
+</table>
+
+## hc / ai.ask.result
+
+SSIM 0.5926
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/hc/ai.ask.result.webp" width="480" alt="mock hc ai.ask.result"></td>
+<td><img src="app-captures/hc/ai.ask.result.webp" width="480" alt="app hc ai.ask.result"></td>
 </tr>
 </table>
 
@@ -1544,18 +1610,6 @@ SSIM 0.5957
 </tr>
 </table>
 
-## hc / ai.quick-entry.rejected
-
-SSIM 0.5963
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/hc/ai.quick-entry.rejected.webp" width="480" alt="mock hc ai.quick-entry.rejected"></td>
-<td><img src="app-captures/hc/ai.quick-entry.rejected.webp" width="480" alt="app hc ai.quick-entry.rejected"></td>
-</tr>
-</table>
-
 ## dark / hi.import.file-overwritten
 
 SSIM 0.5964
@@ -1604,6 +1658,18 @@ SSIM 0.5969
 </tr>
 </table>
 
+## hc / ai.quick-entry.unknown-ledger
+
+SSIM 0.5975
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/hc/ai.quick-entry.unknown-ledger.webp" width="480" alt="mock hc ai.quick-entry.unknown-ledger"></td>
+<td><img src="app-captures/hc/ai.quick-entry.unknown-ledger.webp" width="480" alt="app hc ai.quick-entry.unknown-ledger"></td>
+</tr>
+</table>
+
 ## dark / bank.default
 
 SSIM 0.5992
@@ -1640,6 +1706,18 @@ SSIM 0.5997
 </tr>
 </table>
 
+## light / ai.purchase-bill.ledger-lines
+
+SSIM 0.5998
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/ai.purchase-bill.ledger-lines.webp" width="480" alt="mock light ai.purchase-bill.ledger-lines"></td>
+<td><img src="app-captures/light/ai.purchase-bill.ledger-lines.webp" width="480" alt="app light ai.purchase-bill.ledger-lines"></td>
+</tr>
+</table>
+
 ## light / hi.import.file-overwritten
 
 SSIM 0.5998
@@ -1661,6 +1739,18 @@ SSIM 0.6005
 <tr>
 <td><img src="mock-v2/captures/states/hc/masters.items.webp" width="480" alt="mock hc masters.items"></td>
 <td><img src="app-captures/hc/masters.items.webp" width="480" alt="app hc masters.items"></td>
+</tr>
+</table>
+
+## hc / ai.ai-settings.cloud-edit
+
+SSIM 0.6014
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/hc/ai.ai-settings.cloud-edit.webp" width="480" alt="mock hc ai.ai-settings.cloud-edit"></td>
+<td><img src="app-captures/hc/ai.ai-settings.cloud-edit.webp" width="480" alt="app hc ai.ai-settings.cloud-edit"></td>
 </tr>
 </table>
 
@@ -1697,6 +1787,18 @@ SSIM 0.6023
 <tr>
 <td><img src="mock-v2/captures/states/hc/profit-and-loss.print-busy.webp" width="480" alt="mock hc profit-and-loss.print-busy"></td>
 <td><img src="app-captures/hc/profit-and-loss.print-busy.webp" width="480" alt="app hc profit-and-loss.print-busy"></td>
+</tr>
+</table>
+
+## dark / ai.purchase-bill.ledger-lines
+
+SSIM 0.6048
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/dark/ai.purchase-bill.ledger-lines.webp" width="480" alt="mock dark ai.purchase-bill.ledger-lines"></td>
+<td><img src="app-captures/dark/ai.purchase-bill.ledger-lines.webp" width="480" alt="app dark ai.purchase-bill.ledger-lines"></td>
 </tr>
 </table>
 
@@ -1781,6 +1883,18 @@ SSIM 0.6075
 <tr>
 <td><img src="mock-v2/captures/states/hc/masters.no-match.webp" width="480" alt="mock hc masters.no-match"></td>
 <td><img src="app-captures/hc/masters.no-match.webp" width="480" alt="app hc masters.no-match"></td>
+</tr>
+</table>
+
+## hc / ai.quick-entry.accepted
+
+SSIM 0.6075
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/hc/ai.quick-entry.accepted.webp" width="480" alt="mock hc ai.quick-entry.accepted"></td>
+<td><img src="app-captures/hc/ai.quick-entry.accepted.webp" width="480" alt="app hc ai.quick-entry.accepted"></td>
 </tr>
 </table>
 
@@ -1930,7 +2044,7 @@ SSIM 0.6137
 
 ## light / ai.ai-settings.local
 
-SSIM 0.6158
+SSIM 0.6160
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -2096,6 +2210,18 @@ SSIM 0.6217
 </tr>
 </table>
 
+## hc / ai.purchase-bill.reading
+
+SSIM 0.6222
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/hc/ai.purchase-bill.reading.webp" width="480" alt="mock hc ai.purchase-bill.reading"></td>
+<td><img src="app-captures/hc/ai.purchase-bill.reading.webp" width="480" alt="app hc ai.purchase-bill.reading"></td>
+</tr>
+</table>
+
 ## hc / sales-invoice.print-preview
 
 SSIM 0.6223
@@ -2156,18 +2282,6 @@ SSIM 0.6249
 </tr>
 </table>
 
-## light / ai.ai-settings.cloud
-
-SSIM 0.6252
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/light/ai.ai-settings.cloud.webp" width="480" alt="mock light ai.ai-settings.cloud"></td>
-<td><img src="app-captures/light/ai.ai-settings.cloud.webp" width="480" alt="app light ai.ai-settings.cloud"></td>
-</tr>
-</table>
-
 ## hc / day-book.print-preview
 
 SSIM 0.6252
@@ -2213,6 +2327,18 @@ SSIM 0.6260
 <tr>
 <td><img src="mock-v2/captures/states/dark/masters.ledgers.webp" width="480" alt="mock dark masters.ledgers"></td>
 <td><img src="app-captures/dark/masters.ledgers.webp" width="480" alt="app dark masters.ledgers"></td>
+</tr>
+</table>
+
+## dark / ai.quick-entry.proposal
+
+SSIM 0.6265
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/dark/ai.quick-entry.proposal.webp" width="480" alt="mock dark ai.quick-entry.proposal"></td>
+<td><img src="app-captures/dark/ai.quick-entry.proposal.webp" width="480" alt="app dark ai.quick-entry.proposal"></td>
 </tr>
 </table>
 
@@ -2300,9 +2426,21 @@ SSIM 0.6293
 </tr>
 </table>
 
+## light / ai.quick-entry.proposal
+
+SSIM 0.6301
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/ai.quick-entry.proposal.webp" width="480" alt="mock light ai.quick-entry.proposal"></td>
+<td><img src="app-captures/light/ai.quick-entry.proposal.webp" width="480" alt="app light ai.quick-entry.proposal"></td>
+</tr>
+</table>
+
 ## dark / ai.ai-settings.local
 
-SSIM 0.6311
+SSIM 0.6314
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -2321,30 +2459,6 @@ SSIM 0.6314
 <tr>
 <td><img src="mock-v2/captures/states/hc/credit-note.validation-error.webp" width="480" alt="mock hc credit-note.validation-error"></td>
 <td><img src="app-captures/hc/credit-note.validation-error.webp" width="480" alt="app hc credit-note.validation-error"></td>
-</tr>
-</table>
-
-## dark / ai.ai-settings.cloud
-
-SSIM 0.6315
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/dark/ai.ai-settings.cloud.webp" width="480" alt="mock dark ai.ai-settings.cloud"></td>
-<td><img src="app-captures/dark/ai.ai-settings.cloud.webp" width="480" alt="app dark ai.ai-settings.cloud"></td>
-</tr>
-</table>
-
-## hc / ai.quick-entry.unknown-ledger
-
-SSIM 0.6328
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/hc/ai.quick-entry.unknown-ledger.webp" width="480" alt="mock hc ai.quick-entry.unknown-ledger"></td>
-<td><img src="app-captures/hc/ai.quick-entry.unknown-ledger.webp" width="480" alt="app hc ai.quick-entry.unknown-ledger"></td>
 </tr>
 </table>
 
@@ -2396,6 +2510,30 @@ SSIM 0.6341
 </tr>
 </table>
 
+## light / ai.quick-entry.rejected
+
+SSIM 0.6346
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/ai.quick-entry.rejected.webp" width="480" alt="mock light ai.quick-entry.rejected"></td>
+<td><img src="app-captures/light/ai.quick-entry.rejected.webp" width="480" alt="app light ai.quick-entry.rejected"></td>
+</tr>
+</table>
+
+## dark / ai.quick-entry.rejected
+
+SSIM 0.6348
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/dark/ai.quick-entry.rejected.webp" width="480" alt="mock dark ai.quick-entry.rejected"></td>
+<td><img src="app-captures/dark/ai.quick-entry.rejected.webp" width="480" alt="app dark ai.quick-entry.rejected"></td>
+</tr>
+</table>
+
 ## hc / debit-note.validation-error
 
 SSIM 0.6348
@@ -2441,6 +2579,18 @@ SSIM 0.6369
 <tr>
 <td><img src="mock-v2/captures/states/dark/hi.import.file-missing-choice.webp" width="480" alt="mock dark hi.import.file-missing-choice"></td>
 <td><img src="app-captures/dark/hi.import.file-missing-choice.webp" width="480" alt="app dark hi.import.file-missing-choice"></td>
+</tr>
+</table>
+
+## light / ai.ai-settings.cloud
+
+SSIM 0.6370
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/ai.ai-settings.cloud.webp" width="480" alt="mock light ai.ai-settings.cloud"></td>
+<td><img src="app-captures/light/ai.ai-settings.cloud.webp" width="480" alt="app light ai.ai-settings.cloud"></td>
 </tr>
 </table>
 
@@ -2525,6 +2675,18 @@ SSIM 0.6406
 <tr>
 <td><img src="mock-v2/captures/states/dark/bank.brs-exported.webp" width="480" alt="mock dark bank.brs-exported"></td>
 <td><img src="app-captures/dark/bank.brs-exported.webp" width="480" alt="app dark bank.brs-exported"></td>
+</tr>
+</table>
+
+## dark / ai.ai-settings.cloud
+
+SSIM 0.6412
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/dark/ai.ai-settings.cloud.webp" width="480" alt="mock dark ai.ai-settings.cloud"></td>
+<td><img src="app-captures/dark/ai.ai-settings.cloud.webp" width="480" alt="app dark ai.ai-settings.cloud"></td>
 </tr>
 </table>
 
@@ -2624,18 +2786,6 @@ SSIM 0.6449
 </tr>
 </table>
 
-## hc / ai.quick-entry.accepted
-
-SSIM 0.6450
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/hc/ai.quick-entry.accepted.webp" width="480" alt="mock hc ai.quick-entry.accepted"></td>
-<td><img src="app-captures/hc/ai.quick-entry.accepted.webp" width="480" alt="app hc ai.quick-entry.accepted"></td>
-</tr>
-</table>
-
 ## hc / palette.voucher
 
 SSIM 0.6453
@@ -2696,18 +2846,6 @@ SSIM 0.6470
 </tr>
 </table>
 
-## dark / ai.quick-entry.proposal
-
-SSIM 0.6472
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/dark/ai.quick-entry.proposal.webp" width="480" alt="mock dark ai.quick-entry.proposal"></td>
-<td><img src="app-captures/dark/ai.quick-entry.proposal.webp" width="480" alt="app dark ai.quick-entry.proposal"></td>
-</tr>
-</table>
-
 ## dark / import.refused
 
 SSIM 0.6475
@@ -2717,18 +2855,6 @@ SSIM 0.6475
 <tr>
 <td><img src="mock-v2/captures/states/dark/import.refused.webp" width="480" alt="mock dark import.refused"></td>
 <td><img src="app-captures/dark/import.refused.webp" width="480" alt="app dark import.refused"></td>
-</tr>
-</table>
-
-## dark / ai.quick-entry.rejected
-
-SSIM 0.6478
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/dark/ai.quick-entry.rejected.webp" width="480" alt="mock dark ai.quick-entry.rejected"></td>
-<td><img src="app-captures/dark/ai.quick-entry.rejected.webp" width="480" alt="app dark ai.quick-entry.rejected"></td>
 </tr>
 </table>
 
@@ -2804,6 +2930,18 @@ SSIM 0.6484
 </tr>
 </table>
 
+## light / ai.ask.result
+
+SSIM 0.6486
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/ai.ask.result.webp" width="480" alt="mock light ai.ask.result"></td>
+<td><img src="app-captures/light/ai.ask.result.webp" width="480" alt="app light ai.ask.result"></td>
+</tr>
+</table>
+
 ## light / balance-sheet.detailed
 
 SSIM 0.6487
@@ -2813,6 +2951,18 @@ SSIM 0.6487
 <tr>
 <td><img src="mock-v2/captures/states/light/balance-sheet.detailed.webp" width="480" alt="mock light balance-sheet.detailed"></td>
 <td><img src="app-captures/light/balance-sheet.detailed.webp" width="480" alt="app light balance-sheet.detailed"></td>
+</tr>
+</table>
+
+## dark / ai.ask.result
+
+SSIM 0.6490
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/dark/ai.ask.result.webp" width="480" alt="mock dark ai.ask.result"></td>
+<td><img src="app-captures/dark/ai.ask.result.webp" width="480" alt="app dark ai.ask.result"></td>
 </tr>
 </table>
 
@@ -2864,18 +3014,6 @@ SSIM 0.6511
 </tr>
 </table>
 
-## light / ai.quick-entry.rejected
-
-SSIM 0.6513
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/light/ai.quick-entry.rejected.webp" width="480" alt="mock light ai.quick-entry.rejected"></td>
-<td><img src="app-captures/light/ai.quick-entry.rejected.webp" width="480" alt="app light ai.quick-entry.rejected"></td>
-</tr>
-</table>
-
 ## light / import.port-error
 
 SSIM 0.6514
@@ -2885,6 +3023,18 @@ SSIM 0.6514
 <tr>
 <td><img src="mock-v2/captures/states/light/import.port-error.webp" width="480" alt="mock light import.port-error"></td>
 <td><img src="app-captures/light/import.port-error.webp" width="480" alt="app light import.port-error"></td>
+</tr>
+</table>
+
+## dark / ai.ai-settings.cloud-edit
+
+SSIM 0.6516
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/dark/ai.ai-settings.cloud-edit.webp" width="480" alt="mock dark ai.ai-settings.cloud-edit"></td>
+<td><img src="app-captures/dark/ai.ai-settings.cloud-edit.webp" width="480" alt="app dark ai.ai-settings.cloud-edit"></td>
 </tr>
 </table>
 
@@ -3008,18 +3158,6 @@ SSIM 0.6542
 </tr>
 </table>
 
-## light / ai.quick-entry.proposal
-
-SSIM 0.6548
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/light/ai.quick-entry.proposal.webp" width="480" alt="mock light ai.quick-entry.proposal"></td>
-<td><img src="app-captures/light/ai.quick-entry.proposal.webp" width="480" alt="app light ai.quick-entry.proposal"></td>
-</tr>
-</table>
-
 ## light / balance-sheet.default
 
 SSIM 0.6564
@@ -3077,6 +3215,18 @@ SSIM 0.6577
 <tr>
 <td><img src="mock-v2/captures/states/light/sales-invoice.print-preview.webp" width="480" alt="mock light sales-invoice.print-preview"></td>
 <td><img src="app-captures/light/sales-invoice.print-preview.webp" width="480" alt="app light sales-invoice.print-preview"></td>
+</tr>
+</table>
+
+## light / ai.ai-settings.cloud-edit
+
+SSIM 0.6579
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/ai.ai-settings.cloud-edit.webp" width="480" alt="mock light ai.ai-settings.cloud-edit"></td>
+<td><img src="app-captures/light/ai.ai-settings.cloud-edit.webp" width="480" alt="app light ai.ai-settings.cloud-edit"></td>
 </tr>
 </table>
 
@@ -3272,6 +3422,18 @@ SSIM 0.6648
 </tr>
 </table>
 
+## dark / ai.purchase-bill.reading
+
+SSIM 0.6654
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/dark/ai.purchase-bill.reading.webp" width="480" alt="mock dark ai.purchase-bill.reading"></td>
+<td><img src="app-captures/dark/ai.purchase-bill.reading.webp" width="480" alt="app dark ai.purchase-bill.reading"></td>
+</tr>
+</table>
+
 ## light / hi.balance-sheet.default
 
 SSIM 0.6671
@@ -3296,6 +3458,18 @@ SSIM 0.6674
 </tr>
 </table>
 
+## dark / ai.quick-entry.unknown-ledger
+
+SSIM 0.6680
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/dark/ai.quick-entry.unknown-ledger.webp" width="480" alt="mock dark ai.quick-entry.unknown-ledger"></td>
+<td><img src="app-captures/dark/ai.quick-entry.unknown-ledger.webp" width="480" alt="app dark ai.quick-entry.unknown-ledger"></td>
+</tr>
+</table>
+
 ## dark / bank.brs
 
 SSIM 0.6683
@@ -3305,6 +3479,18 @@ SSIM 0.6683
 <tr>
 <td><img src="mock-v2/captures/states/dark/bank.brs.webp" width="480" alt="mock dark bank.brs"></td>
 <td><img src="app-captures/dark/bank.brs.webp" width="480" alt="app dark bank.brs"></td>
+</tr>
+</table>
+
+## light / ai.quick-entry.unknown-ledger
+
+SSIM 0.6685
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/ai.quick-entry.unknown-ledger.webp" width="480" alt="mock light ai.quick-entry.unknown-ledger"></td>
+<td><img src="app-captures/light/ai.quick-entry.unknown-ledger.webp" width="480" alt="app light ai.quick-entry.unknown-ledger"></td>
 </tr>
 </table>
 
@@ -3476,18 +3662,6 @@ SSIM 0.6832
 </tr>
 </table>
 
-## dark / ai.quick-entry.unknown-ledger
-
-SSIM 0.6833
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/dark/ai.quick-entry.unknown-ledger.webp" width="480" alt="mock dark ai.quick-entry.unknown-ledger"></td>
-<td><img src="app-captures/dark/ai.quick-entry.unknown-ledger.webp" width="480" alt="app dark ai.quick-entry.unknown-ledger"></td>
-</tr>
-</table>
-
 ## hc / payment.bill-wise
 
 SSIM 0.6847
@@ -3509,18 +3683,6 @@ SSIM 0.6854
 <tr>
 <td><img src="mock-v2/captures/states/dark/masters.no-match.webp" width="480" alt="mock dark masters.no-match"></td>
 <td><img src="app-captures/dark/masters.no-match.webp" width="480" alt="app dark masters.no-match"></td>
-</tr>
-</table>
-
-## light / ai.quick-entry.unknown-ledger
-
-SSIM 0.6861
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/light/ai.quick-entry.unknown-ledger.webp" width="480" alt="mock light ai.quick-entry.unknown-ledger"></td>
-<td><img src="app-captures/light/ai.quick-entry.unknown-ledger.webp" width="480" alt="app light ai.quick-entry.unknown-ledger"></td>
 </tr>
 </table>
 
@@ -3560,6 +3722,18 @@ SSIM 0.6868
 </tr>
 </table>
 
+## dark / ai.quick-entry.accepted
+
+SSIM 0.6869
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/dark/ai.quick-entry.accepted.webp" width="480" alt="mock dark ai.quick-entry.accepted"></td>
+<td><img src="app-captures/dark/ai.quick-entry.accepted.webp" width="480" alt="app dark ai.quick-entry.accepted"></td>
+</tr>
+</table>
+
 ## dark / hi.gst.gstr1
 
 SSIM 0.6875
@@ -3593,6 +3767,18 @@ SSIM 0.6885
 <tr>
 <td><img src="mock-v2/captures/states/dark/balance-sheet.detailed.webp" width="480" alt="mock dark balance-sheet.detailed"></td>
 <td><img src="app-captures/dark/balance-sheet.detailed.webp" width="480" alt="app dark balance-sheet.detailed"></td>
+</tr>
+</table>
+
+## light / ai.quick-entry.accepted
+
+SSIM 0.6891
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/ai.quick-entry.accepted.webp" width="480" alt="mock light ai.quick-entry.accepted"></td>
+<td><img src="app-captures/light/ai.quick-entry.accepted.webp" width="480" alt="app light ai.quick-entry.accepted"></td>
 </tr>
 </table>
 
@@ -3725,6 +3911,18 @@ SSIM 0.7008
 <tr>
 <td><img src="mock-v2/captures/states/hc/balance-sheet.group.webp" width="480" alt="mock hc balance-sheet.group"></td>
 <td><img src="app-captures/hc/balance-sheet.group.webp" width="480" alt="app hc balance-sheet.group"></td>
+</tr>
+</table>
+
+## hc / ai.ask.unsupported
+
+SSIM 0.7020
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/hc/ai.ask.unsupported.webp" width="480" alt="mock hc ai.ask.unsupported"></td>
+<td><img src="app-captures/hc/ai.ask.unsupported.webp" width="480" alt="app hc ai.ask.unsupported"></td>
 </tr>
 </table>
 
@@ -4028,6 +4226,18 @@ SSIM 0.7152
 </tr>
 </table>
 
+## hc / ai.quick-entry.loading
+
+SSIM 0.7158
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/hc/ai.quick-entry.loading.webp" width="480" alt="mock hc ai.quick-entry.loading"></td>
+<td><img src="app-captures/hc/ai.quick-entry.loading.webp" width="480" alt="app hc ai.quick-entry.loading"></td>
+</tr>
+</table>
+
 ## hc / payment.account-list
 
 SSIM 0.7158
@@ -4061,6 +4271,18 @@ SSIM 0.7181
 <tr>
 <td><img src="mock-v2/captures/states/hc/setup.new-tab.webp" width="480" alt="mock hc setup.new-tab"></td>
 <td><img src="app-captures/hc/setup.new-tab.webp" width="480" alt="app hc setup.new-tab"></td>
+</tr>
+</table>
+
+## hc / ai.quick-entry.not-installed
+
+SSIM 0.7181
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/hc/ai.quick-entry.not-installed.webp" width="480" alt="mock hc ai.quick-entry.not-installed"></td>
+<td><img src="app-captures/hc/ai.quick-entry.not-installed.webp" width="480" alt="app hc ai.quick-entry.not-installed"></td>
 </tr>
 </table>
 
@@ -4100,18 +4322,6 @@ SSIM 0.7203
 </tr>
 </table>
 
-## dark / ai.quick-entry.accepted
-
-SSIM 0.7204
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/dark/ai.quick-entry.accepted.webp" width="480" alt="mock dark ai.quick-entry.accepted"></td>
-<td><img src="app-captures/dark/ai.quick-entry.accepted.webp" width="480" alt="app dark ai.quick-entry.accepted"></td>
-</tr>
-</table>
-
 ## light / stock-summary.default
 
 SSIM 0.7207
@@ -4133,18 +4343,6 @@ SSIM 0.7209
 <tr>
 <td><img src="mock-v2/captures/states/dark/credit-note.validation-error.webp" width="480" alt="mock dark credit-note.validation-error"></td>
 <td><img src="app-captures/dark/credit-note.validation-error.webp" width="480" alt="app dark credit-note.validation-error"></td>
-</tr>
-</table>
-
-## light / ai.quick-entry.accepted
-
-SSIM 0.7215
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/light/ai.quick-entry.accepted.webp" width="480" alt="mock light ai.quick-entry.accepted"></td>
-<td><img src="app-captures/light/ai.quick-entry.accepted.webp" width="480" alt="app light ai.quick-entry.accepted"></td>
 </tr>
 </table>
 
@@ -4220,6 +4418,18 @@ SSIM 0.7256
 </tr>
 </table>
 
+## hc / ai.ask.failed
+
+SSIM 0.7256
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/hc/ai.ask.failed.webp" width="480" alt="mock hc ai.ask.failed"></td>
+<td><img src="app-captures/hc/ai.ask.failed.webp" width="480" alt="app hc ai.ask.failed"></td>
+</tr>
+</table>
+
 ## light / gst.recon
 
 SSIM 0.7258
@@ -4277,18 +4487,6 @@ SSIM 0.7281
 <tr>
 <td><img src="mock-v2/captures/states/dark/palette.voucher.webp" width="480" alt="mock dark palette.voucher"></td>
 <td><img src="app-captures/dark/palette.voucher.webp" width="480" alt="app dark palette.voucher"></td>
-</tr>
-</table>
-
-## hc / ai.quick-entry.loading
-
-SSIM 0.7287
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/hc/ai.quick-entry.loading.webp" width="480" alt="mock hc ai.quick-entry.loading"></td>
-<td><img src="app-captures/hc/ai.quick-entry.loading.webp" width="480" alt="app hc ai.quick-entry.loading"></td>
 </tr>
 </table>
 
@@ -4352,18 +4550,6 @@ SSIM 0.7304
 </tr>
 </table>
 
-## hc / ai.quick-entry.not-installed
-
-SSIM 0.7310
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/hc/ai.quick-entry.not-installed.webp" width="480" alt="mock hc ai.quick-entry.not-installed"></td>
-<td><img src="app-captures/hc/ai.quick-entry.not-installed.webp" width="480" alt="app hc ai.quick-entry.not-installed"></td>
-</tr>
-</table>
-
 ## dark / gst.recon
 
 SSIM 0.7319
@@ -4409,6 +4595,18 @@ SSIM 0.7354
 <tr>
 <td><img src="mock-v2/captures/states/hc/outstanding.payables.webp" width="480" alt="mock hc outstanding.payables"></td>
 <td><img src="app-captures/hc/outstanding.payables.webp" width="480" alt="app hc outstanding.payables"></td>
+</tr>
+</table>
+
+## hc / ai.quick-entry.read-failed
+
+SSIM 0.7382
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/hc/ai.quick-entry.read-failed.webp" width="480" alt="mock hc ai.quick-entry.read-failed"></td>
+<td><img src="app-captures/hc/ai.quick-entry.read-failed.webp" width="480" alt="app hc ai.quick-entry.read-failed"></td>
 </tr>
 </table>
 
@@ -4496,6 +4694,30 @@ SSIM 0.7465
 </tr>
 </table>
 
+## hc / ai.purchase-bill.rejected
+
+SSIM 0.7485
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/hc/ai.purchase-bill.rejected.webp" width="480" alt="mock hc ai.purchase-bill.rejected"></td>
+<td><img src="app-captures/hc/ai.purchase-bill.rejected.webp" width="480" alt="app hc ai.purchase-bill.rejected"></td>
+</tr>
+</table>
+
+## hc / ai.ask.idle
+
+SSIM 0.7489
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/hc/ai.ask.idle.webp" width="480" alt="mock hc ai.ask.idle"></td>
+<td><img src="app-captures/hc/ai.ask.idle.webp" width="480" alt="app hc ai.ask.idle"></td>
+</tr>
+</table>
+
 ## light / day-book.default
 
 SSIM 0.7495
@@ -4517,18 +4739,6 @@ SSIM 0.7504
 <tr>
 <td><img src="mock-v2/captures/states/light/debit-note.default.webp" width="480" alt="mock light debit-note.default"></td>
 <td><img src="app-captures/light/debit-note.default.webp" width="480" alt="app light debit-note.default"></td>
-</tr>
-</table>
-
-## hc / ai.quick-entry.read-failed
-
-SSIM 0.7511
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/hc/ai.quick-entry.read-failed.webp" width="480" alt="mock hc ai.quick-entry.read-failed"></td>
-<td><img src="app-captures/hc/ai.quick-entry.read-failed.webp" width="480" alt="app hc ai.quick-entry.read-failed"></td>
 </tr>
 </table>
 
@@ -4604,6 +4814,18 @@ SSIM 0.7537
 </tr>
 </table>
 
+## light / ai.quick-entry.loading
+
+SSIM 0.7539
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/ai.quick-entry.loading.webp" width="480" alt="mock light ai.quick-entry.loading"></td>
+<td><img src="app-captures/light/ai.quick-entry.loading.webp" width="480" alt="app light ai.quick-entry.loading"></td>
+</tr>
+</table>
+
 ## hc / masters.gstin-error
 
 SSIM 0.7548
@@ -4613,6 +4835,18 @@ SSIM 0.7548
 <tr>
 <td><img src="mock-v2/captures/states/hc/masters.gstin-error.webp" width="480" alt="mock hc masters.gstin-error"></td>
 <td><img src="app-captures/hc/masters.gstin-error.webp" width="480" alt="app hc masters.gstin-error"></td>
+</tr>
+</table>
+
+## light / ai.ask.unsupported
+
+SSIM 0.7563
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/ai.ask.unsupported.webp" width="480" alt="mock light ai.ask.unsupported"></td>
+<td><img src="app-captures/light/ai.ask.unsupported.webp" width="480" alt="app light ai.ask.unsupported"></td>
 </tr>
 </table>
 
@@ -4688,6 +4922,18 @@ SSIM 0.7598
 </tr>
 </table>
 
+## dark / ai.purchase-bill.rejected
+
+SSIM 0.7600
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/dark/ai.purchase-bill.rejected.webp" width="480" alt="mock dark ai.purchase-bill.rejected"></td>
+<td><img src="app-captures/dark/ai.purchase-bill.rejected.webp" width="480" alt="app dark ai.purchase-bill.rejected"></td>
+</tr>
+</table>
+
 ## hc / stock-summary.loading
 
 SSIM 0.7605
@@ -4721,6 +4967,30 @@ SSIM 0.7608
 <tr>
 <td><img src="mock-v2/captures/states/dark/journal.validation-error.webp" width="480" alt="mock dark journal.validation-error"></td>
 <td><img src="app-captures/dark/journal.validation-error.webp" width="480" alt="app dark journal.validation-error"></td>
+</tr>
+</table>
+
+## hc / ai.quick-entry.idle
+
+SSIM 0.7609
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/hc/ai.quick-entry.idle.webp" width="480" alt="mock hc ai.quick-entry.idle"></td>
+<td><img src="app-captures/hc/ai.quick-entry.idle.webp" width="480" alt="app hc ai.quick-entry.idle"></td>
+</tr>
+</table>
+
+## light / ai.purchase-bill.rejected
+
+SSIM 0.7611
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/ai.purchase-bill.rejected.webp" width="480" alt="mock light ai.purchase-bill.rejected"></td>
+<td><img src="app-captures/light/ai.purchase-bill.rejected.webp" width="480" alt="app light ai.purchase-bill.rejected"></td>
 </tr>
 </table>
 
@@ -4760,6 +5030,18 @@ SSIM 0.7615
 </tr>
 </table>
 
+## dark / ai.ask.unsupported
+
+SSIM 0.7617
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/dark/ai.ask.unsupported.webp" width="480" alt="mock dark ai.ask.unsupported"></td>
+<td><img src="app-captures/dark/ai.ask.unsupported.webp" width="480" alt="app dark ai.ask.unsupported"></td>
+</tr>
+</table>
+
 ## hc / trial-balance.loading
 
 SSIM 0.7620
@@ -4772,15 +5054,15 @@ SSIM 0.7620
 </tr>
 </table>
 
-## light / ai.quick-entry.loading
+## light / ai.purchase-bill.reading
 
-SSIM 0.7634
+SSIM 0.7632
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
 <tr>
-<td><img src="mock-v2/captures/states/light/ai.quick-entry.loading.webp" width="480" alt="mock light ai.quick-entry.loading"></td>
-<td><img src="app-captures/light/ai.quick-entry.loading.webp" width="480" alt="app light ai.quick-entry.loading"></td>
+<td><img src="mock-v2/captures/states/light/ai.purchase-bill.reading.webp" width="480" alt="mock light ai.purchase-bill.reading"></td>
+<td><img src="app-captures/light/ai.purchase-bill.reading.webp" width="480" alt="app light ai.purchase-bill.reading"></td>
 </tr>
 </table>
 
@@ -4793,6 +5075,30 @@ SSIM 0.7634
 <tr>
 <td><img src="mock-v2/captures/states/dark/contra.default.webp" width="480" alt="mock dark contra.default"></td>
 <td><img src="app-captures/dark/contra.default.webp" width="480" alt="app dark contra.default"></td>
+</tr>
+</table>
+
+## dark / ai.quick-entry.loading
+
+SSIM 0.7641
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/dark/ai.quick-entry.loading.webp" width="480" alt="mock dark ai.quick-entry.loading"></td>
+<td><img src="app-captures/dark/ai.quick-entry.loading.webp" width="480" alt="app dark ai.quick-entry.loading"></td>
+</tr>
+</table>
+
+## light / ai.quick-entry.not-installed
+
+SSIM 0.7654
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/ai.quick-entry.not-installed.webp" width="480" alt="mock light ai.quick-entry.not-installed"></td>
+<td><img src="app-captures/light/ai.quick-entry.not-installed.webp" width="480" alt="app light ai.quick-entry.not-installed"></td>
 </tr>
 </table>
 
@@ -4817,6 +5123,18 @@ SSIM 0.7658
 <tr>
 <td><img src="mock-v2/captures/states/light/masters.ledger-detail.webp" width="480" alt="mock light masters.ledger-detail"></td>
 <td><img src="app-captures/light/masters.ledger-detail.webp" width="480" alt="app light masters.ledger-detail"></td>
+</tr>
+</table>
+
+## dark / ai.quick-entry.not-installed
+
+SSIM 0.7660
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/dark/ai.quick-entry.not-installed.webp" width="480" alt="mock dark ai.quick-entry.not-installed"></td>
+<td><img src="app-captures/dark/ai.quick-entry.not-installed.webp" width="480" alt="app dark ai.quick-entry.not-installed"></td>
 </tr>
 </table>
 
@@ -4856,39 +5174,15 @@ SSIM 0.7712
 </tr>
 </table>
 
-## dark / ai.quick-entry.loading
+## light / ai.ask.failed
 
-SSIM 0.7724
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/dark/ai.quick-entry.loading.webp" width="480" alt="mock dark ai.quick-entry.loading"></td>
-<td><img src="app-captures/dark/ai.quick-entry.loading.webp" width="480" alt="app dark ai.quick-entry.loading"></td>
-</tr>
-</table>
-
-## hc / ai.quick-entry.idle
-
-SSIM 0.7738
+SSIM 0.7715
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
 <tr>
-<td><img src="mock-v2/captures/states/hc/ai.quick-entry.idle.webp" width="480" alt="mock hc ai.quick-entry.idle"></td>
-<td><img src="app-captures/hc/ai.quick-entry.idle.webp" width="480" alt="app hc ai.quick-entry.idle"></td>
-</tr>
-</table>
-
-## dark / ai.quick-entry.not-installed
-
-SSIM 0.7743
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/dark/ai.quick-entry.not-installed.webp" width="480" alt="mock dark ai.quick-entry.not-installed"></td>
-<td><img src="app-captures/dark/ai.quick-entry.not-installed.webp" width="480" alt="app dark ai.quick-entry.not-installed"></td>
+<td><img src="mock-v2/captures/states/light/ai.ask.failed.webp" width="480" alt="mock light ai.ask.failed"></td>
+<td><img src="app-captures/light/ai.ask.failed.webp" width="480" alt="app light ai.ask.failed"></td>
 </tr>
 </table>
 
@@ -4904,15 +5198,15 @@ SSIM 0.7746
 </tr>
 </table>
 
-## light / ai.quick-entry.not-installed
+## dark / ai.ask.failed
 
-SSIM 0.7750
+SSIM 0.7748
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
 <tr>
-<td><img src="mock-v2/captures/states/light/ai.quick-entry.not-installed.webp" width="480" alt="mock light ai.quick-entry.not-installed"></td>
-<td><img src="app-captures/light/ai.quick-entry.not-installed.webp" width="480" alt="app light ai.quick-entry.not-installed"></td>
+<td><img src="mock-v2/captures/states/dark/ai.ask.failed.webp" width="480" alt="mock dark ai.ask.failed"></td>
+<td><img src="app-captures/dark/ai.ask.failed.webp" width="480" alt="app dark ai.ask.failed"></td>
 </tr>
 </table>
 
@@ -4952,6 +5246,42 @@ SSIM 0.7774
 </tr>
 </table>
 
+## dark / ai.quick-entry.read-failed
+
+SSIM 0.7782
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/dark/ai.quick-entry.read-failed.webp" width="480" alt="mock dark ai.quick-entry.read-failed"></td>
+<td><img src="app-captures/dark/ai.quick-entry.read-failed.webp" width="480" alt="app dark ai.quick-entry.read-failed"></td>
+</tr>
+</table>
+
+## light / ai.quick-entry.read-failed
+
+SSIM 0.7802
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/ai.quick-entry.read-failed.webp" width="480" alt="mock light ai.quick-entry.read-failed"></td>
+<td><img src="app-captures/light/ai.quick-entry.read-failed.webp" width="480" alt="app light ai.quick-entry.read-failed"></td>
+</tr>
+</table>
+
+## light / ai.ask.idle
+
+SSIM 0.7807
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/ai.ask.idle.webp" width="480" alt="mock light ai.ask.idle"></td>
+<td><img src="app-captures/light/ai.ask.idle.webp" width="480" alt="app light ai.ask.idle"></td>
+</tr>
+</table>
+
 ## dark / contra.validation-error
 
 SSIM 0.7813
@@ -4961,6 +5291,18 @@ SSIM 0.7813
 <tr>
 <td><img src="mock-v2/captures/states/dark/contra.validation-error.webp" width="480" alt="mock dark contra.validation-error"></td>
 <td><img src="app-captures/dark/contra.validation-error.webp" width="480" alt="app dark contra.validation-error"></td>
+</tr>
+</table>
+
+## dark / ai.ask.idle
+
+SSIM 0.7825
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/dark/ai.ask.idle.webp" width="480" alt="mock dark ai.ask.idle"></td>
+<td><img src="app-captures/dark/ai.ask.idle.webp" width="480" alt="app dark ai.ask.idle"></td>
 </tr>
 </table>
 
@@ -4997,18 +5339,6 @@ SSIM 0.7868
 <tr>
 <td><img src="mock-v2/captures/states/hc/masters.empty.webp" width="480" alt="mock hc masters.empty"></td>
 <td><img src="app-captures/hc/masters.empty.webp" width="480" alt="app hc masters.empty"></td>
-</tr>
-</table>
-
-## dark / ai.quick-entry.read-failed
-
-SSIM 0.7878
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/dark/ai.quick-entry.read-failed.webp" width="480" alt="mock dark ai.quick-entry.read-failed"></td>
-<td><img src="app-captures/dark/ai.quick-entry.read-failed.webp" width="480" alt="app dark ai.quick-entry.read-failed"></td>
 </tr>
 </table>
 
@@ -5108,18 +5438,6 @@ SSIM 0.7920
 </tr>
 </table>
 
-## light / ai.quick-entry.read-failed
-
-SSIM 0.7921
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/light/ai.quick-entry.read-failed.webp" width="480" alt="mock light ai.quick-entry.read-failed"></td>
-<td><img src="app-captures/light/ai.quick-entry.read-failed.webp" width="480" alt="app light ai.quick-entry.read-failed"></td>
-</tr>
-</table>
-
 ## dark / bank.import-error
 
 SSIM 0.7926
@@ -5144,6 +5462,18 @@ SSIM 0.7942
 </tr>
 </table>
 
+## light / ai.quick-entry.idle
+
+SSIM 0.7943
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/ai.quick-entry.idle.webp" width="480" alt="mock light ai.quick-entry.idle"></td>
+<td><img src="app-captures/light/ai.quick-entry.idle.webp" width="480" alt="app light ai.quick-entry.idle"></td>
+</tr>
+</table>
+
 ## light / home.loading
 
 SSIM 0.7947
@@ -5165,6 +5495,18 @@ SSIM 0.7955
 <tr>
 <td><img src="mock-v2/captures/states/light/audit.loading.webp" width="480" alt="mock light audit.loading"></td>
 <td><img src="app-captures/light/audit.loading.webp" width="480" alt="app light audit.loading"></td>
+</tr>
+</table>
+
+## dark / ai.quick-entry.idle
+
+SSIM 0.7956
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/dark/ai.quick-entry.idle.webp" width="480" alt="mock dark ai.quick-entry.idle"></td>
+<td><img src="app-captures/dark/ai.quick-entry.idle.webp" width="480" alt="app dark ai.quick-entry.idle"></td>
 </tr>
 </table>
 
@@ -5240,6 +5582,18 @@ SSIM 0.7999
 </tr>
 </table>
 
+## hc / ai.purchase-bill.error
+
+SSIM 0.8035
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/hc/ai.purchase-bill.error.webp" width="480" alt="mock hc ai.purchase-bill.error"></td>
+<td><img src="app-captures/hc/ai.purchase-bill.error.webp" width="480" alt="app hc ai.purchase-bill.error"></td>
+</tr>
+</table>
+
 ## dark / bank.empty
 
 SSIM 0.8045
@@ -5276,18 +5630,6 @@ SSIM 0.8051
 </tr>
 </table>
 
-## dark / ai.quick-entry.idle
-
-SSIM 0.8052
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/dark/ai.quick-entry.idle.webp" width="480" alt="mock dark ai.quick-entry.idle"></td>
-<td><img src="app-captures/dark/ai.quick-entry.idle.webp" width="480" alt="app dark ai.quick-entry.idle"></td>
-</tr>
-</table>
-
 ## hc / review.empty
 
 SSIM 0.8062
@@ -5300,15 +5642,15 @@ SSIM 0.8062
 </tr>
 </table>
 
-## light / ai.quick-entry.idle
+## hc / ai.purchase-bill.choose
 
 SSIM 0.8063
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
 <tr>
-<td><img src="mock-v2/captures/states/light/ai.quick-entry.idle.webp" width="480" alt="mock light ai.quick-entry.idle"></td>
-<td><img src="app-captures/light/ai.quick-entry.idle.webp" width="480" alt="app light ai.quick-entry.idle"></td>
+<td><img src="mock-v2/captures/states/hc/ai.purchase-bill.choose.webp" width="480" alt="mock hc ai.purchase-bill.choose"></td>
+<td><img src="app-captures/hc/ai.purchase-bill.choose.webp" width="480" alt="app hc ai.purchase-bill.choose"></td>
 </tr>
 </table>
 
@@ -5648,6 +5990,18 @@ SSIM 0.8244
 </tr>
 </table>
 
+## light / ai.purchase-bill.choose
+
+SSIM 0.8256
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/ai.purchase-bill.choose.webp" width="480" alt="mock light ai.purchase-bill.choose"></td>
+<td><img src="app-captures/light/ai.purchase-bill.choose.webp" width="480" alt="app light ai.purchase-bill.choose"></td>
+</tr>
+</table>
+
 ## hc / hi.setup.welcome
 
 SSIM 0.8265
@@ -5669,6 +6023,18 @@ SSIM 0.8268
 <tr>
 <td><img src="mock-v2/captures/states/dark/audit.loading.webp" width="480" alt="mock dark audit.loading"></td>
 <td><img src="app-captures/dark/audit.loading.webp" width="480" alt="app dark audit.loading"></td>
+</tr>
+</table>
+
+## dark / ai.purchase-bill.choose
+
+SSIM 0.8278
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/dark/ai.purchase-bill.choose.webp" width="480" alt="mock dark ai.purchase-bill.choose"></td>
+<td><img src="app-captures/dark/ai.purchase-bill.choose.webp" width="480" alt="app dark ai.purchase-bill.choose"></td>
 </tr>
 </table>
 
@@ -5828,6 +6194,18 @@ SSIM 0.8369
 </tr>
 </table>
 
+## dark / ai.purchase-bill.error
+
+SSIM 0.8381
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/dark/ai.purchase-bill.error.webp" width="480" alt="mock dark ai.purchase-bill.error"></td>
+<td><img src="app-captures/dark/ai.purchase-bill.error.webp" width="480" alt="app dark ai.purchase-bill.error"></td>
+</tr>
+</table>
+
 ## light / setup.keyboard
 
 SSIM 0.8384
@@ -5897,6 +6275,18 @@ SSIM 0.8410
 <tr>
 <td><img src="mock-v2/captures/states/dark/bank-chooser.default.webp" width="480" alt="mock dark bank-chooser.default"></td>
 <td><img src="app-captures/dark/bank-chooser.default.webp" width="480" alt="app dark bank-chooser.default"></td>
+</tr>
+</table>
+
+## light / ai.purchase-bill.error
+
+SSIM 0.8412
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/ai.purchase-bill.error.webp" width="480" alt="mock light ai.purchase-bill.error"></td>
+<td><img src="app-captures/light/ai.purchase-bill.error.webp" width="480" alt="app light ai.purchase-bill.error"></td>
 </tr>
 </table>
 
@@ -6130,14 +6520,18 @@ SSIM 0.8875
 
 ## Mock states with no app capture yet
 
-### light (29)
+### light (33)
 
+- `ai.ask.loading`
 - `hi.payment.account-list`
 - `ask.result`
 - `ask.loading`
 - `ask.low-confidence`
 - `ask.unsupported`
 - `ask.offline-ai`
+- `purchase-bill.choose`
+- `purchase-bill.ledger-lines`
+- `purchase-bill.rejected`
 - `purchase-bill.reading`
 - `purchase-bill.proposal`
 - `purchase-bill.low-confidence`
@@ -6162,14 +6556,18 @@ SSIM 0.8875
 - `audit.failed`
 - `gst.gstr1-unsupported`
 
-### dark (29)
+### dark (33)
 
+- `ai.ask.loading`
 - `hi.payment.account-list`
 - `ask.result`
 - `ask.loading`
 - `ask.low-confidence`
 - `ask.unsupported`
 - `ask.offline-ai`
+- `purchase-bill.choose`
+- `purchase-bill.ledger-lines`
+- `purchase-bill.rejected`
 - `purchase-bill.reading`
 - `purchase-bill.proposal`
 - `purchase-bill.low-confidence`
@@ -6194,14 +6592,18 @@ SSIM 0.8875
 - `audit.failed`
 - `gst.gstr1-unsupported`
 
-### hc (29)
+### hc (33)
 
+- `ai.ask.loading`
 - `hi.payment.account-list`
 - `ask.result`
 - `ask.loading`
 - `ask.low-confidence`
 - `ask.unsupported`
 - `ask.offline-ai`
+- `purchase-bill.choose`
+- `purchase-bill.ledger-lines`
+- `purchase-bill.rejected`
 - `purchase-bill.reading`
 - `purchase-bill.proposal`
 - `purchase-bill.low-confidence`
