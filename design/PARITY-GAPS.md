@@ -222,6 +222,22 @@ notifications were read on CBIC's tax information portal on 2026-11-27.
 
 ## Masters (`masters.*`)
 
+- **NOT BUILT** composition (CMP-08, GSTR-4) beyond the engine: `ledgerly_gst::composition` gives the
+  Rule 7 central tax for a category and turnover and the Rule 62 due dates (30 June from FY 2024-25,
+  30 April before). Engine-only. The company has no composition category, voucher tax refuses
+  composition, the State/UT half of the levy is `Unsupported` (State GST and UTGST rules not read),
+  extended due dates are not modelled, and FORM GST CMP-08 and FORM GSTR-4 would not download from
+  CBIC (2026-11-28), so no statement layout, screen or export exists.
+- **NOT BUILT** GSTR-1 gaps of blocker 2: 6A exports and 6B SEZ supplies (voucher tax refuses
+  zero-rated recipients), CDNUR and Table 7 note adjustments (a note does not name its original
+  invoice), 11A/11B advances (no data shape), amendments (9A, 9C, 10, 11), e-commerce Tables 14/15
+  (no operator on a voucher), and the Table 12 B2B/B2C split. The GST portal's GSTR-1 manual
+  (tutorial.gst.gov.in/userguide/returns/Creation_of_Outward_Supplies_Return_in_GSTR-1.htm, read
+  2026-11-28) shows the two tabs "From May'25 Onwards" but does not say which supplies go in each,
+  and the GSTN advisory of 1 May 2025 could not be fetched. The GSTR-1 JSON keys are still not checked
+  against a GSTN offline-tool sample (see `ledgerly-gst-formats` gstr1.rs).
+- **NOT BUILT** GSTR-9 and GSTR-9C working data: Rule 80 was read, but FORM GSTR-9 and FORM GSTR-9C
+  would not download from CBIC (2026-11-28), so their table layout has no source here.
 - **DELIBERATE** the create ledger form has one row more than the mock's compact one: a "More
   details: opening balance, party, bank and tax" link that opens the rest of the ledger master the
   help page "Ledgers" describes (help.tallysolutions.com/ledgers-in-tally/, read 2026-11-21); the

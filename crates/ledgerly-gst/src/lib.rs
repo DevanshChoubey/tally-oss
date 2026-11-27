@@ -2,6 +2,7 @@
 //! legal reference or is `pending` (and then evaluates to `Unsupported`).
 
 pub mod classify;
+pub mod composition;
 pub mod compute;
 mod error;
 pub mod gstr1;
