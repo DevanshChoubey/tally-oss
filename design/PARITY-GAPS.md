@@ -321,7 +321,8 @@ Classes:
   reference ("the assistant does not propose bill references"). Settled with the bill photo round
   (a New Ref named by the supplier bill number, as the voucher form offers), not by the queue.
 - **NOT BUILT** `ai.review.default`: Enter on a draft row says the draft's own screen is not built
-  yet instead of opening the purchase bill or plain-words form (rounds C and D).
+  yet. Plain-words entry (round C) takes a new sentence, not a stored draft, so it is not opened
+  from the queue; the bill photo screen is round D.
 - **NOT BUILT** `ai.review.default`: the title bar's AI chip reads "AI: not set up" (the fixture
   company stores no tier); the mock's reads "AI on this computer" (AI settings round).
 - **NOT BUILT** Home rows do not open their proposal; the empty state's "Read a bill" (Alt+O).
@@ -372,6 +373,9 @@ Classes:
 - **NOT BUILT** `ai.quick-entry.rejected`: no reason buttons (Wrong ledger, amount, account); the
   rejection is stored without a reason. Accept stays on the screen with "Payment <number> posted."
   where the mock goes to the day book. Enter "Edit in the voucher form" says it is not built yet.
+- **DELIBERATE** `ai.quick-entry.accepted` stays on the screen with the card marked Accepted and
+  "Payment PY/0319 posted." (the mock was changed to match in round C); `.idle` and `.read-failed`
+  were added to the mock in round C, the failure text being the reader's own words.
 - **NOT BUILT** `ai.quick-entry.loading`: Esc does not cancel the read; the key bar lists the idle
   keys. The "Try" sentences are left out. Hindi words for the new lines are unsourced.
 - **NOT BUILT** `ask.result`, `ask.loading`, `ask.low-confidence`, `ask.unsupported`,

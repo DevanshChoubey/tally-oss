@@ -378,6 +378,9 @@ mark{background:var(--accent-soft);color:var(--accent-ink);border-radius:2px;pad
  {"id":"ai.quick-entry.unknown-ledger","kind":"validation-error","hash":"screen=quick-entry&state=unknown-ledger&ai=on","title":"Plain-words entry, unknown name (later release)","description":"No ledger named Ramesh: the engine blocks the draft and the assistant invents none."},
  {"id":"ai.quick-entry.loading","kind":"loading","hash":"screen=quick-entry&state=loading&ai=on","title":"Plain-words entry, drafting (later release)","description":"The sentence is with the assistant; nothing is shown until the engine has checked its draft."},
  {"id":"ai.quick-entry.rejected","kind":"happy","hash":"screen=quick-entry&state=rejected&ai=on","title":"Plain-words entry, rejected (later release)","description":"Rejected: nothing was posted, and the rejection is in the AI activity log."},
+ {"id":"ai.quick-entry.idle","kind":"empty","hash":"screen=quick-entry&state=idle&ai=on","title":"Plain-words entry, ready (later release)","description":"A model can run: the box has focus and nothing is drafted until Enter."},
+ {"id":"ai.quick-entry.accepted","kind":"happy","hash":"screen=quick-entry&state=accepted&ai=on","title":"Plain-words entry, accepted (later release)","description":"Ctrl+A posted the draft through the engine; the card says Accepted and names the voucher number the engine gave."},
+ {"id":"ai.quick-entry.read-failed","kind":"error","hash":"screen=quick-entry&state=read-failed&ai=on","title":"Plain-words entry, not read (later release)","description":"The reader refused the answer (a contra voucher; plain words draft payments and receipts only). Nothing is stored as a draft; the failure is in the AI activity log."},
  {"id":"ai.quick-entry.not-installed","kind":"empty","hash":"screen=quick-entry&state=not-installed&ai=on","title":"Plain-words entry, no local model (later release)","description":"On this computer with no model the build can run: the box is disabled, the reason is named, and the voucher forms are offered."},
  {"id":"hi.home.default","kind":"happy","hash":"screen=home&state=default&lang=hi","title":"Home, Hindi","description":"The default Home with every word the app translates shown in Hindi; figures, dates and digit grouping unchanged."},
  {"id":"hi.sales-invoice.default","kind":"happy","hash":"screen=sales-invoice&state=default&lang=hi","title":"Sales invoice, Hindi","description":"The intra-state item invoice in Hindi."},
@@ -1697,12 +1700,23 @@ const QE={
  'unknown-ledger':{text:'Ramesh ko 5000 cash diya',marks:[['Ramesh','payee'],['5000','amount'],['cash','account']]},
  loading:{text:'paid rent 25k to Sharma Properties from Saptagiri',marks:[]},
  'not-installed':{text:'',marks:[]},
+ idle:{text:'',marks:[]},
+ accepted:{text:'paid rent 25k to Sharma Properties from Saptagiri',marks:[['25k','amount'],['Saptagiri','account'],['rent','ledger']]},
+ 'read-failed':{text:'moved 10k from cash to Saptagiri',marks:[]},
  rejected:{text:'paid rent 25k to Sharma Properties from Saptagiri',marks:[['25k','amount'],['Sharma Properties','payee'],['Saptagiri','account'],['rent','ledger']]}};
 function markText(t,marks){let h=esc(t);for(const [m,k] of marks)h=h.replace(esc(m),`<mark class="bind q" title="${k}" style="background:var(--ai-soft);color:var(--ai-ink)">${esc(m)}</mark>`);return h}
 SCREENS['quick-entry']={title:'Plain-words entry',default:'proposal',
  render(st){const q=QE[st]||QE.proposal;const b=balances();
   let card='';
-  if(st==='not-installed')card=`<div class="card pad"><div class="note warn">${ic('cpu')}<span><b>No local model can run.</b> This build has no local model runtime. Choose a model file in ${kb('AI and privacy')}; nothing is downloaded.</span></div><h2 style="margin-top:12px">Type it myself</h2><div class="row" style="gap:8px"><button class="btn" data-go="${hashFor('payment')}">Payment ${kb('F5')}</button><button class="btn" data-go="${hashFor('receipt')}">Receipt ${kb('F6')}</button></div></div>`;
+  if(st==='not-installed')card=`<div class="card pad"><div class="note warn">${ic('cpu')}<span><b>No local model can run.</b> No model file is chosen, and no local inference runtime is built into this version of Ledgerly. Choose a model file in AI and privacy; nothing is downloaded.</span></div><button class="btn" style="margin-top:8px" data-go="${hashFor('ai-settings')}">AI and privacy</button><h2 style="margin-top:12px">Type it myself</h2><div class="row" style="gap:8px"><button class="btn" data-go="${hashFor('payment')}">Payment ${kb('F5')}</button><button class="btn" data-go="${hashFor('receipt')}">Receipt ${kb('F6')}</button></div></div>`;
+  else if(st==='idle')card=`<div class="card pad"><p class="t2" style="margin:0">Press Enter to draft. The draft waits for you; nothing is posted until you accept.</p></div>`;
+  else if(st==='read-failed')card=`<div class="note warn">${ic('alert')}<span>The assistant could not read it: unsupported: natural-language entry for a contra voucher (only payments and receipts are drafted from text)</span></div><h2 style="margin-top:12px">Type it myself</h2><div class="row" style="gap:8px"><button class="btn" data-go="${hashFor('payment')}">Payment ${kb('F5')}</button><button class="btn" data-go="${hashFor('receipt')}">Receipt ${kb('F6')}</button></div>`;
+  else if(st==='accepted')card=proposal({kind:'Draft payment',src:[srcChip('chat','Your words'),srcChip('cpu','Local model')],status:'done',
+    body:`<table class="t"><thead><tr><th>Dr / Cr</th><th>Ledger</th><th class="num">Amount</th></tr></thead><tbody>
+     <tr><td>Dr</td><td>Rent ${prov('ai','AI: ledger')}</td><td class="num">${inr(R(25000))} ${prov('you','"25k"')}</td></tr>
+     <tr><td>Cr</td><td>Saptagiri Commercial Bank A/c ${prov('ai','AI: account')}</td><td class="num">${inr(R(25000))} ${prov('eng','balancing')}</td></tr></tbody></table>
+     <p class="meta" style="margin-top:8px">Date: <b>21 Nov 2026</b>, today, as for any new voucher; no date was typed.</p>`,
+    checks:[['ok','Dr equals Cr (engine).']]})+`<div class="note ok" style="margin-top:8px">${ic('check')}<span>Payment PY/0319 posted.</span></div>`;
   else if(st==='loading')card=`<div class="card pad"><div class="row t2">${ic('cpu')}Drafting on this computer… ${kb('Esc')} cancels</div>${skelRows(6,[50,80,70,60,90,40])}</div>`;
   else if(st==='hinglish'){const bill=openBills().find(x=>x.ref==='SI/0401');
    card=proposal({kind:'Draft receipt',src:[srcChip('chat','Your words'),srcChip('cpu','Local model')],conf:3,editKey:'Enter',
@@ -1734,12 +1748,12 @@ SCREENS['quick-entry']={title:'Plain-words entry',default:'proposal',
  },
  mount(st){const t=$('#qtext');t.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();e.stopPropagation();const v=t.value;go(hashFor('quick-entry',/ se | ko | aaya| diya/i.test(' '+v+' ')?(/ramesh/i.test(v)?'unknown-ledger':'hinglish'):'proposal'),'ai-proposal-arrive')}})},
  key(k,e,st){if(['proposal','hinglish','unknown-ledger'].includes(st)){
-   if(k==='Ctrl+A'){const b=$('.prop [data-act="accept"]');if(b.disabled){toast('Accept is blocked: '+b.title);return true}animateThen('proposal-accept',()=>{go(hashFor('day-book'),'screen-push');toast(st==='hinglish'?'Receipt RC/0220 posted and bank line matched.':'Payment PY/0319 posted.',true)});return true}
+   if(k==='Ctrl+A'){const b=$('.prop [data-act="accept"]');if(b.disabled){toast('Accept is blocked: '+b.title);return true}animateThen('proposal-accept',()=>{if(st==='hinglish'){go(hashFor('day-book'),'screen-push');toast('Receipt RC/0220 posted and bank line matched.',true)}else go(hashFor('quick-entry','accepted'))});return true}
    if(k==='Alt+D'){animateThen('proposal-reject',()=>go(hashFor('quick-entry','rejected')));return true}
    if(k==='Enter'&&!isTyping()){go(hashFor(st==='hinglish'?'receipt':'payment'),'screen-push');return true}}
   if(st==='loading'&&k==='Escape'){go(hashFor('home'));return true}return false},
  back(){return hashFor('home')},
- keys(st){return st==='not-installed'?[['','Plain-words entry'],['F5','Payment'],['F6','Receipt'],['Esc','Back']]:st==='rejected'?[['','Rejected'],['F5','Type it myself'],['Esc','Back']]:[['','Plain-words draft'],['Ctrl+A','Accept and post'],['Enter','Edit in the voucher form'],['Alt+D','Reject'],['Esc','Back']]}
+ keys(st){return ['not-installed','idle','accepted','read-failed'].includes(st)?[['','Plain-words entry'],['F5','Payment'],['F6','Receipt'],['Esc','Back']]:st==='rejected'?[['','Rejected'],['F5','Type it myself'],['Esc','Back']]:[['','Plain-words draft'],['Ctrl+A','Accept and post'],['Enter','Edit in the voucher form'],['Alt+D','Reject'],['Esc','Back']]}
 };
 
 /* =====================================================================
