@@ -2,8 +2,8 @@
 //!
 //! It starts the shell the way `main` does (`Shell::cold_start`), checks the first screen is the
 //! setup welcome, types a company into the setup wizard with the keyboard (as a person would),
-//! waits for the background job to write the company file under a fresh home folder, and then
-//! checks the file: the audit chain verifies and AI is off. CI runs this on Linux, Windows and
+//! waits for the background job to write the company file under a fresh home folder and for the
+//! shell to open it, and then checks the file: the audit chain verifies and AI is off. CI runs this on Linux, Windows and
 //! macOS; `LEDGERLY_SMOKE_HOME` names the fresh home (default: a folder under the test target
 //! directory), so a later CI step can run `ledgerly verify` on the file this test made.
 //!
@@ -144,11 +144,33 @@ fn a_fresh_install_reaches_the_welcome_and_creates_a_company_with_ai_off() {
         );
         std::thread::sleep(Duration::from_millis(20));
     };
-    // Let the job finish and the shell open the company, then settle a few frames.
-    for _ in 0..200 {
+    // The file appears when `SqliteStore::create` makes it, before the job has written the
+    // company into it, so its appearance is not the end of the job. Wait, within the same
+    // deadline, until the shell has opened the new company (its books and AI tier read back
+    // through the worker); a slow disk only makes this take longer (s21: an fsync delayed by
+    // 700 ms made the fixed 200-frame wait open a half-written file, `NotACompanyFile`).
+    loop {
         frame(&ctx, &mut shell, vec![]);
+        let app = shell.app_ctx_mut();
+        let opened = app
+            .books
+            .as_ref()
+            .is_some_and(|b| b.company.name == "Smoke Test Traders");
+        if opened && app.ai_tier.is_some() {
+            break;
+        }
+        assert!(
+            Instant::now() < deadline,
+            "the shell did not open the new company in {}",
+            file.display()
+        );
         std::thread::sleep(Duration::from_millis(5));
     }
+    assert_eq!(
+        shell.app_ctx_mut().ai_tier,
+        Some(AiTier::Off),
+        "the shell must open the new company with AI off"
+    );
 
     let api = Api::open(&file).unwrap();
     assert_eq!(

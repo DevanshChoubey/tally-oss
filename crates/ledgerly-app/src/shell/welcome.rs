@@ -85,6 +85,13 @@ pub(crate) fn hand_over(ctx: &mut AppCtx, mut api: Api) -> Result<(), String> {
         // are read, so opening a company touches neither the keychain nor the network.
         api.attach_key_vault(make());
     }
+    if crate::release::ai_enabled()
+        && let Some(setup) = crate::ocr_setup::ocr_setup()
+    {
+        // The reader loads its models on first use, never here: opening a company reads no
+        // model file and opens no connection.
+        api.attach_bill_ocr(setup.make_reader());
+    }
     let worker = ApiWorker::spawn(api).map_err(|e| format!("Could not start the worker: {e}"))?;
     // The books on screen belong to the previous company; the shell fetches the new ones from
     // the new worker.

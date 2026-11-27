@@ -170,13 +170,15 @@ fn the_keys_for_local_and_cloud_change_nothing() {
         ..AppCtx::default()
     };
     let mut screen = AiSettingsScreen::default();
-    for _ in 0..200 {
+    // Wait for the load as the test above does: keys pressed before it would prove nothing.
+    for _ in 0..2000 {
         let _text = frame(&mut screen, &mut app, &[]);
         if screen.loaded() {
             break;
         }
         std::thread::sleep(Duration::from_millis(2));
     }
+    assert!(screen.loaded(), "the company file did not load");
     for key in [Key::Num2, Key::Num3, Key::Num1] {
         let _text = frame(&mut screen, &mut app, &[key]);
     }

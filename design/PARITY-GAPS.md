@@ -213,7 +213,9 @@ Classes:
   The mock's KSK INDORE line is an exact match in the app (same amount, same day).
 - **NOT BUILT** `bank.suggested-ledger` (a new ledger for unexplained lines).
 - **NOT BUILT** the cloud prompt for bank lines: the cloud provider refuses (`match_bank_line`'s
-  default), and with a cloud provider each unmatched line logs that refusal on every load.
+  default). A line whose read failed is not asked again with the same provider and model
+  version, so the refusal is logged once per line, not on every load (round G, tested; a read
+  cancelled or failed on the network or the key is asked again).
 - **DELIBERATE** `bank.default` shows the empty state because the fixture has no statement.
 
 ## Payment, receipt, contra, journal (`payment.*`, `receipt.*`, `contra.*`, `journal.*`)
@@ -382,13 +384,30 @@ Classes:
   `claude-haiku-5-5`; the cloud panel shows the model each feature is sent to. The cloud panel's
   rows are now Format, Requests go to, Bill reading, Plain words, Other features (mock changed
   first); the fixture's chat endpoint is a base URL.
-- **DELIBERATE** (owner, 2026-11-27) no local model for now: the reader and language rows stay
-  "Not installed"; no runtime is linked and nothing is downloaded. Cloud is the only real provider.
-- **NOT BUILT** the cloud assistant (`Api::cloud_assistant`) reads no bill image: an image cannot be
-  redacted, and the per-document confirmation (`purchase-bill.cloud-consent`) is not built, so the
-  `claude-sonnet-5-5` default is stored and shown but not yet used. Open question for the owner:
-  should a cloud bill read send the image after a per-document confirmation, or the local OCR text
-  (ocrs) redacted?
+- **FIX** (s21, `s21-ocr-sheet-1.png`) `ai.ai-settings.local`, `.local-downloading`,
+  `.local-ready`, `.local-download-failed` (mock states added first): the Reader row is the
+  attached ocrs reader's state. With its model files not there it says which and offers "Download
+  the OCR models" (a button, pressed by a click or, after Tab, by Space; the test clicks). It runs off the
+  UI thread with the app's fetcher only when pressed, from the two fixed URLs; a file whose SHA-256
+  is not the recorded one is not kept, and the note says so with both checksums. The Network row
+  names the download as the one connection. Opening a company attaches a reader that loads
+  nothing; the models load on first use and are kept. Owner decisions 2026-11-27 (OCR is ocrs;
+  the download with the owner's permission and the two checksums, relayed by the coordinator).
+- **DELIBERATE** the language row stays "Not installed": no local language model is linked; only
+  bill reading has a local reader.
+- **NOT BUILT** `.local-ready` and `.local-downloading` are captured with the capture tool's
+  reader and held fetcher; no capture shows real model files loading, and the real fetcher
+  (`UreqModelFetch`) and `OcrsReader` over real files are wired in the real window only, unrun in
+  tests. The models folder is `ocr-models` under the app's config folder.
+- **NOT BUILT** the cloud assistant (`Api::cloud_assistant`) reads no bill image, so the
+  `claude-sonnet-5-5` default is stored and shown but not yet used. Decided (coordinator,
+  2026-11-27): a cloud bill read sends the image only after a per-document confirmation showing
+  what is sent and to which provider; sending the redacted ocrs text instead is a choice on the
+  same confirmation, its default when ocrs is installed. Not built in round s21: the confirmation
+  screen (`purchase-bill.cloud-consent`, in the mock), the image and text request bodies for both
+  formats, and the provider's reply as OCR lines (whose values must still need review). Needed
+  tests: no transport call before the confirmation, no image bytes on the text path, the consent
+  and a decline both logged.
 - **NOT BUILT** the app does not yet attach the cloud assistant when a company with the Cloud tier
   opens (the AI-in-release switch stays false); tests build it through the API with a recording
   transport.
@@ -461,27 +480,50 @@ Classes:
 - **NOT BUILT** `ask.low-confidence`: a `ReportQuery` has no confidence and no second reading.
 - **NOT BUILT** the lead words "Unsupported." and "Not read." are not bold in the app's note, and
   the provider chips in the card head are plain text, as on the plain-words card.
-- **DELIBERATE** an ask the engine cannot run is logged as `ReadFailed` with a reason starting
-  "Unsupported" rather than a new AI event kind, so the stored event format is unchanged.
+- **FIX** (round G, coordinator 2026-11-27) an ask the engine cannot run is logged as its own AI
+  event kind, `NotRun` (log text "Not run: ..."), and a report engine error after the provider
+  answered is logged as `NotRun` before the error is returned (it went back unlogged before).
+  Entries written before keep their bytes and record hash and still read as `ReadFailed`
+  (`ledgerly-store/tests/s21_ai_event_compat.rs`, constants observed on the pre-change tree). A
+  file with a `NotRun` entry does not open in a build from before this change.
 - **NOT BUILT** `gst.recon-explain`: the mock's card is an explanation in words around figures
   bound to the engine, plus a draft fix. None of the four typed proposals (`VoucherDraft`,
   `MatchSuggestion`, `ReportQuery`, `MappingSuggestion`) carries an explanation, and an
   explanation the provider writes is prose, which may state a number the engine did not compute.
   Building it needs a new typed proposal (the cause chosen from a fixed list the engine checks,
-  with every figure the engine's), which is a change to the frozen proposal set for the
-  coordinator to decide. The review queue keeps no 2B row for it.
+  with every figure the engine's). Decided (coordinator, 2026-11-27): add such a proposal, its
+  explanation a template with typed slots filled from engine-computed fields only, with a test
+  that a provider number never reaches the screen. Not built in round s21 (time): the provider's
+  answer should be a payload-free cause enum, so the guarantee is structural. The review queue
+  keeps no 2B row for it.
 - **DELIBERATE** (owner, 2026-11-27) OCR is `ocrs` (MIT OR Apache-2.0; `default-features = false`
   with `onnx`, and `rten` with `onnx_format`; `cargo deny check` passes). `ledgerly_assist::ocr_models`
   names the two model files and their fixed URLs (from the ocrs 0.14.0 crate's
   `examples/download-models.sh`), says Not installed while they are missing or do not load, and
   downloads only on request, keeping a file only when its SHA-256 matches. Nothing was downloaded.
-- **NOT BUILT** the OCR model download refuses: no checksum is recorded, and computing one would
-  mean downloading the files. Owner question: the SHA-256 of `text-detection.onnx` and
-  `text-recognition.onnx`.
-- **NOT BUILT** reading a bill with ocrs: ocrs gives each line its characters and boxes but no
-  confidence, and the bill reader blanks values by the OCR line's confidence. A made-up confidence
-  would be a silent default. Owner question: what stands in for it (for example every ocrs value
-  marked for review). No screen shows the OCR model state or a download button yet (no mock state).
+- **FIX** (owner allowed one fetch, 2026-11-27) the OCR model checksums are recorded: the SHA-256
+  of the two files the coordinator fetched from the fixed URLs (2,499,479 and 9,713,177 bytes). A
+  download keeps a file only when its hash is that one, and stops at the first that differs.
+- **DELIBERATE** (coordinator, 2026-11-27) ocrs gives no confidence, so every value it reads
+  carries the lowest confidence, "needs review" (`ledgerly_assist::review::NEEDS_REVIEW_PERMILLE`,
+  0). No figure is invented. Such a value is kept only when the person confirms it
+  (`DraftEdits::confirmed`, logged in the accept's human edits as `confirmed`); while any read field
+  is unconfirmed the engine check blocks on it, so a printed total is never silently left out of
+  the comparison. `OcrModels::read_png` reads a PNG with the loaded models (boxes from the
+  characters, empty lines left out). Checked once by hand with the owner-fetched models on
+  2026-11-27: a bill drawn in the reader's `Label value` layout came back line for line and the
+  reader drafted the drawn values (fixture `ledgerly-assist/tests/fixtures/ocrs/bill-left.*`).
+- **FIX** (round G) `ai.purchase-bill.needs-review` is built (mock state first; capture fixture
+  `GodavariBillOcrs`, the bill fixture at the needs-review confidence; `s21-review-sheet-1/2`).
+  Each value read by ocrs is tagged "needs review" with a Confirm button until confirmed, then
+  "you confirmed"; the check counts the values still waiting and Accept stays blocked on them. A
+  line that names no ledger is chosen in its select and is not counted as a value to confirm (as in
+  the mock). The card now always shows the supplier GSTIN and the printed tax, as read or "Not
+  read" (mock `ledger-lines` and `needs-review` updated): before, a read GSTIN or tax that needed
+  review had no Confirm anywhere on screen, so the draft could never be accepted.
+- **NOT BUILT** a bill whose amounts are printed right-aligned, apart from their labels: ocrs
+  returns the labels and the amounts as separate lines (fixture `bill-right.*`, observed), and the
+  reader reads `Label value` on one line only, so it reads no amount from such a bill.
 - **FIX** (round D) `ai.purchase-bill.choose`, `.reading`, `.ledger-lines`, `.rejected` and
   `.error` are built on the bill photo screen with the assistant (mock states added first;
   `s21-d-sheet-1/2`). The photo is drawn with a box and label on each value the reader took; the

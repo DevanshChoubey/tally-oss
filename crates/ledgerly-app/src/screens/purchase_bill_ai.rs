@@ -19,8 +19,8 @@ use egui::{
     StrokeKind, TextEdit, TextureHandle, TextureOptions, Ui, vec2,
 };
 use ledgerly_api::{
-    Accepted, AiGate, Api, BillRead, DraftCheck, DraftEdits, Proposal, ProviderPlace, SourceRef,
-    VoucherDraft,
+    Accepted, AiGate, Api, BillRead, DraftCheck, DraftEdits, DraftField, Proposal, ProviderPlace,
+    SourceRef, VoucherDraft, needs_review,
 };
 use ledgerly_core::{CancelToken, Date, DrCr, EventSeq, LedgerId, Outcome, Paise};
 
@@ -93,6 +93,10 @@ struct BillView {
     confidence: u16,
     /// The ledgers the person chose, by draft line.
     chosen: Vec<(usize, LedgerId)>,
+    /// The fields of the draft as read that need review (read by the OCR reader).
+    review: Vec<DraftField>,
+    /// The fields the person confirmed against the photo.
+    confirmed: Vec<DraftField>,
     /// Every ledger of the company, by name, for the open lines' lists.
     choices: Vec<(LedgerId, String)>,
     /// The engine's word on the draft with `chosen`.
@@ -108,6 +112,15 @@ struct Photo {
     image: Arc<ColorImage>,
     /// A label and a box `[x, y, w, h]` in image pixels for each value read.
     boxes: Vec<(String, [u32; 4])>,
+}
+
+/// What the person did on the card: chose a ledger for an open line, or confirmed a value.
+#[derive(Debug, Clone, Copy)]
+enum Pick {
+    /// A ledger for the draft line at this index.
+    Ledger(usize, LedgerId),
+    /// A value read from the bill, checked against the photo.
+    Confirm(DraftField),
 }
 
 /// What a read gave the screen.
@@ -277,6 +290,18 @@ impl AiBill {
         }
     }
 
+    /// Confirms a value read from the bill (the Confirm button beside it); the engine checks the
+    /// draft again.
+    pub(crate) fn confirm_field(&mut self, field: DraftField) {
+        if let Phase::Draft(_, view) = &mut self.phase
+            && view.review.contains(&field)
+            && !view.confirmed.contains(&field)
+        {
+            view.confirmed.push(field);
+            self.recheck = true;
+        }
+    }
+
     fn start_gate(&mut self, worker: &ApiWorker) {
         self.latest.start(worker, |api: &mut Api| {
             Reply::Gate(
@@ -310,9 +335,10 @@ impl AiBill {
         let id = view.id;
         let draft = view.draft.clone();
         let chosen = view.chosen.clone();
+        let confirmed = view.confirmed.clone();
         self.recheck = false;
         self.latest.start(worker, move |api: &mut Api| {
-            Reply::Checked(check(api, id, &draft, &chosen).map_err(|e| e.to_string()))
+            Reply::Checked(check(api, id, &draft, &chosen, &confirmed).map_err(|e| e.to_string()))
         });
     }
 
@@ -320,6 +346,7 @@ impl AiBill {
         let id = view.id;
         let edits = DraftEdits {
             line_ledgers: view.chosen.clone(),
+            confirmed: view.confirmed.clone(),
             ..DraftEdits::default()
         };
         self.latest.start(worker, move |api: &mut Api| {
@@ -465,8 +492,10 @@ impl AiBill {
                     chose = c;
                 });
             });
-        if let Some((line, ledger)) = chose {
-            self.choose_ledger(line, ledger);
+        match chose {
+            Some(Pick::Ledger(line, ledger)) => self.choose_ledger(line, ledger),
+            Some(Pick::Confirm(field)) => self.confirm_field(field),
+            None => {}
         }
         if let Some(action) = action {
             self.act(action, ctx);
@@ -620,7 +649,7 @@ impl AiBill {
         ui: &mut Ui,
         tr: &crate::i18n::Tr,
         keys_free: bool,
-    ) -> (Ask, Option<PropAction>, Option<(usize, LedgerId)>) {
+    ) -> (Ask, Option<PropAction>, Option<Pick>) {
         let mut asked = Ask::Nothing;
         let mut action = None;
         let mut chose = None;
@@ -932,7 +961,7 @@ fn bill_card(
     state: PropState,
     keys: bool,
     tr: &crate::i18n::Tr,
-) -> (Option<PropAction>, Option<(usize, LedgerId)>) {
+) -> (Option<PropAction>, Option<Pick>) {
     let blocked = view.checked.verdict.as_ref().err().map(String::as_str);
     let why = lit("Fix the red items first.");
     let mut chose = None;
@@ -974,20 +1003,22 @@ fn bill_card(
 }
 
 /// The values read from the bill head, each with where it came from.
-fn bill_fields(ui: &mut Ui, photo: &Photo, view: &BillView) {
+fn bill_fields(ui: &mut Ui, photo: &Photo, view: &BillView, open: bool) -> Option<Pick> {
     let t = tokens(ui);
     let draft = &view.draft;
-    let field = |ui: &mut Ui, label: &str, kind: Option<ProvKind>, value: &str| {
-        ui.vertical(|ui| {
-            ui.horizontal(|ui| {
-                ui.label(RichText::new(lit(label)).size(TEXT_META).color(t.text_3));
-                if let Some(kind) = kind {
-                    let _ = prov(ui, kind);
-                }
+    let mut picked = None;
+    let mut field =
+        |ui: &mut Ui, label: &str, kind: Option<(ProvKind, DraftField)>, value: &str| {
+            ui.vertical(|ui| {
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new(lit(label)).size(TEXT_META).color(t.text_3));
+                    if let Some((kind, f)) = kind {
+                        picked = review_tag(ui, view, f, kind, open).or(picked);
+                    }
+                });
+                ui.label(RichText::new(value).size(TEXT_BODY).color(t.text));
             });
-            ui.label(RichText::new(value).size(TEXT_BODY).color(t.text));
-        });
-    };
+        };
     let unread = lit("Not read");
     egui::Grid::new(("bill-fields", view.id.0))
         .num_columns(2)
@@ -996,13 +1027,13 @@ fn bill_fields(ui: &mut Ui, photo: &Photo, view: &BillView) {
             field(
                 ui,
                 "Supplier",
-                Some(ProvKind::Ai),
+                Some((ProvKind::Ai, DraftField::PartyName)),
                 draft.party_name.as_ref().map_or(&unread, |p| &p.value),
             );
             field(
                 ui,
                 "Supplier bill no.",
-                Some(ProvKind::FromBill),
+                Some((ProvKind::FromBill, DraftField::InvoiceNumber)),
                 draft.invoice_number.as_ref().map_or(&unread, |p| &p.value),
             );
             ui.end_row();
@@ -1010,14 +1041,63 @@ fn bill_fields(ui: &mut Ui, photo: &Photo, view: &BillView) {
                 .date
                 .as_ref()
                 .map_or_else(|| unread.clone(), |d| format::date(d.value));
-            field(ui, "Bill date", Some(ProvKind::FromBill), &date);
+            field(
+                ui,
+                "Bill date",
+                Some((ProvKind::FromBill, DraftField::Date)),
+                &date,
+            );
             field(ui, "File", None, &photo.file);
             ui.end_row();
+            field(
+                ui,
+                "Supplier GSTIN",
+                // A value not read has no source to show.
+                draft
+                    .supplier_gstin
+                    .as_ref()
+                    .map(|_| (ProvKind::FromBill, DraftField::SupplierGstin)),
+                draft.supplier_gstin.as_ref().map_or(&unread, |g| &g.value),
+            );
+            ui.end_row();
         });
+    picked
+}
+
+/// The tag beside a value read from the bill: its usual provenance, or, for a value that needs
+/// review, "needs review" and a Confirm button until the person confirms it, then "you
+/// confirmed". Returns the confirmation when the button was pressed.
+fn review_tag(
+    ui: &mut Ui,
+    view: &BillView,
+    field: DraftField,
+    usual: ProvKind,
+    open: bool,
+) -> Option<Pick> {
+    if !view.review.contains(&field) {
+        let _ = prov(ui, usual);
+        return None;
+    }
+    if view.confirmed.contains(&field) {
+        let _ = prov(ui, ProvKind::YouConfirmed);
+        return None;
+    }
+    let _ = prov(ui, ProvKind::NeedsReview);
+    let pressed = open
+        && ui
+            .add(
+                egui::Button::new(
+                    RichText::new(format!("\u{2713} {}", lit("Confirm"))).size(TEXT_META),
+                )
+                .small(),
+            )
+            .on_hover_text(lit("Confirm this value"))
+            .clicked();
+    pressed.then_some(Pick::Confirm(field))
 }
 
 /// The draft lines; an open line has a ledger list the person chooses from.
-fn bill_lines(ui: &mut Ui, view: &BillView, open: bool) -> Option<(usize, LedgerId)> {
+fn bill_lines(ui: &mut Ui, view: &BillView, open: bool) -> Option<Pick> {
     let t = tokens(ui);
     let mut chose = None;
     egui::Grid::new(("bill-lines", view.id.0))
@@ -1036,44 +1116,43 @@ fn bill_lines(ui: &mut Ui, view: &BillView, open: bool) -> Option<(usize, Ledger
                 });
                 ui.vertical(|ui| {
                     if line.open && open {
-                        let shown = line
-                            .ledger
-                            .clone()
-                            .unwrap_or_else(|| lit("Choose a ledger"));
-                        egui::ComboBox::from_id_salt(("bill-line", view.id.0, n))
-                            .selected_text(shown)
-                            .width(220.0)
-                            .show_ui(ui, |ui| {
-                                for (id, name) in &view.choices {
-                                    let on = line.ledger.as_deref() == Some(name.as_str());
-                                    if ui.selectable_label(on, name).clicked() {
-                                        chose = Some((n, *id));
-                                    }
-                                }
-                            });
-                        ui.label(
-                            RichText::new(format!(
-                                "{} \"{}\": {}",
-                                lit("Read"),
-                                line.read,
-                                lit("the bill names no ledger for it")
-                            ))
-                            .size(TEXT_META)
-                            .color(t.text_3),
-                        );
+                        chose = ledger_chooser(ui, view, n, line).or(chose);
                     } else {
-                        match &line.ledger {
-                            Some(name) => ui.label(name),
-                            None => ui.label(
-                                RichText::new(format!("{} {}", lit("No ledger named"), line.read))
+                        ui.horizontal(|ui| {
+                            match &line.ledger {
+                                Some(name) => ui.label(name),
+                                None => ui.label(
+                                    RichText::new(format!(
+                                        "{} {}",
+                                        lit("No ledger named"),
+                                        line.read
+                                    ))
                                     .color(t.bad),
-                            ),
-                        };
+                                ),
+                            };
+                            if !line.open && view.review.contains(&DraftField::LineLedger(n)) {
+                                chose = review_tag(
+                                    ui,
+                                    view,
+                                    DraftField::LineLedger(n),
+                                    ProvKind::FromBill,
+                                    open,
+                                )
+                                .or(chose);
+                            }
+                        });
                     }
                 });
                 ui.horizontal(|ui| {
                     ui.label(format::amount(line.amount));
-                    let _ = prov(ui, ProvKind::FromBill);
+                    chose = review_tag(
+                        ui,
+                        view,
+                        DraftField::LineAmount(n),
+                        ProvKind::FromBill,
+                        open,
+                    )
+                    .or(chose);
                 });
                 ui.end_row();
             }
@@ -1081,24 +1160,60 @@ fn bill_lines(ui: &mut Ui, view: &BillView, open: bool) -> Option<(usize, Ledger
     chose
 }
 
-/// The card's fields, lines and totals. Returns a ledger chosen for an open line.
-fn bill_body(ui: &mut Ui, photo: &Photo, view: &BillView, open: bool) -> Option<(usize, LedgerId)> {
+/// The ledger list of an open line, with the words it was read from. Returns the ledger chosen.
+fn ledger_chooser(ui: &mut Ui, view: &BillView, n: usize, line: &BillLine) -> Option<Pick> {
     let t = tokens(ui);
-    bill_fields(ui, photo, view);
+    let mut chose = None;
+    let shown = line
+        .ledger
+        .clone()
+        .unwrap_or_else(|| lit("Choose a ledger"));
+    egui::ComboBox::from_id_salt(("bill-line", view.id.0, n))
+        .selected_text(shown)
+        .width(220.0)
+        .show_ui(ui, |ui| {
+            for (id, name) in &view.choices {
+                let on = line.ledger.as_deref() == Some(name.as_str());
+                if ui.selectable_label(on, name).clicked() {
+                    chose = Some(Pick::Ledger(n, *id));
+                }
+            }
+        });
+    ui.label(
+        RichText::new(format!(
+            "{} \"{}\": {}",
+            lit("Read"),
+            line.read,
+            lit("the bill names no ledger for it")
+        ))
+        .size(TEXT_META)
+        .color(t.text_3),
+    );
+    chose
+}
+
+/// The card's fields, lines and totals. Returns a ledger chosen for an open line.
+fn bill_body(ui: &mut Ui, photo: &Photo, view: &BillView, open: bool) -> Option<Pick> {
+    let t = tokens(ui);
+    let mut chose = bill_fields(ui, photo, view, open);
     ui.add_space(10.0);
-    let chose = bill_lines(ui, view, open);
+    chose = bill_lines(ui, view, open).or(chose);
     ui.add_space(10.0);
     ui.columns(2, |cols| {
         if let [left, right] = cols {
             left.add(
                 egui::Label::new(para_text(
-                    &lit("Item rows are not read yet. Tax ledgers come from your masters; nothing is created."),
+                    &if view.review.is_empty() {
+                        lit("Item rows are not read yet. Tax ledgers come from your masters; nothing is created.")
+                    } else {
+                        lit("The OCR reader gives no confidence, so nothing it read is kept until you confirm it against the photo. Tab to a Confirm button; Space confirms.")
+                    },
                     TEXT_META,
                     t.text_2,
                 ))
                 .wrap(),
             );
-            totals_box(right, view);
+            chose = totals_box(right, view, open).or(chose);
         }
     });
     for name in &view.draft.create_ledgers {
@@ -1116,8 +1231,26 @@ fn bill_body(ui: &mut Ui, photo: &Photo, view: &BillView, open: bool) -> Option<
     chose
 }
 
+/// An amount as read from the bill, or "Not read".
+fn read_amount(ui: &Ui, read: Option<&ledgerly_api::Transcribed<Paise>>) -> RichText {
+    let t = tokens(ui);
+    read.map_or_else(
+        || {
+            RichText::new(lit("Not read"))
+                .size(TEXT_META)
+                .color(t.text_3)
+        },
+        |p| {
+            RichText::new(format::amount(p.value))
+                .size(TEXT_BODY)
+                .color(t.text)
+        },
+    )
+}
+
 /// The printed total as read, and the engine's total only when the engine made the voucher.
-fn totals_box(ui: &mut Ui, view: &BillView) {
+fn totals_box(ui: &mut Ui, view: &BillView, open: bool) -> Option<Pick> {
+    let mut picked = None;
     let t = tokens(ui);
     Frame::new()
         .fill(t.surface_2)
@@ -1136,19 +1269,38 @@ fn totals_box(ui: &mut Ui, view: &BillView) {
                 ui.add(egui::Label::new(value).wrap());
                 ui.add_space(4.0);
             };
-            let printed = view.draft.document_total.as_ref().map_or_else(
-                || {
-                    RichText::new(lit("Not read"))
+            let printed = read_amount(ui, view.draft.document_total.as_ref());
+            ui.horizontal(|ui| {
+                ui.label(
+                    RichText::new(lit("Printed total"))
                         .size(TEXT_META)
-                        .color(t.text_3)
-                },
-                |p| {
-                    RichText::new(format::amount(p.value))
-                        .size(TEXT_BODY)
-                        .color(t.text)
-                },
-            );
-            row(ui, &lit("Printed total"), ProvKind::FromBill, printed);
+                        .color(t.text_2),
+                );
+                picked = review_tag(
+                    ui,
+                    view,
+                    DraftField::DocumentTotal,
+                    ProvKind::FromBill,
+                    open,
+                );
+            });
+            ui.add(egui::Label::new(printed).wrap());
+            ui.add_space(4.0);
+            let tax = read_amount(ui, view.draft.document_tax.as_ref());
+            ui.horizontal(|ui| {
+                ui.label(
+                    RichText::new(lit("Printed tax"))
+                        .size(TEXT_META)
+                        .color(t.text_2),
+                );
+                if view.draft.document_tax.is_some() {
+                    picked =
+                        review_tag(ui, view, DraftField::DocumentTax, ProvKind::FromBill, open)
+                            .or(picked);
+                }
+            });
+            ui.add(egui::Label::new(tax).wrap());
+            ui.add_space(4.0);
             let engine = view.checked.engine_total.map_or_else(
                 || {
                     RichText::new(lit("Shown when the engine makes the voucher"))
@@ -1164,15 +1316,35 @@ fn totals_box(ui: &mut Ui, view: &BillView) {
             );
             row(ui, &lit("Engine total"), ProvKind::Engine, engine);
         });
+    picked
 }
 
 /// The engine's checks under the card.
 fn bill_checks(ui: &mut Ui, view: &BillView) {
     let t = tokens(ui);
-    let mut lines: Vec<(Icon, Color32, String)> = vec![match &view.checked.verdict {
+    let waiting = view
+        .review
+        .iter()
+        .filter(|f| !view.confirmed.contains(f) && !chosen_covers(view, **f))
+        .count();
+    let mut lines: Vec<(Icon, Color32, String)> = Vec::new();
+    if waiting > 0 {
+        let words = if waiting == 1 {
+            lit("value read from the bill needs review: confirm it against the photo.")
+        } else {
+            lit("values read from the bill need review: confirm each against the photo.")
+        };
+        lines.push((Icon::X, t.bad, format!("{waiting} {words}")));
+    }
+    lines.push(match &view.checked.verdict {
         Ok(()) => (Icon::Check, t.ok, lit("Dr equals Cr (engine).")),
+        Err(_) if waiting > 0 => (
+            Icon::X,
+            t.bad,
+            lit("Confirm each value read from the bill."),
+        ),
         Err(reason) => (Icon::X, t.bad, sentence_case(reason)),
-    }];
+    });
     if let (Some(date), Some(lock)) = view.checked.dates {
         lines.push(if date > lock {
             (
@@ -1199,6 +1371,26 @@ fn bill_checks(ui: &mut Ui, view: &BillView) {
             icon(ui, glyph, color);
             ui.label(RichText::new(line).size(TEXT_META).color(color));
         });
+    }
+}
+
+/// Whether `field` is settled by a ledger choice rather than a confirmation: the ledger of a line
+/// the person chose one for, or of a line that names none and waits for their choice.
+fn chosen_covers(view: &BillView, field: DraftField) -> bool {
+    match field {
+        // A line that names no ledger is the person's choice, made in its select and checked
+        // as "Choose a ledger": it is not a value to confirm (the mock's count leaves it out).
+        DraftField::LineLedger(n) => {
+            view.chosen.iter().any(|(i, _)| *i == n)
+                || view.draft.lines.get(n).is_some_and(|l| l.ledger.is_none())
+        }
+        DraftField::Date
+        | DraftField::PartyName
+        | DraftField::InvoiceNumber
+        | DraftField::SupplierGstin
+        | DraftField::LineAmount(_)
+        | DraftField::DocumentTotal
+        | DraftField::DocumentTax => false,
     }
 }
 
@@ -1278,21 +1470,9 @@ fn read(
     if let Some(reason) = not_read(&bytes) {
         return Ok(ReadDone::FileError(file, reason));
     }
-    let image = match image::load_from_memory_with_format(&bytes, image::ImageFormat::Png) {
-        Ok(decoded) => {
-            let rgba = decoded.to_rgba8();
-            let size = [
-                usize::try_from(rgba.width()).unwrap_or(0),
-                usize::try_from(rgba.height()).unwrap_or(0),
-            ];
-            ColorImage::from_rgba_unmultiplied(size, rgba.as_raw())
-        }
-        Err(e) => {
-            return Ok(ReadDone::FileError(
-                file,
-                format!("{} {e}", lit("the PNG could not be decoded:")),
-            ));
-        }
+    let image = match decode_png(&bytes) {
+        Ok(image) => image,
+        Err(reason) => return Ok(ReadDone::FileError(file, reason)),
     };
     let (id, proposal) = match api.read_bill_photo(&bytes, &file, cancel)? {
         BillRead::Drafted { id, proposal, .. } => (id, proposal),
@@ -1311,17 +1491,8 @@ fn read(
             ));
         }
     };
-    let checked = check(api, id, &draft, &[])?;
-    let mut choices: Vec<(LedgerId, String)> = match api.books()? {
-        Outcome::Value(books) => books
-            .masters
-            .ledgers
-            .values()
-            .map(|l| (l.id, l.name.clone()))
-            .collect(),
-        Outcome::Unsupported(_) => Vec::new(),
-    };
-    choices.sort_by(|a, b| a.1.cmp(&b.1));
+    let checked = check(api, id, &draft, &[], &[])?;
+    let choices = ledger_choices(api)?;
     let photo = Photo {
         file,
         image: Arc::new(image),
@@ -1329,6 +1500,8 @@ fn read(
     };
     let view = BillView {
         id,
+        review: needs_review(&draft),
+        confirmed: Vec::new(),
         confidence: lowest_confidence(&draft),
         draft,
         place,
@@ -1339,6 +1512,36 @@ fn read(
     Ok(ReadDone::Drafted(Box::new(photo), Box::new(view)))
 }
 
+/// The PNG decoded for the screen, or why it could not be.
+fn decode_png(bytes: &[u8]) -> Result<ColorImage, String> {
+    match image::load_from_memory_with_format(bytes, image::ImageFormat::Png) {
+        Ok(decoded) => {
+            let rgba = decoded.to_rgba8();
+            let size = [
+                usize::try_from(rgba.width()).unwrap_or(0),
+                usize::try_from(rgba.height()).unwrap_or(0),
+            ];
+            Ok(ColorImage::from_rgba_unmultiplied(size, rgba.as_raw()))
+        }
+        Err(e) => Err(format!("{} {e}", lit("the PNG could not be decoded:"))),
+    }
+}
+
+/// The company's ledgers by name, for the list an open line chooses from.
+fn ledger_choices(api: &mut Api) -> Result<Vec<(LedgerId, String)>, ledgerly_api::ApiError> {
+    let mut choices: Vec<(LedgerId, String)> = match api.books()? {
+        Outcome::Value(books) => books
+            .masters
+            .ledgers
+            .values()
+            .map(|l| (l.id, l.name.clone()))
+            .collect(),
+        Outcome::Unsupported(_) => Vec::new(),
+    };
+    choices.sort_by(|a, b| a.1.cmp(&b.1));
+    Ok(choices)
+}
+
 /// The engine's check of the draft with the person's choices, and the lines as the card shows
 /// them.
 fn check(
@@ -1346,9 +1549,11 @@ fn check(
     id: EventSeq,
     draft: &VoucherDraft,
     chosen: &[(usize, LedgerId)],
+    confirmed: &[DraftField],
 ) -> Result<Checked, ledgerly_api::ApiError> {
     let edits = DraftEdits {
         line_ledgers: chosen.to_vec(),
+        confirmed: confirmed.to_vec(),
         ..DraftEdits::default()
     };
     let outcome = api.check_ai_draft(id, &edits)?;

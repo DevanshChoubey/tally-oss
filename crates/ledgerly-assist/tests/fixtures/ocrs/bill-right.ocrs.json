@@ -1,0 +1,159 @@
+{
+ "doc_hash": "83642c6010b80407adda0e2e9dd9af3a87be482c71b5623e2b2f946b6c6f104e",
+ "lines": [
+  {
+   "page": 1,
+   "text": "Supplier: Kaveri Stationers",
+   "bbox": [
+    38,
+    31,
+    347,
+    32
+   ],
+   "confidence_permille": 0
+  },
+  {
+   "page": 1,
+   "text": "GSTIN: 29ABCDE1234F1ZW",
+   "bbox": [
+    39,
+    85,
+    361,
+    23
+   ],
+   "confidence_permille": 0
+  },
+  {
+   "page": 1,
+   "text": "Invoice No: KS/2026/0042",
+   "bbox": [
+    41,
+    137,
+    336,
+    25
+   ],
+   "confidence_permille": 0
+  },
+  {
+   "page": 1,
+   "text": "Date: 15/03/2026",
+   "bbox": [
+    40,
+    188,
+    228,
+    26
+   ],
+   "confidence_permille": 0
+  },
+  {
+   "page": 1,
+   "text": "Taxable Value",
+   "bbox": [
+    38,
+    240,
+    179,
+    24
+   ],
+   "confidence_permille": 0
+  },
+  {
+   "page": 1,
+   "text": "CGST @ 9%",
+   "bbox": [
+    40,
+    293,
+    154,
+    28
+   ],
+   "confidence_permille": 0
+  },
+  {
+   "page": 1,
+   "text": "SGST @ 9%",
+   "bbox": [
+    42,
+    345,
+    149,
+    27
+   ],
+   "confidence_permille": 0
+  },
+  {
+   "page": 1,
+   "text": "Total Tax ",
+   "bbox": [
+    39,
+    395,
+    147,
+    24
+   ],
+   "confidence_permille": 0
+  },
+  {
+   "page": 1,
+   "text": "Total",
+   "bbox": [
+    40,
+    450,
+    58,
+    21
+   ],
+   "confidence_permille": 0
+  },
+  {
+   "page": 1,
+   "text": "15,000.00",
+   "bbox": [
+    729,
+    238,
+    129,
+    28
+   ],
+   "confidence_permille": 0
+  },
+  {
+   "page": 1,
+   "text": "1,350.00",
+   "bbox": [
+    744,
+    294,
+    114,
+    24
+   ],
+   "confidence_permille": 0
+  },
+  {
+   "page": 1,
+   "text": "1,350.00",
+   "bbox": [
+    744,
+    346,
+    114,
+    24
+   ],
+   "confidence_permille": 0
+  },
+  {
+   "page": 1,
+   "text": "2,700.00",
+   "bbox": [
+    743,
+    394,
+    115,
+    27
+   ],
+   "confidence_permille": 0
+  },
+  {
+   "page": 1,
+   "text": "17,700.00",
+   "bbox": [
+    729,
+    450,
+    129,
+    23
+   ],
+   "confidence_permille": 0
+  }
+ ]
+}

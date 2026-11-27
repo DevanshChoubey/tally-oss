@@ -173,7 +173,8 @@ pub(crate) fn accepted_drafts(records: &[AuditRecord]) -> BTreeMap<VoucherId, Ai
                 | AiActivityKind::DraftRejected { .. }
                 | AiActivityKind::Answered { .. }
                 | AiActivityKind::ReadFailed { .. }
-                | AiActivityKind::CloudConsent { .. } => None,
+                | AiActivityKind::CloudConsent { .. }
+                | AiActivityKind::NotRun { .. } => None,
             },
             Event::MasterCreated(_)
             | Event::MasterAltered { .. }

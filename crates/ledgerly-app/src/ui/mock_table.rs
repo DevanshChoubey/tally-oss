@@ -47,6 +47,22 @@ pub fn muted(value: &str) -> Cell<'_> {
     })
 }
 
+/// A cell of body text it owns.
+pub fn text_owned<'a>(value: String) -> Cell<'a> {
+    Box::new(move |ui| {
+        let t = tokens(ui);
+        ui.add(Label::new(para_text(&value, TEXT_BODY, t.text)).wrap());
+    })
+}
+
+/// A cell of secondary text it owns (`.t2`).
+pub fn muted_owned<'a>(value: String) -> Cell<'a> {
+    Box::new(move |ui| {
+        let t = tokens(ui);
+        ui.add(Label::new(para_text(&value, TEXT_BODY, t.text_2)).wrap());
+    })
+}
+
 /// A cell holding a read-only switch named `name`.
 pub fn switch_cell(on: bool, name: &str) -> Cell<'_> {
     Box::new(move |ui| {

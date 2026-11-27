@@ -150,9 +150,10 @@ untracked), look at each, update `PARITY-GAPS.md`.
   failing 6 of 7 (the AI-off one passed on the old path). One app expectation was my own wrong
   derivation (Cash where the condensed trial balance shows Current Assets) and was corrected before
   green. 24 `lit` phrases of the new screen had no catalogue entry and only the full gate
-  (`i18n_lit_phrases`) caught it; their 24 Hindi entries are unsourced. Open: a store failure inside
-  `Api::report` after the provider answered returns the error without a log entry; no test can
-  make the report engine fail that way yet, so it is not fixed.
+  (`i18n_lit_phrases`) caught it; their 24 Hindi entries are unsourced. Closed in round G: an error
+  from `Api::report` after the provider answered is logged as `NotRun` before it is returned
+  (tested with a balance sheet dated before the books begin, which the report engine refuses with
+  an error; a store failure itself cannot be made in a test, since the gate reads the log first).
 - Round F (part): the day book Origin of a voucher posted by accepting a draft is the reader's AI
   badge ("Plain-words draft, accepted"; it showed "Typed" before, the test saw it), and the
   assistant's bank match suggestions run end to end behind the gate (`Api::bank_ai_suggestions`,
@@ -165,6 +166,67 @@ untracked), look at each, update `PARITY-GAPS.md`.
   confidence), the download button and model state on a screen; `gst.recon-explain` (needs a new
   typed proposal). Tests written first, seen failing at compile, the checksum check by mutation;
   no real model file was loaded, so real ocrs inference is unrun.
+- OCR checksums: committed. The two SHA-256 the coordinator observed are the fixed checksums; the
+  download refuses bytes whose hash differs. Honesty note: the earlier test "the download refuses
+  while no checksum is recorded" was replaced (the decision changed the behaviour) by one that
+  checks the refusal for a file with no checksum through `download_model`, plus a mismatch test
+  over the fixed files; the two new tests were seen failing before the checksums were added.
+- ocrs reading and needs review: committed. `OcrModels::read_png` (lines boxed by their
+  characters, every value at the needs-review confidence) and `ledgerly_assist::review`
+  (`needs_review`, `confirm`); `DraftEdits::confirmed` with the engine check blocking on any read
+  field still unconfirmed. Real ocrs inference was run once by hand with the owner-fetched models
+  (release build, about 1 s a bill): the `Label value` bill read line for line, a right-aligned bill
+  split labels from amounts. The models folder was deleted after; the recorded outputs are test
+  fixtures. Tests first, seen failing at compile.
+- Needs-review screen (G): committed. `ai.purchase-bill.needs-review` on the bill photo screen:
+  needs-review and you-confirmed tags, Confirm buttons, the waiting count, and the supplier GSTIN
+  and printed tax rows (shown as "Not read" when absent, mock updated first). Honesty notes: the app
+  tests use `confirm_field` rather than Tab and Space; the first app test's count was changed from 8
+  to 7 when the unmatched line's ledger was taken out of the count to match the mock (the select
+  covers it); the GSTIN and tax test was written first and seen failing.
+  Follow-up: the engine check no longer asks to confirm the ledger of a line that names none (it
+  blocks on the missing ledger instead, the same block as before the needs-review change), and the
+  card shows the mock's OCR note with its keyboard path, tested by Tab to a Confirm and Space. Both
+  tests were seen failing first. The source chip still names the attached provider ("Test
+  provider" in the capture) where the mock says "OCR on this computer".
+- Local bill reader: committed (API). `BillOcr` (info, status, PNG to OCR lines) is attached to
+  the API like the key vault (`Api::attach_bill_ocr`); on the local tier with no provider attached,
+  bill reading's gate asks it and `read_bill_photo` reads with it, logged as ocrs 0.14.0. Other
+  features keep the local-model path. `OcrsReader` loads the models once, on the first status or
+  read that finds both files, and keeps them. Tests use a recorded reader (no model is loaded);
+  `OcrsReader` is tested over an empty folder and over files that are not models only, so real
+  inference through it is unrun. Tests first, seen failing at compile; one test's setup was
+  corrected before it first passed (the Cloud tier needs a key and settings to be chosen).
+- Not built at the end of round s21 (reasons in PARITY-GAPS): the cloud consent and cloud bill
+  read (decided, Q3); `gst.recon-explain` (decided: a typed template proposal); the
+  `bank.ai-suggestions` tab, card and capture (no room left in this round; a capture also needs a
+  sample line the assistant could match, which Godavari lacks);
+  the remaining Ask, bill-photo and bank items already listed as NOT BUILT.
+- OCR model state and download (settings): committed. Mock states `ai.ai-settings.local`,
+  `.local-downloading`, `.local-ready`, `.local-download-failed` were added first (hi.js
+  regenerated). The app's `OcrSetup` (models folder, reader maker, fetcher) is registered by the
+  real window (`ocr-models` under the config folder, `OcrsReader`, `UreqModelFetch`) and by the
+  capture tool (a fixed-status reader, a fetcher answering fictional bytes or held); tests hand
+  the screen their own. Opening a company attaches a reader that loads nothing. The download runs
+  on its own thread only when pressed; a kept download attaches a fresh reader and reads the
+  settings again. Tests (`s21_ocr_download`, written first, seen failing at compile): no fetch on
+  load or over 50 frames, the fixed first URL on a click, the downloading state while the fetch is
+  held, a mismatch keeps nothing and offers the download again, a ready reader shows no button.
+  A successful download cannot be tested (no bytes but the real files match the checksums), so the
+  path from a kept download to a loading reader is unrun. Sheet `s21-ocr-sheet-1.png`.
+  Honesty note: the local-reader commit before this one was made without the gates and has one
+  clippy error in its test (`assert!(..is_empty())`); this commit fixes it (`assert_eq!` on the
+  length, the same check). The gates pass on this commit.
+- s19 flake: fixed (test only). Cause: `s19_cold_start_smoke` left its wait as soon as a
+  `.ledgerly` file existed, but `SqliteStore::create` makes the file before the job writes the
+  company into it, and the test then waited a fixed 200 frames of 5 ms before `Api::open`. On a slow
+  disk the job was still writing and the open failed with `NotACompanyFile`. Reproduced every time
+  by delaying each fsync 700 ms with strace fault injection (CPU and I/O load alone did not); the
+  old test failed there, the new one passes there (11 s) and normally (1 s). The wait now runs,
+  within the same 120 s deadline, until the shell has opened the company (its books name it and its
+  AI tier is read), and checks the shell's tier is Off; the file assertions are unchanged.
+  `s19b`'s keys test waited 200 x 2 ms without checking the screen loaded (under load it could pass
+  without testing anything); it now waits like its sibling and asserts the load.
 - Honesty notes (F): the API and app bank tests were written first and seen failing (API at compile,
   app 3 of 4; the AI-off one passed on the old path); the Origin unit test was seen failing at
   compile only. One API test fixture was corrected (an alteration must keep the voucher number).

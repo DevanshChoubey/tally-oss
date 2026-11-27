@@ -21,6 +21,7 @@ ureq.workspace = true
 keyring.workspace = true
 ocrs.workspace = true
 rten.workspace = true
+image.workspace = true
 sha2.workspace = true
 thiserror.workspace = true
 tracing.workspace = true

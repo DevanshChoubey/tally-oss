@@ -4,17 +4,17 @@
 //! not shipped and never downloaded on their own: the user asks for the download, the files come
 //! from the fixed URLs in [`OCR_MODEL_FILES`] (the ones the `ocrs` 0.14.0 crate's
 //! `examples/download-models.sh` names), and each file is kept only when its SHA-256 matches the
-//! checksum recorded here. No checksum is recorded yet (the owner is asked for them, since
-//! computing one would mean downloading the file), so [`download_ocr_models`] refuses before it
-//! sends any request.
+//! checksum recorded here. The checksums are those of the files the coordinator fetched once with
+//! the owner's permission on 2026-11-27 (2,499,479 and 9,713,177 bytes). A file with no recorded
+//! checksum is refused before any request.
 //!
 //! [`ocr_models_status`] says whether the files in a folder load. Missing or unloadable files are
 //! [`ProviderStatus::NotInstalled`], with the reason in words the screen shows.
 //!
-//! Reading a bill with the loaded models is **not built**: `ocrs` gives each recognised line its
-//! characters and boxes but no confidence, and the bill reader blanks values by the OCR line's
-//! confidence ([`crate::ocr::OcrLine::confidence_permille`]). Putting a made-up confidence there
-//! would be a silent default, so the adapter waits for a decision on what stands in for it.
+//! [`OcrModels::read_png`] reads a PNG bill with the loaded models into an [`OcrOutput`], one
+//! [`OcrLine`] per line `ocrs` recognised, boxed by its characters. `ocrs` gives no confidence, so
+//! every line carries [`OCRS_CONFIDENCE_PERMILLE`], the lowest ("needs review", owner decision
+//! 2026-11-27): the validator keeps none of these values until the person confirms each one.
 
 use std::fmt;
 use std::io::Write as _;
@@ -23,8 +23,12 @@ use std::time::Duration;
 
 use sha2::{Digest, Sha256};
 
+use ledgerly_core::CancelToken;
+use ocrs::TextItem as _;
+
 use crate::AssistError;
-use crate::provider::ProviderStatus;
+use crate::ocr::{OcrLine, OcrOutput};
+use crate::provider::{ProviderInfo, ProviderPlace, ProviderStatus};
 
 /// One model file: its name in the models folder, where it is downloaded from, and the SHA-256
 /// (lower-case hex) it must have.
@@ -43,12 +47,12 @@ pub const OCR_MODEL_FILES: [OcrModelFile; 2] = [
     OcrModelFile {
         name: "text-detection.onnx",
         url: "https://ocrs-models.s3-accelerate.amazonaws.com/text-detection.onnx",
-        sha256: None,
+        sha256: Some("a917b23dbd9524b465df7e922641b3ff2981623df4ded5a0234004ef2fee7cfe"),
     },
     OcrModelFile {
         name: "text-recognition.onnx",
         url: "https://ocrs-models.s3-accelerate.amazonaws.com/text-recognition.onnx",
-        sha256: None,
+        sha256: Some("86c145c2edb96c8caed5b1ebb8f44d706408922211451c309c625157dd6061c5"),
     },
 ];
 
@@ -134,10 +138,78 @@ impl OcrModels {
         Ok(OcrModels { engine })
     }
 
-    /// The `ocrs` engine over the loaded models.
-    pub fn engine(&self) -> &ocrs::OcrEngine {
-        &self.engine
+    /// Reads a PNG image into its text lines, each with the box of its characters and
+    /// [`OCRS_CONFIDENCE_PERMILLE`]. Lines with no characters are left out. Boxes are clamped to
+    /// the image (a character box can reach past its edge by a pixel).
+    ///
+    /// # Errors
+    /// [`AssistError::Unsupported`] when the bytes are not a PNG, [`AssistError::Output`] when
+    /// `ocrs` fails, [`AssistError::Cancelled`] when cancelled between steps.
+    pub fn read_png(
+        &self,
+        png: &[u8],
+        sha256: &str,
+        cancel: &CancelToken,
+    ) -> Result<OcrOutput, AssistError> {
+        let image = image::load_from_memory_with_format(png, image::ImageFormat::Png)
+            .map_err(|e| {
+                AssistError::Unsupported(ledgerly_core::Unsupported {
+                    what: "reading this image".to_owned(),
+                    reason: format!("it is not a PNG the reader can open: {e}"),
+                })
+            })?
+            .into_rgb8();
+        let (width, height) = image.dimensions();
+        let failed = |e: &dyn fmt::Display| AssistError::Output {
+            reason: format!("the OCR engine failed: {e}"),
+        };
+        let source = ocrs::ImageSource::from_bytes(image.as_raw(), (width, height))
+            .map_err(|e| failed(&e))?;
+        let input = self.engine.prepare_input(source).map_err(|e| failed(&e))?;
+        let words = self.engine.detect_words(&input).map_err(|e| failed(&e))?;
+        if cancel.is_cancelled() {
+            return Err(AssistError::Cancelled);
+        }
+        let line_rects = self.engine.find_text_lines(&input, &words);
+        let recognised = self
+            .engine
+            .recognize_text(&input, &line_rects)
+            .map_err(|e| failed(&e))?;
+        if cancel.is_cancelled() {
+            return Err(AssistError::Cancelled);
+        }
+        let lines = recognised
+            .iter()
+            .flatten()
+            .filter_map(|line| ocr_line(line, width, height))
+            .collect();
+        Ok(OcrOutput {
+            doc_hash: sha256.to_owned(),
+            lines,
+        })
     }
+}
+
+/// The confidence every value read by `ocrs` carries: the lowest, "needs review". `ocrs` reports
+/// none, and a made-up one would be a silent default.
+pub const OCRS_CONFIDENCE_PERMILLE: u16 = crate::review::NEEDS_REVIEW_PERMILLE;
+
+/// One recognised line as an [`OcrLine`] on page 1, or `None` when it has no characters.
+fn ocr_line(line: &ocrs::TextLine, width: u32, height: u32) -> Option<OcrLine> {
+    let chars = line.chars();
+    let clamp = |v: i32, max: u32| u32::try_from(v.max(0)).map_or(max, |v| v.min(max));
+    let left = chars.iter().map(|c| c.rect.left()).min()?;
+    let top = chars.iter().map(|c| c.rect.top()).min()?;
+    let right = chars.iter().map(|c| c.rect.right()).max()?;
+    let bottom = chars.iter().map(|c| c.rect.bottom()).max()?;
+    let (x, y) = (clamp(left, width), clamp(top, height));
+    let (r, b) = (clamp(right, width), clamp(bottom, height));
+    Some(OcrLine {
+        page: 1,
+        text: line.to_string(),
+        bbox: [x, y, r.saturating_sub(x), b.saturating_sub(y)],
+        confidence_permille: OCRS_CONFIDENCE_PERMILLE,
+    })
 }
 
 fn load_one(dir: &Path, name: &str) -> Result<rten::Model, OcrModelsError> {
@@ -171,6 +243,100 @@ pub fn ocr_models_status(dir: &Path) -> ProviderStatus {
         Err(e) => ProviderStatus::NotInstalled {
             reason: e.to_string(),
         },
+    }
+}
+
+/// The `ocrs` version this build links (Cargo.lock), logged as the bill reader's model version.
+pub const OCRS_VERSION: &str = "0.14.0";
+
+/// Reads a bill image into OCR lines on this computer. The API holds one for the local tier's
+/// bill reading, attached the way the key vault is; tests attach a recorded one, the app's `main`
+/// attaches an [`OcrsReader`].
+pub trait BillOcr: Send + Sync + fmt::Debug {
+    /// Who reads, as the gate and the log name it.
+    fn info(&self) -> ProviderInfo;
+
+    /// Whether it can read now. Cheap after the first call: implementations keep what they load.
+    fn status(&self) -> ProviderStatus;
+
+    /// The OCR lines of a PNG image whose SHA-256 is `sha256`.
+    ///
+    /// # Errors
+    /// [`AssistError`] when the image cannot be read.
+    fn read_png(
+        &self,
+        png: &[u8],
+        sha256: &str,
+        cancel: &CancelToken,
+    ) -> Result<OcrOutput, AssistError>;
+}
+
+/// The `ocrs` reader over a models folder. The models are loaded once, on the first status check
+/// or read that finds both files, and kept; a folder missing a file loads nothing and says which.
+#[derive(Debug)]
+pub struct OcrsReader {
+    dir: std::path::PathBuf,
+    models: std::sync::OnceLock<Result<OcrModels, String>>,
+}
+
+impl OcrsReader {
+    /// A reader over the models in `dir`. Loads nothing yet.
+    pub fn new(dir: &Path) -> Self {
+        OcrsReader {
+            dir: dir.to_path_buf(),
+            models: std::sync::OnceLock::new(),
+        }
+    }
+
+    fn missing(&self) -> Vec<&'static str> {
+        OCR_MODEL_FILES
+            .iter()
+            .filter(|f| !self.dir.join(f.name).is_file())
+            .map(|f| f.name)
+            .collect()
+    }
+
+    fn loaded(&self) -> Result<&OcrModels, String> {
+        let missing = self.missing();
+        if !missing.is_empty() && self.models.get().is_none() {
+            return Err(format!(
+                "the OCR model files are not there: {}",
+                missing.join(", ")
+            ));
+        }
+        self.models
+            .get_or_init(|| OcrModels::load(&self.dir).map_err(|e| e.to_string()))
+            .as_ref()
+            .map_err(Clone::clone)
+    }
+}
+
+impl BillOcr for OcrsReader {
+    fn info(&self) -> ProviderInfo {
+        ProviderInfo {
+            name: "ocrs".to_owned(),
+            version: OCRS_VERSION.to_owned(),
+            place: ProviderPlace::ThisComputer,
+        }
+    }
+
+    fn status(&self) -> ProviderStatus {
+        match self.loaded() {
+            Ok(_) => ProviderStatus::Ready,
+            Err(reason) => ProviderStatus::NotInstalled { reason },
+        }
+    }
+
+    fn read_png(
+        &self,
+        png: &[u8],
+        sha256: &str,
+        cancel: &CancelToken,
+    ) -> Result<OcrOutput, AssistError> {
+        match self.loaded() {
+            Ok(models) => models.read_png(png, sha256, cancel),
+            Err(reason) => Err(AssistError::Output { reason }),
+        }
     }
 }
 

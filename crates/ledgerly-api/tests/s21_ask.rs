@@ -1,8 +1,9 @@
 //! Round s21, plan round E: Ask your books (spec 6.8). A question goes through the one AI gate to
 //! the provider, which answers with a `ReportQuery`. The API resolves the query to a report the
 //! engine knows, runs it with `Api::report`, and hands back the engine's `Report` and nothing the
-//! provider wrote. Every ask that runs is logged: an answer as `Answered`, a query no report can
-//! carry as `ReadFailed` with an "Unsupported" reason, a provider failure as `ReadFailed`.
+//! provider wrote. Every ask that runs is logged: an answer as `Answered`, a query the engine
+//! cannot run (no report carries it, or the report engine fails on it) as `NotRun`, a provider
+//! failure as `ReadFailed` (coordinator, 2026-11-27: an ask that cannot run is its own kind).
 //!
 //! Provenance (derived). The questions and the recorded queries are written here. The company's
 //! financial year starts 1 April 2026, so it runs to 31 March 2027 (Indian financial year); with
@@ -20,7 +21,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 
 use ledgerly_api::{
-    AiFeature, AiGate, AiOutput, AiTier, Api, AskAnswer, CloudRequest, CloudResponse,
+    AiFeature, AiGate, AiOutput, AiTier, Api, ApiError, AskAnswer, CloudRequest, CloudResponse,
     CloudSettings, CloudTransport, Command, FixedAnswers, KEY_SERVICE, MemoryVault, ReportKind,
     ReportQuery, default_report_params,
 };
@@ -298,10 +299,13 @@ fn a_report_no_one_has_is_unsupported_and_logged_as_such() {
     assert!(reason.contains("does not estimate figures"), "{reason}");
     let rows = api.ai_log_rows().unwrap();
     assert_eq!(rows.len(), 1);
-    let AiOutput::ReadFailed(logged) = &rows[0].output else {
-        panic!("an unsupported ask is logged: {:?}", rows[0].output);
+    let AiOutput::NotRun(logged) = &rows[0].output else {
+        panic!(
+            "an unsupported ask is logged as not run: {:?}",
+            rows[0].output
+        );
     };
-    assert!(logged.starts_with("Unsupported"), "{logged}");
+    assert!(logged.contains("does not estimate figures"), "{logged}");
 
     let mut api = asking(
         "s21-ask-unknown.ledgerly",
@@ -325,6 +329,26 @@ fn a_refused_gate_runs_and_logs_nothing() {
         AskAnswer::Refused(AiGate::FeatureOff)
     );
     assert_eq!(api.ai_log_rows().unwrap().len(), 0);
+}
+
+/// The books begin on 1 April 2026; a balance sheet as of 31 March 2026 is one the report engine
+/// refuses with an error (`balance_sheet.rs`: as of a date before the books begin). The error
+/// goes back to the caller, and the ask is logged as not run with the engine's reason.
+#[test]
+fn a_report_engine_error_is_returned_and_logged_as_not_run() {
+    let question = "balance sheet from 01-01-2026 to 31-03-2026";
+    let mut q = query("balance_sheet", &[]);
+    q.from = Some(date!(2026 - 01 - 01));
+    q.to = Some(date!(2026 - 03 - 31));
+    let mut api = asking("s21-ask-engine-error.ledgerly", question, q);
+    let out = api.ask_books(question, &CancelToken::new());
+    assert!(matches!(out, Err(ApiError::Report(_))), "{out:?}");
+    let rows = api.ai_log_rows().unwrap();
+    assert_eq!(rows.len(), 1, "{rows:?}");
+    let AiOutput::NotRun(logged) = &rows[0].output else {
+        panic!("the failed run is logged as not run: {:?}", rows[0].output);
+    };
+    assert!(logged.contains("before the books begin"), "{logged}");
 }
 
 #[test]

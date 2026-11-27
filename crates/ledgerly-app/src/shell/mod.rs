@@ -1033,6 +1033,13 @@ pub fn run() -> eframe::Result<()> {
             crate::screens::setup::enable_system_dialogs();
             // And the one place the OS keychain is the key vault (used only with AI on).
             welcome::use_system_keychain();
+            // And the one place the OCR models folder is the user's own and the fetcher is real
+            // (used only with AI on, and only when the person presses Download).
+            if let Some(dir) = crate::recent::default_dir() {
+                crate::ocr_setup::use_ocr_setup(crate::ocr_setup::OcrSetup::system(
+                    dir.join("ocr-models"),
+                ));
+            }
             Ok(Box::new(Shell::cold_start_with_recent(
                 crate::recent::default_dir(),
             )))

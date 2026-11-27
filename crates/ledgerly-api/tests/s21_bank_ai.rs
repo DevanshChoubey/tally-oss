@@ -481,3 +481,113 @@ fn with_ai_off_nothing_is_asked_or_logged() {
     ));
     assert_eq!(api.ai_activity().unwrap().len(), 0);
 }
+
+fn read_failures(api: &Api) -> usize {
+    kinds(api)
+        .into_iter()
+        .filter(|k| matches!(k, AiActivityKind::ReadFailed { .. }))
+        .count()
+}
+
+/// Loading the bank screen asks again; a line whose read already failed with the same provider
+/// and model is not asked again, so the log gets one failure for it, not one per load. The answer
+/// still says why the line was not read.
+#[test]
+fn a_line_whose_read_failed_is_not_asked_or_logged_again_on_the_next_load() {
+    let provider = FixedAnswers::new().with_bank_line(7, row7(vec![1]));
+    let (_dir, mut api, statement) = setup(AiTier::Local, Some(provider));
+    let BankAiAnswer::Suggested {
+        not_read: first, ..
+    } = suggested(&mut api, statement)
+    else {
+        panic!("the gate is ready")
+    };
+    assert_eq!(read_failures(&api), 1);
+    for _ in 0..3 {
+        let BankAiAnswer::Suggested { not_read, .. } = suggested(&mut api, statement) else {
+            panic!("the gate is ready")
+        };
+        assert_eq!(not_read, first);
+    }
+    assert_eq!(read_failures(&api), 1);
+}
+
+/// [`FixedAnswers`] under another model version (a changed model is asked again), or with the
+/// network down for bank lines (a passing failure is asked again).
+#[derive(Debug)]
+struct NextVersion(FixedAnswers, &'static str, bool);
+
+impl ledgerly_assist::provider::AiProvider for NextVersion {
+    fn info(&self) -> ledgerly_assist::provider::ProviderInfo {
+        ledgerly_assist::provider::ProviderInfo {
+            version: self.1.to_owned(),
+            ..self.0.info()
+        }
+    }
+    fn status(&self) -> ledgerly_assist::provider::ProviderStatus {
+        self.0.status()
+    }
+    fn read_text(
+        &self,
+        text: &str,
+        ledgers: &[ledgerly_assist::nl_entry::MasterLedger],
+        cancel: &CancelToken,
+    ) -> Result<ledgerly_assist::Proposal, ledgerly_assist::AssistError> {
+        self.0.read_text(text, ledgers, cancel)
+    }
+    fn ocr(
+        &self,
+        bytes: &[u8],
+        sha256: &str,
+        cancel: &CancelToken,
+    ) -> Result<ledgerly_assist::ocr::OcrOutput, ledgerly_assist::AssistError> {
+        self.0.ocr(bytes, sha256, cancel)
+    }
+    fn ask(
+        &self,
+        question: &str,
+        cancel: &CancelToken,
+    ) -> Result<ledgerly_assist::ReportQuery, ledgerly_assist::AssistError> {
+        self.0.ask(question, cancel)
+    }
+    fn match_bank_line(
+        &self,
+        line: &ledgerly_assist::BankLineQuestion,
+        open: &[ledgerly_assist::OpenVoucher],
+        cancel: &CancelToken,
+    ) -> Result<MatchSuggestion, ledgerly_assist::AssistError> {
+        if self.2 {
+            return Err(ledgerly_assist::AssistError::Network {
+                reason: "connection refused".to_owned(),
+            });
+        }
+        self.0.match_bank_line(line, open, cancel)
+    }
+}
+
+#[test]
+fn a_failed_line_is_asked_again_once_the_model_changes() {
+    let provider = FixedAnswers::new().with_bank_line(7, row7(vec![1]));
+    let (_dir, mut api, statement) = setup(AiTier::Local, Some(provider));
+    let _ = suggested(&mut api, statement);
+    assert_eq!(read_failures(&api), 1);
+    api.attach_assistant(Box::new(NextVersion(
+        FixedAnswers::new().with_bank_line(7, row7(vec![1])),
+        "s21-2",
+        false,
+    )));
+    let _ = suggested(&mut api, statement);
+    assert_eq!(read_failures(&api), 2);
+}
+
+#[test]
+fn a_line_that_failed_on_the_network_is_asked_again() {
+    let provider = NextVersion(FixedAnswers::new(), "s21-1", true);
+    let (_dir, mut api, statement) = setup(AiTier::Local, None);
+    api.attach_assistant(Box::new(provider));
+    let _ = suggested(&mut api, statement);
+    let first = read_failures(&api);
+    assert_eq!(first, 2, "rows 7 and 8 fail on the network");
+    let _ = suggested(&mut api, statement);
+    assert_eq!(read_failures(&api), 4);
+}

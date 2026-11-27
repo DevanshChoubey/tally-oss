@@ -232,6 +232,7 @@ fn the_check_is_the_engine_voucher_with_the_offered_date() {
         date: Some(TODAY),
         place_of_supply: None,
         line_ledgers: Vec::new(),
+        confirmed: Vec::new(),
     };
     let Outcome::Value(DraftCheck::Ok(voucher)) = api.check_ai_draft(id, &edits).unwrap() else {
         panic!("the draft with a date should pass the engine's check");
@@ -262,6 +263,7 @@ fn accept_posts_the_voucher_and_records_the_accept_in_one_commit() {
         date: Some(TODAY),
         place_of_supply: None,
         line_ledgers: Vec::new(),
+        confirmed: Vec::new(),
     };
     let Outcome::Value(Accepted::Posted(voucher)) = api.accept_ai_draft(id, &edits).unwrap() else {
         panic!("accept should post");
@@ -292,7 +294,8 @@ fn accept_posts_the_voucher_and_records_the_accept_in_one_commit() {
         | AiActivityKind::DraftRejected { .. }
         | AiActivityKind::Answered { .. }
         | AiActivityKind::ReadFailed { .. }
-        | AiActivityKind::CloudConsent { .. }) => panic!("expected the accept, got {other:?}"),
+        | AiActivityKind::CloudConsent { .. }
+        | AiActivityKind::NotRun { .. }) => panic!("expected the accept, got {other:?}"),
     }
     assert_eq!(
         api.ai_origin(voucher.id).unwrap().map(|a| a.feature),
@@ -316,6 +319,7 @@ fn an_accepted_draft_shows_its_reader_as_the_day_book_origin() {
         date: Some(TODAY),
         place_of_supply: None,
         line_ledgers: Vec::new(),
+        confirmed: Vec::new(),
     };
     let Outcome::Value(Accepted::Posted(voucher)) = api.accept_ai_draft(id, &edits).unwrap() else {
         panic!("accept should post");

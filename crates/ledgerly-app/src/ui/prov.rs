@@ -21,6 +21,11 @@ pub enum ProvKind {
     Books,
     /// Produced by a deterministic rule, not by the AI.
     Rule,
+    /// Read by the OCR reader, which gives no confidence: the person checks it against the
+    /// document and confirms it.
+    NeedsReview,
+    /// Read from a document and confirmed by the person against it.
+    YouConfirmed,
 }
 
 /// The short label of a provenance tag.
@@ -33,6 +38,8 @@ pub fn label(kind_of: ProvKind) -> &'static str {
         ProvKind::Engine => "engine",
         ProvKind::Books => "books",
         ProvKind::Rule => "rule",
+        ProvKind::NeedsReview => "needs review",
+        ProvKind::YouConfirmed => "you confirmed",
     }
 }
 
@@ -46,6 +53,10 @@ pub fn description(kind_of: ProvKind) -> &'static str {
         ProvKind::Engine => "Calculated by the engine from the books.",
         ProvKind::Books => "Taken from your books.",
         ProvKind::Rule => "Produced by a fixed rule, not by the AI.",
+        ProvKind::NeedsReview => {
+            "Read by the OCR reader, which gives no confidence: check it against the bill"
+        }
+        ProvKind::YouConfirmed => "Read from the document and confirmed by you.",
     }
 }
 
@@ -54,7 +65,8 @@ pub fn description(kind_of: ProvKind) -> &'static str {
 pub fn colors(kind_of: ProvKind, t: &Tokens) -> (Color32, Color32) {
     match kind_of {
         ProvKind::FromBill | ProvKind::Ai => (t.ai_soft, t.ai_ink),
-        ProvKind::YourWords | ProvKind::Rule => (t.sunken, t.text_2),
+        ProvKind::YourWords | ProvKind::Rule | ProvKind::YouConfirmed => (t.sunken, t.text_2),
+        ProvKind::NeedsReview => (t.warn_soft, t.warn),
         ProvKind::Engine => (t.ok_soft, t.ok),
         ProvKind::Books => (t.accent_soft, t.accent_ink),
     }

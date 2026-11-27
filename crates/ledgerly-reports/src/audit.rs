@@ -850,6 +850,11 @@ fn ai_activity_row(
             label,
             format!("Assistant could not read the input: {reason}"),
         ),
+        AiActivityKind::NotRun { reason } => (
+            ObjectKey::AiProposal(seq),
+            label,
+            format!("Assistant answer the engine could not run: {reason}"),
+        ),
         AiActivityKind::CloudConsent { granted } => (
             ObjectKey::AiProposal(seq),
             label,

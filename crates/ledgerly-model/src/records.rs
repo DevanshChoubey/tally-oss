@@ -137,4 +137,11 @@ pub enum AiActivityKind {
         /// Whether they agreed to send it.
         granted: bool,
     },
+    /// The provider answered, but the engine could not run what it asked: no report carries it,
+    /// or the report engine failed on it. Nothing ran. (Added in round s21; an ask that could not
+    /// run was logged as `ReadFailed` before, and such entries still read as `ReadFailed`.)
+    NotRun {
+        /// Why, in words the screen shows.
+        reason: String,
+    },
 }

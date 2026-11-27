@@ -10,7 +10,9 @@
 //! would post a new voucher from the line (`ledger_name`) is not built and is refused.
 //!
 //! A line with an open suggestion is not asked again (the open draft is returned), nor is a line
-//! whose suggestion was accepted or rejected. A line is known by the hash of its statement id,
+//! whose suggestion was accepted or rejected, nor a line whose read already failed with the same
+//! provider and model version (its logged reason is returned; a read cancelled or failed on the
+//! network or the key is asked again). A line is known by the hash of its statement id,
 //! row, date, amount and description.
 //!
 //! Accepting ([`Api::accept_bank_ai_match`]) checks again against the books as they are now and
@@ -129,6 +131,7 @@ impl Api {
             Outcome::Unsupported(u) => return Ok(Outcome::Unsupported(u)),
         };
         let earlier = self.earlier_bank_drafts()?;
+        let failed = self.earlier_bank_failures(&info)?;
         let mut matches = Vec::new();
         let mut not_read = Vec::new();
         for ask in asks {
@@ -143,6 +146,10 @@ impl Api {
                 }
                 Some(Earlier { open: None, .. }) => continue,
                 None => {}
+            }
+            if let Some((_, reason)) = failed.iter().find(|(hash, _)| *hash == ask.hash) {
+                not_read.push((ask.question.row, reason.clone()));
+                continue;
             }
             let answer = match self.assistant() {
                 Some(provider) => provider.match_bank_line(&ask.question, &ask.offered, cancel),
@@ -320,6 +327,41 @@ impl Api {
         })
     }
 
+    /// The bank lines whose read already failed with this provider and model version, by input
+    /// hash, with the latest reason. Such a line is not asked again (nor logged again) until the
+    /// provider or model changes; a read that was cancelled or failed on the network or the key
+    /// is asked again.
+    fn earlier_bank_failures(
+        &self,
+        info: &ProviderInfo,
+    ) -> Result<Vec<(String, String)>, ApiError> {
+        let mut failed: Vec<(String, String)> = Vec::new();
+        for e in self.ai_activity()? {
+            let a = e.activity;
+            if a.feature != AiFeature::BankSuggestion
+                || a.provider != info.name
+                || a.model_version != info.version
+            {
+                continue;
+            }
+            match a.kind {
+                AiActivityKind::ReadFailed { reason } => {
+                    failed.retain(|(hash, _)| *hash != a.input_hash);
+                    if !passing(&reason) {
+                        failed.push((a.input_hash, reason));
+                    }
+                }
+                AiActivityKind::DraftStored { .. }
+                | AiActivityKind::DraftAccepted { .. }
+                | AiActivityKind::DraftRejected { .. }
+                | AiActivityKind::Answered { .. }
+                | AiActivityKind::CloudConsent { .. }
+                | AiActivityKind::NotRun { .. } => {}
+            }
+        }
+        Ok(failed)
+    }
+
     /// Every bank suggestion stored so far, by input hash: open ones with their proposal, decided
     /// ones without.
     fn earlier_bank_drafts(&self) -> Result<Vec<Earlier>, ApiError> {
@@ -346,10 +388,24 @@ impl Api {
                 | AiActivityKind::DraftRejected { .. }
                 | AiActivityKind::Answered { .. }
                 | AiActivityKind::ReadFailed { .. }
-                | AiActivityKind::CloudConsent { .. } => None,
+                | AiActivityKind::CloudConsent { .. }
+                | AiActivityKind::NotRun { .. } => None,
             })
             .collect())
     }
+}
+
+/// Whether a logged failure `reason` was a passing one, worth asking again: the read was
+/// cancelled, or failed on the network or the key. The prefixes are the errors' own wording.
+fn passing(reason: &str) -> bool {
+    let empty = String::new;
+    [
+        AssistError::Cancelled.to_string(),
+        AssistError::Network { reason: empty() }.to_string(),
+        AssistError::Key { reason: empty() }.to_string(),
+    ]
+    .iter()
+    .any(|prefix| reason.starts_with(prefix.as_str()))
 }
 
 /// The log entry for `ask` with `kind`.

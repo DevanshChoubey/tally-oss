@@ -96,6 +96,12 @@ impl PurchaseBillScreen {
         self.ai.choose_ledger(line, ledger);
     }
 
+    /// Confirms a value read from the bill against the photo, as its Confirm button does (for
+    /// tests and captures).
+    pub fn confirm_field(&mut self, field: ledgerly_api::DraftField) {
+        self.ai.confirm_field(field);
+    }
+
     /// Turns a request to open a screen into the stack's action, keeping the reason when it
     /// does not open.
     fn opened(&mut self, result: Result<ScreenAction, String>) -> ScreenAction {

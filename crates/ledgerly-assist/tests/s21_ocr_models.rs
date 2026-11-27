@@ -121,13 +121,54 @@ fn a_file_that_is_not_a_model_is_a_typed_load_error_not_a_panic() {
 }
 
 #[test]
-fn the_download_refuses_before_any_request_while_no_checksum_is_recorded() {
+fn the_fixed_checksums_are_the_ones_of_the_files_the_owner_fetched() {
+    // provenance: observed. The coordinator fetched both files from the fixed URLs on
+    // 2026-11-27 with the owner's permission and reported their SHA-256 (2,499,479 and
+    // 9,713,177 bytes); this session's sha256sum of the same files agreed.
+    assert_eq!(
+        OCR_MODEL_FILES[0].sha256,
+        Some("a917b23dbd9524b465df7e922641b3ff2981623df4ded5a0234004ef2fee7cfe")
+    );
+    assert_eq!(
+        OCR_MODEL_FILES[1].sha256,
+        Some("86c145c2edb96c8caed5b1ebb8f44d706408922211451c309c625157dd6061c5")
+    );
+}
+
+#[test]
+fn the_download_of_the_fixed_files_refuses_bytes_whose_hash_differs_and_keeps_nothing() {
+    let dir = dir("s21-ocr-fixed-mismatch");
+    let fetch = Recorded {
+        answer: Some(b"not the model".to_vec()),
+        ..Recorded::default()
+    };
+    match download_ocr_models(&dir, &fetch) {
+        Err(OcrModelsError::Checksum { file, expected, .. }) => {
+            assert_eq!(file, "text-detection.onnx");
+            assert_eq!(Some(expected.as_str()), OCR_MODEL_FILES[0].sha256);
+        }
+        other => panic!("expected a checksum refusal, got {other:?}"),
+    }
+    // It stops at the first file: the second is never asked for.
+    assert_eq!(
+        *fetch.asked.lock().unwrap(),
+        ["https://ocrs-models.s3-accelerate.amazonaws.com/text-detection.onnx"]
+    );
+    assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 0);
+}
+
+#[test]
+fn a_file_with_no_recorded_checksum_is_refused_before_any_request() {
     let dir = dir("s21-ocr-nochecksum");
     let fetch = Recorded {
         answer: Some(b"anything".to_vec()),
         ..Recorded::default()
     };
-    match download_ocr_models(&dir, &fetch) {
+    let file = OcrModelFile {
+        sha256: None,
+        ..OCR_MODEL_FILES[0]
+    };
+    match download_model(&file, &dir, &fetch) {
         Err(OcrModelsError::NoChecksum { file }) => assert_eq!(file, "text-detection.onnx"),
         other => panic!("expected a refusal, got {other:?}"),
     }
@@ -188,4 +229,41 @@ fn a_failed_request_is_a_fetch_error_and_nothing_is_written() {
         other => panic!("expected a fetch error, got {other:?}"),
     }
     assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 0);
+}
+
+#[test]
+fn the_ocrs_reader_over_an_empty_folder_names_both_files_and_reads_nothing() {
+    use ledgerly_assist::ocr_models::{BillOcr, OcrsReader};
+    let dir = dir("s21-ocr-reader-empty");
+    let reader = OcrsReader::new(&dir);
+    assert_eq!(reader.info().name, "ocrs");
+    assert_eq!(reader.info().version, "0.14.0");
+    match reader.status() {
+        ProviderStatus::NotInstalled { reason } => {
+            assert!(reason.contains("text-detection.onnx"), "{reason}");
+            assert!(reason.contains("text-recognition.onnx"), "{reason}");
+        }
+        other @ (ProviderStatus::Ready | ProviderStatus::NotConfigured { .. }) => {
+            panic!("expected NotInstalled, got {other:?}")
+        }
+    }
+    let read = reader.read_png(b"not read", "00", &ledgerly_core::CancelToken::new());
+    assert!(matches!(read, Err(AssistError::Output { .. })), "{read:?}");
+}
+
+#[test]
+fn the_ocrs_reader_over_files_that_are_not_models_is_not_installed_with_the_load_error() {
+    use ledgerly_assist::ocr_models::{BillOcr, OcrsReader};
+    let dir = dir("s21-ocr-reader-garbage");
+    for f in &OCR_MODEL_FILES {
+        std::fs::write(dir.join(f.name), b"not a model").unwrap();
+    }
+    let reader = OcrsReader::new(&dir);
+    let first = reader.status();
+    assert!(
+        matches!(&first, ProviderStatus::NotInstalled { reason } if reason.contains("does not load")),
+        "{first:?}"
+    );
+    // Kept, not loaded again: the second answer is the first.
+    assert_eq!(reader.status(), first);
 }

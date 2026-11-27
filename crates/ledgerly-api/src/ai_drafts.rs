@@ -90,6 +90,10 @@ pub struct DraftEdits {
     /// taxable value names no purchase ledger, so the person chooses it; a choice for a line the
     /// reader matched replaces the reader's ledger (it is a human edit and is logged as one).
     pub line_ledgers: Vec<(usize, LedgerId)>,
+    /// The read fields the person confirmed against the document. A value that needs review
+    /// (read by ocrs, which gives no confidence) is kept only once confirmed; while any such
+    /// field is unconfirmed the draft is blocked on it. Logged as a human edit.
+    pub confirmed: Vec<ledgerly_assist::review::DraftField>,
 }
 
 /// One row of the AI activity log.
@@ -251,6 +255,14 @@ impl Api {
                 confidence_permille: 1000,
             });
         }
+        for &field in &edits.confirmed {
+            if !ledgerly_assist::review::confirm(&mut draft, field) {
+                return Ok(Outcome::unsupported(
+                    "a confirmed draft field",
+                    format!("the draft has no {}", field.name()),
+                ));
+            }
+        }
         let books = match self.cached_books()? {
             Outcome::Value(books) => books,
             Outcome::Unsupported(u) => return Ok(Outcome::Unsupported(u)),
@@ -270,6 +282,13 @@ impl Api {
                     confidence_permille: 1000,
                 };
             }
+        }
+        let waiting = first_to_confirm(&draft);
+        if let Some(field) = waiting {
+            return Ok(Outcome::Value(DraftCheck::Blocked {
+                field: field.name(),
+                reason: "this value was read by the OCR reader and needs review: check it against the bill and confirm it".to_owned(),
+            }));
         }
         let pack = load_pack(BUNDLED_RATE_PACK)?;
         let rules_date = draft
@@ -398,7 +417,8 @@ impl Api {
                 | AiActivityKind::DraftRejected { .. }
                 | AiActivityKind::Answered { .. }
                 | AiActivityKind::ReadFailed { .. }
-                | AiActivityKind::CloudConsent { .. } => None,
+                | AiActivityKind::CloudConsent { .. }
+                | AiActivityKind::NotRun { .. } => None,
             }))
     }
 }
@@ -452,7 +472,8 @@ fn decided_draft(kind: &AiActivityKind) -> Option<EventSeq> {
         AiActivityKind::DraftStored { .. }
         | AiActivityKind::Answered { .. }
         | AiActivityKind::ReadFailed { .. }
-        | AiActivityKind::CloudConsent { .. } => None,
+        | AiActivityKind::CloudConsent { .. }
+        | AiActivityKind::NotRun { .. } => None,
     }
 }
 
@@ -481,7 +502,11 @@ pub(crate) fn draft_activity(draft: &AiDraft) -> AiActivity {
 
 /// The person's edits as JSON, or `None` when they changed nothing.
 fn edits_json(edits: &DraftEdits) -> Option<String> {
-    if edits.date.is_none() && edits.place_of_supply.is_none() && edits.line_ledgers.is_empty() {
+    if edits.date.is_none()
+        && edits.place_of_supply.is_none()
+        && edits.line_ledgers.is_empty()
+        && edits.confirmed.is_empty()
+    {
         return None;
     }
     let mut map = serde_json::Map::new();
@@ -505,6 +530,14 @@ fn edits_json(edits: &DraftEdits) -> Option<String> {
             .collect();
         map.insert("line_ledgers".to_owned(), serde_json::Value::Array(chosen));
     }
+    if !edits.confirmed.is_empty() {
+        let names = edits
+            .confirmed
+            .iter()
+            .map(|f| serde_json::Value::String(f.name()))
+            .collect();
+        map.insert("confirmed".to_owned(), serde_json::Value::Array(names));
+    }
     Some(serde_json::Value::Object(map).to_string())
 }
 
@@ -523,6 +556,8 @@ pub enum AiOutput {
     Answered,
     /// Nothing was read; the reason.
     ReadFailed(String),
+    /// The provider answered but the engine could not run it; the reason.
+    NotRun(String),
     /// A cloud consent, granted or not.
     CloudConsent(bool),
 }
@@ -587,6 +622,7 @@ impl Api {
                 AiActivityKind::Answered { .. } => AiOutput::Answered,
                 AiActivityKind::ReadFailed { reason } => AiOutput::ReadFailed(reason.clone()),
                 AiActivityKind::CloudConsent { granted } => AiOutput::CloudConsent(*granted),
+                AiActivityKind::NotRun { reason } => AiOutput::NotRun(reason.clone()),
                 AiActivityKind::DraftAccepted { .. } | AiActivityKind::DraftRejected { .. } => {
                     continue;
                 }
@@ -618,12 +654,14 @@ impl Api {
                         | AiActivityKind::DraftStored { .. }
                         | AiActivityKind::Answered { .. }
                         | AiActivityKind::ReadFailed { .. }
-                        | AiActivityKind::CloudConsent { .. } => None,
+                        | AiActivityKind::CloudConsent { .. }
+                        | AiActivityKind::NotRun { .. } => None,
                     })
                     .unwrap_or(AiDecision::Waiting),
-                AiOutput::Answered | AiOutput::ReadFailed(_) | AiOutput::CloudConsent(_) => {
-                    AiDecision::NoDecision
-                }
+                AiOutput::Answered
+                | AiOutput::ReadFailed(_)
+                | AiOutput::NotRun(_)
+                | AiOutput::CloudConsent(_) => AiDecision::NoDecision,
             };
             rows.push(AiLogRow {
                 at: entry.at,
@@ -710,6 +748,7 @@ fn output_words(output: &AiOutput) -> String {
         AiOutput::MappingSuggestion => "Column mapping".to_owned(),
         AiOutput::Answered => "Answer".to_owned(),
         AiOutput::ReadFailed(reason) => format!("Not read: {reason}"),
+        AiOutput::NotRun(reason) => format!("Not run: {reason}"),
         AiOutput::CloudConsent(true) => "Sending allowed".to_owned(),
         AiOutput::CloudConsent(false) => "Sending refused".to_owned(),
     }
@@ -750,4 +789,25 @@ fn decision_words(decision: &AiDecision) -> String {
         AiDecision::Rejected(None) => "Rejected".to_owned(),
         AiDecision::NoDecision => "Nothing to decide".to_owned(),
     }
+}
+
+/// The first read value of `draft` still waiting for the person's confirmation. A line that names
+/// no ledger has nothing to confirm, only a ledger to choose: the validator's missing-ledger block
+/// asks for that choice.
+fn first_to_confirm(
+    draft: &ledgerly_assist::VoucherDraft,
+) -> Option<ledgerly_assist::review::DraftField> {
+    use ledgerly_assist::review::DraftField;
+    ledgerly_assist::review::needs_review(draft)
+        .into_iter()
+        .find(|f| match *f {
+            DraftField::LineLedger(n) => draft.lines.get(n).is_some_and(|l| l.ledger.is_some()),
+            DraftField::Date
+            | DraftField::PartyName
+            | DraftField::InvoiceNumber
+            | DraftField::SupplierGstin
+            | DraftField::LineAmount(_)
+            | DraftField::DocumentTotal
+            | DraftField::DocumentTax => true,
+        })
 }

@@ -1,0 +1,104 @@
+{
+ "doc_hash": "dd88dec4a7d7deba1ad3ea233db9d4d66b02aebd16f4148d0280406c076e9155",
+ "lines": [
+  {
+   "page": 1,
+   "text": "Supplier: Kaveri Stationers",
+   "bbox": [
+    38,
+    31,
+    347,
+    32
+   ],
+   "confidence_permille": 0
+  },
+  {
+   "page": 1,
+   "text": "GSTIN: 29ABCDE1234F1ZW",
+   "bbox": [
+    39,
+    85,
+    361,
+    23
+   ],
+   "confidence_permille": 0
+  },
+  {
+   "page": 1,
+   "text": "Invoice No: KS/2026/0042",
+   "bbox": [
+    40,
+    135,
+    337,
+    27
+   ],
+   "confidence_permille": 0
+  },
+  {
+   "page": 1,
+   "text": "Date: 15/03/2026",
+   "bbox": [
+    40,
+    190,
+    228,
+    23
+   ],
+   "confidence_permille": 0
+  },
+  {
+   "page": 1,
+   "text": "Taxable Value 15,000.00",
+   "bbox": [
+    38,
+    239,
+    319,
+    28
+   ],
+   "confidence_permille": 0
+  },
+  {
+   "page": 1,
+   "text": "CGST @ 9% 1,350.00",
+   "bbox": [
+    40,
+    292,
+    278,
+    28
+   ],
+   "confidence_permille": 0
+  },
+  {
+   "page": 1,
+   "text": "SGST @ 9% 1,350.00",
+   "bbox": [
+    42,
+    346,
+    273,
+    25
+   ],
+   "confidence_permille": 0
+  },
+  {
+   "page": 1,
+   "text": "Total Tax 2,700.00",
+   "bbox": [
+    39,
+    397,
+    235,
+    25
+   ],
+   "confidence_permille": 0
+  },
+  {
+   "page": 1,
+   "text": "Total 17,700.00",
+   "bbox": [
+    39,
+    450,
+    201,
+    23
+   ],
+   "confidence_permille": 0
+  }
+ ]
+}

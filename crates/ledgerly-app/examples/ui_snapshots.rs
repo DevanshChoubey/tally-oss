@@ -431,6 +431,16 @@ enum Fixture {
     /// provider holding the text lines of the fixture bill photo `examples/fixtures/rupa-bill.png`
     /// ([`godavari_bill_file`]): the mock's `purchase-bill.*` states.
     GodavariBill,
+    /// [`Fixture::GodavariBill`] with every line at the confidence of the `ocrs` reader, which
+    /// gives none: each value needs review ([`godavari_bill_ocrs_file`]), the mock's
+    /// `ai.purchase-bill.needs-review`.
+    GodavariBillOcrs,
+    /// [`Fixture::GodavariAssistant`] with the capture's OCR reader ready, as when both model
+    /// files are there and load: the mock's `ai.ai-settings.local-ready`.
+    GodavariOcrReady,
+    /// [`Fixture::GodavariAssistant`] with the capture's model fetcher held, so a pressed
+    /// download stays running for the photograph: the mock's `ai.ai-settings.local-downloading`.
+    GodavariOcrHeld,
     /// Fictional Traders ([`company_file`]): the shots whose key paths or typed names need its
     /// data, or that show a state the sample does not have.
     Main,
@@ -458,10 +468,19 @@ impl Fixture {
             Fixture::GodavariNo2b => Some(godavari_no_2b_file(dir)),
             Fixture::GodavariBuyerNoPin => Some(godavari_buyer_no_pin_file(dir)),
             Fixture::GodavariShortStock => Some(godavari_short_stock_file(dir)),
-            Fixture::GodavariAssistant => Some(godavari_assistant_file(dir)),
+            Fixture::GodavariAssistant => {
+                Some(with_reader(godavari_assistant_file(dir), false, false))
+            }
+            Fixture::GodavariOcrReady => {
+                Some(with_reader(godavari_assistant_file(dir), true, false))
+            }
+            Fixture::GodavariOcrHeld => {
+                Some(with_reader(godavari_assistant_file(dir), false, true))
+            }
             Fixture::GodavariWords => Some(godavari_words_file(dir)),
             Fixture::GodavariNoModel => Some(godavari_no_model_file(dir)),
             Fixture::GodavariBill => Some(godavari_bill_file(dir)),
+            Fixture::GodavariBillOcrs => Some(godavari_bill_ocrs_file(dir)),
             Fixture::Main => Some(company_file(dir)),
             Fixture::New => Some(new_company_file(dir)),
             Fixture::Blank => Some(blank_company_file(dir)),
@@ -490,6 +509,9 @@ impl Fixture {
                     | Fixture::GodavariWords
                     | Fixture::GodavariNoModel
                     | Fixture::GodavariBill
+                    | Fixture::GodavariBillOcrs
+                    | Fixture::GodavariOcrReady
+                    | Fixture::GodavariOcrHeld
                     | Fixture::Main
                     | Fixture::New
                     | Fixture::Blank
@@ -575,6 +597,82 @@ fn godavari_no_2b_file(dir: &Path) -> Api {
 /// the bill of `billDraft`: taxable 68,000.00 and IGST 12,240.00 from a Gujarat supplier). The
 /// draft is stored through `Api::record_ai_draft` as the bill reader stores one; its figure in
 /// the queue is the engine's check of it, not a number written here.
+/// Whether the capture's model fetcher holds every request until the process ends
+/// ([`Fixture::GodavariOcrHeld`]); otherwise it answers at once with fictional bytes.
+static HOLD_FETCH: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// The bytes the capture's fetcher answers with: not a model, so the download refuses them (their
+/// SHA-256 is the one the mock's `ai.ai-settings.local-download-failed` shows).
+const FICTIONAL_MODEL_BYTES: &[u8] = b"fictional bytes, not the model";
+
+/// The capture's model fetcher: never opens a connection.
+#[derive(Debug)]
+struct CaptureFetch;
+
+impl ledgerly_api::ModelFetch for CaptureFetch {
+    fn get(&self, _url: &str) -> Result<Vec<u8>, ledgerly_api::AssistError> {
+        while HOLD_FETCH.load(std::sync::atomic::Ordering::SeqCst) {
+            std::thread::sleep(std::time::Duration::from_secs(1));
+        }
+        Ok(FICTIONAL_MODEL_BYTES.to_vec())
+    }
+}
+
+/// The capture's OCR reader: a fixed status, reading nothing (the bill shots attach the
+/// fixed-answers provider, which answers first).
+#[derive(Debug)]
+struct CaptureReader(bool);
+
+impl ledgerly_api::BillOcr for CaptureReader {
+    fn info(&self) -> ledgerly_api::ProviderInfo {
+        ledgerly_api::ProviderInfo {
+            name: "ocrs".to_owned(),
+            version: ledgerly_api::OCRS_VERSION.to_owned(),
+            place: ledgerly_api::ProviderPlace::ThisComputer,
+        }
+    }
+    fn status(&self) -> ledgerly_api::ProviderStatus {
+        if self.0 {
+            ledgerly_api::ProviderStatus::Ready
+        } else {
+            ledgerly_api::ProviderStatus::NotInstalled {
+                reason:
+                    "the OCR model files are not there: text-detection.onnx, text-recognition.onnx"
+                        .to_owned(),
+            }
+        }
+    }
+    fn read_png(
+        &self,
+        _png: &[u8],
+        _sha256: &str,
+        _cancel: &ledgerly_core::CancelToken,
+    ) -> Result<ledgerly_api::OcrOutput, ledgerly_api::AssistError> {
+        Err(ledgerly_api::AssistError::Output {
+            reason: "the capture's reader reads nothing".to_owned(),
+        })
+    }
+}
+
+/// `api` with the capture's reader attached, ready or not, and the fetcher held or not.
+fn with_reader(mut api: Api, ready: bool, hold: bool) -> Api {
+    HOLD_FETCH.store(hold, std::sync::atomic::Ordering::SeqCst);
+    api.attach_bill_ocr(Arc::new(CaptureReader(ready)));
+    api
+}
+
+/// Registers the capture's OCR setup: its reader and fetcher over a folder under the output
+/// folder, never the user's.
+fn use_capture_ocr(out: &Path) {
+    ledgerly_app::ocr_setup::use_ocr_setup(ledgerly_app::ocr_setup::OcrSetup {
+        dir: out.join("ocr-models-capture"),
+        reader: Arc::new(|_dir: &Path| -> Arc<dyn ledgerly_api::BillOcr> {
+            Arc::new(CaptureReader(true))
+        }),
+        fetch: Arc::new(CaptureFetch),
+    });
+}
+
 fn godavari_assistant_file(dir: &Path) -> Api {
     use ledgerly_api::{
         AiFeature, DraftLine, FIXED_ANSWERS_NAME, FixedAnswers, NewAiDraft, Proposal, SourceRef,
@@ -734,6 +832,17 @@ const BILL_PDF: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/examples/fixtures/R
 /// with its box in image pixels, measured when the image was drawn. The real bill reader drafts
 /// them; no figure is written here.
 fn godavari_bill_file(dir: &Path) -> Api {
+    godavari_bill_file_read_at(dir, 930)
+}
+
+/// [`godavari_bill_file`] as the `ocrs` reader returns the lines: `ocrs` gives no confidence, so
+/// every line carries `NEEDS_REVIEW_PERMILLE` (coordinator decision 2026-11-27).
+fn godavari_bill_ocrs_file(dir: &Path) -> Api {
+    godavari_bill_file_read_at(dir, ledgerly_api::NEEDS_REVIEW_PERMILLE)
+}
+
+/// The bill fixture with every text line at `confidence_permille`.
+fn godavari_bill_file_read_at(dir: &Path, confidence_permille: u16) -> Api {
     use sha2::{Digest, Sha256};
     use std::fmt::Write as _;
     let bytes = std::fs::read(BILL_PNG).unwrap();
@@ -789,7 +898,7 @@ fn godavari_bill_file(dir: &Path) -> Api {
                 page: 1,
                 text: text.to_owned(),
                 bbox,
-                confidence_permille: 930,
+                confidence_permille,
             })
             .collect(),
     };
@@ -2285,6 +2394,33 @@ fn light_shots() -> Vec<Shot> {
             .expect("AI and privacy", None)
             .on(Fixture::GodavariAssistant)
             .ai_on(),
+        // Later release: Download the OCR models pressed, the fetcher held (mock
+        // `ai.ai-settings.local-downloading`). Nothing opens a connection.
+        shot("ai.ai-settings.local-downloading", &[palette])
+            .query("AI and privacy")
+            .then(&[(Key::Enter, NONE), (Key::Num2, NONE)])
+            .expect("AI and privacy", None)
+            .click_named("Download the OCR models")
+            .wait(20)
+            .on(Fixture::GodavariOcrHeld)
+            .ai_on(),
+        // Later release: the capture's reader ready (mock `ai.ai-settings.local-ready`).
+        shot("ai.ai-settings.local-ready", &[palette])
+            .query("AI and privacy")
+            .then(&[(Key::Enter, NONE), (Key::Num2, NONE)])
+            .expect("AI and privacy", None)
+            .on(Fixture::GodavariOcrReady)
+            .ai_on(),
+        // Later release: the download pressed and the fetcher's fictional bytes refused by their
+        // checksum (mock `ai.ai-settings.local-download-failed`).
+        shot("ai.ai-settings.local-download-failed", &[palette])
+            .query("AI and privacy")
+            .then(&[(Key::Enter, NONE), (Key::Num2, NONE)])
+            .expect("AI and privacy", None)
+            .click_named("Download the OCR models")
+            .wait(60)
+            .on(Fixture::GodavariAssistant)
+            .ai_on(),
         // Later release: the cloud tier with the provider described and the key in the vault.
         shot("ai.ai-settings.cloud", &[palette])
             .query("AI and privacy")
@@ -2445,6 +2581,16 @@ fn light_shots() -> Vec<Shot> {
             .wait(40)
             .expect_bar("Purchase from bill photo", "Draft purchase")
             .on(Fixture::GodavariBill)
+            .ai_on(),
+        shot("ai.purchase-bill.needs-review", &[palette])
+            .query("Purchase from bill photo")
+            .then(&[(Key::Enter, NONE)])
+            .wait(30)
+            .type_text(BILL_PNG)
+            .press(&[(Key::Enter, NONE)])
+            .wait(40)
+            .expect_bar("Purchase from bill photo", "Draft purchase")
+            .on(Fixture::GodavariBillOcrs)
             .ai_on(),
         shot("ai.purchase-bill.rejected", &[palette])
             .query("Purchase from bill photo")
@@ -3558,6 +3704,7 @@ fn main() -> eframe::Result<()> {
         .collect();
     assert!(!entries.is_empty(), "no entry matches --only {only:?}");
     std::fs::create_dir_all(&out).unwrap();
+    use_capture_ocr(&out);
     let company = entries[0].company;
     let (shell, stage, held) = company.shell(&out);
     let app = Snapshots {

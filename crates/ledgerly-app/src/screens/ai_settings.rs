@@ -10,8 +10,10 @@
 //!   provider and a saved key the engine refuses the cloud choice (`Outcome::Unsupported`); the
 //!   screen shows that reason and stores nothing. The key never reaches the company file and is
 //!   never drawn, only whether it is saved.
-//! * The local panel names the model file the user chose (Ctrl+O); nothing is downloaded, and this
-//!   build runs no model, so the reader and language rows say "Not installed".
+//! * The local panel names the model file the user chose (Ctrl+O; nothing is downloaded for it,
+//!   and this build runs no language model). The Reader row is the attached `ocrs` reader's state;
+//!   when its model files are not there it offers "Download the OCR models", the one connection
+//!   this tier opens, run off the UI thread with the app's `OcrSetup` fetcher only when pressed.
 //! * The log is the file's real assistant events (`AiActivityRecorded`, round s21) with the
 //!   decision taken on each, or else the older `AiProposalRecorded` events. When it is empty the
 //!   screen says so and draws no rows; Ctrl+E is offered and exports only a log that has rows.
@@ -26,7 +28,7 @@ use egui::{Align, Key, Layout, Modifiers, RichText, Ui};
 use egui_extras::{Size, StripBuilder};
 use ledgerly_api::{
     AiDecision, AiFeature, AiLogEntry, AiLogRow, AiOutput, AiSettings, AiTier, Api, KeyState,
-    LocalModelFile,
+    LocalModelFile, ProviderInfo, ProviderStatus,
 };
 use ledgerly_core::Outcome;
 
@@ -337,6 +339,35 @@ pub struct AiSettingsScreen {
     latest: Latest<Reply>,
     /// The provider/key form, while it is open (mock `ai.ai-settings.cloud-edit`).
     form: Option<ProviderForm>,
+    /// The OCR model download, when one was pressed.
+    download: Download,
+    /// The OCR setup this screen downloads with; `None` uses the registered one
+    /// (`crate::ocr_setup::ocr_setup`).
+    ocr: Option<crate::ocr_setup::OcrSetup>,
+}
+
+/// The OCR model download as the screen knows it (mock `ai.ai-settings.local-downloading` and
+/// `.local-download-failed`).
+#[derive(Debug, Default)]
+enum Download {
+    /// Not pressed, or finished and kept.
+    #[default]
+    Idle,
+    /// Running on its own thread; the answer arrives here.
+    Running(std::sync::mpsc::Receiver<Result<(), String>>),
+    /// Stopped, with why; nothing of the refused file was kept.
+    Failed(String),
+}
+
+/// What the Reader row shows.
+#[derive(Clone, Copy)]
+struct ReaderView<'a> {
+    /// The attached reader and its state, when one is attached.
+    reader: Option<&'a (ProviderInfo, ProviderStatus)>,
+    /// Whether a download can be offered (the app has an OCR setup).
+    offer: bool,
+    /// The download's state.
+    download: &'a Download,
 }
 
 /// The provider/key form's fields as typed. The key field starts empty and is never filled from
@@ -687,6 +718,101 @@ impl AiSettingsScreen {
         }
     }
 
+    /// Draws the tier's panel; starts the download when its button was pressed. Returns whether
+    /// "Change provider or key" was clicked.
+    fn draw_panel_and_download(&mut self, ui: &mut Ui, panel: Panel, tr: &Tr) -> FormAsk {
+        let view = ReaderView {
+            reader: self.settings.as_ref().and_then(|s| s.bill_reader.as_ref()),
+            offer: self.ocr_setup().is_some(),
+            download: &self.download,
+        };
+        let (change, download) = draw_panel(
+            ui,
+            panel,
+            self.settings.as_ref(),
+            self.cloud_reason.as_deref(),
+            view,
+            tr,
+        );
+        if download {
+            self.start_download();
+        }
+        if change {
+            FormAsk::Open
+        } else {
+            FormAsk::Nothing
+        }
+    }
+
+    /// A screen that downloads with `setup` instead of the registered one (tests).
+    #[must_use]
+    pub fn with_ocr_setup(setup: crate::ocr_setup::OcrSetup) -> Self {
+        AiSettingsScreen {
+            ocr: Some(setup),
+            ..AiSettingsScreen::default()
+        }
+    }
+
+    /// The setup this screen downloads with.
+    fn ocr_setup(&self) -> Option<crate::ocr_setup::OcrSetup> {
+        self.ocr.clone().or_else(crate::ocr_setup::ocr_setup)
+    }
+
+    /// Starts the OCR model download on its own thread with the app's fetcher. Does nothing when
+    /// the app has no OCR setup or a download is already running.
+    fn start_download(&mut self) {
+        if matches!(self.download, Download::Running(_)) {
+            return;
+        }
+        let Some(setup) = self.ocr_setup() else {
+            return;
+        };
+        let (tx, rx) = std::sync::mpsc::channel();
+        let started = std::thread::Builder::new()
+            .name("ocr-models-download".to_owned())
+            .spawn(move || {
+                let result = std::fs::create_dir_all(&setup.dir)
+                    .map_err(|e| e.to_string())
+                    .and_then(|()| {
+                        ledgerly_api::download_ocr_models(&setup.dir, setup.fetch.as_ref())
+                            .map_err(|e| e.to_string())
+                    });
+                let _unwanted = tx.send(result);
+            });
+        self.download = match started {
+            Ok(_handle) => Download::Running(rx),
+            Err(e) => Download::Failed(e.to_string()),
+        };
+    }
+
+    /// Takes the download's answer when it has arrived. A kept download attaches a new reader
+    /// over the folder (it loads the models on first use) and reads the settings again.
+    fn poll_download(&mut self, ctx: &AppCtx) -> bool {
+        let Download::Running(rx) = &self.download else {
+            return false;
+        };
+        let answer = match rx.try_recv() {
+            Ok(answer) => answer,
+            Err(std::sync::mpsc::TryRecvError::Empty) => return false,
+            Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                Err("the download stopped without an answer".to_owned())
+            }
+        };
+        self.download = match answer {
+            Ok(()) => {
+                if let (Some(worker), Some(setup)) = (ctx.api.as_ref(), self.ocr_setup()) {
+                    let reader = setup.make_reader();
+                    // Jobs run in order, so the settings read below sees the new reader.
+                    let _attached = worker.run(move |api: &mut Api| api.attach_bill_ocr(reader));
+                }
+                self.loaded = false;
+                Download::Idle
+            }
+            Err(reason) => Download::Failed(reason),
+        };
+        true
+    }
+
     /// Whether the cloud panel shows the provider with a vault behind it, so the form can save.
     fn can_edit_provider(&self) -> bool {
         self.panel() == Panel::Cloud
@@ -857,6 +983,12 @@ impl Screen for AiSettingsScreen {
         }
 
         self.read_keys(ui, ctx);
+        if self.poll_download(ctx) {
+            ui.ctx().request_repaint();
+        } else if matches!(self.download, Download::Running(_)) {
+            ui.ctx()
+                .request_repaint_after(std::time::Duration::from_millis(50));
+        }
 
         let company = ctx.books.as_ref().map_or_else(
             || tr.t("ai.settings.company_fallback"),
@@ -889,19 +1021,13 @@ impl Screen for AiSettingsScreen {
         }
         gap(ui, 14.0);
 
-        let mut asked = FormAsk::Nothing;
-        if let Some(form) = self.form.as_mut() {
-            asked = draw_provider_form(ui, form, &tr);
+        let asked = if let Some(form) = self.form.as_mut() {
+            let asked = draw_provider_form(ui, form, &tr);
             gap(ui, 14.0);
-        } else if draw_panel(
-            ui,
-            panel,
-            self.settings.as_ref(),
-            self.cloud_reason.as_deref(),
-            &tr,
-        ) {
-            asked = FormAsk::Open;
-        }
+            asked
+        } else {
+            self.draw_panel_and_download(ui, panel, &tr)
+        };
         self.form_asked(asked, ctx.api.as_ref());
 
         let switched = draw_main_row(
@@ -975,9 +1101,11 @@ fn draw_panel(
     panel: Panel,
     settings: Option<&AiSettings>,
     cloud_reason: Option<&str>,
+    view: ReaderView<'_>,
     tr: &Tr,
-) -> bool {
+) -> (bool, bool) {
     let mut change = false;
+    let mut download = false;
     match panel {
         Panel::Unset => {
             note(ui, NoteKind::Info, &unset_note_in(tr));
@@ -988,7 +1116,7 @@ fn draw_panel(
             gap(ui, 14.0);
         }
         Panel::Local => {
-            draw_local(ui, settings.map(|s| &s.model_file), tr);
+            download = draw_local(ui, settings.map(|s| &s.model_file), view, tr);
             gap(ui, 14.0);
         }
         Panel::Cloud => {
@@ -1001,7 +1129,7 @@ fn draw_panel(
             gap(ui, 14.0);
         }
     }
-    change
+    (change, download)
 }
 
 /// The tier a panel shows, as the option card it checks.
@@ -1062,34 +1190,44 @@ fn draw_options(ui: &mut Ui, panel: Panel, stored: Option<AiTier>, tr: &Tr) -> O
     clicked
 }
 
-/// The local panel: the local model's reader, language and network rows, across the full width
-/// of the option cards (index.html:1906 and the local-model card at 1914).
-fn draw_local(ui: &mut Ui, model_file: Option<&LocalModelFile>, tr: &Tr) {
+/// The local panel: the model file, the OCR reader, the language model and the network rows,
+/// across the full width of the option cards (index.html, the local-model card). Returns whether
+/// the download button was pressed.
+fn draw_local(
+    ui: &mut Ui,
+    model_file: Option<&LocalModelFile>,
+    view: ReaderView<'_>,
+    tr: &Tr,
+) -> bool {
+    let mut pressed = false;
     let local = card(ui, |ui| {
         ui.set_min_width(ui.available_width());
         panel_title(ui, Some(Icon::Cpu), &tr.t("ai.settings.local.title"));
-        let file_row = model_file.map(|file| {
-            (
-                tr.t("ai.settings.local.file_label"),
-                model_file_text(file, tr),
-            )
-        });
-        let words = [
-            ("reader_label", "reader"),
-            ("language_label", "language"),
-            ("network_label", "network"),
-        ]
-        .map(|(label, value)| {
-            (
-                tr.t(&format!("ai.settings.local.{label}")),
-                tr.t(&format!("ai.settings.local.{value}")),
-            )
-        });
-        let rows = file_row
-            .iter()
-            .chain(words.iter())
-            .map(|(label, value)| vec![mock_table::muted(label), mock_table::text(value)])
-            .collect();
+        let label = |key: &str| tr.t(&format!("ai.settings.local.{key}"));
+        let mut rows: Vec<Vec<mock_table::Cell<'_>>> = Vec::new();
+        if let Some(file) = model_file {
+            rows.push(vec![
+                mock_table::muted_owned(label("file_label")),
+                mock_table::text_owned(model_file_text(file, tr)),
+            ]);
+        }
+        rows.push(vec![
+            mock_table::muted_owned(label("reader_label")),
+            Box::new(|ui: &mut Ui| pressed = reader_cell(ui, view, tr)),
+        ]);
+        let network = match (view.reader, view.download) {
+            (None, _) => label("network"),
+            (Some(_), Download::Running(_)) => label("network_downloading"),
+            (Some(_), Download::Idle | Download::Failed(_)) => label("network_reader"),
+        };
+        rows.push(vec![
+            mock_table::muted_owned(label("language_label")),
+            mock_table::text_owned(label("language")),
+        ]);
+        rows.push(vec![
+            mock_table::muted_owned(label("network_label")),
+            mock_table::text_owned(network),
+        ]);
         mock_table::table(
             ui,
             &[Width::Fixed(LOCAL_LABEL_COLUMN), Width::Rest],
@@ -1098,6 +1236,65 @@ fn draw_local(ui: &mut Ui, model_file: Option<&LocalModelFile>, tr: &Tr) {
         );
     });
     record_probe(ui, "ai-settings.local", local.response.rect);
+    pressed
+}
+
+/// The Reader row: the attached reader's state, the download's progress or failure, and the
+/// download button while the model files are not there. Returns whether the button was pressed.
+fn reader_cell(ui: &mut Ui, view: ReaderView<'_>, tr: &Tr) -> bool {
+    let t = tokens(ui);
+    let line = |ui: &mut Ui, text: &str, color| {
+        ui.add(egui::Label::new(crate::ui::para_text(text, TEXT_BODY, color)).wrap());
+    };
+    let Some((info, status)) = view.reader else {
+        line(ui, &tr.t("ai.settings.local.reader"), t.text);
+        return false;
+    };
+    if let Download::Running(_) = view.download {
+        line(ui, &tr.t("ai.settings.local.downloading"), t.text);
+        return false;
+    }
+    match status {
+        ProviderStatus::Ready => {
+            let text = tr.tf(
+                "ai.settings.local.reader_ready",
+                &[("name", &info.name), ("version", &info.version)],
+            );
+            line(ui, &text, t.text);
+            false
+        }
+        ProviderStatus::NotConfigured { reason } => {
+            let text = tr.tf("ai.settings.local.reader_not_set_up", &[("reason", reason)]);
+            line(ui, &text, t.text);
+            false
+        }
+        ProviderStatus::NotInstalled { reason } => {
+            let text = tr.tf("ai.settings.local.reader_missing", &[("reason", reason)]);
+            line(ui, &text, t.text);
+            let again = if let Download::Failed(why) = view.download {
+                ui.add_space(8.0);
+                let text = tr.tf("ai.settings.local.download_failed", &[("reason", why)]);
+                note(ui, NoteKind::Bad, &text);
+                true
+            } else {
+                false
+            };
+            if !view.offer {
+                return false;
+            }
+            ui.add_space(6.0);
+            line(ui, &tr.t("ai.settings.local.reader_source"), t.text_2);
+            ui.add_space(8.0);
+            let key = if again { "download_again" } else { "download" };
+            button(
+                ui,
+                &tr.t(&format!("ai.settings.local.{key}")),
+                None,
+                ButtonKind::Secondary,
+            )
+            .clicked()
+        }
+    }
 }
 
 /// The Model file row's text: none chosen, the file and its size, or a file that is gone.
@@ -1818,6 +2015,7 @@ fn output_text(output: &AiOutput, tr: &Tr) -> String {
         AiOutput::ReadFailed(reason) => {
             tr.tf("ai.settings.log.out.read_failed", &[("reason", reason)])
         }
+        AiOutput::NotRun(reason) => tr.tf("ai.settings.log.out.not_run", &[("reason", reason)]),
         AiOutput::CloudConsent(true) => tr.t("ai.settings.log.out.consent_given"),
         AiOutput::CloudConsent(false) => tr.t("ai.settings.log.out.consent_refused"),
     }
