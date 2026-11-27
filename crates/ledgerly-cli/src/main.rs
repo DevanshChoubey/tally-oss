@@ -65,6 +65,16 @@ enum Cmd {
         /// The new company file to write.
         target: PathBuf,
     },
+    /// Ask GitHub for the latest release of this project (the only network request the command
+    /// line makes, and only when this command is run). Prints the release and the SHA-256 of
+    /// each file once the release's two checksum records agree; never downloads an installer or
+    /// installs anything. Exit 0 when up to date or a release is found, 1 when the checksums
+    /// disagree or `--compare` does not match, 2 when the check could not run.
+    CheckUpdate {
+        /// A downloaded release file to compare with the release's SHA-256 for that file name.
+        #[arg(long)]
+        compare: Option<PathBuf>,
+    },
     /// Export a return from a company file.
     Export {
         /// What to export.
@@ -208,6 +218,13 @@ fn run(cmd: &Cmd) -> anyhow::Result<ExitCode> {
             let _span = tracing::info_span!("command", name = "restore").entered();
             restore(backup, target)
         }
+        Cmd::CheckUpdate { compare } => {
+            let _span = tracing::info_span!("command", name = "check-update").entered();
+            check_update(
+                &ledgerly_api::update_check::UpdateChecker::github(),
+                compare.as_deref(),
+            )
+        }
         Cmd::Export { what } => {
             let _span = tracing::info_span!("command", name = "export").entered();
             match what {
@@ -337,6 +354,64 @@ fn backup(args: &BackupArgs) -> anyhow::Result<ExitCode> {
     .context("the backup failed; nothing was written")?;
     println!("Backup written: {}", path.display());
     Ok(ExitCode::SUCCESS)
+}
+
+/// `ledgerly check-update`: see [`Cmd::CheckUpdate`].
+fn check_update(
+    checker: &ledgerly_api::update_check::UpdateChecker,
+    compare: Option<&Path>,
+) -> anyhow::Result<ExitCode> {
+    use ledgerly_api::update_check::{UpdateCheck, sha256_of_file};
+    let this = env!("CARGO_PKG_VERSION");
+    match checker.check(this) {
+        UpdateCheck::UpToDate { latest } => {
+            println!("Ledgerly {this} is up to date (latest release: {latest}).");
+            Ok(ExitCode::SUCCESS)
+        }
+        UpdateCheck::Available(release) => {
+            println!(
+                "Ledgerly {} is available (this is {this}): {}",
+                release.version, release.page_url
+            );
+            println!("The release's checksums agree. SHA-256 of each file:");
+            for asset in &release.assets {
+                println!("  {}  {}", asset.sha256, asset.name);
+            }
+            println!("Nothing was downloaded or installed.");
+            let Some(file) = compare else {
+                return Ok(ExitCode::SUCCESS);
+            };
+            let name = file
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            let Some(asset) = release.assets.iter().find(|a| a.name == name) else {
+                eprintln!("{name} is not a file of release {}.", release.tag);
+                return Ok(ExitCode::from(1));
+            };
+            let actual =
+                sha256_of_file(file).with_context(|| format!("reading {}", file.display()))?;
+            if actual == asset.sha256 {
+                println!("{} matches the release: {actual}", file.display());
+                Ok(ExitCode::SUCCESS)
+            } else {
+                eprintln!(
+                    "{} does NOT match the release: it is {actual}, the release says {}. Do not run it.",
+                    file.display(),
+                    asset.sha256
+                );
+                Ok(ExitCode::from(1))
+            }
+        }
+        UpdateCheck::ChecksumsDisagree { reason } => {
+            eprintln!("The latest release is not offered: its checksums disagree. {reason}");
+            Ok(ExitCode::from(1))
+        }
+        UpdateCheck::CouldNotCheck { reason } => {
+            eprintln!("Could not check for updates: {reason}");
+            Ok(ExitCode::from(2))
+        }
+    }
 }
 
 fn restore(backup: &Path, target: &Path) -> anyhow::Result<ExitCode> {

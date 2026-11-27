@@ -37,6 +37,7 @@ mod review;
 mod search;
 mod tally_file_import;
 mod tally_import;
+pub mod update_check;
 mod upgrade;
 mod voucher_audit;
 mod voucher_gst;
