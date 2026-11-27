@@ -81,7 +81,7 @@ fn ledger(id: u64, name: &str, kind: ReservedGroup) -> Ledger {
         id: LedgerId(id),
         name: name.to_owned(),
         aliases: Vec::new(),
-        group: group(kind),
+        group: Some(group(kind)),
         opening: SignedAmount::dr(Paise::new(100_000_000)),
         bill_wise: None,
         cost_centres_applicable: false,

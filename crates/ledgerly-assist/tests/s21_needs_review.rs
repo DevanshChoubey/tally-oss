@@ -35,7 +35,7 @@ fn ledger(id: u64, name: &str, party: Option<PartyDetails>, tax: Option<TaxDetai
         id: LedgerId(id),
         name: name.to_owned(),
         aliases: vec![],
-        group: GroupId(1),
+        group: Some(GroupId(1)),
         opening: SignedAmount::dr(Paise::ZERO),
         bill_wise: None,
         cost_centres_applicable: false,
