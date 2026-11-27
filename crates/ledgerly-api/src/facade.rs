@@ -66,7 +66,7 @@ pub struct Api {
     /// Who is making the changes.
     actor: Actor,
     /// The loaded books, or why they cannot be loaded.
-    cache: Cache,
+    pub(crate) cache: Cache,
     /// The lock date in force, from the audit log.
     lock: Option<Date>,
     /// Bank statements imported in this session (card W5). Not kept in the company file, which
@@ -82,7 +82,7 @@ pub struct Api {
 
 /// The state of the books cache.
 #[derive(Debug)]
-enum Cache {
+pub(crate) enum Cache {
     /// The books, loaded from the store.
     Ready(Box<Books>),
     /// The store holds a voucher this build cannot project. Nothing is computed from the books.

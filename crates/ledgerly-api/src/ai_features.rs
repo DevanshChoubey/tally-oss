@@ -119,7 +119,7 @@ impl Api {
     /// # Errors
     /// - [`ApiError::Store`] when the audit log cannot be read or the log entry cannot be
     ///   committed.
-    /// - [`ApiError::AiKeyAccount`] when the company cannot be read for its ledgers.
+    /// - [`ApiError::AiBooksBlocked`] when the books are blocked and give no ledgers.
     pub fn read_words(&mut self, text: &str, cancel: &CancelToken) -> Result<WordsRead, ApiError> {
         let info = match self.ai_gate(AiFeature::PlainWords)? {
             AiGate::Ready(info) => info,
@@ -247,7 +247,7 @@ impl Api {
     fn master_ledgers(&self) -> Result<Vec<MasterLedger>, ApiError> {
         let books = match self.books()? {
             Outcome::Value(books) => books,
-            Outcome::Unsupported(u) => return Err(ApiError::AiKeyAccount { reason: u.reason }),
+            Outcome::Unsupported(u) => return Err(ApiError::AiBooksBlocked { reason: u.reason }),
         };
         Ok(books
             .masters
@@ -300,4 +300,61 @@ fn hex(bytes: &[u8]) -> String {
         let _ = write!(out, "{b:02x}");
         out
     })
+}
+
+#[cfg(test)]
+mod tests {
+    #![allow(
+        clippy::unwrap_used,
+        clippy::panic,
+        reason = "test code: rule B2 lets tests unwrap and panic"
+    )]
+
+    use super::*;
+    use crate::facade::Cache;
+    use crate::{AiTier, FixedAnswers};
+    use ledgerly_core::{CancelToken, Clock, CompanyId, StateCode, Unsupported};
+    use ledgerly_model::{Address, Company, EntityKind, Features, NegativeStockPolicy};
+    use time::macros::{date, datetime};
+
+    #[test]
+    fn blocked_books_refuse_a_read_with_their_own_error_not_the_key_account_one() {
+        // provenance: derived. `Api::books` returns the store's Unsupported when a voucher cannot
+        // be replayed (facade.rs `reload`); the readers then have no ledgers, which is not about
+        // the cloud key's keychain account.
+        let dir = tempfile::tempdir().unwrap();
+        let company = Company {
+            ineligible_itc_default: None,
+            id: CompanyId(1),
+            name: "Fictional Traders".to_owned(),
+            mailing_name: None,
+            address: Address::default(),
+            state: StateCode::new(29).unwrap(),
+            pan: None,
+            registrations: Vec::new(),
+            fy_start: date!(2026 - 04 - 01),
+            books_begin: date!(2026 - 04 - 01),
+            entity_kind: EntityKind::Company,
+            features: Features::default(),
+            negative_stock: NegativeStockPolicy::Block,
+        };
+        let mut api = Api::create(
+            &dir.path().join("blocked.ledgerly"),
+            &company,
+            Clock::Fixed(datetime!(2026-11-21 10:00 UTC)),
+        )
+        .unwrap();
+        api.set_ai_tier(AiTier::Local).unwrap();
+        api.attach_assistant(Box::new(FixedAnswers::new()));
+        api.cache = Cache::Blocked(Unsupported {
+            what: "voucher 7".to_owned(),
+            reason: "a stock journal records no side".to_owned(),
+        });
+        match api.read_words("paid rent 25k", &CancelToken::new()) {
+            Err(ApiError::AiBooksBlocked { reason }) => {
+                assert_eq!(reason, "a stock journal records no side");
+            }
+            other => panic!("expected AiBooksBlocked, got {other:?}"),
+        }
+    }
 }
