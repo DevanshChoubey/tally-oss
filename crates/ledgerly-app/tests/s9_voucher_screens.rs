@@ -20,7 +20,7 @@ use ledgerly_core::{
 use ledgerly_model::{
     Address, BankDetails, BaseVoucherKind, BillRefKind, BillWiseConfig, Books, Company, EntityKind,
     Features, Group, Ledger, Masters, NegativeStockPolicy, NumberingConfig, NumberingMethod,
-    RestartPeriod, VoucherType,
+    ReservedGroup, RestartPeriod, VoucherType,
 };
 use time::macros::date;
 
@@ -30,6 +30,8 @@ const BANK: LedgerId = LedgerId(2);
 const PARTY: LedgerId = LedgerId(6);
 const T_PAYMENT: VoucherTypeId = VoucherTypeId(2);
 const GROUP: GroupId = GroupId(1);
+const CASH_GROUP: GroupId = GroupId(2);
+const BANK_GROUP: GroupId = GroupId(3);
 const TODAY: Date = date!(2026 - 11 - 21);
 
 fn ledger(id: LedgerId, name: &str) -> Ledger {
@@ -49,6 +51,55 @@ fn ledger(id: LedgerId, name: &str) -> Ledger {
         reserved: None,
         tally: None,
     }
+}
+
+/// S22: a payment's or receipt's account lists only cash and bank ledgers, so the fixture puts
+/// `ledgers` under a reserved group (Cash-in-Hand, Bank Accounts) inside Current Assets, as in a
+/// real company.
+fn reserve(
+    masters: &mut Masters,
+    id: GroupId,
+    name: &str,
+    reserved: ReservedGroup,
+    ledgers: &[LedgerId],
+) {
+    masters.groups.insert(
+        id,
+        Group {
+            ineligible_itc: None,
+            id,
+            name: name.to_owned(),
+            aliases: Vec::new(),
+            parent: Some(GROUP),
+            reserved: Some(reserved),
+            nature: None,
+            affects_gross_profit: false,
+            tally: None,
+        },
+    );
+    for ledger in ledgers {
+        if let Some(l) = masters.ledgers.get_mut(ledger) {
+            l.group = id;
+        }
+    }
+}
+
+/// Cash under Cash-in-Hand and the bank under Bank Accounts.
+fn reserve_cash_and_bank(masters: &mut Masters) {
+    reserve(
+        masters,
+        CASH_GROUP,
+        "Cash-in-Hand",
+        ReservedGroup::CashInHand,
+        &[CASH],
+    );
+    reserve(
+        masters,
+        BANK_GROUP,
+        "Bank Accounts",
+        ReservedGroup::BankAccounts,
+        &[BANK],
+    );
 }
 
 fn books() -> Books {
@@ -81,6 +132,7 @@ fn books() -> Books {
     for l in [ledger(CASH, "Cash"), ledger(RENT, "Rent"), bank, party] {
         masters.ledgers.insert(l.id, l);
     }
+    reserve_cash_and_bank(&mut masters);
     masters.voucher_types.insert(
         T_PAYMENT,
         VoucherType {

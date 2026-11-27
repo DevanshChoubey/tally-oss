@@ -119,6 +119,124 @@ impl KeyStore for KeyringStore {
     }
 }
 
+/// Where the cloud key is kept: read, saved and deleted, and whether one is there. The app's
+/// vault is the OS keychain ([`KeyringStore`]); tests and captures use [`MemoryVault`]. No method
+/// returns the key except [`KeyStore::api_key`], and no error carries it.
+pub trait KeyVault: KeyStore + std::fmt::Debug {
+    /// Whether a key is saved under `service` and `account`.
+    ///
+    /// # Errors
+    /// [`AssistError::Key`] when the vault cannot be read.
+    fn has_key(&self, service: &str, account: &str) -> Result<bool, AssistError>;
+
+    /// Saves `key` under `service` and `account`, replacing any key there.
+    ///
+    /// # Errors
+    /// [`AssistError::Key`] when the vault refuses.
+    fn save_key(&self, service: &str, account: &str, key: &str) -> Result<(), AssistError>;
+
+    /// Deletes the key under `service` and `account`; deleting a key that is not there is not
+    /// an error.
+    ///
+    /// # Errors
+    /// [`AssistError::Key`] when the vault refuses.
+    fn delete_key(&self, service: &str, account: &str) -> Result<(), AssistError>;
+}
+
+impl KeyVault for KeyringStore {
+    fn has_key(&self, service: &str, account: &str) -> Result<bool, AssistError> {
+        let entry = keyring::Entry::new(service, account).map_err(|e| keychain_error(&e))?;
+        match entry.get_password() {
+            Ok(_) => Ok(true),
+            Err(keyring::Error::NoEntry) => Ok(false),
+            Err(e) => Err(keychain_error(&e)),
+        }
+    }
+
+    fn save_key(&self, service: &str, account: &str, key: &str) -> Result<(), AssistError> {
+        KeyringStore::save_key(self, service, account, key)
+    }
+
+    fn delete_key(&self, service: &str, account: &str) -> Result<(), AssistError> {
+        let entry = keyring::Entry::new(service, account).map_err(|e| keychain_error(&e))?;
+        match entry.delete_credential() {
+            Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+            Err(e) => Err(keychain_error(&e)),
+        }
+    }
+}
+
+/// One saved key in a [`MemoryVault`]: service, account and key.
+type SavedKey = (String, String, String);
+
+/// A key vault held in memory for this process only: the double that tests and captures use in
+/// place of the OS keychain. Nothing is written anywhere.
+#[derive(Default)]
+pub struct MemoryVault {
+    keys: std::sync::Mutex<Vec<SavedKey>>,
+}
+
+impl std::fmt::Debug for MemoryVault {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("MemoryVault { .. }")
+    }
+}
+
+impl MemoryVault {
+    /// A vault holding `key` under `service` and `account` from the start.
+    #[must_use]
+    pub fn with_key(service: &str, account: &str, key: &str) -> Self {
+        MemoryVault {
+            keys: std::sync::Mutex::new(vec![(
+                service.to_owned(),
+                account.to_owned(),
+                key.to_owned(),
+            )]),
+        }
+    }
+
+    fn keys(&self) -> Result<std::sync::MutexGuard<'_, Vec<SavedKey>>, AssistError> {
+        self.keys.lock().map_err(|_| AssistError::Key {
+            reason: "the in-memory key vault was poisoned by a panic".to_owned(),
+        })
+    }
+}
+
+impl KeyStore for MemoryVault {
+    fn api_key(&self, service: &str, account: &str) -> Result<String, AssistError> {
+        self.keys()?
+            .iter()
+            .find(|(s, a, _)| s == service && a == account)
+            .map(|(_, _, k)| k.clone())
+            .ok_or_else(|| AssistError::Key {
+                reason: "no API key is saved for this company; add one in the assistant settings"
+                    .to_owned(),
+            })
+    }
+}
+
+impl KeyVault for MemoryVault {
+    fn has_key(&self, service: &str, account: &str) -> Result<bool, AssistError> {
+        Ok(self
+            .keys()?
+            .iter()
+            .any(|(s, a, _)| s == service && a == account))
+    }
+
+    fn save_key(&self, service: &str, account: &str, key: &str) -> Result<(), AssistError> {
+        let mut keys = self.keys()?;
+        keys.retain(|(s, a, _)| !(s == service && a == account));
+        keys.push((service.to_owned(), account.to_owned(), key.to_owned()));
+        Ok(())
+    }
+
+    fn delete_key(&self, service: &str, account: &str) -> Result<(), AssistError> {
+        self.keys()?
+            .retain(|(s, a, _)| !(s == service && a == account));
+        Ok(())
+    }
+}
+
 fn keychain_error(e: &keyring::Error) -> AssistError {
     if matches!(e, keyring::Error::NoEntry) {
         return AssistError::Key {

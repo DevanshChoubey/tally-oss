@@ -217,9 +217,13 @@ fn the_three_states_render_the_mock_wording_and_keys() {
         screen.panel(),
         ledgerly_app::screens::ai_settings::Panel::Local
     );
+    // Round s21 B: the mock's local state adds Ctrl+O "Model file" after the tiers
+    // (`design/mock-v2/index.html`, `SCREENS['ai-settings'].keys`, the `st==='local'` entry).
+    let mut local_keys = key_hints(false);
+    local_keys.push(ledgerly_app::KeyHint::new("Ctrl+O", "Model file"));
     assert_eq!(
         screen.keys(&ledgerly_app::i18n::Tr::default()),
-        key_hints(false),
+        local_keys,
         "the keys without a log"
     );
 

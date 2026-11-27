@@ -10,6 +10,7 @@
 //! | `Report("home")` | the home screen of the open company ([`super::gateway::GatewayScreen`]) |
 //! | `Report("gst-returns")` | the GST screen for the company's one GST registration |
 //! | `Report("import-tally")` | the import screen (its palette row reads "Import from another app") |
+//! | `Report("import-file")` | the import screen scrolled to the import from an XML file (Alt+O; its palette row reads "Import masters or vouchers from a file") |
 //! | `Report("bank-reconciliation")` | the bank reconciliation of the company's one bank ledger (a stated reason when there are none or several) |
 //! | `Report("bank:N")` | the bank reconciliation of bank ledger N |
 //! | `Report("masters")` | the masters screen, showing ledgers |
@@ -276,6 +277,8 @@ pub const HOME_KEY: &str = "home";
 pub const GST_KEY: &str = "gst-returns";
 /// The palette key of the import screen.
 pub const IMPORT_KEY: &str = "import-tally";
+/// The palette key of the import screen scrolled to the import from an XML file (Alt+O).
+pub const IMPORT_FILE_KEY: &str = "import-file";
 /// The palette key of the masters screen (ledgers).
 pub const MASTERS_KEY: &str = "masters";
 /// The palette key of the bank reconciliation of the company's one bank ledger.
@@ -378,6 +381,7 @@ pub fn screen_entries(books: Option<&Books>) -> Vec<PaletteEntry> {
         screen(REVIEW_KEY, "Review queue"),
         screen(GST_KEY, "GST Returns"),
         screen(IMPORT_KEY, "Import from another app"),
+        screen(IMPORT_FILE_KEY, "Import masters or vouchers from a file"),
         screen(MASTERS_KEY, "Masters"),
         screen(BANK_RECON_KEY, "Bank reconciliation"),
         screen(KEYS_KEY, "Keyboard map"),
@@ -766,6 +770,9 @@ pub fn screen_for_key(key: &str, ctx: &AppCtx) -> Option<Result<Box<dyn Screen>,
             .map(|()| Box::new(super::gateway::GatewayScreen::new()) as Box<dyn Screen>),
         GST_KEY => books_of(ctx).and_then(|b| Ok(Box::new(gst_screen(b)?) as Box<dyn Screen>)),
         IMPORT_KEY => ImportScreen::new(today())
+            .map(|s| Box::new(s) as Box<dyn Screen>)
+            .map_err(NavError::from),
+        IMPORT_FILE_KEY => ImportScreen::for_file(today())
             .map(|s| Box::new(s) as Box<dyn Screen>)
             .map_err(NavError::from),
         MASTERS_KEY => {

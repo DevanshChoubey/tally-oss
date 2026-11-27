@@ -203,6 +203,79 @@ fn csv_text_that_looks_like_a_formula_gets_a_leading_apostrophe() {
 }
 
 #[test]
+fn csv_formula_text_is_guarded_under_an_indent_and_in_every_listed_form() {
+    // derived: OWASP "CSV Injection" (https://community.owasp.org/attacks/CSV_Injection, read
+    // 2026-11-27): no cell may begin with = + - @, tab, carriage return or line feed, nor their
+    // full-width forms; the guard is a leading single quote. A nested row's label is indented by
+    // two spaces per depth (module docs), and a reader that trims leading spaces would then see
+    // `=` first, so the guard looks past leading spaces and goes before the indent. S22: an
+    // imported ledger named `=HYPERLINK("http://x.example","pay")` under a group (depth 1).
+    let report = one_column(vec![
+        row(
+            "=HYPERLINK(\"http://x.example\",\"pay\")",
+            1,
+            RowKind::Text,
+            vec![Cell::Text(" =1+1".to_owned())],
+        ),
+        row(
+            "\nx",
+            0,
+            RowKind::Text,
+            vec![Cell::Text("\u{ff1d}1+1".to_owned())],
+        ),
+        row(
+            "\u{ff0b}a",
+            0,
+            RowKind::Text,
+            vec![Cell::Text("\u{ff20}b".to_owned())],
+        ),
+        row(
+            "\u{ff0d}c",
+            0,
+            RowKind::Text,
+            vec![Cell::Text("  safe".to_owned())],
+        ),
+    ]);
+    assert_eq!(
+        to_csv(&report).unwrap(),
+        "Particulars,Value\n\
+         \"'  =HYPERLINK(\"\"http://x.example\"\",\"\"pay\"\")\",' =1+1\n\
+         \"'\nx\",'\u{ff1d}1+1\n\
+         '\u{ff0b}a,'\u{ff20}b\n\
+         '\u{ff0d}c,  safe\n"
+    );
+}
+
+#[test]
+fn xlsx_formula_text_is_a_text_cell() {
+    // derived: the XLSX writer stores text cells as strings (`write_string`), so a ledger named
+    // like a formula is read back as text, never as a formula (S22).
+    let path = scratch("formula.xlsx");
+    let report = one_column(vec![row(
+        "=HYPERLINK(\"http://x.example\",\"pay\")",
+        1,
+        RowKind::Text,
+        vec![Cell::Text("=1+1".to_owned())],
+    )]);
+    to_xlsx(&report, &path).unwrap();
+    let mut book: Xlsx<_> = open_workbook(&path).unwrap();
+    let name = book.sheet_names()[0].clone();
+    let range = book.worksheet_range(&name).unwrap();
+    assert!(
+        cell_string(range.get((1, 0))).ends_with("=HYPERLINK(\"http://x.example\",\"pay\")"),
+        "{:?}",
+        range.get((1, 0))
+    );
+    assert!(cell_string(range.get((1, 0))).starts_with("text "));
+    assert_eq!(cell_string(range.get((1, 1))), "text =1+1");
+    let formulas = book.worksheet_formula(&name).unwrap();
+    assert!(
+        formulas.used_cells().all(|(_, _, f)| f.is_empty()),
+        "no formula cells"
+    );
+}
+
+#[test]
 fn csv_negative_numbers_are_not_prefixed() {
     // derived: only text is guarded; a credit amount is a number and must stay `-5.00`.
     assert_eq!(

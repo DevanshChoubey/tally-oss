@@ -261,6 +261,7 @@ fn align_voucher_types(events: Vec<Event>) -> Result<Vec<Event>, Unsupported> {
             | Event::Gstr2bImported { .. }
             | Event::ImsActionRecorded { .. }
             | Event::Gstr3bFiled { .. }
+            | Event::AiActivityRecorded(_)
             | Event::MatchConfirmed(_)
             | Event::AiProposalRecorded(_)) => out.push(other),
         }

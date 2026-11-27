@@ -155,6 +155,89 @@ pub fn parse_masters_text(text: &str) -> Result<MastersParsed, MastersError> {
     parser.finish(result)
 }
 
+/// The kind of a master read by [`parse_import_masters_bytes`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ImportMasterKind {
+    /// `GROUP`.
+    Group,
+    /// `LEDGER`.
+    Ledger,
+    /// `STOCKITEM`.
+    StockItem,
+    /// `UNIT`.
+    Unit,
+    /// `GODOWN`.
+    Godown,
+    /// `VOUCHERTYPE`.
+    VoucherType,
+    /// `COSTCENTRE`.
+    CostCentre,
+    /// `COSTCATEGORY`.
+    CostCategory,
+    /// `STOCKGROUP`.
+    StockGroup,
+}
+
+/// A master from a file a user exported for import, where `GUID` may be absent (S22).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ImportMaster {
+    /// What kind of master it is.
+    pub kind: ImportMasterKind,
+    /// The `GUID`, when the file carries one.
+    pub guid: Option<String>,
+    /// The `ALTERID`, when the file carries one.
+    pub alter_id: Option<u64>,
+    /// The object's name (from the `NAME` child, or the `NAME` attribute).
+    pub name: String,
+    /// The `PARENT` element's text; an empty or absent `PARENT` is `None`.
+    pub parent: Option<String>,
+    /// Attributes of the master element, in document order.
+    pub attributes: Vec<(String, String)>,
+    /// Child elements that are not modelled fields, in document order.
+    pub extra: Vec<RawElement>,
+}
+
+/// Everything read from an import file: masters in document order and the warnings raised.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct ImportMastersParsed {
+    /// Masters in document order.
+    pub masters: Vec<ImportMaster>,
+    /// Non-fatal problems, ordered by byte offset.
+    pub warnings: Vec<XmlWarning>,
+}
+
+/// Decodes `bytes` as [`parse_masters_bytes`] does and reads the masters of a file in the import
+/// form. Unlike [`parse_masters_text`], a master without `GUID` is accepted: the sample import
+/// file on the help page carries only `NAME` and `PARENT`
+/// (<https://help.tallysolutions.com/sample-xml/>, read 2026-11-27).
+///
+/// # Errors
+///
+/// As [`parse_masters_bytes`], except that an absent `GUID` is not an error (an empty one is).
+pub fn parse_import_masters_bytes(bytes: &[u8]) -> Result<ImportMastersParsed, TallyXmlError> {
+    let text = decode_bytes(bytes)?;
+    let mut parser = Parser::new(&text);
+    parser.lenient = true;
+    let result = parser.run();
+    let imported = std::mem::take(&mut parser.imported);
+    match parser.finish(result) {
+        Ok(parsed) => Ok(ImportMastersParsed {
+            masters: imported,
+            warnings: parsed.warnings,
+        }),
+        Err(failure) => Err(failure.error),
+    }
+}
+
+/// Decodes a Tally XML file's bytes (UTF-8, UTF-8 with BOM, UTF-16LE or UTF-16BE with BOM) to
+/// text, as [`parse_masters_bytes`] does, for parsers that take text.
+///
+/// # Errors
+/// [`TallyXmlError::Decode`] (offset into `bytes`) when the bytes are not valid text.
+pub fn decode_xml_bytes(bytes: &[u8]) -> Result<String, TallyXmlError> {
+    decode_bytes(bytes)
+}
+
 // ---------------------------------------------------------------------------------------------
 // Decoding
 // ---------------------------------------------------------------------------------------------
@@ -637,6 +720,20 @@ impl MasterKind {
         }
     }
 
+    fn public(self) -> ImportMasterKind {
+        match self {
+            Self::Group => ImportMasterKind::Group,
+            Self::Ledger => ImportMasterKind::Ledger,
+            Self::StockItem => ImportMasterKind::StockItem,
+            Self::Unit => ImportMasterKind::Unit,
+            Self::Godown => ImportMasterKind::Godown,
+            Self::VoucherType => ImportMasterKind::VoucherType,
+            Self::CostCentre => ImportMasterKind::CostCentre,
+            Self::CostCategory => ImportMasterKind::CostCategory,
+            Self::StockGroup => ImportMasterKind::StockGroup,
+        }
+    }
+
     fn wrap(self, record: MasterRecord) -> TallyMaster {
         match self {
             Self::Group => TallyMaster::Group(record),
@@ -772,6 +869,39 @@ fn build_record(
     offset: usize,
     warnings: &mut Vec<XmlWarning>,
 ) -> Result<MasterRecord, TallyXmlError> {
+    let built = build_fields(element, offset, warnings, true)?;
+    let guid = require(built.guid, "GUID", &built.tag)?;
+    Ok(MasterRecord {
+        tally_ref: TallyRef {
+            guid,
+            alter_id: built.alter_id,
+        },
+        name: built.name,
+        parent: built.parent,
+        attributes: built.attributes,
+        extra: built.extra,
+    })
+}
+
+/// A master's fields, with the `GUID` still optional.
+struct Built {
+    tag: String,
+    guid: Option<String>,
+    alter_id: Option<u64>,
+    name: String,
+    parent: Option<String>,
+    attributes: Vec<(String, String)>,
+    extra: Vec<RawElement>,
+}
+
+/// Reads a master's fields. With `need_guid`, an absent `GUID` is refused before the name is
+/// looked at (the strict parser's order); without it only an empty `GUID` is refused.
+fn build_fields(
+    element: RawElement,
+    offset: usize,
+    warnings: &mut Vec<XmlWarning>,
+    need_guid: bool,
+) -> Result<Built, TallyXmlError> {
     let RawElement {
         name: tag,
         attributes,
@@ -788,15 +918,26 @@ fn build_record(
             None => fields.extra.push(child),
         }
     }
-    let guid = require(fields.guid, "GUID", &tag)?;
+    let guid = match fields.guid {
+        Some(g) => Some(require(Some(g), "GUID", &tag)?),
+        None if need_guid => {
+            return Err(TallyXmlError::Missing {
+                tag: "GUID".to_owned(),
+                path: tag,
+            });
+        }
+        None => None,
+    };
     let attribute_name = attributes
         .iter()
         .find(|(k, _)| k == "NAME")
         .map(|(_, v)| v.clone());
     let name = resolve_name(fields.name, attribute_name, &tag)?;
     let alter_id = fields.alter_id.as_deref().map(parse_alter_id).transpose()?;
-    Ok(MasterRecord {
-        tally_ref: TallyRef { guid, alter_id },
+    Ok(Built {
+        tag,
+        guid,
+        alter_id,
         name,
         parent: fields.parent.filter(|p| !p.is_empty()),
         attributes,
@@ -830,6 +971,10 @@ struct Parser<'a> {
     root_closed: bool,
     container_seen: bool,
     out: MastersParsed,
+    /// Read the import form, where `GUID` is optional ([`parse_import_masters_bytes`]).
+    lenient: bool,
+    /// Masters read in the import form.
+    imported: Vec<ImportMaster>,
 }
 
 impl<'a> Parser<'a> {
@@ -843,6 +988,8 @@ impl<'a> Parser<'a> {
             root_closed: false,
             container_seen: false,
             out: MastersParsed::default(),
+            lenient: false,
+            imported: Vec::new(),
         }
     }
 
@@ -979,6 +1126,19 @@ impl<'a> Parser<'a> {
         let Some(kind) = self.open_kind.take() else {
             return Err(xml_error(offset, "master element without a kind"));
         };
+        if self.lenient {
+            let built = build_fields(element, offset, &mut self.out.warnings, false)?;
+            self.imported.push(ImportMaster {
+                kind: kind.public(),
+                guid: built.guid,
+                alter_id: built.alter_id,
+                name: built.name,
+                parent: built.parent,
+                attributes: built.attributes,
+                extra: built.extra,
+            });
+            return Ok(());
+        }
         let record = build_record(element, offset, &mut self.out.warnings)?;
         self.out.masters.push(kind.wrap(record));
         Ok(())

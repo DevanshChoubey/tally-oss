@@ -1,16 +1,15 @@
 //! Plain-words entry (mock `SCREENS['quick-entry']`, index.html:1516-1555).
 //!
 //! Spec 6.8: a sentence such as "paid rent 25k to Sharma Properties by HDFC" becomes a
-//! `VoucherDraft` that the engine balances and a person accepts. `ledgerly_assist::nl_entry`
-//! parses a model's answer, but no model client exists in this build (its only `ModelClient` is
-//! the recorded test double), so nothing can be drafted. The sentence box is drawn disabled, the
-//! note says why for the company's stored tier ([`crate::screens::ai_gate`]), and the screen
-//! offers the voucher forms the mock's rejected state offers ("Type it myself", index.html:1554):
-//! F5 Payment and F6 Receipt, the two kinds `nl_entry` drafts. No draft, sample or figure is
-//! drawn.
+//! `VoucherDraft` that the engine balances and a person accepts.
 //!
-//! All five mock states (`quick-entry.proposal`, `.hinglish`, `.unknown-ledger`, `.loading`,
-//! `.rejected`) need a draft and are listed in `design/PARITY-GAPS.md`.
+//! In this release (`release::AI_IN_THIS_RELEASE` is false) nothing is drafted: the sentence box is
+//! drawn disabled, the note says why for the company's stored tier ([`crate::screens::ai_gate`]),
+//! and the screen offers the voucher forms the mock's rejected state offers ("Type it myself"):
+//! F5 Payment and F6 Receipt, the two kinds `nl_entry` drafts. No draft, sample or figure is drawn.
+//!
+//! With the assistant in the build, the screen delegates to `quick_entry_ai`, which reads the
+//! sentence through `Api::read_words` (mock states `ai.quick-entry.*`).
 
 use crate::i18n::Tr;
 use egui::{Key, Modifiers, RichText, Ui};
@@ -66,12 +65,17 @@ pub struct QuickEntryScreen {
     last: Option<Gate>,
     /// Why the last button or key did not open its screen.
     notice: Option<String>,
+    /// The screen with the assistant, used when this build has it.
+    ai: crate::screens::quick_entry_ai::AiEntry,
 }
 
 impl QuickEntryScreen {
     /// Whether the tier has been read (or cannot be: no company, or the read failed).
     #[must_use]
     pub fn loaded(&self) -> bool {
+        if crate::release::ai_enabled() {
+            return self.ai.loaded();
+        }
         match &self.last {
             None | Some(Gate::Reading) => false,
             Some(
@@ -99,7 +103,7 @@ impl QuickEntryScreen {
 }
 
 /// The share of the row the left card takes (`.g-main`, index.html:138: 1.55fr against 1fr).
-const LEFT_SHARE: f32 = 0.6;
+pub(crate) const LEFT_SHARE: f32 = 0.6;
 
 /// What the left card asked for.
 enum Ask {
@@ -166,7 +170,7 @@ fn draw_left(ui: &mut Ui, gate: &Gate, notice: Option<&str>, tr: &Tr) -> Ask {
 
 /// The right card: what the assistant may do here (index.html:1545). The mock's "Try" sentences
 /// are left out, since nothing would draft them.
-fn draw_rules(ui: &mut Ui) {
+pub(crate) fn draw_rules(ui: &mut Ui) {
     let t = tokens(ui);
     card(ui, |ui| {
         ui.set_width(ui.available_width());
@@ -194,11 +198,24 @@ impl Screen for QuickEntryScreen {
         Some(crate::i18n::lit(SUBTITLE))
     }
 
+    fn key_bar_name(&self, tr: &Tr) -> String {
+        if crate::release::ai_enabled() {
+            return self.ai.key_bar_name();
+        }
+        self.page_title(tr)
+    }
+
     fn keys(&self, _tr: &Tr) -> Vec<KeyHint> {
+        if crate::release::ai_enabled() {
+            return self.ai.keys();
+        }
         key_hints()
     }
 
     fn ui(&mut self, ui: &mut Ui, ctx: &mut AppCtx) -> ScreenAction {
+        if crate::release::ai_enabled() {
+            return self.ai.ui(ui, ctx);
+        }
         let gate = self.gate.gate(ui, ctx);
         self.last = Some(gate.clone());
         let (f5, f6) = ui.input_mut(|i| {

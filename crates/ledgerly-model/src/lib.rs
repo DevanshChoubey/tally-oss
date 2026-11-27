@@ -35,7 +35,7 @@ pub use ledger::{
     ReservedLedger, TaxDetails, TaxLedgerKind, Taxability,
 };
 pub use masters::{MasterSnapshot, Masters};
-pub use records::{BankMatch, MatchKind, ProposalRecord};
+pub use records::{AiActivity, AiActivityKind, AiFeature, BankMatch, MatchKind, ProposalRecord};
 pub use voucher::{
     BankAllocation, BillAllocation, BillRefKind, CostAllocation, GodownAllocation, GstLine,
     InstrumentKind, InventoryLine, LedgerLine, StoredGst, Voucher, VoucherMode, VoucherStatus,

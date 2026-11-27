@@ -190,6 +190,12 @@ Classes:
 
 ## Payment, receipt, contra, journal (`payment.*`, `receipt.*`, `contra.*`, `journal.*`)
 
+- Fixed in s22: the Account of a payment or receipt, and every contra line, lists only Cash-in-Hand
+  and Bank Accounts ledgers (and their sub-groups), as help.tallysolutions.com/payments-and-receipts-tally
+  and /record-contra-entry (read 2026-11-27) describe; the help pages do not say where the list opens,
+  so it opens under the field as every other list.
+- Fixed in s22: the top bar fits the 800 point minimum window; chips that do not fit are left out
+  and the search words are truncated, rather than drawn past the right edge.
 - **DELIBERATE** `payment.bill-wise` shows an empty narration behind the popup: the popup opens on the
   amount's Enter and takes the keyboard, so the narration can only be typed after it; the mock's
   "NEFT, against VL/861" is a filled narration the app does not write for the user.
@@ -305,19 +311,75 @@ Classes:
 
 ## Review queue, AI and privacy, Ask, quick entry, bill photo
 
-- **NOT BUILT** the queue lists bank matches and Rule D-02 duplicates only; bill drafts, plain-words
-  drafts, new-ledger suggestions and 2B explanations need a draft store; the sidebar count stays withheld.
-- **NOT BUILT** Home rows do not open their proposal; the empty state's "Read a bill" (Alt+O).
+- **NOT BUILT** with AI out of the release (1.0.x) the queue lists bank matches and Rule D-02
+  duplicates only; the sidebar count stays withheld. The later-release queue (`ai.review.default`,
+  round s21, `release::set_ai_enabled(true)`) lists stored assistant drafts first, with Y accepting
+  through the engine and N storing the rejection in the AI activity log; new-ledger suggestions and
+  2B explanations are still not listed (no assistant produces them yet).
+- **NOT BUILT** `ai.review.default`: the Rupa Polymers draft shows Amount "none" where the mock shows
+  80,240.00. The engine blocks it: Rupa Polymers is bill-wise and the draft carries no bill
+  reference ("the assistant does not propose bill references"). Settled with the bill photo round
+  (a New Ref named by the supplier bill number, as the voucher form offers), not by the queue.
+- **NOT BUILT** `ai.review.default`: Enter on a draft row says the draft's own screen is not built
+  yet. Plain-words entry (round C) takes a new sentence, not a stored draft, so it is not opened
+  from the queue; the bill photo screen is round D.
+- **NOT BUILT** `ai.review.default`: the title bar's AI chip reads "AI: not set up" (the fixture
+  company stores no tier); the mock's reads "AI on this computer" (AI settings round).
+- **NOT BUILT** Home rows do not open their proposal; the empty state's "Read a bill" (Ctrl+Alt+O).
 - **DELIBERATE** no optional-voucher list (help page "Display Optional Vouchers",
   help.tallysolutions.com/docs/te9rel66/Reports/MIS_Reports/Display_Optional_Vouchers.htm).
 - **DELIBERATE** the mock's `ai-settings.local` and `ai-settings.cloud` states are removed for 1.0.0;
   the screen is `ai-settings.off` only, with the two cards disabled. Their layout returns with the AI.
-- **NOT BUILT** the cloud panel, the local model rows, per-feature switches and AI event rows:
-  no keychain store, model runner or feature switch exists.
+- **NOT BUILT** (1.0.x) the cloud panel, the local model rows, per-feature switches and AI event
+  rows are later-release only. With AI on (round s21 B, `ai.ai-settings.local`, `.cloud`,
+  `s21-b-sheet-1.png`): the Model file row (Ctrl+O chooses a file; only its path and size are
+  read), the provider rows from the company's audited settings with the key state read from the
+  key vault (the OS keychain in the real window), clickable per-feature switches stored as
+  settings, and the log's When/Feature/Input/Output/Your decision rows from `AiActivityRecorded`.
+- **NOT BUILT** `ai.ai-settings.local`: the log holds the fixture's one draft where the mock shows
+  five rows (one per feature); the others appear as rounds C-F record them. The Output column says
+  "Draft purchase" without the mock's line count, and the Input column shows "(hash 9f3c…)" where
+  the mock says "(image hash 9f3c…e1)".
+- **NOT BUILT** `ai.ai-settings.*`: no form to describe the provider or type the key yet (the
+  capture fixture stores them through the API); the reader and language rows stay "Not installed"
+  because no local runtime is linked (owner decision: runtime and model).
+- **NOT BUILT** `ai.ai-settings.cloud`: the Removed before sending card keeps the 1.0 app's wording
+  ("Bank account numbers and IFSC codes", "PAN, GSTIN and Aadhaar numbers"), which names what the
+  redaction module removes; the mock's shorter rows omit IFSC and GSTIN. The mock's table switches
+  have no width (a mock CSS gap: `.switch` is an inline span), so its On columns look empty.
 - **DELIBERATE** no tier is chosen by default; the log headers are the company file's columns; the
   "Current" badge is a border only; the report list shows for every tier.
-- **NOT BUILT** `ask.result`, `ask.loading`, `ask.low-confidence`, `ask.unsupported`, `quick-entry.*`
-  (proposal, hinglish, unknown-ledger, loading, rejected), `purchase-bill.reading`, `.proposal`,
+- **NOT BUILT** (1.0.x) plain-words entry drafts nothing. With AI on (round s21 C,
+  `ai.quick-entry.proposal`, `.unknown-ledger`, `.loading`, `.rejected`, `.not-installed`,
+  `s21-c-sheet-1..3.png`): the sentence goes through the API's one gate (tier, feature switch,
+  provider status) to the provider and the real `nl_entry` reader; the draft is stored (it also waits
+  in the review queue), checked by the engine with today offered as the date, and drawn from the
+  engine's voucher. Ctrl+A posts through the engine, Alt+D records the rejection; both are in the AI
+  activity log. With no provider (this build) the box is off and "No local model can run." offers F5/F6.
+- **NOT BUILT** `ai.quick-entry.hinglish`: the reader drafts no account from "NEFT", no bill reference
+  ("SI/0401 ke against") and no date from a bank line, so the state is not captured.
+- **NOT BUILT** `ai.quick-entry.proposal`: no Saptagiri now/After taxbox (no API call gives a ledger's
+  balance after a draft; no figure is computed in the screen); no PY/0315 duplicate warning, no
+  lock-date check line and no "Why Rent and not Sharma Properties?" line (the reader explains
+  nothing); the narration is text, not an editable field; "Sharma Properties" is not marked in
+  "Read as:" (the reader reports source ranges for the amount and ledger names only); the source chip
+  says "Test provider" (the captures run the fixed-answers provider, never a model) where the mock
+  says "Local model"; the Prop footer keeps the kit's Edit, Reject, Accept order.
+- **NOT BUILT** `ai.quick-entry.unknown-ledger`: the Dr ledger is red text, not a picker; no Alt+C to
+  create it; the check line is the engine's ("create these ledgers first: Ramesh") where the mock
+  says "Dr ledger is missing, so the voucher cannot balance yet."; no "Cash balance after paying"
+  line; the confidence reads Medium (the recorded answer's 800 per mille) where the mock shows Low;
+  the Cr amount is tagged "your words" since the engine made no voucher to balance.
+- **NOT BUILT** `ai.quick-entry.rejected`: no reason buttons (Wrong ledger, amount, account); the
+  rejection is stored without a reason. Accept stays on the screen with "Payment <number> posted."
+  where the mock goes to the day book. Enter "Edit in the voucher form" says it is not built yet.
+- **DELIBERATE** `ai.quick-entry.accepted` stays on the screen with the card marked Accepted and
+  "Payment PY/0319 posted." (the mock was changed to match in round C); `.idle` and `.read-failed`
+  were added to the mock in round C, the failure text being the reader's own words.
+- **NOT BUILT** `ai.quick-entry.loading`: Esc does not cancel the read; the key bar lists the idle
+  keys. The "Try" sentences are left out. Hindi words for the new lines are unsourced.
+- **NOT BUILT** `ask.result`, `ask.loading`, `ask.low-confidence`, `ask.unsupported`,
+  `purchase-bill.reading`, `.proposal`,
   `.low-confidence`, `.mismatch`, `.duplicate`, `.cloud-consent`, `.error`, `.accepted` and
   `gst.recon-explain`: no model runs; a screen would show a look with nothing behind it.
 - **NOT BUILT** the AI-off note's AI and privacy button is a secondary button; the mock's is a ghost
@@ -325,7 +387,7 @@ Classes:
 - **DELIBERATE** Ask's box holds a hint and is disabled and the key bar lists only the name, because
   nothing would answer a typed question.
 - **NOT BUILT** `purchase-bill.offline-ai` has no form or image beside it and its head lacks "Read
-  another" (Alt+O); the key bar is named "Bill photo".
+  another" (Ctrl+Alt+O); the key bar is named "Bill photo".
 
 ## Setup (`setup.*`)
 
@@ -336,10 +398,12 @@ Classes:
   and the line "AI arrives in a later version. This company stays Off.", as the mock does with
   `AI_IN_RELEASE=false`. Nothing but Off is stored by the wizard. One switch, `release::AI_IN_THIS_RELEASE`,
   brings the AI screens back; the sidebar's Plain-words entry, the palette routes and the purchase
-  form's Bill photo button and Alt+O are hidden until then.
+  form's Bill photo button and Ctrl+Alt+O are hidden until then.
 - **DELIBERATE** the import card on Start opens the Import screen with no company open; that screen
   says to create or open one first and offers Back to setup, as the mock's `import.no-company` does,
   so nothing can finish wrongly.
+  Its hint says so: create the company first, then import a whole company from a running app or
+  masters and vouchers from an XML file.
 - **NOT BUILT** the import screen's step-by-step path (the five-step wizard) is not connected.
 - **NOT BUILT** F11 on the Features step: no feature screen exists; rows with no model switch say so.
 - **DELIBERATE** the "Company file" field is ours (the wizard writes a file); City is kept as the
@@ -439,6 +503,35 @@ Credit (`ledgerly_reports::print_text` places the engine's figures only).
 
 - **DELIBERATE** `import.refused` and `import.failed` say the engine's own text, not the mock's
   invented "Memorandum" and "connection refused" examples; the summary counts are `ImportSummary`'s.
+- Fixed in s22: masters and transactions import from an XML file into the open company (Alt+O, the
+  palette's "Import masters or vouchers from a file", the import screen's file form), with the
+  duplicates choice (Combine Opening Balance, Ignore Duplicates, Modify with New Data) and a summary of
+  created, altered, combined, ignored and not imported, every exception listed
+  (help.tallysolutions.com/import-data-from-xml-or-json and /import-data-faq, read 2026-11-27).
+- **NOT BUILT** a transactions file is always posted as new vouchers: the GUID choice of the import
+  FAQ (overwrite a voucher with the same GUID) is not offered, so importing the same file twice posts
+  its vouchers twice.
+- **NOT BUILT** no backup prompt before an import (the FAQ advises a backup first); voucher types named
+  in a file are not created, a voucher of an unknown type is an exception.
+- **NOT BUILT** a party ledger imported with no ISBILLWISEON is bill-wise off (our default); the
+  default of the other product for Sundry Debtors/Creditors is not documented in the pages read, so a
+  sales voucher with bill allocations against such a ledger is listed as an exception, not guessed.
+- **NOT BUILT** a new company has no Cash ledger, so a transactions file that names 'Cash' (with a
+  masters file that does not define it) is listed as "the company has no ledger 'Cash'; import the
+  masters first". Whether the other product predefines a Cash ledger was not checked in its docs in
+  s22; nothing is created for the user until it is.
+- **NOT BUILT** Alt+O is fixed in the shell, not in the keymap or the keyboard-map screen.
+- **FIX** (s21) bill reading moved from Alt+O to Ctrl+Alt+O in mock and app, so Alt+O is Import on
+  every screen, the purchase form included. Checked against
+  help.tallysolutions.com/keyboard-shortcuts-tally-prime/ (read 2026-11-27, page updated
+  2026-09-24): every Alt+letter is bound on some screen there (Alt+O is the Import menu), and the
+  documented Ctrl+Alt letters are B, F, I, N, R, T, U and W, so Ctrl+Alt+O clashes with none.
+  Ctrl+Alt+O is also fixed in the purchase form, not in the keymap.
+- **FIX** the mock's Hindi file states keep the English summary and error lines (`gen-hi.py` skips
+  strings with placeholders, and the "Error: " lines are built in the mock); the app's Hindi text is
+  in `hi.toml` (unsourced). The app's Hindi import file states are not captured.
+- **NOT BUILT** Telugu names draw in Noto Sans Telugu, but egui does not shape Indic conjuncts, so a
+  name such as a ledger in Telugu can show unjoined letters.
 
 ## Captures with no real cause
 

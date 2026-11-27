@@ -5,6 +5,9 @@
 //! settings. Every figure comes from the engine or the report engines (spec section 4).
 
 mod ai;
+mod ai_drafts;
+mod ai_features;
+mod ai_settings;
 mod as_voucher;
 mod balance;
 mod bank;
@@ -29,16 +32,36 @@ mod report;
 mod return_against;
 mod review;
 mod search;
+mod tally_file_import;
 mod tally_import;
 mod voucher_audit;
 mod voucher_gst;
 
 pub use ai::{AiLogEntry, AiTier};
+pub use ai_drafts::{
+    AI_CONFIDENCE_THRESHOLD_PERMILLE, Accepted, AiActivityEntry, AiDecision, AiDraft, AiLogRow,
+    AiOutput, DraftEdits, NewAiDraft,
+};
+// The assistant's typed proposals, for the app (which reaches the assistant only through here).
+pub use ai_features::{AiGate, BillRead, WordsRead};
+pub use ai_settings::{AiSettings, CloudSettings, KEY_SERVICE, KeyState, LOCAL_MODEL_FILE_KEY};
 pub use balance::BalanceChange;
 pub use bank::{BalanceRefusal, balance_refusal};
 pub use command::{Command, CommandResult, CreatedId};
 pub use gst_filing::GstFiling;
+pub use ledgerly_assist::cloud::{KeyVault, KeyringStore, MemoryVault};
+pub use ledgerly_assist::ocr::{OcrLine, OcrOutput, RejectedField};
+pub use ledgerly_assist::provider::{
+    AiProvider, CloudModel, FIXED_ANSWERS_NAME, FixedAnswers, LocalModel, LocalModelFile,
+    ProviderInfo, ProviderPlace, ProviderStatus,
+};
+pub use ledgerly_assist::validate::DraftCheck;
+pub use ledgerly_assist::{
+    DraftItem, DraftLine, MappingSuggestion, MatchSuggestion, Proposal, ReportQuery, SourceRef,
+    Transcribed, VoucherDraft,
+};
 pub use ledgerly_gst::recon2b::{DocAmounts, ImsAction, MatchLevel, ReconState};
+pub use ledgerly_model::{AiActivity, AiActivityKind, AiFeature};
 pub use recon::{Gstr2bReconciliation, Gstr2bRow};
 // Report types the app names when it builds and reads reports (card W7). The app depends on this
 // crate only, so the report model is re-exported here instead of adding a manifest dependency.
@@ -70,11 +93,13 @@ pub use ledgerly_reports::{
 };
 pub use ledgerly_store::backup::{RebuildOutcome, RebuildReport};
 pub use ledgerly_store::verify::{ChainProblem, VerifyReport};
+pub use ledgerly_tally_bridge::file_import::MasterBehaviour;
 pub use maintenance::{VoucherCheck, verify_file};
 pub use nudges::{DuplicatePayment, Gstr1Due, HomeNudges, PaymentRef, gstr1_next_due};
 pub use report::ExportFormat;
 pub use return_against::{InvoicedAgainst, InvoicedLine};
 pub use search::{MatchedOn, SearchHit};
+pub use tally_file_import::{FileImportSummary, ImportException, XmlImport};
 pub use tally_import::ImportSummary;
 pub use voucher_audit::{ChangeKind, VoucherAudit, VoucherChange, VoucherDetail};
 pub use voucher_gst::{EligibleItc, InvoiceGst, PartyBill, RateRow};
@@ -82,4 +107,4 @@ pub use voucher_gst::{EligibleItc, InvoiceGst, PartyBill, RateRow};
 pub use ledgerly_bank::brs::Brs;
 pub use ledgerly_bank::matcher::{Candidate, LineDirection, MatchRule};
 pub use ledgerly_bank::statement::BankStatement;
-pub use review::{ReviewItem, ReviewQueue, ReviewSource, UnlistedSource};
+pub use review::{DraftFigure, ReviewDraft, ReviewItem, ReviewQueue, ReviewSource, UnlistedSource};

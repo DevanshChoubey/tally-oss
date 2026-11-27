@@ -98,20 +98,17 @@ impl Api {
     }
 
     /// Stores `tier` for the company as an audited setting change. Choosing the tier already
-    /// stored writes nothing. `Cloud` is `Unsupported`: no key store exists, so nothing is
-    /// written.
+    /// stored writes nothing. `Cloud` is `Unsupported`, and nothing is written, until a key vault
+    /// is attached, the provider is described and its key is saved ([`Api::ai_settings`]).
     ///
     /// # Errors
     /// - [`ApiError::Store`] when the tier cannot be read or the change cannot be committed.
     /// - [`ApiError::UnknownAiTier`] when the stored tier is a word this build does not know.
     pub fn set_ai_tier(&mut self, tier: AiTier) -> Result<Outcome<()>, ApiError> {
-        if tier == AiTier::Cloud {
-            return Ok(Outcome::Unsupported(Unsupported {
-                what: "AI cloud tier".to_owned(),
-                reason: "the provider key must be saved in the OS keychain, and no keychain \
-                         store is wired into this build yet; the company file never holds a key"
-                    .to_owned(),
-            }));
+        if tier == AiTier::Cloud
+            && let Some(refusal) = self.cloud_refusal()?
+        {
+            return Ok(Outcome::Unsupported(refusal));
         }
         let before = self.ai_tier()?;
         if before == Some(tier) {
@@ -157,7 +154,8 @@ impl Api {
                 | Event::BankStatementStored { .. }
                 | Event::Gstr2bImported { .. }
                 | Event::ImsActionRecorded { .. }
-                | Event::Gstr3bFiled { .. } => None,
+                | Event::Gstr3bFiled { .. }
+                | Event::AiActivityRecorded(_) => None,
             })
             .collect())
     }
@@ -210,7 +208,8 @@ fn tier_word(event: &Event) -> Option<&String> {
         | Event::BankStatementStored { .. }
         | Event::Gstr2bImported { .. }
         | Event::ImsActionRecorded { .. }
-        | Event::Gstr3bFiled { .. } => None,
+        | Event::Gstr3bFiled { .. }
+        | Event::AiActivityRecorded(_) => None,
     }
 }
 
@@ -239,9 +238,11 @@ fn csv_text(entries: &[AiLogEntry]) -> Result<String, std::io::Error> {
     Ok(out)
 }
 
-/// One CSV field: wrapped in quotes when it holds a comma, a quote or a line break, with each
-/// quote inside it doubled (RFC 4180).
-fn csv_field(text: &str) -> String {
+/// One CSV field: guarded against formula injection
+/// ([`ledgerly_reports::export::guard_formula`]), then wrapped in quotes when it holds a comma, a
+/// quote or a line break, with each quote inside it doubled (RFC 4180).
+pub(crate) fn csv_field(text: &str) -> String {
+    let text = &ledgerly_reports::export::guard_formula(text);
     if text.contains([',', '"', '\n', '\r']) {
         format!("\"{}\"", text.replace('"', "\"\""))
     } else {

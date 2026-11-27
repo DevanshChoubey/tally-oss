@@ -211,6 +211,52 @@ fn node_from_start(
     })
 }
 
+/// Checks that a decoded document is an import file: its first element is `ENVELOPE`.
+///
+/// [`parse_vouchers_xml`] finds vouchers wherever they sit, so it reads text with no element, or
+/// another document, as "no vouchers". A file the user hands in to import must be an `ENVELOPE`
+/// document (<https://help.tallysolutions.com/sample-xml/>, read 2026-11-27), so this refuses the
+/// rest before anything is imported.
+///
+/// # Errors
+/// [`TallyXmlError::Missing`] when the document has no element or its root is not `ENVELOPE`,
+/// [`TallyXmlError::Xml`] when it is not well-formed before its first element.
+pub fn check_envelope_root(text: &str) -> Result<(), TallyXmlError> {
+    let mut reader = Reader::from_str(text);
+    loop {
+        let event = reader.read_event().map_err(|e| xml_err(&reader, &e))?;
+        match event {
+            Event::Start(e) | Event::Empty(e) => {
+                return if e.name().as_ref() == "ENVELOPE" {
+                    Ok(())
+                } else {
+                    Err(missing_envelope())
+                };
+            }
+            Event::Text(t) => {
+                if !t
+                    .xml_content(quick_xml::XmlVersion::Implicit1_0)
+                    .trim()
+                    .is_empty()
+                {
+                    return Err(missing_envelope());
+                }
+            }
+            Event::Eof | Event::End(_) | Event::CData(_) | Event::GeneralRef(_) => {
+                return Err(missing_envelope());
+            }
+            Event::Comment(_) | Event::Decl(_) | Event::PI(_) | Event::DocType(_) => {}
+        }
+    }
+}
+
+fn missing_envelope() -> TallyXmlError {
+    TallyXmlError::Missing {
+        tag: "ENVELOPE".to_owned(),
+        path: "document root".to_owned(),
+    }
+}
+
 /// Parses every `VOUCHER` element in a decoded Tally XML document.
 ///
 /// The document is the text returned by `crate::envelope::decode` (card X1). Only one voucher is held as

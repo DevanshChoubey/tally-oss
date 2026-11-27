@@ -104,6 +104,11 @@ const NOTO_BOLD: &str = "NotoSans-Bold";
 const NOTO_DEVANAGARI: &str = "NotoSansDevanagari-Regular";
 /// Devanagari fallback, bold.
 const NOTO_DEVANAGARI_BOLD: &str = "NotoSansDevanagari-Bold";
+/// Telugu fallback, regular: for ledger names in Telugu script, such as those imported from a
+/// file (S22).
+const NOTO_TELUGU: &str = "NotoSansTelugu-Regular";
+/// Telugu fallback, bold.
+const NOTO_TELUGU_BOLD: &str = "NotoSansTelugu-Bold";
 
 /// Which colour scheme is active.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
@@ -541,6 +546,16 @@ pub fn font_definitions() -> FontDefinitions {
         NOTO_DEVANAGARI_BOLD,
         include_bytes!("../assets/fonts/NotoSansDevanagari-Bold.ttf"),
     );
+    insert_face(
+        &mut defs,
+        NOTO_TELUGU,
+        include_bytes!("../assets/fonts/NotoSansTelugu-Regular.ttf"),
+    );
+    insert_face(
+        &mut defs,
+        NOTO_TELUGU_BOLD,
+        include_bytes!("../assets/fonts/NotoSansTelugu-Bold.ttf"),
+    );
     let fallback = defs
         .families
         .remove(&FontFamily::Proportional)
@@ -549,6 +564,7 @@ pub fn font_definitions() -> FontDefinitions {
         INTER_REGULAR.to_owned(),
         NOTO_REGULAR.to_owned(),
         NOTO_DEVANAGARI.to_owned(),
+        NOTO_TELUGU.to_owned(),
     ];
     chain.extend(fallback);
     defs.families.insert(FontFamily::Proportional, chain);
@@ -558,6 +574,7 @@ pub fn font_definitions() -> FontDefinitions {
             INTER_SEMIBOLD.to_owned(),
             NOTO_BOLD.to_owned(),
             NOTO_DEVANAGARI_BOLD.to_owned(),
+            NOTO_TELUGU_BOLD.to_owned(),
         ],
     );
     defs

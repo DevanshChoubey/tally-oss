@@ -21,6 +21,83 @@
    "description": "Dashboard: engine KPIs, plain-words entry bar, review queue and rule-based nudges."
   },
   {
+   "id": "ai.review.default",
+   "kind": "happy",
+   "hash": "screen=review&state=default&ai=on",
+   "title": "Review queue, AI on (later release)",
+   "description": "The queue with the assistant on: a bill-photo draft beside the bank matches. Its amount is the engine's total of the draft; a draft the engine blocks shows none."
+  },
+  {
+   "id": "ai.ai-settings.local",
+   "kind": "happy",
+   "hash": "screen=ai-settings&state=local&ai=on",
+   "title": "AI and privacy, local (later release)",
+   "description": "On this computer: the model file the user chose (none yet), the runtime not in this build, what each feature sees, and the AI activity log."
+  },
+  {
+   "id": "ai.ai-settings.cloud",
+   "kind": "happy",
+   "hash": "screen=ai-settings&state=cloud&ai=on",
+   "title": "AI and privacy, cloud key (later release)",
+   "description": "Cloud with your own key: the provider as the user described it, the key in the system keychain, redaction, and a confirmation before each document."
+  },
+  {
+   "id": "ai.quick-entry.proposal",
+   "kind": "happy",
+   "hash": "screen=quick-entry&state=proposal&ai=on",
+   "title": "Plain-words entry, draft payment (later release)",
+   "description": "The sentence read through the assistant: Rent and the Saptagiri account resolved from the words, 25k copied from them, the date offered as today, the engine's balance check."
+  },
+  {
+   "id": "ai.quick-entry.unknown-ledger",
+   "kind": "validation-error",
+   "hash": "screen=quick-entry&state=unknown-ledger&ai=on",
+   "title": "Plain-words entry, unknown name (later release)",
+   "description": "No ledger named Ramesh: the engine blocks the draft and the assistant invents none."
+  },
+  {
+   "id": "ai.quick-entry.loading",
+   "kind": "loading",
+   "hash": "screen=quick-entry&state=loading&ai=on",
+   "title": "Plain-words entry, drafting (later release)",
+   "description": "The sentence is with the assistant; nothing is shown until the engine has checked its draft."
+  },
+  {
+   "id": "ai.quick-entry.rejected",
+   "kind": "happy",
+   "hash": "screen=quick-entry&state=rejected&ai=on",
+   "title": "Plain-words entry, rejected (later release)",
+   "description": "Rejected: nothing was posted, and the rejection is in the AI activity log."
+  },
+  {
+   "id": "ai.quick-entry.idle",
+   "kind": "empty",
+   "hash": "screen=quick-entry&state=idle&ai=on",
+   "title": "Plain-words entry, ready (later release)",
+   "description": "A model can run: the box has focus and nothing is drafted until Enter."
+  },
+  {
+   "id": "ai.quick-entry.accepted",
+   "kind": "happy",
+   "hash": "screen=quick-entry&state=accepted&ai=on",
+   "title": "Plain-words entry, accepted (later release)",
+   "description": "Ctrl+A posted the draft through the engine; the card says Accepted and names the voucher number the engine gave."
+  },
+  {
+   "id": "ai.quick-entry.read-failed",
+   "kind": "error",
+   "hash": "screen=quick-entry&state=read-failed&ai=on",
+   "title": "Plain-words entry, not read (later release)",
+   "description": "The reader refused the answer (a contra voucher; plain words draft payments and receipts only). Nothing is stored as a draft; the failure is in the AI activity log."
+  },
+  {
+   "id": "ai.quick-entry.not-installed",
+   "kind": "empty",
+   "hash": "screen=quick-entry&state=not-installed&ai=on",
+   "title": "Plain-words entry, no local model (later release)",
+   "description": "On this computer with no model the build can run: the box is disabled, the reason is named, and the voucher forms are offered."
+  },
+  {
    "id": "hi.home.default",
    "kind": "happy",
    "hash": "screen=home&state=default&lang=hi",
@@ -68,6 +145,41 @@
    "hash": "screen=bank&state=default&lang=hi",
    "title": "Bank reconciliation, Hindi",
    "description": "The bank reconciliation screen in Hindi."
+  },
+  {
+   "id": "hi.import.file-masters",
+   "kind": "happy",
+   "hash": "screen=import&state=file-masters&lang=hi",
+   "title": "Import from a file, masters chosen, Hindi",
+   "description": "The import from a file with Masters and Ignore duplicates chosen, in Hindi."
+  },
+  {
+   "id": "hi.import.file-missing-choice",
+   "kind": "validation-error",
+   "hash": "screen=import&state=file-missing-choice&lang=hi",
+   "title": "Import from a file, no choice for existing masters, Hindi",
+   "description": "The missing choice said in Hindi."
+  },
+  {
+   "id": "hi.import.file-imported",
+   "kind": "happy",
+   "hash": "screen=import&state=file-imported&lang=hi",
+   "title": "Import from a file, summary and exceptions, Hindi",
+   "description": "The summary and the exceptions list in Hindi; names and the engine's reasons stay as written."
+  },
+  {
+   "id": "hi.import.file-error",
+   "kind": "error",
+   "hash": "screen=import&state=file-error&lang=hi",
+   "title": "Import from a file, not an XML file, Hindi",
+   "description": "The unreadable file in Hindi; the engine's reason stays as written."
+  },
+  {
+   "id": "hi.payment.account-list",
+   "kind": "happy",
+   "hash": "screen=payment&state=account-list&lang=hi",
+   "title": "Payment, account list open, Hindi",
+   "description": "The payment's cash and bank account list in Hindi."
   },
   {
    "id": "hi.setup.welcome",
@@ -355,6 +467,13 @@
    "hash": "screen=payment&state=default",
    "title": "Payment",
    "description": "F5 payment in single-entry style: bank balance now and after saving."
+  },
+  {
+   "id": "payment.account-list",
+   "kind": "happy",
+   "hash": "screen=payment&state=account-list",
+   "title": "Payment, account list open",
+   "description": "A fresh payment with the keyboard on Account: the list under the field holds only the cash and bank ledgers (Cash-in-hand, Bank accounts, Bank OD) and the form stays in view."
   },
   {
    "id": "payment.bill-wise",
@@ -879,14 +998,14 @@
    "kind": "happy",
    "hash": "screen=import&state=default",
    "title": "Import from another app",
-   "description": "One-step import with host, port and company; the step-by-step panel shows as not connected."
+   "description": "One-step import with host, port and company, the import from an XML file with nothing chosen yet, and the step-by-step panel shown as not connected."
   },
   {
    "id": "import.no-company",
    "kind": "empty",
    "hash": "screen=import&state=no-company",
    "title": "Import, no company open",
-   "description": "No company is open: says to create one first, offers Back to setup, and the form is disabled."
+   "description": "No company is open: says to create one first, offers Back to setup, and both the one-step form and the import from a file are disabled with the reason."
   },
   {
    "id": "import.validation-error",
@@ -922,6 +1041,34 @@
    "hash": "screen=import&state=refused",
    "title": "Import, refused as not supported",
    "description": "The engine refuses a voucher type; the refusal names what and why."
+  },
+  {
+   "id": "import.file-masters",
+   "kind": "happy",
+   "hash": "screen=import&state=file-masters",
+   "title": "Import from a file, masters chosen",
+   "description": "Alt+O: Masters chosen, the three choices for a master already in the company (Ignore duplicates picked) and the file path filled; nothing imported yet."
+  },
+  {
+   "id": "import.file-missing-choice",
+   "kind": "validation-error",
+   "hash": "screen=import&state=file-missing-choice",
+   "title": "Import from a file, no choice for existing masters",
+   "description": "Masters chosen but no choice for a master already in the company: the reason is said in words and nothing is imported."
+  },
+  {
+   "id": "import.file-imported",
+   "kind": "happy",
+   "hash": "screen=import&state=file-imported",
+   "title": "Import from a file, summary and exceptions",
+   "description": "The file was read: 2 created, 1 not imported, with every object not imported listed beside its reason."
+  },
+  {
+   "id": "import.file-error",
+   "kind": "error",
+   "hash": "screen=import&state=file-error",
+   "title": "Import from a file, not an XML file",
+   "description": "The file is not an XML document: the error names the file and the cause, and nothing is imported."
   },
   {
    "id": "import.failed",

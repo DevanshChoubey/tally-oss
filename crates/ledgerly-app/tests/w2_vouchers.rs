@@ -26,7 +26,8 @@ use ledgerly_core::{
 };
 use ledgerly_model::{
     Address, BaseVoucherKind, BillWiseConfig, Books, Company, EntityKind, Features, Group, Ledger,
-    Masters, NegativeStockPolicy, NumberingConfig, NumberingMethod, RestartPeriod, VoucherType,
+    Masters, NegativeStockPolicy, NumberingConfig, NumberingMethod, ReservedGroup, RestartPeriod,
+    VoucherType,
 };
 use time::macros::date;
 
@@ -39,6 +40,7 @@ const T_JOURNAL: VoucherTypeId = VoucherTypeId(1);
 const T_PAYMENT: VoucherTypeId = VoucherTypeId(2);
 const T_RECEIPT: VoucherTypeId = VoucherTypeId(7);
 const GROUP: GroupId = GroupId(1);
+const CASH_GROUP: GroupId = GroupId(2);
 
 const TODAY: Date = date!(2026 - 11 - 21);
 
@@ -81,6 +83,37 @@ fn voucher_type(id: VoucherTypeId, name: &str, base: BaseVoucherKind) -> Voucher
     }
 }
 
+/// S22: a payment's or receipt's account lists only cash and bank ledgers, so the fixture puts
+/// `ledgers` under a reserved group (Cash-in-Hand, Bank Accounts) inside Current Assets, as in a
+/// real company.
+fn reserve(
+    masters: &mut Masters,
+    id: GroupId,
+    name: &str,
+    reserved: ReservedGroup,
+    ledgers: &[LedgerId],
+) {
+    masters.groups.insert(
+        id,
+        Group {
+            ineligible_itc: None,
+            id,
+            name: name.to_owned(),
+            aliases: Vec::new(),
+            parent: Some(GROUP),
+            reserved: Some(reserved),
+            nature: None,
+            affects_gross_profit: false,
+            tally: None,
+        },
+    );
+    for ledger in ledgers {
+        if let Some(l) = masters.ledgers.get_mut(ledger) {
+            l.group = id;
+        }
+    }
+}
+
 fn books() -> Books {
     let mut masters = Masters::default();
     masters.groups.insert(
@@ -109,6 +142,13 @@ fn books() -> Books {
     ] {
         masters.ledgers.insert(l.id, l);
     }
+    reserve(
+        &mut masters,
+        CASH_GROUP,
+        "Cash-in-Hand",
+        ReservedGroup::CashInHand,
+        &[CASH],
+    );
     for t in [
         voucher_type(T_JOURNAL, "Journal", BaseVoucherKind::Journal),
         voucher_type(T_PAYMENT, "Payment", BaseVoucherKind::Payment),

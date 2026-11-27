@@ -14,11 +14,14 @@
 
 use std::collections::BTreeMap;
 
+use ledgerly_assist::validate::DraftCheck;
 use ledgerly_bank::matcher::Candidate;
 use ledgerly_bank::statement::BankStatement;
 use ledgerly_bankfmt::RawLine;
-use ledgerly_core::{BankStatementId, Date, LedgerId, Outcome, Paise};
+use ledgerly_core::{BankStatementId, Date, DrCr, LedgerId, Outcome, Paise};
+use ledgerly_model::Voucher;
 
+use crate::ai_drafts::{AiDraft, DraftEdits};
 use crate::error::ApiError;
 use crate::facade::Api;
 use crate::nudges::DuplicatePayment;
@@ -74,9 +77,34 @@ pub struct ReviewQueue {
     /// The possible duplicate payments rule D-02 finds, oldest second payment first. Empty both
     /// when there are none and when D-02 could not run (then `unlisted` names it).
     pub duplicates: Vec<DuplicatePayment>,
+    /// The assistant's open drafts (bill photos, plain-words entries), oldest first, each with
+    /// the engine's figure. Listed whenever the company file holds one.
+    pub drafts: Vec<ReviewDraft>,
     /// The sources the engine cannot list, each with its reason. Empty only when every source is
     /// connected.
     pub unlisted: Vec<UnlistedSource>,
+}
+
+/// An open assistant draft as the queue lists it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ReviewDraft {
+    /// The draft, as stored.
+    pub draft: AiDraft,
+    /// The engine's check of the draft as it stands, with no edits (a draft with no date read
+    /// is blocked on the date, as accepting it from the queue would be): the voucher total when
+    /// it passes, or why there is none.
+    pub engine: DraftFigure,
+}
+
+/// The figure the queue shows for a draft. Never a number the assistant gave.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DraftFigure {
+    /// The engine recomputed the draft; this is the voucher total (the debit sum).
+    Total(Paise),
+    /// The engine blocks the draft as it stands; no total. The reason is the engine's.
+    Blocked(String),
+    /// The draft is not a voucher, or the engine cannot check it. The reason is the engine's.
+    Unsupported(String),
 }
 
 impl ReviewQueue {
@@ -85,7 +113,7 @@ impl ReviewQueue {
     #[must_use]
     pub fn count(&self) -> Option<usize> {
         if self.unlisted.is_empty() {
-            Some(self.items.len() + self.duplicates.len())
+            Some(self.items.len() + self.duplicates.len() + self.drafts.len())
         } else {
             None
         }
@@ -190,11 +218,40 @@ impl Api {
                 Vec::new()
             }
         };
+        let drafts = self.review_drafts()?;
+        if self.assistant_attached() {
+            unlisted.retain(|u| {
+                !matches!(
+                    u.source,
+                    ReviewSource::BillDraft | ReviewSource::PlainWordsDraft
+                )
+            });
+        }
         Ok(ReviewQueue {
             items,
             duplicates,
+            drafts,
             unlisted,
         })
+    }
+
+    /// The open drafts with the engine's figure for each.
+    fn review_drafts(&self) -> Result<Vec<ReviewDraft>, ApiError> {
+        let mut out = Vec::new();
+        for draft in self.ai_drafts()? {
+            let engine = match self.check_proposal(&draft.proposal, &DraftEdits::default())? {
+                Outcome::Value(DraftCheck::Ok(voucher)) => match debit_total(&voucher) {
+                    Some(total) => DraftFigure::Total(total),
+                    None => DraftFigure::Unsupported(
+                        "the voucher's debit lines do not add up within the money range".to_owned(),
+                    ),
+                },
+                Outcome::Value(DraftCheck::Blocked { reason, .. }) => DraftFigure::Blocked(reason),
+                Outcome::Unsupported(u) => DraftFigure::Unsupported(u.reason),
+            };
+            out.push(ReviewDraft { draft, engine });
+        }
+        Ok(out)
     }
 }
 
@@ -231,4 +288,16 @@ fn item_of(
         amount,
         money_in,
     }
+}
+
+/// The debit sum of a voucher the engine checked (it equals the credit sum). `None` on overflow.
+fn debit_total(voucher: &Voucher) -> Option<Paise> {
+    let mut total = Paise::ZERO;
+    for line in &voucher.ledger_lines {
+        match line.amount.side {
+            DrCr::Dr => total = total.checked_add(line.amount.amount).ok()?,
+            DrCr::Cr => {}
+        }
+    }
+    Some(total)
 }

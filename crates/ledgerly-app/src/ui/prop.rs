@@ -228,43 +228,49 @@ fn footer(ui: &mut Ui, prop: &Prop<'_>, t: &Tokens) -> Option<PropAction> {
     clicked
 }
 
-/// The three buttons of the footer, in the order Edit, Reject, Accept, after the reason.
+/// The three buttons of the footer, in the order Edit, Reject, Accept, after the reason. Each is
+/// placed straight in the footer's wrapping row (no child scope), so a narrow card wraps the
+/// buttons onto the next line, as the mock's footer wraps, instead of widening the card. Accept is
+/// enabled only when the card is open, so disabling the row is monotonic: the whole row when it is
+/// not open, then Accept when it is blocked.
 fn footer_buttons(ui: &mut Ui, open: bool, accept_on: bool) -> Option<PropAction> {
     let mut clicked = None;
-    ui.add_enabled_ui(open, |ui| {
-        if button(
-            ui,
-            PropAction::Edit.label(),
-            Some(PropAction::Edit.shortcut()),
-            ButtonKind::Secondary,
-        )
-        .clicked()
-        {
-            clicked = Some(PropAction::Edit);
-        }
-        if button(
-            ui,
-            PropAction::Reject.label(),
-            Some(PropAction::Reject.shortcut()),
-            ButtonKind::Danger,
-        )
-        .clicked()
-        {
-            clicked = Some(PropAction::Reject);
-        }
-    });
-    ui.add_enabled_ui(accept_on, |ui| {
-        if button(
-            ui,
-            PropAction::Accept.label(),
-            Some(PropAction::Accept.shortcut()),
-            ButtonKind::Primary,
-        )
-        .clicked()
-        {
-            clicked = Some(PropAction::Accept);
-        }
-    });
+    if !open {
+        ui.disable();
+    }
+    if button(
+        ui,
+        PropAction::Edit.label(),
+        Some(PropAction::Edit.shortcut()),
+        ButtonKind::Secondary,
+    )
+    .clicked()
+    {
+        clicked = Some(PropAction::Edit);
+    }
+    if button(
+        ui,
+        PropAction::Reject.label(),
+        Some(PropAction::Reject.shortcut()),
+        ButtonKind::Danger,
+    )
+    .clicked()
+    {
+        clicked = Some(PropAction::Reject);
+    }
+    if !accept_on {
+        ui.disable();
+    }
+    if button(
+        ui,
+        PropAction::Accept.label(),
+        Some(PropAction::Accept.shortcut()),
+        ButtonKind::Primary,
+    )
+    .clicked()
+    {
+        clicked = Some(PropAction::Accept);
+    }
     clicked
 }
 

@@ -59,6 +59,9 @@ pub enum SourceRef {
         /// Row (1-based).
         row: u32,
     },
+    /// Entered or confirmed by the person reviewing the draft (for example the voucher date the
+    /// form offers). Not a transcription; recorded as the person's edit.
+    Edited,
 }
 
 /// A proposed voucher.

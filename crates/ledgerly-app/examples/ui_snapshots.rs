@@ -416,6 +416,17 @@ enum Fixture {
     /// of the mock's `sales-invoice.einvoice-not-ready` ("A registered buyer whose address has no
     /// PIN code"). Capture-only: the sample's own seed holds the PIN.
     GodavariBuyerNoPin,
+    /// The sample company with the assistant attached (later release): the fixed-answers test
+    /// provider, never a real model, and one bill-photo draft stored as the bill reader would
+    /// store it ([`godavari_assistant_file`]). Shown only on shots taken with [`Shot::ai_on`].
+    GodavariAssistant,
+    /// [`Fixture::GodavariAssistant`] with the tier set to this computer and the fixed-answers
+    /// provider holding the two plain-words recordings of the mock's `quick-entry` states
+    /// ([`godavari_words_file`]).
+    GodavariWords,
+    /// The sample company with the tier set to this computer and no provider attached, as in a
+    /// build with no local model runtime: the mock's `quick-entry.not-installed`.
+    GodavariNoModel,
     /// Fictional Traders ([`company_file`]): the shots whose key paths or typed names need its
     /// data, or that show a state the sample does not have.
     Main,
@@ -443,6 +454,9 @@ impl Fixture {
             Fixture::GodavariNo2b => Some(godavari_no_2b_file(dir)),
             Fixture::GodavariBuyerNoPin => Some(godavari_buyer_no_pin_file(dir)),
             Fixture::GodavariShortStock => Some(godavari_short_stock_file(dir)),
+            Fixture::GodavariAssistant => Some(godavari_assistant_file(dir)),
+            Fixture::GodavariWords => Some(godavari_words_file(dir)),
+            Fixture::GodavariNoModel => Some(godavari_no_model_file(dir)),
             Fixture::Main => Some(company_file(dir)),
             Fixture::New => Some(new_company_file(dir)),
             Fixture::Blank => Some(blank_company_file(dir)),
@@ -467,6 +481,9 @@ impl Fixture {
                     | Fixture::GodavariNo2b
                     | Fixture::GodavariBuyerNoPin
                     | Fixture::GodavariShortStock
+                    | Fixture::GodavariAssistant
+                    | Fixture::GodavariWords
+                    | Fixture::GodavariNoModel
                     | Fixture::Main
                     | Fixture::New
                     | Fixture::Blank
@@ -545,6 +562,148 @@ fn godavari_no_2b_file(dir: &Path) -> Api {
     std::fs::create_dir_all(path.parent().unwrap()).unwrap();
     let _removed = std::fs::remove_file(&path);
     ledgerly_sample::create_without_2b(&path, sample_clock()).unwrap()
+}
+
+/// The sample company with the fixed-answers test provider attached and one bill-photo draft,
+/// the mock's review queue row "Rupa Polymers, bill RP/5521" (index.html `REVIEW_ITEMS`, q1, from
+/// the bill of `billDraft`: taxable 68,000.00 and IGST 12,240.00 from a Gujarat supplier). The
+/// draft is stored through `Api::record_ai_draft` as the bill reader stores one; its figure in
+/// the queue is the engine's check of it, not a number written here.
+fn godavari_assistant_file(dir: &Path) -> Api {
+    use ledgerly_api::{
+        AiFeature, DraftLine, FIXED_ANSWERS_NAME, FixedAnswers, NewAiDraft, Proposal, SourceRef,
+        Transcribed, VoucherDraft,
+    };
+    fn on_bill<T>(value: T, top: u32) -> Transcribed<T> {
+        Transcribed {
+            value,
+            source: SourceRef::Document {
+                doc_hash: "9f3c".repeat(16),
+                page: 1,
+                bbox: [40, top, 400, 18],
+            },
+            confidence_permille: 930,
+        }
+    }
+    let mut api = godavari_company_file(dir);
+    let books = match api.books() {
+        Ok(ledgerly_core::Outcome::Value(b)) => b,
+        other => panic!("no books: {other:?}"),
+    };
+    let ledger = |name: &str| {
+        books
+            .masters
+            .ledgers
+            .values()
+            .find(|l| l.name == name)
+            .map(|l| l.id)
+            .unwrap()
+    };
+    let hash = "9f3c".repeat(16);
+    let line = |name: &str, side, rupees: i64, top| DraftLine {
+        ledger_name: on_bill(name.to_owned(), top),
+        ledger: Some(ledger(name)),
+        side,
+        amount: on_bill(Paise::new(rupees * 100), top),
+    };
+    let draft = VoucherDraft {
+        kind: ledgerly_model::BaseVoucherKind::Purchase,
+        date: Some(on_bill(
+            Date::from_calendar_date(2026, time::Month::November, 17).unwrap(),
+            60,
+        )),
+        party_name: Some(on_bill("Rupa Polymers".to_owned(), 20)),
+        party: Some(ledger("Rupa Polymers")),
+        invoice_number: Some(on_bill("RP/5521".to_owned(), 60)),
+        supplier_gstin: Some(on_bill("24ZZZZZ0004Z1ZS".to_owned(), 40)),
+        lines: vec![
+            line("Purchases", ledgerly_core::DrCr::Dr, 68_000, 300),
+            line("IGST", ledgerly_core::DrCr::Dr, 12_240, 330),
+            line("Rupa Polymers", ledgerly_core::DrCr::Cr, 80_240, 360),
+        ],
+        items: Vec::new(),
+        document_total: Some(on_bill(Paise::new(8_024_000), 360)),
+        document_tax: Some(on_bill(Paise::new(1_224_000), 330)),
+        create_ledgers: Vec::new(),
+        narration: "Rupa Polymers, bill RP/5521".to_owned(),
+    };
+    api.attach_assistant(Box::new(FixedAnswers::new()));
+    api.record_ai_draft(NewAiDraft {
+        feature: AiFeature::BillReading,
+        provider: FIXED_ANSWERS_NAME.to_owned(),
+        model_version: "s21-1".to_owned(),
+        prompt_template_version: "ocr/1".to_owned(),
+        input_label: "IMG_2041.jpg".to_owned(),
+        input_hash: hash.clone(),
+        proposal: Proposal::VoucherDraft(Box::new(draft)),
+        confidence_permille: 930,
+    })
+    .unwrap();
+    // The cloud provider of the mock's `ai-settings.cloud` (index.html, `SCREENS['ai-settings']`):
+    // a fictional endpoint on the reserved `.invalid` domain, never called. The key is in the
+    // capture tool's in-memory vault (`capture_vault`), never in the file.
+    api.set_cloud_settings(&ledgerly_api::CloudSettings {
+        endpoint: Some("https://llm.example.invalid/v1/chat/completions".to_owned()),
+        format: Some("chat-completions".to_owned()),
+        model: Some("model-x".to_owned()),
+    })
+    .unwrap();
+    // The fixture is handed to the shell directly, not through the welcome screen's hand-over,
+    // so it gets the vault here, as the hand-over would give it the OS keychain.
+    api.attach_key_vault(capture_vault());
+    api
+}
+
+/// The sentence of the mock's `quick-entry.proposal` (index.html `QE.proposal`).
+const RENT_WORDS: &str = "paid rent 25k to Sharma Properties from Saptagiri";
+/// The sentence of the mock's `quick-entry.unknown-ledger` (index.html `QE['unknown-ledger']`).
+const RAMESH_WORDS: &str = "Ramesh ko 5000 cash diya";
+/// A sentence the reader refuses: the recorded answer calls it a contra voucher, and plain words
+/// draft payments and receipts only (`nl_entry`), the mock's `quick-entry.read-failed`.
+const CONTRA_WORDS: &str = "moved 10k from cash to Saptagiri";
+
+/// [`godavari_assistant_file`] with the tier set to this computer and the fixed-answers provider
+/// given the model answers for the two sentences above. The answers are written here as a model
+/// would answer the plain-words prompt; the real reader (`nl_entry`) parses them, resolves the
+/// names against the sample's ledgers and copies the typed amounts, and the engine balances the
+/// draft. No figure is written here.
+fn godavari_words_file(dir: &Path) -> Api {
+    let mut api = godavari_assistant_file(dir);
+    api.set_ai_tier(ledgerly_api::AiTier::Local).unwrap();
+    api.attach_assistant(Box::new(
+        ledgerly_api::FixedAnswers::new()
+            .with_text(
+                RENT_WORDS,
+                "{\"kind\":\"payment\",\"amount_text\":\"25k\",\"date_text\":null,\"party_name\":\"rent\",\"account_name\":\"Saptagiri\",\"narration\":\"rent Sharma Properties\",\"confidence_permille\":900}",
+            )
+            .with_text(
+                CONTRA_WORDS,
+                "{\"kind\":\"contra\",\"amount_text\":\"10k\",\"date_text\":null,\"party_name\":\"Saptagiri\",\"account_name\":\"cash\",\"narration\":\"moved\",\"confidence_permille\":900}",
+            )
+            .with_text(
+                RAMESH_WORDS,
+                "{\"kind\":\"payment\",\"amount_text\":\"5000\",\"date_text\":null,\"party_name\":\"Ramesh\",\"account_name\":\"cash\",\"narration\":\"Ramesh\",\"confidence_permille\":800}",
+            ),
+    ));
+    api
+}
+
+/// The sample company with the tier set to this computer and no provider: nothing can read a
+/// sentence, as in this build, which links no local model runtime.
+fn godavari_no_model_file(dir: &Path) -> Api {
+    let mut api = godavari_company_file(dir);
+    api.set_ai_tier(ledgerly_api::AiTier::Local).unwrap();
+    api
+}
+
+/// The capture tool's key vault: in memory, holding a fictional key for the sample company
+/// (account `company-<id>-<name>`). Nothing reaches the OS keychain or the network.
+fn capture_vault() -> Box<dyn ledgerly_api::KeyVault> {
+    Box::new(ledgerly_api::MemoryVault::with_key(
+        ledgerly_api::KEY_SERVICE,
+        &format!("company-1-{}", ledgerly_sample::NAME),
+        "fictional-capture-key",
+    ))
 }
 
 /// The sample company plus two vouchers that leave the pickaxe's stock negative for a day: a
@@ -786,6 +945,8 @@ struct Shot {
     after: Vec<Inject>,
     /// The company file the shot is taken on.
     company: Fixture,
+    /// The assistant is on for this shot (`release::set_ai_enabled`): the later-release design.
+    ai: bool,
 }
 
 /// Frames the `setup.done` shot waits after its keys, so the background company file job can
@@ -882,6 +1043,11 @@ enum ScriptedFile {
     /// The sample's November 2B file with another company's GSTIN as its recipient, so the engine
     /// refuses it (the mock's `recon-error`).
     TwoBForAnotherGstin,
+    /// The fictional masters file of `tests/s22_import_file.rs`: two new ledgers and one whose
+    /// group is in neither the company nor the file (the mock's `import.file-imported`).
+    LedgersFromOldApp,
+    /// A text file that is not XML (the mock's `import.file-error`).
+    NotXml,
 }
 
 impl ScriptedFile {
@@ -914,9 +1080,27 @@ impl ScriptedFile {
                 std::fs::write(&path, other).unwrap();
                 path
             }
+            ScriptedFile::LedgersFromOldApp => {
+                let path = dir.join("ledgers-from-old-app.xml");
+                std::fs::write(&path, LEDGERS_FROM_OLD_APP).unwrap();
+                path
+            }
+            ScriptedFile::NotXml => {
+                let path = dir.join("notes.xml");
+                std::fs::write(&path, "this is not xml").unwrap();
+                path
+            }
         }
     }
 }
+
+/// The masters file of [`ScriptedFile::LedgersFromOldApp`], as in `tests/s22_import_file.rs`.
+const LEDGERS_FROM_OLD_APP: &str = r#"<ENVELOPE><HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER><BODY><IMPORTDATA>
+<REQUESTDESC><REPORTNAME>All Masters</REPORTNAME></REQUESTDESC><REQUESTDATA>
+<TALLYMESSAGE><LEDGER NAME="Meena Fabrics" ACTION="Create"><NAME>Meena Fabrics</NAME><PARENT>Sundry Debtors</PARENT></LEDGER></TALLYMESSAGE>
+<TALLYMESSAGE><LEDGER NAME="Hamali Charges" ACTION="Create"><NAME>Hamali Charges</NAME><PARENT>Indirect Expenses</PARENT></LEDGER></TALLYMESSAGE>
+<TALLYMESSAGE><LEDGER NAME="Lost Ledger" ACTION="Create"><NAME>Lost Ledger</NAME><PARENT>No Such Group</PARENT></LEDGER></TALLYMESSAGE>
+</REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>"#;
 
 /// What the screen a flow reached must be. The harness waits for it to settle, then panics with
 /// what was shown instead.
@@ -1074,6 +1258,12 @@ impl Shot {
         self
     }
 
+    /// The same shot with the assistant on (the later release), as the mock's `ai=on` pages.
+    fn ai_on(mut self) -> Self {
+        self.ai = true;
+        self
+    }
+
     /// The same shot taken on another company file.
     fn on(mut self, company: Fixture) -> Self {
         self.company = company;
@@ -1097,6 +1287,7 @@ fn shot(state: &'static str, keys: &[(Key, Modifiers)]) -> Shot {
         query: None,
         after: Vec::new(),
         company: Fixture::Godavari,
+        ai: false,
     }
 }
 
@@ -1579,6 +1770,9 @@ fn light_shots() -> Vec<Shot> {
             // the first particular.
             .press(&[SHIFT_ENTER, SHIFT_ENTER])
             .expect("Payment", None),
+        // A payment just opened: the keyboard is on the Account, whose list holds only the cash
+        // and bank ledgers (mock `payment.account-list`).
+        shot("payment.account-list", &[(Key::F5, NONE)]).expect("Payment", None),
         // The mock's bill allocation: 1,50,000 to Vardhaman Logistics against VL/861.
         shot("payment.bill-wise", &[(Key::F5, NONE)])
             .type_text("Saptagiri")
@@ -1794,6 +1988,109 @@ fn light_shots() -> Vec<Shot> {
         shot("review.default", &[palette])
             .query("Review queue")
             .then(&[(Key::Enter, NONE)]),
+        // Later release: the assistant's bill-photo draft beside the bank matches.
+        shot("ai.review.default", &[palette])
+            .query("Review queue")
+            .then(&[(Key::Enter, NONE)])
+            .expect("Review queue", Some("Rupa Polymers, bill RP/5521"))
+            .on(Fixture::GodavariAssistant)
+            .ai_on(),
+        // Later release: AI and privacy on this computer, with the model file row and the log
+        // holding the draft above.
+        shot("ai.ai-settings.local", &[palette])
+            .query("AI and privacy")
+            .then(&[(Key::Enter, NONE), (Key::Num2, NONE)])
+            .expect("AI and privacy", None)
+            .on(Fixture::GodavariAssistant)
+            .ai_on(),
+        // Later release: the cloud tier with the provider described and the key in the vault.
+        shot("ai.ai-settings.cloud", &[palette])
+            .query("AI and privacy")
+            .then(&[(Key::Enter, NONE), (Key::Num3, NONE)])
+            .expect("AI and privacy", None)
+            .on(Fixture::GodavariAssistant)
+            .ai_on(),
+        // Later release: plain-words entry (mock `quick-entry.*` with `ai=on`). The sentence is
+        // typed into the box, which has focus once the gate reads Ready, and Enter drafts it.
+        shot("ai.quick-entry.proposal", &[palette])
+            .query("Plain-words entry")
+            .then(&[(Key::Enter, NONE)])
+            .wait(30)
+            .type_text(RENT_WORDS)
+            .press(&[(Key::Enter, NONE)])
+            .wait(30)
+            .expect_bar("Plain-words entry", "Plain-words draft")
+            .on(Fixture::GodavariWords)
+            .ai_on(),
+        shot("ai.quick-entry.unknown-ledger", &[palette])
+            .query("Plain-words entry")
+            .then(&[(Key::Enter, NONE)])
+            .wait(30)
+            .type_text(RAMESH_WORDS)
+            .press(&[(Key::Enter, NONE)])
+            .wait(30)
+            .expect_bar("Plain-words entry", "Plain-words draft")
+            .on(Fixture::GodavariWords)
+            .ai_on(),
+        shot("ai.quick-entry.loading", &[palette])
+            .query("Plain-words entry")
+            .then(&[(Key::Enter, NONE)])
+            .wait(30)
+            .type_text(RENT_WORDS)
+            .hold_worker()
+            .press(&[(Key::Enter, NONE)])
+            .wait(10)
+            .expect_bar("Plain-words entry", "Plain-words entry")
+            .on(Fixture::GodavariWords)
+            .ai_on(),
+        shot("ai.quick-entry.rejected", &[palette])
+            .query("Plain-words entry")
+            .then(&[(Key::Enter, NONE)])
+            .wait(30)
+            .type_text(RENT_WORDS)
+            .press(&[(Key::Enter, NONE)])
+            .wait(30)
+            .press(&[(Key::D, Modifiers::ALT)])
+            .wait(30)
+            .expect_bar("Plain-words entry", "Rejected")
+            .on(Fixture::GodavariWords)
+            .ai_on(),
+        shot("ai.quick-entry.idle", &[palette])
+            .query("Plain-words entry")
+            .then(&[(Key::Enter, NONE)])
+            .wait(30)
+            .expect_bar("Plain-words entry", "Plain-words entry")
+            .on(Fixture::GodavariWords)
+            .ai_on(),
+        shot("ai.quick-entry.accepted", &[palette])
+            .query("Plain-words entry")
+            .then(&[(Key::Enter, NONE)])
+            .wait(30)
+            .type_text(RENT_WORDS)
+            .press(&[(Key::Enter, NONE)])
+            .wait(30)
+            .press(&[(Key::A, Modifiers::CTRL)])
+            .wait(30)
+            .expect_bar("Plain-words entry", "Plain-words entry")
+            .on(Fixture::GodavariWords)
+            .ai_on(),
+        shot("ai.quick-entry.read-failed", &[palette])
+            .query("Plain-words entry")
+            .then(&[(Key::Enter, NONE)])
+            .wait(30)
+            .type_text(CONTRA_WORDS)
+            .press(&[(Key::Enter, NONE)])
+            .wait(30)
+            .expect_bar("Plain-words entry", "Plain-words entry")
+            .on(Fixture::GodavariWords)
+            .ai_on(),
+        shot("ai.quick-entry.not-installed", &[palette])
+            .query("Plain-words entry")
+            .then(&[(Key::Enter, NONE)])
+            .wait(30)
+            .expect_bar("Plain-words entry", "Plain-words entry")
+            .on(Fixture::GodavariNoModel)
+            .ai_on(),
         // The item list open on the first line, filtered by what is typed (index.html: type-ahead
         // over item masters).
         invoice_line(
@@ -2185,6 +2482,47 @@ fn s13_shots() -> Vec<Shot> {
             .press(&[(Key::Enter, NONE)])
             .wait(60)
             .expect_in("Import from another app", "Import from another app", "Error: could not import \"Godavari Drip & Pump Works\" from the other app at localhost:9000: The other program is not running or not accepting connections on port 9000"),
+        // S22: Alt+O on the sample company opens the import screen at the import from a file.
+        shot("import.file-masters", &[(Key::O, Modifiers::ALT)])
+            .click_named("Masters (groups and ledgers)")
+            .click_named("Ignore duplicates: keep the existing master as it is")
+            .script_file(ScriptedFile::LedgersFromOldApp)
+            .press(&[(Key::O, Modifiers::COMMAND)])
+            .expect_in(
+                "Import from another app",
+                "Import from another app",
+                "Import in one step",
+            ),
+        shot("import.file-missing-choice", &[(Key::O, Modifiers::ALT)])
+            .click_named("Masters (groups and ledgers)")
+            .script_file(ScriptedFile::LedgersFromOldApp)
+            .press(&[(Key::O, Modifiers::COMMAND)])
+            .click_named("Import the file")
+            .wait(20)
+            .expect_in(
+                "Import from another app",
+                "Import from another app",
+                "Error: choose what to do with a master that is already in the company",
+            ),
+        shot("import.file-imported", &[(Key::O, Modifiers::ALT)])
+            .click_named("Masters (groups and ledgers)")
+            .click_named("Ignore duplicates: keep the existing master as it is")
+            .script_file(ScriptedFile::LedgersFromOldApp)
+            .press(&[(Key::O, Modifiers::COMMAND)])
+            .click_named("Import the file")
+            .wait(60)
+            .expect_in(
+                "Import from another app",
+                "Import from another app",
+                "Masters: 2 created, 0 altered, 0 combined, 0 ignored, 1 not imported.",
+            ),
+        shot("import.file-error", &[(Key::O, Modifiers::ALT)])
+            .click_named("Masters (groups and ledgers)")
+            .click_named("Ignore duplicates: keep the existing master as it is")
+            .script_file(ScriptedFile::NotXml)
+            .press(&[(Key::O, Modifiers::COMMAND)])
+            .click_named("Import the file")
+            .wait(60),
         // Right from Create is the Import card (never Down, which reaches Open).
         shot(
             "import.no-company",
@@ -2757,6 +3095,7 @@ impl eframe::App for Snapshots {
                 let current = &self.shots[self.index];
                 self.shell.set_theme(current.theme.kind());
                 self.shell.set_language(current.lang);
+                ledgerly_app::release::set_ai_enabled(current.ai);
                 self.inject = current
                     .keys
                     .iter()
@@ -2895,10 +3234,19 @@ fn main() -> eframe::Result<()> {
         modifiers_held: false,
         scroll_at: None,
     };
+    // CAPTURE_SIZE=<width>x<height> (points) captures at another window size, to check that
+    // nothing is cut off on wide or small windows; the registry captures are 1280 x 800.
+    let size = std::env::var("CAPTURE_SIZE")
+        .ok()
+        .and_then(|v| {
+            let (w, h) = v.split_once('x')?;
+            Some([w.parse::<f32>().ok()?, h.parse::<f32>().ok()?])
+        })
+        .unwrap_or([1280.0, 800.0]);
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title("Ledgerly snapshots")
-            .with_inner_size([1280.0, 800.0]),
+            .with_inner_size(size),
         ..eframe::NativeOptions::default()
     };
     eframe::run_native(

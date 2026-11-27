@@ -371,6 +371,17 @@ mark{background:var(--accent-soft);color:var(--accent-ink);border-radius:2px;pad
 "ready": "document.documentElement.dataset.ready === '1'",
 "states": [
  {"id":"home.default","kind":"happy","hash":"screen=home&state=default","title":"Home","description":"Dashboard: engine KPIs, plain-words entry bar, review queue and rule-based nudges."},
+ {"id":"ai.review.default","kind":"happy","hash":"screen=review&state=default&ai=on","title":"Review queue, AI on (later release)","description":"The queue with the assistant on: a bill-photo draft beside the bank matches. Its amount is the engine's total of the draft; a draft the engine blocks shows none."},
+ {"id":"ai.ai-settings.local","kind":"happy","hash":"screen=ai-settings&state=local&ai=on","title":"AI and privacy, local (later release)","description":"On this computer: the model file the user chose (none yet), the runtime not in this build, what each feature sees, and the AI activity log."},
+ {"id":"ai.ai-settings.cloud","kind":"happy","hash":"screen=ai-settings&state=cloud&ai=on","title":"AI and privacy, cloud key (later release)","description":"Cloud with your own key: the provider as the user described it, the key in the system keychain, redaction, and a confirmation before each document."},
+ {"id":"ai.quick-entry.proposal","kind":"happy","hash":"screen=quick-entry&state=proposal&ai=on","title":"Plain-words entry, draft payment (later release)","description":"The sentence read through the assistant: Rent and the Saptagiri account resolved from the words, 25k copied from them, the date offered as today, the engine's balance check."},
+ {"id":"ai.quick-entry.unknown-ledger","kind":"validation-error","hash":"screen=quick-entry&state=unknown-ledger&ai=on","title":"Plain-words entry, unknown name (later release)","description":"No ledger named Ramesh: the engine blocks the draft and the assistant invents none."},
+ {"id":"ai.quick-entry.loading","kind":"loading","hash":"screen=quick-entry&state=loading&ai=on","title":"Plain-words entry, drafting (later release)","description":"The sentence is with the assistant; nothing is shown until the engine has checked its draft."},
+ {"id":"ai.quick-entry.rejected","kind":"happy","hash":"screen=quick-entry&state=rejected&ai=on","title":"Plain-words entry, rejected (later release)","description":"Rejected: nothing was posted, and the rejection is in the AI activity log."},
+ {"id":"ai.quick-entry.idle","kind":"empty","hash":"screen=quick-entry&state=idle&ai=on","title":"Plain-words entry, ready (later release)","description":"A model can run: the box has focus and nothing is drafted until Enter."},
+ {"id":"ai.quick-entry.accepted","kind":"happy","hash":"screen=quick-entry&state=accepted&ai=on","title":"Plain-words entry, accepted (later release)","description":"Ctrl+A posted the draft through the engine; the card says Accepted and names the voucher number the engine gave."},
+ {"id":"ai.quick-entry.read-failed","kind":"error","hash":"screen=quick-entry&state=read-failed&ai=on","title":"Plain-words entry, not read (later release)","description":"The reader refused the answer (a contra voucher; plain words draft payments and receipts only). Nothing is stored as a draft; the failure is in the AI activity log."},
+ {"id":"ai.quick-entry.not-installed","kind":"empty","hash":"screen=quick-entry&state=not-installed&ai=on","title":"Plain-words entry, no local model (later release)","description":"On this computer with no model the build can run: the box is disabled, the reason is named, and the voucher forms are offered."},
  {"id":"hi.home.default","kind":"happy","hash":"screen=home&state=default&lang=hi","title":"Home, Hindi","description":"The default Home with every word the app translates shown in Hindi; figures, dates and digit grouping unchanged."},
  {"id":"hi.sales-invoice.default","kind":"happy","hash":"screen=sales-invoice&state=default&lang=hi","title":"Sales invoice, Hindi","description":"The intra-state item invoice in Hindi."},
  {"id":"hi.sales-invoice.print-preview","kind":"happy","hash":"screen=sales-invoice&state=print-preview&lang=hi","title":"Sales invoice, print preview, Hindi","description":"The print preview chrome in Hindi; the printed page stays English (the PDF font is Latin-only)."},
@@ -378,6 +389,11 @@ mark{background:var(--accent-soft);color:var(--accent-ink);border-radius:2px;pad
  {"id":"hi.balance-sheet.default","kind":"happy","hash":"screen=balance-sheet&state=default&lang=hi","title":"Balance sheet, Hindi","description":"The balance sheet in Hindi; Dr and Cr stay as the books write them."},
  {"id":"hi.gst.gstr1","kind":"happy","hash":"screen=gst&state=gstr1&lang=hi","title":"GSTR-1, Hindi","description":"GSTR-1 in Hindi; return names and table numbers stay as the portal writes them."},
  {"id":"hi.bank.default","kind":"happy","hash":"screen=bank&state=default&lang=hi","title":"Bank reconciliation, Hindi","description":"The bank reconciliation screen in Hindi."},
+ {"id":"hi.import.file-masters","kind":"happy","hash":"screen=import&state=file-masters&lang=hi","title":"Import from a file, masters chosen, Hindi","description":"The import from a file with Masters and Ignore duplicates chosen, in Hindi."},
+ {"id":"hi.import.file-missing-choice","kind":"validation-error","hash":"screen=import&state=file-missing-choice&lang=hi","title":"Import from a file, no choice for existing masters, Hindi","description":"The missing choice said in Hindi."},
+ {"id":"hi.import.file-imported","kind":"happy","hash":"screen=import&state=file-imported&lang=hi","title":"Import from a file, summary and exceptions, Hindi","description":"The summary and the exceptions list in Hindi; names and the engine's reasons stay as written."},
+ {"id":"hi.import.file-error","kind":"error","hash":"screen=import&state=file-error&lang=hi","title":"Import from a file, not an XML file, Hindi","description":"The unreadable file in Hindi; the engine's reason stays as written."},
+ {"id":"hi.payment.account-list","kind":"happy","hash":"screen=payment&state=account-list&lang=hi","title":"Payment, account list open, Hindi","description":"The payment's cash and bank account list in Hindi."},
  {"id":"hi.setup.welcome","kind":"happy","hash":"screen=setup&state=welcome&lang=hi","title":"First run, welcome, Hindi","description":"The welcome screen in Hindi."},
  {"id":"home.loading","kind":"loading","hash":"screen=home&state=loading","title":"Home, company opening","description":"Skeleton rows while the company file opens and projections load; no figure is shown until the engine returns it."},
  {"id":"home.empty","kind":"empty","hash":"screen=home&state=empty","title":"Home, new company","description":"A new company with no vouchers: first steps instead of zero-filled KPIs."},
@@ -419,6 +435,7 @@ mark{background:var(--accent-soft);color:var(--accent-ink);border-radius:2px;pad
  {"id":"quick-entry.loading","kind":"loading","hash":"screen=quick-entry&state=loading","title":"Plain-words entry, drafting","description":"The local model is drafting; the text stays editable and Esc cancels."},
  {"id":"quick-entry.rejected","kind":"happy","hash":"screen=quick-entry&state=rejected","title":"Plain-words entry, rejected","description":"The user rejected the draft; nothing was posted and an optional reason is asked."},
  {"id":"payment.default","kind":"happy","hash":"screen=payment&state=default","title":"Payment","description":"F5 payment in single-entry style: bank balance now and after saving."},
+ {"id":"payment.account-list","kind":"happy","hash":"screen=payment&state=account-list","title":"Payment, account list open","description":"A fresh payment with the keyboard on Account: the list under the field holds only the cash and bank ledgers (Cash-in-hand, Bank accounts, Bank OD) and the form stays in view."},
  {"id":"payment.bill-wise","kind":"happy","hash":"screen=payment&state=bill-wise","title":"Payment, bill allocation","description":"Paying a supplier pops the bill-wise allocation with open bills from the engine."},
  {"id":"payment.overdraft","kind":"validation-error","hash":"screen=payment&state=overdraft","title":"Payment, overdraft warning","description":"Amount exceeds the bank balance: a warning, with the shortfall computed by the engine."},
  {"id":"receipt.default","kind":"happy","hash":"screen=receipt&state=default","title":"Receipt","description":"F6 receipt against an open sales bill."},
@@ -493,13 +510,17 @@ mark{background:var(--accent-soft);color:var(--accent-ink);border-radius:2px;pad
 {"id":"masters.items-empty","kind":"empty","hash":"screen=masters&state=items-empty","title":"Masters, no stock items yet","description":"No stock items: the empty state offers Create stock item (Alt+C); that form is not in the mock."},
 {"id":"masters.loading","kind":"loading","hash":"screen=masters&state=loading","title":"Masters, balances loading","description":"Ledger names are listed; the balance column shows dashes until the engine returns the balances."},
 {"id":"masters.no-match","kind":"empty","hash":"screen=masters&state=no-match","title":"Masters, filter matches nothing","description":"The filter has no match: the line says No ledgers matches, with the filter text."},
-{"id":"import.default","kind":"happy","hash":"screen=import&state=default","title":"Import from another app","description":"One-step import with host, port and company; the step-by-step panel shows as not connected."},
-{"id":"import.no-company","kind":"empty","hash":"screen=import&state=no-company","title":"Import, no company open","description":"No company is open: says to create one first, offers Back to setup, and the form is disabled."},
+{"id":"import.default","kind":"happy","hash":"screen=import&state=default","title":"Import from another app","description":"One-step import with host, port and company, the import from an XML file with nothing chosen yet, and the step-by-step panel shown as not connected."},
+{"id":"import.no-company","kind":"empty","hash":"screen=import&state=no-company","title":"Import, no company open","description":"No company is open: says to create one first, offers Back to setup, and both the one-step form and the import from a file are disabled with the reason."},
 {"id":"import.validation-error","kind":"validation-error","hash":"screen=import&state=validation-error","title":"Import, company name missing","description":"The company name is empty; the reason is said in words and nothing is imported."},
 {"id":"import.port-error","kind":"validation-error","hash":"screen=import&state=port-error","title":"Import, port not a number in range","description":"Port 99999 is outside 1 to 65535; the reason is said in words."},
 {"id":"import.running","kind":"loading","hash":"screen=import&state=running","title":"Import, running","description":"Importing; the button is disabled and the form stays as typed."},
 {"id":"import.imported","kind":"happy","hash":"screen=import&state=imported","title":"Import, finished with a summary","description":"The engine reports the company read, the events committed and any warnings (sample counts)."},
 {"id":"import.refused","kind":"error","hash":"screen=import&state=refused","title":"Import, refused as not supported","description":"The engine refuses a voucher type; the refusal names what and why."},
+{"id":"import.file-masters","kind":"happy","hash":"screen=import&state=file-masters","title":"Import from a file, masters chosen","description":"Alt+O: Masters chosen, the three choices for a master already in the company (Ignore duplicates picked) and the file path filled; nothing imported yet."},
+{"id":"import.file-missing-choice","kind":"validation-error","hash":"screen=import&state=file-missing-choice","title":"Import from a file, no choice for existing masters","description":"Masters chosen but no choice for a master already in the company: the reason is said in words and nothing is imported."},
+{"id":"import.file-imported","kind":"happy","hash":"screen=import&state=file-imported","title":"Import from a file, summary and exceptions","description":"The file was read: 2 created, 1 not imported, with every object not imported listed beside its reason."},
+{"id":"import.file-error","kind":"error","hash":"screen=import&state=file-error","title":"Import from a file, not an XML file","description":"The file is not an XML document: the error names the file and the cause, and nothing is imported."},
 {"id":"import.failed","kind":"error","hash":"screen=import&state=failed","title":"Import, failed with a reason","description":"The other app could not be read; the error names the company, the host and port, and the cause. Nothing is written."},
 {"id":"setup.new-tab","kind":"happy","hash":"screen=setup&state=welcome&tabs=2","title":"Cold start, new tab","description":"Ctrl+T with no company open opens a second Company setup tab; the tab strip shows both and New tab and Close tab."},
 {"id":"setup.rail","kind":"happy","hash":"screen=setup&state=welcome&rail=1","title":"Cold start, sidebar collapsed to the rail","description":"Ctrl+\\ folds the sidebar to its 60 px rail: icons only, labels hidden."},
@@ -966,13 +987,16 @@ const skelRows = (n,w) => Array.from({length:n},(_,i)=>`<div class="skel" style=
 /* ---------- params, theme, AI tier ---------- */
 function parseHash(){const h=location.hash.replace(/^#/,'');const p={};for(const kv of h.split('&')){if(!kv)continue;const i=kv.indexOf('=');const k=i<0?kv:kv.slice(0,i);try{p[k]=i<0?'':decodeURIComponent(kv.slice(i+1))}catch(e){p[k]=kv.slice(i+1)}}return p}
 const buildHash = p => Object.entries(p).filter(([,v])=>v!=null&&v!=='').map(([k,v])=>k+'='+encodeURIComponent(v).replace(/%20/g,'%20')).join('&');
-function hashFor(screen,state,extra){const p={screen};if(state)p.state=state;Object.assign(p,extra||{});const cur=parseHash();if(cur.theme)p.theme=cur.theme;if(cur.lang)p.lang=cur.lang;return buildHash(p)}
+function hashFor(screen,state,extra){const p={screen};if(state)p.state=state;Object.assign(p,extra||{});const cur=parseHash();if(cur.theme)p.theme=cur.theme;if(cur.lang)p.lang=cur.lang;if(cur.ai)p.ai=cur.ai;return buildHash(p)}
 const readFreeze = ()=>{const m=/[?&]freeze=(\d+)/.exec(location.search)||/[#&]freeze=(\d+)/.exec(location.hash);return m?+m[1]:null};
 let FREEZE = readFreeze();
 function resolveTheme(p){const t=p.theme||store.get('ledgerly.theme')||'system';if(t==='system')return matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';return ['light','dark','hc'].includes(t)?t:'light'}
 /* Release switch (owner decision 2026-11-26): Ledgerly 1.0.0 ships WITHOUT the AI assistant. The AI-only states below stay in the mock
    as the later-release design; every other screen shows the company with AI Off. A later release sets this to true. */
-const AI_IN_RELEASE=false;
+// The release switch: false, so 1.0.x shows no AI. A page shows the later-release AI design
+// with the hash parameter ai=on (states ai.*), read again on every render.
+const AI_RELEASE_SWITCH=false;
+let AI_IN_RELEASE=AI_RELEASE_SWITCH||/(^#|&)ai=on(&|$)/.test(location.hash);
 const AI_ONLY=p=>['quick-entry','ask','purchase-bill'].includes(p.screen)||(p.screen==='bank'&&/ai-suggestions|suggested-ledger/.test(p.state||''))||(p.screen==='masters'&&p.state==='suggested-ledger')||(p.screen==='gst'&&p.state==='recon-explain');
 function aiTier(p){const s=p.state||'';if(p.screen==='ai-settings')return AI_IN_RELEASE?(s==='cloud'?'cloud':s==='off'?'off':'local'):'off';if(/ai-off|offline-ai/.test(s))return 'off';if(!AI_IN_RELEASE&&!AI_ONLY(p))return 'off';return 'local'}
 const TIER = {local:{icon:'cpu',label:'AI on this computer',tip:'Local model. Nothing leaves this computer.'},cloud:{icon:'cloud',label:'AI cloud, your key',tip:'Your own provider key. Redacted fields never leave.'},off:{icon:'off',label:'AI off',tip:'No AI features for this company.'}};
@@ -1008,7 +1032,10 @@ function renderKeys(list){
   $('#keys').innerHTML=(alt?`<span class="mod">Holding ${alt}</span>`:'')+set.map(([k,l],i)=>i===0&&!alt&&k===''?`<span class="ctx">${esc(l)}</span>`:`<span>${kb(k)} ${esc(l)}</span>`).join('')+
    `<span class="right">${alt?'':'Hold Alt or Ctrl for more · '}${kb('Ctrl+K')} anything · ${kb('?')} all keys</span>`;
 }
-const ALT_KEYS=[['Alt+C','Create master here'],['Alt+D','Delete / reject draft'],['Alt+X','Cancel voucher'],['Alt+2','Duplicate'],['Alt+I','Insert voucher'],['Alt+R','Last narration'],['Alt+F1','Detailed / condensed']].concat(AI_IN_RELEASE?[['Alt+O','Read a bill']]:[]);
+/* S21: bill reading is Ctrl+Alt+O, not Alt+O (Alt+O is Import, as in TallyPrime). Ctrl+Alt+O is not on
+   help.tallysolutions.com/keyboard-shortcuts-tally-prime/ (read 2026-11-27, page updated 2026-09-24); every
+   Alt+<letter> is bound somewhere on that page, and its Ctrl+Alt keys are B F I N R T U W only. */
+const ALT_KEYS=[['Alt+C','Create master here'],['Alt+D','Delete / reject draft'],['Alt+X','Cancel voucher'],['Alt+2','Duplicate'],['Alt+I','Insert voucher'],['Alt+R','Last narration'],['Alt+F1','Detailed / condensed']].concat(AI_IN_RELEASE?[['Ctrl+Alt+O','Read a bill']]:[]);
 const CTRL_KEYS=[['Ctrl+A','Accept / save'],['Ctrl+K','Palette'],['Ctrl+G','Switch to (replace)'],['Ctrl+I','More details / source'],['Ctrl+Enter','Alter master'],['Ctrl+F','Filter'],['Ctrl+P','Print'],['Ctrl+E','Export'],['Ctrl+Z','Undo field']];
 
 /* ---------- toast ---------- */
@@ -1052,7 +1079,7 @@ function translateDom(lang){
 }
 function render(){
   FREEZE=readFreeze();
-  const p=parseHash(); if(!SCREENS[p.screen])p.screen=p.screen==='palette'?'palette':'home';
+  const p=parseHash(); AI_IN_RELEASE=AI_RELEASE_SWITCH||p.ai==='on'; if(!SCREENS[p.screen])p.screen=p.screen==='palette'?'palette':'home';
   const theme=resolveTheme(p); document.documentElement.dataset.theme=theme;
   const def=SCREENS[p.screen]; const state=p.state||def.default;
   document.body.classList.toggle('frozen',FREEZE!=null);
@@ -1109,7 +1136,7 @@ document.addEventListener('keydown',e=>{
   else if(def.key&&def.key(k,e,st,p)===true){e.preventDefault();return}
   const G={
    'Ctrl+K':()=>command('palette'),'Alt+G':()=>command('palette'),'Ctrl+G':()=>command('palette'),
-   'F8':()=>go(hashFor('sales-invoice'),'screen-push'),'F9':()=>go(hashFor('purchase-bill'),'screen-push'),...(AI_IN_RELEASE?{'Alt+O':()=>go(hashFor('purchase-bill','reading'),'screen-push')}:{}),
+   'F8':()=>go(hashFor('sales-invoice'),'screen-push'),'F9':()=>go(hashFor('purchase-bill'),'screen-push'),'Alt+O':()=>go(hashFor('import'),'screen-push'),...(AI_IN_RELEASE?{'Ctrl+Alt+O':()=>go(hashFor('purchase-bill','reading'),'screen-push')}:{}),
    'F5':()=>go(hashFor('payment'),'screen-push'),'F6':()=>go(hashFor('receipt'),'screen-push'),
    'F4':()=>toast('Contra (F4) is not drawn in this mock; it uses the payment layout.'),'F7':()=>toast('Journal (F7) is not drawn in this mock.'),
    'F2':()=>command('date'),'F3':()=>command('company'),'F12':()=>toast('F12 opens options for this screen.'),'F11':()=>toast('F11 opens company features.'),
@@ -1218,7 +1245,7 @@ function nudgeDialog(inOverlay){
 }
 
 /* ---------- palette ---------- */
-const PAL_SCREENS=[['Home','home',null,'home'],['Balance sheet','balance-sheet',null,'scale'],['Day book','day-book',null,'book'],['GSTR-1, November','gst','gstr1','gst'],['GSTR-3B working, November','gst','gstr3b','gst'],['2B and IMS reconciliation','gst','recon','gst'],['Bank reconciliation, Saptagiri','bank',null,'bank'],['Bank reconciliation statement','bank','brs','bank'],['Masters: ledgers','masters','ledgers','users'],['Masters: stock items','masters','items','users'],['Review queue','review',null,'inbox'],['Keyboard map','keys','classic','kbd'],['AI and privacy','ai-settings','local','shield'],['Company setup','setup','welcome','building'],['Outstanding receivables, ageing','ask','result','clock']];
+const PAL_SCREENS=[['Home','home',null,'home'],['Balance sheet','balance-sheet',null,'scale'],['Day book','day-book',null,'book'],['GSTR-1, November','gst','gstr1','gst'],['GSTR-3B working, November','gst','gstr3b','gst'],['2B and IMS reconciliation','gst','recon','gst'],['Bank reconciliation, Saptagiri','bank',null,'bank'],['Bank reconciliation statement','bank','brs','bank'],['Masters: ledgers','masters','ledgers','users'],['Masters: stock items','masters','items','users'],['Review queue','review',null,'inbox'],['Keyboard map','keys','classic','kbd'],['AI and privacy','ai-settings','local','shield'],['Company setup','setup','welcome','building'],['Import masters or vouchers from a file','import',null,'upload'],['Outstanding receivables, ageing','ask','result','clock']];
 const PAL_CMDS=[['New sales invoice','F8','sales-invoice'],['New purchase','F9','purchase-bill'],['New payment','F5','payment'],['New receipt','F6','receipt'],['Import bank statement','','bank:empty'],['Import 2B / IMS JSON','','gst:recon-empty'],['Export GSTR-1 JSON (offline tool format)','Ctrl+E','!export'],['Switch theme','Ctrl+Shift+L','!theme'],['Collapse side bar','Ctrl+\\','!rail'],['Back up now','','!backup']];
 function fuzzy(q,s){q=q.toLowerCase();s=s.toLowerCase();if(s.includes(q))return 2;let i=0;for(const c of s){if(c===q[i])i++;if(i===q.length)return 1}return 0}
 function hl(s,q){const i=s.toLowerCase().indexOf(q.toLowerCase());if(!q||i<0)return esc(s);return esc(s.slice(0,i))+'<mark>'+esc(s.slice(i,i+q.length))+'</mark>'+esc(s.slice(i+q.length))}
@@ -1315,7 +1342,7 @@ SCREENS.ask = {title:'Ask your books',default:'result',
 SCREENS.review = {title:'Review queue',default:'default',
  render(st){
   const head=phead([['Home',hashFor('home')],['Review queue']],'Review queue','Every open AI proposal and rule check in one place. Decide here or in context; it is the same proposal.');
-  if(st==='empty')return head+`<div class="card"><div class="empty">${ic('inbox')}<h2>Nothing to review</h2><p>${AI_IN_RELEASE?'New bill photos, bank suggestions and 2B explanations':'Bank matches and rule checks'} will appear here. Ledgerly never acts on them without you.</p>${AI_IN_RELEASE?`<button class="btn" data-go="${hashFor('purchase-bill','reading')}">${ic('camera')}Read a bill ${kb('Alt+O')}</button>`:''}</div></div>`;
+  if(st==='empty')return head+`<div class="card"><div class="empty">${ic('inbox')}<h2>Nothing to review</h2><p>${AI_IN_RELEASE?'New bill photos, bank suggestions and 2B explanations':'Bank matches and rule checks'} will appear here. Ledgerly never acts on them without you.</p>${AI_IN_RELEASE?`<button class="btn" data-go="${hashFor('purchase-bill','reading')}">${ic('camera')}Read a bill ${kb('Ctrl+Alt+O')}</button>`:''}</div></div>`;
   const items=REVIEW_ITEMS();
   return head+`<div class="grid g-main"><div class="card"><table class="t" id="rq"><thead><tr><th></th><th>Proposal</th><th>Source</th><th>Confidence</th><th class="num">Amount</th></tr></thead><tbody>
    ${items.map((q,i)=>`<tr data-row="${q.id}" data-href="${q.go}" class="${i===0?'sel':''}"><td style="width:28px">${ic(q.icon)}</td><td><b>${esc(q.kind)}</b><div class="t2">${esc(q.what)}</div></td><td class="meta">${esc(q.src)}<br>${q.age} ago</td><td>${conf(q.conf)}</td><td class="num">${q.amt==null?'<span class="muted">none</span>':inr(q.amt)}</td></tr>`).join('')}</tbody></table></div>
@@ -1352,6 +1379,8 @@ function taSource(kind){
   if(kind==='party')return LEDGERS.filter(l=>l.group==='debtors').map(l=>({v:l.name,id:l.id,s:(l.gstin||'Unregistered')+' · '+l.city+' · '+inr(Math.abs(balances()[l.id]))+(balances()[l.id]>=0?' Dr':' Cr')}));
   if(kind==='item')return ITEMS.map(i=>{const q=stockPosition().qty[i.id];return {v:i.name,id:i.id,s:`HSN ${i.hsn||'missing'} · ${i.gst}% · ₹${inr(i.rate)} · ${q} ${i.unit} in stock`}});
   if(kind==='pos')return Object.entries(STATES).map(([k,v])=>({v:k+' '+v,id:k,s:k===CO.state?'Your state: CGST + SGST':'Inter-state: IGST'}));
+  // S22: a payment's or receipt's Account, and each contra line, take only cash and bank ledgers.
+  if(kind==='cashbank')return LEDGERS.filter(l=>['cash','bank','bankod'].includes(l.group)).map(l=>({v:l.name,id:l.id,s:groupOf(l.group).name}));
   if(kind==='ledger')return LEDGERS.filter(l=>!['debtors'].includes(l.group)||true).map(l=>({v:l.name,id:l.id,s:groupOf(l.group).name}));
   return []; }
 function taOpen(inp,kind){
@@ -1359,10 +1388,10 @@ function taOpen(inp,kind){
   const all=taSource(kind);const exact=all.find(o=>o.v.toLowerCase()===q);
   TA.list=exact?all:all.filter(o=>!q||o.v.toLowerCase().includes(q)||o.s.toLowerCase().includes(q));
   TA.hi=Math.max(0,TA.list.findIndex(o=>exact&&o===exact));
-  const cap={party:'Parties',item:'Stock items',pos:'Place of supply',ledger:'Ledgers'}[kind];
+  const cap={party:'Parties',item:'Stock items',pos:'Place of supply',ledger:'Ledgers',cashbank:'Ledgers'}[kind];
   const ta=$('#ta');
   ta.innerHTML=`<div class="cap">${cap} · ${TA.list.length} of ${all.length}</div>`+TA.list.slice(0,8).map((o,i)=>`<div class="opt ${i===TA.hi?'hi':''}" data-j="${i}"><span>${hl(o.v,inp.value.trim())}</span><span class="s">${esc(o.s)}</span></div>`).join('')+
-   (kind==='pos'?'':`<div class="opt" data-j="-1"><span>${ic('plus')} Create ${kind==='item'?'item':'ledger'}${q?` "${esc(inp.value.trim())}"`:''}</span>${kb('Alt+C')}</div>`);
+   (kind==='pos'||kind==='cashbank'?'':`<div class="opt" data-j="-1"><span>${ic('plus')} Create ${kind==='item'?'item':'ledger'}${q?` "${esc(inp.value.trim())}"`:''}</span>${kb('Alt+C')}</div>`);
   const r=inp.getBoundingClientRect();ta.style.left=Math.min(r.left,innerWidth-470)+'px';ta.style.top=(r.bottom+4)+'px';ta.classList.add('open');
   $$('#ta .opt[data-j]').forEach(el=>el.onmousedown=ev=>{ev.preventDefault();TA.hi=+el.dataset.j;taPick()}); }
 function taClose(){$('#ta').classList.remove('open');TA.inp=null}
@@ -1541,17 +1570,18 @@ function recalcInv(flash){
 /* ---------- payment and receipt (single-entry) ---------- */
 const PAY_SEED={
  'payment.default':{type:'Payment',no:'PY/0319',acct:'saptagiri',lines:[['freight',R(6500)]],narr:'Freight, Vardhaman Logistics, LR 4471'},
+ 'payment.account-list':{type:'Payment',no:'PY/0319',acct:null,lines:[],narr:''},
  'payment.bill-wise':{type:'Payment',no:'PY/0319',acct:'saptagiri',lines:[['vardhaman',R(150000)]],narr:'NEFT, against VL/861',bills:'vardhaman'},
  'payment.overdraft':{type:'Payment',no:'PY/0319',acct:'mulacur',lines:[['nilgiri',R(250000)]],narr:'RTGS to Nilgiri Steel Traders'},
  'receipt.default':{type:'Receipt',no:'RC/0220',acct:'saptagiri',lines:[['mai',R(100000)]],narr:'NEFT, part against SI/0401',bills:'mai'}};
 function payScreen(kind){return {title:kind==='payment'?'Payment':'Receipt',default:'default',
  render(st){const s=PAY_SEED[kind+'.'+st]||PAY_SEED[kind+'.default'];const b=balances();const tot=s.lines.reduce((a,l)=>a+l[1],0);
-  const now=b[s.acct], after=kind==='payment'?now-tot:now+tot; const od=after<0;
+  const now=s.acct?b[s.acct]:0, after=kind==='payment'?now-tot:now+tot; const od=after<0;
   const bills=s.bills?openBills().filter(x=>x.led===s.bills):[];
   return `${phead([['Home',hashFor('home')],[s.type]],`${s.type} <span class="t2" style="font-weight:500">${s.no}</span>`,`${kind==='payment'?'F5':'F6'} · single entry: pick the cash or bank account once, then the ledgers`,`<button class="btn primary" data-cmd="save">${ic('save')}Save ${kb('Ctrl+A')}</button>`)}
    <div class="card vsheet"><div class="vhead">
     <div class="fld"><label>Date ${kb('F2')}</label><div class="ro">21 Nov 2026</div></div>
-    <div class="fld span2"><label for="p-acct">Account</label><input id="p-acct" value="${esc(LED[s.acct].name)}"><span class="hint">${esc(LED[s.acct].acct||'')} · balance now ₹${inr(Math.abs(now))} ${now>=0?'Dr':'Cr'} (engine)</span></div>
+    <div class="fld span2"><label for="p-acct">Account</label>${s.acct?`<input id="p-acct" value="${esc(LED[s.acct].name)}"><span class="hint">${esc(LED[s.acct].acct||'')} · balance now ₹${inr(Math.abs(now))} ${now>=0?'Dr':'Cr'} (engine)</span>`:`<input id="p-acct" placeholder="Cash or bank ledger">`}</div>
     <div class="fld"><label>Mode</label><div class="ro">${st==='overdraft'?'RTGS':'NEFT / UPI'}</div></div></div>
    <table class="lines"><thead><tr><th class="n">#</th><th>Particulars</th><th>Group</th><th style="width:170px" class="num">Amount</th></tr></thead><tbody>
     ${s.lines.map((l,i)=>`<tr class="${i===0?'active':''}"><td class="n">${i+1}</td><td><input value="${esc(LED[l[0]].name)}" aria-label="Ledger"></td><td class="t2">${esc(groupOf(LED[l[0]].group).name)}</td><td><input class="num" value="${inr(l[1])}" aria-label="Amount"></td></tr>`).join('')}
@@ -1564,7 +1594,7 @@ function payScreen(kind){return {title:kind==='payment'?'Payment':'Receipt',defa
     ${bills.map(x=>{const al=Math.min(-1*Math.sign(balances()[s.bills])*0+Math.abs(x.open),s.lines[0][1]);return `<tr class="sel"><td>Against</td><td>${x.ref}</td><td>${fmtDate(x.date)}</td><td class="num">${inr(Math.abs(x.open))}</td><td class="num">${inr(al)}</td></tr><tr><td colspan="4" class="t2">Left open on ${x.ref} after saving</td><td class="num">${inr(Math.abs(x.open)-al)}</td></tr>`}).join('')}
     </tbody></table></div>`:''}`;
  },
- mount(st){const i=$('.lines input');i&&i.focus()},
+ mount(st){if(st==='account-list'){const a=$('#p-acct');a.focus();taOpen(a,'cashbank');return}const i=$('.lines input');i&&i.focus()},
  key(k){if(k==='Ctrl+A'||k==='Ctrl+S'){toast(`${kind==='payment'?'Payment PY/0319':'Receipt RC/0220'} saved (mock). A fresh ${kind} opens.`,true);return true}return false},
  cmd(c){if(c==='save')toast('Saved (mock).',true)},
  back(){return hashFor('home')},
@@ -1580,8 +1610,8 @@ function billDraft(st){
   return {lines,inv,ok,printedTotal,printedTax,printedTaxable}; }
 SCREENS['purchase-bill']={title:'Purchase from bill photo',default:'proposal',
  render(st){
-  const head=phead([['Home',hashFor('home')],['Purchase'],['From bill photo']],'Purchase from a bill photo',`F9 purchase · ${kb('Alt+O')} read another bill · the image is kept with the voucher`,
-   `<button class="btn" data-go="${hashFor('purchase-bill','reading')}">${ic('camera')}Read another ${kb('Alt+O')}</button>`);
+  const head=phead([['Home',hashFor('home')],['Purchase'],['From bill photo']],'Purchase from a bill photo',`F9 purchase · ${kb('Ctrl+Alt+O')} read another bill · the image is kept with the voucher`,
+   `<button class="btn" data-go="${hashFor('purchase-bill','reading')}">${ic('camera')}Read another ${kb('Ctrl+Alt+O')}</button>`);
   const d=billDraft(st);
   const left = st==='error'?`<div class="billwrap" style="align-items:center"><div class="empty">${ic('file')}<h2>RP-5521.pdf</h2><p>212 KB · PDF · password-protected</p></div></div>`
    : `<div class="billwrap" id="billwrap">${billImage(st)}${st==='reading'?'':''}</div>`;
@@ -1613,7 +1643,7 @@ SCREENS['purchase-bill']={title:'Purchase from bill photo',default:'proposal',
   return false},
  cmd(c){if(c==='cloud')go(hashFor('purchase-bill','proposal'),'ai-proposal-arrive');if(c==='nocloud')go(hashFor('purchase-bill','low-confidence'))},
  back(st){return st==='accepted'?hashFor('home'):hashFor('review')},
- keys(st){return ['reading'].includes(st)?[['','Reading bill'],['Esc','Cancel']]:st==='accepted'?[['','Posted'],['Alt+O','Read another'],['Esc','Back']]:[['','Draft purchase'],['Enter','Next field'],['Ctrl+I','Show source'],['Ctrl+A','Accept and post'],['Alt+D','Reject draft'],['Esc','Back, keep in queue']]}
+ keys(st){return ['reading'].includes(st)?[['','Reading bill'],['Esc','Cancel']]:st==='accepted'?[['','Posted'],['Ctrl+Alt+O','Read another'],['Esc','Back']]:[['','Draft purchase'],['Enter','Next field'],['Ctrl+I','Show source'],['Ctrl+A','Accept and post'],['Alt+D','Reject draft'],['Esc','Back, keep in queue']]}
 };
 document.addEventListener('click',e=>{const b=e.target.closest('.prop [data-act]');if(!b||b.disabled)return;const a=b.dataset.act;
   const map={accept:'Ctrl+A',reject:'Alt+D',edit:'Enter'};const p=parseHash();const def=SCREENS[p.screen];
@@ -1672,12 +1702,25 @@ const QE={
  hinglish:{text:'Mehta Agro se 1 lakh aaya NEFT, SI/0401 ke against',marks:[['Mehta Agro','party'],['1 lakh','amount'],['NEFT','mode'],['SI/0401','bill']]},
  'unknown-ledger':{text:'Ramesh ko 5000 cash diya',marks:[['Ramesh','payee'],['5000','amount'],['cash','account']]},
  loading:{text:'paid rent 25k to Sharma Properties from Saptagiri',marks:[]},
+ 'not-installed':{text:'',marks:[]},
+ idle:{text:'',marks:[]},
+ accepted:{text:'paid rent 25k to Sharma Properties from Saptagiri',marks:[['25k','amount'],['Saptagiri','account'],['rent','ledger']]},
+ 'read-failed':{text:'moved 10k from cash to Saptagiri',marks:[]},
  rejected:{text:'paid rent 25k to Sharma Properties from Saptagiri',marks:[['25k','amount'],['Sharma Properties','payee'],['Saptagiri','account'],['rent','ledger']]}};
 function markText(t,marks){let h=esc(t);for(const [m,k] of marks)h=h.replace(esc(m),`<mark class="bind q" title="${k}" style="background:var(--ai-soft);color:var(--ai-ink)">${esc(m)}</mark>`);return h}
 SCREENS['quick-entry']={title:'Plain-words entry',default:'proposal',
  render(st){const q=QE[st]||QE.proposal;const b=balances();
   let card='';
-  if(st==='loading')card=`<div class="card pad"><div class="row t2">${ic('cpu')}Drafting on this computer… ${kb('Esc')} cancels</div>${skelRows(6,[50,80,70,60,90,40])}</div>`;
+  if(st==='not-installed')card=`<div class="card pad"><div class="note warn">${ic('cpu')}<span><b>No local model can run.</b> No model file is chosen, and no local inference runtime is built into this version of Ledgerly. Choose a model file in AI and privacy; nothing is downloaded.</span></div><button class="btn" style="margin-top:8px" data-go="${hashFor('ai-settings')}">AI and privacy</button><h2 style="margin-top:12px">Type it myself</h2><div class="row" style="gap:8px"><button class="btn" data-go="${hashFor('payment')}">Payment ${kb('F5')}</button><button class="btn" data-go="${hashFor('receipt')}">Receipt ${kb('F6')}</button></div></div>`;
+  else if(st==='idle')card=`<div class="card pad"><p class="t2" style="margin:0">Press Enter to draft. The draft waits for you; nothing is posted until you accept.</p></div>`;
+  else if(st==='read-failed')card=`<div class="note warn">${ic('alert')}<span>The assistant could not read it: unsupported: natural-language entry for a contra voucher (only payments and receipts are drafted from text)</span></div><h2 style="margin-top:12px">Type it myself</h2><div class="row" style="gap:8px"><button class="btn" data-go="${hashFor('payment')}">Payment ${kb('F5')}</button><button class="btn" data-go="${hashFor('receipt')}">Receipt ${kb('F6')}</button></div>`;
+  else if(st==='accepted')card=proposal({kind:'Draft payment',src:[srcChip('chat','Your words'),srcChip('cpu','Local model')],status:'done',
+    body:`<table class="t"><thead><tr><th>Dr / Cr</th><th>Ledger</th><th class="num">Amount</th></tr></thead><tbody>
+     <tr><td>Dr</td><td>Rent ${prov('ai','AI: ledger')}</td><td class="num">${inr(R(25000))} ${prov('you','"25k"')}</td></tr>
+     <tr><td>Cr</td><td>Saptagiri Commercial Bank A/c ${prov('ai','AI: account')}</td><td class="num">${inr(R(25000))} ${prov('eng','balancing')}</td></tr></tbody></table>
+     <p class="meta" style="margin-top:8px">Date: <b>21 Nov 2026</b>, today, as for any new voucher; no date was typed.</p>`,
+    checks:[['ok','Dr equals Cr (engine).']]})+`<div class="note ok" style="margin-top:8px">${ic('check')}<span>Payment PY/0319 posted.</span></div>`;
+  else if(st==='loading')card=`<div class="card pad"><div class="row t2">${ic('cpu')}Drafting on this computer… ${kb('Esc')} cancels</div>${skelRows(6,[50,80,70,60,90,40])}</div>`;
   else if(st==='hinglish'){const bill=openBills().find(x=>x.ref==='SI/0401');
    card=proposal({kind:'Draft receipt',src:[srcChip('chat','Your words'),srcChip('cpu','Local model')],conf:3,editKey:'Enter',
     body:`<table class="t"><thead><tr><th>Dr / Cr</th><th>Ledger</th><th>Bill</th><th class="num">Amount</th></tr></thead><tbody>
@@ -1697,22 +1740,23 @@ SCREENS['quick-entry']={title:'Plain-words entry',default:'proposal',
     body:`<table class="t"><thead><tr><th>Dr / Cr</th><th>Ledger</th><th class="num">Amount</th></tr></thead><tbody>
      <tr><td>Dr</td><td>Rent ${prov('ai','AI: ledger')}</td><td class="num">${inr(R(25000))} ${prov('you','"25k"')}</td></tr>
      <tr><td>Cr</td><td>Saptagiri Commercial Bank A/c ${prov('ai','AI: account')}</td><td class="num">${inr(R(25000))} ${prov('eng','balancing')}</td></tr></tbody></table>
-     <div class="grid g2" style="margin-top:10px"><div class="fld"><label>Narration ${prov('ai','AI')}</label><input class="aifield" value="Rent, Sharma Properties"></div><div class="taxbox"><div class="taxrow"><span class="lab">Saptagiri now</span><span class="num">${inr(b.saptagiri)}</span></div><div class="taxrow tot"><span class="lab">After ${prov('eng','engine')}</span><span class="num">${inr(b.saptagiri-R(25000))}</span></div></div></div>
+     <div class="grid g2" style="margin-top:10px"><div class="fld"><label>Narration ${prov('ai','AI')}</label><input class="aifield" value="rent Sharma Properties"></div><div class="taxbox"><div class="taxrow"><span class="lab">Saptagiri now</span><span class="num">${inr(b.saptagiri)}</span></div><div class="taxrow tot"><span class="lab">After ${prov('eng','engine')}</span><span class="num">${inr(b.saptagiri-R(25000))}</span></div></div></div>
+     <p class="meta" style="margin-top:8px">Date: <b>21 Nov 2026</b>, today, as for any new voucher; no date was typed.</p>
      <p class="meta" style="margin-top:8px">Why Rent and not Sharma Properties? Sharma Properties has no ledger of its own; your earlier rent payment PY/0315 used Rent with the landlord in the narration.</p>`,
     checks:[['ok','Dr equals Cr (engine).'],['ok','21 Nov 2026 is after the lock date.'],['warn','PY/0315 already paid November rent on 5 Nov. If this is December rent, change the narration; if it is the same rent, reject.']],why:'Amount copied from your words, not computed'});
   return `${phead([['Home',hashFor('home')],['Plain-words entry']],'Plain-words entry','Type it the way you would say it. You get a draft voucher; the engine balances it; you accept.')}
-   <div class="qe" style="margin-bottom:6px">${ic('chat')}<input id="qtext" value="${esc(q.text)}" aria-label="Entry in plain words">${kb('Enter')}</div>
+   <div class="qe" style="margin-bottom:6px">${ic('chat')}<input id="qtext" value="${esc(q.text)}" aria-label="Entry in plain words"${st==='not-installed'?' disabled placeholder="No local model can run in this build"':''}>${kb('Enter')}</div>
    <div class="meta" style="margin:0 0 14px 4px">Read as: ${markText(q.text,q.marks)||'…'}</div>
    <div class="grid g-main"><div>${card}</div><div class="card pad"><h2>What the assistant may do here</h2><ul class="t2" style="padding-left:18px;margin:0;display:grid;gap:6px"><li>Copy amounts you typed (25k, 1 lakh) exactly. It never works one out.</li><li>Pick ledgers that already exist. It never creates one without you.</li><li>Suggest a date from a matching bank line.</li></ul><div class="hr"></div><h3>Try</h3><div class="stack" style="gap:4px;margin-top:6px"><button class="btn ghost" data-go="${hashFor('quick-entry','hinglish')}">Mehta Agro se 1 lakh aaya NEFT, SI/0401 ke against</button><button class="btn ghost" data-go="${hashFor('quick-entry','unknown-ledger')}">Ramesh ko 5000 cash diya</button></div></div></div>`;
  },
  mount(st){const t=$('#qtext');t.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();e.stopPropagation();const v=t.value;go(hashFor('quick-entry',/ se | ko | aaya| diya/i.test(' '+v+' ')?(/ramesh/i.test(v)?'unknown-ledger':'hinglish'):'proposal'),'ai-proposal-arrive')}})},
  key(k,e,st){if(['proposal','hinglish','unknown-ledger'].includes(st)){
-   if(k==='Ctrl+A'){const b=$('.prop [data-act="accept"]');if(b.disabled){toast('Accept is blocked: '+b.title);return true}animateThen('proposal-accept',()=>{go(hashFor('day-book'),'screen-push');toast(st==='hinglish'?'Receipt RC/0220 posted and bank line matched.':'Payment PY/0319 posted.',true)});return true}
+   if(k==='Ctrl+A'){const b=$('.prop [data-act="accept"]');if(b.disabled){toast('Accept is blocked: '+b.title);return true}animateThen('proposal-accept',()=>{if(st==='hinglish'){go(hashFor('day-book'),'screen-push');toast('Receipt RC/0220 posted and bank line matched.',true)}else go(hashFor('quick-entry','accepted'))});return true}
    if(k==='Alt+D'){animateThen('proposal-reject',()=>go(hashFor('quick-entry','rejected')));return true}
    if(k==='Enter'&&!isTyping()){go(hashFor(st==='hinglish'?'receipt':'payment'),'screen-push');return true}}
   if(st==='loading'&&k==='Escape'){go(hashFor('home'));return true}return false},
  back(){return hashFor('home')},
- keys(st){return st==='rejected'?[['','Rejected'],['F5','Type it myself'],['Esc','Back']]:[['','Plain-words draft'],['Ctrl+A','Accept and post'],['Enter','Edit in the voucher form'],['Alt+D','Reject'],['Esc','Back']]}
+ keys(st){return ['not-installed','idle','accepted','read-failed'].includes(st)?[['','Plain-words entry'],['F5','Payment'],['F6','Receipt'],['Esc','Back']]:st==='rejected'?[['','Rejected'],['F5','Type it myself'],['Esc','Back']]:[['','Plain-words draft'],['Ctrl+A','Accept and post'],['Enter','Edit in the voucher form'],['Alt+D','Reject'],['Esc','Back']]}
 };
 
 /* =====================================================================
@@ -2009,7 +2053,7 @@ SCREENS.masters={title:'Masters',default:'ledgers',
 /* ---------- keyboard map ---------- */
 const KEYMAP=[
  ['Go anywhere',[['Ctrl+K','Ctrl+K','Command palette: jump, search, type an entry'],['Alt+G','Ctrl+K','Go to (palette)'],['Ctrl+G','Ctrl+K','Switch to, replacing this screen'],['Esc','Esc','Back one level, never loses a saved voucher'],['?','?','This map'],['F3','Ctrl+Shift+O','Switch company'],['Ctrl+\\','Ctrl+\\','Collapse the side bar']]],
- ['Vouchers',[['F8','Ctrl+Shift+S','Sales'],['F9','Ctrl+Shift+P','Purchase'],['F5','Ctrl+Shift+Y','Payment'],['F6','Ctrl+Shift+R','Receipt'],['F4','Ctrl+Shift+C','Contra'],['F7','Ctrl+Shift+J','Journal'],...(AI_IN_RELEASE?[['Alt+O','Alt+O','Read a bill photo or PDF']]:[])]],
+ ['Vouchers',[['F8','Ctrl+Shift+S','Sales'],['F9','Ctrl+Shift+P','Purchase'],['F5','Ctrl+Shift+Y','Payment'],['F6','Ctrl+Shift+R','Receipt'],['F4','Ctrl+Shift+C','Contra'],['F7','Ctrl+Shift+J','Journal'],...(AI_IN_RELEASE?[['Ctrl+Alt+O','Ctrl+Alt+O','Read a bill photo or PDF']]:[])]],
  ['Inside a voucher',[['Enter','Enter','Next field (Tab works too)'],['Shift+Enter','Shift+Tab','Previous field'],['Ctrl+A','Ctrl+S','Save'],['Alt+C','Alt+C','Create a master from the field'],['Ctrl+Enter','Ctrl+Enter','Alter the master in the field'],['Ctrl+D','Ctrl+D','Delete line'],['Alt+R','Alt+R','Recall last narration'],['F2','F2','Voucher date'],['Ctrl+H','Ctrl+H','Change mode']]],
  ['Reports',[['Enter','Enter','Drill in'],['Esc','Esc','Back up'],['Alt+F1','Alt+F1','Detailed or condensed'],['Alt+F2','Alt+F2','Period'],['Ctrl+E','Ctrl+E','Export'],['Ctrl+J','Ctrl+J','Exceptions only'],['Ctrl+P','Ctrl+P','Print']]],
  ['AI proposals, everywhere',[['Ctrl+A','Ctrl+S','Accept (engine checks first)'],['Enter','Enter','Edit'],['Alt+D','Alt+D','Reject'],['Ctrl+I','Ctrl+I','Show the source']]],
@@ -2036,7 +2080,7 @@ SCREENS.setup={title:'Company setup',default:'welcome',
   const nav=(next,label)=>`<div class="actions" style="margin-top:22px;justify-content:space-between">${i>0?`<button class="btn" data-go="${hashFor('setup',STEPS[i-1][0])}" data-tx="setup-step">Back ${kb('Esc')}</button>`:'<span></span>'}${next?`<button class="btn primary" data-go="${hashFor('setup',next)}" data-tx="setup-step" ${st==='gstin-error'?'disabled title="Fix the GSTIN first"':''}>${label||'Continue'} ${kb('Enter')}</button>`:''}</div>`;
   let pane='';
   if(st==='welcome')pane=`<h1>Welcome to Ledgerly</h1><p class="t2" style="margin:6px 0 18px">Accounting, GST and bank reconciliation on your own computer. Your books are a file you own.</p>
-   <div class="grid g2">${optCard(true,'plus','Create a company','About 3 minutes. Name, GSTIN, financial year.')}${optCard(false,'upload','Import from another accounting app','Masters and vouchers from an XML or spreadsheet export. A report shows what moved.','',hashFor('import'))}${optCard(false,'file','Open a Ledgerly file','From a backup or another computer.')}${optCard(false,'eye','Try the sample company','Godavari Drip & Pump Works, fictional data. Nothing you do there is kept.')}</div>${nav('company','Create a company')}`;
+   <div class="grid g2">${optCard(true,'plus','Create a company','About 3 minutes. Name, GSTIN, financial year.')}${optCard(false,'upload','Import from another accounting app','A whole company from a running app, or masters and vouchers from an XML file. Create the company first; a summary shows what went in.','',hashFor('import'))}${optCard(false,'file','Open a Ledgerly file','From a backup or another computer.')}${optCard(false,'eye','Try the sample company','Godavari Drip & Pump Works, fictional data. Nothing you do there is kept.')}</div>${nav('company','Create a company')}`;
   if(st==='company'||st==='gstin-error'){const bad=st==='gstin-error';const g=gstinCheck(CO.gstin);
    pane=`<h1>Your company</h1><p class="t2" style="margin:6px 0 18px">You can change all of this later except the financial year start.</p><div class="vhead" style="padding:0;border:0">
     <div class="fld span2"><label>Company name</label><input value="${esc(CO.name)}"></div><div class="fld"><label>Type</label><input value="Partnership firm"></div><div class="fld"><label>City</label><input value="Pune"></div>
@@ -2085,19 +2129,19 @@ SCREENS['ai-settings']={title:'AI and privacy',default:AI_IN_RELEASE?'local':'of
    <button class="opt-card" role="radio" aria-checked="${off}" data-go="${hashFor('ai-settings','off')}">${ic('off')}<div><b>Off</b><p>No AI. Exact and rule matching, GST checks and reports all still work.</p></div></button>
    <button class="opt-card" role="radio" aria-checked="${st==='local'}" data-go="${hashFor('ai-settings','local')}">${ic('cpu')}<div><b>On this computer</b><p>Local model. Nothing leaves this computer.</p></div></button>
    <button class="opt-card" role="radio" aria-checked="${cloud}" data-go="${hashFor('ai-settings','cloud')}">${ic('cloud')}<div><b>Cloud, your own key</b><p>You confirm each document. Redaction runs first.</p></div></button></div>`;
-  const feats=[['Bill photo to draft purchase','The image','Image, cropped and redacted'],['Plain words to draft voucher','Your sentence and ledger names','Same, no balances'],['Bank line suggestions','Narration, date, amount','Same'],['Ask your books','Your question and the list of report types','Same; never your figures'],['2B mismatch explanations','The two records and the attached image','Same, redacted']];
+  const feats=[['Bill photo to draft purchase','The image','Nothing: an image cannot be redacted, so bills are read on this computer only'],['Plain words to draft voucher','Your sentence and ledger names','Same, redacted, no balances'],['Bank line suggestions','Narration, date, amount','Same, redacted'],['Ask your books','Your question and the list of report types','Same; never your figures'],['2B mismatch explanations','The two records and the attached image','The two records, redacted; never the image']];
   const ftable=`<div class="card"><table class="t"><thead><tr><th>Feature</th><th>${cloud?'What is sent to your provider':'What the model sees'}</th><th style="width:60px">On</th></tr></thead><tbody>${feats.map(f=>`<tr><td>${f[0]}</td><td class="t2">${off?'Nothing: off':cloud?f[2]:f[1]+', on this computer'}</td><td><span class="switch" role="switch" aria-checked="${!off}" aria-label="${f[0]}"></span></td></tr>`).join('')}</tbody></table></div>`;
   let mid='';
   if(off)mid=`<div class="note" style="margin-bottom:14px">${ic('off')}<span><b>AI is off.</b> Bill reading, plain-words entry, AI bank suggestions and Ask are hidden. Deterministic checks keep running: GSTIN check characters, due-date nudges, duplicate bills, Exact and Rule bank matching.</span></div>`;
-  else if(cloud)mid=`<div class="grid g2" style="margin-bottom:14px"><div class="card pad"><h2>${ic('cloud')} Provider</h2><table class="t"><tbody><tr><td class="t2">Endpoint</td><td>Any compatible chat and vision endpoint</td></tr><tr><td class="t2">Key</td><td>Stored in the system keychain ${badge('Set','b-ok','check')}</td></tr><tr><td class="t2">Ask before sending</td><td><span class="switch" role="switch" aria-checked="true" aria-label="Ask before each document"></span> each document</td></tr><tr><td class="t2">Region and retention</td><td class="t2">Set by your provider's terms. Check them.</td></tr></tbody></table></div>
+  else if(cloud)mid=`<div class="grid g2" style="margin-bottom:14px"><div class="card pad"><h2>${ic('cloud')} Provider</h2><table class="t"><tbody><tr><td class="t2">Endpoint</td><td>https://llm.example.invalid/v1/chat/completions</td></tr><tr><td class="t2">Format</td><td>Chat completions</td></tr><tr><td class="t2">Model</td><td>model-x</td></tr><tr><td class="t2">Key</td><td>Stored in the system keychain ${badge('Set','b-ok','check')}</td></tr><tr><td class="t2">Ask before sending</td><td><span class="switch" role="switch" aria-checked="true" aria-disabled="true" aria-label="Ask before each document" style="display:inline-block;vertical-align:middle;margin-right:6px"></span>each document, always</td></tr><tr><td class="t2">Region and retention</td><td class="t2">Set by your provider's terms. Check them.</td></tr></tbody></table></div>
     <div class="card pad"><h2>${ic('shield')} Removed before sending</h2><table class="t"><tbody>${['Bank account numbers','PAN and Aadhaar numbers','Phone numbers and email addresses','Ledger balances and report figures (never sent)'].map((r,n)=>`<tr><td>${r}</td><td><span class="switch" role="switch" aria-checked="true" aria-label="${r}" ${n===3?'aria-disabled="true"':''}></span></td></tr>`).join('')}</tbody></table></div></div>`;
-  else mid=`<div class="card pad" style="margin-bottom:14px"><h2>${ic('cpu')} Local model</h2><table class="t"><tbody><tr><td class="t2">Reader</td><td>bill reader 0.3, 410 MB, on disk</td></tr><tr><td class="t2">Language</td><td>small model, 1.8 GB, English and Hinglish</td></tr><tr><td class="t2">Network</td><td>${badge('None used','b-ok','check')} verified at start-up</td></tr></tbody></table></div>`;
+  else mid=`<div class="card pad" style="margin-bottom:14px"><h2>${ic('cpu')} Local model</h2><table class="t"><tbody><tr><td class="t2">Model file</td><td>None chosen. ${kb('Ctrl+O')} chooses one; nothing is downloaded.</td></tr><tr><td class="t2">Reader</td><td>Not installed. This build has no local bill reader.</td></tr><tr><td class="t2">Language</td><td>Not installed. This build has no local model.</td></tr><tr><td class="t2">Network</td><td>Nothing is sent: this tier opens no connection.</td></tr></tbody></table></div>`;
   const log=`<div class="card"><div class="spread" style="padding:12px 16px 0"><h2>AI activity log</h2><span class="meta">Kept with the company file. ${kb('Ctrl+E')} exports it.</span></div><table class="t"><thead><tr><th>When</th><th>Feature</th><th>Input</th><th>Output</th><th>Your decision</th></tr></thead><tbody>${off?`<tr><td colspan="5" class="t2">No AI events since AI was turned off.</td></tr>`:AI_LOG.map(r=>`<tr>${r.map((c,n)=>`<td class="${n===2?'t2':''}">${esc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
   const never=`<div class="card pad"><h2>What AI may never do here</h2><ul class="t2" style="padding-left:18px;margin:0;display:grid;gap:6px"><li>Show a figure it worked out. Amounts come from the books, the document, your words or the engine.</li><li>Post, alter, delete or file anything without your accept.</li><li>Create a ledger, item or party on its own.</li><li>Change a locked period or an IMS action.</li><li>Send anything to the cloud without your confirmation.</li></ul></div>`;
   return head+tiers+mid+`<div class="grid g-main" style="align-items:start"><div>${ftable}${log}</div>${never}</div>`},
  key(k){if(isTyping())return false;const m=AI_IN_RELEASE?{'1':'off','2':'local','3':'cloud'}:{'1':'off'};if(m[k]){go(hashFor('ai-settings',m[k]));return true}return false},
  back(){return hashFor('home')},
- keys(){return AI_IN_RELEASE?[['','AI and privacy'],['1','Off'],['2','On this computer'],['3','Cloud'],['Ctrl+E','Export log'],['Esc','Back']]:[['','AI and privacy'],['1','Off'],['Esc','Back']]}
+ keys(st){return AI_IN_RELEASE?[['','AI and privacy'],['1','Off'],['2','On this computer'],['3','Cloud'],...(st==='local'?[['Ctrl+O','Model file']]:[]),['Ctrl+E','Export log'],['Esc','Back']]:[['','AI and privacy'],['1','Off'],['Esc','Back']]}
 };
 
 /* =====================================================================
@@ -2135,7 +2179,7 @@ SCREENS.purchase = {title:'Purchase',default:'default',
     return `<tr class="${i===0?'active':''}"><td class="n">${i+1}</td><td>${it?esc(it.name):`<input value="${esc(text||'')}" style="color:var(--bad)" aria-label="Item">`}</td><td class="t2">${it?it.hsn:''}</td>
      <td class="num">${qty?qty:`<span style="color:var(--bad)">blank</span>`}</td><td class="num">${inr(rate)}</td><td class="num">${it?it.gst+'%':''}</td><td class="num">${amt?inr(amt):''}</td></tr>`}).join('');
   return `${phead([['Home',hashFor('home')],['Purchase']],`Purchase <span class="t2" style="font-weight:500">PB/0145</span>`,'Typed by hand · no bill reader · tax is recomputed by the GST engine on every keystroke',
-    `${AI_IN_RELEASE?`<button class="btn" data-cmd="more">Bill photo ${kb('Alt+O')}</button>`:''}<button class="btn primary" data-cmd="save" ${bad?'disabled':''}>${ic('save')}Save ${kb('Ctrl+A')}</button>`)}
+    `${AI_IN_RELEASE?`<button class="btn" data-cmd="more">Bill photo ${kb('Ctrl+Alt+O')}</button>`:''}<button class="btn primary" data-cmd="save" ${bad?'disabled':''}>${ic('save')}Save ${kb('Ctrl+A')}</button>`)}
   ${vsheetOpen(`<div class="fld span2"><label>Supplier</label><div class="ro">Nilgiri Steel Traders <span class="t2">· 29ZZZZZ0002Z1ZK ${badge('Check OK','b-ok','check')}</span></div></div>
     <div class="fld"><label>Supplier bill no.</label><div class="ro" data-first="1">NST/1150</div></div>
     <div class="fld"><label>Bill date</label><div class="ro">21 Nov 2026</div></div>
@@ -2157,7 +2201,7 @@ SCREENS.purchase = {title:'Purchase',default:'default',
  key(k){if(k==='Ctrl+A'||k==='Ctrl+S'){toast('Purchase PB/0145 saved (mock).',true);return true}return false},
  cmd(c){if(c==='save')toast('Saved (mock).',true)},
  back(){return hashFor('home')},
- keys(st){return [['','Purchase'],['Enter','Next field'],['Alt+C','Create master'],...(AI_IN_RELEASE?[['Alt+O','Read a bill']]:[]),['Ctrl+A','Save'],['Esc','Back']]}
+ keys(st){return [['','Purchase'],['Enter','Next field'],['Alt+C','Create master'],...(AI_IN_RELEASE?[['Ctrl+Alt+O','Read a bill']]:[]),['Ctrl+A','Save'],['Esc','Back']]}
 };
 
 /* credit note against SI/0412 (Shree Ganesh Traders, Maharashtra) and debit note against Rupa Polymers' bill RP/5398 (the sample's
@@ -2625,12 +2669,39 @@ function gstNotReady(st){
 const IMP_STEPS=['Detect','Choose company','Pull','Map','Reconcile'];
 function impNote(kind,text){const cls={bad:'bad',ok:'ok',info:''}[kind];const ico={bad:'alert',ok:'check',info:'info'}[kind];
   return `<div class="note ${cls}" role="${kind==='bad'?'alert':'status'}" style="margin-top:12px">${ic(ico)}<div style="white-space:pre-line">${esc(text)}</div></div>`}
+/* S22: import masters or vouchers from an XML file into the open company (import/file.rs). Alt+O opens the
+   screen scrolled here ("Alt+O (Import)", help.tallysolutions.com/import-data-from-xml-or-json/, read 2026-11-27).
+   The three choices for a master already in the company are those of help.tallysolutions.com/import-data-faq/;
+   none is preselected. The imported state is the app's own text for the fictional fixture of
+   crates/ledgerly-app/tests/s22_import_file.rs (Meena Fabrics, Hamali Charges, Lost Ledger), imported into the sample. */
+const IMP_FILE_PATH='/home/ananya/Documents/ledgers-from-old-app.xml';
+function impChoice(label,sel,dis){return `<button role="radio" aria-checked="${sel}" ${dis?'disabled':''} style="display:block;width:100%;text-align:left;height:36px;padding:0 12px;margin-bottom:4px;font:inherit;font-size:var(--t-body);cursor:pointer;border-radius:var(--r-s);${sel?'background:var(--accent-soft);border:calc(var(--bw) + 1px) solid var(--accent);color:var(--accent-ink);font-weight:600':'background:var(--surface);border:var(--bw) solid var(--border);color:var(--text)'}">${esc(label)}</button>`}
+function impFileCard(fs,noCo){
+  const masters = fs==='masters'||fs==='imported'||fs==='missing-choice'||fs==='error';
+  const beh = fs==='missing-choice'?'':(masters?'ignore':'');
+  const path = fs?IMP_FILE_PATH.replace('ledgers-from-old-app.xml',fs==='error'?'notes.xml':'ledgers-from-old-app.xml'):'';
+  const dis = noCo;
+  const behs=[['combine',"Combine opening balance: add the file's opening balance to the existing one"],['ignore','Ignore duplicates: keep the existing master as it is'],['modify',"Modify with new data: replace the existing master's details with the file's"]];
+  let res='';
+  if(fs==='missing-choice') res=impNote('bad','Error: choose what to do with a master that is already in the company');
+  if(fs==='error') res=impNote('bad',`Error: cannot import ${path}: malformed XML at byte 0: text outside the root element`);
+  if(fs==='imported') res=`<div class="note warn" role="status" style="margin-top:12px">${ic('alert')}<div style="white-space:pre-line">${esc('Masters: 2 created, 0 altered, 0 combined, 0 ignored, 1 not imported.\n'+path)}</div></div>
+    <div style="margin-top:12px"><b>Not imported (1)</b></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:4px"><div>ledger 'Lost Ledger'</div><div class="t2">its parent group 'No Such Group' is not in the company or the file</div></div>`;
+  return `<div class="card pad" style="margin-top:12px" id="imp-file"><h2>Import from an XML file</h2><p class="meta">Masters or vouchers from an XML file in your previous accounting app's import format, into the company that is open. Each object is checked as if typed in; anything that cannot go in is listed with the reason.</p>
+    ${noCo?`<div class="note warn" role="status" style="margin-top:8px">${ic('alert')}<div>Importing from a file needs an open company. Create or open one, then press Alt+O.</div></div>`:''}
+    <div class="fld" style="margin-top:10px"><label>What to import</label></div>
+    <div role="radiogroup" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">${impChoice('Masters (groups and ledgers)',masters,dis)}${impChoice('Transactions (vouchers)',false,dis)}</div>
+    ${masters?`<div class="fld" style="margin-top:8px"><label>When a master is already in the company</label></div><div role="radiogroup">${behs.map(([k,l])=>impChoice(l,beh===k,dis)).join('')}</div>`:''}
+    <div class="fld" style="margin-top:8px"><label>XML file</label><div style="display:flex;gap:8px"><input style="flex:1" value="${esc(path)}" placeholder="path of the XML file" ${dis?'disabled':''}><button class="btn" ${dis?'disabled':''}>${ic('file')}Choose file ${kb('Ctrl+O')}</button></div></div>
+    <div class="actions" style="margin-top:10px"><button class="btn primary" ${dis?'disabled':''}>${ic('upload')}Import the file</button></div>${res}</div>`;
+}
 SCREENS.import={title:'Import from another app',default:'default',
  render(st){
   const noCo = st==='no-company';
   const running = st==='running';
   const f = {host:'localhost',port:'9000',company:'Godavari Drip & Pump Works'};
-  if(st==='default'||noCo||st==='validation-error'){f.company='';}
+  if(st==='default'||noCo||st==='validation-error'||st.startsWith('file-')){f.company='';}
   if(st==='port-error') f.port='99999';
   const vc={}; VOUCHERS.forEach(v=>{vc[v.type]=(vc[v.type]||0)+1});
   const sumText=[`Imported from the other program's company "${f.company}": ${VOUCHERS.length+LEDGERS.length} events committed.`,
@@ -2651,6 +2722,8 @@ SCREENS.import={title:'Import from another app',default:'default',
      <div class="fld"><label>Port</label><input class="num" value="${f.port}" ${dis}></div>
      <div class="fld"><label>Company in the other app</label><input value="${esc(f.company)}" placeholder="its exact name" ${dis}></div></div>
     <div class="actions" style="margin-top:12px"><button class="btn primary" ${noCo||running?'disabled':''}>${ic('upload')}Import the company ${kb('Enter')}</button></div>${note}</div>`;
+  const fileSt = st.startsWith('file-')?st.slice(5):'';
+  const fileCard = impFileCard(fileSt, noCo);
   const detect = `<div class="card pad" style="margin-top:12px"><h2>Step by step, with a report</h2><p class="meta">Ledgerly looks for a running app on this computer, port 9000, or reads an XML file exported from your previous accounting app. Nothing is sent anywhere else.</p>
     <div class="actions" style="margin-top:10px"><button class="btn" disabled>Look for a running app</button></div>
     <div class="fld" style="margin-top:12px"><label>Exported XML file</label><input placeholder="path of the exported file" disabled></div>
@@ -2658,11 +2731,12 @@ SCREENS.import={title:'Import from another app',default:'default',
     ${impNote('info','Not available yet: the step-by-step import and its reconciliation report are not connected to the app. Use the one-step import above.')}</div>`;
   const steps=`<ol style="display:flex;flex-wrap:wrap;gap:18px;list-style:none;padding:0;margin:0 0 14px" aria-label="Import steps">${IMP_STEPS.map((l,n)=>`<li class="${n===0?'':'t2'}" ${n===0?'aria-current="step"':''}><b>${n+1}</b> ${l}</li>`).join('')}</ol>`;
   return phead([['Home',hashFor('home')],['Import from another app']],'Import from another app','Bring your masters and vouchers in from another accounting app. Everything is read on this computer, and a report shows what moved.')
-   + steps + noCoBlock + direct + detect;
+   + steps + noCoBlock + direct + fileCard + detect;
  },
  key(k){return false},
  back(){return hashFor('setup','welcome')},
- keys(st){return st==='running'?[['','Importing'],['Esc','Back']]:[['','Import from another app'],['Enter','Import the company'],['Esc','Back']]}
+ keys(st){return st==='running'?[['','Importing'],['Esc','Back']]:[['','Import from another app'],['Enter','Import the company'],['Ctrl+O','Choose file'],['Esc','Back']]},
+ mount(st){if(st==='file-masters'||st==='file-imported'||st==='file-missing-choice'||st==='file-error'){const h=$('#imp-file');h&&h.scrollIntoView({block:'start'})}}
 };
 
 /* the tab strip (shell/chrome.rs): the open tabs, the active one underlined, New tab and Close tab at the right.

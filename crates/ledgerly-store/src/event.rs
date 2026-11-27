@@ -1,5 +1,5 @@
 use ledgerly_core::{BankStatementId, Date, EventSeq, LedgerId, OffsetDateTime, Paise, UserId};
-use ledgerly_model::{BankMatch, MasterSnapshot, ProposalRecord, Voucher};
+use ledgerly_model::{AiActivity, BankMatch, MasterSnapshot, ProposalRecord, Voucher};
 use serde::{Deserialize, Serialize};
 
 /// One change to a company. Every create, alter, cancel and delete of masters, vouchers and
@@ -123,6 +123,9 @@ pub enum Event {
         /// The day the user says the return was filed.
         filed_on: Date,
     },
+    /// An assistant event (round s21): a draft stored, accepted or rejected, a question answered,
+    /// a read that failed, or a cloud consent. The AI activity log is the list of these.
+    AiActivityRecorded(AiActivity),
 }
 
 /// An action on a record in the GST portal's Invoice Management System, as stored.

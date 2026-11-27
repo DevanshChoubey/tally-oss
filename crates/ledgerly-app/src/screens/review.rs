@@ -17,10 +17,19 @@
 //! back (the shell). Accepting a bank match sends it to `Api::confirm_bank_match`, which checks
 //! it again; accepting a duplicate has nothing to post and says so. Rejecting hides the row for
 //! this session only, because the engine keeps no record of a rejection.
+//!
+//! Assistant drafts (later release, `release::ai_enabled`) are listed first, as the mock lists
+//! its bill-photo draft. Accepting one
+//! sends it to `Api::accept_ai_draft`, which validates it and posts it through the engine or says
+//! why not; rejecting one is stored (`Api::reject_ai_draft`) in the AI activity log.
 
 use egui::{Event, InputState, Key, Modifiers, Ui};
-use ledgerly_api::{Candidate, DuplicatePayment, ReviewItem, ReviewQueue, ReviewSource};
-use ledgerly_core::{BankStatementId, LedgerId, Outcome, Paise};
+use ledgerly_api::{
+    AiFeature, Candidate, DraftFigure, DuplicatePayment, ReviewDraft, ReviewItem, ReviewQueue,
+    ReviewSource,
+};
+use ledgerly_core::{BankStatementId, EventSeq, LedgerId, Outcome, Paise};
+use ledgerly_model::BaseVoucherKind;
 
 use crate::i18n::Tr;
 use crate::screen::{KeyHint, ScreenAction};
@@ -75,6 +84,13 @@ pub enum RowOrigin {
     /// A possible duplicate payment (rule D-02): there is nothing to accept, only two vouchers to
     /// compare in the day book.
     Duplicate,
+    /// An assistant draft: accepting asks the engine to check and post it.
+    Draft {
+        /// The draft's id.
+        id: EventSeq,
+        /// The feature that made it.
+        feature: AiFeature,
+    },
 }
 
 /// A decision on the highlighted row.
@@ -95,6 +111,11 @@ pub enum Verdict {
         statement: BankStatementId,
         /// The suggestion.
         candidate: Box<Candidate>,
+    },
+    /// Send the draft to `Api::accept_ai_draft`; the engine checks it again before posting.
+    AcceptDraft {
+        /// The draft's id.
+        id: EventSeq,
     },
     /// Nothing is sent: say this instead.
     Say(String),
@@ -236,6 +257,124 @@ pub fn duplicate_row(pair: &DuplicatePayment) -> QueueRow {
     }
 }
 
+/// The confidence band of an assistant draft: 850 per-mille and up is High, the keep threshold
+/// (`AI_CONFIDENCE_THRESHOLD_PERMILLE`, 700) up to 849 is Medium, and below it Low.
+#[must_use]
+pub fn confidence_of(permille: u16) -> Confidence {
+    if permille >= 850 {
+        Confidence::High
+    } else if permille >= ledgerly_api::AI_CONFIDENCE_THRESHOLD_PERMILLE {
+        Confidence::Medium
+    } else {
+        Confidence::Low
+    }
+}
+
+/// The key of a draft's kind words ("Draft purchase").
+pub(crate) fn draft_kind_key(kind: BaseVoucherKind) -> &'static str {
+    match kind {
+        BaseVoucherKind::Purchase => "review.kind.draft_purchase",
+        BaseVoucherKind::Payment => "review.kind.draft_payment",
+        BaseVoucherKind::Receipt => "review.kind.draft_receipt",
+        BaseVoucherKind::Sales => "review.kind.draft_sales",
+        BaseVoucherKind::Contra => "review.kind.draft_contra",
+        BaseVoucherKind::Journal => "review.kind.draft_journal",
+        BaseVoucherKind::CreditNote
+        | BaseVoucherKind::DebitNote
+        | BaseVoucherKind::Memorandum
+        | BaseVoucherKind::ReversingJournal
+        | BaseVoucherKind::ReceiptNote
+        | BaseVoucherKind::DeliveryNote
+        | BaseVoucherKind::RejectionIn
+        | BaseVoucherKind::RejectionOut
+        | BaseVoucherKind::StockJournal
+        | BaseVoucherKind::PhysicalStock
+        | BaseVoucherKind::SalesOrder
+        | BaseVoucherKind::PurchaseOrder => "review.kind.draft_voucher",
+    }
+}
+
+/// The key of the words for where a draft came from ("Bill photo").
+fn draft_source_key(feature: AiFeature) -> &'static str {
+    match feature {
+        AiFeature::BillReading => "review.draft_source.bill",
+        AiFeature::PlainWords => "review.draft_source.words",
+        AiFeature::BankSuggestion => "review.draft_source.bank",
+        AiFeature::Ask => "review.draft_source.ask",
+        AiFeature::Gstr2bExplanation => "review.draft_source.gstr2b",
+    }
+}
+
+/// What a voucher draft is about: "party, bill number", the party, the narration, or its ledgers.
+fn draft_what(d: &ledgerly_api::VoucherDraft) -> String {
+    match (&d.party_name, &d.invoice_number) {
+        (Some(party), Some(number)) => crate::i18n::tf(
+            "review.draft.what_bill",
+            &[("party", &party.value), ("number", &number.value)],
+        ),
+        (Some(party), None) => party.value.clone(),
+        (None, _) if !d.narration.is_empty() => d.narration.clone(),
+        (None, _) => d
+            .lines
+            .iter()
+            .map(|l| l.ledger_name.value.clone())
+            .collect::<Vec<_>>()
+            .join(" / "),
+    }
+}
+
+/// The row for one open assistant draft. The amount is the engine's figure for the draft (or
+/// none when the engine blocked it); the row never adds anything up itself.
+#[must_use]
+pub fn draft_row(item: &ReviewDraft) -> QueueRow {
+    let d = &item.draft;
+    let (kind, what) = match &d.proposal {
+        ledgerly_api::Proposal::VoucherDraft(v) => {
+            (crate::i18n::t(draft_kind_key(v.kind)), draft_what(v))
+        }
+        ledgerly_api::Proposal::MatchSuggestion(_) => (
+            crate::i18n::t("review.kind.bank_match"),
+            d.input_label.clone(),
+        ),
+        ledgerly_api::Proposal::ReportQuery(_) | ledgerly_api::Proposal::MappingSuggestion(_) => (
+            crate::i18n::t("review.kind.draft_voucher"),
+            d.input_label.clone(),
+        ),
+    };
+    let amount = match &item.engine {
+        DraftFigure::Total(p) => Some(*p),
+        DraftFigure::Blocked(_) | DraftFigure::Unsupported(_) => None,
+    };
+    QueueRow {
+        kind,
+        what,
+        source: format!(
+            "{}\n{}",
+            crate::i18n::t(draft_source_key(d.feature)),
+            d.input_label
+        ),
+        confidence: confidence_of(d.confidence_permille),
+        amount,
+        ledger: None,
+        origin: RowOrigin::Draft {
+            id: d.id,
+            feature: d.feature,
+        },
+        key: format!("draft:{}", d.id.0),
+    }
+}
+
+/// The icon of a draft row, by the feature that made it.
+fn draft_icon(feature: AiFeature) -> Icon {
+    match feature {
+        AiFeature::BillReading => Icon::Camera,
+        AiFeature::PlainWords => Icon::Chat,
+        AiFeature::BankSuggestion => Icon::Bank,
+        AiFeature::Ask => Icon::Spark,
+        AiFeature::Gstr2bExplanation => Icon::Gst,
+    }
+}
+
 /// What accepting `row` does.
 #[must_use]
 pub fn accept_verdict(row: &QueueRow) -> Verdict {
@@ -248,6 +387,7 @@ pub fn accept_verdict(row: &QueueRow) -> Verdict {
             candidate: Box::new(candidate.clone()),
         },
         RowOrigin::Duplicate => Verdict::Say(crate::i18n::t("review.dup.nothing_to_accept")),
+        RowOrigin::Draft { id, .. } => Verdict::AcceptDraft { id: *id },
     }
 }
 
@@ -256,6 +396,7 @@ pub fn accept_verdict(row: &QueueRow) -> Verdict {
 pub fn reject_notice(row: &QueueRow) -> String {
     match row.origin {
         RowOrigin::Bank { .. } | RowOrigin::Duplicate => crate::i18n::t("review.rejected"),
+        RowOrigin::Draft { .. } => crate::i18n::t("review.draft_rejected"),
     }
 }
 
@@ -263,9 +404,11 @@ pub fn reject_notice(row: &QueueRow) -> String {
 #[must_use]
 pub fn rows(queue: &ReviewQueue) -> Vec<QueueRow> {
     queue
-        .items
+        .drafts
         .iter()
-        .map(row_of)
+        .filter(|_| crate::release::ai_enabled())
+        .map(draft_row)
+        .chain(queue.items.iter().map(row_of))
         .chain(queue.duplicates.iter().map(duplicate_row))
         .collect()
 }
@@ -338,6 +481,38 @@ pub struct ReviewScreen {
     dismissed: Vec<String>,
     /// What the last decision did, with its tone.
     notice: Option<(NoteKind, String)>,
+    /// The accept or reject of an assistant draft running on the worker.
+    draft_decision: Latest<Result<Outcome<DraftDecided>, String>>,
+}
+
+/// What a decision on an assistant draft did.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DraftDecided {
+    /// The engine posted the draft as this voucher number (or id, when it has no number).
+    Posted(String),
+    /// The engine blocked it; nothing was posted. The engine's reason.
+    Blocked(String),
+    /// The draft was rejected; nothing was posted.
+    Rejected,
+}
+
+/// Accepts draft `id` as it stands, with no edits: a draft the engine blocks (no date read, say)
+/// posts nothing and comes back as `Blocked` with the engine's reason.
+///
+/// # Errors
+/// As `Api::accept_ai_draft`.
+pub fn accept_draft_on(
+    api: &mut ledgerly_api::Api,
+    id: EventSeq,
+) -> Result<Outcome<DraftDecided>, ledgerly_api::ApiError> {
+    Ok(api
+        .accept_ai_draft(id, &ledgerly_api::DraftEdits::default())?
+        .map(|accepted| match accepted {
+            ledgerly_api::Accepted::Posted(v) => {
+                DraftDecided::Posted(v.number.clone().unwrap_or_else(|| v.id.0.to_string()))
+            }
+            ledgerly_api::Accepted::Blocked { reason, .. } => DraftDecided::Blocked(reason),
+        }))
 }
 
 impl ReviewScreen {
@@ -377,6 +552,10 @@ impl ReviewScreen {
     /// Applies a decision to the highlighted row. Accepting a bank match sends it to the engine
     /// through `worker`; rejecting hides the row for this session.
     pub fn decide(&mut self, decision: Decision, worker: Option<&ApiWorker>) {
+        if self.draft_decision.is_pending() {
+            // One decision on a draft at a time: a second press would race the first.
+            return;
+        }
         let Some(row) = self
             .panel
             .as_ref()
@@ -386,6 +565,21 @@ impl ReviewScreen {
             return;
         };
         match decision {
+            Decision::Reject if matches!(row.origin, RowOrigin::Draft { .. }) => {
+                let RowOrigin::Draft { id, .. } = row.origin else {
+                    return;
+                };
+                let Some(handle) = worker else {
+                    self.notice = Some((NoteKind::Bad, crate::i18n::t("review.no_company_accept")));
+                    return;
+                };
+                self.notice = Some((NoteKind::Info, reject_notice(&row)));
+                self.draft_decision.start(handle, move |api| {
+                    api.reject_ai_draft(id, None)
+                        .map(|()| Outcome::Value(DraftDecided::Rejected))
+                        .map_err(|e| e.to_string())
+                });
+            }
             Decision::Reject => {
                 self.dismissed.push(row.key.clone());
                 if let Some(panel) = self.panel.as_mut() {
@@ -396,6 +590,17 @@ impl ReviewScreen {
             }
             Decision::Accept => match accept_verdict(&row) {
                 Verdict::Say(text) => self.notice = Some((NoteKind::Info, text)),
+                Verdict::AcceptDraft { id } => {
+                    let Some(handle) = worker else {
+                        self.notice =
+                            Some((NoteKind::Bad, crate::i18n::t("review.no_company_accept")));
+                        return;
+                    };
+                    self.notice = Some((NoteKind::Info, crate::i18n::t("review.draft_accepting")));
+                    self.draft_decision.start(handle, move |api| {
+                        accept_draft_on(api, id).map_err(|e| e.to_string())
+                    });
+                }
                 Verdict::Confirm {
                     statement,
                     candidate,
@@ -440,6 +645,45 @@ impl ReviewScreen {
             .and_then(|r| r.ledger)
     }
 
+    /// Takes the answer of an accept or reject of a draft, and reloads the queue after one.
+    fn poll_draft_decision(&mut self) {
+        match self.draft_decision.poll() {
+            Some(Done::Ready(Ok(Outcome::Value(decided)))) => {
+                crate::shell::submit::note_changed();
+                self.notice = Some(match decided {
+                    DraftDecided::Posted(number) => (
+                        NoteKind::Ok,
+                        crate::i18n::tf("review.draft_posted", &[("number", &number)]),
+                    ),
+                    DraftDecided::Blocked(reason) => (
+                        NoteKind::Warn,
+                        crate::i18n::tf("review.draft_blocked", &[("reason", &reason)]),
+                    ),
+                    DraftDecided::Rejected => {
+                        (NoteKind::Info, crate::i18n::t("review.draft_rejected"))
+                    }
+                });
+                self.want = true;
+            }
+            Some(Done::Ready(Ok(Outcome::Unsupported(u)))) => {
+                self.notice = Some((NoteKind::Warn, unsupported_text(&u)));
+            }
+            Some(Done::Ready(Err(e))) => {
+                self.notice = Some((
+                    NoteKind::Bad,
+                    crate::i18n::tf("review.not_accepted", &[("error", &e)]),
+                ));
+            }
+            Some(Done::Lost) => {
+                self.notice = Some((
+                    NoteKind::Bad,
+                    crate::i18n::t("review.worker_stopped_accept"),
+                ));
+            }
+            None => {}
+        }
+    }
+
     /// Advances the load by one step: shows a finished answer, then sends a waiting request.
     pub fn tick(&mut self, worker: Option<&ApiWorker>) {
         match self.latest.poll() {
@@ -480,6 +724,7 @@ impl ReviewScreen {
             }
             None => {}
         }
+        self.poll_draft_decision();
         if !self.want {
             return;
         }
@@ -505,6 +750,10 @@ impl ReviewScreen {
         else {
             return ScreenAction::Stay;
         };
+        if matches!(row.origin, RowOrigin::Draft { .. }) {
+            self.notice = Some((NoteKind::Info, crate::i18n::t("review.draft_open_later")));
+            return ScreenAction::Stay;
+        }
         let opened = match (row.ledger, ctx.books.as_ref()) {
             (Some(ledger), Some(books)) => crate::shell::navigate::bank_screen(books, ledger)
                 .map(|s| Box::new(s) as Box<dyn Screen>),
@@ -614,6 +863,7 @@ impl ReviewScreen {
                 let glyph = match row.origin {
                     RowOrigin::Bank { .. } => Icon::Bank,
                     RowOrigin::Duplicate => Icon::Alert,
+                    RowOrigin::Draft { feature, .. } => draft_icon(feature),
                 };
                 let icon: Cell<'_> = Box::new(move |ui| {
                     let t = crate::ui::tokens(ui);
@@ -771,6 +1021,13 @@ impl Screen for ReviewScreen {
         tr.t("sidebar.review_queue")
     }
 
+    fn cursor_label(&self, _ctx: &AppCtx) -> Option<String> {
+        self.panel
+            .as_ref()
+            .and_then(|p| p.rows.get(self.selected))
+            .map(|row| row.what.clone())
+    }
+
     fn subtitle(&self, _tr: &Tr) -> Option<String> {
         None
     }
@@ -880,6 +1137,7 @@ mod tests {
         let connected = ReviewQueue {
             items: Vec::new(),
             duplicates: Vec::new(),
+            drafts: Vec::new(),
             unlisted: Vec::new(),
         };
         assert_eq!(empty_view(&connected), EmptyView::Nothing);
