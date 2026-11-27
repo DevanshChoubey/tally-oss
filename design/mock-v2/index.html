@@ -659,7 +659,10 @@ const LEDGERS = [
  ['bankch','Bank charges','indexp',R(6820)],['dep','Depreciation','indexp',R(107331)],['welfare','Staff welfare','indexp',R(38600)],
  ['interest','Interest on term loan','indexp',R(61250)],['roundoff','Round off','indexp',0],
  ['disc','Discount received','indinc',-R(18400)],
- ['ostock','Opening stock','openstock',R(912000)]
+ ['ostock','Opening stock','openstock',R(912000)],
+ /* The predefined Profit & Loss A/c sits under Primary, no group ("grouped under the Primary group",
+    help.tallysolutions.com/ledgers-and-groups-in-tallyprime/, read 2026-11-27). No prior-year profit here. */
+ ['pnl','Profit & Loss A/c',null,0]
 ].map(([id,name,group,ob,x])=>Object.assign({id,name,group,ob},x||{}));
 const LED = Object.fromEntries(LEDGERS.map(l=>[l.id,l]));
 
@@ -787,7 +790,9 @@ function stockPosition(short){
   const neg=ITEMS.filter(i=>low[i.id]);
   const value=ITEMS.reduce((s,i)=>s+Math.max(q[i.id],0)*i.cost,0);
   return {qty:q,value,provisional:neg.length?{reason:'NegativeStock',items:neg.map(i=>i.name),first:neg.map(i=>low[i.id])[0]}:null}; }
-function groupOf(id){return GROUPS.find(g=>g.id===id)}
+/* null is Primary, the root of the group tree: only the Profit & Loss A/c sits there. It has no nature. */
+const PRIMARY={id:null,name:'Primary'};
+function groupOf(id){return id===null?PRIMARY:GROUPS.find(g=>g.id===id)}
 function rootOf(gid){let g=groupOf(gid);while(g.parent)g=groupOf(g.parent);return g}
 function balanceSheet(opt){
   opt=opt||{}; const b=balances(opt.short?SHORT_VOUCHERS:[]); const st=stockPosition(opt.short);

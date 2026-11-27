@@ -10,8 +10,9 @@
 //!
 //! The import only goes into a company that holds exactly what [`Api::create`] seeds: the reserved
 //! groups, the default voucher types and Main Location, and nothing else, with no period locked.
-//! A company made by [`Api::create_company`] also holds its untouched predefined Cash ledger;
-//! the export's own Cash takes its place (see `in_place_of_predefined`).
+//! A company made by [`Api::create_company`] also holds its untouched predefined Cash and
+//! Profit & Loss A/c ledgers; the export's own Cash takes the first's place and the second is kept
+//! (see `in_place_of_predefined`).
 //! Any other company is refused with `Outcome::Unsupported` before Tally is contacted. Merging into existing books
 //! is not offered: an import into a company with data would need an id base and a merge rule that
 //! the spec does not give.
@@ -21,7 +22,7 @@ use std::ffi::OsString;
 use std::fmt;
 use std::path::{Path, PathBuf};
 
-use ledgerly_core::{CancelToken, Date, Outcome, Period, Unsupported};
+use ledgerly_core::{CancelToken, Date, LedgerId, Outcome, Period, Unsupported};
 use ledgerly_model::seed_godowns::default_godowns;
 use ledgerly_model::seed_groups::reserved_groups;
 use ledgerly_model::seed_ledgers::predefined_ledgers;
@@ -190,7 +191,13 @@ impl Api {
 /// <https://help.tallysolutions.com/ledgers-in-tallyprime/>, read 2026-11-27), numbered with the
 /// rest of its ledgers from 1. So the untouched predefined ledgers are removed first, and the
 /// export's `Cash` under Cash-in-Hand takes the reserved Cash role: the company ends with one Cash,
-/// and every ledger id is the mapping's.
+/// and every imported ledger id is the mapping's.
+///
+/// The predefined Profit & Loss A/c "cannot be deleted"
+/// (<https://help.tallysolutions.com/tally-prime/accounting/ledgers-and-groups-in-tallyprime/>, read
+/// 2026-11-27). The export's own, which the mapping keeps under Primary with its reserved role,
+/// takes its place; an export without one gets it back, under Primary, with the next id after
+/// every imported ledger.
 fn in_place_of_predefined(events: Vec<Event>) -> Vec<Event> {
     let cash_in_hand = reserved_groups()
         .into_iter()
@@ -212,6 +219,28 @@ fn in_place_of_predefined(events: Vec<Event>) -> Vec<Event> {
             ledger.reserved = Some(ReservedLedger::Cash);
         }
         out.push(event);
+    }
+    let next_id = out
+        .iter()
+        .filter_map(|e| {
+            if let Event::MasterCreated(MasterSnapshot::Ledger(l)) = e {
+                Some(l.id.0)
+            } else {
+                None
+            }
+        })
+        .max()
+        .unwrap_or(0)
+        .saturating_add(1);
+    let imports_profit_and_loss = out.iter().any(|e| {
+        matches!(e, Event::MasterCreated(MasterSnapshot::Ledger(l))
+            if l.reserved == Some(ReservedLedger::ProfitAndLoss))
+    });
+    for mut ledger in predefined_ledgers() {
+        if ledger.reserved == Some(ReservedLedger::ProfitAndLoss) && !imports_profit_and_loss {
+            ledger.id = LedgerId(next_id);
+            out.push(Event::MasterCreated(MasterSnapshot::Ledger(ledger)));
+        }
     }
     out
 }

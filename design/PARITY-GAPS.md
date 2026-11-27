@@ -669,10 +669,28 @@ Credit (`ledgerly_reports::print_text` places the engine's figures only).
   so it cannot be deleted (help.tallysolutions.com/ledgers-in-tallyprime/, read 2026-11-27). A
   whole-company import into a new company takes the export's own Cash in its place. Company files
   made before s22 have no Cash and are not migrated.
-- **NOT BUILT** Profit & Loss A/c, the other predefined ledger, is not created: it sits under Primary
-  there, and every ledger here has a group. The books compute its row at query time instead
-  (`ledgerly-reports` `balance_sheet.rs`). What an import does with a file that posts to a ledger
-  named "Profit & Loss A/c" was not checked in s22.
+- Fixed in s22: a new company also starts with the predefined Profit & Loss A/c, under Primary
+  (`Ledger::group` is `None`; no other ledger may sit there), reserved so it cannot be deleted but
+  can be renamed (help.tallysolutions.com/tally-prime/accounting/ledgers-and-groups-in-tallyprime/,
+  read 2026-11-27: "grouped under the Primary group", "cannot be deleted but it can be altered",
+  takes adjustment journals, carries the previous year's profit or loss as its opening balance,
+  shown in the balance sheet under liabilities). The balance sheet adds its closing balance to the
+  computed Profit and Loss A/c row; the trial balance lists it as its own line after the primary
+  groups when it is not zero; the profit and loss statement leaves it out. The masters list, the
+  ledger view, the voucher form's group column and the palette show its group as "Primary".
+  A file import matches it by name: "Ignore duplicates" keeps it, "Combine opening balances" adds
+  the file's opening (last year's profit) to it, "Modify with new data" takes the file's opening,
+  and a voucher that posts to "Profit & Loss A/c" posts to it. A whole-company import keeps the
+  export's own Profit & Loss A/c (under Primary, reserved) in place of the new company's, so a
+  journal to it imports; an export without one keeps the new company's. Company files made before
+  s22 have no Profit & Loss A/c and are not migrated.
+- **NOT BUILT** a Profit & Loss A/c renamed in the other program: a file import matches the ledger by
+  name, so a file's ledger under Primary with another name is an exception (it has no parent group
+  here), and so is each voucher that posts to it; a whole-company import refuses such a ledger
+  (LedgerWithoutGroup). Neither guesses which ledger was meant.
+- **DELIBERATE** the trial balance shows Profit & Loss A/c as a top-level ledger line after the
+  primary groups, not inside one, since it is under no group; where the other program places it in
+  its own trial balance was not observed.
 - Fixed in s22: Alt+O is the keymap's "Import masters or vouchers from a file" in both presets and
   is on the keyboard-map screen under Go anywhere. Bill reading on the purchase form is Ctrl+Alt+O
   (s21, below), so no screen binds Alt+O to anything else.

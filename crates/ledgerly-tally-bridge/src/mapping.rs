@@ -56,8 +56,8 @@ use ledgerly_core::{
 use ledgerly_model::seed_groups::reserved_groups;
 use ledgerly_model::{
     BaseVoucherKind, BillAllocation, BillRefKind, BillWiseConfig, Group, Ledger, LedgerLine,
-    MasterSnapshot, NumberingConfig, NumberingMethod, RestartPeriod, Voucher, VoucherMode,
-    VoucherStatus, VoucherType,
+    MasterSnapshot, NumberingConfig, NumberingMethod, ReservedLedger, RestartPeriod, Voucher,
+    VoucherMode, VoucherStatus, VoucherType,
 };
 use ledgerly_store::Event;
 use ledgerly_tally_xml::masters::{MasterRecord, RawElement, TallyMaster};
@@ -487,24 +487,29 @@ impl State {
 
     fn map_ledger(&mut self, rec: &MasterRecord) -> Result<(), MapError> {
         let object = format!("ledger '{}'", rec.name);
-        let Some(parent) = normalize_parent(rec.parent.as_deref()) else {
-            if rec.name == PROFIT_AND_LOSS_LEDGER {
-                self.warn(
-                    &object,
-                    "the reserved profit and loss ledger is not imported; the books have their own",
-                );
-                return Ok(());
+        // TallyPrime's predefined Profit & Loss A/c is "grouped under the Primary group" and takes
+        // adjustment journals
+        // (<https://help.tallysolutions.com/tally-prime/accounting/ledgers-and-groups-in-tallyprime/>,
+        // read 2026-11-27): it is mapped as the books' own, with no group and the reserved role.
+        let (group, reserved) = match normalize_parent(rec.parent.as_deref()) {
+            None if rec.name == PROFIT_AND_LOSS_LEDGER => {
+                (None, Some(ReservedLedger::ProfitAndLoss))
             }
-            return Err(MapError::LedgerWithoutGroup {
-                ledger: rec.name.clone(),
-            });
+            None => {
+                return Err(MapError::LedgerWithoutGroup {
+                    ledger: rec.name.clone(),
+                });
+            }
+            Some(parent) => {
+                let found = self.groups.get(&parent).copied();
+                let group = found.ok_or_else(|| MapError::UnknownParent {
+                    kind: "ledger",
+                    name: rec.name.clone(),
+                    parent,
+                })?;
+                (Some(group), None)
+            }
         };
-        let found = self.groups.get(&parent).copied();
-        let group = found.ok_or_else(|| MapError::UnknownParent {
-            kind: "ledger",
-            name: rec.name.clone(),
-            parent,
-        })?;
         if self.ledgers.contains_key(&rec.name) {
             return Err(MapError::DuplicateName {
                 kind: "ledger",
@@ -533,7 +538,7 @@ impl State {
                 id,
                 name: rec.name.clone(),
                 aliases: Vec::new(),
-                group: Some(group),
+                group,
                 opening: SignedAmount::dr(Paise::ZERO),
                 bill_wise,
                 cost_centres_applicable,
@@ -541,7 +546,7 @@ impl State {
                 bank: None,
                 tax: None,
                 gst: None,
-                reserved: None,
+                reserved,
                 tally: Some(rec.tally_ref.clone()),
             })));
         Ok(())

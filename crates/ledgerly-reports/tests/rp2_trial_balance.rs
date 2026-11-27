@@ -922,3 +922,52 @@ proptest! {
         }
     }
 }
+
+const PROFIT_AND_LOSS: u64 = 16;
+
+/// `b` with the predefined Profit & Loss A/c under Primary (no group), with `opening`.
+fn with_profit_and_loss(mut b: Books, opening: SignedAmount) -> Books {
+    let mut pl = ledger(PROFIT_AND_LOSS, "Profit & Loss A/c", 1, opening);
+    pl.group = None;
+    pl.reserved = Some(ledgerly_model::ReservedLedger::ProfitAndLoss);
+    b.masters.ledgers.insert(pl.id, pl);
+    b
+}
+
+#[test]
+fn a_profit_and_loss_ledger_with_nothing_on_it_changes_nothing() {
+    // provenance: derived — a ledger with a zero balance is not listed and adds nothing to
+    // either column (`zero_balance_ledgers_are_not_listed_and_do_not_change_totals`).
+    for detail in [Detail::Detailed, Detail::Condensed] {
+        let p = params(date!(2026 - 04 - 30), detail);
+        let without = run(&card_books(), &p);
+        let with = run(&with_profit_and_loss(card_books(), zero()), &p);
+        assert_eq!(with, without);
+    }
+}
+
+#[test]
+fn prior_year_profit_on_the_profit_and_loss_ledger_is_its_own_line() {
+    // provenance: derived. "The profit or loss from the previous year is carried forward as the
+    // opening balance of the ledger" and the ledger is "grouped under the Primary group"
+    // (https://help.tallysolutions.com/ledgers-and-groups-in-tallyprime/, read 2026-11-27), so
+    // it is a line of its own beside the primary groups, at its balance.
+    // Opening: Capital Cr 1,00,000; Cash Dr 1,25,000; Profit & Loss A/c Cr 25,000 (last year's
+    // profit kept as cash). Openings balance: 1,25,000 Dr = 1,00,000 + 25,000 Cr, so there is no
+    // difference line. After the sale (Dr 11,800; Cr 10,000 + 900 + 900):
+    // Dr: Cash 1,25,000 + Customer One 11,800 = 1,36,800.
+    // Cr: Capital 1,00,000 + P&L 25,000 + Sales 10,000 + CGST 900 + SGST 900 = 1,36,800.
+    let mut b = books(SignedAmount::cr(rs(100_000)), SignedAmount::dr(rs(125_000)));
+    add_sale(&mut b);
+    let b = with_profit_and_loss(b, SignedAmount::cr(rs(25_000)));
+    for detail in [Detail::Detailed, Detail::Condensed] {
+        let r = run(&b, &params(date!(2026 - 04 - 30), detail));
+        let pl = row(&r, "Profit & Loss A/c");
+        assert_eq!(pl.depth, 0);
+        assert_eq!(pl.kind, RowKind::Ledger);
+        assert_eq!(pl.key, Some(DrillKey::Ledger(LedgerId(PROFIT_AND_LOSS))));
+        assert_eq!(dr_cr(&pl.cells), (None, Some(rs(25_000))));
+        assert!(!has_row(&r, "Difference in opening balances"));
+        assert_eq!(totals(&r), (rs(136_800), rs(136_800)));
+    }
+}

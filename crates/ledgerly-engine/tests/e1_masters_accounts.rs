@@ -823,3 +823,50 @@ fn group_in_use_by_a_sub_group_or_ledger_is_typed_in_use_by_master() {
         })
     );
 }
+
+#[test]
+fn the_profit_and_loss_ledger_is_created_under_primary() {
+    // provenance: derived. Profit & Loss A/c is "grouped under the Primary group"
+    // (https://help.tallysolutions.com/ledgers-and-groups-in-tallyprime/, read 2026-11-27).
+    let b = books();
+    let mut pnl = ledger(11, "Profit & Loss A/c", 1);
+    pnl.group = None;
+    pnl.reserved = Some(ReservedLedger::ProfitAndLoss);
+    assert!(matches!(create_ledger(pnl, &b), Ok(Outcome::Value(_))));
+}
+
+#[test]
+fn only_the_profit_and_loss_ledger_sits_under_primary() {
+    // provenance: derived, same page: Primary holds the predefined Profit & Loss A/c; any other
+    // ledger is created under a group.
+    let b = books();
+    let mut stray = ledger(11, "Stray", 1);
+    stray.group = None;
+    assert!(matches!(
+        create_ledger(stray.clone(), &b),
+        Err(EngineError::Invalid { .. })
+    ));
+    let mut moved = b.masters.ledgers[&LedgerId(2)].clone();
+    moved.group = None;
+    assert!(matches!(
+        alter_ledger(moved, &b),
+        Err(EngineError::Invalid { .. })
+    ));
+}
+
+#[test]
+fn the_profit_and_loss_ledger_is_not_moved_into_a_group() {
+    // provenance: derived, the existing rule for every reserved ledger: moving it is
+    // Unsupported, never a guess (no page read says it may move).
+    let mut b = books();
+    let mut pnl = ledger(11, "Profit & Loss A/c", 1);
+    pnl.group = None;
+    pnl.reserved = Some(ReservedLedger::ProfitAndLoss);
+    b.masters.ledgers.insert(pnl.id, pnl.clone());
+    let mut moved = pnl;
+    moved.group = Some(GroupId(1));
+    assert!(matches!(
+        alter_ledger(moved, &b),
+        Ok(Outcome::Unsupported(_))
+    ));
+}

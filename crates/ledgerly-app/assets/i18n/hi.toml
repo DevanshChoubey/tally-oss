@@ -317,6 +317,7 @@ name = "हिन्दी"
 "masters.delete_question" = "'{name}' हटाएँ? हटाने के लिए Y, रखने के लिए N दबाएँ।"  # unsourced
 "masters.this_master" = "यह मास्टर"  # unsourced
 "masters.group_not_found" = "बही में समूह नहीं मिला"  # unsourced
+"masters.under_primary" = "प्राथमिक"  # unsourced
 "masters.note.not_available" = "अभी उपलब्ध नहीं: इंजन इस स्क्रीन को यह आँकड़ा नहीं देता। यहाँ कुछ भी अनुमान से नहीं भरा जाता।"  # unsourced
 "masters.note.gstin_foot" = "जाँच अक्षर इसी कंप्यूटर पर जाँचा जाता है। Ledgerly GSTIN को ऑनलाइन नहीं खोजता।"  # unsourced
 "masters.note.open_bills_loading" = "खुले बिल अभी इंजन से नहीं आए हैं। यहाँ कुछ भी अनुमान से नहीं भरा जाता।"  # unsourced

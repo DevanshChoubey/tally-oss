@@ -612,7 +612,7 @@ fn the_setup_screen_makes_a_company_with_the_predefined_cash_ledger() {
     // provenance: derived. TallyPrime help, "Ledgers in TallyPrime"
     // (https://help.tallysolutions.com/ledgers-in-tallyprime/, read 2026-11-27): "TallyPrime
     // provides predefined ledgers such as Cash and Profit & Loss A/c". A company made by the setup
-    // screen holds Cash, reserved, from the start (S22).
+    // screen holds Cash and Profit & Loss A/c, reserved, from the start (S22).
     let path =
         std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("s22-cash-wizard.ledgerly");
     let _gone = std::fs::remove_file(&path);
@@ -641,9 +641,15 @@ fn the_setup_screen_makes_a_company_with_the_predefined_cash_ledger() {
         .collect();
     assert_eq!(
         names,
-        vec![(
-            "Cash".to_owned(),
-            Some(ledgerly_model::ReservedLedger::Cash)
-        )]
+        vec![
+            (
+                "Cash".to_owned(),
+                Some(ledgerly_model::ReservedLedger::Cash)
+            ),
+            (
+                "Profit & Loss A/c".to_owned(),
+                Some(ledgerly_model::ReservedLedger::ProfitAndLoss)
+            ),
+        ]
     );
 }

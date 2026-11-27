@@ -2310,3 +2310,18 @@ impl MastersScreen {
         });
     }
 }
+
+/// The name of the group a ledger is under, as the screens show it. A ledger with no group is the
+/// predefined Profit & Loss A/c, which TallyPrime keeps under Primary
+/// (<https://help.tallysolutions.com/tally-prime/accounting/ledgers-and-groups-in-tallyprime/>,
+/// read 2026-11-27). `None` when the ledger names a group the books do not hold.
+#[must_use]
+pub fn ledger_group_name(
+    masters: &ledgerly_model::Masters,
+    ledger: &ledgerly_model::Ledger,
+) -> Option<String> {
+    match ledger.group {
+        None => Some(crate::i18n::t("masters.under_primary")),
+        Some(id) => masters.groups.get(&id).map(|g| g.name.clone()),
+    }
+}

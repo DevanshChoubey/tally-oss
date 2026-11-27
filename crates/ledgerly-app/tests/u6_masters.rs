@@ -680,6 +680,81 @@ fn a_reserved_group_can_be_renamed_but_not_moved() {
     ));
 }
 
+#[test]
+fn the_profit_and_loss_ledger_can_be_renamed_and_stays_under_primary() {
+    // provenance: derived. TallyPrime's predefined Profit & Loss A/c is "grouped under the Primary
+    // group" and "cannot be deleted but it can be altered"
+    // (https://help.tallysolutions.com/tally-prime/accounting/ledgers-and-groups-in-tallyprime/,
+    // read 2026-11-27). Renaming it keeps it under Primary; putting it under a group is a move,
+    // which a reserved ledger refuses.
+    let mut b = books();
+    let pnl_id = LedgerId(50);
+    let mut pnl = ledger(
+        pnl_id,
+        "Profit & Loss A/c",
+        gid(&b, ReservedGroup::CapitalAccount),
+    );
+    pnl.group = None;
+    pnl.reserved = Some(ReservedLedger::ProfitAndLoss);
+    b.masters.ledgers.insert(pnl_id, pnl);
+    let d = LedgerDraft {
+        name: "Profit and Loss".to_owned(),
+        group: None,
+        ..LedgerDraft::default()
+    };
+    let l = as_ledger(
+        MasterDraft::Ledger(Box::new(d.clone()))
+            .build(&b, Some(pnl_id.0))
+            .unwrap(),
+    );
+    assert_eq!(
+        (l.name.as_str(), l.group, l.reserved),
+        ("Profit and Loss", None, Some(ReservedLedger::ProfitAndLoss))
+    );
+    let mut moved = d.clone();
+    moved.group = Some(gid(&b, ReservedGroup::CapitalAccount));
+    assert!(matches!(
+        MasterDraft::Ledger(Box::new(moved)).build(&b, Some(pnl_id.0)),
+        Err(MasterError::Reserved { .. })
+    ));
+    // Any other ledger still needs a group.
+    let rent = LedgerDraft {
+        name: "Rent".to_owned(),
+        group: None,
+        ..LedgerDraft::default()
+    };
+    assert_eq!(
+        invalid_field(MasterDraft::Ledger(Box::new(rent)).build(&b, Some(RENT.0))),
+        "Under"
+    );
+}
+
+#[test]
+fn the_profit_and_loss_ledger_is_listed_under_primary() {
+    // provenance: derived. The predefined Profit & Loss A/c is "grouped under the Primary group"
+    // (https://help.tallysolutions.com/tally-prime/accounting/ledgers-and-groups-in-tallyprime/,
+    // read 2026-11-27), so the list says so rather than "under ?"; ", reserved" as for Cash.
+    let mut b = books();
+    let pnl_id = LedgerId(50);
+    let mut pnl = ledger(
+        pnl_id,
+        "Profit & Loss A/c",
+        gid(&b, ReservedGroup::CapitalAccount),
+    );
+    pnl.group = None;
+    pnl.reserved = Some(ReservedLedger::ProfitAndLoss);
+    b.masters.ledgers.insert(pnl_id, pnl);
+    let rows = list_rows(&b.masters, MasterKind::Ledger, "");
+    let row = rows.iter().find(|r| r.name == "Profit & Loss A/c").unwrap();
+    assert_eq!(row.detail, "under Primary, reserved");
+    // Searching for the group's name finds it, as it finds any ledger by its group.
+    let found = list_rows(&b.masters, MasterKind::Ledger, "primary");
+    assert!(
+        found.iter().any(|r| r.name == "Profit & Loss A/c"),
+        "{found:?}"
+    );
+}
+
 // ---- deleting --------------------------------------------------------------------------------
 
 fn screen_on(kind: MasterKind, id: u64) -> MastersScreen {

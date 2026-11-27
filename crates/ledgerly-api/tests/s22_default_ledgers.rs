@@ -4,9 +4,9 @@
 //! (<https://help.tallysolutions.com/ledgers-in-tallyprime/>, read 2026-11-27): "TallyPrime
 //! provides predefined ledgers such as Cash and Profit & Loss A/c", and a predefined master such
 //! as Cash or Profit & Loss A/c cannot be deleted. Cash sits under Cash-in-Hand (research R1,
-//! "Reserved ledgers"). Profit & Loss A/c sits under Primary there, which a ledger here cannot
-//! (every ledger has a group); the books compute its row at query time instead (see
-//! `ledgerly-reports` `balance_sheet.rs`), so only Cash is created.
+//! "Reserved ledgers"). Profit & Loss A/c is "grouped under the Primary group"
+//! (<https://help.tallysolutions.com/ledgers-and-groups-in-tallyprime/>, read 2026-11-27): here,
+//! a ledger with no group. Both start with no opening balance.
 #![allow(
     clippy::unwrap_used,
     clippy::expect_used,
@@ -69,7 +69,7 @@ fn a_new_company_starts_with_the_predefined_cash_ledger() {
         .unwrap()
         .id;
     let ledgers: Vec<_> = b.masters.ledgers.values().collect();
-    assert_eq!(ledgers.len(), 1, "{ledgers:?}");
+    assert_eq!(ledgers.len(), 2, "Cash and Profit & Loss A/c: {ledgers:?}");
     let cash = ledgers[0];
     assert_eq!(cash.name, "Cash");
     assert_eq!(cash.group, Some(cash_in_hand));
@@ -94,7 +94,57 @@ fn the_predefined_cash_ledger_cannot_be_deleted() {
         ),
         "{out:?}"
     );
-    assert_eq!(books(&api).masters.ledgers.len(), 1);
+    assert_eq!(books(&api).masters.ledgers.len(), 2);
+}
+
+#[test]
+fn a_new_company_starts_with_the_profit_and_loss_ledger_under_primary() {
+    let dir = tempfile::tempdir().unwrap();
+    let api = new_company(&dir.path().join("c.ledgerly"), &company(), clock());
+    let b = books(&api);
+    let pl: Vec<_> = b
+        .masters
+        .ledgers
+        .values()
+        .filter(|l| l.reserved == Some(ReservedLedger::ProfitAndLoss))
+        .collect();
+    assert_eq!(pl.len(), 1, "{:?}", b.masters.ledgers);
+    let pl = pl[0];
+    assert_eq!(pl.name, "Profit & Loss A/c");
+    assert_eq!(pl.group, None, "under Primary");
+    assert_eq!(pl.opening, SignedAmount::dr(Paise::ZERO));
+    assert_eq!(pl.bill_wise, None);
+}
+
+#[test]
+fn the_profit_and_loss_ledger_cannot_be_deleted_but_can_be_renamed() {
+    // "This ledger cannot be deleted but it can be altered" (ledgers-and-groups-in-tallyprime).
+    let dir = tempfile::tempdir().unwrap();
+    let mut api = new_company(&dir.path().join("c.ledgerly"), &company(), clock());
+    let pl = books(&api)
+        .masters
+        .ledgers
+        .values()
+        .find(|l| l.reserved == Some(ReservedLedger::ProfitAndLoss))
+        .cloned()
+        .unwrap();
+    let out = api.execute(Command::DeleteLedger(pl.id));
+    assert!(
+        matches!(
+            out,
+            Err(ApiError::Engine(EngineError::ReservedLedger(
+                ReservedLedger::ProfitAndLoss
+            )))
+        ),
+        "{out:?}"
+    );
+    let mut renamed = pl.clone();
+    renamed.name = "Profit and Loss".to_owned();
+    assert!(matches!(
+        api.execute(Command::AlterLedger(renamed)),
+        Ok(Outcome::Value(_))
+    ));
+    assert_eq!(books(&api).masters.ledgers[&pl.id].name, "Profit and Loss");
 }
 
 #[test]

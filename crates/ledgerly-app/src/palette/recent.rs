@@ -47,14 +47,14 @@ fn live_detail(api: &Api, books: &Books, target: &PaletteTarget) -> Option<Strin
         PaletteTarget::Master(key) => match report_from_key(key)? {
             ReportKind::LedgerVouchers(id) => {
                 let ledger = books.masters.ledgers.get(&id)?;
-                let group = books.masters.groups.get(&ledger.group?)?;
+                let group = crate::screens::masters::ledger_group_name(&books.masters, ledger)?;
                 let params = default_params(ReportKind::LedgerVouchers(id), books).ok()?;
                 let balance = match api.report(&params) {
                     Ok(Outcome::Value(report)) => closing_text(&report.rows),
                     Ok(Outcome::Unsupported(u)) => format!("not computed: {}", u.reason),
                     Err(e) => format!("not computed: {e}"),
                 };
-                Some(format!("Ledger \u{00B7} {} \u{00B7} {balance}", group.name))
+                Some(format!("Ledger \u{00B7} {group} \u{00B7} {balance}"))
             }
             ReportKind::TrialBalance
             | ReportKind::BalanceSheet

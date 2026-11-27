@@ -25,9 +25,21 @@
 //!
 //! That is the cumulative profit from the beginning of the books, not only the current year. The
 //! `Profit and Loss A/c` row is a credit for a profit and shows on the assets side as a debit for
-//! a loss. A ledger carrying `ReservedLedger::ProfitAndLoss` is an ordinary ledger of its group:
-//! do not also enter prior profit as an opening balance on an income or expense ledger, or it is
-//! counted twice.
+//! a loss.
+//!
+//! TallyPrime's predefined Profit & Loss A/c sits under Primary, carries the previous year's profit
+//! or loss as its opening balance, takes adjustment journals, and "is shown in the balance sheet
+//! under liabilities"
+//! (<https://help.tallysolutions.com/tally-prime/accounting/ledgers-and-groups-in-tallyprime/>, read
+//! 2026-11-27). So the closing balance of the ledger carrying `ReservedLedger::ProfitAndLoss` with no
+//! group is added to the profit above, and the one row shows both:
+//!
+//! ```text
+//! profit row = profit + closing balance of the Profit & Loss A/c ledger
+//! ```
+//!
+//! A Profit & Loss ledger placed under a group (older books) is an ordinary ledger of that group.
+//! Any other ledger without a group is corrupt input and an error.
 //!
 //! Opening balances may be unbalanced (spec invariant 4). The difference is an explicit
 //! [`RowKind::Difference`] row on the short side, so both totals agree. Opening stock is not
@@ -79,8 +91,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use ledgerly_core::{Date, GroupId, LedgerId, Outcome, Paise, SignedAmount, VoucherTypeId};
 use ledgerly_model::{
-    BaseVoucherKind, Books, Group, Ledger, Nature, Posting, ReservedGroup, Scenario, VoucherStatus,
-    VoucherType,
+    BaseVoucherKind, Books, Group, Ledger, Nature, Posting, ReservedGroup, ReservedLedger,
+    Scenario, VoucherStatus, VoucherType,
 };
 use ledgerly_stock::{ProvisionalReason, StockValuation, ValuationStatus};
 
@@ -755,11 +767,17 @@ fn check_all_placed(books: &Books, placed: &BTreeSet<LedgerId>) -> Result<(), Re
     {
         Some(orphan) => Err(ReportError::Invalid {
             field: "groups".to_owned(),
-            reason: format!(
-                "ledger {} is in {}, which is missing or not reachable from a primary group",
-                orphan.name,
-                crate::group_text(orphan.group)
-            ),
+            reason: match orphan.group {
+                Some(_) => format!(
+                    "ledger {} is in {}, which is missing or not reachable from a primary group",
+                    orphan.name,
+                    crate::group_text(orphan.group)
+                ),
+                None => format!(
+                    "ledger {} has no group; only the predefined Profit & Loss A/c sits under Primary",
+                    orphan.name
+                ),
+            },
         }),
         None => Ok(()),
     }
@@ -858,6 +876,14 @@ fn walk_primaries(
                     ));
                 }
             }
+        }
+    }
+    // The predefined Profit & Loss A/c sits under Primary; its balance joins the profit row.
+    for l in books.masters.ledgers.values() {
+        if l.group.is_none() && l.reserved == Some(ReservedLedger::ProfitAndLoss) {
+            walker.placed.insert(l.id);
+            let balance = balances.get(&l.id).copied().unwrap_or(Paise::ZERO);
+            st.profit_net = st.profit_net.checked_add(balance)?;
         }
     }
     check_all_placed(books, &walker.placed)?;

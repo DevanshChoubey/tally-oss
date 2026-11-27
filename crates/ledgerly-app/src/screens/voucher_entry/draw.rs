@@ -257,9 +257,7 @@ fn group_name(masters: &Masters, row: &DraftRow) -> Option<String> {
         Some(LedgerRef::Chosen(id)) => masters
             .ledgers
             .get(id)
-            .and_then(|ledger| ledger.group)
-            .and_then(|id| masters.groups.get(&id))
-            .map(|group| group.name.clone()),
+            .and_then(|ledger| crate::screens::masters::ledger_group_name(masters, ledger)),
         Some(LedgerRef::Pending(_)) | None => None,
     }
 }

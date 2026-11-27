@@ -25,7 +25,7 @@
 //! (no case folding: no source says whether names are case-insensitive).
 
 use ledgerly_core::{GroupId, LedgerId, Outcome};
-use ledgerly_model::{Books, Group, Ledger, MasterSnapshot, Voucher};
+use ledgerly_model::{Books, Group, Ledger, MasterSnapshot, ReservedLedger, Voucher};
 use ledgerly_store::Event;
 
 use crate::EngineError;
@@ -211,16 +211,23 @@ fn check_ledger_shape(l: &Ledger, books: &Books) -> Result<(), EngineError> {
     if name.is_empty() {
         return Err(invalid("ledger name", "the name is empty; type a name"));
     }
-    let Some(group) = l.group else {
-        return Err(invalid(
-            "ledger group",
-            "the ledger has no group; choose the group it belongs under",
-        ));
-    };
-    if !books.masters.groups.contains_key(&group) {
-        return Err(EngineError::NotFound {
-            what: format!("group {} of ledger '{name}'", group.0),
-        });
+    match l.group {
+        // Primary holds only the predefined Profit & Loss A/c ("grouped under the Primary
+        // group", <https://help.tallysolutions.com/ledgers-and-groups-in-tallyprime/>, read
+        // 2026-11-27); every other ledger is created under a group.
+        None if l.reserved == Some(ReservedLedger::ProfitAndLoss) => {}
+        None => {
+            return Err(invalid(
+                "ledger group",
+                "only the predefined Profit & Loss A/c sits under Primary; choose the group this ledger belongs under",
+            ));
+        }
+        Some(group) if !books.masters.groups.contains_key(&group) => {
+            return Err(EngineError::NotFound {
+                what: format!("group {} of ledger '{name}'", group.0),
+            });
+        }
+        Some(_) => {}
     }
     if l.opening.amount.is_negative() {
         return Err(invalid(

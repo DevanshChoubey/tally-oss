@@ -703,3 +703,103 @@ fn a_backup_that_cannot_be_written_stops_the_import() {
             .any(|l| l.name == "Kumar Textiles")
     );
 }
+
+// Profit & Loss A/c. The company has it from the start, under Primary; the other product's
+// masters file names it "Profit & Loss A/c" with the parent Primary, and its opening balance is
+// last year's profit ("The profit or loss from the previous year is carried forward as the
+// opening balance of the ledger", https://help.tallysolutions.com/ledgers-and-groups-in-tallyprime/,
+// read 2026-11-27). An import matches it by name, as it matches every other master.
+
+const PNL: &str = "Profit & Loss A/c";
+
+fn pnl_master(opening: &str) -> String {
+    envelope(&msg(&format!(
+        "<LEDGER NAME=\"Profit &amp; Loss A/c\" ACTION=\"Create\"><NAME>Profit &amp; Loss A/c</NAME>\
+         <PARENT>&#4; Primary</PARENT><OPENINGBALANCE>{opening}</OPENINGBALANCE></LEDGER>"
+    )))
+}
+
+fn pnl_ledger(api: &Api) -> ledgerly_model::Ledger {
+    books(api)
+        .masters
+        .ledgers
+        .values()
+        .find(|l| l.name == PNL)
+        .cloned()
+        .unwrap()
+}
+
+#[test]
+fn a_profit_and_loss_master_ignored_as_a_duplicate_keeps_the_predefined_ledger() {
+    let (dir, mut api) = setup();
+    let path = write(dir.path(), "pnl.xml", &pnl_master("2000.00"));
+    let s = import(
+        &mut api,
+        XmlImport::Masters(MasterBehaviour::IgnoreDuplicates),
+        &path,
+    );
+    assert_eq!(counts(&s), [0, 0, 0, 1, 0], "{s}");
+    let pl = pnl_ledger(&api);
+    assert_eq!(pl.group, None);
+    assert_eq!(pl.opening, SignedAmount::dr(Paise::ZERO));
+}
+
+#[test]
+fn a_profit_and_loss_master_combined_brings_last_years_profit_in() {
+    // 2000.00 positive is a credit of Rs 2,000 (see `modify_replaces_the_group_and_the_opening`):
+    // a profit carried forward. 0 + Cr 2,000 = Cr 2,000.
+    let (dir, mut api) = setup();
+    let path = write(dir.path(), "pnl.xml", &pnl_master("2000.00"));
+    let s = import(
+        &mut api,
+        XmlImport::Masters(MasterBehaviour::CombineOpeningBalance),
+        &path,
+    );
+    assert_eq!(counts(&s), [0, 0, 1, 0, 0], "{s}");
+    let pl = pnl_ledger(&api);
+    assert_eq!(pl.group, None, "still under Primary");
+    assert_eq!(
+        pl.reserved,
+        Some(ledgerly_model::ReservedLedger::ProfitAndLoss)
+    );
+    assert_eq!(pl.opening, SignedAmount::cr(Paise::new(200_000)));
+}
+
+#[test]
+fn a_profit_and_loss_master_modified_takes_the_files_opening_and_stays_under_primary() {
+    let (dir, mut api) = setup();
+    let path = write(dir.path(), "pnl.xml", &pnl_master("-750.00"));
+    let s = import(
+        &mut api,
+        XmlImport::Masters(MasterBehaviour::ModifyWithNewData),
+        &path,
+    );
+    assert_eq!(counts(&s), [0, 1, 0, 0, 0], "{s}");
+    let pl = pnl_ledger(&api);
+    assert_eq!(pl.group, None);
+    // -750.00 is a debit of Rs 750: a loss carried forward.
+    assert_eq!(pl.opening, SignedAmount::dr(Paise::new(75_000)));
+}
+
+#[test]
+fn a_journal_to_profit_and_loss_posts_to_the_predefined_ledger() {
+    // "You can use this account to pass adjustment entries through journal vouchers" (same page).
+    // Dr Profit & Loss A/c 500, Cr Kumar Textiles 500.
+    let (dir, mut api) = with_masters();
+    let file = envelope(&msg(
+        "<VOUCHER VCHTYPE=\"Journal\" ACTION=\"Create\"><DATE>20261008</DATE><GUID>j-pnl-1</GUID><VOUCHERTYPENAME>Journal</VOUCHERTYPENAME><NARRATION>Adjustment</NARRATION>\
+         <ALLLEDGERENTRIES.LIST><LEDGERNAME>Profit &amp; Loss A/c</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-500.00</AMOUNT></ALLLEDGERENTRIES.LIST>\
+         <ALLLEDGERENTRIES.LIST><LEDGERNAME>Kumar Textiles</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>500.00</AMOUNT></ALLLEDGERENTRIES.LIST></VOUCHER>",
+    ));
+    let path = write(dir.path(), "journal.xml", &file);
+    let s = import(&mut api, XmlImport::default_transactions(), &path);
+    assert_eq!(counts(&s), [1, 0, 0, 0, 0], "{s}");
+    let pl = pnl_ledger(&api);
+    let b = books(&api);
+    let v = b.vouchers.values().next().unwrap();
+    assert_eq!(v.ledger_lines[0].ledger, pl.id);
+    assert_eq!(
+        v.ledger_lines[0].amount,
+        SignedAmount::dr(Paise::new(50_000))
+    );
+}

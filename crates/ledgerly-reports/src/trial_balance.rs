@@ -13,6 +13,12 @@
 //! so both columns total the same. Postings that do not balance among themselves are corrupt input
 //! and are a [`ReportError::Invalid`], never absorbed into that row.
 //!
+//! TallyPrime keeps the predefined Profit & Loss A/c under Primary, not under a group, and carries
+//! the previous year's profit or loss as its opening balance
+//! (<https://help.tallysolutions.com/tally-prime/accounting/ledgers-and-groups-in-tallyprime/>, read
+//! 2026-11-27). Its balance is a depth-0 ledger row after the primary groups, shown when it is not
+//! zero, and it counts in both totals. Any other ledger without a group is corrupt input.
+//!
 //! Unsupported (never guessed): comparative and monthly columns, filters, `exceptions_only`, and a
 //! named scenario over memorandum or reversing-journal postings.
 
@@ -20,7 +26,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use ledgerly_core::{Date, GroupId, LedgerId, Outcome, Paise, SignedAmount, VoucherTypeId};
 use ledgerly_model::{
-    BaseVoucherKind, Books, Group, Ledger, Posting, Scenario, VoucherStatus, VoucherType,
+    BaseVoucherKind, Books, Group, Ledger, Posting, ReservedLedger, Scenario, VoucherStatus,
+    VoucherType,
 };
 
 use crate::{
@@ -414,11 +421,17 @@ fn check_all_placed(books: &Books, placed: &BTreeSet<LedgerId>) -> Result<(), Re
     {
         Some(orphan) => Err(ReportError::Invalid {
             field: "groups".to_string(),
-            reason: format!(
-                "ledger {} is in {}, which is missing or not reachable from a primary group",
-                orphan.name,
-                crate::group_text(orphan.group)
-            ),
+            reason: match orphan.group {
+                Some(_) => format!(
+                    "ledger {} is in {}, which is missing or not reachable from a primary group",
+                    orphan.name,
+                    crate::group_text(orphan.group)
+                ),
+                None => format!(
+                    "ledger {} has no group; only the predefined Profit & Loss A/c sits under Primary",
+                    orphan.name
+                ),
+            },
         }),
         None => Ok(()),
     }
@@ -443,6 +456,29 @@ fn build_report(
         if out.shown {
             rows.extend(out.rows);
         }
+    }
+    // The predefined Profit & Loss A/c sits under Primary itself (see the module doc).
+    for l in books.masters.ledgers.values() {
+        if l.group.is_some() || l.reserved != Some(ReservedLedger::ProfitAndLoss) {
+            continue;
+        }
+        builder.placed_ledgers.insert(l.id);
+        let balance = balances.get(&l.id).copied().unwrap_or(Paise::ZERO);
+        if balance.is_zero() {
+            continue;
+        }
+        if balance.is_negative() {
+            cr_total = cr_total.checked_add(balance.checked_neg()?)?;
+        } else {
+            dr_total = dr_total.checked_add(balance)?;
+        }
+        rows.push(ReportRow {
+            key: Some(DrillKey::Ledger(l.id)),
+            label: l.name.clone(),
+            depth: 0,
+            kind: RowKind::Ledger,
+            cells: balance_cells(balance)?,
+        });
     }
     check_all_placed(books, &builder.placed_ledgers)?;
 
