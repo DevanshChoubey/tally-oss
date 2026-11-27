@@ -475,9 +475,9 @@ Classes:
   names the two model files and their fixed URLs (from the ocrs 0.14.0 crate's
   `examples/download-models.sh`), says Not installed while they are missing or do not load, and
   downloads only on request, keeping a file only when its SHA-256 matches. Nothing was downloaded.
-- **NOT BUILT** the OCR model download refuses: no checksum is recorded, and computing one would
-  mean downloading the files. Owner question: the SHA-256 of `text-detection.onnx` and
-  `text-recognition.onnx`.
+- **FIX** (owner allowed one fetch, 2026-11-27) the OCR model checksums are recorded: the SHA-256
+  of the two files the coordinator fetched from the fixed URLs (2,499,479 and 9,713,177 bytes). A
+  download keeps a file only when its hash is that one, and stops at the first that differs.
 - **NOT BUILT** reading a bill with ocrs: ocrs gives each line its characters and boxes but no
   confidence, and the bill reader blanks values by the OCR line's confidence. A made-up confidence
   would be a silent default. Owner question: what stands in for it (for example every ocrs value

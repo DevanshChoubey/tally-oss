@@ -165,6 +165,11 @@ untracked), look at each, update `PARITY-GAPS.md`.
   confidence), the download button and model state on a screen; `gst.recon-explain` (needs a new
   typed proposal). Tests written first, seen failing at compile, the checksum check by mutation;
   no real model file was loaded, so real ocrs inference is unrun.
+- OCR checksums: committed. The two SHA-256 the coordinator observed are the fixed checksums; the
+  download refuses bytes whose hash differs. Honesty note: the earlier test "the download refuses
+  while no checksum is recorded" was replaced (the decision changed the behaviour) by one that
+  checks the refusal for a file with no checksum through `download_model`, plus a mismatch test
+  over the fixed files; the two new tests were seen failing before the checksums were added.
 - Honesty notes (F): the API and app bank tests were written first and seen failing (API at compile,
   app 3 of 4; the AI-off one passed on the old path); the Origin unit test was seen failing at
   compile only. One API test fixture was corrected (an alteration must keep the voucher number).

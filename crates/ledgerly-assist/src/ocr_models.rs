@@ -4,9 +4,9 @@
 //! not shipped and never downloaded on their own: the user asks for the download, the files come
 //! from the fixed URLs in [`OCR_MODEL_FILES`] (the ones the `ocrs` 0.14.0 crate's
 //! `examples/download-models.sh` names), and each file is kept only when its SHA-256 matches the
-//! checksum recorded here. No checksum is recorded yet (the owner is asked for them, since
-//! computing one would mean downloading the file), so [`download_ocr_models`] refuses before it
-//! sends any request.
+//! checksum recorded here. The checksums are those of the files the coordinator fetched once with
+//! the owner's permission on 2026-11-27 (2,499,479 and 9,713,177 bytes). A file with no recorded
+//! checksum is refused before any request.
 //!
 //! [`ocr_models_status`] says whether the files in a folder load. Missing or unloadable files are
 //! [`ProviderStatus::NotInstalled`], with the reason in words the screen shows.
@@ -43,12 +43,12 @@ pub const OCR_MODEL_FILES: [OcrModelFile; 2] = [
     OcrModelFile {
         name: "text-detection.onnx",
         url: "https://ocrs-models.s3-accelerate.amazonaws.com/text-detection.onnx",
-        sha256: None,
+        sha256: Some("a917b23dbd9524b465df7e922641b3ff2981623df4ded5a0234004ef2fee7cfe"),
     },
     OcrModelFile {
         name: "text-recognition.onnx",
         url: "https://ocrs-models.s3-accelerate.amazonaws.com/text-recognition.onnx",
-        sha256: None,
+        sha256: Some("86c145c2edb96c8caed5b1ebb8f44d706408922211451c309c625157dd6061c5"),
     },
 ];
 
