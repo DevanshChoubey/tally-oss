@@ -6,6 +6,7 @@
 
 mod ai;
 mod ai_drafts;
+mod ai_settings;
 mod as_voucher;
 mod balance;
 mod bank;
@@ -37,13 +38,16 @@ mod voucher_gst;
 
 pub use ai::{AiLogEntry, AiTier};
 pub use ai_drafts::{
-    AI_CONFIDENCE_THRESHOLD_PERMILLE, Accepted, AiActivityEntry, AiDraft, DraftEdits, NewAiDraft,
+    AI_CONFIDENCE_THRESHOLD_PERMILLE, Accepted, AiActivityEntry, AiDecision, AiDraft, AiLogRow,
+    AiOutput, DraftEdits, NewAiDraft,
 };
 // The assistant's typed proposals, for the app (which reaches the assistant only through here).
+pub use ai_settings::{AiSettings, CloudSettings, KEY_SERVICE, KeyState, LOCAL_MODEL_FILE_KEY};
 pub use balance::BalanceChange;
 pub use bank::{BalanceRefusal, balance_refusal};
 pub use command::{Command, CommandResult, CreatedId};
 pub use gst_filing::GstFiling;
+pub use ledgerly_assist::cloud::{KeyVault, KeyringStore, MemoryVault};
 pub use ledgerly_assist::ocr::{OcrLine, OcrOutput};
 pub use ledgerly_assist::provider::{
     AiProvider, CloudModel, FIXED_ANSWERS_NAME, FixedAnswers, LocalModel, LocalModelFile,

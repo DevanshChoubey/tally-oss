@@ -28,6 +28,20 @@
    "description": "The queue with the assistant on: a bill-photo draft beside the bank matches. Its amount is the engine's total of the draft; a draft the engine blocks shows none."
   },
   {
+   "id": "ai.ai-settings.local",
+   "kind": "happy",
+   "hash": "screen=ai-settings&state=local&ai=on",
+   "title": "AI and privacy, local (later release)",
+   "description": "On this computer: the model file the user chose (none yet), the runtime not in this build, what each feature sees, and the AI activity log."
+  },
+  {
+   "id": "ai.ai-settings.cloud",
+   "kind": "happy",
+   "hash": "screen=ai-settings&state=cloud&ai=on",
+   "title": "AI and privacy, cloud key (later release)",
+   "description": "Cloud with your own key: the provider as the user described it, the key in the system keychain, redaction, and a confirmation before each document."
+  },
+  {
    "id": "hi.home.default",
    "kind": "happy",
    "hash": "screen=home&state=default&lang=hi",

@@ -98,20 +98,17 @@ impl Api {
     }
 
     /// Stores `tier` for the company as an audited setting change. Choosing the tier already
-    /// stored writes nothing. `Cloud` is `Unsupported`: no key store exists, so nothing is
-    /// written.
+    /// stored writes nothing. `Cloud` is `Unsupported`, and nothing is written, until a key vault
+    /// is attached, the provider is described and its key is saved ([`Api::ai_settings`]).
     ///
     /// # Errors
     /// - [`ApiError::Store`] when the tier cannot be read or the change cannot be committed.
     /// - [`ApiError::UnknownAiTier`] when the stored tier is a word this build does not know.
     pub fn set_ai_tier(&mut self, tier: AiTier) -> Result<Outcome<()>, ApiError> {
-        if tier == AiTier::Cloud {
-            return Ok(Outcome::Unsupported(Unsupported {
-                what: "AI cloud tier".to_owned(),
-                reason: "the provider key must be saved in the OS keychain, and no keychain \
-                         store is wired into this build yet; the company file never holds a key"
-                    .to_owned(),
-            }));
+        if tier == AiTier::Cloud
+            && let Some(refusal) = self.cloud_refusal()?
+        {
+            return Ok(Outcome::Unsupported(refusal));
         }
         let before = self.ai_tier()?;
         if before == Some(tier) {

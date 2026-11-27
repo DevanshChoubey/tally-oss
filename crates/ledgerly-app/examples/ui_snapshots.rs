@@ -628,7 +628,29 @@ fn godavari_assistant_file(dir: &Path) -> Api {
         confidence_permille: 930,
     })
     .unwrap();
+    // The cloud provider of the mock's `ai-settings.cloud` (index.html, `SCREENS['ai-settings']`):
+    // a fictional endpoint on the reserved `.invalid` domain, never called. The key is in the
+    // capture tool's in-memory vault (`capture_vault`), never in the file.
+    api.set_cloud_settings(&ledgerly_api::CloudSettings {
+        endpoint: Some("https://llm.example.invalid/v1/chat/completions".to_owned()),
+        format: Some("chat-completions".to_owned()),
+        model: Some("model-x".to_owned()),
+    })
+    .unwrap();
+    // The fixture is handed to the shell directly, not through the welcome screen's hand-over,
+    // so it gets the vault here, as the hand-over would give it the OS keychain.
+    api.attach_key_vault(capture_vault());
     api
+}
+
+/// The capture tool's key vault: in memory, holding a fictional key for the sample company
+/// (account `company-<id>-<name>`). Nothing reaches the OS keychain or the network.
+fn capture_vault() -> Box<dyn ledgerly_api::KeyVault> {
+    Box::new(ledgerly_api::MemoryVault::with_key(
+        ledgerly_api::KEY_SERVICE,
+        &format!("company-1-{}", ledgerly_sample::NAME),
+        "fictional-capture-key",
+    ))
 }
 
 /// The sample company plus two vouchers that leave the pickaxe's stock negative for a day: a
@@ -1918,6 +1940,21 @@ fn light_shots() -> Vec<Shot> {
             .query("Review queue")
             .then(&[(Key::Enter, NONE)])
             .expect("Review queue", Some("Rupa Polymers, bill RP/5521"))
+            .on(Fixture::GodavariAssistant)
+            .ai_on(),
+        // Later release: AI and privacy on this computer, with the model file row and the log
+        // holding the draft above.
+        shot("ai.ai-settings.local", &[palette])
+            .query("AI and privacy")
+            .then(&[(Key::Enter, NONE), (Key::Num2, NONE)])
+            .expect("AI and privacy", None)
+            .on(Fixture::GodavariAssistant)
+            .ai_on(),
+        // Later release: the cloud tier with the provider described and the key in the vault.
+        shot("ai.ai-settings.cloud", &[palette])
+            .query("AI and privacy")
+            .then(&[(Key::Enter, NONE), (Key::Num3, NONE)])
+            .expect("AI and privacy", None)
             .on(Fixture::GodavariAssistant)
             .ai_on(),
         // The item list open on the first line, filtered by what is typed (index.html: type-ahead

@@ -271,7 +271,7 @@ pub fn confidence_of(permille: u16) -> Confidence {
 }
 
 /// The key of a draft's kind words ("Draft purchase").
-fn draft_kind_key(kind: BaseVoucherKind) -> &'static str {
+pub(crate) fn draft_kind_key(kind: BaseVoucherKind) -> &'static str {
     match kind {
         BaseVoucherKind::Purchase => "review.kind.draft_purchase",
         BaseVoucherKind::Payment => "review.kind.draft_payment",

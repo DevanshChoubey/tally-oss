@@ -5,11 +5,17 @@
 //! and lets the user choose it with 1, 2 or 3 or by a click. Three rules of spec 6.8 shape it:
 //!
 //! * AI only drafts. The "never" list says so, and no panel shows a figure.
-//! * The cloud tier needs the user's own key. No key store is wired into this build, so the
-//!   engine refuses the cloud choice (`Outcome::Unsupported`). The screen shows that reason and
-//!   stores nothing; the key never reaches the company file.
-//! * The log is the file's real `AiProposalRecorded` events. When it is empty the screen says so
-//!   and draws no rows; Ctrl+E is offered and exports only a log that has rows.
+//! * The cloud tier needs the user's own key, kept in the key vault (the OS keychain in the real
+//!   window, attached when a company opens with AI in the release). Without a vault, a described
+//!   provider and a saved key the engine refuses the cloud choice (`Outcome::Unsupported`); the
+//!   screen shows that reason and stores nothing. The key never reaches the company file and is
+//!   never drawn, only whether it is saved.
+//! * The local panel names the model file the user chose (Ctrl+O); nothing is downloaded, and this
+//!   build runs no model, so the reader and language rows say "Not installed".
+//! * The log is the file's real assistant events (`AiActivityRecorded`, round s21) with the
+//!   decision taken on each, or else the older `AiProposalRecorded` events. When it is empty the
+//!   screen says so and draws no rows; Ctrl+E is offered and exports only a log that has rows.
+//! * Each feature's switch is an audited setting of the company (`Api::set_ai_feature`).
 //!
 //! Every difference from the mock is listed in `design/PARITY-GAPS.md`.
 
@@ -18,7 +24,10 @@ use std::path::PathBuf;
 
 use egui::{Align, Key, Layout, Modifiers, RichText, Ui};
 use egui_extras::{Size, StripBuilder};
-use ledgerly_api::{AiLogEntry, AiTier, Api};
+use ledgerly_api::{
+    AiDecision, AiFeature, AiLogEntry, AiLogRow, AiOutput, AiSettings, AiTier, Api, KeyState,
+    LocalModelFile,
+};
 use ledgerly_core::Outcome;
 
 use crate::screen::KeyHint;
@@ -77,14 +86,18 @@ pub const FEATURES: [(&str, &str, &str); 5] = [
     (
         "Bill photo to draft purchase",
         "The image",
-        "Image, cropped and redacted",
+        "Nothing: an image cannot be redacted, so bills are read on this computer only",
     ),
     (
         "Plain words to draft voucher",
         "Your sentence and ledger names",
-        "Same, no balances",
+        "Same, redacted, no balances",
     ),
-    ("Bank line suggestions", "Narration, date, amount", "Same"),
+    (
+        "Bank line suggestions",
+        "Narration, date, amount",
+        "Same, redacted",
+    ),
     (
         "Ask your books",
         "Your question and the list of report types",
@@ -93,7 +106,7 @@ pub const FEATURES: [(&str, &str, &str); 5] = [
     (
         "2B mismatch explanations",
         "The two records and the attached image",
-        "Same, redacted",
+        "The two records, redacted; never the image",
     ),
 ];
 
@@ -256,8 +269,13 @@ pub fn key_hints(log_has_rows: bool) -> Vec<KeyHint> {
 /// The worker's answer to the one call this screen waits on.
 #[derive(Debug)]
 enum Reply {
-    /// The stored tier and the log, read together.
-    Loaded(Result<(Option<AiTier>, Vec<AiLogEntry>), String>),
+    /// The stored tier and the log, read together, with the AI settings and the assistant's log
+    /// rows when the release carries AI.
+    Loaded(Result<Loaded, String>),
+    /// The answer to choosing a local model file.
+    ModelFileChosen(Result<Outcome<()>, String>),
+    /// The answer to switching a feature on or off.
+    FeatureSwitched(Result<Outcome<()>, String>),
     /// The answer to choosing `tier`: stored, or refused with the engine's reason.
     Chosen {
         /// The tier that was chosen.
@@ -274,6 +292,20 @@ enum Reply {
     },
 }
 
+/// What one read of the company gives the screen.
+#[derive(Debug)]
+struct Loaded {
+    /// The stored tier.
+    tier: Option<AiTier>,
+    /// The older proposal log (`AiProposalRecorded`).
+    log: Vec<AiLogEntry>,
+    /// The model file, the cloud provider and the key state; `None` when AI is out of the
+    /// release, so nothing is read for it.
+    settings: Option<AiSettings>,
+    /// The assistant's activity rows; empty when AI is out of the release.
+    rows: Vec<AiLogRow>,
+}
+
 /// The AI and privacy screen.
 #[derive(Debug, Default)]
 pub struct AiSettingsScreen {
@@ -283,6 +315,10 @@ pub struct AiSettingsScreen {
     loaded: bool,
     /// The log rows read from the company file.
     log: Vec<AiLogEntry>,
+    /// The AI settings, once read (only when the release carries AI).
+    settings: Option<AiSettings>,
+    /// The assistant's activity rows read from the company file.
+    rows: Vec<AiLogRow>,
     /// The user chose Cloud, so the cloud panel is shown with the engine's reason.
     cloud_asked: bool,
     /// The engine's reason the cloud tier is not available, once it has said so.
@@ -358,15 +394,48 @@ impl AiSettingsScreen {
         self.notice_is_cloud_refusal = false;
     }
 
-    /// Starts reading the stored tier and the log.
+    /// The features switched off, once the AI settings are read (only with AI in the release).
+    #[must_use]
+    pub fn features_off(&self) -> Option<&[AiFeature]> {
+        self.settings.as_ref().map(|s| s.features_off.as_slice())
+    }
+
+    /// Starts switching `feature` on or off; the settings are read again when it is stored.
+    fn switch_feature(&mut self, worker: &ApiWorker, feature: AiFeature, on: bool) {
+        self.latest.start(worker, move |api: &mut Api| {
+            Reply::FeatureSwitched(api.set_ai_feature(feature, on).map_err(|e| e.to_string()))
+        });
+    }
+
+    /// The assistant's activity rows read from the company file.
+    #[must_use]
+    pub fn activity_rows(&self) -> &[AiLogRow] {
+        &self.rows
+    }
+
+    /// Whether the log card has anything to export.
+    fn log_has_rows(&self) -> bool {
+        !self.log.is_empty() || !self.rows.is_empty()
+    }
+
+    /// Starts reading the stored tier and the log, and, when the release carries AI, the AI
+    /// settings and the assistant's rows. The release switch is the UI thread's, so it is read
+    /// here and handed to the worker.
     fn start_load(&mut self, worker: &ApiWorker) {
-        self.latest.start(worker, |api: &mut Api| {
-            let tier = api.ai_tier().map_err(|e| e.to_string());
-            let log = api.ai_log().map_err(|e| e.to_string());
-            Reply::Loaded(match (tier, log) {
-                (Ok(tier), Ok(log)) => Ok((tier, log)),
-                (Err(reason), _) | (_, Err(reason)) => Err(reason),
-            })
+        let with_ai = crate::release::ai_enabled();
+        self.latest.start(worker, move |api: &mut Api| {
+            Reply::Loaded(read_all_settings(api, with_ai).map_err(|e| e.to_string()))
+        });
+    }
+
+    /// Starts storing `path` as the local model file. Only the path is stored; nothing is read
+    /// from the file but its size, and nothing is downloaded.
+    fn choose_model_file(&mut self, worker: &ApiWorker, path: PathBuf) {
+        self.latest.start(worker, move |api: &mut Api| {
+            Reply::ModelFileChosen(
+                api.set_local_model_file(Some(&path))
+                    .map_err(|e| e.to_string()),
+            )
         });
     }
 
@@ -391,12 +460,13 @@ impl AiSettingsScreen {
     /// The keys this screen answers: 1, 2 and 3 choose a tier; Ctrl+E exports the log when it
     /// has rows.
     fn read_keys(&mut self, ui: &Ui, ctx: &AppCtx) {
-        let (one, two, three, export) = ui.input_mut(|i| {
+        let (one, two, three, export, model_file) = ui.input_mut(|i| {
             (
                 i.consume_key(Modifiers::NONE, Key::Num1),
                 i.consume_key(Modifiers::NONE, Key::Num2),
                 i.consume_key(Modifiers::NONE, Key::Num3),
                 i.consume_key(Modifiers::COMMAND, Key::E),
+                i.consume_key(Modifiers::COMMAND, Key::O),
             )
         });
         let worker = ctx.api.as_ref();
@@ -412,10 +482,17 @@ impl AiSettingsScreen {
             self.pick(worker, AiTier::Cloud);
         }
         if export
-            && !self.log.is_empty()
+            && self.log_has_rows()
             && let (Some(worker), Some(path)) = (worker, save_dialog(&ctx.tr))
         {
             self.export(worker, path);
+        }
+        if model_file
+            && crate::release::ai_enabled()
+            && self.panel() == Panel::Local
+            && let (Some(worker), Some(path)) = (worker, model_dialog(&ctx.tr))
+        {
+            self.choose_model_file(worker, path);
         }
     }
 
@@ -442,12 +519,14 @@ impl AiSettingsScreen {
             Some(Done::Ready(reply)) => reply,
         };
         match reply {
-            Reply::Loaded(Ok((tier, log))) => {
+            Reply::Loaded(Ok(loaded)) => {
                 // A file stored with Local by an older build opens, and shows Off, while the
                 // release carries no AI (see `crate::release`).
-                let tier = crate::release::effective_tier(tier);
+                let tier = crate::release::effective_tier(loaded.tier);
                 self.stored = tier;
-                self.log = log;
+                self.log = loaded.log;
+                self.settings = loaded.settings;
+                self.rows = loaded.rows;
                 self.loaded = true;
                 ctx.ai_tier = tier;
             }
@@ -477,6 +556,23 @@ impl AiSettingsScreen {
                 }
                 Err(reason) => self.show_notice(&reason),
             },
+            Reply::FeatureSwitched(result) => {
+                match result {
+                    Ok(Outcome::Value(())) => {}
+                    Ok(Outcome::Unsupported(u)) => self.show_notice(&unsupported_text(&u)),
+                    Err(reason) => self.show_notice(&reason),
+                }
+                self.loaded = false;
+            }
+            Reply::ModelFileChosen(result) => {
+                match result {
+                    Ok(Outcome::Value(())) => self.notice = None,
+                    Ok(Outcome::Unsupported(u)) => self.show_notice(&unsupported_text(&u)),
+                    Err(reason) => self.show_notice(&reason),
+                }
+                // Read the settings again, so the row shows the file as it is on disk.
+                self.loaded = false;
+            }
             Reply::Exported { path, result } => {
                 let line = match result {
                     Ok(Outcome::Value(())) => {
@@ -498,7 +594,19 @@ impl Screen for AiSettingsScreen {
     }
 
     fn keys(&self, tr: &Tr) -> Vec<KeyHint> {
-        key_hints_in(!self.log.is_empty(), tr)
+        let mut hints = key_hints_in(self.log_has_rows(), tr);
+        if crate::release::ai_enabled() && self.panel() == Panel::Local {
+            // The mock lists Ctrl+O after the tiers and before the export (index.html:2106).
+            let at = hints
+                .iter()
+                .position(|h| h.keys == "Ctrl+E")
+                .unwrap_or(hints.len());
+            hints.insert(
+                at,
+                KeyHint::new("Ctrl+O", tr.t("ai.settings.key.model_file")),
+            );
+        }
+        hints
     }
 
     fn ui(&mut self, ui: &mut Ui, ctx: &mut AppCtx) -> ScreenAction {
@@ -547,9 +655,28 @@ impl Screen for AiSettingsScreen {
         }
         gap(ui, 14.0);
 
-        draw_panel(ui, panel, self.cloud_reason.as_deref(), &tr);
+        draw_panel(
+            ui,
+            panel,
+            self.settings.as_ref(),
+            self.cloud_reason.as_deref(),
+            &tr,
+        );
 
-        draw_main_row(ui, panel, &self.log, !self.loaded, &tr);
+        let switched = draw_main_row(
+            ui,
+            panel,
+            self.features_off(),
+            &self.log,
+            &self.rows,
+            !self.loaded,
+            &tr,
+        );
+        if let (Some((feature, on)), Some(worker)) = (switched, ctx.api.as_ref())
+            && !self.latest.is_pending()
+        {
+            self.switch_feature(worker, feature, on);
+        }
         ScreenAction::Stay
     }
 }
@@ -574,10 +701,40 @@ fn save_dialog(tr: &Tr) -> Option<PathBuf> {
     )
 }
 
+/// The system open dialog for the local model file. Only the path is kept; nothing is copied or
+/// downloaded.
+fn model_dialog(tr: &Tr) -> Option<PathBuf> {
+    crate::ui::dialogs::open_file(&tr.t("ai.settings.model_dialog"), &[])
+}
+
+/// Reads the stored tier and the older log, and with `with_ai` the AI settings and the
+/// assistant's log rows.
+fn read_all_settings(api: &Api, with_ai: bool) -> Result<Loaded, ledgerly_api::ApiError> {
+    let tier = api.ai_tier()?;
+    let log = api.ai_log()?;
+    let (settings, rows) = if with_ai {
+        (Some(api.ai_settings()?), api.ai_log_rows()?)
+    } else {
+        (None, Vec::new())
+    };
+    Ok(Loaded {
+        tier,
+        log,
+        settings,
+        rows,
+    })
+}
+
 pub use crate::ui::probe::{read_probe, record_probe};
 
 /// The panel under the option cards: what the chosen tier means, or the note for no tier.
-fn draw_panel(ui: &mut Ui, panel: Panel, cloud_reason: Option<&str>, tr: &Tr) {
+fn draw_panel(
+    ui: &mut Ui,
+    panel: Panel,
+    settings: Option<&AiSettings>,
+    cloud_reason: Option<&str>,
+    tr: &Tr,
+) {
     match panel {
         Panel::Unset => {
             note(ui, NoteKind::Info, &unset_note_in(tr));
@@ -588,11 +745,16 @@ fn draw_panel(ui: &mut Ui, panel: Panel, cloud_reason: Option<&str>, tr: &Tr) {
             gap(ui, 14.0);
         }
         Panel::Local => {
-            draw_local(ui, tr);
+            draw_local(ui, settings.map(|s| &s.model_file), tr);
             gap(ui, 14.0);
         }
         Panel::Cloud => {
-            draw_cloud(ui, cloud_reason, tr);
+            match settings {
+                Some(settings) if settings.key != KeyState::NoVault => {
+                    draw_cloud_provider(ui, settings, tr);
+                }
+                Some(_) | None => draw_cloud(ui, cloud_reason, tr),
+            }
             gap(ui, 14.0);
         }
     }
@@ -658,10 +820,16 @@ fn draw_options(ui: &mut Ui, panel: Panel, stored: Option<AiTier>, tr: &Tr) -> O
 
 /// The local panel: the local model's reader, language and network rows, across the full width
 /// of the option cards (index.html:1906 and the local-model card at 1914).
-fn draw_local(ui: &mut Ui, tr: &Tr) {
+fn draw_local(ui: &mut Ui, model_file: Option<&LocalModelFile>, tr: &Tr) {
     let local = card(ui, |ui| {
         ui.set_min_width(ui.available_width());
         panel_title(ui, Some(Icon::Cpu), &tr.t("ai.settings.local.title"));
+        let file_row = model_file.map(|file| {
+            (
+                tr.t("ai.settings.local.file_label"),
+                model_file_text(file, tr),
+            )
+        });
         let words = [
             ("reader_label", "reader"),
             ("language_label", "language"),
@@ -673,8 +841,9 @@ fn draw_local(ui: &mut Ui, tr: &Tr) {
                 tr.t(&format!("ai.settings.local.{value}")),
             )
         });
-        let rows = words
+        let rows = file_row
             .iter()
+            .chain(words.iter())
             .map(|(label, value)| vec![mock_table::muted(label), mock_table::text(value)])
             .collect();
         mock_table::table(
@@ -685,6 +854,132 @@ fn draw_local(ui: &mut Ui, tr: &Tr) {
         );
     });
     record_probe(ui, "ai-settings.local", local.response.rect);
+}
+
+/// The Model file row's text: none chosen, the file and its size, or a file that is gone.
+fn model_file_text(file: &LocalModelFile, tr: &Tr) -> String {
+    match file {
+        LocalModelFile::NotChosen => tr.t("ai.settings.local.file_none"),
+        LocalModelFile::Found { path, bytes } => tr.tf(
+            "ai.settings.local.file_found",
+            &[
+                ("path", &path.display().to_string()),
+                ("bytes", &bytes.to_string()),
+            ],
+        ),
+        LocalModelFile::Missing(path) => tr.tf(
+            "ai.settings.local.file_missing",
+            &[("path", &path.display().to_string())],
+        ),
+    }
+}
+
+/// The request format in words: the two formats the cloud client speaks get the mock's words;
+/// anything else the user typed is shown as typed.
+fn format_text(format: &str, tr: &Tr) -> String {
+    match format {
+        "chat-completions" => tr.t("ai.settings.cloud.format_chat"),
+        "messages" => tr.t("ai.settings.cloud.format_messages"),
+        other => other.to_owned(),
+    }
+}
+
+/// The Key row's words and badge: saved, not saved, or the vault could not be read.
+fn key_words(key: &KeyState, tr: &Tr) -> (String, Option<(BadgeKind, String)>) {
+    match key {
+        KeyState::Set => (
+            tr.t("ai.settings.cloud.key_stored"),
+            Some((BadgeKind::Ok, tr.t("ai.settings.cloud.key_set"))),
+        ),
+        KeyState::NotSet => (
+            tr.t("ai.settings.cloud.key_missing"),
+            Some((BadgeKind::Warn, tr.t("ai.settings.cloud.key_not_set"))),
+        ),
+        KeyState::Unreadable(reason) => (
+            tr.tf("ai.settings.cloud.key_unreadable", &[("reason", reason)]),
+            None,
+        ),
+        KeyState::NoVault => (tr.t("ai.settings.cloud.key"), None),
+    }
+}
+
+/// The cloud panel once a key vault is attached (index.html:2098): the provider as the user
+/// described it and whether the key is saved, beside the Removed before sending card. The key
+/// itself is never read here, only whether it is there.
+fn draw_cloud_provider(ui: &mut Ui, settings: &AiSettings, tr: &Tr) {
+    let not_described = tr.t("ai.settings.cloud.not_described");
+    let cloud = &settings.cloud;
+    let endpoint = cloud
+        .endpoint
+        .clone()
+        .unwrap_or_else(|| not_described.clone());
+    let format = cloud
+        .format
+        .as_deref()
+        .map_or_else(|| not_described.clone(), |f| format_text(f, tr));
+    let model = cloud.model.clone().unwrap_or_else(|| not_described.clone());
+    let (key_text, key_badge) = key_words(&settings.key, tr);
+    let labels = [
+        "endpoint_label",
+        "format_label",
+        "model_label",
+        "key_label",
+        "ask_label",
+        "region_label",
+    ]
+    .map(|k| tr.t(&format!("ai.settings.cloud.{k}")));
+    let ask = tr.t("ai.settings.cloud.ask");
+    let region = tr.t("ai.settings.cloud.region");
+    let removed_lines = removed_in(tr);
+    ui.scope(|ui| {
+        ui.spacing_mut().item_spacing.x = GRID_GAP;
+        ui.columns(2, |cols| {
+            let [left, right] = cols else { return };
+            let provider = card(left, |ui| {
+                ui.set_min_width(ui.available_width());
+                panel_title(ui, Some(Icon::Cloud), &tr.t("ai.settings.cloud.title"));
+                let key_cell: Cell<'_> = Box::new(|ui| {
+                    ui.horizontal_wrapped(|ui| {
+                        ui.label(RichText::new(&key_text).size(TEXT_BODY));
+                        if let Some((kind, word)) = &key_badge {
+                            badge(ui, *kind, word);
+                        }
+                    });
+                });
+                let ask_cell: Cell<'_> = Box::new(|ui| {
+                    ui.horizontal(|ui| {
+                        mock_table::switch_cell(true, &ask)(ui);
+                        ui.label(RichText::new(&ask).size(TEXT_BODY));
+                    });
+                });
+                let rows = vec![
+                    vec![mock_table::muted(&labels[0]), mock_table::text(&endpoint)],
+                    vec![mock_table::muted(&labels[1]), mock_table::text(&format)],
+                    vec![mock_table::muted(&labels[2]), mock_table::text(&model)],
+                    vec![mock_table::muted(&labels[3]), key_cell],
+                    vec![mock_table::muted(&labels[4]), ask_cell],
+                    vec![mock_table::muted(&labels[5]), mock_table::muted(&region)],
+                ];
+                mock_table::table(
+                    ui,
+                    &[Width::Fixed(PROVIDER_LABEL_COLUMN), Width::Rest],
+                    None,
+                    rows,
+                );
+            });
+            record_probe(left, "ai-settings.provider", provider.response.rect);
+            let removed = card(right, |ui| {
+                ui.set_min_width(ui.available_width());
+                panel_title(ui, Some(Icon::Shield), &tr.t("ai.settings.cloud.removed"));
+                let rows = removed_lines
+                    .iter()
+                    .map(|line| vec![mock_table::text(line), mock_table::switch_cell(true, line)])
+                    .collect();
+                mock_table::table(ui, &[Width::Rest, Width::Fixed(ON_COLUMN)], None, rows);
+            });
+            record_probe(right, "ai-settings.removed", removed.response.rect);
+        });
+    });
 }
 
 /// The cloud panel (index.html:1912): the Provider card and the Removed before sending card, side
@@ -777,7 +1072,17 @@ fn removed_in(tr: &Tr) -> [String; 4] {
 
 /// The main row (`.g-main`, index.html:1918): the features table over the log on the left, the
 /// never card on the right.
-fn draw_main_row(ui: &mut Ui, panel: Panel, log: &[AiLogEntry], reading: bool, tr: &Tr) {
+/// Returns the feature whose switch was clicked this frame and the state it was switched to.
+fn draw_main_row(
+    ui: &mut Ui,
+    panel: Panel,
+    features_off: Option<&[AiFeature]>,
+    log: &[AiLogEntry],
+    rows: &[AiLogRow],
+    reading: bool,
+    tr: &Tr,
+) -> Option<(AiFeature, bool)> {
+    let mut switched = None;
     #[expect(clippy::float_arithmetic, reason = "the grid's fractions of the row")]
     let (left, right) = {
         let room = (ui.available_width() - GRID_GAP).max(0.0);
@@ -793,20 +1098,33 @@ fn draw_main_row(ui: &mut Ui, panel: Panel, log: &[AiLogEntry], reading: bool, t
             .size(Size::exact(right))
             .horizontal(|mut strip| {
                 strip.cell(|col| {
-                    draw_features(col, panel, tr);
+                    switched = draw_features(col, panel, features_off, tr);
                     gap(col, 12.0);
-                    draw_log(col, log, reading, tr);
+                    if rows.is_empty() {
+                        draw_log(col, log, reading, tr);
+                    } else {
+                        draw_activity(col, rows, tr);
+                    }
                 });
                 strip.empty();
                 strip.cell(|col| draw_never(col, tr));
             });
     });
+    switched
 }
 
 /// The features table: what each feature sees, and whether it runs (index.html:1908). The On
 /// switch is read-only: nothing runs yet (PARITY-GAPS).
-fn draw_features(ui: &mut Ui, panel: Panel, tr: &Tr) {
+/// With the AI settings read (`features_off` is `Some`) and a tier on, each switch can be clicked;
+/// the feature clicked and its new state are returned.
+fn draw_features(
+    ui: &mut Ui,
+    panel: Panel,
+    features_off: Option<&[AiFeature]>,
+    tr: &Tr,
+) -> Option<(AiFeature, bool)> {
     let off = matches!(panel, Panel::Off | Panel::Unset);
+    let mut switched = None;
     let cloud = panel == Panel::Cloud;
     let t = tokens(ui);
     let features = card_flush(ui, |ui| {
@@ -828,15 +1146,29 @@ fn draw_features(ui: &mut Ui, panel: Panel, tr: &Tr) {
                 }
             })
             .collect();
+        let clicked = std::cell::Cell::new(None);
         let rows = features_words
             .iter()
             .zip(&texts)
-            .map(|((feature, _, _), text)| {
-                vec![
-                    mock_table::text(feature),
-                    mock_table::muted(text),
-                    mock_table::switch_cell(!off, feature),
-                ]
+            .zip(AiFeature::ALL)
+            .enumerate()
+            .map(|(n, (((name, _, _), text), feature))| {
+                let switch: Cell<'_> = match features_off {
+                    Some(list) if !off => {
+                        let on = !list.contains(&feature);
+                        let clicked = &clicked;
+                        Box::new(move |ui: &mut Ui| {
+                            let response =
+                                crate::ui::switch::switch(ui, on, egui::Sense::click(), name);
+                            record_probe(ui, &format!("ai-settings.switch.{n}"), response.rect);
+                            if response.clicked() {
+                                clicked.set(Some((feature, !on)));
+                            }
+                        })
+                    }
+                    Some(_) | None => mock_table::switch_cell(!off, name),
+                };
+                vec![mock_table::text(name), mock_table::muted(text), switch]
             })
             .collect();
         mock_table::table(
@@ -853,6 +1185,7 @@ fn draw_features(ui: &mut Ui, panel: Panel, tr: &Tr) {
             ]),
             rows,
         );
+        switched = clicked.get();
         if !off {
             // Nothing runs in this build; the switch says the feature is on, this line says why
             // nothing happens (PARITY-GAPS).
@@ -868,6 +1201,7 @@ fn draw_features(ui: &mut Ui, panel: Panel, tr: &Tr) {
         }
     });
     record_probe(ui, "ai-settings.features", features.response.rect);
+    switched
 }
 
 /// The AI activity log: the file's real rows, or a line saying there are none.
@@ -959,6 +1293,141 @@ fn draw_log(ui: &mut Ui, log: &[AiLogEntry], reading: bool, tr: &Tr) {
             rows,
         );
     });
+}
+
+/// The assistant's activity log (index.html:2077 and 1915): when, which feature, what it was
+/// given, what it produced and what you decided. Every cell is a stored fact; none is a figure.
+fn draw_activity(ui: &mut Ui, rows: &[AiLogRow], tr: &Tr) {
+    card_flush(ui, |ui| {
+        let t = tokens(ui);
+        ui.add_space(12.0);
+        ui.horizontal(|ui| {
+            ui.add_space(16.0);
+            ui.label(
+                RichText::new(tr.t("ai.settings.log.title"))
+                    .font(bold_font(ui, TEXT_H2))
+                    .color(t.text),
+            );
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                ui.add_space(16.0);
+                ui.label(
+                    RichText::new(tr.t("ai.settings.log.meta"))
+                        .size(TEXT_META)
+                        .color(t.text_3),
+                );
+            });
+        });
+        ui.add_space(6.0);
+        let texts: Vec<[String; 5]> = rows
+            .iter()
+            .map(|row| {
+                [
+                    short_when(row),
+                    tr.t(feature_key(row.feature)),
+                    tr.tf(
+                        "ai.settings.log.input_text",
+                        &[
+                            ("label", &row.input_label),
+                            ("hash", &short_hash(&row.input_hash)),
+                        ],
+                    ),
+                    output_text(&row.output, tr),
+                    decision_text(&row.decision, tr),
+                ]
+            })
+            .collect();
+        let cells = texts
+            .iter()
+            .map(|c| {
+                vec![
+                    mock_table::muted(&c[0]),
+                    mock_table::text(&c[1]),
+                    mock_table::text(&c[2]),
+                    mock_table::text(&c[3]),
+                    mock_table::text(&c[4]),
+                ]
+            })
+            .collect();
+        let headers = [
+            tr.t("ai.settings.log.when"),
+            tr.t("ai.settings.log.feature"),
+            tr.t("ai.settings.log.input"),
+            tr.t("ai.settings.log.output"),
+            tr.t("ai.settings.log.decision"),
+        ];
+        mock_table::table(
+            ui,
+            &[
+                Width::Fixed(100.0),
+                Width::Fixed(110.0),
+                Width::Rest,
+                Width::Fixed(150.0),
+                Width::Fixed(130.0),
+            ],
+            Some(&headers.each_ref().map(String::as_str)),
+            cells,
+        );
+    });
+}
+
+/// The words of a feature in the log (index.html:2077).
+fn feature_key(feature: AiFeature) -> &'static str {
+    match feature {
+        AiFeature::BillReading => "ai.settings.log.feature.bill",
+        AiFeature::PlainWords => "ai.settings.log.feature.plain",
+        AiFeature::BankSuggestion => "ai.settings.log.feature.bank",
+        AiFeature::Ask => "ai.settings.log.feature.ask",
+        AiFeature::Gstr2bExplanation => "ai.settings.log.feature.gstr2b",
+    }
+}
+
+/// What an event produced, in words.
+fn output_text(output: &AiOutput, tr: &Tr) -> String {
+    match output {
+        AiOutput::DraftVoucher(kind) => tr.t(crate::screens::review::draft_kind_key(*kind)),
+        AiOutput::MatchSuggestion => tr.t("ai.settings.log.out.match"),
+        AiOutput::ReportQuery => tr.t("ai.settings.log.out.query"),
+        AiOutput::MappingSuggestion => tr.t("ai.settings.log.out.mapping"),
+        AiOutput::Answered => tr.t("ai.settings.log.out.answered"),
+        AiOutput::ReadFailed(reason) => {
+            tr.tf("ai.settings.log.out.read_failed", &[("reason", reason)])
+        }
+        AiOutput::CloudConsent(true) => tr.t("ai.settings.log.out.consent_given"),
+        AiOutput::CloudConsent(false) => tr.t("ai.settings.log.out.consent_refused"),
+    }
+}
+
+/// What the person decided, in words.
+fn decision_text(decision: &AiDecision, tr: &Tr) -> String {
+    match decision {
+        AiDecision::Waiting => tr.t("ai.settings.log.waiting"),
+        AiDecision::Accepted(Some(number)) => {
+            tr.tf("ai.settings.log.accepted_as", &[("number", number)])
+        }
+        AiDecision::Accepted(None) => tr.t("ai.settings.log.accepted"),
+        AiDecision::Rejected(_) => tr.t("ai.settings.log.rejected"),
+        AiDecision::NoDecision => tr.t("ai.settings.log.no_decision"),
+    }
+}
+
+/// The log's time as the mock shows it: `21 Nov 10:42` in the row's own offset.
+fn short_when(row: &AiLogRow) -> String {
+    let month = match row.at.month() {
+        time::Month::January => "Jan",
+        time::Month::February => "Feb",
+        time::Month::March => "Mar",
+        time::Month::April => "Apr",
+        time::Month::May => "May",
+        time::Month::June => "Jun",
+        time::Month::July => "Jul",
+        time::Month::August => "Aug",
+        time::Month::September => "Sep",
+        time::Month::October => "Oct",
+        time::Month::November => "Nov",
+        time::Month::December => "Dec",
+    };
+    let (h, mi, _) = row.at.to_hms();
+    format!("{:02} {month} {h:02}:{mi:02}", row.at.day())
 }
 
 /// The log's time as the CSV export writes it: `YYYY-MM-DD HH:MM` in the entry's own offset.
