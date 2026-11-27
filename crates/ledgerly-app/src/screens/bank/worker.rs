@@ -20,14 +20,20 @@
 //!   matched as soon as the user accepts it; if the API refuses or the worker is lost, the line
 //!   goes back to waiting and the reason is shown.
 //!
+//! With the assistant in the release, the load also asks `Api::bank_ai_suggestions` about the
+//! lines the exact matcher leaves; the API's gate decides whether anything is asked. An AI
+//! suggestion is shown with the engine's reason (same amount, days apart), never the provider's
+//! words, and accepting it goes to `Api::accept_bank_ai_match`; skipping its line rejects it
+//! (`Api::reject_ai_draft`). Both are logged in the AI activity log by the API.
+//!
 //! Limits, stated rather than guessed: a rule suggestion has no voucher yet, so it is not offered;
 //! a manual match is not sent to the API (it only confirms a match the matcher lists), so the
 //! manual list is empty in this mode; the statement shown is the newest stored one of the ledger.
 
 use std::collections::{BTreeSet, VecDeque};
 
-use ledgerly_api::{BrsLine, BrsStatement, Candidate, ExportFormat};
-use ledgerly_core::{BankStatementId, Date, LedgerId, Outcome, Paise};
+use ledgerly_api::{AiBankMatch, BankAiAnswer, BrsLine, BrsStatement, Candidate, ExportFormat};
+use ledgerly_core::{BankStatementId, CancelToken, Date, EventSeq, LedgerId, Outcome, Paise};
 use ledgerly_model::{BankMatch, MatchKind};
 
 use super::{
@@ -43,6 +49,19 @@ pub(super) struct Loaded {
     statement: BankStatementId,
     lines: Vec<StatementLineView>,
     candidates: Vec<Candidate>,
+    /// The assistant's checked suggestions; empty when the assistant was not asked.
+    ai: Vec<AiBankMatch>,
+}
+
+/// What a queued write does.
+#[derive(Debug, Clone)]
+pub(super) enum Job {
+    /// Confirm the matcher's candidate.
+    Exact(Candidate),
+    /// Accept the assistant's suggestion stored as this draft.
+    AcceptAi(EventSeq),
+    /// Reject the assistant's suggestion stored as this draft.
+    RejectAi(EventSeq),
 }
 
 /// `None`: the ledger has no stored statement.
@@ -50,7 +69,7 @@ type LoadAnswer = Result<Outcome<Option<Loaded>>, String>;
 type BrsAnswer = (Date, Result<Outcome<BrsStatement>, String>);
 /// The file the statement was written to, or why it was not.
 type ExportAnswer = (std::path::PathBuf, Result<Outcome<()>, String>);
-type ConfirmAnswer = (BankMatch, Result<Outcome<()>, String>);
+type ConfirmAnswer = (BankMatch, bool, Result<Outcome<()>, String>);
 /// The new statement's id, or why the file was refused.
 type ImportAnswer = Result<Outcome<BankStatementId>, ImportFailure>;
 
@@ -82,7 +101,7 @@ pub(super) struct Run {
     load: Latest<LoadAnswer>,
     brs: Latest<BrsAnswer>,
     confirm: Latest<ConfirmAnswer>,
-    queue: VecDeque<(BankMatch, Candidate)>,
+    queue: VecDeque<(BankMatch, Job)>,
     in_flight: bool,
     /// A picked file that the next tick sends to the worker.
     import_pending: Option<PendingImport>,
@@ -92,8 +111,10 @@ pub(super) struct Run {
     export_pending: Option<std::path::PathBuf>,
     /// The export the worker is running.
     export: Latest<ExportAnswer>,
-    /// The matcher's candidates behind `BankScreen::suggestions`, in the same order.
+    /// The matcher's candidates behind `BankScreen::suggestions`.
     candidates: Vec<Candidate>,
+    /// The assistant's suggestions behind `BankScreen::suggestions`.
+    ai: Vec<AiBankMatch>,
     /// Statement lines the user matched in this session; kept across a reload.
     matched: BTreeSet<u32>,
 }
@@ -152,6 +173,7 @@ impl BankScreen {
                 export_pending: None,
                 export: Latest::default(),
                 candidates: Vec::new(),
+                ai: Vec::new(),
                 matched: BTreeSet::new(),
             }),
             import_layout: import::DEFAULT_LAYOUT,
@@ -161,6 +183,7 @@ impl BankScreen {
             account: None,
             can_switch: false,
             switch_requested: false,
+            rejected: Vec::new(),
         }
     }
 
@@ -203,6 +226,7 @@ impl BankScreen {
         }
         self.apply_answers();
         self.queue_accepted();
+        self.queue_rejected();
         let Some(handle) = worker else {
             self.fail_without_worker();
             return;
@@ -264,7 +288,9 @@ impl BankScreen {
         }
         let finished = self.run.as_mut().and_then(|run| run.confirm.poll());
         match finished {
-            Some(Done::Ready((matched, answer))) => self.apply_confirm(&matched, answer),
+            Some(Done::Ready((matched, rejected, answer))) => {
+                self.apply_confirm(&matched, rejected, answer);
+            }
             Some(Done::Lost) => {
                 self.notice = Some(LOST.to_owned());
                 self.release_in_flight();
@@ -314,6 +340,7 @@ impl BankScreen {
                 self.used_vouchers.clear();
                 if let Some(run) = self.run.as_mut() {
                     run.candidates.clear();
+                    run.ai.clear();
                 }
             }
             Ok(Outcome::Value(Some(loaded))) => self.show_loaded(loaded),
@@ -367,8 +394,21 @@ impl BankScreen {
             self.suggestions.push(view_of(&candidate));
             kept.push(candidate);
         }
+        let mut ai_kept = Vec::new();
+        for m in loaded.ai {
+            let waiting = self
+                .lines
+                .iter()
+                .any(|l| l.view.line_no == m.line && l.status == LineStatus::Pending);
+            let taken = self.suggestions.iter().any(|s| s.lines.contains(&m.line));
+            if waiting && !taken {
+                self.suggestions.push(ai_view_of(&m));
+                ai_kept.push(m);
+            }
+        }
         if let Some(run) = self.run.as_mut() {
             run.candidates = kept;
+            run.ai = ai_kept;
         }
     }
 
@@ -387,8 +427,22 @@ impl BankScreen {
         }
     }
 
-    fn apply_confirm(&mut self, matched: &BankMatch, answer: Result<Outcome<()>, String>) {
+    fn apply_confirm(
+        &mut self,
+        matched: &BankMatch,
+        rejected: bool,
+        answer: Result<Outcome<()>, String>,
+    ) {
         self.release_in_flight();
+        if rejected {
+            // A rejection changes no line: the line stays as the person set it.
+            match answer {
+                Ok(Outcome::Value(())) => self.notice = None,
+                Ok(Outcome::Unsupported(u)) => self.notice = Some(unsupported_text(&u)),
+                Err(text) => self.notice = Some(text),
+            }
+            return;
+        }
         match answer {
             Ok(Outcome::Value(())) => {
                 // The confirmed match set a bank date, so the shell reads the books again.
@@ -420,6 +474,26 @@ impl BankScreen {
     /// the matcher did not suggest (a manual one) is refused here and put back.
     fn queue_accepted(&mut self) {
         for matched in self.take_confirmed() {
+            if matched.kind == MatchKind::AiSuggested {
+                let draft = self.run.as_ref().and_then(|run| {
+                    run.ai
+                        .iter()
+                        .find(|m| {
+                            matched.statement_lines == [m.line] && matched.vouchers == [m.voucher]
+                        })
+                        .map(|m| m.draft)
+                });
+                if let (Some(draft), Some(run)) = (draft, self.run.as_mut()) {
+                    run.queue.push_back((matched, Job::AcceptAi(draft)));
+                } else {
+                    self.revert(&matched);
+                    self.notice = Some(
+                        "The assistant's suggestion is no longer open; nothing was saved."
+                            .to_owned(),
+                    );
+                }
+                continue;
+            }
             let candidate = self.run.as_ref().and_then(|run| {
                 run.candidates
                     .iter()
@@ -432,7 +506,7 @@ impl BankScreen {
             match (candidate, matched.kind) {
                 (Some(candidate), MatchKind::Exact) => {
                     if let Some(run) = self.run.as_mut() {
-                        run.queue.push_back((matched, candidate));
+                        run.queue.push_back((matched, Job::Exact(candidate)));
                     }
                 }
                 (None, MatchKind::Exact)
@@ -447,6 +521,30 @@ impl BankScreen {
         }
     }
 
+    /// Queues a rejection for each line the person skipped while it showed the assistant's
+    /// suggestion. The suggestion leaves the screen; the line stays skipped.
+    fn queue_rejected(&mut self) {
+        for line in self.take_rejected() {
+            let Some(run) = self.run.as_mut() else {
+                return;
+            };
+            let Some(at) = run.ai.iter().position(|m| m.line == line) else {
+                continue;
+            };
+            let m = run.ai.remove(at);
+            let matched = BankMatch {
+                statement: self.statement,
+                statement_lines: vec![m.line],
+                vouchers: vec![m.voucher],
+                kind: MatchKind::AiSuggested,
+                bank_date: m.bank_date,
+            };
+            run.queue.push_back((matched, Job::RejectAi(m.draft)));
+            self.suggestions
+                .retain(|s| !(s.kind == MatchKind::AiSuggested && s.lines == [line]));
+        }
+    }
+
     /// Sends the next queued confirmation when none is running.
     fn send_confirm(&mut self, handle: &ApiWorker) {
         let Some(run) = self.run.as_mut() else {
@@ -455,17 +553,24 @@ impl BankScreen {
         if run.in_flight {
             return;
         }
-        let Some((matched, candidate)) = run.queue.pop_front() else {
+        let Some((matched, job)) = run.queue.pop_front() else {
             return;
         };
         let statement = matched.statement;
         run.in_flight = true;
         run.confirm.start(handle, move |api| {
-            let answer = api
-                .confirm_bank_match(statement, &candidate)
-                .map(|out| out.map(|_| ()))
-                .map_err(|e| e.to_string());
-            (matched, answer)
+            let rejected = matches!(job, Job::RejectAi(_));
+            let answer = match job {
+                Job::Exact(candidate) => api
+                    .confirm_bank_match(statement, &candidate)
+                    .map(|out| out.map(|_| ())),
+                Job::AcceptAi(draft) => api
+                    .accept_bank_ai_match(statement, draft)
+                    .map(|out| out.map(|_| ())),
+                Job::RejectAi(draft) => api.reject_ai_draft(draft, None).map(Outcome::Value),
+            }
+            .map_err(|e| e.to_string());
+            (matched, rejected, answer)
         });
     }
 
@@ -508,8 +613,9 @@ impl BankScreen {
         }
         run.want_load = false;
         let (ledger, as_of) = (run.ledger, run.as_of);
+        let ask_ai = crate::release::ai_enabled();
         run.load
-            .start(handle, move |api| load_statement(api, ledger));
+            .start(handle, move |api| load_statement(api, ledger, ask_ai));
         run.brs.start(handle, move |api| {
             let answer = api.brs_statement(ledger, as_of).map_err(|e| e.to_string());
             (as_of, answer)
@@ -579,8 +685,9 @@ impl BankScreen {
 const LOST: &str =
     "the engine stopped before it answered; check the books and open the bank screen again";
 
-/// Reads the newest stored statement of `ledger` and the matcher's suggestions for it.
-fn load_statement(api: &ledgerly_api::Api, ledger: LedgerId) -> LoadAnswer {
+/// Reads the newest stored statement of `ledger`, the matcher's suggestions for it, and, when
+/// `ask_ai`, the assistant's (the API's gate decides whether it is asked).
+fn load_statement(api: &mut ledgerly_api::Api, ledger: LedgerId, ask_ai: bool) -> LoadAnswer {
     let stored = api
         .stored_bank_statements(ledger)
         .map_err(|e| e.to_string())?;
@@ -606,13 +713,46 @@ fn load_statement(api: &ledgerly_api::Api, ledger: LedgerId) -> LoadAnswer {
         })
         .collect();
     let id = *id;
-    match api.bank_suggestions(id, &[]).map_err(|e| e.to_string())? {
-        Outcome::Value(candidates) => Ok(Outcome::Value(Some(Loaded {
-            statement: id,
-            lines,
-            candidates,
-        }))),
-        Outcome::Unsupported(u) => Ok(Outcome::Unsupported(u)),
+    let candidates = match api.bank_suggestions(id, &[]).map_err(|e| e.to_string())? {
+        Outcome::Value(candidates) => candidates,
+        Outcome::Unsupported(u) => return Ok(Outcome::Unsupported(u)),
+    };
+    let ai = if ask_ai {
+        match api
+            .bank_ai_suggestions(id, &CancelToken::new())
+            .map_err(|e| e.to_string())?
+        {
+            Outcome::Value(BankAiAnswer::Suggested { matches, .. }) => matches,
+            Outcome::Value(BankAiAnswer::Refused(_)) | Outcome::Unsupported(_) => Vec::new(),
+        }
+    } else {
+        Vec::new()
+    };
+    Ok(Outcome::Value(Some(Loaded {
+        statement: id,
+        lines,
+        candidates,
+        ai,
+    })))
+}
+
+/// The view of one of the assistant's suggestions. The reason is the engine's check (the amounts
+/// are equal, the days between), never the provider's words; the confidence is the provider's
+/// stated per-mille as a label, which the screen shows and never decides with.
+fn ai_view_of(m: &AiBankMatch) -> SuggestionView {
+    let confidence = match m.confidence_permille {
+        800..=u16::MAX => Confidence::High,
+        500..=799 => Confidence::Medium,
+        0..=499 => Confidence::Low,
+    };
+    SuggestionView {
+        lines: vec![m.line],
+        vouchers: vec![m.voucher],
+        voucher_label: format!("voucher {}", m.voucher.0),
+        reason: crate::i18n::tf("bank.ai.reason", &[("days", &m.days_apart.to_string())]),
+        confidence,
+        kind: MatchKind::AiSuggested,
+        bank_date: m.bank_date,
     }
 }
 

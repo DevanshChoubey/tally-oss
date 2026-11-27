@@ -153,6 +153,15 @@ untracked), look at each, update `PARITY-GAPS.md`.
   (`i18n_lit_phrases`) caught it; their 24 Hindi entries are unsourced. Open: a store failure inside
   `Api::report` after the provider answered returns the error without a log entry; no test can
   make the report engine fail that way yet, so it is not fixed.
+- Round F (part): the day book Origin of a voucher posted by accepting a draft is the reader's AI
+  badge ("Plain-words draft, accepted"; it showed "Typed" before, the test saw it), and the
+  assistant's bank match suggestions run end to end behind the gate (`Api::bank_ai_suggestions`,
+  `Api::accept_bank_ai_match`, `Api::bank_matches`; `AiProvider::match_bank_line` with a refusing
+  default; the bank screen's worker shows, accepts and rejects them). NOT BUILT (PARITY-GAPS): the
+  `bank.ai-suggestions` tab and card, a voucher or a ledger from a bank line, the cloud bank prompt.
+- Honesty notes (F): the API and app bank tests were written first and seen failing (API at compile,
+  app 3 of 4; the AI-off one passed on the old path); the Origin unit test was seen failing at
+  compile only. One API test fixture was corrected (an alteration must keep the voucher number).
 - Honesty notes (C): the app tests' sentence helper was changed to wait for the ready hint
   instead of "Read as:" (the test typed before the gate read Ready); the screen tests were written
   before the screen and seen failing, the accept transition checked by mutation.

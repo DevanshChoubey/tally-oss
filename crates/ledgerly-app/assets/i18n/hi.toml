@@ -408,6 +408,7 @@ name = "हिन्दी"
 # Bank screen (s7: hindi)
 "bank.title" = "बैंक मिलान: {ledger}"  # unsourced
 "bank.page_title" = "बैंक मिलान"  # unsourced
+"bank.ai.reason" = "बैंक पर वाउचर जितनी ही राशि, {days} दिन का अंतर। इंजन ने दोनों जाँचे; वाउचर सहायक ने चुना।"  # unsourced
 "bank.key.match" = "मिलाएँ"  # unsourced
 "bank.key.skip" = "छोड़ें"  # unsourced
 "bank.key.match_by_hand" = "हाथ से मिलाएँ"  # unsourced

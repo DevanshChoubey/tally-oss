@@ -12,6 +12,7 @@ mod as_voucher;
 mod ask_books;
 mod balance;
 mod bank;
+mod bank_ai;
 mod brs_statement;
 mod command;
 mod day_book_meta;
@@ -53,6 +54,7 @@ pub use ai_settings::{
 pub use ask_books::{AskAnswer, default_report_params, default_report_period};
 pub use balance::BalanceChange;
 pub use bank::{BalanceRefusal, balance_refusal};
+pub use bank_ai::{AiBankMatch, BankAiAnswer};
 pub use command::{Command, CommandResult, CreatedId};
 pub use gst_filing::GstFiling;
 pub use ledgerly_assist::cloud::{

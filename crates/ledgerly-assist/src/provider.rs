@@ -32,7 +32,10 @@ use ledgerly_model::Masters;
 use crate::cloud::CloudClient;
 use crate::nl_entry::{MasterLedger, ModelClient, ModelRequest, NlEntry};
 use crate::ocr::{OcrOutput, read_bill};
-use crate::{AssistError, Proposal, ProposalInput, Proposer, ReportQuery};
+use crate::{
+    AssistError, BankLineQuestion, MatchSuggestion, OpenVoucher, Proposal, ProposalInput, Proposer,
+    ReportQuery,
+};
 
 /// Where a provider runs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -109,6 +112,26 @@ pub trait AiProvider: Send + fmt::Debug {
     /// # Errors
     /// [`AssistError`] when no query can be produced.
     fn ask(&self, question: &str, cancel: &CancelToken) -> Result<ReportQuery, AssistError>;
+
+    /// A statement line to the one voucher in `open` it pays or receives. Only the voucher's id
+    /// is taken from the answer: the engine checks the row, the voucher and the amount.
+    ///
+    /// A provider that has no prompt for bank lines yet refuses (the default).
+    ///
+    /// # Errors
+    /// [`AssistError`] when no suggestion can be produced.
+    fn match_bank_line(
+        &self,
+        line: &BankLineQuestion,
+        open: &[OpenVoucher],
+        cancel: &CancelToken,
+    ) -> Result<MatchSuggestion, AssistError> {
+        let _ = (line, open, cancel);
+        Err(AssistError::Unsupported(Unsupported {
+            what: "bank match suggestions".to_owned(),
+            reason: format!("{} does not suggest bank matches yet", self.info().name),
+        }))
+    }
 }
 
 /// The assistant seam over a provider and the masters of the open company.
@@ -354,6 +377,7 @@ pub struct FixedAnswers {
     texts: Vec<(String, String)>,
     documents: Vec<OcrOutput>,
     questions: Vec<(String, ReportQuery)>,
+    bank_lines: Vec<(u32, MatchSuggestion)>,
     not_installed: Option<String>,
 }
 
@@ -384,6 +408,13 @@ impl FixedAnswers {
     #[must_use]
     pub fn with_question(mut self, question: impl Into<String>, query: ReportQuery) -> Self {
         self.questions.push((question.into(), query));
+        self
+    }
+
+    /// Records the bank match suggestion for the statement line of `row`.
+    #[must_use]
+    pub fn with_bank_line(mut self, row: u32, suggestion: MatchSuggestion) -> Self {
+        self.bank_lines.push((row, suggestion));
         self
     }
 
@@ -481,6 +512,23 @@ impl AiProvider for FixedAnswers {
             .map(|(_, query)| query.clone())
             .ok_or_else(|| AssistError::Output {
                 reason: "the test provider has no query recorded for this question".to_owned(),
+            })
+    }
+
+    fn match_bank_line(
+        &self,
+        line: &BankLineQuestion,
+        _open: &[OpenVoucher],
+        cancel: &CancelToken,
+    ) -> Result<MatchSuggestion, AssistError> {
+        self.check(cancel)?;
+        self.bank_lines
+            .iter()
+            .find(|(row, _)| *row == line.row)
+            .map(|(_, suggestion)| suggestion.clone())
+            .ok_or_else(|| AssistError::Output {
+                reason: "the test provider has no suggestion recorded for this statement line"
+                    .to_owned(),
             })
     }
 }

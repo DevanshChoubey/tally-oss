@@ -465,7 +465,7 @@ fn parse_proposal(id: EventSeq, json: &str) -> Result<Proposal, ApiError> {
 }
 
 /// The fields a decision event repeats from the draft it decides (its kind is set by the caller).
-fn draft_activity(draft: &AiDraft) -> AiActivity {
+pub(crate) fn draft_activity(draft: &AiDraft) -> AiActivity {
     AiActivity {
         feature: draft.feature,
         provider: draft.provider.clone(),

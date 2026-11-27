@@ -353,7 +353,7 @@ impl Api {
     ///
     /// # Errors
     /// [`ApiError::UnknownBankStatement`] when the company file holds no such statement.
-    fn held_statement(&self, id: BankStatementId) -> Result<&BankStatement, ApiError> {
+    pub(crate) fn held_statement(&self, id: BankStatementId) -> Result<&BankStatement, ApiError> {
         self.held()?
             .get(&id)
             .ok_or(ApiError::UnknownBankStatement { id: id.0 })

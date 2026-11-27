@@ -388,6 +388,9 @@ pub struct BankScreen {
     can_switch: bool,
     /// The user asked to change account this frame (key `C` or the button).
     switch_requested: bool,
+    /// Lines the user skipped while they showed the assistant's suggestion, for the host to
+    /// reject; oldest first.
+    rejected: Vec<u32>,
 }
 
 impl BankScreen {
@@ -494,6 +497,7 @@ impl BankScreen {
             account: None,
             can_switch: false,
             switch_requested: false,
+            rejected: Vec::new(),
         })
     }
 
@@ -556,6 +560,12 @@ impl BankScreen {
         })
     }
 
+    /// Hands the lines whose assistant suggestion the user rejected (by skipping the line) since
+    /// the last call to the host, oldest first.
+    pub fn take_rejected(&mut self) -> Vec<u32> {
+        std::mem::take(&mut self.rejected)
+    }
+
     /// Hands the matches the user confirmed since the last call to the host, oldest first.
     pub fn take_confirmed(&mut self) -> Vec<BankMatch> {
         std::mem::take(&mut self.confirmed)
@@ -611,7 +621,16 @@ impl BankScreen {
         };
         match line.status {
             LineStatus::Pending => {
-                line.status = LineStatus::Skipped;
+                let line_no = line.view.line_no;
+                if self
+                    .suggestion_for(line_no)
+                    .is_some_and(|s| s.kind == MatchKind::AiSuggested)
+                {
+                    self.rejected.push(line_no);
+                }
+                if let Some(line) = self.lines.get_mut(self.focus) {
+                    line.status = LineStatus::Skipped;
+                }
                 self.advance();
                 Ok(())
             }

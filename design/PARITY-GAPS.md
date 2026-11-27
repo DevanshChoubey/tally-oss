@@ -193,7 +193,27 @@ Classes:
   the engine's, and the subtitle's month alone would name the wrong day.
 - **NOT BUILT** the lines table lacks Exact, Rule and "AI suggested" badges and a confidence meter.
 - **DELIBERATE** the key that changes account is C, not F4, which is Contra in this app.
-- **NOT BUILT** `bank.suggested-ledger` and `bank.ai-suggestions` need the in-app assistant.
+- **FIX (s21 round F)** the assistant's bank suggestions: a line the exact matcher leaves is asked
+  about (`Api::bank_ai_suggestions`), with the open vouchers in its direction; the engine checks the
+  row, the one voucher, that it was offered and that the amounts are equal, stores the suggestion as
+  a draft (it lists in the review queue as a bank match, as the mock's q2), and accepting confirms
+  it as AI suggested with the accept in the same commit (`Api::accept_bank_ai_match`). Skipping its
+  line rejects it; a rejected or accepted line is not asked again. Every ask, refusal, accept and
+  reject is in the AI activity log.
+- **DELIBERATE** the side text of an AI suggestion is the engine's check ("Same amount as the voucher
+  on the bank, N days apart"), never the provider's reason; the mock shows the model's words
+  ("m.why"). A suggestion whose amounts differ is refused, not shown with a red check (the mock's
+  "Amounts differ" line), so Accept is never live on a mismatch.
+- **DELIBERATE** a suggestion is accepted or rejected one line at a time; nothing is accepted in bulk.
+- **NOT BUILT** `bank.ai-suggestions` as a screen state: the "AI suggestions" tab, the proposal card
+  with its source chips and check lines, Y/N/E keys (the app's Enter accepts and S skips) and a
+  capture. The Godavari sample has no line the assistant could match to an existing voucher (every
+  same-amount pair is within the exact matcher's 3 days), and its two mock suggestions that post a
+  new voucher (ANNAPURNA CANTEEN, MEHTA AGRO) are not built: a voucher from a bank line is refused.
+  The mock's KSK INDORE line is an exact match in the app (same amount, same day).
+- **NOT BUILT** `bank.suggested-ledger` (a new ledger for unexplained lines).
+- **NOT BUILT** the cloud prompt for bank lines: the cloud provider refuses (`match_bank_line`'s
+  default), and with a cloud provider each unmatched line logs that refusal on every load.
 - **DELIBERATE** `bank.default` shows the empty state because the fixture has no statement.
 
 ## Payment, receipt, contra, journal (`payment.*`, `receipt.*`, `contra.*`, `journal.*`)

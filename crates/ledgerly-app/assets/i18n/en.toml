@@ -375,6 +375,7 @@ name = "English"
 # Bank screen (s7: hindi)
 "bank.title" = "Bank reconciliation: {ledger}"
 "bank.page_title" = "Bank reconciliation"
+"bank.ai.reason" = "Same amount as the voucher on the bank, {days} days apart. The engine checked both; the assistant chose the voucher."
 "bank.key.match" = "Match"
 "bank.key.skip" = "Skip"
 "bank.key.match_by_hand" = "Match by hand"
