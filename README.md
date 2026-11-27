@@ -32,7 +32,8 @@ in Rust with [egui](https://github.com/emilk/egui).
 - **Books.** Ledgers, groups and cost-centre masters; sales, purchase, payment, receipt, journal,
   contra, credit note and debit note vouchers; voucher numbering; period locks. Allocating a voucher
   line to cost centres is not built yet: a ledger that needs cost centres is refused on entry.
-- **Backup and restore.** Settings > Backups and updates backs up the company file now (Alt+B) or on
+- **Backup and restore** (in the source tree after 1.0.0; not in the 1.0.0 packages). Settings >
+  Backups and updates backs up the company file now (Alt+B) or on
   a schedule (Daily, Weekly or Monthly, keeping 1 to 366 scheduled versions; 7 by default), and
   restores a backup to a new file after checking its audit chain. `ledgerly backup` and
   `ledgerly restore` do the same from the command line. A file made by an older build is backed up
@@ -125,12 +126,14 @@ To run the app straight from the source tree, use `cargo run --release -p ledger
 ## Quick start
 
 1. Start `ledgerly-app`. The first-run screens cover the company, the features you want, the backup
-   folder and the keyboard. The backup step stores a Daily schedule that keeps 7 versions.
+   folder and the keyboard. After 1.0.0 the backup step stores a Daily schedule that keeps 7
+   versions; in 1.0.0 it stores nothing.
 2. Create the company. Ledgerly stores it as a single file on your computer.
 3. Enter vouchers from the sidebar or with the function keys shown in the status bar. Press Ctrl+K
    to find any screen or master by name.
 4. Open **Balance sheet**, **Day book** or **GST returns** to see the engine's figures.
-5. Keep backups of the company file. Settings > Backups and updates shows the backups, takes one
+5. Keep backups of the company file. In 1.0.0, copy the file. After 1.0.0, Settings > Backups and
+   updates shows the backups, takes one
    now (Alt+B) and restores one to a new file. A scheduled backup is taken when you open the company
    and one is due; with Ledgerly closed, run `ledgerly backup <file> --if-due` from your system's
    scheduler.
@@ -146,9 +149,9 @@ all options.
 | `ledgerly rebuild-check <file>` | Replays the event log and compares the result with the stored projection tables. |
 | `ledgerly export gstr1 <file> --gstin <GSTIN> --from <YYYY-MM-DD> --to <YYYY-MM-DD> [--out <file>]` | Writes GSTR-1 for one period as JSON, to standard output or to `--out`. |
 | `ledgerly import-tally <file> --company "<name>" [--host <host>] [--port <port>]` | Imports a company from a running Tally's HTTP XML port (default `127.0.0.1:9000`) into a company file. |
-| `ledgerly backup <file> [--to <folder>] [--if-due] [--list]` | Writes a checked backup of a company file into its backup folder (or `--to`); `--if-due` backs up only when the stored schedule is due, and rotates scheduled backups; `--list` lists the backups. |
-| `ledgerly restore <backup> <target>` | Restores a backup to a new file after checking its audit chain. It never replaces an existing file; a broken chain exits with `1`. |
-| `ledgerly check-update [--compare <file>]` | Asks the GitHub releases API for the latest release and checks that its `SHA256SUMS.txt` agrees with GitHub's record of each file; `--compare` checks a downloaded file against it. It never downloads or installs a release. |
+| `ledgerly backup <file> [--to <folder>] [--if-due] [--list]` | After 1.0.0. Writes a checked backup of a company file into its backup folder (or `--to`); `--if-due` backs up only when the stored schedule is due, and rotates scheduled backups; `--list` lists the backups. |
+| `ledgerly restore <backup> <target>` | After 1.0.0. Restores a backup to a new file after checking its audit chain. It never replaces an existing file; a broken chain exits with `1`. |
+| `ledgerly check-update [--compare <file>]` | After 1.0.0. Asks the GitHub releases API for the latest release and checks that its `SHA256SUMS.txt` agrees with GitHub's record of each file; `--compare` checks a downloaded file against it. It never downloads or installs a release. |
 | `ledgerly conformance [--cases <dir>] [--pass-list <file>]` | Runs the golden conformance cases and checks the pass-list ratchet. |
 | `ledgerly mcp --company <file>` | Serves the MCP server over stdio. See the next section. |
 
@@ -182,16 +185,18 @@ server over stdio for an AI client you run yourself. It exposes three tools:
 
 - **Local by default.** The company is one file on your computer. Ledgerly does not upload books,
   party data or bank data.
-- **Network use only when you ask for it.** Ledgerly makes a network connection in two cases: when you
-  import from a running Tally, it connects to the HTTP XML port you give it (default `127.0.0.1:9000`);
-  and when you turn on the update check (Settings > Backups and updates > Updates, off by default)
-  and press Check now, or run `ledgerly check-update`. The check asks `api.github.com` for the latest
-  release of this project and reads its `SHA256SUMS.txt` from GitHub's download hosts, with the
-  user agent `Ledgerly-update-check` and nothing about you, your company or your files. It never
-  downloads or installs a release. There is no AI or telemetry connection.
-- **Backups.** Backups go to the folder you choose (or `Backups` beside the company file). Each is a
-  separate file whose audit chain is checked when it is written and again before a restore; a
-  restore always writes a new file. Manual backups are never removed; scheduled ones are rotated.
+- **Network use only when you ask for it.** Ledgerly makes a network connection in two cases: when
+  you import from a running Tally, it connects to the HTTP XML port you give it (default
+  `127.0.0.1:9000`); and, in the source tree after 1.0.0 (1.0.0 has no update check), when you
+  turn on the update check (Settings > Backups and updates > Updates, off by default) and press
+  Check now, or run `ledgerly check-update`. The check asks `api.github.com` for the latest release
+  of this project and reads its `SHA256SUMS.txt` from GitHub's download hosts, with the user agent
+  `Ledgerly-update-check` and nothing about you, your company or your files. It never downloads or
+  installs a release. There is no AI or telemetry connection.
+- **Backups** (after 1.0.0). Backups go to the folder you choose (or `Backups` beside the company
+  file). Each is a separate file whose audit chain is checked when it is written and again before
+  a restore; a restore always writes a new file. Manual backups are never removed; scheduled ones
+  are rotated.
 
 ## Correctness
 
@@ -229,7 +234,9 @@ Not in 1.0.0:
 - E-way bill JSON. Format code exists in `ledgerly-gst-formats`, but no screen or command uses it.
 - Cost-centre allocation on vouchers, and a cost-centre report (the masters exist).
 - Item invoices in a company with more than one godown.
-- Scheduled backups while Ledgerly is closed (use `ledgerly backup --if-due` from a scheduler).
+- Backup and restore, and the update check (both arrive after 1.0.0; see CHANGELOG.md, Unreleased).
+  Even then, scheduled backups run only when the company is opened, or from a system scheduler with
+  `ledgerly backup --if-due`.
 - Export to Tally XML, and Excel import of masters or vouchers.
 - The Windows and macOS installers are not signed (see [Install](#install)). The release workflow
   has a code-signing step for the Windows installer that runs once the project's signing account

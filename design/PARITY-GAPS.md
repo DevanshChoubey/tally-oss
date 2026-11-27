@@ -717,6 +717,10 @@ Sources (read 2026-11-27): help.tallysolutions.com `local-backup`, `restore-back
   only; the screen has no file picker for it.
 - **NOT BUILT** code signing: the release workflow's SignPath step is skipped until the project's
   signing account and secrets exist (`docs/signing.md`); the `.zip`'s programs stay unsigned.
+- **DELIBERATE** a backup before import is offered for the import from a file into a company with
+  data (the file form's Yes or No, as the import help page has it). The import from a running app
+  over HTTP takes none: it only goes into a company that holds nothing but the seed (`Api::import_tally_http`
+  refuses any other before contacting the app), so there is nothing to lose.
 - **DELIBERATE** backup times are shown in India time (UTC+05:30), as every date in the app is.
 
 ## Print (`*.print-preview`, `*.print-config`, `*.print-range-error`, `*.print-busy`, `*.print-saved`, `*.print-failed`)
