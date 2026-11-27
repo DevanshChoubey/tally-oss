@@ -636,8 +636,8 @@ Credit (`ledgerly_reports::print_text` places the engine's figures only).
   created, altered, combined, ignored and not imported, every exception listed
   (help.tallysolutions.com/import-data-from-xml-or-json and /import-data-faq, read 2026-11-27).
 - Fixed in s22: the "Overwrite voucher when a voucher with same GUID exists" choice is offered for a
-  transactions file, default No as in the import FAQ (help.tallysolutions.com/import-data-faq/, read
-  2026-11-27). With No a voucher whose GUID is in the company is posted again as a new voucher, with
+  transactions file, default No (the import FAQ, help.tallysolutions.com/import-data-faq/, read
+  2026-11-27, describes both settings but states no default; No is the coordinator's brief). With No a voucher whose GUID is in the company is posted again as a new voucher, with
   a warning, and a later import overwrites the newest copy; with Yes it alters the voucher in place.
   So importing the same file twice is safe only with Yes: with the documented default the second
   import duplicates the vouchers that the engine accepts again.
@@ -658,8 +658,8 @@ Credit (`ledgerly_reports::print_text` places the engine's figures only).
   made before s22 have no Cash and are not migrated.
 - **NOT BUILT** Profit & Loss A/c, the other predefined ledger, is not created: it sits under Primary
   there, and every ledger here has a group. The books compute its row at query time instead
-  (`ledgerly-reports` `balance_sheet.rs`), so a file that posts to a ledger named "Profit & Loss A/c"
-  is listed as an exception.
+  (`ledgerly-reports` `balance_sheet.rs`). What an import does with a file that posts to a ledger
+  named "Profit & Loss A/c" was not checked in s22.
 - Fixed in s22: Alt+O is the keymap's "Import masters or vouchers from a file" in both presets and
   is on the keyboard-map screen under Go anywhere. Bill reading on the purchase form is Ctrl+Alt+O
   (s21, below), so no screen binds Alt+O to anything else.

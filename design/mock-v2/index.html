@@ -2772,7 +2772,7 @@ function impChoice(label,sel,dis){return `<button role="radio" aria-checked="${s
 function impT(key,vars){const e=((window.HI||{}).keys||{})[key];let s=e?(parseHash().lang==='hi'?e[1]:e[0]):'['+key+']';
   for(const [k,v] of Object.entries(vars||{}))s=s.split('{'+k+'}').join(String(v));return s}
 /* S22 transactions: the "Overwrite voucher when a voucher with same GUID exists" import configuration, default No
-   (help.tallysolutions.com/import-data-faq/, read 2026-11-27). The overwritten state is the app's text for the
+   (help.tallysolutions.com/import-data-faq/, read 2026-11-27, gives both settings, no default). The overwritten state is the app's text for the
    PAYMENT fixture of s22_import_file.rs (Hamali Charges paid in cash, GUID g-app-pay-1) imported a second time
    with overwrite Yes: the voucher in the company is altered, not doubled. */
 function impFileCard(fs,noCo){
