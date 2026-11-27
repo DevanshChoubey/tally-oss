@@ -151,6 +151,7 @@ fn a_sentence_becomes_a_stored_draft_the_engine_balances_with_the_offered_date()
     let edits = DraftEdits {
         date: Some(date!(2026 - 11 - 21)),
         place_of_supply: None,
+        line_ledgers: Vec::new(),
     };
     let Outcome::Value(DraftCheck::Ok(voucher)) = api.check_ai_draft(id, &edits).unwrap() else {
         panic!("the engine should balance the draft with the offered date");

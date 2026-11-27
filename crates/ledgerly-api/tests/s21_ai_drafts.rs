@@ -230,6 +230,7 @@ fn the_check_is_the_engine_voucher_with_the_offered_date() {
     let edits = DraftEdits {
         date: Some(TODAY),
         place_of_supply: None,
+        line_ledgers: Vec::new(),
     };
     let Outcome::Value(DraftCheck::Ok(voucher)) = api.check_ai_draft(id, &edits).unwrap() else {
         panic!("the draft with a date should pass the engine's check");
@@ -259,6 +260,7 @@ fn accept_posts_the_voucher_and_records_the_accept_in_one_commit() {
     let edits = DraftEdits {
         date: Some(TODAY),
         place_of_supply: None,
+        line_ledgers: Vec::new(),
     };
     let Outcome::Value(Accepted::Posted(voucher)) = api.accept_ai_draft(id, &edits).unwrap() else {
         panic!("accept should post");

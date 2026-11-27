@@ -14,7 +14,7 @@
 
 use ledgerly_assist::Proposal;
 use ledgerly_assist::validate::{DraftCheck, validate_draft_with_place};
-use ledgerly_core::{Date, EventSeq, Outcome, StateCode, VoucherId};
+use ledgerly_core::{Date, EventSeq, LedgerId, Outcome, StateCode, VoucherId};
 use ledgerly_gst::pack::load_pack;
 use ledgerly_model::{AiActivity, AiActivityKind, AiFeature, Voucher};
 use ledgerly_store::{AuditRecord, Event};
@@ -86,6 +86,10 @@ pub struct DraftEdits {
     pub date: Option<Date>,
     /// The place of supply the person confirmed, for a draft that needs GST.
     pub place_of_supply: Option<StateCode>,
+    /// The ledgers the person chose for draft lines, by the line's index in the draft. A bill's
+    /// taxable value names no purchase ledger, so the person chooses it; a choice for a line the
+    /// reader matched replaces the reader's ledger (it is a human edit and is logged as one).
+    pub line_ledgers: Vec<(usize, LedgerId)>,
 }
 
 /// One row of the AI activity log.
@@ -251,6 +255,22 @@ impl Api {
             Outcome::Value(books) => books,
             Outcome::Unsupported(u) => return Ok(Outcome::Unsupported(u)),
         };
+        for &(index, ledger) in &edits.line_ledgers {
+            let Some(line) = draft.lines.get_mut(index) else {
+                return Ok(Outcome::unsupported(
+                    "a ledger chosen for a draft line",
+                    format!("the draft has no line {index}"),
+                ));
+            };
+            line.ledger = Some(ledger);
+            if let Some(master) = books.masters.ledgers.get(&ledger) {
+                line.ledger_name = ledgerly_assist::Transcribed {
+                    value: master.name.clone(),
+                    source: ledgerly_assist::SourceRef::Edited,
+                    confidence_permille: 1000,
+                };
+            }
+        }
         let pack = load_pack(BUNDLED_RATE_PACK)?;
         let rules_date = draft
             .date
@@ -461,7 +481,7 @@ fn draft_activity(draft: &AiDraft) -> AiActivity {
 
 /// The person's edits as JSON, or `None` when they changed nothing.
 fn edits_json(edits: &DraftEdits) -> Option<String> {
-    if edits.date.is_none() && edits.place_of_supply.is_none() {
+    if edits.date.is_none() && edits.place_of_supply.is_none() && edits.line_ledgers.is_empty() {
         return None;
     }
     let mut map = serde_json::Map::new();
@@ -476,6 +496,14 @@ fn edits_json(edits: &DraftEdits) -> Option<String> {
             "place_of_supply".to_owned(),
             serde_json::Value::from(place.get()),
         );
+    }
+    if !edits.line_ledgers.is_empty() {
+        let chosen = edits
+            .line_ledgers
+            .iter()
+            .map(|&(index, ledger)| serde_json::json!({ "line": index, "ledger": ledger.0 }))
+            .collect();
+        map.insert("line_ledgers".to_owned(), serde_json::Value::Array(chosen));
     }
     Some(serde_json::Value::Object(map).to_string())
 }

@@ -241,6 +241,7 @@ impl AiEntry {
         let edits = DraftEdits {
             date: view.offered_date,
             place_of_supply: None,
+            line_ledgers: Vec::new(),
         };
         self.latest.start(worker, move |api: &mut Api| {
             Reply::Accepted(
@@ -1033,6 +1034,7 @@ fn read(api: &mut Api, text: &str, today: Date) -> Result<ReadDone, ledgerly_api
     let edits = DraftEdits {
         date: offered_date,
         place_of_supply: None,
+        line_ledgers: Vec::new(),
     };
     let check = api.check_ai_draft(id, &edits)?;
     let name_of = |id: LedgerId| -> Option<String> {
