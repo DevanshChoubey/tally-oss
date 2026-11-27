@@ -242,9 +242,11 @@ notifications were read on CBIC's tax information portal on 2026-11-27.
   also mahagst.gov.in's copy) says that from the May 2025 return period Table 12 has "B2B Supplies"
   and "B2C Supplies" tabs, B2B checked against 4A, 4B, 6B, 6C, 8 (registered), 9A/9B/9C
   (registered), 15/15A (registered) and B2C against 5A, 6A, 7A, 7B, 8 (unregistered), 9A (export,
-  B2CL), 9B/9C (unregistered), 10, 15/15A (unregistered). Not built because the `Gstr1` data shape
-  holds one HSN table and the offline-tool JSON keys of the two tabs were not read; the engine's
-  one combined Table 12 is therefore not the post-May 2025 layout. The GSTR-1 manual
+  B2CL), 9B/9C (unregistered), 10, 15/15A (unregistered). The engine builds the two tabs
+  (`gstr1::build_gstr1_hsn_split`, engine-only); the JSON export, the CLI and the GSTR-1 screen
+  still carry the one combined Table 12 of `Gstr1`, because the offline-tool JSON keys of the two
+  tabs were not read and the mock's GSTR-1 state has no tabs, so the export is not the post-May
+  2025 layout. The GSTR-1 manual
   (tutorial.gst.gov.in/userguide/returns/Creation_of_Outward_Supplies_Return_in_GSTR-1.htm, read in
   full 2026-11-28) names the tabs without the mapping, and gives Table 14's two tabs (s.52 TCS and
   s.9(5)). The GSTR-1 JSON keys are still not checked against a GSTN offline-tool sample (see

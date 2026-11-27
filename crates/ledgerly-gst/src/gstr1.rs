@@ -57,8 +57,9 @@
 //!   lines (taxable and not). Services (SAC) report `NA` and a zero quantity. The tax of a row is
 //!   the sum of unrounded line tax rounded once. Credit notes reduce the rows only when the rule
 //!   pack says so (`gstr1.hsn_credit_notes`, parameter `treatment` = `net` or `exclude`); with no
-//!   verified entry a credit note is `NeedsCorrection` (`unsupported:`). There is no B2B/B2C
-//!   split of Table 12 in the data shape yet, so one combined table is built.
+//!   verified entry a credit note is `NeedsCorrection` (`unsupported:`). [`Gstr1`] holds one
+//!   combined Table 12; [`build_gstr1_hsn_split`] gives the B2B and B2C tabs the portal has
+//!   from the May 2025 return period, which no writer uses yet.
 //! * Table 13 lists each run of consecutive numbers (same prefix, numeric tail one apart) of
 //!   invoices and of credit notes, with the cancelled ones counted. A gap starts a new run; the
 //!   builder never invents a document. Receipt-voucher series are not summarised.
@@ -154,6 +155,30 @@ pub fn build_gstr1(
     period: Period,
     pack: &RulePack,
 ) -> Result<Outcome<(Gstr1, Vec<BucketedVoucher>)>, GstError> {
+    let evals = match evaluate_period(books, gstin, period, pack)? {
+        Outcome::Value(e) => e,
+        Outcome::Unsupported(u) => return Ok(Outcome::Unsupported(u)),
+    };
+    let gstr1 = assemble(gstin, period, &evals)?;
+    let buckets = evals
+        .iter()
+        .map(|e| BucketedVoucher {
+            voucher: e.id,
+            bucket: e.bucket,
+            reason: e.reason.clone(),
+            in_tables: e.in_tables,
+        })
+        .collect();
+    Ok(Outcome::Value((gstr1, buckets)))
+}
+
+/// The checks of the company and registration, then one [`Eval`] per voucher of the period.
+fn evaluate_period(
+    books: &Books,
+    gstin: &Gstin,
+    period: Period,
+    pack: &RulePack,
+) -> Result<Outcome<Vec<Eval>>, GstError> {
     if let Outcome::Unsupported(u) = check_period(period) {
         return Ok(Outcome::Unsupported(u));
     }
@@ -193,17 +218,65 @@ pub fn build_gstr1(
         evals.push(evaluate(books, v, pack)?);
     }
     flag_duplicates(&mut evals);
-    let gstr1 = assemble(gstin, period, &evals)?;
-    let buckets = evals
-        .iter()
-        .map(|e| BucketedVoucher {
-            voucher: e.id,
-            bucket: e.bucket,
-            reason: e.reason.clone(),
-            in_tables: e.in_tables,
-        })
-        .collect();
-    Ok(Outcome::Value((gstr1, buckets)))
+    Ok(Outcome::Value(evals))
+}
+
+/// Table 12 in its two tabs, "B2B Supplies" and "B2C Supplies".
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HsnSplit {
+    /// HSN rows of supplies to registered recipients.
+    pub b2b: Vec<HsnRow>,
+    /// HSN rows of supplies to unregistered recipients.
+    pub b2c: Vec<HsnRow>,
+}
+
+/// First day of the first return period with Table 12 in two tabs.
+const HSN_SPLIT_FROM: Date = time::macros::date!(2025 - 05 - 01);
+
+/// Table 12 split into its "B2B Supplies" and "B2C Supplies" tabs, from the same vouchers and
+/// rows as [`build_gstr1`]'s one table: a voucher to a registered recipient (Tables 4, 6B, 6C,
+/// 8 registered, 9B registered) goes to B2B, any other (Tables 5, 6A, 7, 8 unregistered) to B2C.
+/// GSTN advisory "Reporting of HSN codes in Table 12 of GSTR-1/1A"
+/// (<https://tutorial.gst.gov.in/downloads/news/updated_advisory_hsn_table12_25042025.pdf>,
+/// read 2026-11-28). `Unsupported` for a period that starts before May 2025, when the portal
+/// had one table, and wherever [`build_gstr1`] is. The offline tool's JSON keys for the two tabs
+/// were not read, so no writer uses this yet.
+///
+/// # Errors
+///
+/// As [`build_gstr1`].
+pub fn build_gstr1_hsn_split(
+    books: &Books,
+    gstin: &Gstin,
+    period: Period,
+    pack: &RulePack,
+) -> Result<Outcome<HsnSplit>, GstError> {
+    if period.from() < HSN_SPLIT_FROM {
+        return Ok(Outcome::unsupported(
+            "Table 12 in B2B and B2C tabs",
+            "the two tabs begin with the May 2025 return period; earlier periods have one Table 12",
+        ));
+    }
+    let evals = match evaluate_period(books, gstin, period, pack)? {
+        Outcome::Value(e) => e,
+        Outcome::Unsupported(u) => return Ok(Outcome::Unsupported(u)),
+    };
+    let mut b2b: BTreeMap<HsnKey, HsnAmounts> = BTreeMap::new();
+    let mut b2c: BTreeMap<HsnKey, HsnAmounts> = BTreeMap::new();
+    for part in evals.iter().filter_map(|e| e.part.as_ref()) {
+        let tab = if part.registered { &mut b2b } else { &mut b2c };
+        for (key, amounts) in &part.hsn {
+            let slot = tab.entry(key.clone()).or_default();
+            *slot = slot.plus(*amounts)?;
+        }
+    }
+    let rows = |tab: BTreeMap<HsnKey, HsnAmounts>| -> Result<Vec<HsnRow>, GstError> {
+        tab.into_iter().map(|(k, a)| hsn_row(k, a)).collect()
+    };
+    Ok(Outcome::Value(HsnSplit {
+        b2b: rows(b2b)?,
+        b2c: rows(b2c)?,
+    }))
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -423,6 +496,8 @@ struct Part {
     /// Why Table 12 cannot take this voucher (a missing HSN or unit quantity code). The invoice
     /// still belongs in its other tables: GSTN's HSN field exists in Table 12 only.
     hsn_gap: Option<String>,
+    /// The recipient is registered (the B2B tab of Table 12).
+    registered: bool,
 }
 
 struct Eval {
@@ -732,11 +807,16 @@ fn build_part(c: &Ctx<'_>, number: String, is_note: bool, recipient: &Recipient)
         items: groups.iter().map(|g| g.item(inter)).collect(),
     };
     let placement = go!(placement(c, is_note, recipient, inv, &groups)?);
+    let registered = match recipient {
+        Recipient::Registered(_) => true,
+        Recipient::Unregistered => false,
+    };
     Ok(Ok(Part {
         placement,
         nil,
         hsn,
         hsn_gap,
+        registered,
     }))
 }
 
