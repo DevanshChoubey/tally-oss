@@ -8,6 +8,7 @@ pub mod gstr1;
 pub mod gstr1a;
 pub mod gstr3b;
 pub mod itc;
+pub mod itc_conditions;
 pub mod pack;
 pub mod pos;
 pub mod rcm;

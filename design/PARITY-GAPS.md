@@ -196,6 +196,20 @@ notifications were read on CBIC's tax information portal on 2026-11-27.
 - **NOT BUILT** a recipient that is an LLP for a class naming a body corporate (sl.15), or a trust,
   society or HUF for a class naming a body corporate or firm: whether either is a "body corporate"
   under Companies Act s.2(11) is not settled from the sources read, so it is Unsupported.
+- **NOT BUILT** the s.16(4)/(5) time limit, the 180-day reversal (s.16(2), Rule 37) and the
+  common-credit attribution (Rules 42, 43) as GSTR-3B table 4(B) rows: the engine works them out
+  (`ledgerly_gst::itc_conditions`), engine-only. The books hold no annual-return date, no
+  payment-to-invoice matching and no T1-T4 split, so no report uses them yet.
+- **NOT BUILT** the count of the 180 days: "from the date of issue" may or may not count the
+  invoice day, and the General Clauses Act was not read. A payment on the disputed day, or 180 days
+  whose two possible ends fall in different tax periods, is `Unsupported`.
+- **NOT BUILT** rounding of a proportionate reversal (Rules 37 and 42): neither rule says how it is
+  rounded, so a share that is not a whole number of paise is `Unsupported`.
+- **NOT BUILT** Rule 37 for invoices before 1 October 2022 (the earlier text was not read), re-availing
+  under Rule 37(2), s.16(6) after a revoked cancellation, the Rule 42(1)(i) proviso (no turnover),
+  Rule 42(2)'s annual recomputation, and the real-estate formulas of Rules 42(3)-(6) and 43(2)-(5).
+- **NOT BUILT** Rule 43(1)(g) Te: the formula uses 'Tr', whose defining clause (f) was omitted from
+  1 April 2020 (Notification 16/2020-CT); the text read defines it nowhere else, so Te is `Unsupported`.
 
 ## Masters (`masters.*`)
 
