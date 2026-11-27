@@ -37,10 +37,13 @@ use time::macros::{date, datetime};
 const IMAGE: &[u8] = b"fictional bill image bytes";
 
 fn image_hash() -> String {
+    use std::fmt::Write as _;
     Sha256::digest(IMAGE)
         .iter()
-        .map(|b| format!("{b:02x}"))
-        .collect()
+        .fold(String::new(), |mut out, b| {
+            let _ = write!(out, "{b:02x}");
+            out
+        })
 }
 
 fn line(text: &str, top: u32) -> OcrLine {
@@ -165,7 +168,7 @@ fn a_bill_photo_is_refused_until_the_gate_allows_bill_reading() {
         "{read:?}"
     );
     // A refusal runs nothing and logs nothing.
-    assert!(api.ai_log_rows().unwrap().is_empty());
+    assert_eq!(api.ai_log_rows().unwrap().len(), 0);
 }
 
 #[test]
@@ -215,5 +218,5 @@ fn a_photo_the_provider_cannot_read_is_logged_as_a_failed_read() {
         "{:?}",
         rows[0]
     );
-    assert!(api.ai_drafts().unwrap().is_empty());
+    assert_eq!(api.ai_drafts().unwrap().len(), 0);
 }
