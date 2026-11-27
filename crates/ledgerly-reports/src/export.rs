@@ -291,19 +291,22 @@ fn csv_field(value: &Value) -> String {
     match value {
         Value::Blank => String::new(),
         Value::Number { text, .. } => text.clone(),
-        Value::Text(text) => {
-            // OWASP "CSV Injection" (read 2026-11-27): = + - @, tab, CR, LF and their
-            // full-width forms. Leading spaces (a nested row's indent) are looked past, since a
-            // reader that trims them would see the formula first (S22).
-            if text.trim_start_matches(' ').starts_with([
-                '=', '+', '-', '@', '\t', '\r', '\n', '\u{ff1d}', '\u{ff0b}', '\u{ff0d}',
-                '\u{ff20}',
-            ]) {
-                format!("'{text}")
-            } else {
-                text.clone()
-            }
-        }
+        Value::Text(text) => guard_formula(text),
+    }
+}
+
+/// `text` as a spreadsheet reads it as text: prefixed with an apostrophe when it would start a
+/// formula. OWASP "CSV Injection" (read 2026-11-27): = + - @, tab, CR, LF and their full-width
+/// forms. Leading spaces (a nested row's indent) are looked past, since a reader that trims them
+/// would see the formula first (S22). Shared by every CSV the app writes.
+#[must_use]
+pub fn guard_formula(text: &str) -> String {
+    if text.trim_start_matches(' ').starts_with([
+        '=', '+', '-', '@', '\t', '\r', '\n', '\u{ff1d}', '\u{ff0b}', '\u{ff0d}', '\u{ff20}',
+    ]) {
+        format!("'{text}")
+    } else {
+        text.to_owned()
     }
 }
 

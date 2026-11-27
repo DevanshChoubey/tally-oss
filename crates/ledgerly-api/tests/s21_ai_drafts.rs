@@ -391,3 +391,25 @@ fn the_activity_log_exports_each_assistant_event_with_its_decision() {
         "{text}"
     );
 }
+
+/// Provenance (derived): OWASP "CSV Injection" (read 2026-11-27 by the integration branch's
+/// report export, commit 77d879db): a cell that starts with = + - @, tab, CR or LF, or their
+/// full-width forms, also after leading spaces, is prefixed with an apostrophe so a spreadsheet
+/// reads it as text. A typed sentence is the log's Input, so it is guarded the same way.
+#[test]
+fn the_activity_export_writes_formula_like_input_as_text() {
+    let mut api = books("s21-drafts-export-formula.ledgerly", Vec::new());
+    for label in ["=1+2", "  @SUM(A1)", "\u{ff1d}1", "-5"] {
+        let mut draft = rent_draft();
+        draft.input_label = label.to_owned();
+        api.record_ai_draft(draft).unwrap();
+    }
+    let out =
+        std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("s21-activity-formula.csv");
+    let _removed = std::fs::remove_file(&out);
+    api.export_ai_activity(&out).unwrap();
+    let text = std::fs::read_to_string(&out).unwrap();
+    for guarded in [",'=1+2,", ",'  @SUM(A1),", ",'\u{ff1d}1,", ",'-5,"] {
+        assert!(text.contains(guarded), "{guarded} not in:\n{text}");
+    }
+}
