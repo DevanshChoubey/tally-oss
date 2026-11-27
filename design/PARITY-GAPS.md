@@ -175,8 +175,10 @@ notifications were read on CBIC's tax information portal on 2026-11-27.
   read 2026-11-27). Unmarked, a registered supplier's invoice that charges tax is taken as the
   supplier's forward charge; unmarked with no tax charged is Unsupported.
 - **NOT BUILT** table 3.1(b) (zero-rated: exports, GSTR-1 6A, and SEZ supplies, 6B): voucher tax
-  (`compute`) refuses overseas and SEZ recipients, so a period with one stays `Unsupported`. It
-  needs the IGST Act s.16 and place-of-supply rules for exports of services, not yet read.
+  now prices SEZ supplies and exports of goods, with payment of IGST or under LUT (IGST Act s.16,
+  s.7(5)), but the GSTR-3B statement still refuses a zero-rated line, so a period with one stays
+  `Unsupported`. Exports of services stay `Unsupported` in voucher tax: s.13 and the s.2(6)
+  conditions are not modelled.
 - **NOT BUILT** GSTR-3B tables 3.1.1 (e-commerce operators, s.9(5)), 3.2, 4(B), 4(C), 4(D), 5 and
   5.1, and a GSTR-3B JSON file: the books hold no e-commerce operator, no 2B-based 4(B)/4(D) split
   and no interest working, and no GSTN offline-tool schema for GSTR-3B was read (the GST portal's
