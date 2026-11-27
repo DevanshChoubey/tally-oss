@@ -238,9 +238,11 @@ fn csv_text(entries: &[AiLogEntry]) -> Result<String, std::io::Error> {
     Ok(out)
 }
 
-/// One CSV field: wrapped in quotes when it holds a comma, a quote or a line break, with each
-/// quote inside it doubled (RFC 4180).
+/// One CSV field: guarded against formula injection
+/// ([`ledgerly_reports::export::guard_formula`]), then wrapped in quotes when it holds a comma, a
+/// quote or a line break, with each quote inside it doubled (RFC 4180).
 pub(crate) fn csv_field(text: &str) -> String {
+    let text = &ledgerly_reports::export::guard_formula(text);
     if text.contains([',', '"', '\n', '\r']) {
         format!("\"{}\"", text.replace('"', "\"\""))
     } else {
