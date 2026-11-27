@@ -325,6 +325,23 @@ fn a_file_that_is_not_xml_is_an_error_and_imports_nothing() {
 }
 
 #[test]
+fn a_transactions_file_that_is_not_xml_is_an_error() {
+    // derived: an import file is an ENVELOPE document (https://help.tallysolutions.com/sample-xml/,
+    // read 2026-11-27); text with no element is not one, so it is refused, not read as "no vouchers".
+    let (dir, mut api) = setup();
+    for (name, body) in [
+        ("plain.xml", "this is not xml"),
+        ("other.xml", "<NOTES><VOUCHER/></NOTES>"),
+    ] {
+        let path = write(dir.path(), name, body);
+        let err = api
+            .import_tally_xml_file(XmlImport::Transactions, &path)
+            .unwrap_err();
+        assert!(matches!(err, ApiError::FileImport { .. }), "{name}: {err}");
+    }
+}
+
+#[test]
 fn a_missing_file_is_an_error() {
     let (dir, mut api) = setup();
     let err = api

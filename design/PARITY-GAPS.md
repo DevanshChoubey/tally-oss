@@ -190,6 +190,12 @@ Classes:
 
 ## Payment, receipt, contra, journal (`payment.*`, `receipt.*`, `contra.*`, `journal.*`)
 
+- Fixed in s22: the Account of a payment or receipt, and every contra line, lists only Cash-in-Hand
+  and Bank Accounts ledgers (and their sub-groups), as help.tallysolutions.com/payments-and-receipts-tally
+  and /record-contra-entry (read 2026-11-27) describe; the help pages do not say where the list opens,
+  so it opens under the field as every other list.
+- Fixed in s22: the top bar fits the 800 point minimum window; chips that do not fit are left out
+  and the search words are truncated, rather than drawn past the right edge.
 - **DELIBERATE** `payment.bill-wise` shows an empty narration behind the popup: the popup opens on the
   amount's Enter and takes the keyboard, so the narration can only be typed after it; the mock's
   "NEFT, against VL/861" is a filled narration the app does not write for the user.
@@ -340,6 +346,8 @@ Classes:
 - **DELIBERATE** the import card on Start opens the Import screen with no company open; that screen
   says to create or open one first and offers Back to setup, as the mock's `import.no-company` does,
   so nothing can finish wrongly.
+  Its hint says so: create the company first, then import a whole company from a running app or
+  masters and vouchers from an XML file.
 - **NOT BUILT** the import screen's step-by-step path (the five-step wizard) is not connected.
 - **NOT BUILT** F11 on the Features step: no feature screen exists; rows with no model switch say so.
 - **DELIBERATE** the "Company file" field is ours (the wizard writes a file); City is kept as the
@@ -439,6 +447,30 @@ Credit (`ledgerly_reports::print_text` places the engine's figures only).
 
 - **DELIBERATE** `import.refused` and `import.failed` say the engine's own text, not the mock's
   invented "Memorandum" and "connection refused" examples; the summary counts are `ImportSummary`'s.
+- Fixed in s22: masters and transactions import from an XML file into the open company (Alt+O, the
+  palette's "Import masters or vouchers from a file", the import screen's file form), with the
+  duplicates choice (Combine Opening Balance, Ignore Duplicates, Modify with New Data) and a summary of
+  created, altered, combined, ignored and not imported, every exception listed
+  (help.tallysolutions.com/import-data-from-xml-or-json and /import-data-faq, read 2026-11-27).
+- **NOT BUILT** a transactions file is always posted as new vouchers: the GUID choice of the import
+  FAQ (overwrite a voucher with the same GUID) is not offered, so importing the same file twice posts
+  its vouchers twice.
+- **NOT BUILT** no backup prompt before an import (the FAQ advises a backup first); voucher types named
+  in a file are not created, a voucher of an unknown type is an exception.
+- **NOT BUILT** a party ledger imported with no ISBILLWISEON is bill-wise off (our default); the
+  default of the other product for Sundry Debtors/Creditors is not documented in the pages read, so a
+  sales voucher with bill allocations against such a ledger is listed as an exception, not guessed.
+- **NOT BUILT** a new company has no Cash ledger, so a transactions file that names 'Cash' (with a
+  masters file that does not define it) is listed as "the company has no ledger 'Cash'; import the
+  masters first". Whether the other product predefines a Cash ledger was not checked in its docs in
+  s22; nothing is created for the user until it is.
+- **NOT BUILT** Alt+O is fixed in the shell, not in the keymap or the keyboard-map screen; the
+  purchase form's own Alt+O (bill photo, AI release only) wins on that form.
+- **FIX** the mock's Hindi file states keep the English summary and error lines (`gen-hi.py` skips
+  strings with placeholders, and the "Error: " lines are built in the mock); the app's Hindi text is
+  in `hi.toml` (unsourced). The app's Hindi import file states are not captured.
+- **NOT BUILT** Telugu names draw in Noto Sans Telugu, but egui does not shape Indic conjuncts, so a
+  name such as a ledger in Telugu can show unjoined letters.
 
 ## Captures with no real cause
 

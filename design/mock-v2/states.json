@@ -70,6 +70,34 @@
    "description": "The bank reconciliation screen in Hindi."
   },
   {
+   "id": "hi.import.file-masters",
+   "kind": "happy",
+   "hash": "screen=import&state=file-masters&lang=hi",
+   "title": "Import from a file, masters chosen, Hindi",
+   "description": "The import from a file with Masters and Ignore duplicates chosen, in Hindi."
+  },
+  {
+   "id": "hi.import.file-missing-choice",
+   "kind": "validation-error",
+   "hash": "screen=import&state=file-missing-choice&lang=hi",
+   "title": "Import from a file, no choice for existing masters, Hindi",
+   "description": "The missing choice said in Hindi."
+  },
+  {
+   "id": "hi.import.file-imported",
+   "kind": "happy",
+   "hash": "screen=import&state=file-imported&lang=hi",
+   "title": "Import from a file, summary and exceptions, Hindi",
+   "description": "The summary and the exceptions list in Hindi; names and the engine's reasons stay as written."
+  },
+  {
+   "id": "hi.import.file-error",
+   "kind": "error",
+   "hash": "screen=import&state=file-error&lang=hi",
+   "title": "Import from a file, not an XML file, Hindi",
+   "description": "The unreadable file in Hindi; the engine's reason stays as written."
+  },
+  {
    "id": "hi.payment.account-list",
    "kind": "happy",
    "hash": "screen=payment&state=account-list&lang=hi",
@@ -893,14 +921,14 @@
    "kind": "happy",
    "hash": "screen=import&state=default",
    "title": "Import from another app",
-   "description": "One-step import with host, port and company; the step-by-step panel shows as not connected."
+   "description": "One-step import with host, port and company, the import from an XML file with nothing chosen yet, and the step-by-step panel shown as not connected."
   },
   {
    "id": "import.no-company",
    "kind": "empty",
    "hash": "screen=import&state=no-company",
    "title": "Import, no company open",
-   "description": "No company is open: says to create one first, offers Back to setup, and the form is disabled."
+   "description": "No company is open: says to create one first, offers Back to setup, and both the one-step form and the import from a file are disabled with the reason."
   },
   {
    "id": "import.validation-error",
@@ -936,6 +964,34 @@
    "hash": "screen=import&state=refused",
    "title": "Import, refused as not supported",
    "description": "The engine refuses a voucher type; the refusal names what and why."
+  },
+  {
+   "id": "import.file-masters",
+   "kind": "happy",
+   "hash": "screen=import&state=file-masters",
+   "title": "Import from a file, masters chosen",
+   "description": "Alt+O: Masters chosen, the three choices for a master already in the company (Ignore duplicates picked) and the file path filled; nothing imported yet."
+  },
+  {
+   "id": "import.file-missing-choice",
+   "kind": "validation-error",
+   "hash": "screen=import&state=file-missing-choice",
+   "title": "Import from a file, no choice for existing masters",
+   "description": "Masters chosen but no choice for a master already in the company: the reason is said in words and nothing is imported."
+  },
+  {
+   "id": "import.file-imported",
+   "kind": "happy",
+   "hash": "screen=import&state=file-imported",
+   "title": "Import from a file, summary and exceptions",
+   "description": "The file was read: 2 created, 1 not imported, with every object not imported listed beside its reason."
+  },
+  {
+   "id": "import.file-error",
+   "kind": "error",
+   "hash": "screen=import&state=file-error",
+   "title": "Import from a file, not an XML file",
+   "description": "The file is not an XML document: the error names the file and the cause, and nothing is imported."
   },
   {
    "id": "import.failed",
