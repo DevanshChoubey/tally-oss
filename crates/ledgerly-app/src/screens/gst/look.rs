@@ -16,10 +16,17 @@ use crate::i18n::Tr;
 /// The English words of the GSTR-3B table, its figure headings and its sources, with the key of
 /// each one's translation. The words are the ones [`gstr3b_lines`] and [`GSTR3B_COLUMNS`] build
 /// the table from; the form names and tax heads (IGST, CGST, SGST, Cess) stay in Latin letters.
-const TABLE_WORDS: [(&str, &str); 10] = [
+const TABLE_WORDS: [(&str, &str); 14] = [
     ("Table", "gst.3b.table"),
     ("Taxable", "gst.3b.taxable"),
     ("3.1(a) Outward taxable supplies", "gst.3b.outward"),
+    ("3.1(c) Nil rated and exempted", "gst.3b.nil_exempt"),
+    (
+        "3.1(d) Inward supplies liable to reverse charge",
+        "gst.3b.inward_rc",
+    ),
+    ("3.1(e) Non-GST outward supplies", "gst.3b.non_gst"),
+    ("Reverse charge, 4(A)(3)", "gst.3b.itc_rc"),
     ("4 Eligible ITC", "gst.3b.eligible_itc"),
     ("In your books", "gst.3b.in_books"),
     ("Blocked or ineligible, not claimed", "gst.3b.blocked"),
@@ -78,6 +85,17 @@ pub enum Line3b {
         /// IGST, CGST, SGST and cess, in that order.
         tax: [Paise; 4],
     },
+    /// A row with a value in the Taxable column and blank tax cells: tables 3.1(c) and 3.1(e),
+    /// which the form fills with a value only (GSTN GSTR-3B manual,
+    /// <https://tutorial.gst.gov.in/userguide/returns/GSTR3B.htm>, read 2026-11-28).
+    ValueOnly {
+        /// What the row is.
+        label: &'static str,
+        /// Where the value comes from, drawn as a provenance chip.
+        source: Option<&'static str>,
+        /// The value.
+        value: Paise,
+    },
 }
 
 /// The four tax heads in the order of [`GSTR3B_COLUMNS`].
@@ -85,11 +103,14 @@ fn heads(t: Gstr3bTaxAmounts) -> [Paise; 4] {
     [t.integrated, t.central, t.state_ut, t.cess]
 }
 
-/// The GSTR-3B table for `w`: table 3.1(a), then under "4 Eligible ITC" the credit in the books
-/// (table 4(A)(5)) and the blocked or ineligible credit the engine keeps apart from it.
+/// The GSTR-3B table for `w`, in the mock's order: tables 3.1(a), 3.1(c), 3.1(d) and 3.1(e),
+/// then under "4 Eligible ITC" the reverse-charge credit (table 4(A)(3)), the credit in the books
+/// (table 4(A)(5)) and the blocked or ineligible credit the engine keeps apart from it. A
+/// reverse-charge table the engine could not work out (`Unsupported`) is left out; its reason is
+/// a note under the table.
 #[must_use]
 pub fn gstr3b_lines(w: &Gstr3bWorking) -> Vec<Line3b> {
-    vec![
+    let mut lines = vec![
         Line3b::Row {
             label: "3.1(a) Outward taxable supplies",
             source: Some("sales vouchers"),
@@ -97,23 +118,57 @@ pub fn gstr3b_lines(w: &Gstr3bWorking) -> Vec<Line3b> {
             taxable: Some(w.outward_taxable_value),
             tax: heads(w.outward_tax),
         },
-        Line3b::Sub("4 Eligible ITC"),
-        Line3b::Row {
-            label: "In your books",
+        Line3b::ValueOnly {
+            label: "3.1(c) Nil rated and exempted",
+            source: Some("sales vouchers"),
+            value: w.outward_nil_exempt_value,
+        },
+    ];
+    match &w.inward_reverse_charge {
+        Outcome::Value(d) => lines.push(Line3b::Row {
+            label: "3.1(d) Inward supplies liable to reverse charge",
+            source: Some("purchase vouchers"),
+            indent: false,
+            taxable: Some(d.taxable_value),
+            tax: heads(d.tax),
+        }),
+        Outcome::Unsupported(_) => {}
+    }
+    lines.push(Line3b::ValueOnly {
+        label: "3.1(e) Non-GST outward supplies",
+        source: Some("sales vouchers"),
+        value: w.outward_non_gst_value,
+    });
+    lines.push(Line3b::Sub("4 Eligible ITC"));
+    match &w.itc_reverse_charge {
+        Outcome::Value(c) => lines.push(Line3b::Row {
+            label: "Reverse charge, 4(A)(3)",
             source: Some("purchase vouchers"),
             indent: true,
             taxable: None,
-            tax: heads(w.itc_all_other),
-        },
-        Line3b::Row {
-            label: "Blocked or ineligible, not claimed",
-            source: None,
-            indent: true,
-            taxable: None,
-            tax: heads(w.itc_not_claimable),
-        },
-    ]
+            tax: heads(c.itc),
+        }),
+        Outcome::Unsupported(_) => {}
+    }
+    lines.push(Line3b::Row {
+        label: BOOKS_ROW,
+        source: Some("purchase vouchers"),
+        indent: true,
+        taxable: None,
+        tax: heads(w.itc_all_other),
+    });
+    lines.push(Line3b::Row {
+        label: "Blocked or ineligible, not claimed",
+        source: None,
+        indent: true,
+        taxable: None,
+        tax: heads(w.itc_not_claimable),
+    });
+    lines
 }
+
+/// The label of the 4(A)(5) row, after which the IMS rows go.
+const BOOKS_ROW: &str = "In your books";
 
 /// The table with the payment of tax (table 6.1) the engine worked out: under "4 Eligible ITC"
 /// the credit accepted in IMS and the credit with no action yet (shown apart, not used), then
@@ -137,13 +192,17 @@ pub fn gstr3b_lines_with_payment(
             taxable: None,
             tax: heads(t),
         };
-    // After "In your books" (index 2), before the blocked row.
+    // After "In your books", before the blocked row.
+    let after_books = lines
+        .iter()
+        .position(|l| matches!(l, Line3b::Row { label, .. } if *label == BOOKS_ROW))
+        .map_or(lines.len(), |i| i + 1);
     lines.insert(
-        3,
+        after_books,
         ind("Accepted in IMS", Some("your actions"), p.credit_accepted),
     );
     lines.insert(
-        4,
+        after_books + 1,
         ind(
             "No action yet: deemed accepted when 2B is generated",
             None,

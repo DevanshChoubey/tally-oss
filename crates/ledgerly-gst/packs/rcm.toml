@@ -1,0 +1,198 @@
+# Reverse charge on services: the classes of CGST Act s.9(3) (Notification No. 13/2017-Central Tax (Rate))
+# and IGST Act s.5(3) (Notification No. 10/2017-Integrated Tax (Rate)), as amended. Read by `rcm.rs`.
+#
+# Sources, all read on 2026-11-27 from CBIC's tax information portal
+# <https://taxinformation.cbic.gov.in/view-pdf/<id>/ENG/Notifications> (the PDF behind each id was
+# fetched through the portal's download API and read with pdftotext; 13/2023-IT(R) is a scanned page
+# and was read with tesseract). The chain below is complete: every amending notification names the
+# one before it in its closing "last amended by" note, and CBIC's amendment history of each principal
+# notification (api fetchNotificationHistory) lists the same set.
+#
+#   13/2017-CT(R) (id 1000994), GSR 692(E) 28.06.2017, in force 1.7.2017; corrigendum 25.09.2017
+#     (id 1000995: sl.2 column (2) reads "Services provided by an individual advocate including a
+#     senior advocate or firm of advocates by way of legal services, directly or indirectly", with the
+#     Explanation defining "legal service" as advice, consultancy or assistance in any branch of law,
+#     including representational services before any court, tribunal or authority).
+#   Amended by 22/2017 (1000985), 33/2017 (1000974), 3/2018 (1000957), 15/2018 (1000945),
+#     29/2018 (1000930, from 1.1.2019), 05/2019 (1000922, from 1.4.2019), 22/2019 (1000905, from
+#     1.10.2019), 29/2019 (1000898, GSR 971(E) 31.12.2019, no commencement clause), 05/2022 (1009435,
+#     from 18.7.2022), 02/2023 (1009643, from 1.3.2023), 08/2023 (1009785, from 27.7.2023),
+#     14/2023 (1009895, from 20.10.2023), 09/2024 (1010182, from 10.10.2024; corrigendum 22.10.2024
+#     <https://gstcouncil.gov.in/sites/default/files/2024-12/corr-ctr09-2024_1.pdf>: sl.5AB reads
+#     "any immovable property"), 07/2025 (1010275, GSR 44(E) 16.01.2025 per the note of 08/2026, no
+#     commencement clause, so in force on that date), 08/2026 (1010785, from 1.11.2026).
+#   10/2017-IT(R) (id 1001188), GSR 685(E) 28.06.2017: the same classes one serial number later
+#     (IT sl.1 is import of services, IT sl.10 ocean freight), amended in step by 22/2017, 34/2017,
+#     3/2018, 16/2018, 30/2018, 05/2019, 21/2019, 28/2019, 05/2022, 02/2023, 08/2023, 13/2023
+#     (omits sl.10 from 1.10.2023), 17/2023 (Railways, from 20.10.2023), 09/2024, 07/2025 (GSR 45(E)
+#     16.01.2025) and 08/2026 (from 1.11.2026). Discrepancy recorded: the note of 09/2024-IT(R) names
+#     the previous amendment "14/2023-Integrated Tax (Rate) ... G.S.R. 766(E)", but CBIC lists
+#     14/2023-IT(R) as an amendment of 1/2017-IT(R); the 19.10.2023 amendment of 10/2017-IT(R) is
+#     17/2023-IT(R). 07/2025-IT(R) changes only sl.5 (sponsorship); it does not add the composition
+#     exclusion that 07/2025-CT(R) adds to sl.5AB. The engine never charges a composition recipient.
+#
+# SAC codes are the service codes of the Annexure to Notification No. 11/2017-CT(R) (Scheme of
+# Classification of Services), read on 2026-11-27 in the GST Council's copy
+# <https://gstcouncil.gov.in/sites/default/files/2024-05/notification11-cgst-annexure.pdf>:
+#   996791 "Goods transport agency services for road transport"; 99821 group "Legal services" with
+#   998211-998214 and 998216, and 998215 "Arbitration and conciliation services"; 998397 "Sponsorship
+#   services and brand promotion services"; 998525 "Guard services"; 996601 "Rental services of road
+#   vehicles including buses, coaches, cars, trucks and other motor vehicles, with or without
+#   operator"; 997211 "Rental or leasing services involving own or leased residential property";
+#   997212 the same for non-residential property.
+#
+# Parameters of a class (see `rcm.rs`): `hsn_prefixes`, `supplier` (`any` or `unregistered`),
+# `recipient` (`registered`, `body_corporate`, `body_corporate_or_partnership`), `forward_charge`
+# (`any_tax`, or `rate:<total percent>`: a registered supplier whose invoice charges that tax has
+# taken the supply out of the class), and `requires`: the conditions of columns (2) to (4) that the
+# books cannot check. A class with `requires` is charged only when the user marks the voucher reverse
+# charge, which declares those conditions.
+#
+# Not built (see design/PARITY-GAPS.md, "Reverse charge"): CT sl.5/5A (IT 6/6A) government services,
+# 5B/5C (TDR, FSI, long-term lease to a promoter), 6 (directors), 7 (insurance agents), 8 (recovery
+# agents), 9/9A (copyright), 10 (RBI Overseeing Committee), 11 (DSAs), 12 (business facilitators),
+# 13 (business correspondent agents), 16 (securities lending), IT sl.1 (import of services), the
+# goods of Notification No. 4/2017-CT(R), s.9(4) (Notification No. 7/2019-CT(R), promoters), and
+# every date before 18 July 2022: the index starts on the day 05/2022-CT(R) came into force, so
+# earlier dates are Unsupported.
+version = "2026.1-rcm"
+
+[[entry]]
+id = "rcm.classes"
+effective_from = "2022-07-18"
+effective_to = "2024-10-09"
+legal_ref = "Notification No. 13/2017-CT(R) and 10/2017-IT(R) as amended up to 14/2023-CT(R) and 17/2023-IT(R)"
+[entry.params]
+ids = "gta,legal,arbitral,sponsorship,security,motor_vehicle_rental,residential_rent"
+
+[[entry]]
+id = "rcm.classes"
+effective_from = "2024-10-10"
+legal_ref = "Notification No. 13/2017-CT(R) and 10/2017-IT(R) as amended up to 08/2026-CT(R) and 08/2026-IT(R)"
+[entry.params]
+ids = "gta,legal,arbitral,sponsorship,security,motor_vehicle_rental,residential_rent,commercial_rent_unregistered"
+
+# GTA, road transport. Column (4) lists any person registered under the GST Acts among the
+# recipients, so a registered company is always one. The first proviso (29/2018) excludes
+# government recipients registered only to deduct tax under s.51: never this company's registration.
+# The second proviso (05/2022, from 18.7.2022): not where the supplier is registered, has opted to
+# pay tax under forward charge and issues a tax invoice charging tax with the Annexure III
+# declaration. The books show that by the tax on the supplier's invoice (`forward_charge = any_tax`).
+[[entry]]
+id = "rcm.class.gta"
+effective_from = "2022-07-18"
+legal_ref = "Notification No. 13/2017-CT(R) sl.1 and 10/2017-IT(R) sl.2, as amended by 05/2022-CT(R) and 05/2022-IT(R) (second proviso, from 18 July 2022)"
+[entry.params]
+hsn_prefixes = "996791"
+supplier = "any"
+recipient = "registered"
+forward_charge = "any_tax"
+
+# Legal services by an individual advocate (including a senior advocate) or a firm of advocates,
+# directly or indirectly, to a business entity (sl.2 as corrected on 25.09.2017). A registered
+# person supplies in the course of business (CGST Act s.7(1)(a), s.22), so the company is a business
+# entity. Who the supplier is cannot be read from the books.
+[[entry]]
+id = "rcm.class.legal"
+effective_from = "2022-07-18"
+legal_ref = "Notification No. 13/2017-CT(R) sl.2 and 10/2017-IT(R) sl.3, as corrected by the corrigenda of 25 September 2017"
+[entry.params]
+hsn_prefixes = "998211,998212,998213,998214,998216"
+supplier = "any"
+recipient = "registered"
+requires = "the supplier is an individual advocate (including a senior advocate) or a firm of advocates"
+
+[[entry]]
+id = "rcm.class.arbitral"
+effective_from = "2022-07-18"
+legal_ref = "Notification No. 13/2017-CT(R) sl.3 and 10/2017-IT(R) sl.4"
+[entry.params]
+hsn_prefixes = "998215"
+supplier = "any"
+recipient = "registered"
+requires = "the supplier is an arbitral tribunal"
+
+# Sponsorship to a body corporate or partnership firm. Supplier "Any person" until 07/2025; from
+# 16.01.2025 "Any person other than a body corporate", which the books cannot tell.
+# An LLP is a partnership firm for this notification (Explanation (e), inserted by 22/2017).
+[[entry]]
+id = "rcm.class.sponsorship"
+effective_from = "2022-07-18"
+effective_to = "2025-01-15"
+legal_ref = "Notification No. 13/2017-CT(R) sl.4 and 10/2017-IT(R) sl.5"
+[entry.params]
+hsn_prefixes = "998397"
+supplier = "any"
+recipient = "body_corporate_or_partnership"
+
+[[entry]]
+id = "rcm.class.sponsorship"
+effective_from = "2025-01-16"
+legal_ref = "Notification No. 13/2017-CT(R) sl.4 and 10/2017-IT(R) sl.5, as amended by 07/2025-CT(R) and 07/2025-IT(R) (G.S.R. 44(E) and 45(E) of 16 January 2025)"
+[entry.params]
+hsn_prefixes = "998397"
+supplier = "any"
+recipient = "body_corporate_or_partnership"
+requires = "the supplier is not a body corporate"
+
+# Security services (supply of security personnel) by any person other than a body corporate to a
+# registered person (29/2018, from 1.1.2019). The proviso excludes government recipients registered
+# only for s.51 and composition recipients; the engine charges neither.
+[[entry]]
+id = "rcm.class.security"
+effective_from = "2022-07-18"
+legal_ref = "Notification No. 13/2017-CT(R) sl.14 and 10/2017-IT(R) sl.16, inserted by 29/2018-CT(R) and 30/2018-IT(R) from 1 January 2019"
+[entry.params]
+hsn_prefixes = "998525"
+supplier = "any"
+recipient = "registered"
+requires = "the service is the supply of security personnel and the supplier is not a body corporate"
+
+# Renting of a motor vehicle designed to carry passengers, fuel cost included, by a person other
+# than a body corporate who does not issue an invoice charging central tax at 6 per cent (IT: 12
+# per cent), to a body corporate (sl.15 as substituted by 29/2019). 08/2026 changes the figure to 9
+# (IT: 18) from 1.11.2026. `rate:12` means an invoice charging 12% in all (6% CGST and 6% SGST, or
+# 12% IGST).
+[[entry]]
+id = "rcm.class.motor_vehicle_rental"
+effective_from = "2022-07-18"
+effective_to = "2026-10-31"
+legal_ref = "Notification No. 13/2017-CT(R) sl.15 and 10/2017-IT(R) sl.17, as substituted by 29/2019-CT(R) and 28/2019-IT(R)"
+[entry.params]
+hsn_prefixes = "996601"
+supplier = "any"
+recipient = "body_corporate"
+forward_charge = "rate:12"
+requires = "the vehicle is designed to carry passengers, the cost of fuel is included in the consideration, and the supplier is not a body corporate"
+
+[[entry]]
+id = "rcm.class.motor_vehicle_rental"
+effective_from = "2026-11-01"
+legal_ref = "Notification No. 13/2017-CT(R) sl.15 and 10/2017-IT(R) sl.17, as amended by 08/2026-CT(R) and 08/2026-IT(R) from 1 November 2026"
+[entry.params]
+hsn_prefixes = "996601"
+supplier = "any"
+recipient = "body_corporate"
+forward_charge = "rate:18"
+requires = "the vehicle is designed to carry passengers, the cost of fuel is included in the consideration, and the supplier is not a body corporate"
+
+# Renting of residential dwelling to a registered person, by any person (05/2022, from 18.7.2022).
+[[entry]]
+id = "rcm.class.residential_rent"
+effective_from = "2022-07-18"
+legal_ref = "Notification No. 13/2017-CT(R) sl.5AA and 10/2017-IT(R) sl.6AA, inserted by 05/2022-CT(R) and 05/2022-IT(R) from 18 July 2022"
+[entry.params]
+hsn_prefixes = "997211"
+supplier = "any"
+recipient = "registered"
+
+# Renting of any immovable property other than residential dwelling, by an unregistered person to a
+# registered person (09/2024, from 10.10.2024, read with its corrigendum of 22.10.2024).
+[[entry]]
+id = "rcm.class.commercial_rent_unregistered"
+effective_from = "2024-10-10"
+legal_ref = "Notification No. 13/2017-CT(R) sl.5AB and 10/2017-IT(R) sl.6AB, inserted by 09/2024-CT(R) and 09/2024-IT(R) from 10 October 2024"
+[entry.params]
+hsn_prefixes = "997212"
+supplier = "unregistered"
+recipient = "registered"

@@ -38,7 +38,35 @@
 //! [entry.params]
 //! hsn_prefixes = "9965"              # comma separated digits; a line matches when its HSN/SAC starts with one
 //! supplier = "any"                   # "any" (registered or not) or "unregistered" (only unregistered suppliers)
+//! recipient = "registered"           # optional: "registered" (the default), "body_corporate" or
+//!                                    # "body_corporate_or_partnership", read from the company's entity kind
+//! forward_charge = "any_tax"         # optional: "any_tax" or "rate:<total percent>"; a registered supplier
+//!                                    # whose invoice charges that tax has taken the supply out of the class
+//! requires = "..."                   # optional: the conditions the books cannot check, in words
 //! ```
+//!
+//! The bundled classes are in `packs/rcm.toml`, each citing its entry of Notification No.
+//! 13/2017-CT(R) and 10/2017-IT(R).
+//!
+//! # What the books can and cannot tell
+//!
+//! The recipient's registration and legal form (`Company::entity_kind`) and the supplier's
+//! registration are in the books. Whether the supplier is an advocate, an arbitral tribunal or a
+//! body corporate is not. A class names those conditions in `requires`, and the user's reverse
+//! charge mark on the voucher declares them (as the accounting product's "Applicable for Reverse
+//! Charge" does):
+//!
+//! * marked: the tax is `Payable`, and [`RcmPayable::declared`] repeats the conditions declared;
+//! * not marked, and the supplier's invoice charges tax (the voucher posts CGST, SGST, UTGST or IGST
+//!   lines): the books record the supplier's forward-charge supply,
+//!   [`NoRcmReason::SupplierChargedTax`];
+//! * not marked and no tax charged: `Unsupported`, naming the conditions to declare.
+//!
+//! A tax charged by an unregistered supplier, or a voucher both marked and carrying the supplier's
+//! tax, is `Unsupported`: the books contradict themselves. Whether an LLP is a "body corporate"
+//! (Companies Act s.2(11), Explanation (b) of the notification) and whether a trust, society or HUF
+//! (`EntityKind::Other`) is one are not settled from the sources read, so those recipients are
+//! `Unsupported` for a `body_corporate` class (an LLP is a partnership firm by Explanation (e)).
 //!
 //! A class that is listed but pending (or not in force on that date) makes every voucher that needs
 //! the list `Unsupported`: the module cannot tell whether the line belongs to it, and answering
@@ -70,8 +98,8 @@ use ledgerly_core::{
     Date, Decimal, DrCr, MoneyError, Outcome, Paise, RoundingRule, StateCode, round_rupees_to_paise,
 };
 use ledgerly_model::{
-    BaseVoucherKind, Company, GstHistory, Masters, RegistrationType, StockItem, TaxLedgerKind,
-    Taxability, Voucher, VoucherMode, VoucherStatus,
+    BaseVoucherKind, Company, EntityKind, GstHistory, Masters, RegistrationType, StockItem,
+    TaxLedgerKind, Taxability, Voucher, VoucherMode, VoucherStatus,
 };
 
 use crate::GstError;
@@ -106,6 +134,13 @@ pub enum NoRcmReason {
     SupplierRegistered,
     /// The voucher has no taxable line (everything is exempt, nil-rated or outside GST).
     NoTaxableLine,
+    /// A class matches, but the company is not a recipient that class names (for example a
+    /// proprietor buying a service notified only for a body corporate).
+    RecipientNotCovered,
+    /// A class matches, but the registered supplier's invoice charges the tax: under the class's
+    /// forward-charge option, or, for a class whose conditions the books cannot check, as the
+    /// supplier's own statement that the supply is under forward charge.
+    SupplierChargedTax,
 }
 
 /// When input tax credit on the reverse-charge tax can be taken.
@@ -158,6 +193,9 @@ pub struct RcmPayable {
     /// Whether the user had marked the voucher as reverse charge. The liability exists either way
     /// (it is the law, not the mark); `false` tells the caller the voucher needs to be marked.
     pub marked_on_voucher: bool,
+    /// The class's conditions that the books cannot check and that the user declared by marking
+    /// the voucher (the class's `requires` text); `None` when the books decided everything.
+    pub declared: Option<String>,
 }
 
 /// The reverse-charge position of a purchase voucher.
@@ -288,19 +326,64 @@ fn evaluate(
     }
     // Every path above that reaches here answers `Payable`, which depends on the recipient's
     // registration. Without a company that is unknown, so the answer is not given.
-    if company.is_none() {
+    let Some(company) = company else {
         return unsupported(
             "reverse charge without the recipient's registration",
             "reverse_charge has no company argument, so a composition recipient cannot be excluded; use reverse_charge_for_company, which checks the company's registration",
         );
+    };
+    if !supported!(recipient_covered(class, company)) {
+        return Ok(not_applicable(v, NoRcmReason::RecipientNotCovered));
     }
+    let charged = supported!(charged_tax(v, masters)?);
+    let declared = match supported!(decide_charge(v, class, &supplier, &taxable, &charged)) {
+        Charge::Reverse { declared } => declared,
+        Charge::Forward => return Ok(not_applicable(v, NoRcmReason::SupplierChargedTax)),
+    };
     let heads = supported!(supply_heads(v, supplier.state));
     let mut lines = Vec::with_capacity(taxable.len());
     for base in &taxable {
         lines.push(supported!(price_line(base, heads, rules)?));
     }
-    let payable = assemble(lines, heads, rules.version(), class, v.reverse_charge)?;
+    let mut payable = assemble(lines, heads, rules.version(), class, v.reverse_charge)?;
+    payable.declared = declared;
     Ok(Outcome::Value(RcmLiability::Payable(payable)))
+}
+
+/// For a purchase that is **not** marked reverse charge, from a supplier the caller treats as a
+/// forward-charge supplier: the id of a notified class its taxable lines match when the voucher
+/// posts no GST, so the supply may be under reverse charge and a forward-charge credit computed
+/// from the rates could be a wrong number. `None` when the voucher charges tax (the supplier's
+/// forward charge, see the module docs), when no line matches a class, or when `rules` has no
+/// `rcm.classes` entry on its date (a pack without the list; the caller must say so).
+///
+/// `rules` is selected for the voucher's date: the class index only tells whether a class could
+/// apply, never the tax.
+///
+/// # Errors
+/// As [`reverse_charge`].
+pub(crate) fn unmarked_class_match(
+    v: &Voucher,
+    masters: &Masters,
+    rules: &RuleSet,
+) -> Result<Outcome<Option<String>>, GstError> {
+    if !rules.has(INDEX_ID) {
+        return Ok(Outcome::Value(None));
+    }
+    if supported!(charged_tax(v, masters)?).any {
+        return Ok(Outcome::Value(None));
+    }
+    let taxable: Vec<Base> = supported!(collect_bases(v, masters, rules.date())?)
+        .into_iter()
+        .filter(|b| is_taxable(b.taxability))
+        .collect();
+    if taxable.is_empty() {
+        return Ok(Outcome::Value(None));
+    }
+    let classes = supported!(load_classes(rules)?);
+    Ok(Outcome::Value(
+        supported!(match_class(&taxable, &classes)).map(|c| c.id.clone()),
+    ))
 }
 
 /// `NotApplicable`, unless the user marked the voucher as reverse charge: then the mark and the
@@ -655,6 +738,159 @@ struct Class {
     legal_ref: String,
     prefixes: Vec<String>,
     unregistered_only: bool,
+    recipient: Recipient,
+    forward: Option<Forward>,
+    requires: Option<String>,
+}
+
+/// Which recipients a class names (column (4) of the notification), as far as the books tell.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Recipient {
+    /// Any registered person (the company always is one when the answer is `Payable`).
+    Registered,
+    /// A body corporate (Companies Act s.2(11)).
+    BodyCorporate,
+    /// A body corporate or a partnership firm (an LLP counts as a firm, Explanation (e)).
+    BodyCorporateOrPartnership,
+}
+
+/// How a registered supplier takes a supply out of the class by charging tax itself.
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum Forward {
+    /// Any tax charged on the invoice (the GTA's forward-charge option).
+    AnyTax,
+    /// Tax charged at this total rate on every taxable line.
+    Rate(Decimal),
+}
+
+/// The outcome of the forward-charge and declaration rules.
+enum Charge {
+    /// The recipient pays; `declared` holds the conditions the user's mark declared.
+    Reverse { declared: Option<String> },
+    /// The supplier's invoice charges the tax.
+    Forward,
+}
+
+/// The tax heads the supplier's invoice charges, read from the voucher's tax ledger lines.
+struct Charged {
+    /// At least one CGST, SGST, UTGST or IGST line with a non-zero amount.
+    any: bool,
+}
+
+fn charged_tax(v: &Voucher, masters: &Masters) -> Result<Outcome<Charged>, GstError> {
+    let mut any = false;
+    for line in &v.ledger_lines {
+        let ledger = masters
+            .ledgers
+            .get(&line.ledger)
+            .ok_or_else(|| not_found(format!("ledger {}", line.ledger.0)))?;
+        let Some(tax) = &ledger.tax else {
+            continue;
+        };
+        match tax.kind {
+            TaxLedgerKind::Cgst
+            | TaxLedgerKind::Sgst
+            | TaxLedgerKind::Utgst
+            | TaxLedgerKind::Igst => {
+                if !line.amount.amount.is_zero() {
+                    any = true;
+                }
+            }
+            TaxLedgerKind::Cess => {
+                return unsupported(
+                    "GST cess",
+                    "the voucher posts to a cess ledger; no verified cess rate is available",
+                );
+            }
+            TaxLedgerKind::Tds | TaxLedgerKind::Tcs | TaxLedgerKind::Other => {}
+        }
+    }
+    Ok(Outcome::Value(Charged { any }))
+}
+
+fn recipient_covered(class: &Class, company: &Company) -> Outcome<bool> {
+    let body_corporate = |kind: EntityKind| match kind {
+        EntityKind::Company => Outcome::Value(true),
+        EntityKind::Partnership | EntityKind::Proprietorship => Outcome::Value(false),
+        EntityKind::Llp => Outcome::unsupported(
+            format!("reverse charge class `{}` for an LLP recipient", class.id),
+            "the class names a body corporate (Companies Act s.2(11)); whether an LLP is one is not settled from the sources read",
+        ),
+        EntityKind::Other => Outcome::unsupported(
+            format!(
+                "reverse charge class `{}` for a trust, society or HUF",
+                class.id
+            ),
+            "the class names a body corporate (Companies Act s.2(11)); the company's legal form does not say whether it is one",
+        ),
+    };
+    match class.recipient {
+        Recipient::Registered => Outcome::Value(true),
+        Recipient::BodyCorporate => body_corporate(company.entity_kind),
+        Recipient::BodyCorporateOrPartnership => match company.entity_kind {
+            EntityKind::Llp | EntityKind::Partnership => Outcome::Value(true),
+            kind @ (EntityKind::Company | EntityKind::Proprietorship | EntityKind::Other) => {
+                body_corporate(kind)
+            }
+        },
+    }
+}
+
+fn decide_charge(
+    v: &Voucher,
+    class: &Class,
+    supplier: &Supplier,
+    taxable: &[Base],
+    charged: &Charged,
+) -> Outcome<Charge> {
+    if charged.any && !supplier.registered {
+        return Outcome::unsupported(
+            "tax on an unregistered supplier's invoice",
+            "the voucher posts GST ledgers but the supplier is unregistered and cannot charge tax; correct the supplier or remove the tax lines",
+        );
+    }
+    if charged.any && v.reverse_charge {
+        return Outcome::unsupported(
+            "a voucher marked reverse charge whose supplier charges tax",
+            format!(
+                "the voucher is marked reverse charge under class `{}` but the supplier's invoice charges tax on it; remove the tax lines or the mark",
+                class.id
+            ),
+        );
+    }
+    if charged.any {
+        let opted = match &class.forward {
+            None => false,
+            Some(Forward::AnyTax) => true,
+            Some(Forward::Rate(rate)) => taxable.iter().all(|b| b.rate == Some(*rate)),
+        };
+        if opted || class.requires.is_some() {
+            return Outcome::Value(Charge::Forward);
+        }
+        return Outcome::unsupported(
+            format!(
+                "tax charged on a supply of reverse charge class `{}`",
+                class.id
+            ),
+            format!(
+                "{} puts the tax on the recipient, but the supplier's invoice charges it; remove the tax lines",
+                class.legal_ref
+            ),
+        );
+    }
+    match (&class.requires, v.reverse_charge) {
+        (None, _) => Outcome::Value(Charge::Reverse { declared: None }),
+        (Some(r), true) => Outcome::Value(Charge::Reverse {
+            declared: Some(r.clone()),
+        }),
+        (Some(r), false) => Outcome::unsupported(
+            format!("reverse charge class `{}`", class.id),
+            format!(
+                "{} applies only if {r}; the books cannot tell, so mark the voucher reverse charge if it does, or enter the supplier's tax if the supplier charged it",
+                class.legal_ref
+            ),
+        ),
+    }
 }
 
 fn csv(text: &str) -> Vec<&str> {
@@ -727,11 +963,51 @@ fn read_class(id: &str, entry: &PackEntry) -> Result<Class, GstError> {
             )));
         }
     };
+    let recipient = match entry.params().get("recipient").map(String::as_str) {
+        None | Some("registered") => Recipient::Registered,
+        Some("body_corporate") => Recipient::BodyCorporate,
+        Some("body_corporate_or_partnership") => Recipient::BodyCorporateOrPartnership,
+        Some(other) => {
+            return Err(pack_err(format!(
+                "entry `{}`: recipient `{other}` is not registered, body_corporate or body_corporate_or_partnership",
+                entry.id()
+            )));
+        }
+    };
+    let forward = match entry.params().get("forward_charge").map(String::as_str) {
+        None => None,
+        Some("any_tax") => Some(Forward::AnyTax),
+        Some(other) => {
+            let rate = other
+                .strip_prefix("rate:")
+                .and_then(|r| r.trim().parse::<Decimal>().ok())
+                .ok_or_else(|| {
+                    pack_err(format!(
+                        "entry `{}`: forward_charge `{other}` is neither any_tax nor rate:<percent>",
+                        entry.id()
+                    ))
+                })?;
+            Some(Forward::Rate(rate))
+        }
+    };
+    let requires = match entry.params().get("requires") {
+        None => None,
+        Some(text) if text.trim().is_empty() => {
+            return Err(pack_err(format!(
+                "entry `{}`: requires is blank",
+                entry.id()
+            )));
+        }
+        Some(text) => Some(text.trim().to_owned()),
+    };
     Ok(Class {
         id: id.to_owned(),
         legal_ref,
         prefixes,
         unregistered_only,
+        recipient,
+        forward,
+        requires,
     })
 }
 
@@ -913,5 +1189,6 @@ fn assemble(
         totals,
         itc: RcmItc::AfterTaxPaid,
         marked_on_voucher: marked,
+        declared: None,
     })
 }

@@ -14,7 +14,13 @@
 //! portal:
 //!
 //! * **3.1(a)**, outward taxable supplies (other than zero rated, nil rated and exempted): the sum
-//!   of the taxable value of every line that G6 classifies as `Taxable`, and the tax on it from G4.
+//!   of the taxable value of every line that G6 classifies as `Taxable` or `DeemedExport`, and the
+//!   tax on it from G4. Deemed exports are here because the GST portal's GSTR-3B help fills
+//!   3.1(a) from GSTR-1 tables 4A and 6C (tutorial.gst.gov.in/userguide/returns/GSTR3B.htm, read
+//!   2026-11-28).
+//! * **3.1(c)**, nil rated and exempted outward supplies, and **3.1(e)**, non-GST outward
+//!   supplies: the value of the lines G6 classifies `NilRated` or `Exempt`, and `NonGst` (the same
+//!   help page: GSTR-1 table 8 columns 2 and 3, and column 4).
 //! * **4(A)(5)**, all other ITC: the tax on every purchase line that G7 finds `Eligible`. Tax on
 //!   `Blocked` and `Ineligible` lines is never added; it is shown separately in
 //!   [`Gstr3bWorking::itc_not_claimable`].
@@ -43,11 +49,38 @@
 //! rounding, so a voucher with some blocked lines can differ by a paisa from the supplier's
 //! invoice total. This is a product policy, not a rule of the Act.
 //!
-//! # Reverse charge purchases
+//! # Reverse charge purchases (tables 3.1(d) and 4(A)(3))
 //!
-//! Purchases under reverse charge belong to tables 3.1(d) and 4(A)(3), not to 3.1(a) or 4(A)(5).
-//! They are left out of both figures and listed in [`Gstr3bWorking::reverse_charge_purchases`] so
-//! that nothing is dropped silently.
+//! Purchases under reverse charge belong to tables 3.1(d) and 4(A)(3), not to 3.1(a) or 4(A)(5)
+//! (CGST Act s.9(3); "output tax" of s.2(82) excludes tax payable on reverse charge). A purchase
+//! goes to these tables when it is marked reverse charge, when its supplier is unregistered, or
+//! when it is not marked, posts no GST and a line matches a notified class of the pack (see
+//! [`crate::rcm`]); a supplier's invoice that charges GST stays a forward-charge purchase.
+//!
+//! * **3.1(d)**, inward supplies liable to reverse charge: the taxable value and tax of every
+//!   purchase that [`crate::rcm::reverse_charge_for_company`] finds `Payable`, in the period of
+//!   its time of supply (`Voucher::supply_date`, which under reverse charge follows CGST Act
+//!   s.12(3) and s.13(3) and is entered by the user). Tax is rounded once per head per voucher.
+//! * **4(A)(3)**, ITC on inward supplies liable to reverse charge: the tax on the lines of those
+//!   purchases that card G7 finds claimable. Rule 36(1)(b) of the CGST Rules allows the credit on
+//!   the recipient's invoice "subject to the payment of tax", and s.49(4) lets the credit ledger
+//!   pay only output tax, so the tax of 3.1(d) is paid in cash with the same return; the working
+//!   shows the credit in the same period on that footing.
+//!
+//! The two tables are separate `Outcome`s ([`Gstr3bWorking::inward_reverse_charge`] and
+//! [`Gstr3bWorking::itc_reverse_charge`]): a reverse-charge purchase that cannot be decided makes
+//! them `Unsupported`, never the forward-charge tables, because its tax is in neither 3.1(a) nor
+//! 4(A)(5). A credit that cannot be decided (for example a hired vehicle, whose s.17(5)(b)
+//! exceptions depend on use) makes only 4(A)(3) `Unsupported`. A purchase that is not under reverse
+//! charge and is from an unregistered supplier carries no tax and is in no table.
+//!
+//! A reverse-charge purchase without a supply date is `Unsupported` when its voucher date is in
+//! the period or up to 61 days before it (the 61st day after the invoice is the latest time of
+//! supply under s.13(3)(b)), or when its payment date is in the period. Every reverse-charge
+//! purchase of the period, decided or not, is listed in [`Gstr3bWorking::reverse_charge_purchases`].
+//!
+//! When the pack has no `rcm.classes` entry on a purchase's date (the bundled list starts on
+//! 18 July 2022), an unmarked purchase from a registered supplier is taken as forward charge.
 //!
 //! # Not decided (the result is `Unsupported`)
 //!
@@ -59,8 +92,8 @@
 //!   the Act text yet, so it is `pending`.
 //! * Outward supplies under reverse charge, receipt vouchers that carry an advance (tax on
 //!   advances needs the time-of-supply rules of card G12), and outward lines that G6 classifies as
-//!   exports, SEZ supplies, deemed exports or advances (tables 3.1(b) and others are not worked
-//!   out here).
+//!   exports, SEZ supplies or advances (table 3.1(b) needs zero-rated voucher tax, which G4 does
+//!   not compute).
 //! * Anything G4, G6 or G7 returns `Unsupported` for, including a purchase whose "ineligible for
 //!   input credit" settings conflict (see [`crate::itc`]). The reason names the voucher.
 //!
@@ -71,11 +104,12 @@
 //! [`GstError::Money`] on overflow.
 
 use ledgerly_core::{
-    Date, Decimal, Gstin, MoneyError, Outcome, Paise, Period, RoundingRule, VoucherId,
+    Date, Decimal, Gstin, MoneyError, Outcome, Paise, Period, RoundingRule, Unsupported, VoucherId,
     round_rupees_to_paise,
 };
 use ledgerly_model::{
-    BaseVoucherKind, BillRefKind, Books, Masters, Taxability, Voucher, VoucherMode, VoucherStatus,
+    BaseVoucherKind, BillRefKind, Books, Masters, RegistrationType, Taxability, Voucher,
+    VoucherMode, VoucherStatus,
 };
 
 pub use ledgerly_gst_formats::gstr3b::{Gstr3bPortalValues, Gstr3bTaxAmounts};
@@ -85,6 +119,7 @@ use crate::classify::{SupplyKind, classify_line};
 use crate::compute::{GstBreakup, LineSource, LineTax, compute_voucher_tax};
 use crate::itc::itc_eligibility;
 use crate::pack::{RulePack, RuleSet};
+use crate::rcm::{RcmLiability, RcmPayable, reverse_charge_for_company, unmarked_class_match};
 
 /// One figure of the working that is compared with the portal.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -143,10 +178,46 @@ pub struct Gstr3bWorking {
     pub itc_vouchers: Vec<VoucherId>,
     /// Tax on purchase lines that is blocked (s.17(5)) or otherwise ineligible. Not in 4(A)(5).
     pub itc_not_claimable: Gstr3bTaxAmounts,
-    /// Purchases under reverse charge in the period: in neither 3.1(a) nor 4(A)(5).
+    /// Table 3.1(c): value of nil-rated and exempted outward supplies.
+    pub outward_nil_exempt_value: Paise,
+    /// Table 3.1(e): value of non-GST outward supplies.
+    pub outward_non_gst_value: Paise,
+    /// The vouchers that contribute to 3.1(c) or 3.1(e), in voucher id order.
+    pub other_outward_vouchers: Vec<VoucherId>,
+    /// Purchases under reverse charge in the period (by time of supply), and those whose
+    /// reverse-charge position could not be decided: in neither 3.1(a) nor 4(A)(5).
     pub reverse_charge_purchases: Vec<VoucherId>,
+    /// Table 3.1(d): inward supplies liable to reverse charge.
+    pub inward_reverse_charge: Outcome<InwardReverseCharge>,
+    /// Table 4(A)(3): input tax credit on inward supplies liable to reverse charge.
+    pub itc_reverse_charge: Outcome<ItcReverseCharge>,
     /// Books against portal, one row per figure; `None` when no portal values were given.
     pub comparison: Option<Vec<ComparisonRow>>,
+}
+
+/// Table 3.1(d) of the working.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct InwardReverseCharge {
+    /// Total taxable value.
+    pub taxable_value: Paise,
+    /// Tax the recipient owes, paid in cash (CGST Act s.49(4) with s.2(82)).
+    pub tax: Gstr3bTaxAmounts,
+    /// The vouchers that contribute, in voucher id order.
+    pub vouchers: Vec<VoucherId>,
+    /// Of those, the vouchers not marked reverse charge: the liability is the law's, not the
+    /// mark's, and the voucher should be marked.
+    pub unmarked: Vec<VoucherId>,
+}
+
+/// Table 4(A)(3) of the working.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct ItcReverseCharge {
+    /// Credit on the claimable lines.
+    pub itc: Gstr3bTaxAmounts,
+    /// Tax on reverse-charge lines that is blocked or otherwise ineligible: in 3.1(d), not here.
+    pub not_claimable: Gstr3bTaxAmounts,
+    /// The vouchers with claimable credit, in voucher id order.
+    pub vouchers: Vec<VoucherId>,
 }
 
 impl Gstr3bWorking {
@@ -265,10 +336,19 @@ struct Totals {
     outward_taxable_value: Paise,
     outward_tax: Gstr3bTaxAmounts,
     outward_vouchers: Vec<VoucherId>,
+    outward_nil_exempt_value: Paise,
+    outward_non_gst_value: Paise,
+    other_outward_vouchers: Vec<VoucherId>,
     itc_all_other: Gstr3bTaxAmounts,
     itc_vouchers: Vec<VoucherId>,
     itc_not_claimable: Gstr3bTaxAmounts,
     reverse_charge_purchases: Vec<VoucherId>,
+    inward_rc: InwardReverseCharge,
+    itc_rc: ItcReverseCharge,
+    /// The first reverse-charge purchase that could not be decided: both tables are `Unsupported`.
+    rc_unsupported: Option<Unsupported>,
+    /// The first reverse-charge credit that could not be decided: 4(A)(3) is `Unsupported`.
+    itc_rc_unsupported: Option<Unsupported>,
 }
 
 /// Where the working is built: the books, the period and the pack.
@@ -314,7 +394,18 @@ pub fn build_gstr3b(
         itc_all_other: totals.itc_all_other,
         itc_vouchers: totals.itc_vouchers,
         itc_not_claimable: totals.itc_not_claimable,
+        outward_nil_exempt_value: totals.outward_nil_exempt_value,
+        outward_non_gst_value: totals.outward_non_gst_value,
+        other_outward_vouchers: totals.other_outward_vouchers,
         reverse_charge_purchases: totals.reverse_charge_purchases,
+        inward_reverse_charge: match &totals.rc_unsupported {
+            Some(u) => Outcome::Unsupported(u.clone()),
+            None => Outcome::Value(totals.inward_rc),
+        },
+        itc_reverse_charge: match totals.rc_unsupported.or(totals.itc_rc_unsupported) {
+            Some(u) => Outcome::Unsupported(u),
+            None => Outcome::Value(totals.itc_rc),
+        },
         comparison: None,
     };
     if let Some(portal) = portal {
@@ -396,24 +487,20 @@ fn add_voucher(
         VoucherStatus::Optional | VoucherStatus::Cancelled => return Ok(Outcome::Value(())),
         VoucherStatus::Regular | VoucherStatus::PostDated => {}
     }
-    if !touches_period(v, scope.period) {
-        return Ok(Outcome::Value(()));
-    }
     let voucher_type = scope
         .books
         .masters
         .voucher_types
         .get(&v.type_id)
         .ok_or_else(|| not_found(format!("voucher type {}", v.type_id.0)))?;
+    // A purchase decides its own period (its reverse-charge time of supply can be after the
+    // voucher date); every other voucher must touch the period.
+    if voucher_type.base != BaseVoucherKind::Purchase && !touches_period(v, scope.period) {
+        return Ok(Outcome::Value(()));
+    }
     match voucher_type.base {
         BaseVoucherKind::Sales => add_sales(scope, v, totals),
-        BaseVoucherKind::Purchase => {
-            if scope.period.contains(v.date) {
-                add_purchase(scope, v, totals)
-            } else {
-                Ok(Outcome::Value(()))
-            }
-        }
+        BaseVoucherKind::Purchase => add_purchase(scope, v, totals),
         BaseVoucherKind::CreditNote | BaseVoucherKind::DebitNote => unsupported(
             format!("{:?} in a GSTR-3B period", voucher_type.base),
             format!(
@@ -563,10 +650,12 @@ fn add_sales(scope: &Scope<'_>, v: &Voucher, totals: &mut Totals) -> Result<Outc
     let masters = &scope.books.masters;
     let mut taxable = Paise::ZERO;
     let mut heads = HeadSums::default();
+    let mut nil_exempt = Paise::ZERO;
+    let mut non_gst = Paise::ZERO;
     for (position, line_tax) in priced.positions.iter().zip(&priced.breakup.lines) {
         let kind = supported!(classify_line(v, *position, masters, &priced.rules)?);
         let expected = match kind {
-            SupplyKind::Taxable => Taxability::Taxable,
+            SupplyKind::Taxable | SupplyKind::DeemedExport => Taxability::Taxable,
             SupplyKind::Exempt => Taxability::Exempt,
             SupplyKind::NilRated => Taxability::NilRated,
             SupplyKind::NonGst => Taxability::NonGst,
@@ -574,7 +663,6 @@ fn add_sales(scope: &Scope<'_>, v: &Voucher, totals: &mut Totals) -> Result<Outc
             | SupplyKind::ExportUnderLut
             | SupplyKind::SezWithPayment
             | SupplyKind::SezUnderLut
-            | SupplyKind::DeemedExport
             | SupplyKind::Advance => {
                 return unsupported(
                     format!("a {kind:?} line in GSTR-3B"),
@@ -594,10 +682,22 @@ fn add_sales(scope: &Scope<'_>, v: &Voucher, totals: &mut Totals) -> Result<Outc
                 ),
             ));
         }
-        if kind == SupplyKind::Taxable {
-            taxable = taxable.checked_add(line_tax.taxable)?;
-            heads.add_line(line_tax)?;
+        match expected {
+            Taxability::Taxable => {
+                taxable = taxable.checked_add(line_tax.taxable)?;
+                heads.add_line(line_tax)?;
+            }
+            Taxability::Exempt | Taxability::NilRated => {
+                nil_exempt = nil_exempt.checked_add(line_tax.taxable)?;
+            }
+            Taxability::NonGst => non_gst = non_gst.checked_add(line_tax.taxable)?,
         }
+    }
+    if !nil_exempt.is_zero() || !non_gst.is_zero() {
+        totals.outward_nil_exempt_value =
+            totals.outward_nil_exempt_value.checked_add(nil_exempt)?;
+        totals.outward_non_gst_value = totals.outward_non_gst_value.checked_add(non_gst)?;
+        totals.other_outward_vouchers.push(v.id);
     }
     if !taxable.is_zero() {
         totals.outward_taxable_value = totals.outward_taxable_value.checked_add(taxable)?;
@@ -647,15 +747,281 @@ fn itc_line_index(v: &Voucher, k: usize, position: usize) -> Outcome<usize> {
     }
 }
 
+/// Where a purchase goes: the forward-charge tables or the reverse-charge ones.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Route {
+    Forward,
+    Reverse,
+}
+
+/// Marked, from an unregistered supplier, or unmarked with no GST posted on a notified class:
+/// reverse-charge tables. Everything else: forward charge.
+fn route(scope: &Scope<'_>, v: &Voucher) -> Result<Outcome<Route>, GstError> {
+    if v.reverse_charge {
+        return Ok(Outcome::Value(Route::Reverse));
+    }
+    let masters = &scope.books.masters;
+    if let Some(party_id) = v.party {
+        let party = masters
+            .ledgers
+            .get(&party_id)
+            .ok_or_else(|| not_found(format!("party ledger {}", party_id.0)))?;
+        if let Some(details) = &party.party {
+            match details.registration {
+                RegistrationType::Unregistered | RegistrationType::Consumer => {
+                    return Ok(Outcome::Value(Route::Reverse));
+                }
+                RegistrationType::Regular
+                | RegistrationType::Composition
+                | RegistrationType::Sez
+                | RegistrationType::Overseas
+                | RegistrationType::Uin => {}
+            }
+        }
+    }
+    // The class check guards the forward credit of 4(A)(5), which counts only purchases dated in
+    // the period, and a supply the user dated in it; an unmarked purchase from a registered
+    // supplier with neither date in the period is in no table of it.
+    let in_period =
+        scope.period.contains(v.date) || v.supply_date.is_some_and(|d| scope.period.contains(d));
+    if !in_period {
+        return Ok(Outcome::Value(Route::Forward));
+    }
+    match v.mode {
+        VoucherMode::AccountingInvoice | VoucherMode::ItemInvoice => {}
+        // G4 refuses it on the forward path with its own reason.
+        VoucherMode::AsVoucher => return Ok(Outcome::Value(Route::Forward)),
+    }
+    // A pack with no rule on the voucher date has no class list either: the forward path decides
+    // (and refuses the voucher itself when it is in the period).
+    let Outcome::Value(rules) = scope.pack.for_time_of_supply(v.date) else {
+        return Ok(Outcome::Value(Route::Forward));
+    };
+    match unmarked_class_match(v, masters, &rules)? {
+        Outcome::Value(Some(_)) => Ok(Outcome::Value(Route::Reverse)),
+        Outcome::Value(None) => Ok(Outcome::Value(Route::Forward)),
+        Outcome::Unsupported(u) => unsupported(u.what, format!("{}: {}", label(v), u.reason)),
+    }
+}
+
+/// The earliest voucher date, relative to the start of the period, whose reverse-charge time of
+/// supply can fall in the period: the date immediately following sixty days from the invoice
+/// (CGST Act s.13(3)(b)) is the 61st day after it.
+const RC_LOOKBACK_DAYS: i64 = 61;
+
+/// The first voucher date that [`RC_LOOKBACK_DAYS`] reaches back to from the start of `period`.
+fn lookback_start(period: Period) -> Date {
+    period
+        .from()
+        .checked_sub(time::Duration::days(RC_LOOKBACK_DAYS))
+        .unwrap_or(period.from())
+}
+
 fn add_purchase(
     scope: &Scope<'_>,
     v: &Voucher,
     totals: &mut Totals,
 ) -> Result<Outcome<()>, GstError> {
-    if v.reverse_charge {
-        totals.reverse_charge_purchases.push(v.id);
+    let period = scope.period;
+    let may_be_rc = v.reverse_charge
+        || touches_period(v, period)
+        || (v.supply_date.is_none() && v.date >= lookback_start(period) && v.date <= period.to());
+    if !may_be_rc {
         return Ok(Outcome::Value(()));
     }
+    match supported!(route(scope, v)?) {
+        Route::Reverse => add_reverse_charge(scope, v, totals),
+        Route::Forward => {
+            if period.contains(v.date) {
+                add_forward_purchase(scope, v, totals)
+            } else {
+                Ok(Outcome::Value(()))
+            }
+        }
+    }
+}
+
+/// Records the first undecided reverse-charge purchase; the forward tables are unaffected.
+fn rc_unsupported(slot: &mut Option<Unsupported>, u: Unsupported) {
+    if slot.is_none() {
+        *slot = Some(u);
+    }
+}
+
+/// A reverse-charge purchase without a supply date whose time of supply may be in `period`
+/// makes both tables `Unsupported`.
+fn no_supply_date(v: &Voucher, period: Period, totals: &mut Totals) {
+    let in_window = v.date >= lookback_start(period) && v.date <= period.to();
+    if in_window || v.payment_date.is_some_and(|d| period.contains(d)) {
+        totals.reverse_charge_purchases.push(v.id);
+        rc_unsupported(
+            &mut totals.rc_unsupported,
+            Unsupported {
+                what: "time of supply under reverse charge".to_owned(),
+                reason: format!(
+                    "{} is under reverse charge and has no supply date; under CGST Act s.12(3) and s.13(3) its time of supply may fall in this period, so set the supply date",
+                    label(v)
+                ),
+            },
+        );
+    }
+}
+
+fn add_reverse_charge(
+    scope: &Scope<'_>,
+    v: &Voucher,
+    totals: &mut Totals,
+) -> Result<Outcome<()>, GstError> {
+    let period = scope.period;
+    let Some(tos) = v.supply_date else {
+        no_supply_date(v, period, totals);
+        return Ok(Outcome::Value(()));
+    };
+    if !period.contains(tos) {
+        return Ok(Outcome::Value(()));
+    }
+    let rules = match scope.pack.for_time_of_supply(tos) {
+        Outcome::Value(r) => r,
+        Outcome::Unsupported(u) => {
+            totals.reverse_charge_purchases.push(v.id);
+            rc_unsupported(&mut totals.rc_unsupported, u);
+            return Ok(Outcome::Value(()));
+        }
+    };
+    let masters = &scope.books.masters;
+    let company = &scope.books.company;
+    let payable = match reverse_charge_for_company(v, masters, &rules, company)? {
+        Outcome::Value(RcmLiability::Payable(p)) => {
+            totals.reverse_charge_purchases.push(v.id);
+            p
+        }
+        Outcome::Value(RcmLiability::NotApplicable(_)) => return Ok(Outcome::Value(())),
+        Outcome::Unsupported(u) => {
+            totals.reverse_charge_purchases.push(v.id);
+            let u = Unsupported {
+                what: u.what,
+                reason: format!("{}: {}", label(v), u.reason),
+            };
+            rc_unsupported(&mut totals.rc_unsupported, u);
+            return Ok(Outcome::Value(()));
+        }
+    };
+    let t = payable.totals;
+    let tax = Gstr3bTaxAmounts {
+        integrated: t.igst,
+        central: t.cgst,
+        state_ut: t.sgst.checked_add(t.utgst)?,
+        cess: t.cess,
+    };
+    if totals.rc_unsupported.is_some() {
+        return Ok(Outcome::Value(()));
+    }
+    let inward = &mut totals.inward_rc;
+    inward.taxable_value = inward.taxable_value.checked_add(payable.taxable_total)?;
+    inward.tax = add_amounts(inward.tax, tax)?;
+    inward.vouchers.push(v.id);
+    if !payable.marked_on_voucher {
+        inward.unmarked.push(v.id);
+    }
+    if totals.itc_rc_unsupported.is_some() {
+        return Ok(Outcome::Value(()));
+    }
+    match rc_credit(v, &payable, scope, &rules)? {
+        Outcome::Value((eligible, not_claimable)) => {
+            if eligible != Gstr3bTaxAmounts::default() {
+                totals.itc_rc.itc = add_amounts(totals.itc_rc.itc, eligible)?;
+                totals.itc_rc.vouchers.push(v.id);
+            }
+            totals.itc_rc.not_claimable = add_amounts(totals.itc_rc.not_claimable, not_claimable)?;
+        }
+        Outcome::Unsupported(u) => {
+            let u = Unsupported {
+                what: u.what,
+                reason: format!("{}: {}", label(v), u.reason),
+            };
+            rc_unsupported(&mut totals.itc_rc_unsupported, u);
+        }
+    }
+    Ok(Outcome::Value(()))
+}
+
+/// The credit on a reverse-charge purchase: (claimable, not claimable), each head rounded once.
+fn rc_credit(
+    v: &Voucher,
+    payable: &RcmPayable,
+    scope: &Scope<'_>,
+    rules: &RuleSet,
+) -> Result<Outcome<(Gstr3bTaxAmounts, Gstr3bTaxAmounts)>, GstError> {
+    // The credit check reads the supplier's registration: an unregistered supplier's purchase is
+    // creditable only under reverse charge, which the liability just found establishes even when
+    // the voucher is not marked.
+    let marked = Voucher {
+        reverse_charge: true,
+        ..v.clone()
+    };
+    let masters = &scope.books.masters;
+    let mut eligible = HeadSums::default();
+    let mut not_claimable = HeadSums::default();
+    for (k, rc_line) in payable.lines.iter().enumerate() {
+        let index = match rc_line.source {
+            LineSource::Inventory { index } => supported!(itc_line_index(v, k, index)),
+            LineSource::Ledger { ledger } => {
+                let mut found = v
+                    .ledger_lines
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, l)| l.ledger == ledger)
+                    .map(|(i, _)| i);
+                match (found.next(), found.next()) {
+                    (Some(only), None) => only,
+                    (None, _) | (Some(_), Some(_)) => {
+                        return unsupported(
+                            "ITC on a reverse-charge line whose ledger is not on exactly one ledger line",
+                            format!(
+                                "line {} of {} posts to a ledger that does not appear once among its ledger lines",
+                                k + 1,
+                                label(v)
+                            ),
+                        );
+                    }
+                }
+            }
+        };
+        let eligibility = supported!(itc_eligibility(
+            &marked,
+            index,
+            &scope.books.company,
+            masters,
+            rules,
+        )?);
+        let line = LineTax {
+            source: rc_line.source,
+            taxability: Taxability::Taxable,
+            taxable: rc_line.taxable,
+            rate_percent: rc_line.rate_percent,
+            cgst: rc_line.cgst,
+            sgst: rc_line.sgst,
+            utgst: rc_line.utgst,
+            igst: rc_line.igst,
+            cess: Decimal::ZERO,
+        };
+        if eligibility.is_claimable() {
+            eligible.add_line(&line)?;
+        } else {
+            not_claimable.add_line(&line)?;
+        }
+    }
+    Ok(Outcome::Value((
+        eligible.rounded()?,
+        not_claimable.rounded()?,
+    )))
+}
+
+fn add_forward_purchase(
+    scope: &Scope<'_>,
+    v: &Voucher,
+    totals: &mut Totals,
+) -> Result<Outcome<()>, GstError> {
     let priced = supported!(price(scope, v)?);
     let masters = &scope.books.masters;
     let mut eligible = HeadSums::default();

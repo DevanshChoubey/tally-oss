@@ -878,7 +878,11 @@ function gstr3b(actions){
   use('igst','igst');use('igst','cgst',Math.max(0,liab.cgst-c.cgst));use('igst','sgst',Math.max(0,liab.sgst-c.sgst));use('igst','cgst');use('igst','sgst');
   use('cgst','cgst');use('sgst','sgst');use('cgst','igst');use('sgst','igst');
   const cash={igst:half(liab.igst,100)*100,cgst:half(liab.cgst,100)*100,sgst:half(liab.sgst,100)*100};
-  return {out,itc,deemed,books,liabAfter:liab,cash,cashTotal:cash.igst+cash.cgst+cash.sgst}; }
+  /* 3.1(c) nil rated and exempted, 3.1(e) non-GST (GSTN GSTR-3B manual, read 2026-11-28): every November sale line is an item with a GST rate above nil and no item is marked non-GST, so both are the value of no lines. 3.1(d) and 4(A)(3): no November purchase is marked reverse charge, so both are nil. */
+  let nilExempt=0; for(const v of NOV_SALES())for(const [item,qty,rate] of v.lines){const it=ITEM[item];if(it&&it.gst===0)nilExempt+=qty*rate}
+  const nonGst=0; const rc={taxable:0,igst:0,cgst:0,sgst:0}, rcItc={igst:0,cgst:0,sgst:0};
+  if(VOUCHERS.some(x=>x.type==='Purchase'&&x.rc))throw new Error('mock: a reverse-charge purchase is not modelled in gstr3b()');
+  return {out,itc,deemed,books,liabAfter:liab,cash,cashTotal:cash.igst+cash.cgst+cash.sgst,nilExempt,nonGst,rc,rcItc}; }
 
 /* ---------- bank statement (Saptagiri), immutable imported facts ---------- */
 const STMT = {acct:'saptagiri',file:'saptagiri-nov-2026.csv',open:R(610000),lines:[
@@ -1989,7 +1993,11 @@ SCREENS.gst={title:'GST returns',default:'gstr1',
   if(st==='gstr3b'){const s=gstr3b(IMS_ACT);const c=(a,b,d)=>`<td class="num">${inr(a)}</td><td class="num">${inr(b)}</td><td class="num">${inr(d)}</td>`;
    return head+`<div class="grid g-main"><div class="card"><table class="t"><thead><tr><th>Table</th><th class="num">Taxable</th><th class="num">IGST</th><th class="num">CGST</th><th class="num">SGST</th></tr></thead><tbody>
     <tr><td>3.1(a) Outward taxable supplies ${prov('books','sales vouchers')}</td><td class="num">${inr(s.out.taxable)}</td>${c(s.out.igst,s.out.cgst,s.out.sgst)}</tr>
+    <tr><td>3.1(c) Nil rated and exempted ${prov('books','sales vouchers')}</td><td class="num">${inr(s.nilExempt)}</td><td></td><td></td><td></td></tr>
+    <tr><td>3.1(d) Inward supplies liable to reverse charge ${prov('books','purchase vouchers')}</td><td class="num">${inr(s.rc.taxable)}</td>${c(s.rc.igst,s.rc.cgst,s.rc.sgst)}</tr>
+    <tr><td>3.1(e) Non-GST outward supplies ${prov('books','sales vouchers')}</td><td class="num">${inr(s.nonGst)}</td><td></td><td></td><td></td></tr>
     <tr class="sub"><td colspan="5">4 Eligible ITC</td></tr>
+    <tr><td class="ind1">Reverse charge, 4(A)(3) ${prov('books','purchase vouchers')}</td><td></td>${c(s.rcItc.igst,s.rcItc.cgst,s.rcItc.sgst)}</tr>
     <tr><td class="ind1">In your books ${prov('books','purchase vouchers')}</td><td></td>${c(s.books.igst,s.books.cgst,s.books.sgst)}</tr>
     <tr><td class="ind1">Accepted in IMS ${prov('you','your actions')}</td><td></td>${c(s.itc.igst,s.itc.cgst,s.itc.sgst)}</tr>
     <tr><td class="ind1">No action yet: deemed accepted when 2B is generated</td><td></td>${c(s.deemed.igst,s.deemed.cgst,s.deemed.sgst)}</tr>

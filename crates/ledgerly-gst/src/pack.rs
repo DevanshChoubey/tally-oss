@@ -267,6 +267,11 @@ impl RuleSet {
         &self.version
     }
 
+    /// `true` when the pack has an entry `id` (pending or not) in force on this date.
+    pub fn has(&self, id: &str) -> bool {
+        self.entries.contains_key(id)
+    }
+
     /// The rule `id` in force on this date. `Unsupported` when the pack has no such rule on that
     /// date or the entry is pending; there is no default.
     pub fn get(&self, id: &str) -> Outcome<&PackEntry> {

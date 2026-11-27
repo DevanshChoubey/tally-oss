@@ -150,8 +150,114 @@ Classes:
 - **DELIBERATE** the capture company's GSTIN and figures differ from the mock's Godavari Drip; the
   sample's GST ledgers are one per head and its GSTINs use the fake PAN pattern `ZZZZZ####Z`.
 
+## GST engine coverage (s23)
+
+Sources for this section are cited in `crates/ledgerly-gst/packs/rcm.toml` and the module docs;
+notifications were read on CBIC's tax information portal on 2026-11-27.
+
+- **NOT BUILT** reverse charge before 18 July 2022: the class index of `packs/rcm.toml` starts the day
+  05/2022-CT(R) came into force (GTA forward-charge option, sl.5AA). Earlier purchases are
+  Unsupported; the earlier text of sl.1 ("who has not paid central tax at the rate of 6%") and s.9(4)
+  (Notifications 8/2017, 38/2017, 10/2018, 12/2018, 22/2018-CT(R)) were not read.
+- **NOT BUILT** reverse-charge classes whose supply the books cannot identify: 13/2017-CT(R) sl.5 and
+  5A (government services, any SAC), 5B and 5C (TDR, FSI and long-term lease to a promoter), 6
+  (director's services: no SAC), 7 (insurance agent: SAC 997161 also covers brokers), 8 (recovery
+  agent: no SAC read), 9 and 9A (copyright: the 99733 codes do not split music, art and literary
+  works), 10 (RBI Overseeing Committee), 11 (DSAs), 12 (business facilitator), 13 (business
+  correspondent agent) and 16 (securities lending); IGST sl.1 (import of services: the engine refuses
+  an overseas supplier); s.9(4) for promoters (Notification 7/2019-CT(R), not read); the goods of
+  Notification 4/2017-CT(R) (not read). A voucher marked reverse charge for one of these is
+  Unsupported ("the pack says it is not"), never charged.
+- **DELIBERATE** for a class whose conditions the books cannot check (an advocate, an arbitral
+  tribunal, a supplier that is not a body corporate, a passenger vehicle with fuel), the user's
+  reverse-charge mark declares them, as the product's "Applicable for Reverse Charge" does
+  (help.tallysolutions.com/tally-prime/gst-reverse-charge-transactions/india-gst-inward-supply-rcm-tally/,
+  read 2026-11-27). Unmarked, a registered supplier's invoice that charges tax is taken as the
+  supplier's forward charge; unmarked with no tax charged is Unsupported.
+- **NOT BUILT** table 3.1(b) (zero-rated: exports, GSTR-1 6A, and SEZ supplies, 6B): voucher tax
+  (`compute`) refuses overseas and SEZ recipients, so a period with one stays `Unsupported`. It
+  needs the IGST Act s.16 and place-of-supply rules for exports of services, not yet read.
+- **NOT BUILT** GSTR-3B tables 3.1.1 (e-commerce operators, s.9(5)), 3.2, 4(B), 4(C), 4(D), 5 and
+  5.1, and a GSTR-3B JSON file: the books hold no e-commerce operator, no 2B-based 4(B)/4(D) split
+  and no interest working, and no GSTN offline-tool schema for GSTR-3B was read (the GST portal's
+  downloads are behind its firewall to automated clients, and CBIC's copy of FORM GSTR-3B would
+  not download, 2026-11-28). The export is the tab-separated text of `ledgerly export gstr3b`.
+- **NOT BUILT** table 6.1 (payment of tax) for a period with reverse-charge purchases: their tax
+  is paid in cash (s.49(4) with s.2(82)) and their credit may be in the 2B file as reverse-charge
+  documents, whose IMS handling was not read; the payment stays `Unsupported` for such a period.
+- **NOT BUILT** the self-invoice (s.31(3)(f), Rule 46 particulars) and payment voucher (s.31(3)(g),
+  Rule 52) as documents: the engine says which is due and the Rule 47A last day
+  (`ledgerly_gst::rcm_documents`), engine-only; no voucher type, numbering or print exists. A
+  receipt before 1 November 2024 has no known limit (Rule 47A starts then) and is `Unsupported`.
+- **DELIBERATE** a reverse-charge purchase needs its supply date (the s.13(3) time of supply: the
+  payment, the 61st day after the invoice, or the recipient's invoice date from the Finance (No. 2)
+  Act, 2024); without it 3.1(d) and 4(A)(3) are `Unsupported` when the voucher is dated in the
+  period or the 61 days before it. The commencement date of s.13(3)(c) was not read, so the engine
+  does not work the date out itself.
+- **FIX** when the pack has no `rcm.classes` entry on a purchase's date (before 18 July 2022), an
+  unmarked purchase from a registered supplier that posts no GST still gets a 4(A)(5) credit
+  computed from its rates, as before this round.
+- **NOT BUILT** a recipient that is an LLP for a class naming a body corporate (sl.15), or a trust,
+  society or HUF for a class naming a body corporate or firm: whether either is a "body corporate"
+  under Companies Act s.2(11) is not settled from the sources read, so it is Unsupported.
+- **NOT BUILT** the s.16(4)/(5) time limit, the 180-day reversal (s.16(2), Rule 37) and the
+  common-credit attribution (Rules 42, 43) as GSTR-3B table 4(B) rows: the engine works them out
+  (`ledgerly_gst::itc_conditions`), engine-only. The 180-day inputs are read from the books' bill
+  references (`unpaid_invoice_from_bills`: the purchase's `New` bill, payments `Against` it), but
+  no GSTR-3B row uses them yet: the books hold no annual-return date, no T1-T4 split, and a
+  supplier ledger that is not bill-wise, a payment on account, or a bill settled by a debit note
+  or journal leaves the amount not paid unknown (`Unsupported`).
+- **NOT BUILT** the count of the 180 days: "from the date of issue" may or may not count the
+  invoice day, and the General Clauses Act was not read. A payment on the disputed day, or 180 days
+  whose two possible ends fall in different tax periods, is `Unsupported`.
+- **NOT BUILT** rounding of a proportionate reversal (Rules 37 and 42): neither rule says how it is
+  rounded, so a share that is not a whole number of paise is `Unsupported`.
+- **NOT BUILT** Rule 37 for invoices before 1 October 2022 (the earlier text was not read), re-availing
+  under Rule 37(2), s.16(6) after a revoked cancellation, the Rule 42(1)(i) proviso (no turnover),
+  Rule 42(2)'s annual recomputation, and the real-estate formulas of Rules 42(3)-(6) and 43(2)-(5).
+- **NOT BUILT** Rule 43(1)(g) Te: the formula uses 'Tr', whose defining clause (f) was omitted from
+  1 April 2020 (Notification 16/2020-CT); the text read defines it nowhere else, so Te is `Unsupported`.
+
 ## Masters (`masters.*`)
 
+- **NOT BUILT** composition (CMP-08, GSTR-4) beyond the engine: `ledgerly_gst::composition` gives the
+  Rule 7 central tax for a category and turnover and the Rule 62 due dates (30 June from FY 2024-25,
+  30 April before). Engine-only. The company has no composition category, voucher tax refuses
+  composition, the State/UT half of the levy is `Unsupported` (State GST and UTGST rules not read),
+  extended due dates are not modelled. FORM GST CMP-08 and FORM GSTR-4 would not download from CBIC
+  (2026-11-28); the GST portal's GSTR-4 manual
+  (tutorial.gst.gov.in/userguide/returns/manual_GSTR4annual.htm, read 2026-11-28) gives the annual
+  return's tables (4A registered non-RC, 4B registered RC, 4C unregistered, 4D import of services,
+  5 CMP-08 summary, 6 rate-wise RC inward and outward, 7 TDS/TCS), but tables 4 and 6 need rate-wise
+  values of a composition company's purchases and sales, which voucher tax refuses. No CMP-08
+  manual page was found on tutorial.gst.gov.in (Manual_CMP08.htm and CMP08.htm are 404), and the
+  state copy statetax.goa.gov.in/PDF/gst_forms/Return.pdf holds the 2017 forms (quarterly GSTR-4,
+  no CMP-08). So no statement, screen or export exists.
+- **NOT BUILT** GSTR-1 gaps of blocker 2: 6A exports and 6B SEZ supplies (voucher tax refuses
+  zero-rated recipients), CDNUR and Table 7 note adjustments (a note does not name its original
+  invoice), 11A/11B advances (no data shape), amendments (9A, 9C, 10, 11), e-commerce Tables 14/15
+  (no operator on a voucher), and the Table 12 B2B/B2C split. The split is now sourced: GSTN's
+  advisory "Reporting of HSN codes in Table 12 of GSTR-1/1A"
+  (tutorial.gst.gov.in/downloads/news/updated_advisory_hsn_table12_25042025.pdf, read 2026-11-28;
+  also mahagst.gov.in's copy) says that from the May 2025 return period Table 12 has "B2B Supplies"
+  and "B2C Supplies" tabs, B2B checked against 4A, 4B, 6B, 6C, 8 (registered), 9A/9B/9C
+  (registered), 15/15A (registered) and B2C against 5A, 6A, 7A, 7B, 8 (unregistered), 9A (export,
+  B2CL), 9B/9C (unregistered), 10, 15/15A (unregistered). The engine builds the two tabs
+  (`gstr1::build_gstr1_hsn_split`, engine-only); the JSON export, the CLI and the GSTR-1 screen
+  still carry the one combined Table 12 of `Gstr1`, because the offline-tool JSON keys of the two
+  tabs were not read and the mock's GSTR-1 state has no tabs, so the export is not the post-May
+  2025 layout. The GSTR-1 manual
+  (tutorial.gst.gov.in/userguide/returns/Creation_of_Outward_Supplies_Return_in_GSTR-1.htm, read in
+  full 2026-11-28) names the tabs without the mapping, and gives Table 14's two tabs (s.52 TCS and
+  s.9(5)). The GSTR-1 JSON keys are still not checked against a GSTN offline-tool sample (see
+  `ledgerly-gst-formats` gstr1.rs).
+- **NOT BUILT** GSTR-9 and GSTR-9C working data: Rule 80 was read, but FORM GSTR-9 and FORM GSTR-9C
+  would not download from CBIC (2026-11-28; content/pdf rejected by the site's firewall). The GST
+  portal's GSTR-9 manual (tutorial.gst.gov.in/userguide/returns/Manual_gstr9.htm, read 2026-11-28)
+  names tables 4 to 19 but shows their rows (4A-4N, 5A-5N, 6A1/A2, 7A1/A2, 8H1 from FY 2024-25)
+  only as screenshots, so the rows' contents have no text source. No GSTR-9C manual page was found
+  (Manual_gstr9c.htm is 404), and the state copy statetax.goa.gov.in/PDF/gst_forms/Return.pdf holds
+  the 2017 forms only (no GSTR-9 or 9C). comtax.wb.gov.in did not answer.
 - **DELIBERATE** the create ledger form has one row more than the mock's compact one: a "More
   details: opening balance, party, bank and tax" link that opens the rest of the ledger master the
   help page "Ledgers" describes (help.tallysolutions.com/ledgers-in-tally/, read 2026-11-21); the

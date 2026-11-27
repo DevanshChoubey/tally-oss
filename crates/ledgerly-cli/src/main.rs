@@ -98,6 +98,9 @@ struct ImportTallyArgs {
 enum ExportCmd {
     /// GSTR-1 for one period, as JSON.
     Gstr1(Gstr1Args),
+    /// The GSTR-3B working for one period (tables 3.1(a), 3.1(d), 4(A)(3) and 4(A)(5)), as
+    /// tab-separated text: table, column, amount in rupees. Not a filing format.
+    Gstr3b(Gstr1Args),
 }
 
 /// Arguments of `export gstr1`.
@@ -170,6 +173,7 @@ fn run(cmd: &Cmd) -> anyhow::Result<ExitCode> {
             let _span = tracing::info_span!("command", name = "export").entered();
             match what {
                 ExportCmd::Gstr1(args) => export_gstr1(args),
+                ExportCmd::Gstr3b(args) => export_gstr3b(args),
             }
         }
         Cmd::RebuildCheck { file } => {
@@ -265,6 +269,88 @@ fn export_gstr1(args: &Gstr1Args) -> anyhow::Result<ExitCode> {
             Ok(ExitCode::from(EXIT_COULD_NOT_RUN))
         }
     }
+}
+
+fn export_gstr3b(args: &Gstr1Args) -> anyhow::Result<ExitCode> {
+    let gstin = Gstin::parse(&args.gstin)
+        .map_err(|e| anyhow!("the GSTIN is not valid ({e}); check it against the GSTIN card"))?;
+    let period = Period::new(
+        parse_date("--from", &args.from)?,
+        parse_date("--to", &args.to)?,
+    )
+    .map_err(|e| anyhow!("the period is not valid ({e}); --from must not be after --to"))?;
+    let api = open_company(&args.file)?;
+    let outcome = api
+        .gstr3b(&gstin, period)
+        .context("the GSTR-3B working failed")?;
+    match outcome {
+        Outcome::Value(w) => {
+            let text = gstr3b_text(&w);
+            match &args.out {
+                Some(path) => write_atomic(path, text.as_bytes())?,
+                None => print!("{text}"),
+            }
+            Ok(ExitCode::SUCCESS)
+        }
+        Outcome::Unsupported(u) => {
+            eprintln!("unsupported: {}: {}", u.what, u.reason);
+            Ok(ExitCode::from(EXIT_COULD_NOT_RUN))
+        }
+    }
+}
+
+/// The working as `table<TAB>column<TAB>rupees` lines. A table the engine did not work out is a
+/// `#` line with the reason, never a figure.
+fn gstr3b_text(w: &ledgerly_api::Gstr3bWorking) -> String {
+    use std::fmt::Write as _;
+    let mut out = String::new();
+    let mut line = |table: &str, column: &str, amount: ledgerly_core::Paise| {
+        let _ = writeln!(out, "{table}\t{column}\t{}", amount.to_rupees());
+    };
+    let heads = |line: &mut dyn FnMut(&str, &str, ledgerly_core::Paise),
+                 table: &str,
+                 t: ledgerly_api::Gstr3bTaxAmounts| {
+        line(table, "integrated tax", t.integrated);
+        line(table, "central tax", t.central);
+        line(table, "state/UT tax", t.state_ut);
+        line(table, "cess", t.cess);
+    };
+    line("3.1(a)", "taxable value", w.outward_taxable_value);
+    heads(&mut line, "3.1(a)", w.outward_tax);
+    line(
+        "3.1(c)",
+        "nil rated and exempted value",
+        w.outward_nil_exempt_value,
+    );
+    line("3.1(e)", "non-GST value", w.outward_non_gst_value);
+    let mut skipped = Vec::new();
+    match &w.inward_reverse_charge {
+        Outcome::Value(d) => {
+            line("3.1(d)", "taxable value", d.taxable_value);
+            heads(&mut line, "3.1(d)", d.tax);
+        }
+        Outcome::Unsupported(u) => {
+            skipped.push(format!("# 3.1(d) not worked out: {}: {}", u.what, u.reason));
+        }
+    }
+    match &w.itc_reverse_charge {
+        Outcome::Value(c) => heads(&mut line, "4(A)(3)", c.itc),
+        Outcome::Unsupported(u) => skipped.push(format!(
+            "# 4(A)(3) not worked out: {}: {}",
+            u.what, u.reason
+        )),
+    }
+    heads(&mut line, "4(A)(5)", w.itc_all_other);
+    heads(
+        &mut line,
+        "not claimable (not in 4(A))",
+        w.itc_not_claimable,
+    );
+    for s in skipped {
+        out.push_str(&s);
+        out.push('\n');
+    }
+    out
 }
 
 /// Parses `YYYY-MM-DD`. `flag` names the option in the error.

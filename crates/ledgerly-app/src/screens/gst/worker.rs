@@ -652,6 +652,64 @@ fn tax_heads(rows: &mut Vec<FigureRow>, table: &str, heads: [Paise; 4]) {
     row(rows, format!("{table}: cess"), cess);
 }
 
+/// Tables 3.1(d) and 4(A)(3), or a note saying why one is not worked out.
+fn reverse_charge_figures(w: &Gstr3bWorking, rows: &mut Vec<FigureRow>, notes: &mut Vec<String>) {
+    match &w.inward_reverse_charge {
+        Outcome::Value(inward) => {
+            row(
+                rows,
+                "Table 3.1(d) inward supplies liable to reverse charge: taxable value".to_owned(),
+                inward.taxable_value,
+            );
+            let tax = inward.tax;
+            tax_heads(
+                rows,
+                "Table 3.1(d)",
+                [tax.integrated, tax.central, tax.state_ut, tax.cess],
+            );
+            if !inward.unmarked.is_empty() {
+                notes.push(format!(
+                    "{} purchase(s) in 3.1(d) are not marked reverse charge; mark them.",
+                    inward.unmarked.len()
+                ));
+            }
+        }
+        Outcome::Unsupported(u) => {
+            notes.push(format!(
+                "Table 3.1(d) not worked out: {} ({})",
+                u.what, u.reason
+            ));
+        }
+    }
+    match &w.itc_reverse_charge {
+        Outcome::Value(credit) => {
+            let itc = credit.itc;
+            tax_heads(
+                rows,
+                "Table 4(A)(3) ITC on inward supplies liable to reverse charge",
+                [itc.integrated, itc.central, itc.state_ut, itc.cess],
+            );
+            let blocked = credit.not_claimable;
+            tax_heads(
+                rows,
+                "Reverse-charge credit not claimable (not in 4(A)(3))",
+                [
+                    blocked.integrated,
+                    blocked.central,
+                    blocked.state_ut,
+                    blocked.cess,
+                ],
+            );
+        }
+        Outcome::Unsupported(u) => {
+            notes.push(format!(
+                "Table 4(A)(3) not worked out: {} ({})",
+                u.what, u.reason
+            ));
+        }
+    }
+}
+
 /// Tables 3.1(a), 4(A)(5) and the credit that is not claimable, read from the working.
 fn gstr3b_figures(w: &Gstr3bWorking) -> Figures {
     let mut rows = Vec::new();
@@ -679,6 +737,7 @@ fn gstr3b_figures(w: &Gstr3bWorking) -> Figures {
         [n.integrated, n.central, n.state_ut, n.cess],
     );
     let mut notes = vec![format!("Rule pack version {}.", w.pack_version)];
+    reverse_charge_figures(w, &mut rows, &mut notes);
     if !w.reverse_charge_purchases.is_empty() {
         notes.push(format!(
             "{} purchase(s) under reverse charge are in neither 3.1(a) nor 4(A)(5).",

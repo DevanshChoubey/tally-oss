@@ -79,6 +79,9 @@ fn rows(s: &GstScreen) -> Vec<(&'static str, Option<Paise>, [Paise; 4])> {
                 taxable,
                 tax,
             } => Some((*label, Some(*taxable), *tax)),
+            Line3b::ValueOnly { label, value, .. } => {
+                Some((*label, Some(*value), [Paise::ZERO; 4]))
+            }
             Line3b::Sub(_) | Line3b::SubSourced { .. } => None,
         })
         .collect()
@@ -99,8 +102,8 @@ fn find(
 
 #[test]
 fn the_tab_draws_the_mocks_set_off_rows_in_the_mocks_order() {
-    // provenance: the mock's gst.gstr3b rows, in order: 3.1(a), "4 Eligible ITC" with In your
-    // books, Accepted in IMS, No action yet; "6.1 Payment of tax" with Left after using accepted
+    // provenance: the mock's gst.gstr3b rows, in order: 3.1(a), 3.1(c), 3.1(d), 3.1(e), "4
+    // Eligible ITC" with Reverse charge 4(A)(3), In your books, Accepted in IMS, No action yet; "6.1 Payment of tax" with Left after using accepted
     // credit and Payable in cash, rounded to rupees. The blocked row is ours and stays last in 4.
     let (_d, w) = open(true);
     let s = screen(&w);
@@ -111,6 +114,7 @@ fn the_tab_draws_the_mocks_set_off_rows_in_the_mocks_order() {
             Line3b::Sub(label)
             | Line3b::SubSourced { label, .. }
             | Line3b::Row { label, .. }
+            | Line3b::ValueOnly { label, .. }
             | Line3b::Total { label, .. } => *label,
         })
         .collect();
@@ -118,7 +122,11 @@ fn the_tab_draws_the_mocks_set_off_rows_in_the_mocks_order() {
         labels,
         vec![
             "3.1(a) Outward taxable supplies",
+            "3.1(c) Nil rated and exempted",
+            "3.1(d) Inward supplies liable to reverse charge",
+            "3.1(e) Non-GST outward supplies",
             "4 Eligible ITC",
+            "Reverse charge, 4(A)(3)",
             "In your books",
             "Accepted in IMS",
             "No action yet: deemed accepted when 2B is generated",

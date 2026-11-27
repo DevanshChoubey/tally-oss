@@ -1309,10 +1309,7 @@ fn paint_3b_sub_sourced(ui: &mut Ui, width: f32, label: &str, source: &str) {
 
 /// One line of the GSTR-3B table: a sub-heading, or a row of the engine's figures with its
 /// source chip after the label, or under it when the two do not fit on one line.
-#[allow(clippy::float_arithmetic, reason = "placing the label and its chip")]
 fn paint_3b_line(ui: &mut Ui, width: f32, line: &Line3b, tr: &Tr) {
-    let t = tokens(ui);
-    let font = egui::FontId::proportional(TEXT_BODY);
     match line {
         Line3b::Sub(label) => paint_3b_sub(ui, width, label),
         Line3b::SubSourced { label, source } => paint_3b_sub_sourced(ui, width, label, source),
@@ -1327,74 +1324,103 @@ fn paint_3b_line(ui: &mut Ui, width: f32, line: &Line3b, tr: &Tr) {
             indent,
             taxable,
             tax,
-        } => {
-            let label_text = look::text_in(label, tr);
-            let source_text = source.map(|s| look::text_in(s, tr));
-            let pad = table::CELL_PAD_X + if *indent { table::indent(1) } else { 0.0 };
-            let probe = Rect::from_min_size(egui::pos2(0.0, 0.0), vec2(width, T_ROW_HEIGHT));
-            let [label_cell, ..] = gstr3b_columns(probe);
-            let wrap = (label_cell.width() - pad - table::CELL_PAD_X).max(40.0);
-            let galley = ui.painter().layout(label_text, font.clone(), t.text, wrap);
-            let text = galley.size();
-            let one_row = galley.rows.len() <= 1;
-            let chip_w = source_text.as_deref().map_or(0.0, |s| chip_width(ui, s));
-            // The chip follows the label on its line when both fit, else it goes under it.
-            let chip_inline = one_row && text.x + CHIP_GAP + chip_w <= wrap;
-            let chip_below = source.is_some() && !chip_inline;
-            let content = text.y
-                + if chip_below {
-                    CHIP_GAP / 2.0 + CHIP_H
-                } else {
-                    0.0
-                };
-            let height = (content + 2.0 * ROW_PAD_Y).max(T_ROW_HEIGHT);
-            let (rect, response) = ui.allocate_exact_size(vec2(width, height), Sense::hover());
-            let state = RowState {
-                selected: false,
-                hovered: response.hovered(),
-                sub: false,
-            };
-            table::paint_row(ui, rect, state);
-            let [label_rect, figures @ ..] = gstr3b_columns(rect);
-            let top = rect.top() + (rect.height() - 1.0 - content) / 2.0;
-            let text_pos = egui::pos2(label_rect.left() + pad, top);
-            ui.painter()
-                .with_clip_rect(label_rect)
-                .galley(text_pos, galley, t.text);
-            if let Some(s) = source_text.as_deref() {
-                let chip_rect = if chip_inline {
-                    Rect::from_min_size(
-                        egui::pos2(
-                            text_pos.x + text.x + CHIP_GAP,
-                            top + (text.y - CHIP_H) / 2.0,
-                        ),
-                        vec2(chip_w, CHIP_H),
-                    )
-                } else {
-                    Rect::from_min_size(
-                        egui::pos2(text_pos.x, top + text.y + CHIP_GAP / 2.0),
-                        vec2(chip_w, CHIP_H),
-                    )
-                };
-                let mut child = ui.new_child(
-                    UiBuilder::new()
-                        .max_rect(chip_rect)
-                        .layout(Layout::left_to_right(Align::Center)),
-                );
-                source_chip(&mut child, s);
-            }
-            paint_3b_figures(ui, figures, *taxable, tax);
-        }
+        } => paint_3b_row(ui, width, label, *source, *indent, *taxable, Some(tax), tr),
+        Line3b::ValueOnly {
+            label,
+            source,
+            value,
+        } => paint_3b_row(ui, width, label, *source, false, Some(*value), None, tr),
     }
+}
+
+/// One figure row of the GSTR-3B table: the label (indented under a sub-heading when `indent`),
+/// its provenance chip, the taxable value and the four tax heads (blank when `tax` is `None`).
+#[allow(
+    clippy::too_many_arguments,
+    reason = "the parts of one row, as the look gives them"
+)]
+#[allow(clippy::float_arithmetic, reason = "placing the label and its chip")]
+fn paint_3b_row(
+    ui: &mut Ui,
+    width: f32,
+    label: &str,
+    source: Option<&str>,
+    indent: bool,
+    taxable: Option<Paise>,
+    tax: Option<&[Paise; 4]>,
+    tr: &Tr,
+) {
+    let t = tokens(ui);
+    let font = egui::FontId::proportional(TEXT_BODY);
+    let label_text = look::text_in(label, tr);
+    let source_text = source.map(|s| look::text_in(s, tr));
+    let pad = table::CELL_PAD_X + if indent { table::indent(1) } else { 0.0 };
+    let probe = Rect::from_min_size(egui::pos2(0.0, 0.0), vec2(width, T_ROW_HEIGHT));
+    let [label_cell, ..] = gstr3b_columns(probe);
+    let wrap = (label_cell.width() - pad - table::CELL_PAD_X).max(40.0);
+    let galley = ui.painter().layout(label_text, font.clone(), t.text, wrap);
+    let text = galley.size();
+    let one_row = galley.rows.len() <= 1;
+    let chip_w = source_text.as_deref().map_or(0.0, |s| chip_width(ui, s));
+    // The chip follows the label on its line when both fit, else it goes under it.
+    let chip_inline = one_row && text.x + CHIP_GAP + chip_w <= wrap;
+    let chip_below = source.is_some() && !chip_inline;
+    let content = text.y
+        + if chip_below {
+            CHIP_GAP / 2.0 + CHIP_H
+        } else {
+            0.0
+        };
+    let height = (content + 2.0 * ROW_PAD_Y).max(T_ROW_HEIGHT);
+    let (rect, response) = ui.allocate_exact_size(vec2(width, height), Sense::hover());
+    let state = RowState {
+        selected: false,
+        hovered: response.hovered(),
+        sub: false,
+    };
+    table::paint_row(ui, rect, state);
+    let [label_rect, figures @ ..] = gstr3b_columns(rect);
+    let top = rect.top() + (rect.height() - 1.0 - content) / 2.0;
+    let text_pos = egui::pos2(label_rect.left() + pad, top);
+    ui.painter()
+        .with_clip_rect(label_rect)
+        .galley(text_pos, galley, t.text);
+    if let Some(s) = source_text.as_deref() {
+        let chip_rect = if chip_inline {
+            Rect::from_min_size(
+                egui::pos2(
+                    text_pos.x + text.x + CHIP_GAP,
+                    top + (text.y - CHIP_H) / 2.0,
+                ),
+                vec2(chip_w, CHIP_H),
+            )
+        } else {
+            Rect::from_min_size(
+                egui::pos2(text_pos.x, top + text.y + CHIP_GAP / 2.0),
+                vec2(chip_w, CHIP_H),
+            )
+        };
+        let mut child = ui.new_child(
+            UiBuilder::new()
+                .max_rect(chip_rect)
+                .layout(Layout::left_to_right(Align::Center)),
+        );
+        source_chip(&mut child, s);
+    }
+    paint_3b_figures(ui, figures, taxable, tax);
 }
 
 /// The taxable value (blank where the table has none) and the four tax heads of a GSTR-3B row,
 /// each as the engine's working holds it.
-fn paint_3b_figures(ui: &Ui, cells: [Rect; 5], taxable: Option<Paise>, tax: &[Paise; 4]) {
+fn paint_3b_figures(ui: &Ui, cells: [Rect; 5], taxable: Option<Paise>, tax: Option<&[Paise; 4]>) {
     let t = tokens(ui);
     let font = egui::FontId::proportional(TEXT_BODY);
     let taxable_text = taxable.map_or_else(String::new, |p| amount_cell(Some(p)));
-    let texts = std::iter::once(taxable_text).chain(tax.iter().map(|p| amount_cell(Some(*p))));
+    let tax_texts: [String; 4] = match tax {
+        Some(heads) => heads.map(|p| amount_cell(Some(p))),
+        None => Default::default(),
+    };
+    let texts = std::iter::once(taxable_text).chain(tax_texts);
     for (r, text) in cells.into_iter().zip(texts) {
         table::paint_cell_text(ui, r, 1.0, &text, font.clone(), t.text, CellPlace::Right);
     }
@@ -1506,8 +1532,8 @@ const NEXT_STEPS: [&str; 4] = [
 /// text, which the engine does not match. Set-off: CGST Act s.49(5) and Rule 88A (read
 /// 2026-11-26); cess credit pays cess only (Compensation Act s.11(2)).
 const GSTR3B_NOTES: [&str; 6] = [
-    "Ledgerly does not file GSTR-3B. It works out tables 3.1(a), 4(A)(5) and the payment of tax \
-     (6.1) from your books and the 2B file.",
+    "Ledgerly does not file GSTR-3B. It works out tables 3.1(a), 3.1(c), 3.1(d), 3.1(e), \
+     4(A)(3), 4(A)(5) and the payment of tax (6.1) from your books and the 2B file.",
     "Table 4(A)(5) is the credit your books could claim. It is not checked against GSTR-2B, and \
      the conditions of CGST Act s.16(2) and s.16(4) are not checked.",
     "Only credit you accepted in IMS pays tax. Records with no action are shown apart and are \
@@ -1516,8 +1542,8 @@ const GSTR3B_NOTES: [&str; 6] = [
      SGST credit pays SGST, then IGST. Cess credit pays cess only.",
     "Credit left in your electronic credit ledger from earlier months is not known to Ledgerly, \
      so the cash figure assumes none.",
-    "Purchases under reverse charge are in neither 3.1(a) nor 4(A)(5), and tax on blocked or \
-     ineligible purchase lines is never added to 4(A)(5).",
+    "Purchases under reverse charge are in 3.1(d) and 4(A)(3), not in 3.1(a) or 4(A)(5), and tax \
+     on blocked or ineligible purchase lines is never added to 4(A)(3) or 4(A)(5).",
 ];
 
 /// The translations of translation keys, in order.

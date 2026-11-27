@@ -29,7 +29,7 @@ use ledgerly_core::{
     SignedAmount, StateCode, StockItemId, UnitId, VoucherId, VoucherTypeId,
 };
 use ledgerly_gst::GstError;
-use ledgerly_gst::gstr1::{Bucket, BucketedVoucher, build_gstr1};
+use ledgerly_gst::gstr1::{Bucket, BucketedVoucher, HsnSplit, build_gstr1, build_gstr1_hsn_split};
 use ledgerly_gst::pack::{RulePack, load_pack};
 use ledgerly_gst_formats::gstr1::{B2bInvoiceType, DocRange, DocType, Gstr1, ItemTax, NoteKind};
 use ledgerly_model::{
@@ -825,4 +825,77 @@ fn a_sale_is_reported_in_the_period_of_its_time_of_supply_not_its_voucher_date()
         feb_r.b2b.first().unwrap().invoices.first().unwrap().date,
         date!(2026 - 01 - 31)
     );
+}
+
+// ---------------------------------------------------------------------------------------------
+// S23: Table 12 in two tabs, B2B and B2C (from the May 2025 return period)
+
+fn split(books: &Books, period: Period) -> Outcome<HsnSplit> {
+    build_gstr1_hsn_split(books, &gstin(OWN_GSTIN), period, &full_pack()).unwrap()
+}
+
+#[test]
+fn table_12_splits_hsn_rows_by_whether_the_recipient_is_registered() {
+    // provenance: derived. GSTN advisory "Reporting of HSN codes in Table 12 of GSTR-1/1A"
+    // (https://tutorial.gst.gov.in/downloads/news/updated_advisory_hsn_table12_25042025.pdf,
+    // read 2026-11-28): from the May 2025 return period Table 12 has "B2B Supplies" and "B2C
+    // Supplies" tabs; B2B is checked against Tables 4A, 4B, 6B, 6C, 8 (recipient registered) and
+    // 9B (registered), B2C against 5A, 6A, 7A, 7B, 8 (unregistered) and 9B (unregistered). The
+    // registered sale (1,000,000 paise at 18 percent inter-state: IGST 180,000, value 1,180,000)
+    // is the B2B tab's one row; the unregistered B2CS sale (500,000: IGST 90,000, value 590,000)
+    // is the B2C tab's one row. Each has quantity 1.
+    let b = books(vec![
+        sale(1, "INV-1", REGISTERED, GUJARAT, &[1_000_000]),
+        sale(2, "INV-2", UNREGISTERED, GUJARAT, &[500_000]),
+    ]);
+    let Outcome::Value(s) = split(&b, january()) else {
+        panic!("unexpected Unsupported")
+    };
+    assert_eq!(s.b2b.len(), 1);
+    assert_eq!(s.b2c.len(), 1);
+    let (b2b, b2c) = (s.b2b.first().unwrap(), s.b2c.first().unwrap());
+    assert_eq!(b2b.hsn.as_str(), "8471");
+    assert_eq!(b2b.qty, Qty(Decimal::ONE));
+    assert_eq!(b2b.taxable, paise(1_000_000));
+    assert_eq!(b2b.igst, paise(180_000));
+    assert_eq!(b2b.value, paise(1_180_000));
+    assert_eq!(b2c.qty, Qty(Decimal::ONE));
+    assert_eq!(b2c.taxable, paise(500_000));
+    assert_eq!(b2c.igst, paise(90_000));
+    assert_eq!(b2c.value, paise(590_000));
+}
+
+#[test]
+fn a_credit_note_to_a_registered_recipient_nets_in_the_b2b_tab() {
+    // provenance: derived. The advisory checks the B2B tab against 9B for registered recipients,
+    // so the CDNR note of `credit_note_to_registered_recipient_lands_in_9b` (500,000, IGST 90,000,
+    // qty 1, fixture treatment `net`) reduces the B2B row: qty 0, taxable 500,000, IGST 90,000,
+    // value 590,000. Nothing is in the B2C tab.
+    let mut note = voucher(2, CREDIT_NOTE, "CN-1", REGISTERED, GUJARAT);
+    note.inventory_lines = vec![inv_line(500_000)];
+    let b = books(vec![
+        sale(1, "INV-1", REGISTERED, GUJARAT, &[1_000_000]),
+        note,
+    ]);
+    let Outcome::Value(s) = split(&b, january()) else {
+        panic!("unexpected Unsupported")
+    };
+    assert_eq!(s.b2c.len(), 0);
+    let h = s.b2b.first().unwrap();
+    assert_eq!(h.qty, Qty(Decimal::ZERO));
+    assert_eq!(h.taxable, paise(500_000));
+    assert_eq!(h.igst, paise(90_000));
+    assert_eq!(h.value, paise(590_000));
+}
+
+#[test]
+fn the_split_before_the_may_2025_return_period_is_unsupported() {
+    // provenance: derived. The advisory implements the two tabs "from May 2025 return period";
+    // April 2025 has one Table 12, so a split of it is not a layout the portal had.
+    let b = books(vec![]);
+    let april = Period::new(date!(2025 - 04 - 01), date!(2025 - 04 - 30)).unwrap();
+    match split(&b, april) {
+        Outcome::Unsupported(u) => assert!(u.reason.contains("May 2025"), "{}", u.reason),
+        Outcome::Value(v) => panic!("expected Unsupported, got {v:?}"),
+    }
 }
