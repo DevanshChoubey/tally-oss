@@ -44,7 +44,8 @@
 
 use crate::GstError;
 use crate::gstr3b::Gstr3bTaxAmounts;
-use ledgerly_core::{Date, FinancialYear, Outcome, Paise, Period};
+use ledgerly_core::{Date, DrCr, FinancialYear, LedgerId, Outcome, Paise, Period};
+use ledgerly_model::{BaseVoucherKind, BillAllocation, BillRefKind, Voucher, VoucherStatus};
 use time::macros::date;
 use time::{Duration, Month};
 
@@ -471,5 +472,162 @@ fn invalid(field: &str, reason: &str) -> GstError {
     GstError::Invalid {
         field: field.to_owned(),
         reason: reason.to_owned(),
+    }
+}
+
+/// The 180-day rule's inputs for `purchase`, read from the books' bill references.
+///
+/// The invoice is the one `New` reference on the `supplier`'s line of `purchase`; its amount is
+/// "the value of supply along with tax" (Rule 37(1)) and the invoice date is the supplier's date
+/// (`reference_date`). Its payments are the debit `Against` and `Advance` references of the same
+/// name on the supplier's ledger in payment vouchers among `others` (each voucher with its base
+/// kind), dated by their vouchers. Optional and cancelled vouchers pay nothing. Nothing is deemed
+/// paid: the books do not mark Schedule I or s.15(2)(b) amounts.
+///
+/// `Unsupported` when the amount not paid cannot be told from the books: no single `New`
+/// reference on the supplier's line, no supplier's invoice date, the bill settled by a voucher
+/// other than a payment, a reference that adds to the bill, or a debit to the supplier on
+/// account (tied to no bill).
+///
+/// # Errors
+///
+/// [`GstError::Invalid`] for a `New` reference on the debit side (a purchase bill is owed to the
+/// supplier).
+pub fn unpaid_invoice_from_bills<'a>(
+    purchase: &Voucher,
+    supplier: LedgerId,
+    others: impl IntoIterator<Item = (BaseVoucherKind, &'a Voucher)>,
+    itc: Gstr3bTaxAmounts,
+) -> Result<Outcome<UnpaidInvoice>, GstError> {
+    const WHAT: &str = "the 180-day rule from bill references";
+    let refs: Vec<&BillAllocation> = purchase
+        .ledger_lines
+        .iter()
+        .filter(|l| l.ledger == supplier)
+        .flat_map(|l| l.bills.iter())
+        .collect();
+    let [bill] = refs.as_slice() else {
+        return Ok(Outcome::unsupported(
+            WHAT,
+            format!(
+                "the purchase has {} bill references on the supplier's line, not one new bill, \
+                 so no payment can be tied to this invoice",
+                refs.len()
+            ),
+        ));
+    };
+    match bill.kind {
+        BillRefKind::New => {}
+        BillRefKind::Against | BillRefKind::Advance | BillRefKind::OnAccount => {
+            return Ok(Outcome::unsupported(
+                WHAT,
+                "the purchase's bill reference on the supplier's line is not a new bill",
+            ));
+        }
+    }
+    match bill.amount.side {
+        DrCr::Cr => {}
+        DrCr::Dr => {
+            return Err(invalid(
+                "bill",
+                "a purchase's new bill is on the debit side",
+            ));
+        }
+    }
+    let Some(invoice_date) = purchase.reference_date else {
+        return Ok(Outcome::unsupported(
+            WHAT,
+            "the supplier's invoice date (the voucher's reference date) is not entered; Rule 37 \
+             counts from the date of issue of the invoice",
+        ));
+    };
+    let mut payments = Vec::new();
+    for (kind, v) in others {
+        if v.id == purchase.id {
+            continue;
+        }
+        match v.status {
+            VoucherStatus::Regular | VoucherStatus::PostDated => {}
+            VoucherStatus::Optional | VoucherStatus::Cancelled => continue,
+        }
+        for r in v
+            .ledger_lines
+            .iter()
+            .filter(|l| l.ledger == supplier)
+            .flat_map(|l| l.bills.iter())
+        {
+            match settlement(kind, v, r, &bill.name) {
+                Ok(Some(paid)) => payments.push(paid),
+                Ok(None) => {}
+                Err(reason) => return Ok(Outcome::unsupported(WHAT, reason)),
+            }
+        }
+    }
+    Ok(Outcome::Value(UnpaidInvoice {
+        invoice_date,
+        payable: bill.amount.amount,
+        deemed_paid: Paise::ZERO,
+        payments,
+        itc,
+        reverse_charge: purchase.reverse_charge,
+    }))
+}
+
+/// What reference `r` on the supplier's ledger in voucher `v` (of base `kind`) does to the bill
+/// named `bill`: a payment of it (`Some`), nothing (`None`), or a reason the amount not paid is
+/// unknown (`Err`).
+fn settlement(
+    kind: BaseVoucherKind,
+    v: &Voucher,
+    r: &BillAllocation,
+    bill: &str,
+) -> Result<Option<(Date, Paise)>, String> {
+    let settles = match (r.kind, r.amount.side) {
+        (BillRefKind::OnAccount, DrCr::Dr) => {
+            return Err(format!(
+                "voucher {} debits the supplier on account, tied to no bill, so it may or may not \
+                 pay this invoice",
+                v.id.0
+            ));
+        }
+        (BillRefKind::OnAccount, DrCr::Cr) => return Ok(None),
+        (BillRefKind::New | BillRefKind::Against | BillRefKind::Advance, DrCr::Dr | DrCr::Cr)
+            if r.name != bill =>
+        {
+            return Ok(None);
+        }
+        (BillRefKind::Against | BillRefKind::Advance, DrCr::Dr) => true,
+        (BillRefKind::New, DrCr::Dr | DrCr::Cr)
+        | (BillRefKind::Against | BillRefKind::Advance, DrCr::Cr) => false,
+    };
+    if !settles {
+        return Err(format!(
+            "voucher {} adds to bill {bill}, so the invoice's value with tax is not the bill's",
+            v.id.0
+        ));
+    }
+    match kind {
+        BaseVoucherKind::Payment => Ok(Some((v.date, r.amount.amount))),
+        BaseVoucherKind::Contra
+        | BaseVoucherKind::Receipt
+        | BaseVoucherKind::Journal
+        | BaseVoucherKind::Sales
+        | BaseVoucherKind::Purchase
+        | BaseVoucherKind::CreditNote
+        | BaseVoucherKind::DebitNote
+        | BaseVoucherKind::Memorandum
+        | BaseVoucherKind::ReversingJournal
+        | BaseVoucherKind::ReceiptNote
+        | BaseVoucherKind::DeliveryNote
+        | BaseVoucherKind::RejectionIn
+        | BaseVoucherKind::RejectionOut
+        | BaseVoucherKind::StockJournal
+        | BaseVoucherKind::PhysicalStock
+        | BaseVoucherKind::SalesOrder
+        | BaseVoucherKind::PurchaseOrder => Err(format!(
+            "bill {bill} is settled by voucher {}, a {kind:?} voucher; whether that is payment \
+             under Rule 37 was not read",
+            v.id.0
+        )),
     }
 }

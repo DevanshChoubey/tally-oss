@@ -209,8 +209,11 @@ notifications were read on CBIC's tax information portal on 2026-11-27.
   under Companies Act s.2(11) is not settled from the sources read, so it is Unsupported.
 - **NOT BUILT** the s.16(4)/(5) time limit, the 180-day reversal (s.16(2), Rule 37) and the
   common-credit attribution (Rules 42, 43) as GSTR-3B table 4(B) rows: the engine works them out
-  (`ledgerly_gst::itc_conditions`), engine-only. The books hold no annual-return date, no
-  payment-to-invoice matching and no T1-T4 split, so no report uses them yet.
+  (`ledgerly_gst::itc_conditions`), engine-only. The 180-day inputs are read from the books' bill
+  references (`unpaid_invoice_from_bills`: the purchase's `New` bill, payments `Against` it), but
+  no GSTR-3B row uses them yet: the books hold no annual-return date, no T1-T4 split, and a
+  supplier ledger that is not bill-wise, a payment on account, or a bill settled by a debit note
+  or journal leaves the amount not paid unknown (`Unsupported`).
 - **NOT BUILT** the count of the 180 days: "from the date of issue" may or may not count the
   invoice day, and the General Clauses Act was not read. A payment on the disputed day, or 180 days
   whose two possible ends fall in different tax periods, is `Unsupported`.
