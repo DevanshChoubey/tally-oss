@@ -230,3 +230,40 @@ fn a_failed_request_is_a_fetch_error_and_nothing_is_written() {
     }
     assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 0);
 }
+
+#[test]
+fn the_ocrs_reader_over_an_empty_folder_names_both_files_and_reads_nothing() {
+    use ledgerly_assist::ocr_models::{BillOcr, OcrsReader};
+    let dir = dir("s21-ocr-reader-empty");
+    let reader = OcrsReader::new(&dir);
+    assert_eq!(reader.info().name, "ocrs");
+    assert_eq!(reader.info().version, "0.14.0");
+    match reader.status() {
+        ProviderStatus::NotInstalled { reason } => {
+            assert!(reason.contains("text-detection.onnx"), "{reason}");
+            assert!(reason.contains("text-recognition.onnx"), "{reason}");
+        }
+        other @ (ProviderStatus::Ready | ProviderStatus::NotConfigured { .. }) => {
+            panic!("expected NotInstalled, got {other:?}")
+        }
+    }
+    let read = reader.read_png(b"not read", "00", &ledgerly_core::CancelToken::new());
+    assert!(matches!(read, Err(AssistError::Output { .. })), "{read:?}");
+}
+
+#[test]
+fn the_ocrs_reader_over_files_that_are_not_models_is_not_installed_with_the_load_error() {
+    use ledgerly_assist::ocr_models::{BillOcr, OcrsReader};
+    let dir = dir("s21-ocr-reader-garbage");
+    for f in &OCR_MODEL_FILES {
+        std::fs::write(dir.join(f.name), b"not a model").unwrap();
+    }
+    let reader = OcrsReader::new(&dir);
+    let first = reader.status();
+    assert!(
+        matches!(&first, ProviderStatus::NotInstalled { reason } if reason.contains("does not load")),
+        "{first:?}"
+    );
+    // Kept, not loaded again: the second answer is the first.
+    assert_eq!(reader.status(), first);
+}

@@ -79,6 +79,8 @@ pub struct Api {
     /// Where the cloud key is kept, when a vault is attached ([`Api::attach_key_vault`]). The
     /// company file never holds the key.
     pub(crate) key_vault: Option<std::sync::Arc<dyn ledgerly_assist::cloud::KeyVault>>,
+    /// The local bill reader, when one is attached ([`Api::attach_bill_ocr`]).
+    bill_ocr: Option<std::sync::Arc<dyn ledgerly_assist::ocr_models::BillOcr>>,
 }
 
 /// The state of the books cache.
@@ -125,6 +127,7 @@ impl Api {
             bank: Statements::default(),
             assistant: None,
             key_vault: None,
+            bill_ocr: None,
         };
         api.reload()?;
         Ok(api)
@@ -171,6 +174,7 @@ impl Api {
             bank: Statements::default(),
             assistant: None,
             key_vault: None,
+            bill_ocr: None,
         };
         api.reload()?;
         Ok(api)
@@ -193,6 +197,22 @@ impl Api {
     /// the user's cloud provider; tests and captures attach the fixed-answer test provider.
     pub fn attach_assistant(&mut self, provider: Box<dyn AiProvider>) {
         self.assistant = Some(provider);
+    }
+
+    /// Attaches the local bill reader for this session: with the local tier and no provider
+    /// attached, bill reading goes to it. The app attaches the `ocrs` reader over its models
+    /// folder; tests attach a recorded one. Attaching loads nothing.
+    pub fn attach_bill_ocr(
+        &mut self,
+        reader: std::sync::Arc<dyn ledgerly_assist::ocr_models::BillOcr>,
+    ) {
+        self.bill_ocr = Some(reader);
+    }
+
+    /// The attached local bill reader, if any.
+    #[must_use]
+    pub fn bill_ocr(&self) -> Option<&dyn ledgerly_assist::ocr_models::BillOcr> {
+        self.bill_ocr.as_deref()
     }
 
     /// The attached provider, if any.

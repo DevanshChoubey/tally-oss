@@ -28,7 +28,7 @@ use ocrs::TextItem as _;
 
 use crate::AssistError;
 use crate::ocr::{OcrLine, OcrOutput};
-use crate::provider::ProviderStatus;
+use crate::provider::{ProviderInfo, ProviderPlace, ProviderStatus};
 
 /// One model file: its name in the models folder, where it is downloaded from, and the SHA-256
 /// (lower-case hex) it must have.
@@ -243,6 +243,100 @@ pub fn ocr_models_status(dir: &Path) -> ProviderStatus {
         Err(e) => ProviderStatus::NotInstalled {
             reason: e.to_string(),
         },
+    }
+}
+
+/// The `ocrs` version this build links (Cargo.lock), logged as the bill reader's model version.
+pub const OCRS_VERSION: &str = "0.14.0";
+
+/// Reads a bill image into OCR lines on this computer. The API holds one for the local tier's
+/// bill reading, attached the way the key vault is; tests attach a recorded one, the app's `main`
+/// attaches an [`OcrsReader`].
+pub trait BillOcr: Send + Sync + fmt::Debug {
+    /// Who reads, as the gate and the log name it.
+    fn info(&self) -> ProviderInfo;
+
+    /// Whether it can read now. Cheap after the first call: implementations keep what they load.
+    fn status(&self) -> ProviderStatus;
+
+    /// The OCR lines of a PNG image whose SHA-256 is `sha256`.
+    ///
+    /// # Errors
+    /// [`AssistError`] when the image cannot be read.
+    fn read_png(
+        &self,
+        png: &[u8],
+        sha256: &str,
+        cancel: &CancelToken,
+    ) -> Result<OcrOutput, AssistError>;
+}
+
+/// The `ocrs` reader over a models folder. The models are loaded once, on the first status check
+/// or read that finds both files, and kept; a folder missing a file loads nothing and says which.
+#[derive(Debug)]
+pub struct OcrsReader {
+    dir: std::path::PathBuf,
+    models: std::sync::OnceLock<Result<OcrModels, String>>,
+}
+
+impl OcrsReader {
+    /// A reader over the models in `dir`. Loads nothing yet.
+    pub fn new(dir: &Path) -> Self {
+        OcrsReader {
+            dir: dir.to_path_buf(),
+            models: std::sync::OnceLock::new(),
+        }
+    }
+
+    fn missing(&self) -> Vec<&'static str> {
+        OCR_MODEL_FILES
+            .iter()
+            .filter(|f| !self.dir.join(f.name).is_file())
+            .map(|f| f.name)
+            .collect()
+    }
+
+    fn loaded(&self) -> Result<&OcrModels, String> {
+        let missing = self.missing();
+        if !missing.is_empty() && self.models.get().is_none() {
+            return Err(format!(
+                "the OCR model files are not there: {}",
+                missing.join(", ")
+            ));
+        }
+        self.models
+            .get_or_init(|| OcrModels::load(&self.dir).map_err(|e| e.to_string()))
+            .as_ref()
+            .map_err(Clone::clone)
+    }
+}
+
+impl BillOcr for OcrsReader {
+    fn info(&self) -> ProviderInfo {
+        ProviderInfo {
+            name: "ocrs".to_owned(),
+            version: OCRS_VERSION.to_owned(),
+            place: ProviderPlace::ThisComputer,
+        }
+    }
+
+    fn status(&self) -> ProviderStatus {
+        match self.loaded() {
+            Ok(_) => ProviderStatus::Ready,
+            Err(reason) => ProviderStatus::NotInstalled { reason },
+        }
+    }
+
+    fn read_png(
+        &self,
+        png: &[u8],
+        sha256: &str,
+        cancel: &CancelToken,
+    ) -> Result<OcrOutput, AssistError> {
+        match self.loaded() {
+            Ok(models) => models.read_png(png, sha256, cancel),
+            Err(reason) => Err(AssistError::Output { reason }),
+        }
     }
 }
 

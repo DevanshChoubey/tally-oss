@@ -2,7 +2,8 @@
 //!
 //! [`Api::ai_gate`] decides whether a feature may run now: the company's tier, the feature's
 //! switch, and the provider's own status. The provider is the one attached for the session
-//! ([`Api::attach_assistant`]), or else the local model at the chosen file, which this build
+//! ([`Api::attach_assistant`]); else, for bill reading on the local tier, the attached `ocrs`
+//! reader ([`Api::attach_bill_ocr`]); else the local model at the chosen file, which this build
 //! cannot run. Every feature screen asks the gate first and shows its refusal as a typed state.
 //!
 //! A read that runs is always logged: a draft as `DraftStored` (it then waits in the review
@@ -101,7 +102,19 @@ impl Api {
             (Some(provider), AiTier::Local | AiTier::Cloud) => {
                 return Ok(status_gate(provider.status(), provider.info()));
             }
-            (None, AiTier::Local) => self.local_model()?.status(),
+            (None, AiTier::Local) => match (feature, self.bill_ocr()) {
+                (AiFeature::BillReading, Some(reader)) => {
+                    return Ok(status_gate(reader.status(), reader.info()));
+                }
+                (
+                    AiFeature::BillReading
+                    | AiFeature::PlainWords
+                    | AiFeature::BankSuggestion
+                    | AiFeature::Ask
+                    | AiFeature::Gstr2bExplanation,
+                    _,
+                ) => self.local_model()?.status(),
+            },
             (None, AiTier::Cloud) => ProviderStatus::NotConfigured {
                 reason: "this build has no connection to a cloud provider; nothing is sent"
                     .to_owned(),
@@ -199,9 +212,10 @@ impl Api {
             return Ok(BillRead::Cancelled);
         }
         let input_hash = hex(&Sha256::digest(bytes));
-        let ocr = match self.assistant() {
-            Some(provider) => provider.ocr(bytes, &input_hash, cancel),
-            None => Err(AssistError::Output {
+        let ocr = match (self.assistant(), self.bill_ocr()) {
+            (Some(provider), _) => provider.ocr(bytes, &input_hash, cancel),
+            (None, Some(reader)) => reader.read_png(bytes, &input_hash, cancel),
+            (None, None) => Err(AssistError::Output {
                 reason: "no provider is attached".to_owned(),
             }),
         };

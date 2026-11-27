@@ -189,6 +189,14 @@ untracked), look at each, update `PARITY-GAPS.md`.
   card shows the mock's OCR note with its keyboard path, tested by Tab to a Confirm and Space. Both
   tests were seen failing first. The source chip still names the attached provider ("Test
   provider" in the capture) where the mock says "OCR on this computer".
+- Local bill reader: committed (API). `BillOcr` (info, status, PNG to OCR lines) is attached to
+  the API like the key vault (`Api::attach_bill_ocr`); on the local tier with no provider attached,
+  bill reading's gate asks it and `read_bill_photo` reads with it, logged as ocrs 0.14.0. Other
+  features keep the local-model path. `OcrsReader` loads the models once, on the first status or
+  read that finds both files, and keeps them. Tests use a recorded reader (no model is loaded);
+  `OcrsReader` is tested over an empty folder and over files that are not models only, so real
+  inference through it is unrun. Tests first, seen failing at compile; one test's setup was
+  corrected before it first passed (the Cloud tier needs a key and settings to be chosen).
 - s19 flake: fixed (test only). Cause: `s19_cold_start_smoke` left its wait as soon as a
   `.ledgerly` file existed, but `SqliteStore::create` makes the file before the job writes the
   company into it, and the test then waited a fixed 200 frames of 5 ms before `Api::open`. On a slow
