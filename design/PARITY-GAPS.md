@@ -39,8 +39,10 @@ Classes:
 
 ## Palette
 
-- **NOT BUILT** the mock's Read a bill photo, Import bank statement, Import 2B / IMS JSON and Back
-  up now commands (no bill reader, no palette route to the importers, no backup schedule).
+- **NOT BUILT** the mock's Read a bill photo, Import bank statement and Import 2B / IMS JSON
+  commands (no bill reader, no palette route to the importers).
+- **NOT BUILT** the mock's Back up now and Check for updates commands: the palette opens Backups and
+  updates, where Alt+B backs up and U checks; the palette runs no screen's action by itself.
 - **DELIBERATE** Ctrl+E exports any open report, as the help page "How to Export Data"
   (help.tallysolutions.com/export-data-in-tally/, read 2026-11-23) says, though the mock's day book
   key bar has no Ctrl+E; the key bar leaves it out as the mock does.
@@ -668,8 +670,10 @@ notifications were read on CBIC's tax information portal on 2026-11-27.
 
 ## Setup (`setup.*`)
 
-- **NOT BUILT** the Keyboard step's preset is shown but not stored; the backup folder is not saved
-  and no backup runs on a schedule.
+- **NOT BUILT** the Keyboard step's preset is shown but not stored.
+- Fixed in s23: the Backup step stores its folder (empty means `Backups` beside the file) with a
+  Daily schedule and 7 restorable versions, the defaults of help.tallysolutions.com/local-backup/
+  (read 2026-11-27); the other choices are on Backups and updates.
 - **DELIBERATE** release 1.0.0 ships without the AI assistant (owner decision of 2026-11-26). The AI
   step selects Off; On this computer and Cloud are shown disabled with a "Not in this release" tag
   and the line "AI arrives in a later version. This company stays Off.", as the mock does with
@@ -686,6 +690,34 @@ notifications were read on CBIC's tax information portal on 2026-11-27.
 - **DELIBERATE** the "Company file" field is ours (the wizard writes a file); City is kept as the
   first address line because `Address` has no city field.
 - **DELIBERATE** the mock's sample is prefilled and the wizard starts blank; refusals are a toast.
+
+## Backups and updates (`backup.*`, round s23)
+
+Sources (read 2026-11-27): help.tallysolutions.com `local-backup`, `restore-backup-data`,
+`release-notes-tallyprime-7-0`, `data-migration-faq`.
+
+- **NOT BUILT** a scheduled backup on close, or while the app is closed: the schedule runs when the
+  company is opened and one is due. `ledgerly backup <file> --if-due` is the answer for a system
+  scheduler (cron, Task Scheduler).
+- **NOT BUILT** the Once frequency, and incremental backups; every backup is a full copy.
+- **DELIBERATE** restore never replaces a file (the product offers Replace on restore): it writes a
+  new file after checking the audit chain, and the open company is left as it is.
+- **DELIBERATE** the backup before an upgrade on open is always taken (the product's migration asks,
+  and its default is No). Without a verified backup nothing is upgraded and the file opens as it was.
+- **NOT BUILT** a backup before a schema migration: the store has one schema version
+  (`SCHEMA_VERSION = 1`), so there is nothing to migrate yet. The upgrade on open covers the
+  predefined ledgers only.
+- **DELIBERATE** on upgrade, a ledger named Profit & Loss A/c (or Cash outside Cash-in-Hand) that
+  is not the predefined one is left alone and reported as not added, because taking its role would
+  move a balance.
+- **DELIBERATE** the update check is off by default, asks only the GitHub releases API of this
+  project, offers a release only when `SHA256SUMS.txt` and GitHub's digests agree, and never
+  downloads or installs; the user downloads from the release page.
+- **NOT BUILT** the hash of a file the user picks is checked by `ledgerly check-update --compare`
+  only; the screen has no file picker for it.
+- **NOT BUILT** code signing: the release workflow's SignPath step is skipped until the project's
+  signing account and secrets exist (`docs/signing.md`); the `.zip`'s programs stay unsigned.
+- **DELIBERATE** backup times are shown in India time (UTC+05:30), as every date in the app is.
 
 ## Print (`*.print-preview`, `*.print-config`, `*.print-range-error`, `*.print-busy`, `*.print-saved`, `*.print-failed`)
 
@@ -800,9 +832,10 @@ Credit (`ledgerly_reports::print_text` places the engine's figures only).
   read 2026-11-27). The page states no default, so the form has none: Import refuses until one is
   chosen. With Yes the company is backed up first and the summary names the backup; if the backup
   fails nothing is imported.
-- **DELIBERATE** the backup goes to a `Backups` folder beside the company file, with the app's
-  ordinary backup name; the help page does not say where the other product puts it. The name is to
-  the second, so two backups of one company in the same second fail (and so the import does not run).
+- **DELIBERATE** the backup goes to the company's backup folder (`Backups` beside the company file
+  unless Backups and updates names another), with the app's ordinary backup name; the help page does
+  not say where the other product puts it. Since s23 a second backup in the same second takes the
+  next sequence number in its name, so it never fails or overwrites.
 - Re-importing the same file: choose Overwrite = Yes. The import FAQ says of a file imported again
   and again that "transactions will get duplicated" (help.tallysolutions.com/import-data-faq/, read
   2026-11-27); here, with Overwrite = No every voucher in the file is posted again. The file form
