@@ -222,7 +222,7 @@ enum Click {
     ChangeMode,
     /// Open or close the More details panel (Ctrl+I).
     More,
-    /// Read a bill photo into a purchase (Alt+O): opens the bill screen.
+    /// Read a bill photo into a purchase (Ctrl+Alt+O): opens the bill screen.
     BillPhoto,
 }
 
@@ -2206,7 +2206,7 @@ impl ItemInvoiceScreen {
 
         let mut clicks: Option<Click> = None;
         let mut mode_anchor: Option<Rect> = None;
-        // The bill photo screen needs the assistant (`crate::release`): no button, no Alt+O.
+        // The bill photo screen needs the assistant (`crate::release`): no button, no Ctrl+Alt+O.
         let mut bill_photo = !busy
             && crate::release::ai_enabled()
             && self.draft.kind == InvoiceKind::Purchase
@@ -2214,7 +2214,7 @@ impl ItemInvoiceScreen {
             && !self.confirming_save
             && self.mode_list.is_none()
             && self.create.is_none()
-            && super::keys::consume_alt_o(ui);
+            && super::keys::consume_ctrl_alt_o(ui);
         let locked = self.locked_on();
         let subtitle = self.subtitle(tr).unwrap_or_default();
         let is_note = matches!(
@@ -2253,7 +2253,7 @@ impl ItemInvoiceScreen {
                 }
                 // The head lays buttons out right to left. A sale: More details sits left of
                 // Save and the mode button left of that (index.html:1308). A purchase has "Bill
-                // photo Alt+O" there (index.html:1990); a note has Save alone (index.html:2027).
+                // photo Ctrl+Alt+O" there (index.html:2182); a note has Save alone (index.html:2027).
                 match self.draft.kind {
                     InvoiceKind::Sales => {
                         if button(
@@ -2277,7 +2277,7 @@ impl ItemInvoiceScreen {
                         if button(
                             ui,
                             &tr.lit("Bill photo"),
-                            Some("Alt+O"),
+                            Some("Ctrl+Alt+O"),
                             ButtonKind::Secondary,
                         )
                         .clicked()
@@ -2554,7 +2554,7 @@ impl Screen for ItemInvoiceScreen {
                     KeyHint::new("Alt+C", tr.lit("Create master")),
                 ];
                 if crate::release::ai_enabled() {
-                    hints.push(KeyHint::new("Alt+O", tr.lit("Read a bill")));
+                    hints.push(KeyHint::new("Ctrl+Alt+O", tr.lit("Read a bill")));
                 }
                 hints.push(KeyHint::new("Ctrl+A", tr.lit("Save")));
                 hints.push(KeyHint::new("Esc", tr.lit("Back")));

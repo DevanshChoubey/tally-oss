@@ -32,7 +32,7 @@ use crate::{AppCtx, Screen, ScreenAction};
 pub const TITLE: &str = "Purchase from bill photo";
 /// The page head's title (index.html:1422).
 pub const PAGE_TITLE: &str = "Purchase from a bill photo";
-/// The page head's purpose line: the first part of the mock's (index.html:1422). Its "Alt+O read
+/// The page head's purpose line: the first part of the mock's (index.html:1422). Its "Ctrl+Alt+O read
 /// another bill" and "the image is kept with the voucher" need the reader and an image store.
 pub const SUBTITLE: &str = "F9 purchase";
 /// The image column's title when no bill is read.
