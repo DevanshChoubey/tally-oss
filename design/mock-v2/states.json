@@ -32,7 +32,28 @@
    "kind": "happy",
    "hash": "screen=ai-settings&state=local&ai=on",
    "title": "AI and privacy, local (later release)",
-   "description": "On this computer: the model file the user chose (none yet), the runtime not in this build, what each feature sees, and the AI activity log."
+   "description": "On this computer: the model file the user chose (none yet), the OCR reader not installed with its download button (nothing is fetched until it is pressed), what each feature sees, and the AI activity log."
+  },
+  {
+   "id": "ai.ai-settings.local-downloading",
+   "kind": "loading",
+   "hash": "screen=ai-settings&state=local-downloading&ai=on",
+   "title": "AI and privacy, OCR models downloading (later release)",
+   "description": "After the person presses Download the OCR models: the two ocrs model files come from the fixed URLs, off the screen's thread. Nothing else is sent, and bills cannot be read until both files are here."
+  },
+  {
+   "id": "ai.ai-settings.local-ready",
+   "kind": "happy",
+   "hash": "screen=ai-settings&state=local-ready&ai=on",
+   "title": "AI and privacy, OCR reader ready (later release)",
+   "description": "Both ocrs model files are here and load: bills are read on this computer, every value needing review."
+  },
+  {
+   "id": "ai.ai-settings.local-download-failed",
+   "kind": "error",
+   "hash": "screen=ai-settings&state=local-download-failed&ai=on",
+   "title": "AI and privacy, OCR download refused (later release)",
+   "description": "A downloaded file whose SHA-256 is not the recorded one is not kept; the reader stays not installed and the button offers the download again."
   },
   {
    "id": "ai.ai-settings.cloud",

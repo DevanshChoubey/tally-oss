@@ -57,11 +57,15 @@ pub use bank::{BalanceRefusal, balance_refusal};
 pub use bank_ai::{AiBankMatch, BankAiAnswer};
 pub use command::{Command, CommandResult, CreatedId};
 pub use gst_filing::GstFiling;
+pub use ledgerly_assist::AssistError;
 pub use ledgerly_assist::cloud::{
     CloudRequest, CloudResponse, CloudTransport, KeyVault, KeyringStore, MemoryVault, UreqTransport,
 };
 pub use ledgerly_assist::ocr::{OcrLine, OcrOutput, RejectedField};
-pub use ledgerly_assist::ocr_models::{BillOcr, OCRS_VERSION, OcrsReader};
+pub use ledgerly_assist::ocr_models::{
+    BillOcr, ModelFetch, OCR_MODEL_FILES, OCRS_VERSION, OcrModelsError, OcrsReader, UreqModelFetch,
+    download_ocr_models,
+};
 pub use ledgerly_assist::provider::{
     AiProvider, CloudModel, FIXED_ANSWERS_NAME, FixedAnswers, LocalModel, LocalModelFile,
     ProviderInfo, ProviderPlace, ProviderStatus,

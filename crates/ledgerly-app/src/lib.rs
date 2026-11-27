@@ -10,6 +10,7 @@ mod screen;
 
 pub mod i18n;
 pub mod keymap;
+pub mod ocr_setup;
 pub mod palette;
 pub mod recent;
 pub mod release;

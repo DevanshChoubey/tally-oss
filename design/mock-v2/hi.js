@@ -848,6 +848,7 @@ window.HI={
 "the file could not be opened:": "फ़ाइल खुल नहीं सकी:",
 "the file is not a PNG image; this build reads PNG bill photos.": "फ़ाइल PNG चित्र नहीं है; यह संस्करण PNG बिल फ़ोटो पढ़ता है।",
 "The matcher found no competing suggestion for this line": "मिलान करने वाले को इस पंक्ति के लिए कोई प्रतिस्पर्धी सुझाव नहीं मिला",
+"The OCR reader gives no confidence, so nothing it read is kept until you confirm it against the photo. Tab to a Confirm button; Space confirms.": "OCR रीडर कोई भरोसा-स्तर नहीं देता, इसलिए उसका पढ़ा कुछ भी तब तक नहीं रखा जाता जब तक आप फ़ोटो से मिलाकर पुष्टि न करें। Tab से पुष्टि बटन पर जाएँ; Space पुष्टि करता है।",
 "The photo shows here with a box on each value read from it.": "फ़ोटो यहाँ दिखेगी, उससे पढ़े हर मान पर एक बॉक्स के साथ।",
 "the PNG could not be decoded:": "PNG पढ़ी नहीं जा सकी:",
 "The preview opens when it is ready.": "तैयार होते ही पूर्वावलोकन खुलेगा।",

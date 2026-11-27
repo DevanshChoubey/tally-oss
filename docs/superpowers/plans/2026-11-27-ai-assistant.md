@@ -197,6 +197,25 @@ untracked), look at each, update `PARITY-GAPS.md`.
   `OcrsReader` is tested over an empty folder and over files that are not models only, so real
   inference through it is unrun. Tests first, seen failing at compile; one test's setup was
   corrected before it first passed (the Cloud tier needs a key and settings to be chosen).
+- Not built at the end of round s21 (reasons in PARITY-GAPS): the cloud consent and cloud bill
+  read (decided, Q3); `gst.recon-explain` (decided: a typed template proposal); the
+  `bank.ai-suggestions` tab, card and capture (the sample has no line the assistant could match);
+  the remaining Ask, bill-photo and bank items already listed as NOT BUILT.
+- OCR model state and download (settings): committed. Mock states `ai.ai-settings.local`,
+  `.local-downloading`, `.local-ready`, `.local-download-failed` were added first (hi.js
+  regenerated). The app's `OcrSetup` (models folder, reader maker, fetcher) is registered by the
+  real window (`ocr-models` under the config folder, `OcrsReader`, `UreqModelFetch`) and by the
+  capture tool (a fixed-status reader, a fetcher answering fictional bytes or held); tests hand
+  the screen their own. Opening a company attaches a reader that loads nothing. The download runs
+  on its own thread only when pressed; a kept download attaches a fresh reader and reads the
+  settings again. Tests (`s21_ocr_download`, written first, seen failing at compile): no fetch on
+  load or over 50 frames, the fixed first URL on a click, the downloading state while the fetch is
+  held, a mismatch keeps nothing and offers the download again, a ready reader shows no button.
+  A successful download cannot be tested (no bytes but the real files match the checksums), so the
+  path from a kept download to a loading reader is unrun. Sheet `s21-ocr-sheet-1.png`.
+  Honesty note: the local-reader commit before this one was made without the gates and has one
+  clippy error in its test (`assert!(..is_empty())`); this commit fixes it (`assert_eq!` on the
+  length, the same check). The gates pass on this commit.
 - s19 flake: fixed (test only). Cause: `s19_cold_start_smoke` left its wait as soon as a
   `.ledgerly` file existed, but `SqliteStore::create` makes the file before the job writes the
   company into it, and the test then waited a fixed 200 frames of 5 ms before `Api::open`. On a slow

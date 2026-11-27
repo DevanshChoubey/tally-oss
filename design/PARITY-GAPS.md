@@ -384,13 +384,30 @@ Classes:
   `claude-haiku-5-5`; the cloud panel shows the model each feature is sent to. The cloud panel's
   rows are now Format, Requests go to, Bill reading, Plain words, Other features (mock changed
   first); the fixture's chat endpoint is a base URL.
-- **DELIBERATE** (owner, 2026-11-27) no local model for now: the reader and language rows stay
-  "Not installed"; no runtime is linked and nothing is downloaded. Cloud is the only real provider.
-- **NOT BUILT** the cloud assistant (`Api::cloud_assistant`) reads no bill image: an image cannot be
-  redacted, and the per-document confirmation (`purchase-bill.cloud-consent`) is not built, so the
-  `claude-sonnet-5-5` default is stored and shown but not yet used. Open question for the owner:
-  should a cloud bill read send the image after a per-document confirmation, or the local OCR text
-  (ocrs) redacted?
+- **FIX** (s21, `s21-ocr-sheet-1.png`) `ai.ai-settings.local`, `.local-downloading`,
+  `.local-ready`, `.local-download-failed` (mock states added first): the Reader row is the
+  attached ocrs reader's state. With its model files not there it says which and offers "Download
+  the OCR models" (a button, pressed by a click or, after Tab, by Space; the test clicks). It runs off the
+  UI thread with the app's fetcher only when pressed, from the two fixed URLs; a file whose SHA-256
+  is not the recorded one is not kept, and the note says so with both checksums. The Network row
+  names the download as the one connection. Opening a company attaches a reader that loads
+  nothing; the models load on first use and are kept. Owner decisions 2026-11-27 (OCR is ocrs;
+  the download with the owner's permission and the two checksums, relayed by the coordinator).
+- **DELIBERATE** the language row stays "Not installed": no local language model is linked; only
+  bill reading has a local reader.
+- **NOT BUILT** `.local-ready` and `.local-downloading` are captured with the capture tool's
+  reader and held fetcher; no capture shows real model files loading, and the real fetcher
+  (`UreqModelFetch`) and `OcrsReader` over real files are wired in the real window only, unrun in
+  tests. The models folder is `ocr-models` under the app's config folder.
+- **NOT BUILT** the cloud assistant (`Api::cloud_assistant`) reads no bill image, so the
+  `claude-sonnet-5-5` default is stored and shown but not yet used. Decided (coordinator,
+  2026-11-27): a cloud bill read sends the image only after a per-document confirmation showing
+  what is sent and to which provider; sending the redacted ocrs text instead is a choice on the
+  same confirmation, its default when ocrs is installed. Not built in round s21: the confirmation
+  screen (`purchase-bill.cloud-consent`, in the mock), the image and text request bodies for both
+  formats, and the provider's reply as OCR lines (whose values must still need review). Needed
+  tests: no transport call before the confirmation, no image bytes on the text path, the consent
+  and a decline both logged.
 - **NOT BUILT** the app does not yet attach the cloud assistant when a company with the Cloud tier
   opens (the AI-in-release switch stays false); tests build it through the API with a recording
   transport.
@@ -474,8 +491,11 @@ Classes:
   `MatchSuggestion`, `ReportQuery`, `MappingSuggestion`) carries an explanation, and an
   explanation the provider writes is prose, which may state a number the engine did not compute.
   Building it needs a new typed proposal (the cause chosen from a fixed list the engine checks,
-  with every figure the engine's), which is a change to the frozen proposal set for the
-  coordinator to decide. The review queue keeps no 2B row for it.
+  with every figure the engine's). Decided (coordinator, 2026-11-27): add such a proposal, its
+  explanation a template with typed slots filled from engine-computed fields only, with a test
+  that a provider number never reaches the screen. Not built in round s21 (time): the provider's
+  answer should be a payload-free cause enum, so the guarantee is structural. The review queue
+  keeps no 2B row for it.
 - **DELIBERATE** (owner, 2026-11-27) OCR is `ocrs` (MIT OR Apache-2.0; `default-features = false`
   with `onnx`, and `rten` with `onnx_format`; `cargo deny check` passes). `ledgerly_assist::ocr_models`
   names the two model files and their fixed URLs (from the ocrs 0.14.0 crate's

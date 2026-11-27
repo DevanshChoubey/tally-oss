@@ -164,6 +164,9 @@ pub struct AiSettings {
     pub key: KeyState,
     /// The features switched off, in [`AiFeature::ALL`] order; every other feature is on.
     pub features_off: Vec<AiFeature>,
+    /// The local bill reader, when one is attached ([`Api::attach_bill_ocr`]): who it is and
+    /// whether it can read. `None` when none is attached.
+    pub bill_reader: Option<(ProviderInfo, ProviderStatus)>,
 }
 
 impl Api {
@@ -210,6 +213,7 @@ impl Api {
             local_status: model.status(),
             cloud: self.cloud_settings()?,
             key: self.key_state()?,
+            bill_reader: self.bill_ocr().map(|r| (r.info(), r.status())),
             features_off: AiFeature::ALL
                 .into_iter()
                 .map(|f| self.ai_feature_on(f).map(|on| (f, on)))

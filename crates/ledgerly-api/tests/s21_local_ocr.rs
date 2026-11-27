@@ -239,7 +239,7 @@ fn a_reader_without_its_models_refuses_with_its_reason_and_reads_nothing() {
         ))
     );
     assert_eq!(r.reads.load(Ordering::SeqCst), 0);
-    assert!(api.ai_activity().unwrap().is_empty());
+    assert_eq!(api.ai_activity().unwrap().len(), 0);
 }
 
 #[test]
