@@ -123,8 +123,8 @@ pub enum KeyOutcome {
 }
 
 /// What a step says when its choice cannot be stored yet, or `None` when the step saves what it
-/// asks, in the current language. The keyboard preset and backup folder have no store
-/// (design/PARITY-GAPS.md); the AI tier is stored, and [`ai_notice`] covers the one AI choice the
+/// asks, in the current language. The keyboard preset has no store (design/PARITY-GAPS.md); the
+/// backup step stores its choices ([`store_backup_settings`]); the AI tier is stored, and [`ai_notice`] covers the one AI choice the
 /// engine refuses.
 #[must_use]
 pub fn unsaved_notice(step: Step) -> Option<String> {
@@ -136,8 +136,9 @@ pub fn unsaved_notice(step: Step) -> Option<String> {
 pub fn unsaved_notice_in(step: Step, tr: &Tr) -> Option<String> {
     match step {
         Step::Keyboard => Some(tr.t("setup.notice.keyboard_unsaved")),
-        Step::Backup => Some(tr.t("setup.notice.backup_unsaved")),
-        Step::Welcome | Step::Company | Step::Ai | Step::Features | Step::Done => None,
+        Step::Welcome | Step::Company | Step::Ai | Step::Features | Step::Backup | Step::Done => {
+            None
+        }
     }
 }
 
@@ -572,5 +573,25 @@ pub fn build_company(form: &CompanyForm, features: Features) -> Result<Company, 
         entity_kind: form.kind,
         features,
         negative_stock: NegativeStockPolicy::Block,
+    })
+}
+
+/// Stores the backup step's choices with the new company: the folder typed (empty means the
+/// Backups folder beside the company file), a daily scheduled backup and 7 restorable versions,
+/// the defaults of TallyPrime's Schedule Backup ("Local Backup",
+/// <https://help.tallysolutions.com/local-backup/>, read 2026-11-27). Returns what to say when the
+/// settings could not be stored; the company is kept either way.
+pub fn store_backup_settings(api: &mut Api, folder: &str) -> Option<String> {
+    let folder = folder.trim();
+    let settings = ledgerly_api::BackupSettings {
+        folder: (!folder.is_empty()).then(|| std::path::PathBuf::from(folder)),
+        frequency: ledgerly_api::BackupFrequency::Daily,
+        keep: ledgerly_api::DEFAULT_KEEP,
+    };
+    api.set_backup_settings(&settings).err().map(|e| {
+        crate::i18n::tf(
+            "setup.notice.backup_not_saved",
+            &[("reason", &e.to_string())],
+        )
     })
 }

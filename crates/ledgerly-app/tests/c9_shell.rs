@@ -461,7 +461,10 @@ fn gst_returns_without_a_registration_leave_a_notice() {
 #[test]
 fn the_welcome_screen_hands_over_to_home_after_opening_a_file() {
     let path = file("welcome");
-    drop(Api::create(&path, &company(), Clock::Fixed(OffsetDateTime::UNIX_EPOCH)).unwrap());
+    // A company made by this build has its predefined ledgers (`create_company`), so the open
+    // needs no upgrade and goes straight to home. A file without them is upgraded on open, and
+    // home first shows the upgrade note (tests/s23_backup_screen.rs).
+    drop(Api::create_company(&path, &company(), Clock::Fixed(OffsetDateTime::UNIX_EPOCH)).unwrap());
     let mut welcome = WelcomeScreen::with_clock(Clock::Fixed(OffsetDateTime::UNIX_EPOCH));
     welcome.set_open_path(path.to_string_lossy());
     welcome.start_open();

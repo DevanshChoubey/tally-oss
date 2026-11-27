@@ -66,6 +66,7 @@ use crate::keymap::{Action, Keymap};
 use crate::palette::{PaletteEntry, PaletteTarget, RunCommand, command_entries};
 use crate::screens::ai_settings::AiSettingsScreen;
 use crate::screens::ask::AskScreen;
+use crate::screens::backup::BackupScreen;
 use crate::screens::bank::{BankChoice, BankChooserScreen, BankScreen};
 use crate::screens::gst::{GstScreen, GstTab};
 use crate::screens::import::ImportScreen;
@@ -299,6 +300,8 @@ pub const KEYS_KEY: &str = "keys";
 pub const AI_SETTINGS_KEY: &str = "ai-settings";
 /// The palette key of the Company setup screen.
 pub const SETUP_KEY: &str = "setup";
+/// The palette key of the Backups and updates screen (round s23).
+pub const BACKUP_KEY: &str = "backup";
 
 /// The icon a palette row for `target` shows. Screens take the icon the mock's `PAL_SCREENS`
 /// gives them (`design/mock-v2/index.html:1109`); the kinds take the icons of `palResults`
@@ -350,6 +353,7 @@ fn report_icon(key: &str) -> Icon {
         KEYS_KEY => Icon::Kbd,
         AI_SETTINGS_KEY => Icon::Shield,
         SETUP_KEY => Icon::Building,
+        BACKUP_KEY => Icon::Db,
         ASK_KEY => Icon::Spark,
         QUICK_ENTRY_KEY => Icon::Chat,
         PURCHASE_BILL_KEY => Icon::Purchase,
@@ -400,6 +404,7 @@ pub fn screen_entries(books: Option<&Books>) -> Vec<PaletteEntry> {
             ],
         );
     }
+    entries.push(screen(BACKUP_KEY, "Backups and updates"));
     if let Some(books) = books {
         for ledger in books.masters.ledgers.values() {
             if ledger.bank.is_some() {
@@ -515,6 +520,7 @@ pub fn sidebar() -> Vec<SidebarGroup> {
             entries: vec![
                 row("AI and privacy", None, screen(AI_SETTINGS_KEY)),
                 row("Keyboard map", Some("?"), screen(KEYS_KEY)),
+                row("Backups and updates", None, screen(BACKUP_KEY)),
                 row("Company setup", None, screen(SETUP_KEY)),
             ],
         },
@@ -787,6 +793,7 @@ pub fn screen_for_key(key: &str, ctx: &AppCtx) -> Option<Result<Box<dyn Screen>,
         KEYS_KEY => Ok(Box::new(KeymapScreen::default())),
         AI_SETTINGS_KEY => Ok(Box::new(AiSettingsScreen::default())),
         SETUP_KEY => Ok(Box::new(SetupScreen::default())),
+        BACKUP_KEY => Ok(Box::new(BackupScreen::default())),
         other => {
             let id = parse_id(other, "bank:")?;
             books_of(ctx)

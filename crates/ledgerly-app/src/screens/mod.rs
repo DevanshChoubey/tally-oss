@@ -6,6 +6,7 @@ pub mod ask;
 mod ask_ai;
 pub mod assist;
 pub mod audit;
+pub mod backup;
 pub mod bank;
 pub mod entry_print;
 pub mod gst;

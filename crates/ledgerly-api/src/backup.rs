@@ -196,6 +196,12 @@ impl Api {
         })
     }
 
+    /// The company file this API has open.
+    #[must_use]
+    pub fn company_file(&self) -> &Path {
+        self.store().path()
+    }
+
     /// The `Backups` folder beside the company file.
     #[must_use]
     pub fn default_backup_folder(&self) -> PathBuf {

@@ -796,7 +796,8 @@ fn the_sidebar_has_the_mock_groups_and_entries_in_order() {
     // provenance: derived. design/mock-v2/DESIGN.md, "Side bar groups", in order: Overview (Home,
     // Review queue), Enter (Sales, Purchase, Payment, Receipt, Plain-words entry), Books (Day
     // book, Balance sheet, Masters), Compliance (GST returns, Bank reconciliation), Settings (AI
-    // and privacy, Keyboard map, Company setup). 2 + 5 + 3 + 2 + 3 = 15 rows.
+    // and privacy, Keyboard map, Backups and updates, Company setup; round s23 added Backups and
+    // updates to the mock's NAV). 2 + 5 + 3 + 2 + 4 = 16 rows.
     let groups: Vec<(&str, Vec<&str>)> = navigate::sidebar()
         .iter()
         .map(|g| {
@@ -824,7 +825,12 @@ fn the_sidebar_has_the_mock_groups_and_entries_in_order() {
             ("Compliance", vec!["GST returns", "Bank reconciliation"]),
             (
                 "Settings",
-                vec!["AI and privacy", "Keyboard map", "Company setup"]
+                vec![
+                    "AI and privacy",
+                    "Keyboard map",
+                    "Backups and updates",
+                    "Company setup"
+                ]
             ),
         ]
     );

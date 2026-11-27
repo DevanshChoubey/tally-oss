@@ -24,10 +24,13 @@ use ledgerly_api::update_check::{UpdateCheck, UpdateChecker, sha256_of_file};
 use sha2::{Digest, Sha256};
 
 fn hex(bytes: &[u8]) -> String {
+    use std::fmt::Write as _;
     Sha256::digest(bytes)
         .iter()
-        .map(|b| format!("{b:02x}"))
-        .collect()
+        .fold(String::new(), |mut out, b| {
+            let _ = write!(out, "{b:02x}");
+            out
+        })
 }
 
 /// One canned reply: status, extra headers and body.
@@ -121,7 +124,7 @@ fn handle(mut stream: TcpStream, routes: &[(String, Reply)], log: &Mutex<Vec<See
         reply.body.len()
     );
     for (k, v) in &reply.headers {
-        head.push_str(&format!("{k}: {v}\r\n"));
+        let _ = std::fmt::Write::write_fmt(&mut head, format_args!("{k}: {v}\r\n"));
     }
     head.push_str("\r\n");
     let _ = stream.write_all(head.as_bytes());

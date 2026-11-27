@@ -198,7 +198,8 @@ fn the_sidebar_shows_the_mock_entries() {
     ledgerly_app::release::set_ai_enabled(true);
     // provenance: derived from the sidebar groups of design/mock-v2/DESIGN.md ("Side bar groups":
     // Enter is Sales F8, Purchase F9, Payment F5, Receipt F6, Plain-words entry). Purchase opens
-    // the invoice screen (tests/w2_purchase_invoice.rs), so its row shows, after Sales.
+    // the invoice screen (tests/w2_purchase_invoice.rs), so its row shows, after Sales. Settings
+    // holds Backups and updates since round s23 (the mock's NAV and DESIGN.md).
     let shown = labels();
     assert_eq!(
         shown,
@@ -217,6 +218,7 @@ fn the_sidebar_shows_the_mock_entries() {
             "Bank reconciliation",
             "AI and privacy",
             "Keyboard map",
+            "Backups and updates",
             "Company setup",
         ]
     );

@@ -383,8 +383,7 @@ fn check_update(
             };
             let name = file
                 .file_name()
-                .map(|n| n.to_string_lossy().into_owned())
-                .unwrap_or_default();
+                .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
             let Some(asset) = release.assets.iter().find(|a| a.name == name) else {
                 eprintln!("{name} is not a file of release {}.", release.tag);
                 return Ok(ExitCode::from(1));

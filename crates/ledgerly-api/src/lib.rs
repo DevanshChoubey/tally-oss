@@ -116,6 +116,7 @@ pub use ledgerly_reports::{
     AuditReportKind, Cell, ColumnHeader, ColumnSpec, Detail, DrillKey, Report, ReportFilter,
     ReportKind, ReportParams, ReportRow, RowKind,
 };
+pub use ledgerly_store::StoreError;
 pub use ledgerly_store::backup::{BackupFile, BackupKind, RebuildOutcome, RebuildReport};
 pub use ledgerly_store::verify::{ChainProblem, VerifyReport};
 pub use ledgerly_tally_bridge::file_import::MasterBehaviour;

@@ -167,7 +167,7 @@ impl WelcomeScreen {
             self.notice = Some("Type the path of a company file to open.".to_owned());
             return;
         }
-        self.spawn_job(move || Api::open(&path).map_err(|e| e.to_string()));
+        self.spawn_job(move || crate::open_company::open_company_noted(&path));
     }
 
     /// Starts creating the company described by the "create" row. Returns at once.

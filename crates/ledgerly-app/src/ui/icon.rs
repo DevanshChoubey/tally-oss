@@ -93,6 +93,8 @@ pub enum Icon {
     Clock,
     /// `camera` (a bill photo).
     Camera,
+    /// `db` (backups).
+    Db,
 }
 
 impl Icon {
@@ -159,6 +161,10 @@ impl Icon {
             Icon::Info => "M12 3a9 9 0 1 0 0 18a9 9 0 0 0 0-18z M12 11v5 M12 8h.01",
             Icon::Clock => "M12 3a9 9 0 1 0 0 18a9 9 0 0 0 0-18z M12 7v5l3 2",
             Icon::Camera => "M4 8h3l2-3h6l2 3h3v11H4z M12 10a3.5 3.5 0 1 0 0 7a3.5 3.5 0 0 0 0-7z",
+            // The mock's `db` uses the smooth command `s`; written out as the cubics it stands for.
+            Icon::Db => {
+                "M4 6C4 4.3 7.6 3 12 3C16.4 3 20 4.3 20 6C20 7.7 16.4 9 12 9C7.6 9 4 7.7 4 6z M4 6v12C4 19.7 7.6 21 12 21C16.4 21 20 19.7 20 18V6 M4 12C4 13.7 7.6 15 12 15C16.4 15 20 13.7 20 12"
+            }
         }
     }
 }
