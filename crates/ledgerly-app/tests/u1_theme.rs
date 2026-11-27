@@ -319,7 +319,8 @@ fn fonts_and_text_styles_are_installed_once_on_apply() {
     // derived: the mock's UI face is Inter (design/mock-v2/index.html `font-family`), regular and
     // 600 for bold. Inter 4.1 (OFL, github.com/rsms/inter) is bundled, downloaded with the user's
     // permission 2026-11-22; it replaces the Noto Sans stand-in of wave 1. Noto Sans follows it
-    // for any glyph Inter lacks, Noto Sans Devanagari is the fallback for Hindi names, and the
+    // for any glyph Inter lacks, Noto Sans Devanagari is the fallback for Hindi names, Noto Sans Telugu for Telugu
+    // names (S22, the owner's masters file), and the
     // bold face is its own family led by Inter SemiBold.
     let ctx = egui::Context::default();
     theme::apply(&ctx, ThemeKind::Light);
@@ -362,7 +363,8 @@ fn fonts_and_text_styles_are_installed_once_on_apply() {
         vec![
             "Inter-SemiBold".to_owned(),
             "NotoSans-Bold".to_owned(),
-            "NotoSansDevanagari-Bold".to_owned()
+            "NotoSansDevanagari-Bold".to_owned(),
+            "NotoSansTelugu-Bold".to_owned()
         ]
     );
 }

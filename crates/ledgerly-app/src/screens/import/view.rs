@@ -4,10 +4,12 @@ use crate::i18n::Tr;
 use std::path::PathBuf;
 
 use egui::{Key, Modifiers, RichText, Sense, Stroke, Ui};
+use ledgerly_api::MasterBehaviour;
 use ledgerly_core::format::format_inr;
 use ledgerly_core::{Date, DrCr, FinancialYear, Outcome, PeriodError, SignedAmount};
 
 use super::direct::{DirectImport, DirectState};
+use super::file::{FileImport, FileImportState, FileKind, FilePress, draw_file, state_lines};
 use super::types::{
     DetectState, ImportError, ImportRequest, ImportSource, MAX_VOUCHERS_PER_REQUEST, MapReport,
     MapState, MapStatus, PullProgress, PullStage, PullState, ReconReport, ReconSectionReport,
@@ -72,6 +74,8 @@ pub struct ImportScreen {
     notice: Option<String>,
     /// The one-call import path (see the `direct` module).
     direct: DirectImport,
+    /// Import from an XML file into the open company (see the `file` module).
+    file: FileImport,
 }
 
 impl ImportScreen {
@@ -86,7 +90,50 @@ impl ImportScreen {
             differences_only: false,
             notice: None,
             direct: DirectImport::default(),
+            file: FileImport::default(),
         })
+    }
+
+    /// The screen as Alt+O opens it: the same screen, scrolled to the import from a file.
+    ///
+    /// # Errors
+    /// As [`ImportScreen::new`].
+    pub fn for_file(today: Date) -> Result<Self, PeriodError> {
+        let mut screen = Self::new(today)?;
+        screen.file.reveal = 3;
+        Ok(screen)
+    }
+
+    /// Sets the form of the import from a file: what the file holds, its path, and what to do
+    /// with a master that is already in the company.
+    pub fn set_file_form(
+        &mut self,
+        kind: Option<FileKind>,
+        path: &str,
+        behaviour: Option<MasterBehaviour>,
+    ) {
+        self.file.kind = kind;
+        path.clone_into(&mut self.file.path);
+        self.file.behaviour = behaviour;
+    }
+
+    /// Starts the import from a file on `worker`. A missing choice, or no worker, is a `Failed`
+    /// state and nothing runs.
+    pub fn start_file_import(&mut self, worker: Option<&ApiWorker>) {
+        self.file.start(worker);
+    }
+
+    /// What the import from a file shows now.
+    #[must_use]
+    pub fn file_state(&self) -> &FileImportState {
+        &self.file.state
+    }
+
+    /// The import from a file's result as lines of text: the summary line, then every object not
+    /// imported, then the objects left as they were and the fields not imported.
+    #[must_use]
+    pub fn file_lines(&self) -> Vec<String> {
+        state_lines(&self.file.state)
     }
 
     /// The state machine, for the host to read.
@@ -127,6 +174,7 @@ impl ImportScreen {
     /// Takes a finished one-call import answer, if there is one.
     pub fn tick(&mut self) {
         self.direct.tick();
+        self.file.tick();
     }
 
     /// The last refusal shown under the step, if any.
@@ -191,6 +239,96 @@ impl ImportScreen {
     }
 }
 
+impl ImportScreen {
+    /// Enter imports (the file when its path field has the keyboard, else the one-step import)
+    /// and Ctrl+O chooses the file.
+    fn import_keys(&mut self, ui: &Ui, ctx: &AppCtx) {
+        let can_import = self.wizard.step() == Step::Detect
+            && self.direct.state != DirectState::Running
+            && self.file.state != FileImportState::Running;
+        if !can_import {
+            return;
+        }
+        let (enter, open) = ui.ctx().input_mut(|i| {
+            (
+                i.consume_key(Modifiers::NONE, Key::Enter),
+                ctx.api.is_some() && i.consume_key(Modifiers::COMMAND, Key::O),
+            )
+        });
+        if enter && self.file.path_focused {
+            self.file.start(ctx.api.as_ref());
+        } else if enter {
+            self.direct.start(ctx.api.as_ref());
+        }
+        if open {
+            self.file.choose_file();
+        }
+    }
+
+    /// Everything inside the screen's scroll area: the head, the step bar and the current step.
+    fn body(&mut self, ui: &mut Ui, ctx: &AppCtx, clicks: &mut Vec<Click>) {
+        let width = ui.available_width().min(COLUMN_MAX_WIDTH);
+        ui.vertical(|ui| {
+            ui.set_max_width(width);
+            page_head(
+                ui,
+                &crate::i18n::lit("Import from another app"),
+                Some(&crate::i18n::lit("Bring your masters and vouchers in from another accounting app. Everything is read on this computer, and a report shows what moved.")),
+                |_| {},
+            );
+            ui.set_width(ui.available_width());
+            draw_steps(ui, &self.wizard);
+            ui.add_space(14.0);
+            match self.wizard.step() {
+                Step::Detect => self.detect_step(ui, ctx, clicks),
+                Step::ChooseCompany => draw_choose(ui, &self.wizard, clicks),
+                Step::Pull => draw_pull(ui, &self.wizard, clicks),
+                Step::Map => draw_map(ui, &self.wizard, clicks),
+                Step::Reconcile => {
+                    draw_reconcile(ui, &self.wizard, &mut self.differences_only, clicks);
+                }
+            }
+            if let Some(text) = &self.notice {
+                ui.add_space(12.0);
+                note(ui, NoteKind::Bad, text);
+            }
+        });
+    }
+
+    /// The first step: the one-step import, the file import, then the step-by-step panel.
+    fn detect_step(&mut self, ui: &mut Ui, ctx: &AppCtx, clicks: &mut Vec<Click>) {
+        let no_company = ctx.api.is_none();
+        if no_company {
+            note(
+                ui,
+                NoteKind::Warn,
+                &crate::i18n::lit(
+                    "No company is open yet. An import fills an empty company file, so create a company first (Company setup), then come back here.",
+                ),
+            );
+            ui.add_space(8.0);
+            if button(ui, "Back to setup", Some("Esc"), ButtonKind::Secondary).clicked() {
+                clicks.push(Click::Close);
+            }
+            ui.add_space(14.0);
+        }
+        if draw_direct(ui, &mut self.direct, !no_company) {
+            self.direct.start(ctx.api.as_ref());
+        }
+        ui.add_space(12.0);
+        let press = panel(ui, |ui| {
+            draw_file(ui, &mut self.file, !no_company, choice_row)
+        });
+        match press {
+            FilePress::None => {}
+            FilePress::Import => self.file.start(ctx.api.as_ref()),
+            FilePress::Choose => self.file.choose_file(),
+        }
+        ui.add_space(12.0);
+        draw_detect(ui, &self.wizard, &mut self.export_path, clicks);
+    }
+}
+
 /// Whether the host answers the step-by-step wizard's requests (detect, pull, map, commit,
 /// reconcile). The shell does not run them yet, so the step-by-step controls are drawn disabled
 /// with the reason; the one-step import is the path that works (`design/PARITY-GAPS.md`).
@@ -205,7 +343,8 @@ impl Screen for ImportScreen {
     }
 
     fn key_bar_name(&self, tr: &Tr) -> String {
-        if self.direct.state == DirectState::Running {
+        if self.direct.state == DirectState::Running || self.file.state == FileImportState::Running
+        {
             tr.t("import.key_bar_running")
         } else {
             self.title(tr)
@@ -213,11 +352,13 @@ impl Screen for ImportScreen {
     }
 
     fn keys(&self, tr: &Tr) -> Vec<KeyHint> {
-        if self.direct.state == DirectState::Running {
+        if self.direct.state == DirectState::Running || self.file.state == FileImportState::Running
+        {
             return vec![KeyHint::new("Esc", tr.t("chrome.back"))];
         }
         vec![
             KeyHint::new("Enter", tr.t("import.key_import")),
+            KeyHint::new("Ctrl+O", tr.t("import.file.choose")),
             KeyHint::new("Esc", tr.t("chrome.back")),
         ]
     }
@@ -225,6 +366,9 @@ impl Screen for ImportScreen {
     fn cursor_label(&self, ctx: &AppCtx) -> Option<String> {
         if let Some(text) = self.direct.state.text() {
             return text.lines().next().map(str::to_owned);
+        }
+        if let Some(line) = state_lines(&self.file.state).into_iter().next() {
+            return Some(line);
         }
         Some(if ctx.api.is_none() {
             "No company is open yet.".to_owned()
@@ -235,7 +379,8 @@ impl Screen for ImportScreen {
 
     fn ui(&mut self, ui: &mut Ui, ctx: &mut AppCtx) -> ScreenAction {
         self.tick();
-        if self.direct.state == DirectState::Running {
+        if self.direct.state == DirectState::Running || self.file.state == FileImportState::Running
+        {
             ui.ctx().request_repaint();
         }
         let mut clicks = Vec::new();
@@ -245,64 +390,13 @@ impl Screen for ImportScreen {
         {
             clicks.push(Click::Escape);
         }
-        let can_import =
-            self.wizard.step() == Step::Detect && self.direct.state != DirectState::Running;
-        let enter = can_import
-            && ui
-                .ctx()
-                .input_mut(|i| i.consume_key(Modifiers::NONE, Key::Enter));
-        if enter {
-            self.direct.start(ctx.api.as_ref());
-        }
-        let width = ui.available_width().min(COLUMN_MAX_WIDTH);
-        ui.vertical(|ui| {
-            ui.set_max_width(width);
-            page_head(
-                ui,
-                &crate::i18n::lit("Import from another app"),
-                Some(&crate::i18n::lit("Bring your masters and vouchers in from another accounting app. Everything is read on this computer, and a report shows what moved.")),
-                |_| {},
-            );
-            {
-                ui.set_width(ui.available_width());
-                draw_steps(ui, &self.wizard);
-                ui.add_space(14.0);
-                let no_company = ctx.api.is_none();
-                match self.wizard.step() {
-                    Step::Detect => {
-                        if no_company {
-                            note(
-                                ui,
-                                NoteKind::Warn,
-                                &crate::i18n::lit("No company is open yet. An import fills an empty company file, so create a company first (Company setup), then come back here."),
-                            );
-                            ui.add_space(8.0);
-                            if button(ui, "Back to setup", Some("Esc"), ButtonKind::Secondary)
-                                .clicked()
-                            {
-                                clicks.push(Click::Close);
-                            }
-                            ui.add_space(14.0);
-                        }
-                        if draw_direct(ui, &mut self.direct, !no_company) {
-                            self.direct.start(ctx.api.as_ref());
-                        }
-                        ui.add_space(12.0);
-                        draw_detect(ui, &self.wizard, &mut self.export_path, &mut clicks);
-                    }
-                    Step::ChooseCompany => draw_choose(ui, &self.wizard, &mut clicks),
-                    Step::Pull => draw_pull(ui, &self.wizard, &mut clicks),
-                    Step::Map => draw_map(ui, &self.wizard, &mut clicks),
-                    Step::Reconcile => {
-                        draw_reconcile(ui, &self.wizard, &mut self.differences_only, &mut clicks);
-                    }
-                }
-                if let Some(text) = &self.notice {
-                    ui.add_space(12.0);
-                    note(ui, NoteKind::Bad, text);
-                }
-            }
-        });
+        self.import_keys(ui, ctx);
+        // The screen scrolls: the file import's result sits under two forms, below the fold of a
+        // short window (S22).
+        egui::ScrollArea::vertical()
+            .id_salt("import-screen")
+            .auto_shrink([false, false])
+            .show(ui, |ui| self.body(ui, ctx, &mut clicks));
         let mut action = ScreenAction::Stay;
         for click in clicks {
             if matches!(action, ScreenAction::Pop) {

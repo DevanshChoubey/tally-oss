@@ -42,7 +42,7 @@ use ledgerly_model::{
 pub use ledgerly_tally_xml::masters::{ImportMaster, ImportMasterKind};
 use ledgerly_tally_xml::masters::{RawElement, decode_xml_bytes, parse_import_masters_bytes};
 pub use ledgerly_tally_xml::vouchers::TVoucher;
-use ledgerly_tally_xml::vouchers::{TLedgerEntry, parse_vouchers_xml};
+use ledgerly_tally_xml::vouchers::{TLedgerEntry, check_envelope_root, parse_vouchers_xml};
 
 use crate::mapping::{
     MapError, bill_kind, element_flag, extra_text, insert_unique, node_flag, normalize_parent,
@@ -130,6 +130,7 @@ pub fn read_masters(bytes: &[u8]) -> Result<FileContents<ImportMaster>, String> 
 /// The reader's error as text when the file is not a readable XML document of vouchers.
 pub fn read_vouchers(bytes: &[u8]) -> Result<FileContents<TVoucher>, String> {
     let text = decode_xml_bytes(bytes).map_err(|e| e.to_string())?;
+    check_envelope_root(&text).map_err(|e| e.to_string())?;
     let (items, warnings) = parse_vouchers_xml(&text).map_err(|e| e.to_string())?;
     Ok(FileContents {
         items,

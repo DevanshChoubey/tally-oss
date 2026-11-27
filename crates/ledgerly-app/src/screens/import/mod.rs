@@ -40,15 +40,21 @@
 //!   ([`ReconReport`]). Differences are listed and counted, never hidden; a section that could not
 //!   be compared says so ([`ReconReport::summary`]).
 //!
+//! Beside the wizard, two paths that work today: the one-step import from a running app (the
+//! `direct` module) and the import of masters or vouchers from an XML file into the open company
+//! (the `file` module, S22; Alt+O opens the screen there).
+//!
 //! Not built here, and said so rather than guessed: AI column mapping (spec 6.8), a pull period
 //! that is not a run of whole financial years, and the live two-way sync (v1.1).
 
 mod direct;
+mod file;
 mod types;
 mod view;
 mod wizard;
 
 pub use direct::DirectState;
+pub use file::{FileImportState, FileKind, state_lines, summary_line};
 pub use types::*;
 pub use view::{ImportScreen, format_signed_amount};
 pub use wizard::ImportWizard;

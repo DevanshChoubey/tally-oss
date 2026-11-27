@@ -1,5 +1,5 @@
-Noto Sans and Noto Sans Devanagari, Copyright 2015-2020 Google LLC, licensed under the SIL Open Font License 1.1 (OFL.txt).
-Copied from the Debian fonts-noto-core package (/usr/share/fonts/truetype/noto) on 2026-11-22.
+Noto Sans and Noto Sans Devanagari, Copyright 2015-2020 Google LLC, and Noto Sans Telugu (version 2.001), Copyright 2019 Google LLC, all licensed under the SIL Open Font License 1.1 (OFL.txt).
+Copied from the Debian fonts-noto-core package (/usr/share/fonts/truetype/noto) on 2026-11-22 (Noto Sans Telugu on 2026-11-27).
 
 Inter (Regular, SemiBold) version 4.1, Copyright (c) 2016 The Inter Project Authors, licensed under
 the SIL Open Font License 1.1 (Inter-LICENSE.txt). Taken from `extras/ttf/` of the official release

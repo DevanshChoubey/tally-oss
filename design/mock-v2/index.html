@@ -378,6 +378,10 @@ mark{background:var(--accent-soft);color:var(--accent-ink);border-radius:2px;pad
  {"id":"hi.balance-sheet.default","kind":"happy","hash":"screen=balance-sheet&state=default&lang=hi","title":"Balance sheet, Hindi","description":"The balance sheet in Hindi; Dr and Cr stay as the books write them."},
  {"id":"hi.gst.gstr1","kind":"happy","hash":"screen=gst&state=gstr1&lang=hi","title":"GSTR-1, Hindi","description":"GSTR-1 in Hindi; return names and table numbers stay as the portal writes them."},
  {"id":"hi.bank.default","kind":"happy","hash":"screen=bank&state=default&lang=hi","title":"Bank reconciliation, Hindi","description":"The bank reconciliation screen in Hindi."},
+ {"id":"hi.import.file-masters","kind":"happy","hash":"screen=import&state=file-masters&lang=hi","title":"Import from a file, masters chosen, Hindi","description":"The import from a file with Masters and Ignore duplicates chosen, in Hindi."},
+ {"id":"hi.import.file-missing-choice","kind":"validation-error","hash":"screen=import&state=file-missing-choice&lang=hi","title":"Import from a file, no choice for existing masters, Hindi","description":"The missing choice said in Hindi."},
+ {"id":"hi.import.file-imported","kind":"happy","hash":"screen=import&state=file-imported&lang=hi","title":"Import from a file, summary and exceptions, Hindi","description":"The summary and the exceptions list in Hindi; names and the engine's reasons stay as written."},
+ {"id":"hi.import.file-error","kind":"error","hash":"screen=import&state=file-error&lang=hi","title":"Import from a file, not an XML file, Hindi","description":"The unreadable file in Hindi; the engine's reason stays as written."},
  {"id":"hi.payment.account-list","kind":"happy","hash":"screen=payment&state=account-list&lang=hi","title":"Payment, account list open, Hindi","description":"The payment's cash and bank account list in Hindi."},
  {"id":"hi.setup.welcome","kind":"happy","hash":"screen=setup&state=welcome&lang=hi","title":"First run, welcome, Hindi","description":"The welcome screen in Hindi."},
  {"id":"home.loading","kind":"loading","hash":"screen=home&state=loading","title":"Home, company opening","description":"Skeleton rows while the company file opens and projections load; no figure is shown until the engine returns it."},
@@ -495,13 +499,17 @@ mark{background:var(--accent-soft);color:var(--accent-ink);border-radius:2px;pad
 {"id":"masters.items-empty","kind":"empty","hash":"screen=masters&state=items-empty","title":"Masters, no stock items yet","description":"No stock items: the empty state offers Create stock item (Alt+C); that form is not in the mock."},
 {"id":"masters.loading","kind":"loading","hash":"screen=masters&state=loading","title":"Masters, balances loading","description":"Ledger names are listed; the balance column shows dashes until the engine returns the balances."},
 {"id":"masters.no-match","kind":"empty","hash":"screen=masters&state=no-match","title":"Masters, filter matches nothing","description":"The filter has no match: the line says No ledgers matches, with the filter text."},
-{"id":"import.default","kind":"happy","hash":"screen=import&state=default","title":"Import from another app","description":"One-step import with host, port and company; the step-by-step panel shows as not connected."},
-{"id":"import.no-company","kind":"empty","hash":"screen=import&state=no-company","title":"Import, no company open","description":"No company is open: says to create one first, offers Back to setup, and the form is disabled."},
+{"id":"import.default","kind":"happy","hash":"screen=import&state=default","title":"Import from another app","description":"One-step import with host, port and company, the import from an XML file with nothing chosen yet, and the step-by-step panel shown as not connected."},
+{"id":"import.no-company","kind":"empty","hash":"screen=import&state=no-company","title":"Import, no company open","description":"No company is open: says to create one first, offers Back to setup, and both the one-step form and the import from a file are disabled with the reason."},
 {"id":"import.validation-error","kind":"validation-error","hash":"screen=import&state=validation-error","title":"Import, company name missing","description":"The company name is empty; the reason is said in words and nothing is imported."},
 {"id":"import.port-error","kind":"validation-error","hash":"screen=import&state=port-error","title":"Import, port not a number in range","description":"Port 99999 is outside 1 to 65535; the reason is said in words."},
 {"id":"import.running","kind":"loading","hash":"screen=import&state=running","title":"Import, running","description":"Importing; the button is disabled and the form stays as typed."},
 {"id":"import.imported","kind":"happy","hash":"screen=import&state=imported","title":"Import, finished with a summary","description":"The engine reports the company read, the events committed and any warnings (sample counts)."},
 {"id":"import.refused","kind":"error","hash":"screen=import&state=refused","title":"Import, refused as not supported","description":"The engine refuses a voucher type; the refusal names what and why."},
+{"id":"import.file-masters","kind":"happy","hash":"screen=import&state=file-masters","title":"Import from a file, masters chosen","description":"Alt+O: Masters chosen, the three choices for a master already in the company (Ignore duplicates picked) and the file path filled; nothing imported yet."},
+{"id":"import.file-missing-choice","kind":"validation-error","hash":"screen=import&state=file-missing-choice","title":"Import from a file, no choice for existing masters","description":"Masters chosen but no choice for a master already in the company: the reason is said in words and nothing is imported."},
+{"id":"import.file-imported","kind":"happy","hash":"screen=import&state=file-imported","title":"Import from a file, summary and exceptions","description":"The file was read: 2 created, 1 not imported, with every object not imported listed beside its reason."},
+{"id":"import.file-error","kind":"error","hash":"screen=import&state=file-error","title":"Import from a file, not an XML file","description":"The file is not an XML document: the error names the file and the cause, and nothing is imported."},
 {"id":"import.failed","kind":"error","hash":"screen=import&state=failed","title":"Import, failed with a reason","description":"The other app could not be read; the error names the company, the host and port, and the cause. Nothing is written."},
 {"id":"setup.new-tab","kind":"happy","hash":"screen=setup&state=welcome&tabs=2","title":"Cold start, new tab","description":"Ctrl+T with no company open opens a second Company setup tab; the tab strip shows both and New tab and Close tab."},
 {"id":"setup.rail","kind":"happy","hash":"screen=setup&state=welcome&rail=1","title":"Cold start, sidebar collapsed to the rail","description":"Ctrl+\\ folds the sidebar to its 60 px rail: icons only, labels hidden."},
@@ -1111,7 +1119,7 @@ document.addEventListener('keydown',e=>{
   else if(def.key&&def.key(k,e,st,p)===true){e.preventDefault();return}
   const G={
    'Ctrl+K':()=>command('palette'),'Alt+G':()=>command('palette'),'Ctrl+G':()=>command('palette'),
-   'F8':()=>go(hashFor('sales-invoice'),'screen-push'),'F9':()=>go(hashFor('purchase-bill'),'screen-push'),...(AI_IN_RELEASE?{'Alt+O':()=>go(hashFor('purchase-bill','reading'),'screen-push')}:{}),
+   'F8':()=>go(hashFor('sales-invoice'),'screen-push'),'F9':()=>go(hashFor('purchase-bill'),'screen-push'),'Alt+O':()=>go(hashFor('import'),'screen-push'),...(AI_IN_RELEASE?{'Alt+O':()=>go(hashFor('purchase-bill','reading'),'screen-push')}:{}),
    'F5':()=>go(hashFor('payment'),'screen-push'),'F6':()=>go(hashFor('receipt'),'screen-push'),
    'F4':()=>toast('Contra (F4) is not drawn in this mock; it uses the payment layout.'),'F7':()=>toast('Journal (F7) is not drawn in this mock.'),
    'F2':()=>command('date'),'F3':()=>command('company'),'F12':()=>toast('F12 opens options for this screen.'),'F11':()=>toast('F11 opens company features.'),
@@ -1220,7 +1228,7 @@ function nudgeDialog(inOverlay){
 }
 
 /* ---------- palette ---------- */
-const PAL_SCREENS=[['Home','home',null,'home'],['Balance sheet','balance-sheet',null,'scale'],['Day book','day-book',null,'book'],['GSTR-1, November','gst','gstr1','gst'],['GSTR-3B working, November','gst','gstr3b','gst'],['2B and IMS reconciliation','gst','recon','gst'],['Bank reconciliation, Saptagiri','bank',null,'bank'],['Bank reconciliation statement','bank','brs','bank'],['Masters: ledgers','masters','ledgers','users'],['Masters: stock items','masters','items','users'],['Review queue','review',null,'inbox'],['Keyboard map','keys','classic','kbd'],['AI and privacy','ai-settings','local','shield'],['Company setup','setup','welcome','building'],['Outstanding receivables, ageing','ask','result','clock']];
+const PAL_SCREENS=[['Home','home',null,'home'],['Balance sheet','balance-sheet',null,'scale'],['Day book','day-book',null,'book'],['GSTR-1, November','gst','gstr1','gst'],['GSTR-3B working, November','gst','gstr3b','gst'],['2B and IMS reconciliation','gst','recon','gst'],['Bank reconciliation, Saptagiri','bank',null,'bank'],['Bank reconciliation statement','bank','brs','bank'],['Masters: ledgers','masters','ledgers','users'],['Masters: stock items','masters','items','users'],['Review queue','review',null,'inbox'],['Keyboard map','keys','classic','kbd'],['AI and privacy','ai-settings','local','shield'],['Company setup','setup','welcome','building'],['Import masters or vouchers from a file','import',null,'upload'],['Outstanding receivables, ageing','ask','result','clock']];
 const PAL_CMDS=[['New sales invoice','F8','sales-invoice'],['New purchase','F9','purchase-bill'],['New payment','F5','payment'],['New receipt','F6','receipt'],['Import bank statement','','bank:empty'],['Import 2B / IMS JSON','','gst:recon-empty'],['Export GSTR-1 JSON (offline tool format)','Ctrl+E','!export'],['Switch theme','Ctrl+Shift+L','!theme'],['Collapse side bar','Ctrl+\\','!rail'],['Back up now','','!backup']];
 function fuzzy(q,s){q=q.toLowerCase();s=s.toLowerCase();if(s.includes(q))return 2;let i=0;for(const c of s){if(c===q[i])i++;if(i===q.length)return 1}return 0}
 function hl(s,q){const i=s.toLowerCase().indexOf(q.toLowerCase());if(!q||i<0)return esc(s);return esc(s.slice(0,i))+'<mark>'+esc(s.slice(i,i+q.length))+'</mark>'+esc(s.slice(i+q.length))}
@@ -2041,7 +2049,7 @@ SCREENS.setup={title:'Company setup',default:'welcome',
   const nav=(next,label)=>`<div class="actions" style="margin-top:22px;justify-content:space-between">${i>0?`<button class="btn" data-go="${hashFor('setup',STEPS[i-1][0])}" data-tx="setup-step">Back ${kb('Esc')}</button>`:'<span></span>'}${next?`<button class="btn primary" data-go="${hashFor('setup',next)}" data-tx="setup-step" ${st==='gstin-error'?'disabled title="Fix the GSTIN first"':''}>${label||'Continue'} ${kb('Enter')}</button>`:''}</div>`;
   let pane='';
   if(st==='welcome')pane=`<h1>Welcome to Ledgerly</h1><p class="t2" style="margin:6px 0 18px">Accounting, GST and bank reconciliation on your own computer. Your books are a file you own.</p>
-   <div class="grid g2">${optCard(true,'plus','Create a company','About 3 minutes. Name, GSTIN, financial year.')}${optCard(false,'upload','Import from another accounting app','Masters and vouchers from an XML or spreadsheet export. A report shows what moved.','',hashFor('import'))}${optCard(false,'file','Open a Ledgerly file','From a backup or another computer.')}${optCard(false,'eye','Try the sample company','Godavari Drip & Pump Works, fictional data. Nothing you do there is kept.')}</div>${nav('company','Create a company')}`;
+   <div class="grid g2">${optCard(true,'plus','Create a company','About 3 minutes. Name, GSTIN, financial year.')}${optCard(false,'upload','Import from another accounting app','A whole company from a running app, or masters and vouchers from an XML file. Create the company first; a summary shows what went in.','',hashFor('import'))}${optCard(false,'file','Open a Ledgerly file','From a backup or another computer.')}${optCard(false,'eye','Try the sample company','Godavari Drip & Pump Works, fictional data. Nothing you do there is kept.')}</div>${nav('company','Create a company')}`;
   if(st==='company'||st==='gstin-error'){const bad=st==='gstin-error';const g=gstinCheck(CO.gstin);
    pane=`<h1>Your company</h1><p class="t2" style="margin:6px 0 18px">You can change all of this later except the financial year start.</p><div class="vhead" style="padding:0;border:0">
     <div class="fld span2"><label>Company name</label><input value="${esc(CO.name)}"></div><div class="fld"><label>Type</label><input value="Partnership firm"></div><div class="fld"><label>City</label><input value="Pune"></div>
@@ -2630,12 +2638,39 @@ function gstNotReady(st){
 const IMP_STEPS=['Detect','Choose company','Pull','Map','Reconcile'];
 function impNote(kind,text){const cls={bad:'bad',ok:'ok',info:''}[kind];const ico={bad:'alert',ok:'check',info:'info'}[kind];
   return `<div class="note ${cls}" role="${kind==='bad'?'alert':'status'}" style="margin-top:12px">${ic(ico)}<div style="white-space:pre-line">${esc(text)}</div></div>`}
+/* S22: import masters or vouchers from an XML file into the open company (import/file.rs). Alt+O opens the
+   screen scrolled here ("Alt+O (Import)", help.tallysolutions.com/import-data-from-xml-or-json/, read 2026-11-27).
+   The three choices for a master already in the company are those of help.tallysolutions.com/import-data-faq/;
+   none is preselected. The imported state is the app's own text for the fictional fixture of
+   crates/ledgerly-app/tests/s22_import_file.rs (Meena Fabrics, Hamali Charges, Lost Ledger), imported into the sample. */
+const IMP_FILE_PATH='/home/ananya/Documents/ledgers-from-old-app.xml';
+function impChoice(label,sel,dis){return `<button role="radio" aria-checked="${sel}" ${dis?'disabled':''} style="display:block;width:100%;text-align:left;height:36px;padding:0 12px;margin-bottom:4px;font:inherit;font-size:var(--t-body);cursor:pointer;border-radius:var(--r-s);${sel?'background:var(--accent-soft);border:calc(var(--bw) + 1px) solid var(--accent);color:var(--accent-ink);font-weight:600':'background:var(--surface);border:var(--bw) solid var(--border);color:var(--text)'}">${esc(label)}</button>`}
+function impFileCard(fs,noCo){
+  const masters = fs==='masters'||fs==='imported'||fs==='missing-choice'||fs==='error';
+  const beh = fs==='missing-choice'?'':(masters?'ignore':'');
+  const path = fs?IMP_FILE_PATH.replace('ledgers-from-old-app.xml',fs==='error'?'notes.xml':'ledgers-from-old-app.xml'):'';
+  const dis = noCo;
+  const behs=[['combine',"Combine opening balance: add the file's opening balance to the existing one"],['ignore','Ignore duplicates: keep the existing master as it is'],['modify',"Modify with new data: replace the existing master's details with the file's"]];
+  let res='';
+  if(fs==='missing-choice') res=impNote('bad','Error: choose what to do with a master that is already in the company');
+  if(fs==='error') res=impNote('bad',`Error: cannot import ${path}: malformed XML at byte 0: text outside the root element`);
+  if(fs==='imported') res=`<div class="note warn" role="status" style="margin-top:12px">${ic('alert')}<div style="white-space:pre-line">${esc('Masters: 2 created, 0 altered, 0 combined, 0 ignored, 1 not imported.\n'+path)}</div></div>
+    <div style="margin-top:12px"><b>Not imported (1)</b></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:4px"><div>ledger 'Lost Ledger'</div><div class="t2">its parent group 'No Such Group' is not in the company or the file</div></div>`;
+  return `<div class="card pad" style="margin-top:12px" id="imp-file"><h2>Import from an XML file</h2><p class="meta">Masters or vouchers from an XML file in your previous accounting app's import format, into the company that is open. Each object is checked as if typed in; anything that cannot go in is listed with the reason.</p>
+    ${noCo?`<div class="note warn" role="status" style="margin-top:8px">${ic('alert')}<div>Importing from a file needs an open company. Create or open one, then press Alt+O.</div></div>`:''}
+    <div class="fld" style="margin-top:10px"><label>What to import</label></div>
+    <div role="radiogroup" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">${impChoice('Masters (groups and ledgers)',masters,dis)}${impChoice('Transactions (vouchers)',false,dis)}</div>
+    ${masters?`<div class="fld" style="margin-top:8px"><label>When a master is already in the company</label></div><div role="radiogroup">${behs.map(([k,l])=>impChoice(l,beh===k,dis)).join('')}</div>`:''}
+    <div class="fld" style="margin-top:8px"><label>XML file</label><div style="display:flex;gap:8px"><input style="flex:1" value="${esc(path)}" placeholder="path of the XML file" ${dis?'disabled':''}><button class="btn" ${dis?'disabled':''}>${ic('file')}Choose file ${kb('Ctrl+O')}</button></div></div>
+    <div class="actions" style="margin-top:10px"><button class="btn primary" ${dis?'disabled':''}>${ic('upload')}Import the file</button></div>${res}</div>`;
+}
 SCREENS.import={title:'Import from another app',default:'default',
  render(st){
   const noCo = st==='no-company';
   const running = st==='running';
   const f = {host:'localhost',port:'9000',company:'Godavari Drip & Pump Works'};
-  if(st==='default'||noCo||st==='validation-error'){f.company='';}
+  if(st==='default'||noCo||st==='validation-error'||st.startsWith('file-')){f.company='';}
   if(st==='port-error') f.port='99999';
   const vc={}; VOUCHERS.forEach(v=>{vc[v.type]=(vc[v.type]||0)+1});
   const sumText=[`Imported from the other program's company "${f.company}": ${VOUCHERS.length+LEDGERS.length} events committed.`,
@@ -2656,6 +2691,8 @@ SCREENS.import={title:'Import from another app',default:'default',
      <div class="fld"><label>Port</label><input class="num" value="${f.port}" ${dis}></div>
      <div class="fld"><label>Company in the other app</label><input value="${esc(f.company)}" placeholder="its exact name" ${dis}></div></div>
     <div class="actions" style="margin-top:12px"><button class="btn primary" ${noCo||running?'disabled':''}>${ic('upload')}Import the company ${kb('Enter')}</button></div>${note}</div>`;
+  const fileSt = st.startsWith('file-')?st.slice(5):'';
+  const fileCard = impFileCard(fileSt, noCo);
   const detect = `<div class="card pad" style="margin-top:12px"><h2>Step by step, with a report</h2><p class="meta">Ledgerly looks for a running app on this computer, port 9000, or reads an XML file exported from your previous accounting app. Nothing is sent anywhere else.</p>
     <div class="actions" style="margin-top:10px"><button class="btn" disabled>Look for a running app</button></div>
     <div class="fld" style="margin-top:12px"><label>Exported XML file</label><input placeholder="path of the exported file" disabled></div>
@@ -2663,11 +2700,12 @@ SCREENS.import={title:'Import from another app',default:'default',
     ${impNote('info','Not available yet: the step-by-step import and its reconciliation report are not connected to the app. Use the one-step import above.')}</div>`;
   const steps=`<ol style="display:flex;flex-wrap:wrap;gap:18px;list-style:none;padding:0;margin:0 0 14px" aria-label="Import steps">${IMP_STEPS.map((l,n)=>`<li class="${n===0?'':'t2'}" ${n===0?'aria-current="step"':''}><b>${n+1}</b> ${l}</li>`).join('')}</ol>`;
   return phead([['Home',hashFor('home')],['Import from another app']],'Import from another app','Bring your masters and vouchers in from another accounting app. Everything is read on this computer, and a report shows what moved.')
-   + steps + noCoBlock + direct + detect;
+   + steps + noCoBlock + direct + fileCard + detect;
  },
  key(k){return false},
  back(){return hashFor('setup','welcome')},
- keys(st){return st==='running'?[['','Importing'],['Esc','Back']]:[['','Import from another app'],['Enter','Import the company'],['Esc','Back']]}
+ keys(st){return st==='running'?[['','Importing'],['Esc','Back']]:[['','Import from another app'],['Enter','Import the company'],['Ctrl+O','Choose file'],['Esc','Back']]},
+ mount(st){if(st==='file-masters'||st==='file-imported'||st==='file-missing-choice'||st==='file-error'){const h=$('#imp-file');h&&h.scrollIntoView({block:'start'})}}
 };
 
 /* the tab strip (shell/chrome.rs): the open tabs, the active one underlined, New tab and Close tab at the right.

@@ -853,8 +853,9 @@ impl Shell {
     }
 
     /// The keys that open a new voucher form from any screen of an open company: contra, journal,
-    /// purchase, credit note and debit note. Payment, receipt and sales keep their own handling
-    /// on the screens that offer them. Runs after the screen, so a screen that owns a chord
+    /// purchase, credit note and debit note, and Alt+O ([`Self::import_key_cmd`], which also
+    /// works with no company open). Payment, receipt and sales keep their own handling on the
+    /// screens that offer them. Runs after the screen, so a screen that owns a chord
     /// (Home's F9) has already consumed it.
     fn voucher_key_cmds(&self, ui: &egui::Ui) -> Vec<ChromeCmd> {
         const OPENERS: [Action; 5] = [
@@ -864,11 +865,12 @@ impl Shell {
             Action::NewCreditNote,
             Action::NewDebitNote,
         ];
+        let import = self.import_key_cmd(ui);
         if self.app_ctx.api.is_none() || self.palette.is_open() {
-            return Vec::new();
+            return import.into_iter().collect();
         }
         let text_focused = ui.ctx().text_edit_focused();
-        let mut cmds = Vec::new();
+        let mut cmds: Vec<ChromeCmd> = import.into_iter().collect();
         ui.input_mut(|i| {
             for action in OPENERS {
                 if self
@@ -881,6 +883,24 @@ impl Shell {
             }
         });
         cmds
+    }
+
+    /// Alt+O opens the import screen at the import from a file ("Alt+O (Import)",
+    /// <https://help.tallysolutions.com/import-data-from-xml-or-json/>, read 2026-11-27). Runs
+    /// after the screen, so a screen that owns Alt+O (the purchase's bill photo) keeps it. On the
+    /// import screen itself it does nothing: the screen is already there.
+    fn import_key_cmd(&self, ui: &egui::Ui) -> Option<ChromeCmd> {
+        if self.palette.is_open() {
+            return None;
+        }
+        let on_import = self
+            .tabs
+            .active_stack()
+            .is_some_and(|stack| stack.top_title(&self.tr) == self.tr.t("import.title"));
+        let pressed = ui.input_mut(|i| i.consume_key(Modifiers::ALT, Key::O));
+        (pressed && !on_import).then(|| {
+            ChromeCmd::OpenOnTop(PaletteTarget::Report(navigate::IMPORT_FILE_KEY.to_owned()))
+        })
     }
 
     fn run_cmd(&mut self, cmd: ChromeCmd) {

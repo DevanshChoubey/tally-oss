@@ -882,6 +882,11 @@ enum ScriptedFile {
     /// The sample's November 2B file with another company's GSTIN as its recipient, so the engine
     /// refuses it (the mock's `recon-error`).
     TwoBForAnotherGstin,
+    /// The fictional masters file of `tests/s22_import_file.rs`: two new ledgers and one whose
+    /// group is in neither the company nor the file (the mock's `import.file-imported`).
+    LedgersFromOldApp,
+    /// A text file that is not XML (the mock's `import.file-error`).
+    NotXml,
 }
 
 impl ScriptedFile {
@@ -914,9 +919,27 @@ impl ScriptedFile {
                 std::fs::write(&path, other).unwrap();
                 path
             }
+            ScriptedFile::LedgersFromOldApp => {
+                let path = dir.join("ledgers-from-old-app.xml");
+                std::fs::write(&path, LEDGERS_FROM_OLD_APP).unwrap();
+                path
+            }
+            ScriptedFile::NotXml => {
+                let path = dir.join("notes.xml");
+                std::fs::write(&path, "this is not xml").unwrap();
+                path
+            }
         }
     }
 }
+
+/// The masters file of [`ScriptedFile::LedgersFromOldApp`], as in `tests/s22_import_file.rs`.
+const LEDGERS_FROM_OLD_APP: &str = r#"<ENVELOPE><HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER><BODY><IMPORTDATA>
+<REQUESTDESC><REPORTNAME>All Masters</REPORTNAME></REQUESTDESC><REQUESTDATA>
+<TALLYMESSAGE><LEDGER NAME="Meena Fabrics" ACTION="Create"><NAME>Meena Fabrics</NAME><PARENT>Sundry Debtors</PARENT></LEDGER></TALLYMESSAGE>
+<TALLYMESSAGE><LEDGER NAME="Hamali Charges" ACTION="Create"><NAME>Hamali Charges</NAME><PARENT>Indirect Expenses</PARENT></LEDGER></TALLYMESSAGE>
+<TALLYMESSAGE><LEDGER NAME="Lost Ledger" ACTION="Create"><NAME>Lost Ledger</NAME><PARENT>No Such Group</PARENT></LEDGER></TALLYMESSAGE>
+</REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>"#;
 
 /// What the screen a flow reached must be. The harness waits for it to settle, then panics with
 /// what was shown instead.
@@ -2188,6 +2211,47 @@ fn s13_shots() -> Vec<Shot> {
             .press(&[(Key::Enter, NONE)])
             .wait(60)
             .expect_in("Import from another app", "Import from another app", "Error: could not import \"Godavari Drip & Pump Works\" from the other app at localhost:9000: The other program is not running or not accepting connections on port 9000"),
+        // S22: Alt+O on the sample company opens the import screen at the import from a file.
+        shot("import.file-masters", &[(Key::O, Modifiers::ALT)])
+            .click_named("Masters (groups and ledgers)")
+            .click_named("Ignore duplicates: keep the existing master as it is")
+            .script_file(ScriptedFile::LedgersFromOldApp)
+            .press(&[(Key::O, Modifiers::COMMAND)])
+            .expect_in(
+                "Import from another app",
+                "Import from another app",
+                "Import in one step",
+            ),
+        shot("import.file-missing-choice", &[(Key::O, Modifiers::ALT)])
+            .click_named("Masters (groups and ledgers)")
+            .script_file(ScriptedFile::LedgersFromOldApp)
+            .press(&[(Key::O, Modifiers::COMMAND)])
+            .click_named("Import the file")
+            .wait(20)
+            .expect_in(
+                "Import from another app",
+                "Import from another app",
+                "Error: choose what to do with a master that is already in the company",
+            ),
+        shot("import.file-imported", &[(Key::O, Modifiers::ALT)])
+            .click_named("Masters (groups and ledgers)")
+            .click_named("Ignore duplicates: keep the existing master as it is")
+            .script_file(ScriptedFile::LedgersFromOldApp)
+            .press(&[(Key::O, Modifiers::COMMAND)])
+            .click_named("Import the file")
+            .wait(60)
+            .expect_in(
+                "Import from another app",
+                "Import from another app",
+                "Masters: 2 created, 0 altered, 0 combined, 0 ignored, 1 not imported.",
+            ),
+        shot("import.file-error", &[(Key::O, Modifiers::ALT)])
+            .click_named("Masters (groups and ledgers)")
+            .click_named("Ignore duplicates: keep the existing master as it is")
+            .script_file(ScriptedFile::NotXml)
+            .press(&[(Key::O, Modifiers::COMMAND)])
+            .click_named("Import the file")
+            .wait(60),
         // Right from Create is the Import card (never Down, which reaches Open).
         shot(
             "import.no-company",

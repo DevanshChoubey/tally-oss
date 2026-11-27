@@ -50,8 +50,9 @@ fn enter_runs_the_import_with_the_form_as_filled() {
 
 #[test]
 fn the_key_bar_offers_enter_to_import_and_esc_to_go_back() {
-    // provenance: index.html:2463 (the empty-keys entry is the bar's name): [['','Import from another app'],['Enter','Import the company'],
-    // ['Esc','Back']].
+    // provenance: the mock's `SCREENS.import.keys` (design/mock-v2/index.html; the empty-keys entry
+    // is the bar's name): [['','Import from another app'],['Enter','Import the company'],
+    // ['Ctrl+O','Choose file'],['Esc','Back']]. Ctrl+O chooses the XML file (S22).
     let s = ImportScreen::new(date!(2026 - 11 - 21)).unwrap();
     let keys: Vec<(String, String)> = s
         .keys(&ledgerly_app::i18n::Tr::default())
@@ -62,6 +63,7 @@ fn the_key_bar_offers_enter_to_import_and_esc_to_go_back() {
         keys,
         [
             ("Enter".to_owned(), "Import the company".to_owned()),
+            ("Ctrl+O".to_owned(), "Choose file".to_owned()),
             ("Esc".to_owned(), "Back".to_owned()),
         ]
     );
