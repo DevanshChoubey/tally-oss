@@ -135,16 +135,9 @@ fn tax(i: i64, c: i64, s: i64, cess: i64) -> Gstr3bTaxAmounts {
     }
 }
 
-#[test]
-fn the_3b_table_places_the_engines_figures_in_the_mocks_rows() {
-    // provenance: index.html:1680-1684: the 3.1(a) row with its taxable value and tax heads and
-    // the provenance chip "sales vouchers", then the "4 Eligible ITC" sub-heading and the indented
-    // "In your books" row with the chip "purchase vouchers". Derived: the engine's credit that is
-    // not claimable (`Gstr3bWorking::itc_not_claimable`) follows as its own indented row, since the
-    // engine keeps it apart from 4(A)(5). The mock's IMS, deemed, 6.1 and cash rows have no engine
-    // figure (engine items E-1 and E-3) and are not drawn. Cess stays as a column because the
-    // engine has a figure for it. Every amount is the working's own; nothing is added.
-    let w = Gstr3bWorking {
+/// The working of the 3B table test: every row has its own figure.
+fn working_with_every_row() -> Gstr3bWorking {
+    Gstr3bWorking {
         gstin: gstin(),
         period: Period::new(date!(2026 - 11 - 01), date!(2026 - 11 - 30)).unwrap(),
         pack_version: "2026.1".to_owned(),
@@ -154,14 +147,36 @@ fn the_3b_table_places_the_engines_figures_in_the_mocks_rows() {
         itc_all_other: tax(2_952_000, 0, 0, 1_000),
         itc_vouchers: Vec::new(),
         itc_not_claimable: tax(0, 9_000, 9_000, 0),
-        outward_nil_exempt_value: Paise::ZERO,
-        outward_non_gst_value: Paise::ZERO,
+        outward_nil_exempt_value: Paise::new(40_000),
+        outward_non_gst_value: Paise::new(70_000),
         other_outward_vouchers: vec![],
         reverse_charge_purchases: Vec::new(),
-        inward_reverse_charge: Outcome::Value(InwardReverseCharge::default()),
-        itc_reverse_charge: Outcome::Value(ItcReverseCharge::default()),
+        inward_reverse_charge: Outcome::Value(InwardReverseCharge {
+            taxable_value: Paise::new(500_000),
+            tax: tax(0, 45_000, 45_000, 0),
+            ..InwardReverseCharge::default()
+        }),
+        itc_reverse_charge: Outcome::Value(ItcReverseCharge {
+            itc: tax(0, 45_000, 45_000, 0),
+            ..ItcReverseCharge::default()
+        }),
         comparison: None,
-    };
+    }
+}
+
+#[test]
+fn the_3b_table_places_the_engines_figures_in_the_mocks_rows() {
+    // provenance: index.html, state gst.gstr3b: the 3.1(a) row with its taxable value and tax
+    // heads and the provenance chip "sales vouchers"; 3.1(c) and 3.1(e) with a value and blank tax
+    // cells (the GSTR-3B form has no tax columns there, GSTN GSTR-3B manual
+    // https://tutorial.gst.gov.in/userguide/returns/GSTR3B.htm, read 2026-11-28); 3.1(d) with
+    // value and tax; then the "4 Eligible ITC" sub-heading, the indented 4(A)(3) row and the
+    // indented "In your books" row with the chip "purchase vouchers". Derived: the engine's credit that is
+    // not claimable (`Gstr3bWorking::itc_not_claimable`) follows as its own indented row, since the
+    // engine keeps it apart from 4(A)(5). The mock's IMS, deemed, 6.1 and cash rows have no engine
+    // figure (engine items E-1 and E-3) and are not drawn. Cess stays as a column because the
+    // engine has a figure for it. Every amount is the working's own; nothing is added.
+    let w = working_with_every_row();
     assert_eq!(
         look::gstr3b_lines(&w),
         vec![
@@ -177,7 +192,41 @@ fn the_3b_table_places_the_engines_figures_in_the_mocks_rows() {
                     Paise::ZERO
                 ],
             },
+            Line3b::ValueOnly {
+                label: "3.1(c) Nil rated and exempted",
+                source: Some("sales vouchers"),
+                value: Paise::new(40_000),
+            },
+            Line3b::Row {
+                label: "3.1(d) Inward supplies liable to reverse charge",
+                source: Some("purchase vouchers"),
+                indent: false,
+                taxable: Some(Paise::new(500_000)),
+                tax: [
+                    Paise::ZERO,
+                    Paise::new(45_000),
+                    Paise::new(45_000),
+                    Paise::ZERO
+                ],
+            },
+            Line3b::ValueOnly {
+                label: "3.1(e) Non-GST outward supplies",
+                source: Some("sales vouchers"),
+                value: Paise::new(70_000),
+            },
             Line3b::Sub("4 Eligible ITC"),
+            Line3b::Row {
+                label: "Reverse charge, 4(A)(3)",
+                source: Some("purchase vouchers"),
+                indent: true,
+                taxable: None,
+                tax: [
+                    Paise::ZERO,
+                    Paise::new(45_000),
+                    Paise::new(45_000),
+                    Paise::ZERO
+                ],
+            },
             Line3b::Row {
                 label: "In your books",
                 source: Some("purchase vouchers"),
@@ -202,6 +251,52 @@ fn the_3b_table_places_the_engines_figures_in_the_mocks_rows() {
                     Paise::ZERO
                 ],
             },
+        ]
+    );
+}
+
+#[test]
+fn a_reverse_charge_table_the_engine_cannot_work_out_is_left_out_of_the_table() {
+    // provenance: derived (rule "never a wrong number"): an `Unsupported` 3.1(d) or 4(A)(3) has no
+    // figure to draw, so the row is not drawn; the reason is a note under the table (worker.rs,
+    // `reverse_charge_figures`). A blank row would read as nil.
+    let w = Gstr3bWorking {
+        gstin: gstin(),
+        period: Period::new(date!(2026 - 11 - 01), date!(2026 - 11 - 30)).unwrap(),
+        pack_version: "2026.1".to_owned(),
+        outward_taxable_value: Paise::ZERO,
+        outward_tax: tax(0, 0, 0, 0),
+        outward_vouchers: Vec::new(),
+        itc_all_other: tax(0, 0, 0, 0),
+        itc_vouchers: Vec::new(),
+        itc_not_claimable: tax(0, 0, 0, 0),
+        outward_nil_exempt_value: Paise::ZERO,
+        outward_non_gst_value: Paise::ZERO,
+        other_outward_vouchers: vec![],
+        reverse_charge_purchases: Vec::new(),
+        inward_reverse_charge: Outcome::unsupported("reverse charge", "test"),
+        itc_reverse_charge: Outcome::unsupported("reverse charge", "test"),
+        comparison: None,
+    };
+    let labels: Vec<&str> = look::gstr3b_lines(&w)
+        .iter()
+        .map(|l| match l {
+            Line3b::Sub(label)
+            | Line3b::SubSourced { label, .. }
+            | Line3b::Row { label, .. }
+            | Line3b::ValueOnly { label, .. }
+            | Line3b::Total { label, .. } => *label,
+        })
+        .collect();
+    assert_eq!(
+        labels,
+        vec![
+            "3.1(a) Outward taxable supplies",
+            "3.1(c) Nil rated and exempted",
+            "3.1(e) Non-GST outward supplies",
+            "4 Eligible ITC",
+            "In your books",
+            "Blocked or ineligible, not claimed",
         ]
     );
 }

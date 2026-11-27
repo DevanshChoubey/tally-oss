@@ -174,13 +174,6 @@ notifications were read on CBIC's tax information portal on 2026-11-27.
   (help.tallysolutions.com/tally-prime/gst-reverse-charge-transactions/india-gst-inward-supply-rcm-tally/,
   read 2026-11-27). Unmarked, a registered supplier's invoice that charges tax is taken as the
   supplier's forward charge; unmarked with no tax charged is Unsupported.
-- **NOT BUILT** the `gst.gstr3b` screen does not draw tables 3.1(c), 3.1(d), 3.1(e) and 4(A)(3)
-  yet: the engine works them out (`Gstr3bWorking::outward_nil_exempt_value`,
-  `outward_non_gst_value`, `inward_reverse_charge`, `itc_reverse_charge`) and
-  `ledgerly export gstr3b` prints them, but the mock state has no rows for them, so the screen waits
-  for a mock round (mock first). Round s23 drew the rows into the mock, but headless Chrome exits with SIGTRAP in
-  that round's shell, so `capture.mjs` could not refresh the captures and the mock change was not
-  kept.
 - **NOT BUILT** table 3.1(b) (zero-rated: exports, GSTR-1 6A, and SEZ supplies, 6B): voucher tax
   (`compute`) refuses overseas and SEZ recipients, so a period with one stays `Unsupported`. It
   needs the IGST Act s.16 and place-of-supply rules for exports of services, not yet read.
@@ -231,18 +224,38 @@ notifications were read on CBIC's tax information portal on 2026-11-27.
   Rule 7 central tax for a category and turnover and the Rule 62 due dates (30 June from FY 2024-25,
   30 April before). Engine-only. The company has no composition category, voucher tax refuses
   composition, the State/UT half of the levy is `Unsupported` (State GST and UTGST rules not read),
-  extended due dates are not modelled, and FORM GST CMP-08 and FORM GSTR-4 would not download from
-  CBIC (2026-11-28), so no statement layout, screen or export exists.
+  extended due dates are not modelled. FORM GST CMP-08 and FORM GSTR-4 would not download from CBIC
+  (2026-11-28); the GST portal's GSTR-4 manual
+  (tutorial.gst.gov.in/userguide/returns/manual_GSTR4annual.htm, read 2026-11-28) gives the annual
+  return's tables (4A registered non-RC, 4B registered RC, 4C unregistered, 4D import of services,
+  5 CMP-08 summary, 6 rate-wise RC inward and outward, 7 TDS/TCS), but tables 4 and 6 need rate-wise
+  values of a composition company's purchases and sales, which voucher tax refuses. No CMP-08
+  manual page was found on tutorial.gst.gov.in (Manual_CMP08.htm and CMP08.htm are 404), and the
+  state copy statetax.goa.gov.in/PDF/gst_forms/Return.pdf holds the 2017 forms (quarterly GSTR-4,
+  no CMP-08). So no statement, screen or export exists.
 - **NOT BUILT** GSTR-1 gaps of blocker 2: 6A exports and 6B SEZ supplies (voucher tax refuses
   zero-rated recipients), CDNUR and Table 7 note adjustments (a note does not name its original
   invoice), 11A/11B advances (no data shape), amendments (9A, 9C, 10, 11), e-commerce Tables 14/15
-  (no operator on a voucher), and the Table 12 B2B/B2C split. The GST portal's GSTR-1 manual
-  (tutorial.gst.gov.in/userguide/returns/Creation_of_Outward_Supplies_Return_in_GSTR-1.htm, read
-  2026-11-28) shows the two tabs "From May'25 Onwards" but does not say which supplies go in each,
-  and the GSTN advisory of 1 May 2025 could not be fetched. The GSTR-1 JSON keys are still not checked
-  against a GSTN offline-tool sample (see `ledgerly-gst-formats` gstr1.rs).
+  (no operator on a voucher), and the Table 12 B2B/B2C split. The split is now sourced: GSTN's
+  advisory "Reporting of HSN codes in Table 12 of GSTR-1/1A"
+  (tutorial.gst.gov.in/downloads/news/updated_advisory_hsn_table12_25042025.pdf, read 2026-11-28;
+  also mahagst.gov.in's copy) says that from the May 2025 return period Table 12 has "B2B Supplies"
+  and "B2C Supplies" tabs, B2B checked against 4A, 4B, 6B, 6C, 8 (registered), 9A/9B/9C
+  (registered), 15/15A (registered) and B2C against 5A, 6A, 7A, 7B, 8 (unregistered), 9A (export,
+  B2CL), 9B/9C (unregistered), 10, 15/15A (unregistered). Not built because the `Gstr1` data shape
+  holds one HSN table and the offline-tool JSON keys of the two tabs were not read; the engine's
+  one combined Table 12 is therefore not the post-May 2025 layout. The GSTR-1 manual
+  (tutorial.gst.gov.in/userguide/returns/Creation_of_Outward_Supplies_Return_in_GSTR-1.htm, read in
+  full 2026-11-28) names the tabs without the mapping, and gives Table 14's two tabs (s.52 TCS and
+  s.9(5)). The GSTR-1 JSON keys are still not checked against a GSTN offline-tool sample (see
+  `ledgerly-gst-formats` gstr1.rs).
 - **NOT BUILT** GSTR-9 and GSTR-9C working data: Rule 80 was read, but FORM GSTR-9 and FORM GSTR-9C
-  would not download from CBIC (2026-11-28), so their table layout has no source here.
+  would not download from CBIC (2026-11-28; content/pdf rejected by the site's firewall). The GST
+  portal's GSTR-9 manual (tutorial.gst.gov.in/userguide/returns/Manual_gstr9.htm, read 2026-11-28)
+  names tables 4 to 19 but shows their rows (4A-4N, 5A-5N, 6A1/A2, 7A1/A2, 8H1 from FY 2024-25)
+  only as screenshots, so the rows' contents have no text source. No GSTR-9C manual page was found
+  (Manual_gstr9c.htm is 404), and the state copy statetax.goa.gov.in/PDF/gst_forms/Return.pdf holds
+  the 2017 forms only (no GSTR-9 or 9C). comtax.wb.gov.in did not answer.
 - **DELIBERATE** the create ledger form has one row more than the mock's compact one: a "More
   details: opening balance, party, bank and tax" link that opens the rest of the ledger master the
   help page "Ledgers" describes (help.tallysolutions.com/ledgers-in-tally/, read 2026-11-21); the
