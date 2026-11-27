@@ -350,6 +350,42 @@ fn evaluate(
     Ok(Outcome::Value(RcmLiability::Payable(payable)))
 }
 
+/// For a purchase that is **not** marked reverse charge, from a supplier the caller treats as a
+/// forward-charge supplier: the id of a notified class its taxable lines match when the voucher
+/// posts no GST, so the supply may be under reverse charge and a forward-charge credit computed
+/// from the rates could be a wrong number. `None` when the voucher charges tax (the supplier's
+/// forward charge, see the module docs), when no line matches a class, or when `rules` has no
+/// `rcm.classes` entry on its date (a pack without the list; the caller must say so).
+///
+/// `rules` is selected for the voucher's date: the class index only tells whether a class could
+/// apply, never the tax.
+///
+/// # Errors
+/// As [`reverse_charge`].
+pub(crate) fn unmarked_class_match(
+    v: &Voucher,
+    masters: &Masters,
+    rules: &RuleSet,
+) -> Result<Outcome<Option<String>>, GstError> {
+    if !rules.has(INDEX_ID) {
+        return Ok(Outcome::Value(None));
+    }
+    if supported!(charged_tax(v, masters)?).any {
+        return Ok(Outcome::Value(None));
+    }
+    let taxable: Vec<Base> = supported!(collect_bases(v, masters, rules.date())?)
+        .into_iter()
+        .filter(|b| is_taxable(b.taxability))
+        .collect();
+    if taxable.is_empty() {
+        return Ok(Outcome::Value(None));
+    }
+    let classes = supported!(load_classes(rules)?);
+    Ok(Outcome::Value(
+        supported!(match_class(&taxable, &classes)).map(|c| c.id.clone()),
+    ))
+}
+
 /// `NotApplicable`, unless the user marked the voucher as reverse charge: then the mark and the
 /// pack disagree and the answer is `Unsupported`.
 fn not_applicable(v: &Voucher, reason: NoRcmReason) -> Outcome<RcmLiability> {
@@ -793,7 +829,9 @@ fn recipient_covered(class: &Class, company: &Company) -> Outcome<bool> {
         Recipient::BodyCorporate => body_corporate(company.entity_kind),
         Recipient::BodyCorporateOrPartnership => match company.entity_kind {
             EntityKind::Llp | EntityKind::Partnership => Outcome::Value(true),
-            other => body_corporate(other),
+            kind @ (EntityKind::Company | EntityKind::Proprietorship | EntityKind::Other) => {
+                body_corporate(kind)
+            }
         },
     }
 }

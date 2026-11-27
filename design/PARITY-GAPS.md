@@ -174,6 +174,25 @@ notifications were read on CBIC's tax information portal on 2026-11-27.
   (help.tallysolutions.com/tally-prime/gst-reverse-charge-transactions/india-gst-inward-supply-rcm-tally/,
   read 2026-11-27). Unmarked, a registered supplier's invoice that charges tax is taken as the
   supplier's forward charge; unmarked with no tax charged is Unsupported.
+- **NOT BUILT** the `gst.gstr3b` screen does not draw tables 3.1(d) and 4(A)(3) yet: the engine
+  works them out (`Gstr3bWorking::inward_reverse_charge`, `itc_reverse_charge`) and
+  `ledgerly export gstr3b` prints them, but the mock state has no rows for them, so the screen waits
+  for a mock round (mock first).
+- **NOT BUILT** table 6.1 (payment of tax) for a period with reverse-charge purchases: their tax
+  is paid in cash (s.49(4) with s.2(82)) and their credit may be in the 2B file as reverse-charge
+  documents, whose IMS handling was not read; the payment stays `Unsupported` for such a period.
+- **NOT BUILT** the self-invoice (s.31(3)(f), Rule 46 particulars) and payment voucher (s.31(3)(g),
+  Rule 52) as documents: the engine says which is due and the Rule 47A last day
+  (`ledgerly_gst::rcm_documents`), engine-only; no voucher type, numbering or print exists. A
+  receipt before 1 November 2024 has no known limit (Rule 47A starts then) and is `Unsupported`.
+- **DELIBERATE** a reverse-charge purchase needs its supply date (the s.13(3) time of supply: the
+  payment, the 61st day after the invoice, or the recipient's invoice date from the Finance (No. 2)
+  Act, 2024); without it 3.1(d) and 4(A)(3) are `Unsupported` when the voucher is dated in the
+  period or the 61 days before it. The commencement date of s.13(3)(c) was not read, so the engine
+  does not work the date out itself.
+- **FIX** when the pack has no `rcm.classes` entry on a purchase's date (before 18 July 2022), an
+  unmarked purchase from a registered supplier that posts no GST still gets a 4(A)(5) credit
+  computed from its rates, as before this round.
 - **NOT BUILT** a recipient that is an LLP for a class naming a body corporate (sl.15), or a trust,
   society or HUF for a class naming a body corporate or firm: whether either is a "body corporate"
   under Companies Act s.2(11) is not settled from the sources read, so it is Unsupported.

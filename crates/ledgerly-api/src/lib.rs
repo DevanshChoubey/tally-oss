@@ -87,7 +87,8 @@ pub use day_book_meta::EntryOrigin;
 pub use error::ApiError;
 pub use facade::Api;
 pub use gst::{
-    Bucket, BucketedVoucher, Gstr1, Gstr1Return, Gstr3bTaxAmounts, Gstr3bWorking, RulePack,
+    Bucket, BucketedVoucher, Gstr1, Gstr1Return, Gstr3bTaxAmounts, Gstr3bWorking,
+    InwardReverseCharge, ItcReverseCharge, RulePack,
 };
 pub use gstr1_sections::{Gstr1Section, TaxableAgreement};
 pub use gstr3b_payment::{Gstr3bPayment, HomeGst};

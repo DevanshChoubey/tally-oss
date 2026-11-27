@@ -13,11 +13,11 @@
 )]
 
 use egui::{Event, Key, Modifiers, RawInput};
-use ledgerly_api::{Gstr3bTaxAmounts, Gstr3bWorking};
+use ledgerly_api::{Gstr3bTaxAmounts, Gstr3bWorking, InwardReverseCharge, ItcReverseCharge};
 use ledgerly_app::screens::gst::look::{self, Line3b};
 use ledgerly_app::screens::gst::{Bucket, ExceptionItem, Feed, GstScreen, GstTab};
 use ledgerly_app::{AppCtx, Screen, ScreenAction};
-use ledgerly_core::{Gstin, Paise, Period, StateCode, VoucherId, gstin_check_character};
+use ledgerly_core::{Gstin, Outcome, Paise, Period, StateCode, VoucherId, gstin_check_character};
 use time::macros::date;
 
 fn gstin() -> Gstin {
@@ -155,6 +155,8 @@ fn the_3b_table_places_the_engines_figures_in_the_mocks_rows() {
         itc_vouchers: Vec::new(),
         itc_not_claimable: tax(0, 9_000, 9_000, 0),
         reverse_charge_purchases: Vec::new(),
+        inward_reverse_charge: Outcome::Value(InwardReverseCharge::default()),
+        itc_reverse_charge: Outcome::Value(ItcReverseCharge::default()),
         comparison: None,
     };
     assert_eq!(

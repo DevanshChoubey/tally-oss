@@ -228,14 +228,18 @@ fn run(v: &Voucher, kind: EntityKind) -> Outcome<RcmLiability> {
 fn payable(v: &Voucher, kind: EntityKind) -> RcmPayable {
     match run(v, kind) {
         Outcome::Value(RcmLiability::Payable(p)) => p,
-        other => panic!("expected Payable, got {other:?}"),
+        other @ (Outcome::Value(RcmLiability::NotApplicable(_)) | Outcome::Unsupported(_)) => {
+            panic!("expected Payable, got {other:?}")
+        }
     }
 }
 
 fn not_applicable(v: &Voucher, kind: EntityKind) -> NoRcmReason {
     match run(v, kind) {
         Outcome::Value(RcmLiability::NotApplicable(r)) => r,
-        other => panic!("expected NotApplicable, got {other:?}"),
+        other @ (Outcome::Value(RcmLiability::Payable(_)) | Outcome::Unsupported(_)) => {
+            panic!("expected NotApplicable, got {other:?}")
+        }
     }
 }
 

@@ -29,7 +29,9 @@ use crate::error::ApiError;
 use crate::facade::Api;
 
 pub use ledgerly_gst::gstr1::{Bucket, BucketedVoucher};
-pub use ledgerly_gst::gstr3b::{Gstr3bTaxAmounts, Gstr3bWorking};
+pub use ledgerly_gst::gstr3b::{
+    Gstr3bTaxAmounts, Gstr3bWorking, InwardReverseCharge, ItcReverseCharge,
+};
 pub use ledgerly_gst::pack::{RulePack, load_pack};
 pub use ledgerly_gst_formats::gstr1::Gstr1;
 
@@ -41,6 +43,10 @@ pub(crate) const BUNDLED_RATE_PACK: &str =
 /// threshold and the s.17(5) blocked-credit headings. Merged with the slab pack.
 pub(crate) const BUNDLED_RULES_PACK: &str =
     include_str!("../../ledgerly-gst/packs/gstr-rules.toml");
+
+/// The notified reverse-charge classes bundled with the application (`rcm.toml`: 13/2017-CT(R) and
+/// 10/2017-IT(R) as amended). Merged with the slab and rules packs.
+pub(crate) const BUNDLED_RCM_PACK: &str = include_str!("../../ledgerly-gst/packs/rcm.toml");
 
 /// A GSTR-1 return with the bucket of every in-period voucher.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -72,7 +78,9 @@ fn is_settled(bucket: Bucket) -> bool {
 /// # Errors
 /// [`ApiError::Gst`] when the bundled pack does not load (a build defect).
 pub(crate) fn bundled_pack() -> Result<RulePack, ApiError> {
-    Ok(load_pack(BUNDLED_RATE_PACK)?.merge(&load_pack(BUNDLED_RULES_PACK)?)?)
+    Ok(load_pack(BUNDLED_RATE_PACK)?
+        .merge(&load_pack(BUNDLED_RULES_PACK)?)?
+        .merge(&load_pack(BUNDLED_RCM_PACK)?)?)
 }
 
 /// Why a return is not complete, as an `Unsupported` that names the vouchers left out.
