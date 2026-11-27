@@ -111,7 +111,7 @@ fn is_bank_ledger(books: &Books, ledger: LedgerId) -> Result<bool, BankError> {
         .ledgers
         .get(&ledger)
         .ok_or_else(|| invalid("bank ledger", format!("ledger {} does not exist", ledger.0)))?;
-    let mut next = Some(l.group);
+    let mut next = l.group;
     // Bounded walk: a parent cycle in bad data cannot loop forever.
     for _ in 0..=books.masters.groups.len() {
         let Some(gid) = next else {

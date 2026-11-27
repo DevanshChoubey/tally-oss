@@ -72,7 +72,7 @@ fn a_new_company_starts_with_the_predefined_cash_ledger() {
     assert_eq!(ledgers.len(), 1, "{ledgers:?}");
     let cash = ledgers[0];
     assert_eq!(cash.name, "Cash");
-    assert_eq!(cash.group, cash_in_hand);
+    assert_eq!(cash.group, Some(cash_in_hand));
     assert_eq!(cash.reserved, Some(ReservedLedger::Cash));
     assert_eq!(cash.opening, SignedAmount::dr(Paise::ZERO));
     assert_eq!(cash.bill_wise, None);

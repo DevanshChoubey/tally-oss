@@ -80,7 +80,7 @@ fn names(books: &Books, items: &[PickerItem]) -> Vec<(String, bool)> {
         .filter_map(|item| match item {
             PickerItem::Ledger(hit) => {
                 let ledger = books.masters.ledgers.get(&hit.id).unwrap();
-                Some((hit.name.clone(), under_cash_bank(books, Some(ledger.group))))
+                Some((hit.name.clone(), under_cash_bank(books, ledger.group)))
             }
             PickerItem::Create { .. } => None,
         })

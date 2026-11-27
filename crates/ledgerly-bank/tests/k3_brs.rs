@@ -43,7 +43,7 @@ fn ledger(id: LedgerId, bank: bool, opening: SignedAmount) -> Ledger {
         id,
         name: format!("Fictional ledger {}", id.0),
         aliases: Vec::new(),
-        group: GroupId(1),
+        group: Some(GroupId(1)),
         opening,
         bill_wise: None,
         cost_centres_applicable: false,

@@ -194,7 +194,7 @@ pub fn delete_group(id: GroupId, books: &Books) -> Result<Outcome<Vec<Event>>, E
             by: format!("sub-group '{}'", child.name),
         });
     }
-    if let Some(ledger) = books.masters.ledgers.values().find(|l| l.group == id) {
+    if let Some(ledger) = books.masters.ledgers.values().find(|l| l.group == Some(id)) {
         return Err(EngineError::InUseByMaster {
             what: format!("group '{}'", group.name),
             by: format!("ledger '{}'", ledger.name),
@@ -211,9 +211,15 @@ fn check_ledger_shape(l: &Ledger, books: &Books) -> Result<(), EngineError> {
     if name.is_empty() {
         return Err(invalid("ledger name", "the name is empty; type a name"));
     }
-    if !books.masters.groups.contains_key(&l.group) {
+    let Some(group) = l.group else {
+        return Err(invalid(
+            "ledger group",
+            "the ledger has no group; choose the group it belongs under",
+        ));
+    };
+    if !books.masters.groups.contains_key(&group) {
         return Err(EngineError::NotFound {
-            what: format!("group {} of ledger '{name}'", l.group.0),
+            what: format!("group {} of ledger '{name}'", group.0),
         });
     }
     if l.opening.amount.is_negative() {

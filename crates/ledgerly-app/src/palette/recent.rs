@@ -47,7 +47,7 @@ fn live_detail(api: &Api, books: &Books, target: &PaletteTarget) -> Option<Strin
         PaletteTarget::Master(key) => match report_from_key(key)? {
             ReportKind::LedgerVouchers(id) => {
                 let ledger = books.masters.ledgers.get(&id)?;
-                let group = books.masters.groups.get(&ledger.group)?;
+                let group = books.masters.groups.get(&ledger.group?)?;
                 let params = default_params(ReportKind::LedgerVouchers(id), books).ok()?;
                 let balance = match api.report(&params) {
                     Ok(Outcome::Value(report)) => closing_text(&report.rows),

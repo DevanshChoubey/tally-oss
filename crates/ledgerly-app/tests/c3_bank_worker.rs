@@ -88,7 +88,7 @@ fn ledger(
         id,
         name: name.to_owned(),
         aliases: Vec::new(),
-        group: group(kind),
+        group: Some(group(kind)),
         opening: SignedAmount::dr(Paise::new(opening)),
         bill_wise: None,
         cost_centres_applicable: false,

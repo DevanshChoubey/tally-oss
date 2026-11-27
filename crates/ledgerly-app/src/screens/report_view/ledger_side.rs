@@ -41,7 +41,7 @@ pub(super) struct SideInfo {
 /// The card's fields for `ledger`, or `None` when the books do not hold it or its group.
 pub(super) fn side_info(books: &Books, ledger: LedgerId) -> Option<SideInfo> {
     let l = books.masters.ledgers.get(&ledger)?;
-    let group = books.masters.groups.get(&l.group)?;
+    let group = books.masters.groups.get(&l.group?)?;
     Some(SideInfo {
         ledger,
         name: l.name.clone(),

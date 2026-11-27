@@ -98,7 +98,7 @@ pub(crate) fn new_ledger(request: &CreateLedgerRequest) -> Ledger {
         id: LedgerId(0),
         name: request.name.clone(),
         aliases: Vec::new(),
-        group: request.group,
+        group: Some(request.group),
         opening: SignedAmount::dr(Paise::ZERO),
         bill_wise: None,
         cost_centres_applicable: false,

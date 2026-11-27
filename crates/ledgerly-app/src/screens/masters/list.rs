@@ -61,7 +61,10 @@ fn ledger_entries(m: &Masters) -> Vec<Entry> {
     m.ledgers
         .values()
         .map(|l| {
-            let group = m.groups.get(&l.group).map_or("?", |g| g.name.as_str());
+            let group = l
+                .group
+                .and_then(|id| m.groups.get(&id))
+                .map_or("?", |g| g.name.as_str());
             let mut detail = format!("under {group}");
             if !l.opening.amount.is_zero() {
                 let side = match l.opening.side {
@@ -75,7 +78,7 @@ fn ledger_entries(m: &Masters) -> Vec<Entry> {
             }
             let mut search = with_aliases(&l.name, &l.aliases);
             // The group's name is searched too (mock v2 index.html:1797, the row's `data-q`).
-            if let Some(g) = m.groups.get(&l.group) {
+            if let Some(g) = l.group.and_then(|id| m.groups.get(&id)) {
                 search.push(g.name.clone());
             }
             if let Some(g) = l.party.as_ref().and_then(|p| p.gstin.as_ref()) {

@@ -627,7 +627,7 @@ fn ledger_draft(l: &Ledger) -> LedgerDraft {
     LedgerDraft {
         name: l.name.clone(),
         aliases: l.aliases.join(", "),
-        group: Some(l.group),
+        group: l.group,
         opening: if l.opening.amount.is_zero() {
             String::new()
         } else {
@@ -702,7 +702,7 @@ fn build_ledger(
     if !masters.groups.contains_key(&group) {
         return Err(invalid("Under", "the group does not exist"));
     }
-    if let Some(o) = orig.filter(|o| o.reserved.is_some() && o.group != group) {
+    if let Some(o) = orig.filter(|o| o.reserved.is_some() && o.group != Some(group)) {
         return Err(MasterError::Reserved {
             name: o.name.clone(),
             what: "moved to another group".to_owned(),
@@ -724,7 +724,7 @@ fn build_ledger(
         id: id.unwrap_or(ledgerly_core::LedgerId(UNASSIGNED_ID)),
         name,
         aliases: names.collect(),
-        group,
+        group: Some(group),
         opening: build_opening(d)?,
         bill_wise,
         cost_centres_applicable: d.cost_centres,

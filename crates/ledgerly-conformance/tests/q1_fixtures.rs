@@ -317,7 +317,11 @@ fn widget_b_purchase_converts_boxes_to_pieces() {
 fn every_ledger_group_unit_and_item_reference_resolves() {
     let b = books_small();
     for l in b.masters.ledgers.values() {
-        assert!(b.masters.groups.contains_key(&l.group), "{}", l.name);
+        assert!(
+            l.group.is_some_and(|g| b.masters.groups.contains_key(&g)),
+            "{}",
+            l.name
+        );
     }
     for v in b.vouchers.values() {
         assert!(b.masters.voucher_types.contains_key(&v.type_id));

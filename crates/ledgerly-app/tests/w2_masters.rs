@@ -59,7 +59,7 @@ fn ledger(id: u64, name: &str, group_id: u64) -> Ledger {
         id: LedgerId(id),
         name: name.to_owned(),
         aliases: Vec::new(),
-        group: GroupId(group_id),
+        group: Some(GroupId(group_id)),
         opening: SignedAmount::dr(Paise::ZERO),
         bill_wise: None,
         cost_centres_applicable: false,

@@ -136,7 +136,7 @@ fn ledger_under_reserved_group_maps_to_the_reserved_group_by_name() {
     // derived: two events, the reserved group altered (never created again), then the ledger.
     assert_eq!(events.len(), 2);
     let expected = seed(ReservedGroup::SundryDebtors);
-    assert_eq!(as_ledger(&events[1]).group, expected.id);
+    assert_eq!(as_ledger(&events[1]).group, Some(expected.id));
     let Event::MasterAltered { before, after } = &events[0] else {
         panic!("first event is not an alteration: {:?}", events[0]);
     };
@@ -162,7 +162,7 @@ fn ledger_under_reserved_group_missing_from_export_still_resolves() {
     assert_eq!(events.len(), 1);
     assert_eq!(
         as_ledger(&events[0]).group,
-        seed(ReservedGroup::SundryDebtors).id
+        Some(seed(ReservedGroup::SundryDebtors).id)
     );
 }
 
@@ -182,7 +182,7 @@ fn renamed_reserved_group_is_found_by_reserved_name() {
     ));
     let events = map_to_events(&m, &[]).unwrap();
     let expected = seed(ReservedGroup::SundryDebtors);
-    assert_eq!(as_ledger(&events[1]).group, expected.id);
+    assert_eq!(as_ledger(&events[1]).group, Some(expected.id));
     let Event::MasterAltered { after, .. } = &events[0] else {
         panic!("not an alteration");
     };
@@ -320,7 +320,7 @@ fn custom_groups_are_created_parents_first_whatever_the_file_order() {
     );
     assert_eq!(local.parent, Some(seed(ReservedGroup::SundryDebtors).id));
     assert_eq!(retail.parent, Some(GroupId(29)));
-    assert_eq!(as_ledger(&events[2]).group, GroupId(30));
+    assert_eq!(as_ledger(&events[2]).group, Some(GroupId(30)));
 }
 
 #[test]

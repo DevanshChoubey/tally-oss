@@ -128,7 +128,7 @@ fn ledger(name: &str, under: GroupId) -> Ledger {
         id: LedgerId(0),
         name: name.to_owned(),
         aliases: Vec::new(),
-        group: under,
+        group: Some(under),
         opening: SignedAmount::dr(Paise::ZERO),
         bill_wise: None,
         cost_centres_applicable: false,
@@ -188,7 +188,7 @@ fn a_created_group_and_ledger_appear_in_the_books_with_their_assigned_ids() {
     let books = shell.app_ctx_mut().books.as_ref().unwrap();
     assert_eq!(books.masters.groups[&GroupId(29)].name, "Marketing");
     assert_eq!(books.masters.ledgers[&LedgerId(1)].name, "Ads");
-    assert_eq!(books.masters.ledgers[&LedgerId(1)].group, GroupId(29));
+    assert_eq!(books.masters.ledgers[&LedgerId(1)].group, Some(GroupId(29)));
 }
 
 #[test]

@@ -533,7 +533,7 @@ impl State {
                 id,
                 name: rec.name.clone(),
                 aliases: Vec::new(),
-                group,
+                group: Some(group),
                 opening: SignedAmount::dr(Paise::ZERO),
                 bill_wise,
                 cost_centres_applicable,

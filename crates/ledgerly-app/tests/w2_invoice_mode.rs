@@ -71,7 +71,7 @@ fn ledger(name: &str, which: ReservedGroup) -> Ledger {
         id: LedgerId(0),
         name: name.to_owned(),
         aliases: Vec::new(),
-        group: group(which),
+        group: Some(group(which)),
         opening: SignedAmount::dr(Paise::ZERO),
         bill_wise: None,
         cost_centres_applicable: false,

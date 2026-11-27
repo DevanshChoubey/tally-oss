@@ -278,9 +278,9 @@ fn unsupported_params(params: &ReportParams) -> Option<Outcome<Report>> {
     None
 }
 
-/// Whether `group` is the Stock-in-Hand group or sits under it.
-pub(crate) fn under_stock_in_hand(books: &Books, group: GroupId) -> bool {
-    let mut current = Some(group);
+/// Whether `group` is the Stock-in-Hand group or sits under it (`None`, Primary, is not).
+pub(crate) fn under_stock_in_hand(books: &Books, group: Option<GroupId>) -> bool {
+    let mut current = group;
     // The hop bound stops a cyclic chart; `check_all_placed` reports the cycle itself.
     for _ in 0..=books.masters.groups.len() {
         let Some(id) = current else {
@@ -631,7 +631,9 @@ impl<'a> Walker<'a> {
         }
         let mut ledgers: BTreeMap<GroupId, Vec<&Ledger>> = BTreeMap::new();
         for l in books.masters.ledgers.values() {
-            ledgers.entry(l.group).or_default().push(l);
+            if let Some(group) = l.group {
+                ledgers.entry(group).or_default().push(l);
+            }
         }
         let detailed = match detail {
             Detail::Detailed => true,
@@ -754,8 +756,9 @@ fn check_all_placed(books: &Books, placed: &BTreeSet<LedgerId>) -> Result<(), Re
         Some(orphan) => Err(ReportError::Invalid {
             field: "groups".to_owned(),
             reason: format!(
-                "ledger {} is in group {}, which is missing or not reachable from a primary group",
-                orphan.name, orphan.group.0
+                "ledger {} is in {}, which is missing or not reachable from a primary group",
+                orphan.name,
+                crate::group_text(orphan.group)
             ),
         }),
         None => Ok(()),

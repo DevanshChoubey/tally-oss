@@ -419,7 +419,7 @@ fn ledger_step(
                 id: LedgerId(0),
                 name: m.name.clone(),
                 aliases: Vec::new(),
-                group,
+                group: Some(group),
                 opening: file_opening.unwrap_or_else(|| SignedAmount::dr(Paise::ZERO)),
                 bill_wise: bill_wise.then_some(BillWiseConfig {
                     default_credit_days: None,
@@ -530,7 +530,7 @@ fn existing_ledger_step(
         MasterBehaviour::ModifyWithNewData => {
             let mut after = existing.clone();
             if normalize_parent(m.parent.as_deref()).is_some() {
-                after.group = parent_id(m, masters, object)?;
+                after.group = Some(parent_id(m, masters, object)?);
             }
             if let Some(o) = file_opening {
                 after.opening = o;

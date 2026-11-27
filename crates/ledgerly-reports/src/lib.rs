@@ -20,3 +20,11 @@ pub use model::{
     AuditReportKind, Cell, ColumnHeader, ColumnSpec, Detail, DrillKey, Report, ReportError,
     ReportFilter, ReportKind, ReportParams, ReportRow, RowKind,
 };
+
+/// "group 7" for a ledger's group, "Primary" for a ledger with none (the root of the group tree).
+pub(crate) fn group_text(group: Option<ledgerly_core::GroupId>) -> String {
+    match group {
+        Some(id) => format!("group {}", id.0),
+        None => "Primary".to_owned(),
+    }
+}

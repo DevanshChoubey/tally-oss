@@ -32,7 +32,7 @@ pub fn predefined_ledgers() -> Vec<Ledger> {
         id: CASH,
         name: "Cash".to_owned(),
         aliases: Vec::new(),
-        group: cash_in_hand.id,
+        group: Some(cash_in_hand.id),
         opening: SignedAmount::dr(Paise::ZERO),
         bill_wise: None,
         cost_centres_applicable: false,

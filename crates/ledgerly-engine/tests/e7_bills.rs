@@ -47,7 +47,7 @@ fn ledger(id: LedgerId, name: &str, bill_wise: bool) -> Ledger {
         id,
         name: name.to_string(),
         aliases: Vec::new(),
-        group: ledgerly_core::GroupId(1),
+        group: Some(ledgerly_core::GroupId(1)),
         opening: SignedAmount::dr(Paise::ZERO),
         bill_wise: bill_wise.then_some(BillWiseConfig {
             default_credit_days: Some(45),

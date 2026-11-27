@@ -213,7 +213,11 @@ fn select_parties<'a>(
         if !filter.ledgers.is_empty() && !filter.ledgers.contains(&ledger.id) {
             continue;
         }
-        let chain = group_chain(books, ledger.group)?;
+        // A ledger under Primary (no group) is not under the debtors or creditors group.
+        let Some(group) = ledger.group else {
+            continue;
+        };
+        let chain = group_chain(books, group)?;
         if !chain.iter().any(|g| g.reserved == Some(reserved)) {
             continue;
         }

@@ -92,7 +92,7 @@ fn ledger(name: &str, which: ReservedGroup) -> Ledger {
         id: LedgerId(0),
         name: name.to_owned(),
         aliases: Vec::new(),
-        group: group(which),
+        group: Some(group(which)),
         opening: SignedAmount::dr(Paise::ZERO),
         bill_wise: None,
         cost_centres_applicable: false,
@@ -456,7 +456,7 @@ fn alt_c_on_a_particular_with_the_worker_creates_the_ledger_in_the_store() {
         .find(|l| l.name == "Consulting Fees")
         .expect("the ledger was created");
     assert_eq!(picked, Some(made.id));
-    assert_eq!(made.group, group(ReservedGroup::SalesAccounts));
+    assert_eq!(made.group, Some(group(ReservedGroup::SalesAccounts)));
 }
 
 #[test]

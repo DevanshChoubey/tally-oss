@@ -112,7 +112,7 @@ fn ledger(id: LedgerId, name: &str, group: GroupId, bill_wise: bool) -> Ledger {
         id,
         name: name.into(),
         aliases: vec![],
-        group,
+        group: Some(group),
         opening: SignedAmount::dr(Paise::ZERO),
         bill_wise: bill_wise.then_some(BillWiseConfig {
             default_credit_days: None,

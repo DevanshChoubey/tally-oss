@@ -252,10 +252,13 @@ pub fn ledger_detail(masters: &Masters, id: u64) -> Option<LedgerDetail> {
 
 /// The name of the group `ledger` sits under.
 fn group_name(masters: &Masters, ledger: &Ledger) -> String {
-    masters.groups.get(&ledger.group).map_or_else(
-        || crate::i18n::t("masters.group_not_found"),
-        |g| g.name.clone(),
-    )
+    ledger
+        .group
+        .and_then(|id| masters.groups.get(&id))
+        .map_or_else(
+            || crate::i18n::t("masters.group_not_found"),
+            |g| g.name.clone(),
+        )
 }
 
 /// The GSTIN stored on a ledger's party record, or empty.

@@ -205,7 +205,7 @@ fn in_place_of_predefined(events: Vec<Event>) -> Vec<Event> {
         if let Event::MasterCreated(MasterSnapshot::Ledger(ledger)) = &mut event
             && !cash_taken
             && ledger.name == "Cash"
-            && Some(ledger.group) == cash_in_hand
+            && ledger.group == cash_in_hand
             && ledger.reserved.is_none()
         {
             cash_taken = true;

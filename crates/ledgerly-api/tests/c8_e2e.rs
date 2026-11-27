@@ -224,7 +224,7 @@ fn plain(name: &str, reserved: ReservedGroup) -> Ledger {
         id: LedgerId(0),
         name: name.to_owned(),
         aliases: Vec::new(),
-        group: group(reserved),
+        group: Some(group(reserved)),
         opening: SignedAmount::dr(Paise::ZERO),
         bill_wise: None,
         cost_centres_applicable: false,

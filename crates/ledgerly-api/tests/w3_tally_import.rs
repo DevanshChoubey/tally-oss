@@ -325,7 +325,7 @@ fn a_company_with_a_ledger_is_refused_before_tally_is_contacted() {
         id: ledgerly_core::LedgerId(1),
         name: "Cash".to_owned(),
         aliases: Vec::new(),
-        group,
+        group: Some(group),
         opening: SignedAmount::dr(Paise::ZERO),
         bill_wise: None,
         cost_centres_applicable: false,

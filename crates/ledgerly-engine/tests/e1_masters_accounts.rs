@@ -69,7 +69,7 @@ fn ledger(id: u64, name: &str, group: u64) -> Ledger {
         id: LedgerId(id),
         name: name.to_owned(),
         aliases: Vec::new(),
-        group: GroupId(group),
+        group: Some(GroupId(group)),
         opening: SignedAmount::dr(Paise::ZERO),
         bill_wise: None,
         cost_centres_applicable: false,
@@ -698,7 +698,7 @@ fn pending_moving_a_reserved_ledger_to_another_group_is_unsupported() {
     // Unsupported, never a guess.
     let b = books();
     let mut l = b.masters.ledgers[&LedgerId(1)].clone();
-    l.group = GroupId(3);
+    l.group = Some(GroupId(3));
     assert!(matches!(alter_ledger(l, &b), Ok(Outcome::Unsupported(_))));
 }
 
@@ -707,7 +707,7 @@ fn altering_a_ledger_checks_group_name_and_opening() {
     // provenance: derived, same rules as create_ledger.
     let b = books();
     let mut l = b.masters.ledgers[&LedgerId(2)].clone();
-    l.group = GroupId(99);
+    l.group = Some(GroupId(99));
     assert_eq!(
         alter_ledger(l, &b),
         Err(EngineError::NotFound {

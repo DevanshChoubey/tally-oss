@@ -403,7 +403,7 @@ fn ledger_flag(ledger: &Ledger, masters: &Masters) -> Result<Outcome<Option<bool
         return value(Some(flag));
     }
     let mut seen: BTreeSet<GroupId> = BTreeSet::new();
-    let mut next = Some(ledger.group);
+    let mut next = ledger.group;
     while let Some(id) = next {
         if !seen.insert(id) {
             return unsupported(

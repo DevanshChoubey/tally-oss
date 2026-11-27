@@ -169,7 +169,7 @@ pub fn search_ledgers_where(
 /// are a derived rule.
 #[must_use]
 pub fn is_cash_or_bank(masters: &Masters, ledger: &Ledger) -> bool {
-    let mut group = Some(ledger.group);
+    let mut group = ledger.group;
     // A parent loop cannot hold more groups than there are, so the walk always ends.
     for _ in 0..=masters.groups.len() {
         let Some(g) = group.and_then(|id| masters.groups.get(&id)) else {

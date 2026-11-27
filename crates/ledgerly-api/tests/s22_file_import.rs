@@ -173,7 +173,7 @@ fn masters_go_into_the_open_company_and_every_exception_is_listed() {
         .values()
         .find(|l| l.name == "Kumar Textiles")
         .unwrap();
-    assert_eq!(kumar.group, branch.id);
+    assert_eq!(kumar.group, Some(branch.id));
 }
 
 #[test]
@@ -250,7 +250,7 @@ fn modify_replaces_the_group_and_the_opening() {
         .values()
         .find(|l| l.name == "Kumar Textiles")
         .unwrap();
-    assert_eq!(kumar.group, debtors.id);
+    assert_eq!(kumar.group, Some(debtors.id));
     // 100.00 positive is a credit of Rs 100.
     assert_eq!(kumar.opening, SignedAmount::cr(Paise::new(10_000)));
 }

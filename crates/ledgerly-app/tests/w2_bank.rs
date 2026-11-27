@@ -72,7 +72,7 @@ fn bank_ledger() -> Ledger {
         id: BANK,
         name: "Bank Current Account".to_owned(),
         aliases: Vec::new(),
-        group: group(ReservedGroup::BankAccounts),
+        group: Some(group(ReservedGroup::BankAccounts)),
         opening: SignedAmount::dr(ledgerly_core::Paise::new(100_000)),
         bill_wise: None,
         cost_centres_applicable: false,

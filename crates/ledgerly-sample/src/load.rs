@@ -326,7 +326,7 @@ fn ledger(l: &LedgerSeed, id: LedgerId) -> Result<Ledger, SampleError> {
         id,
         name: l.name.clone(),
         aliases: l.aliases.clone(),
-        group: group_id(reserved(l.group))?,
+        group: Some(group_id(reserved(l.group))?),
         opening: opening(l)?,
         bill_wise: l.bill_wise.then_some(BillWiseConfig {
             default_credit_days: l.credit_days,
