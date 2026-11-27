@@ -353,3 +353,41 @@ fn without_an_assistant_the_draft_sources_stay_unlisted() {
             .any(|u| u.source == ReviewSource::PlainWordsDraft)
     );
 }
+
+/// Provenance (derived): the header is the AI settings log's columns (mock `AI_LOG`,
+/// `design/mock-v2/index.html`) plus the provider and the full input hash; the row is the draft
+/// this test records, still waiting.
+#[test]
+fn the_activity_log_exports_each_assistant_event_with_its_decision() {
+    let mut api = books("s21-drafts-export.ledgerly", Vec::new());
+    let id = api.record_ai_draft(rent_draft()).unwrap();
+    let out = std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("s21-activity.csv");
+    let _removed = std::fs::remove_file(&out);
+    assert_eq!(
+        api.export_ai_activity(&out).unwrap(),
+        ledgerly_core::Outcome::Value(())
+    );
+    let text = std::fs::read_to_string(&out).unwrap();
+    let mut lines = text.lines();
+    assert_eq!(
+        lines.next(),
+        Some("When,Feature,Provider,Input,Input hash,Output,Your decision")
+    );
+    let row = lines.next().unwrap();
+    assert!(row.contains(",Plain words,"), "{row}");
+    assert!(row.contains(SENTENCE), "{row}");
+    assert!(row.contains(",Draft payment,"), "{row}");
+    assert!(row.ends_with(",Waiting in review"), "{row}");
+    assert_eq!(lines.next(), None);
+    api.reject_ai_draft(id, Some("wrong supplier".to_owned()))
+        .unwrap();
+    api.export_ai_activity(&out).unwrap();
+    let text = std::fs::read_to_string(&out).unwrap();
+    assert!(
+        text.lines()
+            .nth(1)
+            .unwrap()
+            .ends_with(",Rejected: wrong supplier"),
+        "{text}"
+    );
+}

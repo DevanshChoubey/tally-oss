@@ -156,6 +156,17 @@ fn the_local_panel_names_the_model_file_and_the_log_lists_assistant_activity() {
     assert!(text.contains("Bill reader"), "{text}");
     assert!(text.contains("IMG_2041.jpg"), "{text}");
     assert!(text.contains("Waiting in review"), "{text}");
+
+    // Ctrl+E exports the rows shown, with the decision column (the export's header is the API's).
+    let out = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("s21-app-activity.csv");
+    let _removed = std::fs::remove_file(&out);
+    ledgerly_app::ui::dialogs::script_save_file(out.clone());
+    let _ = frame(&mut screen, &mut app, &[(Key::E, Modifiers::COMMAND)]);
+    let _ = settle_on(&mut screen, &mut app, "Exported");
+    let csv = std::fs::read_to_string(&out).unwrap();
+    assert!(csv.starts_with("When,Feature,"), "{csv}");
+    assert!(csv.contains("IMG_2041.jpg"), "{csv}");
+    assert!(csv.trim_end().ends_with("Waiting in review"), "{csv}");
 }
 
 #[test]

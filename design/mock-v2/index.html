@@ -374,6 +374,11 @@ mark{background:var(--accent-soft);color:var(--accent-ink);border-radius:2px;pad
  {"id":"ai.review.default","kind":"happy","hash":"screen=review&state=default&ai=on","title":"Review queue, AI on (later release)","description":"The queue with the assistant on: a bill-photo draft beside the bank matches. Its amount is the engine's total of the draft; a draft the engine blocks shows none."},
  {"id":"ai.ai-settings.local","kind":"happy","hash":"screen=ai-settings&state=local&ai=on","title":"AI and privacy, local (later release)","description":"On this computer: the model file the user chose (none yet), the runtime not in this build, what each feature sees, and the AI activity log."},
  {"id":"ai.ai-settings.cloud","kind":"happy","hash":"screen=ai-settings&state=cloud&ai=on","title":"AI and privacy, cloud key (later release)","description":"Cloud with your own key: the provider as the user described it, the key in the system keychain, redaction, and a confirmation before each document."},
+ {"id":"ai.quick-entry.proposal","kind":"happy","hash":"screen=quick-entry&state=proposal&ai=on","title":"Plain-words entry, draft payment (later release)","description":"The sentence read through the assistant: Rent and the Saptagiri account resolved from the words, 25k copied from them, the date offered as today, the engine's balance check."},
+ {"id":"ai.quick-entry.unknown-ledger","kind":"validation-error","hash":"screen=quick-entry&state=unknown-ledger&ai=on","title":"Plain-words entry, unknown name (later release)","description":"No ledger named Ramesh: the engine blocks the draft and the assistant invents none."},
+ {"id":"ai.quick-entry.loading","kind":"loading","hash":"screen=quick-entry&state=loading&ai=on","title":"Plain-words entry, drafting (later release)","description":"The sentence is with the assistant; nothing is shown until the engine has checked its draft."},
+ {"id":"ai.quick-entry.rejected","kind":"happy","hash":"screen=quick-entry&state=rejected&ai=on","title":"Plain-words entry, rejected (later release)","description":"Rejected: nothing was posted, and the rejection is in the AI activity log."},
+ {"id":"ai.quick-entry.not-installed","kind":"empty","hash":"screen=quick-entry&state=not-installed&ai=on","title":"Plain-words entry, no local model (later release)","description":"On this computer with no model the build can run: the box is disabled, the reason is named, and the voucher forms are offered."},
  {"id":"hi.home.default","kind":"happy","hash":"screen=home&state=default&lang=hi","title":"Home, Hindi","description":"The default Home with every word the app translates shown in Hindi; figures, dates and digit grouping unchanged."},
  {"id":"hi.sales-invoice.default","kind":"happy","hash":"screen=sales-invoice&state=default&lang=hi","title":"Sales invoice, Hindi","description":"The intra-state item invoice in Hindi."},
  {"id":"hi.sales-invoice.print-preview","kind":"happy","hash":"screen=sales-invoice&state=print-preview&lang=hi","title":"Sales invoice, print preview, Hindi","description":"The print preview chrome in Hindi; the printed page stays English (the PDF font is Latin-only)."},
@@ -1691,12 +1696,14 @@ const QE={
  hinglish:{text:'Mehta Agro se 1 lakh aaya NEFT, SI/0401 ke against',marks:[['Mehta Agro','party'],['1 lakh','amount'],['NEFT','mode'],['SI/0401','bill']]},
  'unknown-ledger':{text:'Ramesh ko 5000 cash diya',marks:[['Ramesh','payee'],['5000','amount'],['cash','account']]},
  loading:{text:'paid rent 25k to Sharma Properties from Saptagiri',marks:[]},
+ 'not-installed':{text:'',marks:[]},
  rejected:{text:'paid rent 25k to Sharma Properties from Saptagiri',marks:[['25k','amount'],['Sharma Properties','payee'],['Saptagiri','account'],['rent','ledger']]}};
 function markText(t,marks){let h=esc(t);for(const [m,k] of marks)h=h.replace(esc(m),`<mark class="bind q" title="${k}" style="background:var(--ai-soft);color:var(--ai-ink)">${esc(m)}</mark>`);return h}
 SCREENS['quick-entry']={title:'Plain-words entry',default:'proposal',
  render(st){const q=QE[st]||QE.proposal;const b=balances();
   let card='';
-  if(st==='loading')card=`<div class="card pad"><div class="row t2">${ic('cpu')}Drafting on this computer… ${kb('Esc')} cancels</div>${skelRows(6,[50,80,70,60,90,40])}</div>`;
+  if(st==='not-installed')card=`<div class="card pad"><div class="note warn">${ic('cpu')}<span><b>No local model can run.</b> This build has no local model runtime. Choose a model file in ${kb('AI and privacy')}; nothing is downloaded.</span></div><h2 style="margin-top:12px">Type it myself</h2><div class="row" style="gap:8px"><button class="btn" data-go="${hashFor('payment')}">Payment ${kb('F5')}</button><button class="btn" data-go="${hashFor('receipt')}">Receipt ${kb('F6')}</button></div></div>`;
+  else if(st==='loading')card=`<div class="card pad"><div class="row t2">${ic('cpu')}Drafting on this computer… ${kb('Esc')} cancels</div>${skelRows(6,[50,80,70,60,90,40])}</div>`;
   else if(st==='hinglish'){const bill=openBills().find(x=>x.ref==='SI/0401');
    card=proposal({kind:'Draft receipt',src:[srcChip('chat','Your words'),srcChip('cpu','Local model')],conf:3,editKey:'Enter',
     body:`<table class="t"><thead><tr><th>Dr / Cr</th><th>Ledger</th><th>Bill</th><th class="num">Amount</th></tr></thead><tbody>
@@ -1716,11 +1723,12 @@ SCREENS['quick-entry']={title:'Plain-words entry',default:'proposal',
     body:`<table class="t"><thead><tr><th>Dr / Cr</th><th>Ledger</th><th class="num">Amount</th></tr></thead><tbody>
      <tr><td>Dr</td><td>Rent ${prov('ai','AI: ledger')}</td><td class="num">${inr(R(25000))} ${prov('you','"25k"')}</td></tr>
      <tr><td>Cr</td><td>Saptagiri Commercial Bank A/c ${prov('ai','AI: account')}</td><td class="num">${inr(R(25000))} ${prov('eng','balancing')}</td></tr></tbody></table>
-     <div class="grid g2" style="margin-top:10px"><div class="fld"><label>Narration ${prov('ai','AI')}</label><input class="aifield" value="Rent, Sharma Properties"></div><div class="taxbox"><div class="taxrow"><span class="lab">Saptagiri now</span><span class="num">${inr(b.saptagiri)}</span></div><div class="taxrow tot"><span class="lab">After ${prov('eng','engine')}</span><span class="num">${inr(b.saptagiri-R(25000))}</span></div></div></div>
+     <div class="grid g2" style="margin-top:10px"><div class="fld"><label>Narration ${prov('ai','AI')}</label><input class="aifield" value="rent Sharma Properties"></div><div class="taxbox"><div class="taxrow"><span class="lab">Saptagiri now</span><span class="num">${inr(b.saptagiri)}</span></div><div class="taxrow tot"><span class="lab">After ${prov('eng','engine')}</span><span class="num">${inr(b.saptagiri-R(25000))}</span></div></div></div>
+     <p class="meta" style="margin-top:8px">Date: <b>21 Nov 2026</b>, today, as for any new voucher; no date was typed.</p>
      <p class="meta" style="margin-top:8px">Why Rent and not Sharma Properties? Sharma Properties has no ledger of its own; your earlier rent payment PY/0315 used Rent with the landlord in the narration.</p>`,
     checks:[['ok','Dr equals Cr (engine).'],['ok','21 Nov 2026 is after the lock date.'],['warn','PY/0315 already paid November rent on 5 Nov. If this is December rent, change the narration; if it is the same rent, reject.']],why:'Amount copied from your words, not computed'});
   return `${phead([['Home',hashFor('home')],['Plain-words entry']],'Plain-words entry','Type it the way you would say it. You get a draft voucher; the engine balances it; you accept.')}
-   <div class="qe" style="margin-bottom:6px">${ic('chat')}<input id="qtext" value="${esc(q.text)}" aria-label="Entry in plain words">${kb('Enter')}</div>
+   <div class="qe" style="margin-bottom:6px">${ic('chat')}<input id="qtext" value="${esc(q.text)}" aria-label="Entry in plain words"${st==='not-installed'?' disabled placeholder="No local model can run in this build"':''}>${kb('Enter')}</div>
    <div class="meta" style="margin:0 0 14px 4px">Read as: ${markText(q.text,q.marks)||'…'}</div>
    <div class="grid g-main"><div>${card}</div><div class="card pad"><h2>What the assistant may do here</h2><ul class="t2" style="padding-left:18px;margin:0;display:grid;gap:6px"><li>Copy amounts you typed (25k, 1 lakh) exactly. It never works one out.</li><li>Pick ledgers that already exist. It never creates one without you.</li><li>Suggest a date from a matching bank line.</li></ul><div class="hr"></div><h3>Try</h3><div class="stack" style="gap:4px;margin-top:6px"><button class="btn ghost" data-go="${hashFor('quick-entry','hinglish')}">Mehta Agro se 1 lakh aaya NEFT, SI/0401 ke against</button><button class="btn ghost" data-go="${hashFor('quick-entry','unknown-ledger')}">Ramesh ko 5000 cash diya</button></div></div></div>`;
  },
@@ -1731,7 +1739,7 @@ SCREENS['quick-entry']={title:'Plain-words entry',default:'proposal',
    if(k==='Enter'&&!isTyping()){go(hashFor(st==='hinglish'?'receipt':'payment'),'screen-push');return true}}
   if(st==='loading'&&k==='Escape'){go(hashFor('home'));return true}return false},
  back(){return hashFor('home')},
- keys(st){return st==='rejected'?[['','Rejected'],['F5','Type it myself'],['Esc','Back']]:[['','Plain-words draft'],['Ctrl+A','Accept and post'],['Enter','Edit in the voucher form'],['Alt+D','Reject'],['Esc','Back']]}
+ keys(st){return st==='not-installed'?[['','Plain-words entry'],['F5','Payment'],['F6','Receipt'],['Esc','Back']]:st==='rejected'?[['','Rejected'],['F5','Type it myself'],['Esc','Back']]:[['','Plain-words draft'],['Ctrl+A','Accept and post'],['Enter','Edit in the voucher form'],['Alt+D','Reject'],['Esc','Back']]}
 };
 
 /* =====================================================================

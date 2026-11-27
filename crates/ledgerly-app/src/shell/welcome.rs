@@ -378,8 +378,13 @@ mod key_vault_tests {
     }
 
     fn key_state_after_open(name: &str) -> KeyState {
-        // Lib tests have no CARGO_TARGET_TMPDIR; the temp dir is set to the build disk.
-        let path = std::env::temp_dir().join(name);
+        // Lib tests have no CARGO_TARGET_TMPDIR; the file goes beside the test binary, in the
+        // target directory, never the system temp directory.
+        let path = std::env::current_exe()
+            .unwrap()
+            .parent()
+            .unwrap()
+            .join(name);
         let _removed = std::fs::remove_file(&path);
         let company = Company {
             ineligible_itc_default: None,

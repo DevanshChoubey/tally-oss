@@ -240,7 +240,7 @@ fn csv_text(entries: &[AiLogEntry]) -> Result<String, std::io::Error> {
 
 /// One CSV field: wrapped in quotes when it holds a comma, a quote or a line break, with each
 /// quote inside it doubled (RFC 4180).
-fn csv_field(text: &str) -> String {
+pub(crate) fn csv_field(text: &str) -> String {
     if text.contains([',', '"', '\n', '\r']) {
         format!("\"{}\"", text.replace('"', "\"\""))
     } else {

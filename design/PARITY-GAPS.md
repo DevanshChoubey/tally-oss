@@ -348,8 +348,34 @@ Classes:
   have no width (a mock CSS gap: `.switch` is an inline span), so its On columns look empty.
 - **DELIBERATE** no tier is chosen by default; the log headers are the company file's columns; the
   "Current" badge is a border only; the report list shows for every tier.
-- **NOT BUILT** `ask.result`, `ask.loading`, `ask.low-confidence`, `ask.unsupported`, `quick-entry.*`
-  (proposal, hinglish, unknown-ledger, loading, rejected), `purchase-bill.reading`, `.proposal`,
+- **NOT BUILT** (1.0.x) plain-words entry drafts nothing. With AI on (round s21 C,
+  `ai.quick-entry.proposal`, `.unknown-ledger`, `.loading`, `.rejected`, `.not-installed`,
+  `s21-c-sheet-1..3.png`): the sentence goes through the API's one gate (tier, feature switch,
+  provider status) to the provider and the real `nl_entry` reader; the draft is stored (it also waits
+  in the review queue), checked by the engine with today offered as the date, and drawn from the
+  engine's voucher. Ctrl+A posts through the engine, Alt+D records the rejection; both are in the AI
+  activity log. With no provider (this build) the box is off and "No local model can run." offers F5/F6.
+- **NOT BUILT** `ai.quick-entry.hinglish`: the reader drafts no account from "NEFT", no bill reference
+  ("SI/0401 ke against") and no date from a bank line, so the state is not captured.
+- **NOT BUILT** `ai.quick-entry.proposal`: no Saptagiri now/After taxbox (no API call gives a ledger's
+  balance after a draft; no figure is computed in the screen); no PY/0315 duplicate warning, no
+  lock-date check line and no "Why Rent and not Sharma Properties?" line (the reader explains
+  nothing); the narration is text, not an editable field; "Sharma Properties" is not marked in
+  "Read as:" (the reader reports source ranges for the amount and ledger names only); the source chip
+  says "Test provider" (the captures run the fixed-answers provider, never a model) where the mock
+  says "Local model"; the Prop footer keeps the kit's Edit, Reject, Accept order.
+- **NOT BUILT** `ai.quick-entry.unknown-ledger`: the Dr ledger is red text, not a picker; no Alt+C to
+  create it; the check line is the engine's ("create these ledgers first: Ramesh") where the mock
+  says "Dr ledger is missing, so the voucher cannot balance yet."; no "Cash balance after paying"
+  line; the confidence reads Medium (the recorded answer's 800 per mille) where the mock shows Low;
+  the Cr amount is tagged "your words" since the engine made no voucher to balance.
+- **NOT BUILT** `ai.quick-entry.rejected`: no reason buttons (Wrong ledger, amount, account); the
+  rejection is stored without a reason. Accept stays on the screen with "Payment <number> posted."
+  where the mock goes to the day book. Enter "Edit in the voucher form" says it is not built yet.
+- **NOT BUILT** `ai.quick-entry.loading`: Esc does not cancel the read; the key bar lists the idle
+  keys. The "Try" sentences are left out. Hindi words for the new lines are unsourced.
+- **NOT BUILT** `ask.result`, `ask.loading`, `ask.low-confidence`, `ask.unsupported`,
+  `purchase-bill.reading`, `.proposal`,
   `.low-confidence`, `.mismatch`, `.duplicate`, `.cloud-consent`, `.error`, `.accepted` and
   `gst.recon-explain`: no model runs; a screen would show a look with nothing behind it.
 - **NOT BUILT** the AI-off note's AI and privacy button is a secondary button; the mock's is a ghost

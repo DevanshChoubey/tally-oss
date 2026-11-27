@@ -99,8 +99,18 @@ untracked), look at each, update `PARITY-GAPS.md`.
 - Round B: committed (key vault seam with `KeyringStore` in the real window and `MemoryVault` in
   tests and captures, cloud gating on vault + provider + saved key, local model file setting and
   Ctrl+O, per-feature switches, assistant log rows, mock states `ai.ai-settings.local` and
-  `.cloud`). Open: a form to describe the provider and type the key (owner: which providers);
-  no local runtime (owner: runtime and model download).
+  `.cloud`). Open: a form to describe the provider and type the key is NOT BUILT (not an owner
+  decision; the captures store the provider through the API); no local runtime (owner: runtime
+  and model download).
+- Round C: committed (`Api::ai_gate` and `Api::read_words`, the one gate rounds D-F reuse: tier,
+  feature switch, provider status, Local with no runtime = Not installed; every read, refusal-free
+  failure and draft logged; the AI half of Plain-words entry with proposal, unknown ledger,
+  loading, rejected and not-installed states; the Prop footer now wraps its buttons instead of
+  widening a narrow card). Open: the Hinglish state, the balance-after taxbox, reject reasons,
+  Alt+C, Enter to the voucher form, Esc to cancel (PARITY-GAPS).
+- Honesty notes (C): the app tests' sentence helper was changed to wait for the ready hint
+  instead of "Read as:" (the test typed before the gate read Ready); the screen tests were written
+  before the screen and seen failing, the accept transition checked by mutation.
 - Honesty notes (B): the Ctrl+O and vault hand-over tests were written after the code and checked
   by mutation; `w4_ai_settings` had its local-panel key list updated to the mock's new Ctrl+O entry
   (the mock changed in this round; the assertion is as strict as before).
