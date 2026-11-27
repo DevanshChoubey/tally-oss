@@ -34,6 +34,8 @@ time = { version = "0.3.55", features = ["serde", "macros", "parsing", "formatti
 # Storage and hashing
 rusqlite = { version = "0.43", features = ["bundled"] }
 sha2 = "0.11"
+# PNG decoding for the bill photo; already in the tree through eframe with the same feature.
+image = { version = "0.25", default-features = false, features = ["png"] }
 ciborium = "0.2"
 hex = "0.4"
 # Formats
@@ -56,6 +58,8 @@ anyhow = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 keyring = "4"
+ocrs = { version = "0.14", default-features = false, features = ["onnx"] }
+rten = { version = "0.28", default-features = false, features = ["onnx_format"] }
 tempfile = "3"
 clap = { version = "4.6", features = ["derive"] }
 # UI (ledgerly-app only, rule C1)

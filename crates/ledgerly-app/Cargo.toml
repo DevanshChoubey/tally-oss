@@ -20,6 +20,7 @@ ledgerly-sample.workspace = true
 egui.workspace = true
 eframe.workspace = true
 egui_extras.workspace = true
+image.workspace = true
 rfd.workspace = true
 serde.workspace = true
 toml.workspace = true
@@ -30,6 +31,7 @@ tracing-subscriber.workspace = true
 anyhow.workspace = true
 
 [dev-dependencies]
+sha2.workspace = true
 insta.workspace = true
 tempfile.workspace = true
 ledgerly-store.workspace = true

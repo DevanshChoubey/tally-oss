@@ -12,8 +12,8 @@
 use egui::text::{LayoutJob, TextFormat};
 use egui::{FontId, Frame, Key, Margin, Modifiers, RichText, Stroke, TextEdit, Ui};
 use ledgerly_api::{
-    Accepted, AiGate, Api, DraftCheck, DraftEdits, Proposal, ProviderPlace, SourceRef,
-    VoucherDraft, WordsRead,
+    Accepted, AiGate, Api, BalanceChange, DraftCheck, DraftEdits, Proposal, ProviderPlace,
+    SourceRef, VoucherDraft, WordsRead,
 };
 use ledgerly_core::{CancelToken, Date, DrCr, EventSeq, LedgerId, Outcome, Paise};
 use ledgerly_model::BaseVoucherKind;
@@ -75,6 +75,20 @@ struct DraftView {
     verdict: Result<(), String>,
     /// The character ranges of the sentence the reader took values from.
     marks: Vec<(usize, usize)>,
+    /// The cash or bank account's balance now and after the voucher, when the engine made one.
+    balance: Option<AccountBalance>,
+    /// The voucher's date as the engine checks it, and the lock date in force.
+    dates: (Option<Date>, Option<Date>),
+}
+
+/// The account a payment is paid from, or a receipt received into, with the trial balance's
+/// figures for it (mock "Saptagiri now" / "After (engine)").
+#[derive(Debug, Clone)]
+struct AccountBalance {
+    /// The account's ledger name.
+    name: String,
+    /// The balance now and after the voucher, or why the engine gives none.
+    change: Result<BalanceChange, String>,
 }
 
 /// What a read gave the screen.
@@ -227,6 +241,7 @@ impl AiEntry {
         let edits = DraftEdits {
             date: view.offered_date,
             place_of_supply: None,
+            line_ledgers: Vec::new(),
         };
         self.latest.start(worker, move |api: &mut Api| {
             Reply::Accepted(
@@ -334,6 +349,7 @@ impl AiEntry {
 
         let mut asked = Ask::Nothing;
         let mut action = None;
+        let mut tried = None;
         egui_extras::StripBuilder::new(ui)
             .size(egui_extras::Size::relative(super::quick_entry::LEFT_SHARE))
             .size(egui_extras::Size::remainder())
@@ -341,8 +357,17 @@ impl AiEntry {
                 strip.cell(|ui| {
                     (asked, action) = self.left(ui, &ctx.tr, !box_focused);
                 });
-                strip.cell(super::quick_entry::draw_rules);
+                strip.cell(|ui| {
+                    super::quick_entry::draw_rules_with(ui, |ui| tried = try_examples(ui, typing));
+                });
             });
+        if let Some(example) = tried
+            && let Some(worker) = ctx.api.as_ref()
+            && !self.latest.is_pending()
+        {
+            self.text = example;
+            self.start_read(worker, crate::shell::navigate::today());
+        }
         if let Some(action) = action {
             self.act(action, ctx);
         }
@@ -525,6 +550,38 @@ impl AiEntry {
         }
         (asked, action)
     }
+}
+
+/// Sentences the reader can draft (mock "Try" with `ai=on`, index.html:1750). A click reads one.
+const TRY: [&str; 2] = [
+    "paid rent 25k to Sharma Properties from Saptagiri",
+    "Ramesh ko 5000 cash diya",
+];
+
+/// The "Try" list under the rules. Returns the sentence clicked; the buttons are off while no
+/// model can run.
+fn try_examples(ui: &mut Ui, typing: bool) -> Option<String> {
+    let t = tokens(ui);
+    ui.add_space(10.0);
+    ui.separator();
+    ui.label(
+        RichText::new(lit("Try"))
+            .font(bold_font(ui, TEXT_BODY))
+            .color(t.text),
+    );
+    ui.add_space(4.0);
+    let mut clicked = None;
+    if !typing {
+        ui.disable();
+    }
+    for example in TRY {
+        // Shown and read in the person's language: the sentence is what they would type.
+        let words = lit(example);
+        if button(ui, &words, None, ButtonKind::Secondary).clicked() {
+            clicked = Some(words);
+        }
+    }
+    clicked
 }
 
 /// The loading card: what is happening and skeleton rows (mock `quick-entry.loading`).
@@ -782,16 +839,16 @@ fn draft_body(ui: &mut Ui, view: &DraftView) {
                 ui.end_row();
             }
         });
-    ui.add_space(8.0);
-    ui.horizontal(|ui| {
-        ui.label(
-            RichText::new(lit("Narration"))
-                .size(TEXT_META)
-                .color(t.text_3),
-        );
-        let _ = prov(ui, ProvKind::Ai);
-        ui.label(&view.narration);
+    ui.add_space(10.0);
+    ui.columns(2, |cols| {
+        if let [left, right] = cols {
+            narration_field(left, &view.narration);
+            if let Some(balance) = &view.balance {
+                balance_box(right, balance);
+            }
+        }
     });
+    ui.add_space(4.0);
     if let Some(date) = view.offered_date {
         ui.label(
             RichText::new(format!(
@@ -819,17 +876,133 @@ fn draft_body(ui: &mut Ui, view: &DraftView) {
     }
 }
 
+/// The narration the reader wrote, in a field as the voucher form shows it (mock `.aifield`).
+/// It is read-only here: Enter opens the voucher form for edits.
+fn narration_field(ui: &mut Ui, narration: &str) {
+    let t = tokens(ui);
+    ui.horizontal(|ui| {
+        ui.label(
+            RichText::new(lit("Narration"))
+                .size(TEXT_META)
+                .color(t.text_3),
+        );
+        let _ = prov(ui, ProvKind::Ai);
+    });
+    Frame::new()
+        .fill(t.ai_soft)
+        .stroke(Stroke::new(border_width(kind(ui)), t.ai))
+        .corner_radius(RADIUS_M)
+        .inner_margin(Margin::symmetric(10, 6))
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.label(RichText::new(narration).size(TEXT_BODY).color(t.text));
+        });
+}
+
+/// The account's balance now and after the voucher, both from the trial balance.
+fn balance_box(ui: &mut Ui, balance: &AccountBalance) {
+    let t = tokens(ui);
+    Frame::new()
+        .fill(t.surface_2)
+        .stroke(Stroke::new(border_width(kind(ui)), t.border))
+        .corner_radius(RADIUS_M)
+        .inner_margin(Margin::symmetric(12, 8))
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            match &balance.change {
+                Ok(change) => {
+                    // Right to left: the amount keeps its place and a long ledger name wraps
+                    // in the space left of it instead of running under the figure.
+                    let row = |ui: &mut Ui, label: &str, engine: bool, amount: String, strong| {
+                        let size = egui::vec2(ui.available_width(), 0.0);
+                        let layout = egui::Layout::right_to_left(egui::Align::Center);
+                        ui.allocate_ui_with_layout(size, layout, |ui| {
+                            let text = RichText::new(amount).size(TEXT_BODY).color(t.text);
+                            ui.label(if strong { text.strong() } else { text });
+                            ui.add_space(12.0);
+                            ui.with_layout(
+                                egui::Layout::left_to_right(egui::Align::Center),
+                                |ui| {
+                                    ui.add(
+                                        egui::Label::new(
+                                            RichText::new(label).size(TEXT_META).color(t.text_2),
+                                        )
+                                        .wrap(),
+                                    );
+                                    if engine {
+                                        let _ = prov(ui, ProvKind::Engine);
+                                    }
+                                },
+                            );
+                        });
+                    };
+                    row(
+                        ui,
+                        &format!("{} {}", balance.name, lit("now")),
+                        false,
+                        balance_text(change.now),
+                        false,
+                    );
+                    row(ui, &lit("After"), true, balance_text(change.after), true);
+                }
+                Err(reason) => {
+                    ui.label(
+                        RichText::new(format!(
+                            "{} {}: {reason}",
+                            balance.name,
+                            lit("balance not shown")
+                        ))
+                        .size(TEXT_META)
+                        .color(t.text_2),
+                    );
+                }
+            }
+        });
+}
+
+/// A balance as the mock's tax box shows it: the amount, with "Cr" when the account is
+/// overdrawn (a cash or bank account's balance is a debit otherwise).
+fn balance_text(b: ledgerly_core::SignedAmount) -> String {
+    match b.side {
+        DrCr::Dr => format::amount(b.amount),
+        DrCr::Cr => format!("{} Cr", format::amount(b.amount)),
+    }
+}
+
 /// The engine's checks under the table.
 fn draft_checks(ui: &mut Ui, view: &DraftView) {
     let t = tokens(ui);
-    let (glyph, color, line) = match &view.verdict {
+    let mut lines = vec![match &view.verdict {
         Ok(()) => (Icon::Check, t.ok, lit("Dr equals Cr (engine).")),
         Err(reason) => (Icon::X, t.bad, reason.clone()),
-    };
-    ui.horizontal_wrapped(|ui| {
-        icon(ui, glyph, color);
-        ui.label(RichText::new(line).size(TEXT_META).color(color));
-    });
+    }];
+    if let (Some(date), Some(lock)) = view.dates {
+        lines.push(if date > lock {
+            (
+                Icon::Check,
+                t.ok,
+                format!("{} {}", format::date(date), lit("is after the lock date.")),
+            )
+        } else {
+            (
+                Icon::X,
+                t.bad,
+                format!(
+                    "{} {} {}{}",
+                    format::date(date),
+                    lit("is on or before the lock date,"),
+                    format::date(lock),
+                    lit("; the engine refuses it.")
+                ),
+            )
+        });
+    }
+    for (glyph, color, line) in lines {
+        ui.horizontal_wrapped(|ui| {
+            icon(ui, glyph, color);
+            ui.label(RichText::new(line).size(TEXT_META).color(color));
+        });
+    }
 }
 
 /// Reads `text` on the worker: the gate, the read, and the engine's check with today offered.
@@ -861,12 +1034,25 @@ fn read(api: &mut Api, text: &str, today: Date) -> Result<ReadDone, ledgerly_api
     let edits = DraftEdits {
         date: offered_date,
         place_of_supply: None,
+        line_ledgers: Vec::new(),
     };
     let check = api.check_ai_draft(id, &edits)?;
     let name_of = |id: LedgerId| -> Option<String> {
         match api.books() {
             Ok(Outcome::Value(b)) => b.masters.ledgers.get(&id).map(|l| l.name.clone()),
             Ok(Outcome::Unsupported(_)) | Err(_) => None,
+        }
+    };
+    let balance = match &check {
+        Outcome::Value(DraftCheck::Ok(voucher)) => {
+            account_balance(api, draft.kind, voucher, &name_of)?
+        }
+        Outcome::Value(DraftCheck::Blocked { .. }) | Outcome::Unsupported(_) => None,
+    };
+    let voucher_date = match &check {
+        Outcome::Value(DraftCheck::Ok(voucher)) => Some(voucher.date),
+        Outcome::Value(DraftCheck::Blocked { .. }) | Outcome::Unsupported(_) => {
+            draft.date.as_ref().map(|d| d.value).or(offered_date)
         }
     };
     let (lines, verdict) = match &check {
@@ -888,7 +1074,50 @@ fn read(api: &mut Api, text: &str, today: Date) -> Result<ReadDone, ledgerly_api
         offered_date,
         verdict,
         marks: marks_of(&draft),
+        balance,
+        dates: (voucher_date, api.lock_date()),
     })))
+}
+
+/// The account of a payment (its credit line) or a receipt (its debit line), with the trial
+/// balance's figures before and after the voucher. Other kinds have no such account here.
+fn account_balance(
+    api: &Api,
+    kind: BaseVoucherKind,
+    voucher: &ledgerly_model::Voucher,
+    name_of: &dyn Fn(LedgerId) -> Option<String>,
+) -> Result<Option<AccountBalance>, ledgerly_api::ApiError> {
+    let side = match kind {
+        BaseVoucherKind::Payment => DrCr::Cr,
+        BaseVoucherKind::Receipt => DrCr::Dr,
+        BaseVoucherKind::Purchase
+        | BaseVoucherKind::Sales
+        | BaseVoucherKind::Contra
+        | BaseVoucherKind::Journal
+        | BaseVoucherKind::CreditNote
+        | BaseVoucherKind::DebitNote
+        | BaseVoucherKind::Memorandum
+        | BaseVoucherKind::ReversingJournal
+        | BaseVoucherKind::ReceiptNote
+        | BaseVoucherKind::DeliveryNote
+        | BaseVoucherKind::RejectionIn
+        | BaseVoucherKind::RejectionOut
+        | BaseVoucherKind::StockJournal
+        | BaseVoucherKind::PhysicalStock
+        | BaseVoucherKind::SalesOrder
+        | BaseVoucherKind::PurchaseOrder => return Ok(None),
+    };
+    let Some(line) = voucher.ledger_lines.iter().find(|l| l.amount.side == side) else {
+        return Ok(None);
+    };
+    let Some(name) = name_of(line.ledger) else {
+        return Ok(None);
+    };
+    let change = match api.balance_change(line.ledger, voucher)? {
+        Outcome::Value(change) => Ok(change),
+        Outcome::Unsupported(u) => Err(unsupported_text(&u)),
+    };
+    Ok(Some(AccountBalance { name, change }))
 }
 
 /// The engine's voucher as table lines: the first amount is the typed one, the other the engine's

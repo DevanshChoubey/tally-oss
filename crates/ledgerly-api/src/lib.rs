@@ -9,8 +9,10 @@ mod ai_drafts;
 mod ai_features;
 mod ai_settings;
 mod as_voucher;
+mod ask_books;
 mod balance;
 mod bank;
+mod bank_ai;
 mod brs_statement;
 mod command;
 mod day_book_meta;
@@ -44,12 +46,20 @@ pub use ai_drafts::{
 };
 // The assistant's typed proposals, for the app (which reaches the assistant only through here).
 pub use ai_features::{AiGate, BillRead, WordsRead};
-pub use ai_settings::{AiSettings, CloudSettings, KEY_SERVICE, KeyState, LOCAL_MODEL_FILE_KEY};
+pub use ai_settings::{
+    ANTHROPIC_MESSAGES_URL, AiSettings, CLOUD_FORMATS, CloudAssistant, CloudSettings,
+    DEFAULT_BILL_MODEL, DEFAULT_WORDS_MODEL, KEY_SERVICE, KeyState, LOCAL_MODEL_FILE_KEY,
+    cloud_model_for, cloud_request_url,
+};
+pub use ask_books::{AskAnswer, default_report_params, default_report_period};
 pub use balance::BalanceChange;
 pub use bank::{BalanceRefusal, balance_refusal};
+pub use bank_ai::{AiBankMatch, BankAiAnswer};
 pub use command::{Command, CommandResult, CreatedId};
 pub use gst_filing::GstFiling;
-pub use ledgerly_assist::cloud::{KeyVault, KeyringStore, MemoryVault};
+pub use ledgerly_assist::cloud::{
+    CloudRequest, CloudResponse, CloudTransport, KeyVault, KeyringStore, MemoryVault, UreqTransport,
+};
 pub use ledgerly_assist::ocr::{OcrLine, OcrOutput, RejectedField};
 pub use ledgerly_assist::provider::{
     AiProvider, CloudModel, FIXED_ANSWERS_NAME, FixedAnswers, LocalModel, LocalModelFile,

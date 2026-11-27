@@ -52,9 +52,11 @@ fn new_file(name: &str) -> (Api, PathBuf) {
 
 fn provider() -> CloudSettings {
     CloudSettings {
-        endpoint: Some("https://llm.example.invalid/v1/chat/completions".to_owned()),
+        endpoint: Some("https://llm.example.invalid/v1".to_owned()),
         format: Some("chat-completions".to_owned()),
         model: Some("model-x".to_owned()),
+        bill_model: None,
+        words_model: None,
     }
 }
 
@@ -173,4 +175,51 @@ fn each_feature_is_on_until_switched_off_and_the_switch_is_audited() {
     api.set_ai_feature(AiFeature::BankSuggestion, true).unwrap();
     assert!(api.ai_feature_on(AiFeature::BankSuggestion).unwrap());
     assert_eq!(api.ai_settings().unwrap().features_off, Vec::new());
+}
+
+/// The cloud client sends only to `https://` addresses (`ledgerly_assist::cloud`, "it must be
+/// `https`"), so a provider described with a plain `http://` endpoint is refused when it is
+/// stored, not later when a document is about to be sent. Nothing is stored.
+#[test]
+fn an_endpoint_that_is_not_https_is_refused_and_nothing_is_stored() {
+    let (mut api, _path) = new_file("s21-settings-http.ledgerly");
+    let plain = CloudSettings {
+        endpoint: Some("http://llm.example.invalid/v1/chat/completions".to_owned()),
+        ..provider()
+    };
+    let Outcome::Unsupported(u) = api.set_cloud_settings(&plain).unwrap() else {
+        panic!("an http endpoint must be refused");
+    };
+    assert!(u.reason.contains("https://"), "{}", u.reason);
+    assert_eq!(api.ai_settings().unwrap().cloud, CloudSettings::default());
+}
+
+/// The request formats the cloud client speaks are the two `CloudProvider` wire formats, written
+/// `chat-completions` and `messages` in the settings (`CloudSettings::format`). Any other word is
+/// refused, so a format the client cannot speak is never stored as if it could.
+#[test]
+fn a_request_format_the_client_does_not_speak_is_refused() {
+    let (mut api, _path) = new_file("s21-settings-format.ledgerly");
+    let odd = CloudSettings {
+        format: Some("completions-v0".to_owned()),
+        ..provider()
+    };
+    let Outcome::Unsupported(u) = api.set_cloud_settings(&odd).unwrap() else {
+        panic!("an unknown format must be refused");
+    };
+    assert!(u.reason.contains("chat-completions"), "{}", u.reason);
+    assert!(u.reason.contains("messages"), "{}", u.reason);
+    assert_eq!(api.ai_settings().unwrap().cloud, CloudSettings::default());
+}
+
+/// An empty key is not a key: saving one is refused and the vault is left as it was.
+#[test]
+fn an_empty_key_is_not_saved() {
+    let (mut api, _path) = new_file("s21-settings-empty-key.ledgerly");
+    api.attach_key_vault(Box::new(MemoryVault::default()));
+    let Outcome::Unsupported(u) = api.save_cloud_key("   ").unwrap() else {
+        panic!("an empty key must be refused");
+    };
+    assert!(u.reason.contains("empty"), "{}", u.reason);
+    assert_eq!(api.ai_settings().unwrap().key, KeyState::NotSet);
 }

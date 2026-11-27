@@ -149,6 +149,13 @@ pub enum ApiError {
         /// The engine's reason the books cannot be read.
         reason: String,
     },
+    /// The books are blocked (a stored voucher the engine cannot replay), so the assistant has no
+    /// ledgers to resolve names against and nothing is read.
+    #[error("the books cannot be read, so the assistant has no ledgers to name: {reason}")]
+    AiBooksBlocked {
+        /// The engine's reason the books cannot be read.
+        reason: String,
+    },
     /// A stored assistant proposal could not be written or read back as JSON.
     #[error("assistant draft {id} cannot be read by this build: {reason}")]
     AiDraftUnreadable {

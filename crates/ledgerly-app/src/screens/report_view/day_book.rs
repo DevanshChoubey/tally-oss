@@ -10,8 +10,9 @@
 //! The facade adds three columns after those (`ledgerly-api` `day_book_meta`): `Narration`,
 //! `Entered by` and `Origin`. The screen draws the narration as a second line under the party
 //! (index.html:1651, `div.meta`), Entered by in the secondary ink and the origin as the mock does:
-//! `Typed` in the meta ink, an accepted AI draft as an AI badge. What the engine does not record
-//! is not drawn (no attachment or bank rule is stored, so no "Image attached" or "Bank rule").
+//! `Typed` in the meta ink, an accepted AI draft as an AI badge with the reader's words
+//! ("Plain-words draft, accepted"). What the engine does not record is not drawn (no attachment or
+//! bank rule is stored, so no "Image attached" or "Bank rule").
 //! The engine's `Status` column is empty for a regular voucher; any other status is a badge at the
 //! right of the Origin cell, and is spoken last.
 //!
@@ -21,6 +22,7 @@
 //! voucher is counted here.
 
 use egui::{Frame, Rect, Role, ScrollArea, Sense, Stroke, Ui, pos2, vec2};
+use ledgerly_api::{AiFeature, EntryOrigin};
 use ledgerly_core::{Date, DrCr, Period};
 
 use super::text::{amount_on_side, cell_text};
@@ -615,6 +617,23 @@ fn paint_particulars(ui: &Ui, rect: Rect, label: &str, narration: &str) {
     );
 }
 
+/// The badge the Origin cell draws for `origin` (the facade's [`EntryOrigin::label`]), with its
+/// words in the current language: an accepted draft is an AI badge (an accept the log does not
+/// tie to a feature reads "AI draft, accepted"), an import a neutral one. `None` is meta text.
+fn origin_badge(origin: &str) -> Option<(BadgeKind, String)> {
+    if origin == EntryOrigin::AiDraft.label() {
+        return Some((BadgeKind::Ai, crate::i18n::lit("AI draft, accepted")));
+    }
+    if origin == EntryOrigin::Imported.label() {
+        return Some((BadgeKind::Neutral, crate::i18n::lit("Imported")));
+    }
+    AiFeature::ALL
+        .into_iter()
+        .map(|feature| EntryOrigin::AcceptedDraft(feature).label())
+        .find(|label| *label == origin)
+        .map(|label| (BadgeKind::Ai, crate::i18n::lit(label)))
+}
+
 /// The origin: `Typed` as meta text, an accepted AI draft as the AI badge, an import as a neutral
 /// badge, and any other word the engine gives as meta text. A status other than regular is a
 /// neutral badge at the right edge.
@@ -622,16 +641,8 @@ fn paint_origin(ui: &Ui, rect: Rect, origin: &str, status: &str) {
     let t = tokens(ui);
     let x = rect.left() + table::CELL_PAD_X;
     let y = rect.center().y;
-    if origin == "AI draft" {
-        paint_badge(
-            ui,
-            x,
-            y,
-            BadgeKind::Ai,
-            &crate::i18n::lit("AI draft, accepted"),
-        );
-    } else if origin == "Imported" {
-        paint_badge(ui, x, y, BadgeKind::Neutral, &crate::i18n::lit("Imported"));
+    if let Some((kind, words)) = origin_badge(origin) {
+        paint_badge(ui, x, y, kind, &words);
     } else {
         table::paint_cell_text(
             ui,
@@ -751,5 +762,29 @@ mod a11y_names {
             spoken(&voucher_report()),
             "20 Nov 2026, Sales, 12, Sharma Traders, 1,200.00, Paid"
         );
+    }
+
+    #[test]
+    fn an_accepted_draft_of_a_named_reader_is_an_ai_badge_with_its_words() {
+        // provenance: the mock's day book Origin cell (index.html, `day-book` render) draws
+        // `badge(v.ai + ", accepted", "b-ai", "spark")`; PY/0315 has `ai:'Plain-words draft'` and
+        // PB/0141 `ai:'Bill photo draft'`. An import is a neutral badge; Typed is meta text.
+        assert_eq!(
+            origin_badge("Plain-words draft, accepted"),
+            Some((BadgeKind::Ai, "Plain-words draft, accepted".to_owned()))
+        );
+        assert_eq!(
+            origin_badge("Bill photo draft, accepted"),
+            Some((BadgeKind::Ai, "Bill photo draft, accepted".to_owned()))
+        );
+        assert_eq!(
+            origin_badge("AI draft"),
+            Some((BadgeKind::Ai, "AI draft, accepted".to_owned()))
+        );
+        assert_eq!(
+            origin_badge("Imported"),
+            Some((BadgeKind::Neutral, "Imported".to_owned()))
+        );
+        assert_eq!(origin_badge("Typed"), None);
     }
 }

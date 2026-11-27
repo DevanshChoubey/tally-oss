@@ -220,3 +220,135 @@ fn a_photo_the_provider_cannot_read_is_logged_as_a_failed_read() {
     );
     assert_eq!(api.ai_drafts().unwrap().len(), 0);
 }
+
+#[test]
+fn the_person_chooses_the_purchase_ledger_and_the_engine_then_balances_the_bill() {
+    // provenance: derived. The reader leaves the taxable line's ledger for the person ("nothing
+    // on the bill says which purchase ledger it belongs to", ocr.rs `taxable_line`), so the draft
+    // is blocked as read. With Purchases chosen for that line the voucher is Purchases Dr
+    // 68,000.00 against Rupa Polymers Cr 68,000.00, the printed total; accepting posts it and
+    // the choice is in the log's human edits.
+    use ledgerly_api::{Accepted, DraftCheck, DraftEdits};
+    use ledgerly_core::DrCr;
+    let mut api = books("s21-bill-ledger.ledgerly");
+    api.set_ai_tier(AiTier::Local).unwrap();
+    api.attach_assistant(Box::new(FixedAnswers::new().with_document(bill())));
+    let BillRead::Drafted { id, .. } = api
+        .read_bill_photo(IMAGE, "IMG_2041.jpg", &CancelToken::new())
+        .unwrap()
+    else {
+        panic!("expected a draft");
+    };
+    let as_read = api.check_ai_draft(id, &DraftEdits::default()).unwrap();
+    assert!(
+        matches!(as_read, Outcome::Value(DraftCheck::Blocked { .. })),
+        "{as_read:?}"
+    );
+    let edits = DraftEdits {
+        line_ledgers: vec![(0, LedgerId(4))],
+        ..DraftEdits::default()
+    };
+    let Outcome::Value(DraftCheck::Ok(voucher)) = api.check_ai_draft(id, &edits).unwrap() else {
+        panic!("expected the engine's voucher");
+    };
+    let lines: Vec<(LedgerId, DrCr, Paise)> = voucher
+        .ledger_lines
+        .iter()
+        .map(|l| (l.ledger, l.amount.side, l.amount.amount))
+        .collect();
+    assert_eq!(
+        lines,
+        vec![
+            (LedgerId(4), DrCr::Dr, Paise::new(6_800_000)),
+            (LedgerId(5), DrCr::Cr, Paise::new(6_800_000)),
+        ]
+    );
+    let accepted = api.accept_ai_draft(id, &edits).unwrap();
+    assert!(
+        matches!(accepted, Outcome::Value(Accepted::Posted(_))),
+        "{accepted:?}"
+    );
+    let activity = api.ai_activity().unwrap();
+    let edits_logged = activity
+        .iter()
+        .find_map(|e| {
+            if let ledgerly_api::AiActivityKind::DraftAccepted {
+                human_edits_json, ..
+            } = &e.activity.kind
+            {
+                human_edits_json.clone()
+            } else {
+                None
+            }
+        })
+        .unwrap_or_default();
+    assert!(edits_logged.contains("line_ledgers"), "{edits_logged}");
+}
+
+#[test]
+fn a_ledger_chosen_for_a_line_the_draft_does_not_have_is_unsupported_not_ignored() {
+    // provenance: derived. The bill draft has two lines (taxable value, party), indices 0 and 1;
+    // a choice for line 7 names nothing, so the check says so instead of dropping the choice.
+    use ledgerly_api::DraftEdits;
+    let mut api = books("s21-bill-no-line.ledgerly");
+    api.set_ai_tier(AiTier::Local).unwrap();
+    api.attach_assistant(Box::new(FixedAnswers::new().with_document(bill())));
+    let BillRead::Drafted { id, .. } = api
+        .read_bill_photo(IMAGE, "IMG_2041.jpg", &CancelToken::new())
+        .unwrap()
+    else {
+        panic!("expected a draft");
+    };
+    let edits = DraftEdits {
+        line_ledgers: vec![(0, LedgerId(4)), (7, LedgerId(4))],
+        ..DraftEdits::default()
+    };
+    let check = api.check_ai_draft(id, &edits).unwrap();
+    assert!(matches!(check, Outcome::Unsupported(_)), "{check:?}");
+}
+
+#[test]
+fn the_persons_choice_replaces_a_ledger_the_reader_matched() {
+    // provenance: derived. The reader matched the party line (index 1) to Rupa Polymers. The
+    // person's choice is a human edit and wins: with Purchases on line 0 and Purchases again on
+    // line 1, both lines name ledger 4 and the engine's voucher says so.
+    use ledgerly_api::{DraftCheck, DraftEdits};
+    let mut api = books("s21-bill-override.ledgerly");
+    api.set_ai_tier(AiTier::Local).unwrap();
+    api.attach_assistant(Box::new(FixedAnswers::new().with_document(bill())));
+    let BillRead::Drafted { id, .. } = api
+        .read_bill_photo(IMAGE, "IMG_2041.jpg", &CancelToken::new())
+        .unwrap()
+    else {
+        panic!("expected a draft");
+    };
+    let edits = DraftEdits {
+        line_ledgers: vec![(0, LedgerId(4)), (1, LedgerId(4))],
+        ..DraftEdits::default()
+    };
+    let check = api.check_ai_draft(id, &edits).unwrap();
+    let Outcome::Value(DraftCheck::Ok(voucher)) = &check else {
+        panic!("expected the engine's voucher: {check:?}");
+    };
+    assert!(
+        voucher.ledger_lines.iter().all(|l| l.ledger == LedgerId(4)),
+        "{voucher:?}"
+    );
+}
+
+#[test]
+fn a_cancelled_read_stores_no_draft_and_logs_nothing() {
+    // provenance: derived. The person pressed Esc before the read could store anything: the
+    // token is cancelled, so no draft waits in the queue and the read is reported as cancelled.
+    // The provider did not run (the token is checked before it), so nothing is logged, as for a
+    // refusal.
+    let mut api = books("s21-bill-cancel.ledgerly");
+    api.set_ai_tier(AiTier::Local).unwrap();
+    api.attach_assistant(Box::new(FixedAnswers::new().with_document(bill())));
+    let cancel = CancelToken::new();
+    cancel.cancel();
+    let read = api.read_bill_photo(IMAGE, "IMG_2041.jpg", &cancel).unwrap();
+    assert!(matches!(read, BillRead::Cancelled), "{read:?}");
+    assert_eq!(api.ai_drafts().unwrap().len(), 0);
+    assert_eq!(api.ai_log_rows().unwrap().len(), 0);
+}

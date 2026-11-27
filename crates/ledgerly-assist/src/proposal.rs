@@ -134,6 +134,53 @@ pub struct MatchSuggestion {
     pub confidence_permille: u16,
 }
 
+/// A statement line the exact matcher left unclaimed, as the assistant is asked about it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BankLineQuestion {
+    /// Statement row (1-based), as the file numbers it.
+    pub row: u32,
+    /// The date the bank gives.
+    pub date: Date,
+    /// The bank's description of the line.
+    pub description: String,
+    /// The amount, never negative.
+    pub amount: Paise,
+    /// Money in (true) or money out.
+    pub deposit: bool,
+}
+
+/// A voucher on the bank ledger with no bank date, that the exact matcher left open: one the
+/// assistant may name for a [`BankLineQuestion`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct OpenVoucher {
+    /// The voucher.
+    pub id: VoucherId,
+    /// Voucher date.
+    pub date: Date,
+    /// The other side of the voucher (its first ledger that is not the bank).
+    pub ledger_name: String,
+    /// The net amount on the bank ledger, never negative.
+    pub amount: Paise,
+    /// A debit to the bank (money in, true) or a credit.
+    pub deposit: bool,
+}
+
+/// The report names a [`ReportQuery`] may give, each one a report the engine runs. The cloud
+/// prompt lists them, and `ledgerly_api::Api::ask_books` maps each to its report.
+pub const REPORT_NAMES: [&str; 8] = [
+    "trial_balance",
+    "balance_sheet",
+    "profit_and_loss",
+    "day_book",
+    "receivables",
+    "payables",
+    "ledger_vouchers",
+    "stock_summary",
+];
+
+/// The report name a provider gives when no report answers the question (a forecast, say).
+pub const UNSUPPORTED_REPORT: &str = "unsupported";
+
 /// A report the user asked for in words. The engine runs it; the answer shows this query.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ReportQuery {

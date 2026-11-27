@@ -66,7 +66,7 @@ pub struct Api {
     /// Who is making the changes.
     actor: Actor,
     /// The loaded books, or why they cannot be loaded.
-    cache: Cache,
+    pub(crate) cache: Cache,
     /// The lock date in force, from the audit log.
     lock: Option<Date>,
     /// Bank statements imported in this session (card W5). Not kept in the company file, which
@@ -77,12 +77,12 @@ pub struct Api {
     assistant: Option<Box<dyn AiProvider>>,
     /// Where the cloud key is kept, when a vault is attached ([`Api::attach_key_vault`]). The
     /// company file never holds the key.
-    pub(crate) key_vault: Option<Box<dyn ledgerly_assist::cloud::KeyVault>>,
+    pub(crate) key_vault: Option<std::sync::Arc<dyn ledgerly_assist::cloud::KeyVault>>,
 }
 
 /// The state of the books cache.
 #[derive(Debug)]
-enum Cache {
+pub(crate) enum Cache {
     /// The books, loaded from the store.
     Ready(Box<Books>),
     /// The store holds a voucher this build cannot project. Nothing is computed from the books.

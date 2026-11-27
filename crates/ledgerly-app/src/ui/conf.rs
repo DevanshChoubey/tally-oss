@@ -31,13 +31,13 @@ pub fn lit_bars(level: Confidence) -> usize {
     }
 }
 
-/// The word shown after the bars.
+/// The words shown after the bars (mock `conf`: the band, then "confidence").
 #[must_use]
 pub fn word(level: Confidence) -> &'static str {
     match level {
-        Confidence::High => "High",
-        Confidence::Medium => "Medium",
-        Confidence::Low => "Low",
+        Confidence::High => "High confidence",
+        Confidence::Medium => "Medium confidence",
+        Confidence::Low => "Low confidence",
         Confidence::Rule => "Rule, deterministic",
     }
 }

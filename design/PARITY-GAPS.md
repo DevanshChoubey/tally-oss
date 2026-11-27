@@ -92,8 +92,16 @@ Classes:
 
 ## Day book (`day-book.*`)
 
-- **NOT BUILT** Origin shows Typed, AI draft, accepted or Imported only: no attachment, bank-rule or
-  draft kind is stored ("Image attached", "Bank rule" in the mock).
+- **FIX (s21 round F)** a voucher posted by accepting an assistant draft showed "Typed" (the posting's
+  actor is the person who accepted). The accept event now names the voucher and its feature, so the
+  Origin cell is the mock's AI badge with the reader's words: "Plain-words draft, accepted", "Bill
+  photo draft, accepted" (index.html day book, `v.ai + ', accepted'`); the voucher view says it came
+  from an AI draft.
+- **NOT BUILT** no attachment or bank rule is stored on a voucher ("Image attached", "Bank rule" in
+  the mock). The Godavari capture fixture posts every voucher by hand, so `day-book.month` shows no
+  AI badge where the mock has two (PY/0315, PB/0141); the badge is tested in
+  `s21_ai_drafts::an_accepted_draft_shows_its_reader_as_the_day_book_origin` and the
+  `day_book::origin_badge` unit test.
 - **NOT BUILT** Ctrl+I Origin: the original proposal is not opened from the day book.
 - **DELIBERATE** a non-regular status is a badge in the Origin cell; the mock has no Status column.
 - **DELIBERATE** the month view keeps the cursor on the voucher it was on (`replace_report`).
@@ -185,7 +193,27 @@ Classes:
   the engine's, and the subtitle's month alone would name the wrong day.
 - **NOT BUILT** the lines table lacks Exact, Rule and "AI suggested" badges and a confidence meter.
 - **DELIBERATE** the key that changes account is C, not F4, which is Contra in this app.
-- **NOT BUILT** `bank.suggested-ledger` and `bank.ai-suggestions` need the in-app assistant.
+- **FIX (s21 round F)** the assistant's bank suggestions: a line the exact matcher leaves is asked
+  about (`Api::bank_ai_suggestions`), with the open vouchers in its direction; the engine checks the
+  row, the one voucher, that it was offered and that the amounts are equal, stores the suggestion as
+  a draft (it lists in the review queue as a bank match, as the mock's q2), and accepting confirms
+  it as AI suggested with the accept in the same commit (`Api::accept_bank_ai_match`). Skipping its
+  line rejects it; a rejected or accepted line is not asked again. Every ask, refusal, accept and
+  reject is in the AI activity log.
+- **DELIBERATE** the side text of an AI suggestion is the engine's check ("Same amount as the voucher
+  on the bank, N days apart"), never the provider's reason; the mock shows the model's words
+  ("m.why"). A suggestion whose amounts differ is refused, not shown with a red check (the mock's
+  "Amounts differ" line), so Accept is never live on a mismatch.
+- **DELIBERATE** a suggestion is accepted or rejected one line at a time; nothing is accepted in bulk.
+- **NOT BUILT** `bank.ai-suggestions` as a screen state: the "AI suggestions" tab, the proposal card
+  with its source chips and check lines, Y/N/E keys (the app's Enter accepts and S skips) and a
+  capture. The Godavari sample has no line the assistant could match to an existing voucher (every
+  same-amount pair is within the exact matcher's 3 days), and its two mock suggestions that post a
+  new voucher (ANNAPURNA CANTEEN, MEHTA AGRO) are not built: a voucher from a bank line is refused.
+  The mock's KSK INDORE line is an exact match in the app (same amount, same day).
+- **NOT BUILT** `bank.suggested-ledger` (a new ledger for unexplained lines).
+- **NOT BUILT** the cloud prompt for bank lines: the cloud provider refuses (`match_bank_line`'s
+  default), and with a cloud provider each unmatched line logs that refusal on every load.
 - **DELIBERATE** `bank.default` shows the empty state because the fixture has no statement.
 
 ## Payment, receipt, contra, journal (`payment.*`, `receipt.*`, `contra.*`, `journal.*`)
@@ -340,9 +368,32 @@ Classes:
   five rows (one per feature); the others appear as rounds C-F record them. The Output column says
   "Draft purchase" without the mock's line count, and the Input column shows "(hash 9f3c…)" where
   the mock says "(image hash 9f3c…e1)".
-- **NOT BUILT** `ai.ai-settings.*`: no form to describe the provider or type the key yet (the
-  capture fixture stores them through the API); the reader and language rows stay "Not installed"
-  because no local runtime is linked (owner decision: runtime and model).
+- **FIX** (s21, `s21-k-sheet-1.png`) `ai.ai-settings.cloud-edit`: Ctrl+Enter on the cloud panel
+  opens the provider/key form (mock state added first): request format, endpoint or base URL, a
+  model per feature, and a masked key field that is never filled back from the vault. Ctrl+A saves
+  (the provider as audited settings, the key to the vault only), Alt+D deletes the key, Esc closes
+  the form. Keys as TallyPrime documents them (Ctrl+Enter "To alter a master", Ctrl+A "To accept
+  or save a screen", Alt+D delete, Esc back; help.tallysolutions.com/keyboard-shortcuts-tally-prime/,
+  read 2026-11-27). The API refuses a non-https endpoint, a format other than the two it speaks
+  and an empty key; tests and captures use `MemoryVault` only, and nothing opens a connection.
+- **DELIBERATE** (owner, 2026-11-27) the cloud provider is the Anthropic Messages API with the
+  user's own key or an OpenAI-compatible chat endpoint given as a base URL plus key; no other.
+  With Messages and no model named, bill reading uses `claude-sonnet-5-5` and plain words
+  `claude-haiku-5-5`; the cloud panel shows the model each feature is sent to. The cloud panel's
+  rows are now Format, Requests go to, Bill reading, Plain words, Other features (mock changed
+  first); the fixture's chat endpoint is a base URL.
+- **DELIBERATE** (owner, 2026-11-27) no local model for now: the reader and language rows stay
+  "Not installed"; no runtime is linked and nothing is downloaded. Cloud is the only real provider.
+- **NOT BUILT** the cloud assistant (`Api::cloud_assistant`) reads no bill image: an image cannot be
+  redacted, and the per-document confirmation (`purchase-bill.cloud-consent`) is not built, so the
+  `claude-sonnet-5-5` default is stored and shown but not yet used. Open question for the owner:
+  should a cloud bill read send the image after a per-document confirmation, or the local OCR text
+  (ocrs) redacted?
+- **NOT BUILT** the app does not yet attach the cloud assistant when a company with the Cloud tier
+  opens (the AI-in-release switch stays false); tests build it through the API with a recording
+  transport.
+- **NOT BUILT** the form's text fields are egui's single-line edits, shorter than the mock's
+  `.fld input` boxes.
 - **NOT BUILT** `ai.ai-settings.cloud`: the Removed before sending card keeps the 1.0 app's wording
   ("Bank account numbers and IFSC codes", "PAN, GSTIN and Aadhaar numbers"), which names what the
   redaction module removes; the mock's shorter rows omit IFSC and GSTIN. The mock's table switches
@@ -358,17 +409,29 @@ Classes:
   activity log. With no provider (this build) the box is off and "No local model can run." offers F5/F6.
 - **NOT BUILT** `ai.quick-entry.hinglish`: the reader drafts no account from "NEFT", no bill reference
   ("SI/0401 ke against") and no date from a bank line, so the state is not captured.
-- **NOT BUILT** `ai.quick-entry.proposal`: no Saptagiri now/After taxbox (no API call gives a ledger's
-  balance after a draft; no figure is computed in the screen); no PY/0315 duplicate warning, no
-  lock-date check line and no "Why Rent and not Sharma Properties?" line (the reader explains
-  nothing); the narration is text, not an editable field; "Sharma Properties" is not marked in
-  "Read as:" (the reader reports source ranges for the amount and ledger names only); the source chip
-  says "Test provider" (the captures run the fixed-answers provider, never a model) where the mock
-  says "Local model"; the Prop footer keeps the kit's Edit, Reject, Accept order.
+- **FIX** (s21 follow-up, `s21-qe-sheet-1.png`) `ai.quick-entry.proposal`: the account's balance box
+  ("<ledger> now" and "After (engine)", both from the trial balance through `Api::balance_change`;
+  the capture's Saptagiri figures, 7,27,524.50 and 7,02,524.50, are the engine's and equal the
+  mock's), the narration in a field, the lock-date check line ("21 Nov 2026 is after the lock
+  date."), the "Try" sentences (a click reads one) and "High confidence" after the bars (mock `conf`,
+  index.html:962; the review queue's band reads the same way now).
+- **DELIBERATE** `ai.quick-entry.proposal`: the source chip says "Test provider" where the mock says
+  "Local model": the captures run the fixed-answers provider, never a model, and the chip names the
+  provider that answered. The balance box names the whole ledger ("Saptagiri Commercial Bank A/c
+  now"); the mock's "Saptagiri" is a short form no master stores. The narration field is read-only:
+  edits go through Enter (the voucher form), so the draft and what was accepted stay one thing.
+- **NOT BUILT** `ai.quick-entry.proposal`: no PY/0315 duplicate warning (no engine check finds an
+  earlier voucher for the same rent; the assistant may not assert one) and no "Why Rent and not
+  Sharma Properties?" line (the reader explains nothing); "Sharma Properties" is not marked in
+  "Read as:" (the reader reports source ranges for the amount and ledger names only); the Prop
+  footer keeps the kit's Edit, Reject, Accept order (Accept last keeps the disabled state of a
+  blocked draft from greying the other two in a wrapping row).
 - **NOT BUILT** `ai.quick-entry.unknown-ledger`: the Dr ledger is red text, not a picker; no Alt+C to
   create it; the check line is the engine's ("create these ledgers first: Ramesh") where the mock
   says "Dr ledger is missing, so the voucher cannot balance yet."; no "Cash balance after paying"
-  line; the confidence reads Medium (the recorded answer's 800 per mille) where the mock shows Low;
+  line (DELIBERATE: the engine computes a balance only for a voucher it can check, and a draft with
+  a missing ledger is none); the narration and the lock line show here as on the proposal, where the
+  mock leaves them out; the confidence reads Medium (the recorded answer's 800 per mille) where the mock shows Low;
   the Cr amount is tagged "your words" since the engine made no voucher to balance.
 - **NOT BUILT** `ai.quick-entry.rejected`: no reason buttons (Wrong ledger, amount, account); the
   rejection is stored without a reason. Accept stays on the screen with "Payment <number> posted."
@@ -377,11 +440,75 @@ Classes:
   "Payment PY/0319 posted." (the mock was changed to match in round C); `.idle` and `.read-failed`
   were added to the mock in round C, the failure text being the reader's own words.
 - **NOT BUILT** `ai.quick-entry.loading`: Esc does not cancel the read; the key bar lists the idle
-  keys. The "Try" sentences are left out. Hindi words for the new lines are unsourced.
-- **NOT BUILT** `ask.result`, `ask.loading`, `ask.low-confidence`, `ask.unsupported`,
-  `purchase-bill.reading`, `.proposal`,
-  `.low-confidence`, `.mismatch`, `.duplicate`, `.cloud-consent`, `.error`, `.accepted` and
-  `gst.recon-explain`: no model runs; a screen would show a look with nothing behind it.
+  keys. The "Try" sentences of the `ai=on` mock are the two the reader drafts (the Mehta Agro one
+  needs a bill reference, which the assistant never proposes; the mock was changed first). Hindi words for the new lines are unsourced.
+- **FIX** (round E) `ai.ask.idle`, `.result`, `.unsupported` and `.failed` are built on Ask your
+  books with the assistant (mock states added first; `s21-e-sheet-1/2`). `Api::ask_books` runs the
+  question through the gate, checks the provider's `ReportQuery` against the question (dates and
+  ledger names it states), resolves it to an engine report (a ledger's vouchers need exactly one
+  ledger; a ledger named for a whole-books report is refused, never dropped) and runs it with
+  `Api::report`. The card draws the engine's `Report` only: the chips are its title and dates,
+  every figure a cell. Ask and the palette share one default-period rule
+  (`ledgerly_api::default_report_params`). Enter opens the full report; Alt+D dismisses.
+- **DELIBERATE** `ai.ask.result`: the mock's earlier result (receivables overdue more than 30
+  days, sorted by days overdue) needs a filter and a sort a `ReportQuery` does not carry; the
+  `ai=on` result is Bills receivable as the engine opens it, and a report wider than four columns
+  shows its last column and says how many more the full report has.
+- **NOT BUILT** `ai.ask.result` Ctrl+A "Save as report" (shown blocked with the reason), a drill
+  from a row of the card, and an Alt+D that logs the reading as wrong (Alt+D only dismisses; no
+  AI event kind records it). `ai.ask.loading` is not captured (it lasts one frame with the test
+  provider) and Esc does not cancel a question in flight.
+- **NOT BUILT** `ask.low-confidence`: a `ReportQuery` has no confidence and no second reading.
+- **NOT BUILT** the lead words "Unsupported." and "Not read." are not bold in the app's note, and
+  the provider chips in the card head are plain text, as on the plain-words card.
+- **DELIBERATE** an ask the engine cannot run is logged as `ReadFailed` with a reason starting
+  "Unsupported" rather than a new AI event kind, so the stored event format is unchanged.
+- **NOT BUILT** `gst.recon-explain`: the mock's card is an explanation in words around figures
+  bound to the engine, plus a draft fix. None of the four typed proposals (`VoucherDraft`,
+  `MatchSuggestion`, `ReportQuery`, `MappingSuggestion`) carries an explanation, and an
+  explanation the provider writes is prose, which may state a number the engine did not compute.
+  Building it needs a new typed proposal (the cause chosen from a fixed list the engine checks,
+  with every figure the engine's), which is a change to the frozen proposal set for the
+  coordinator to decide. The review queue keeps no 2B row for it.
+- **DELIBERATE** (owner, 2026-11-27) OCR is `ocrs` (MIT OR Apache-2.0; `default-features = false`
+  with `onnx`, and `rten` with `onnx_format`; `cargo deny check` passes). `ledgerly_assist::ocr_models`
+  names the two model files and their fixed URLs (from the ocrs 0.14.0 crate's
+  `examples/download-models.sh`), says Not installed while they are missing or do not load, and
+  downloads only on request, keeping a file only when its SHA-256 matches. Nothing was downloaded.
+- **NOT BUILT** the OCR model download refuses: no checksum is recorded, and computing one would
+  mean downloading the files. Owner question: the SHA-256 of `text-detection.onnx` and
+  `text-recognition.onnx`.
+- **NOT BUILT** reading a bill with ocrs: ocrs gives each line its characters and boxes but no
+  confidence, and the bill reader blanks values by the OCR line's confidence. A made-up confidence
+  would be a silent default. Owner question: what stands in for it (for example every ocrs value
+  marked for review). No screen shows the OCR model state or a download button yet (no mock state).
+- **FIX** (round D) `ai.purchase-bill.choose`, `.reading`, `.ledger-lines`, `.rejected` and
+  `.error` are built on the bill photo screen with the assistant (mock states added first;
+  `s21-d-sheet-1/2`). The photo is drawn with a box and label on each value the reader took; the
+  taxable line has a ledger list the person chooses from (`DraftEdits::line_ledgers`, logged as a
+  human edit); the engine total is the engine voucher's party line, shown only when the engine
+  makes the voucher, never a sum on screen.
+- **NOT BUILT** `purchase-bill.proposal`, `.low-confidence`, `.mismatch`: the mock drafts item rows
+  (qty, rate, items matched to masters); the bill reader reads no item rows yet, so the app drafts
+  ledger lines (`ai.purchase-bill.ledger-lines`, added to the mock for this). Ctrl+I "Show source"
+  and Enter "Next field" are not built.
+- **NOT BUILT** `ai.purchase-bill.accepted` capture: Accept is reached only after choosing a ledger
+  in a list, which the capture tool cannot drive; it is covered by the app test
+  `choosing_the_purchase_ledger_lets_the_engine_balance_and_accept_post_it`. On the sample company
+  the Rupa Polymers bill would then stop at the engine's Unsupported verdict (a supplier outside
+  the company's registration state, `validate::check_supplier_state`) and Rupa is bill-wise (a
+  draft proposes no bill allocations), so Accept stays off there; recorded, not hidden.
+- **NOT BUILT** the place of supply is not asked on the bill screen, so a GST purchase draft in a
+  registered company stays Unsupported ("the place of supply is never guessed"); an owner/design
+  decision whether to take it from the supplier master.
+- **NOT BUILT** `purchase-bill.duplicate` (no engine check finds an earlier read of the same image or
+  bill number), `.cloud-consent` (cloud provider refuses documents; owner decision on cloud), JPEG
+  and PDF reading (PNG only: JPEG needs the `image` crate's jpeg feature and a cargo deny check;
+  PDF needs a renderer; both refused with a typed reason, mock error state changed to say so), and
+  keeping the image with the voucher (no image store; the choose text says so, mock changed first).
+- **NOT BUILT** Esc while reading is honoured only before the provider runs (`BillRead::Cancelled`);
+  a read already past the provider stores its draft, and the screen says it waits in the review
+  queue. No app test drives Esc mid-read (it races the worker).
 - **NOT BUILT** the AI-off note's AI and privacy button is a secondary button; the mock's is a ghost
   (the kit has no ghost `ButtonKind`).
 - **DELIBERATE** Ask's box holds a hint and is disabled and the key bar lists only the name, because

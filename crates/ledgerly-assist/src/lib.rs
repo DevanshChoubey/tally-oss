@@ -4,6 +4,7 @@
 pub mod cloud;
 pub mod nl_entry;
 pub mod ocr;
+pub mod ocr_models;
 mod proposal;
 pub mod provider;
 pub mod redact;
@@ -11,7 +12,7 @@ mod seam;
 pub mod validate;
 
 pub use proposal::{
-    DraftItem, DraftLine, MappingSuggestion, MatchSuggestion, Proposal, ReportQuery, SourceRef,
-    Transcribed, VoucherDraft,
+    BankLineQuestion, DraftItem, DraftLine, MappingSuggestion, MatchSuggestion, OpenVoucher,
+    Proposal, REPORT_NAMES, ReportQuery, SourceRef, Transcribed, UNSUPPORTED_REPORT, VoucherDraft,
 };
 pub use seam::{AssistError, ProposalInput, Proposer};

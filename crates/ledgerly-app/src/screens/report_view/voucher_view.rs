@@ -170,7 +170,7 @@ pub fn audit_lines(detail: &VoucherDetail) -> Vec<String> {
     let by = &audit.entered_by;
     let created = match audit.origin {
         EntryOrigin::Typed => format!("Created {day} by {by}, typed by hand."),
-        EntryOrigin::AiDraft => {
+        EntryOrigin::AiDraft | EntryOrigin::AcceptedDraft(_) => {
             sentence(format!("Created {day} from an AI draft, accepted by {by}"))
         }
         EntryOrigin::Imported => format!("Created {day} by {by}, through an import."),

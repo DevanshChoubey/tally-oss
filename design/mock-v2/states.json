@@ -42,6 +42,13 @@
    "description": "Cloud with your own key: the provider as the user described it, the key in the system keychain, redaction, and a confirmation before each document."
   },
   {
+   "id": "ai.ai-settings.cloud-edit",
+   "kind": "happy",
+   "hash": "screen=ai-settings&state=cloud-edit&ai=on",
+   "title": "AI and privacy, change provider or key (later release)",
+   "description": "Ctrl+Enter on the cloud panel: the request format (Messages for the Anthropic API, or an OpenAI-compatible chat base URL), the endpoint and a model per feature as fields, the key in a masked field that is never filled back. Ctrl+A saves the key to the system keychain only; Alt+D deletes it; saving opens no connection."
+  },
+  {
    "id": "ai.quick-entry.proposal",
    "kind": "happy",
    "hash": "screen=quick-entry&state=proposal&ai=on",
@@ -96,6 +103,76 @@
    "hash": "screen=quick-entry&state=not-installed&ai=on",
    "title": "Plain-words entry, no local model (later release)",
    "description": "On this computer with no model the build can run: the box is disabled, the reason is named, and the voucher forms are offered."
+  },
+  {
+   "id": "ai.ask.idle",
+   "kind": "empty",
+   "hash": "screen=ask&state=idle&ai=on",
+   "title": "Ask your books, ready (later release)",
+   "description": "A model can run: the box has focus and nothing is sent or run until Enter."
+  },
+  {
+   "id": "ai.ask.loading",
+   "kind": "loading",
+   "hash": "screen=ask&state=loading&ai=on",
+   "title": "Ask your books, building the query (later release)",
+   "description": "The question is with the assistant; nothing is shown until the engine has run the query."
+  },
+  {
+   "id": "ai.ask.result",
+   "kind": "happy",
+   "hash": "screen=ask&state=result&ai=on",
+   "title": "Ask your books, answered (later release)",
+   "description": "The question became a ReportQuery the engine ran: the chips name the report and its date from the engine's own parameters, and the table is the engine's report. Enter opens the full report; Alt+D dismisses; saving it as a report is not built."
+  },
+  {
+   "id": "ai.ask.unsupported",
+   "kind": "error",
+   "hash": "screen=ask&state=unsupported&ai=on",
+   "title": "Ask your books, unsupported (later release)",
+   "description": "A forecast: the query names no report the engine runs, so the answer is Unsupported, logged, with three reports offered."
+  },
+  {
+   "id": "ai.ask.failed",
+   "kind": "error",
+   "hash": "screen=ask&state=failed&ai=on",
+   "title": "Ask your books, not read (later release)",
+   "description": "The query named a date the question does not say, so nothing ran; the reason is the check's own words, and the failure is in the AI activity log."
+  },
+  {
+   "id": "ai.purchase-bill.choose",
+   "kind": "empty",
+   "hash": "screen=purchase-bill&state=choose&ai=on",
+   "title": "Bill photo, choose a file (later release)",
+   "description": "Ctrl+Alt+O: the path of a bill photo (PNG or JPEG) or PDF is typed; Enter reads it on this computer. Nothing is read or kept until then."
+  },
+  {
+   "id": "ai.purchase-bill.reading",
+   "kind": "loading",
+   "hash": "screen=purchase-bill&state=reading&ai=on",
+   "title": "Bill photo, reading (later release)",
+   "description": "A bill photo is being read on this computer; the image never leaves the machine."
+  },
+  {
+   "id": "ai.purchase-bill.ledger-lines",
+   "kind": "validation-error",
+   "hash": "screen=purchase-bill&state=ledger-lines&ai=on",
+   "title": "Bill photo, choose the purchase ledger (later release)",
+   "description": "What the bill reader reads today: the printed supplier, bill number, date, taxable value, tax and total, drafted as ledger lines with a box on the image for each. The taxable value names no purchase ledger, so the person chooses one; the engine checks the draft after every choice and its verdict is the check line. Item rows are not read yet."
+  },
+  {
+   "id": "ai.purchase-bill.rejected",
+   "kind": "empty",
+   "hash": "screen=purchase-bill&state=rejected&ai=on",
+   "title": "Bill photo, draft rejected (later release)",
+   "description": "Alt+D: the draft is rejected and nothing is posted; the rejection is in the AI activity log. Another bill can be read, or the bill typed."
+  },
+  {
+   "id": "ai.purchase-bill.error",
+   "kind": "error",
+   "hash": "screen=purchase-bill&state=error&ai=on",
+   "title": "Bill photo, unreadable file (later release)",
+   "description": "The file is a PDF, which this build does not read (PNG photos only); the error says what failed and what to do."
   },
   {
    "id": "hi.home.default",
@@ -364,6 +441,27 @@
    "description": "A fresh invoice opens after saving, with a toast naming the voucher saved."
   },
   {
+   "id": "purchase-bill.choose",
+   "kind": "empty",
+   "hash": "screen=purchase-bill&state=choose",
+   "title": "Bill photo, choose a file",
+   "description": "Ctrl+Alt+O: the path of a bill photo (PNG or JPEG) or PDF is typed; Enter reads it on this computer. Nothing is read or kept until then."
+  },
+  {
+   "id": "purchase-bill.ledger-lines",
+   "kind": "validation-error",
+   "hash": "screen=purchase-bill&state=ledger-lines",
+   "title": "Bill photo, choose the purchase ledger",
+   "description": "What the bill reader reads today: the printed supplier, bill number, date, taxable value, tax and total, drafted as ledger lines with a box on the image for each. The taxable value names no purchase ledger, so the person chooses one; the engine checks the draft after every choice and its verdict is the check line. Item rows are not read yet."
+  },
+  {
+   "id": "purchase-bill.rejected",
+   "kind": "empty",
+   "hash": "screen=purchase-bill&state=rejected",
+   "title": "Bill photo, draft rejected",
+   "description": "Alt+D: the draft is rejected and nothing is posted; the rejection is in the AI activity log. Another bill can be read, or the bill typed."
+  },
+  {
    "id": "purchase-bill.reading",
    "kind": "loading",
    "hash": "screen=purchase-bill&state=reading",
@@ -417,7 +515,7 @@
    "kind": "error",
    "hash": "screen=purchase-bill&state=error",
    "title": "Bill photo, unreadable file",
-   "description": "The file is a password-protected PDF; the error says what failed and what to do."
+   "description": "The file is a PDF, which this build does not read (PNG photos only); the error says what failed and what to do."
   },
   {
    "id": "purchase-bill.accepted",

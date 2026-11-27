@@ -18,7 +18,7 @@
 use std::collections::BTreeMap;
 
 use ledgerly_core::{UserId, VoucherId};
-use ledgerly_model::Books;
+use ledgerly_model::{AiActivityKind, AiFeature, Books};
 use ledgerly_reports::{Cell, ColumnHeader, DrillKey, Report};
 use ledgerly_store::{Actor, AuditRecord, Event};
 
@@ -105,6 +105,8 @@ pub enum EntryOrigin {
     Typed,
     /// The assistant drafted it and a person accepted the draft.
     AiDraft,
+    /// A person accepted a draft of this assistant feature; the accept event names the voucher.
+    AcceptedDraft(AiFeature),
     /// An import job posted it.
     Imported,
 }
@@ -116,6 +118,13 @@ impl EntryOrigin {
         match self {
             Self::Typed => "Typed",
             Self::AiDraft => "AI draft",
+            Self::AcceptedDraft(feature) => match feature {
+                AiFeature::BillReading => "Bill photo draft, accepted",
+                AiFeature::PlainWords => "Plain-words draft, accepted",
+                AiFeature::BankSuggestion => "Bank suggestion, accepted",
+                AiFeature::Ask => "Ask answer, accepted",
+                AiFeature::Gstr2bExplanation => "GSTR-2B explanation, accepted",
+            },
             Self::Imported => "Imported",
         }
     }
@@ -148,6 +157,44 @@ pub(crate) fn entry(records: &[AuditRecord], actor: &Actor) -> Entry {
     }
 }
 
+/// The vouchers a person posted by accepting an assistant draft, with the draft's feature. The
+/// posting's actor is the person; the accept event recorded in the same commit names the voucher.
+pub(crate) fn accepted_drafts(records: &[AuditRecord]) -> BTreeMap<VoucherId, AiFeature> {
+    records
+        .iter()
+        .filter_map(|record| match &record.event {
+            Event::AiActivityRecorded(activity) => match &activity.kind {
+                AiActivityKind::DraftAccepted {
+                    voucher: Some(voucher),
+                    ..
+                } => Some((*voucher, activity.feature)),
+                AiActivityKind::DraftAccepted { voucher: None, .. }
+                | AiActivityKind::DraftStored { .. }
+                | AiActivityKind::DraftRejected { .. }
+                | AiActivityKind::Answered { .. }
+                | AiActivityKind::ReadFailed { .. }
+                | AiActivityKind::CloudConsent { .. } => None,
+            },
+            Event::MasterCreated(_)
+            | Event::MasterAltered { .. }
+            | Event::MasterDeleted(_)
+            | Event::VoucherPosted(_)
+            | Event::VoucherAltered { .. }
+            | Event::VoucherCancelled { .. }
+            | Event::VoucherDeleted { .. }
+            | Event::SettingChanged { .. }
+            | Event::PeriodLocked { .. }
+            | Event::StatementImported(_)
+            | Event::MatchConfirmed(_)
+            | Event::AiProposalRecorded(_)
+            | Event::BankStatementStored { .. }
+            | Event::Gstr2bImported { .. }
+            | Event::ImsActionRecorded { .. }
+            | Event::Gstr3bFiled { .. } => None,
+        })
+        .collect()
+}
+
 /// `report` (the day book) with the narration, entered-by and origin columns added.
 pub(crate) fn annotate(
     store: &ledgerly_store::SqliteStore,
@@ -155,12 +202,17 @@ pub(crate) fn annotate(
     mut report: Report,
 ) -> Result<Report, ApiError> {
     let records = read_all(store)?;
+    let accepted = accepted_drafts(&records);
     let mut posted: BTreeMap<VoucherId, Entry> = BTreeMap::new();
     for record in &records {
         if let Event::VoucherPosted(v) = &record.event {
-            posted
-                .entry(v.id)
-                .or_insert_with(|| entry(&records, &record.meta.actor));
+            posted.entry(v.id).or_insert_with(|| {
+                let mut e = entry(&records, &record.meta.actor);
+                if let Some(feature) = accepted.get(&v.id) {
+                    e.origin = EntryOrigin::AcceptedDraft(*feature);
+                }
+                e
+            });
         }
     }
     for label in ["Narration", "Entered by", "Origin"] {

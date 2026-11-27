@@ -140,6 +140,39 @@ pub fn suggest_matches(stmt: &BankStatement, books: &Books, rules: &[MatchRule])
     out
 }
 
+/// A match target: a voucher with a line on a bank ledger and no bank date yet (see "What is
+/// matched"), with its net effect on that ledger.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct OpenEntry {
+    /// The voucher.
+    pub voucher: VoucherId,
+    /// Voucher date.
+    pub date: Date,
+    /// A net debit to the bank is a deposit, a net credit a withdrawal.
+    pub direction: LineDirection,
+    /// The net amount on the bank ledger, never negative.
+    pub amount: Paise,
+}
+
+/// The match targets on `bank` in `books`, by voucher id.
+pub fn open_entries(books: &Books, bank: LedgerId) -> Vec<OpenEntry> {
+    bank_entries(books, bank)
+        .into_iter()
+        .map(|e| OpenEntry {
+            voucher: e.id,
+            date: e.date,
+            direction: e.direction,
+            amount: Paise::new(e.amount),
+        })
+        .collect()
+}
+
+/// The direction and amount of a statement line; `None` for a line that moves no money or has
+/// an impossible amount, which matching never offers.
+pub fn line_flow(line: &RawLine) -> Option<(LineDirection, Paise)> {
+    LineView::new(line).map(|v| (v.direction, Paise::new(v.amount)))
+}
+
 /// Whether `text` matches `pattern`: whole string, ignoring case, `*` matches any run.
 #[expect(
     clippy::similar_names,

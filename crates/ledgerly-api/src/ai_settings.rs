@@ -9,8 +9,17 @@
 
 use std::path::{Path, PathBuf};
 
-use ledgerly_assist::cloud::KeyVault;
+use std::sync::Arc;
+
+use ledgerly_assist::cloud::{
+    CloudClient, CloudConfig, CloudProvider, CloudRequest, CloudResponse, CloudTransport, KeyStore,
+    KeyVault,
+};
+use ledgerly_assist::nl_entry::MasterLedger;
 use ledgerly_assist::provider::{AiProvider, LocalModel, LocalModelFile, ProviderStatus};
+use ledgerly_assist::provider::{CloudModel, ProviderInfo, ProviderPlace};
+use ledgerly_assist::{AssistError, Proposal};
+use ledgerly_core::CancelToken;
 use ledgerly_core::{Outcome, Unsupported};
 use ledgerly_model::AiFeature;
 use ledgerly_store::Event;
@@ -25,8 +34,23 @@ pub const LOCAL_MODEL_FILE_KEY: &str = "ai.local.model_file";
 const CLOUD_ENDPOINT_KEY: &str = "ai.cloud.endpoint";
 /// The setting key of the cloud request format.
 const CLOUD_FORMAT_KEY: &str = "ai.cloud.format";
-/// The setting key of the cloud model name.
+/// The setting key of the cloud model name for the features without their own model.
 const CLOUD_MODEL_KEY: &str = "ai.cloud.model";
+/// The setting key of the cloud model name for bill reading.
+const CLOUD_BILL_MODEL_KEY: &str = "ai.cloud.bill_model";
+/// The setting key of the cloud model name for plain words.
+const CLOUD_WORDS_MODEL_KEY: &str = "ai.cloud.words_model";
+/// The Anthropic Messages API's request URL, used when the Messages format names no endpoint.
+pub const ANTHROPIC_MESSAGES_URL: &str = "https://api.anthropic.com/v1/messages";
+/// The model bill reading uses with the Messages format when the user names none (owner's
+/// decision, 2026-11-27).
+pub const DEFAULT_BILL_MODEL: &str = "claude-sonnet-5-5";
+/// The model plain words use with the Messages format when the user names none (owner's
+/// decision, 2026-11-27).
+pub const DEFAULT_WORDS_MODEL: &str = "claude-haiku-5-5";
+/// The output token limit sent with each request (the Messages API requires one). A proposal is
+/// one short JSON object; 1024 tokens is ample for it.
+const MAX_OUTPUT_TOKENS: u32 = 1024;
 /// The keychain service the cloud key is saved under.
 pub const KEY_SERVICE: &str = "ledgerly-ai-cloud";
 
@@ -36,10 +60,82 @@ pub const KEY_SERVICE: &str = "ledgerly-ai-cloud";
 pub struct CloudSettings {
     /// The endpoint URL.
     pub endpoint: Option<String>,
-    /// The request format, as the provider documents it (`chat-completions` or `messages`).
+    /// The request format: `messages` (the Anthropic Messages API, where the endpoint may be
+    /// left out) or `chat-completions` (an OpenAI-compatible chat endpoint, where the endpoint is
+    /// the base URL and `/chat/completions` is added to it).
     pub format: Option<String>,
-    /// The model name the provider expects.
+    /// The model name for the features without their own model below.
     pub model: Option<String>,
+    /// The model name for bill reading.
+    pub bill_model: Option<String>,
+    /// The model name for plain words.
+    pub words_model: Option<String>,
+}
+
+/// The model `feature` is sent to: its own model when named; with the Messages format, the
+/// owner's default for bill reading and plain words; else the model for other features.
+#[must_use]
+pub fn cloud_model_for(cloud: &CloudSettings, feature: AiFeature) -> Option<String> {
+    let messages = cloud.format.as_deref() == Some(CLOUD_FORMATS[1]);
+    let (own, default) = match feature {
+        AiFeature::BillReading => (&cloud.bill_model, DEFAULT_BILL_MODEL),
+        AiFeature::PlainWords => (&cloud.words_model, DEFAULT_WORDS_MODEL),
+        AiFeature::BankSuggestion | AiFeature::Ask | AiFeature::Gstr2bExplanation => {
+            return cloud.model.clone();
+        }
+    };
+    own.clone()
+        .or_else(|| messages.then(|| default.to_owned()))
+        .or_else(|| cloud.model.clone())
+}
+
+/// The URL requests go to: the endpoint (or [`ANTHROPIC_MESSAGES_URL`]) for the Messages format,
+/// the base URL with `/chat/completions` for the chat format; `None` when there is none.
+#[must_use]
+pub fn cloud_request_url(cloud: &CloudSettings) -> Option<String> {
+    match cloud.format.as_deref() {
+        Some(f) if f == CLOUD_FORMATS[1] => Some(
+            cloud
+                .endpoint
+                .clone()
+                .unwrap_or_else(|| ANTHROPIC_MESSAGES_URL.to_owned()),
+        ),
+        Some(f) if f == CLOUD_FORMATS[0] => cloud
+            .endpoint
+            .as_deref()
+            .map(|base| format!("{}/chat/completions", base.trim_end_matches('/'))),
+        Some(_) | None => None,
+    }
+}
+
+/// The request formats the cloud client speaks, as written in [`CloudSettings::format`].
+pub const CLOUD_FORMATS: [&str; 2] = ["chat-completions", "messages"];
+
+/// Why `cloud` cannot be stored: an endpoint the client would never send to, or a request format
+/// it does not speak. A part left out is not refused (the cloud choice names what is missing).
+fn cloud_settings_refusal(cloud: &CloudSettings) -> Option<Unsupported> {
+    let what = "the cloud provider".to_owned();
+    if let Some(endpoint) = cloud.endpoint.as_deref()
+        && !ledgerly_assist::cloud::is_https(endpoint)
+    {
+        return Some(Unsupported {
+            what,
+            reason: "the endpoint must start with https://, so the key is never sent in clear"
+                .to_owned(),
+        });
+    }
+    if let Some(format) = cloud.format.as_deref()
+        && !CLOUD_FORMATS.contains(&format)
+    {
+        return Some(Unsupported {
+            what,
+            reason: format!(
+                "the request format must be {} or {}",
+                CLOUD_FORMATS[0], CLOUD_FORMATS[1]
+            ),
+        });
+    }
+    None
 }
 
 /// Whether the cloud key is saved.
@@ -74,7 +170,31 @@ impl Api {
     /// Attaches the vault the cloud key is kept in for this session (the app attaches the OS
     /// keychain; tests and captures an in-memory vault). Attaching reads nothing.
     pub fn attach_key_vault(&mut self, vault: Box<dyn KeyVault>) {
-        self.key_vault = Some(vault);
+        self.key_vault = Some(std::sync::Arc::from(vault));
+    }
+
+    /// The user's cloud provider as an assistant, sending through `transport` (the app passes
+    /// HTTPS; tests a recording double). Making it reads the settings and whether a key is
+    /// saved, and sends nothing; the key is read from the vault only when a request is made.
+    ///
+    /// # Errors
+    /// [`ApiError::Store`] or [`ApiError::AiKeyAccount`] when the company cannot be read.
+    pub fn cloud_assistant(
+        &self,
+        transport: Box<dyn CloudTransport>,
+    ) -> Result<Outcome<CloudAssistant>, ApiError> {
+        if let Some(refused) = self.cloud_refusal()? {
+            return Ok(Outcome::Unsupported(refused));
+        }
+        let Some(vault) = self.key_vault.clone() else {
+            return Ok(Outcome::Unsupported(no_vault()));
+        };
+        Ok(Outcome::Value(CloudAssistant {
+            cloud: self.cloud_settings()?,
+            account: self.key_account()?,
+            vault,
+            transport: std::sync::Arc::from(transport),
+        }))
     }
 
     /// The AI settings stored for the company, the local model file as it is on disk now, and
@@ -166,10 +286,15 @@ impl Api {
     /// # Errors
     /// [`ApiError::Store`] when a change cannot be committed.
     pub fn set_cloud_settings(&mut self, cloud: &CloudSettings) -> Result<Outcome<()>, ApiError> {
+        if let Some(refused) = cloud_settings_refusal(cloud) {
+            return Ok(Outcome::Unsupported(refused));
+        }
         for (key, value) in [
             (CLOUD_ENDPOINT_KEY, &cloud.endpoint),
             (CLOUD_FORMAT_KEY, &cloud.format),
             (CLOUD_MODEL_KEY, &cloud.model),
+            (CLOUD_BILL_MODEL_KEY, &cloud.bill_model),
+            (CLOUD_WORDS_MODEL_KEY, &cloud.words_model),
         ] {
             self.change_setting(key, value.as_deref().unwrap_or(""))?;
         }
@@ -182,6 +307,12 @@ impl Api {
     /// [`ApiError::Store`] or [`ApiError::AiKeyAccount`] when the company cannot be read to name
     /// the key's account.
     pub fn save_cloud_key(&mut self, key: &str) -> Result<Outcome<()>, ApiError> {
+        if key.trim().is_empty() {
+            return Ok(Outcome::Unsupported(Unsupported {
+                what: "saving the cloud key".to_owned(),
+                reason: "the key is empty".to_owned(),
+            }));
+        }
         let account = self.key_account()?;
         let Some(vault) = self.key_vault.as_ref() else {
             return Ok(Outcome::Unsupported(no_vault()));
@@ -226,15 +357,13 @@ impl Api {
             }));
         }
         let cloud = self.cloud_settings()?;
-        let missing: Vec<&str> = [
-            ("the endpoint", &cloud.endpoint),
-            ("the request format", &cloud.format),
-            ("the model name", &cloud.model),
-        ]
-        .into_iter()
-        .filter(|(_, v)| v.is_none())
-        .map(|(name, _)| name)
-        .collect();
+        let mut missing: Vec<&str> = Vec::new();
+        if cloud.format.is_none() {
+            missing.push("the request format");
+        }
+        if cloud_request_url(&cloud).is_none() {
+            missing.push("the endpoint");
+        }
         if !missing.is_empty() {
             return Ok(Some(Unsupported {
                 what,
@@ -263,6 +392,8 @@ impl Api {
             endpoint: read(CLOUD_ENDPOINT_KEY)?,
             format: read(CLOUD_FORMAT_KEY)?,
             model: read(CLOUD_MODEL_KEY)?,
+            bill_model: read(CLOUD_BILL_MODEL_KEY)?,
+            words_model: read(CLOUD_WORDS_MODEL_KEY)?,
         })
     }
 
@@ -354,5 +485,136 @@ fn no_vault() -> Unsupported {
         reason: "no keychain store is attached, so a key cannot be saved; the company file never \
                  holds a key"
             .to_owned(),
+    }
+}
+
+/// The user's cloud provider (bring your own key), one model per feature as
+/// [`cloud_model_for`] names it. Each request is built by the cloud client: redacted, https
+/// only, the key from the vault in a header. A document is never sent.
+pub struct CloudAssistant {
+    cloud: CloudSettings,
+    account: String,
+    vault: Arc<dyn KeyVault>,
+    transport: Arc<dyn CloudTransport>,
+}
+
+impl std::fmt::Debug for CloudAssistant {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CloudAssistant")
+            .field("cloud", &self.cloud)
+            .finish_non_exhaustive()
+    }
+}
+
+/// The vault as the client's key store.
+struct VaultKeys(Arc<dyn KeyVault>);
+
+impl KeyStore for VaultKeys {
+    fn api_key(&self, service: &str, account: &str) -> Result<String, AssistError> {
+        self.0.api_key(service, account)
+    }
+}
+
+/// The shared transport as the client's own.
+struct SharedTransport(Arc<dyn CloudTransport>);
+
+impl CloudTransport for SharedTransport {
+    fn post(&self, request: &CloudRequest) -> Result<CloudResponse, AssistError> {
+        self.0.post(request)
+    }
+}
+
+impl CloudAssistant {
+    /// The provider for `feature`, or why there is none.
+    fn model(&self, feature: AiFeature) -> Result<CloudModel, AssistError> {
+        let unsupported = |reason: String| {
+            AssistError::Unsupported(Unsupported {
+                what: "the cloud provider".to_owned(),
+                reason,
+            })
+        };
+        let provider = match self.cloud.format.as_deref() {
+            Some(f) if f == CLOUD_FORMATS[1] => CloudProvider::Anthropic,
+            Some(f) if f == CLOUD_FORMATS[0] => CloudProvider::OpenAiCompatible,
+            Some(_) | None => return Err(unsupported("no request format is chosen".to_owned())),
+        };
+        let endpoint = cloud_request_url(&self.cloud)
+            .ok_or_else(|| unsupported("no endpoint is given".to_owned()))?;
+        let model = cloud_model_for(&self.cloud, feature).ok_or_else(|| {
+            unsupported(format!("no model is named for {}", feature_words(feature)))
+        })?;
+        Ok(CloudModel::new(CloudClient::new(
+            CloudConfig {
+                provider,
+                endpoint,
+                model,
+                key_service: KEY_SERVICE.to_owned(),
+                key_account: self.account.clone(),
+                max_output_tokens: MAX_OUTPUT_TOKENS,
+            },
+            Box::new(VaultKeys(Arc::clone(&self.vault))),
+            Box::new(SharedTransport(Arc::clone(&self.transport))),
+        )))
+    }
+}
+
+/// A feature in the words of a refusal.
+fn feature_words(feature: AiFeature) -> &'static str {
+    match feature {
+        AiFeature::BillReading => "bill reading",
+        AiFeature::PlainWords => "plain words",
+        AiFeature::BankSuggestion => "bank suggestions",
+        AiFeature::Ask => "questions about the books",
+        AiFeature::Gstr2bExplanation => "2B explanations",
+    }
+}
+
+impl AiProvider for CloudAssistant {
+    fn info(&self) -> ProviderInfo {
+        ProviderInfo {
+            name: self
+                .cloud
+                .format
+                .clone()
+                .unwrap_or_else(|| "cloud".to_owned()),
+            version: ledgerly_assist::cloud::PROMPT_TEMPLATE_VERSION.to_owned(),
+            place: ProviderPlace::Cloud,
+        }
+    }
+
+    fn status(&self) -> ProviderStatus {
+        ProviderStatus::Ready
+    }
+
+    fn read_text(
+        &self,
+        text: &str,
+        ledgers: &[MasterLedger],
+        cancel: &CancelToken,
+    ) -> Result<Proposal, AssistError> {
+        self.model(AiFeature::PlainWords)?
+            .read_text(text, ledgers, cancel)
+    }
+
+    fn ocr(
+        &self,
+        _bytes: &[u8],
+        _sha256: &str,
+        _cancel: &CancelToken,
+    ) -> Result<ledgerly_assist::ocr::OcrOutput, AssistError> {
+        Err(AssistError::Unsupported(Unsupported {
+            what: "reading a bill in the cloud".to_owned(),
+            reason: "an image cannot be redacted before it leaves this computer, and the \
+                     per-document confirmation is not built"
+                .to_owned(),
+        }))
+    }
+
+    fn ask(
+        &self,
+        question: &str,
+        cancel: &CancelToken,
+    ) -> Result<ledgerly_assist::ReportQuery, AssistError> {
+        self.model(AiFeature::Ask)?.ask(question, cancel)
     }
 }

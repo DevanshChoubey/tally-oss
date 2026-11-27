@@ -85,12 +85,15 @@ Each round: test first and seen failing, provenance on expected values, all five
 states in light, dark and hc, build mock|app sheets (`design/app-captures/s21-<round>-sheet-N.png`,
 untracked), look at each, update `PARITY-GAPS.md`.
 
-## Owner decisions (not made here)
+## Owner decisions (2026-11-27, relayed by the coordinator)
 
-- A local inference runtime (a llama.cpp binding) and an OCR engine (Tesseract or PaddleOCR
-  binding): each is a new dependency and a model download. The seams and the Not installed state
-  are built; no runtime is linked.
-- The real cloud provider(s) and their default endpoints.
+- Local model: none for now. Local stays Not installed; no runtime, no model download.
+- OCR: ocrs (pure Rust, MIT/Apache-2.0). Its model files (about 10 MB) are downloaded only when
+  the user asks, from a fixed URL, with a checksum check; never during development.
+- Cloud: the Anthropic Messages API with the user's own key (defaults `claude-sonnet-5-5` for bill
+  reading, `claude-haiku-5-5` for plain words) and an OpenAI-compatible chat endpoint (base URL plus
+  key). No other provider. Keys in the keychain; no network in tests. The AI-in-release switch
+  stays false.
 
 ## Status (kept current each round)
 
@@ -117,6 +120,54 @@ untracked), look at each, update `PARITY-GAPS.md`.
   photo screen and its mock states with `ai=on` (reading, proposal, low confidence, mismatch,
   duplicate, cloud consent, error, accepted), the bill-wise New Ref that leaves Rupa Polymers at
   "none", and the cloud-consent wording (cloud.rs refuses documents). Rounds E and F not started.
+- After the merge into integration (1c765b0): `master_ledgers` returns `ApiError::AiBooksBlocked`
+  for blocked books (test first, in-crate, seen failing); plain-words gaps closed: the account's
+  balance now/after from `Api::balance_change`, the lock-date check line, the narration field, the
+  "Try" sentences (mock changed first to ones the reader drafts), "High confidence" after the bars.
+  Tests first, seen failing. Recorded: Test-provider chip, unknown-ledger balance, PY/0315 duplicate
+  line and the "Why Rent" line (PARITY-GAPS).
+- Round D screen: committed. `DraftEdits::line_ledgers` (the person's ledger for an open line,
+  checked by the engine, logged), `BillRead::Cancelled` (a cancel before the provider runs stores
+  and logs nothing), the bill photo screen with the assistant (choose, reading, ledger lines with
+  boxes on the photo, rejected, error), PNG only. Mock states first; tests first, seen failing.
+  NOT BUILT (PARITY-GAPS): item rows, accepted capture, place of supply, duplicate, cloud consent,
+  JPEG/PDF, image store, Esc mid-read. Rounds E and F, and the key form, not started.
+- Key form and owner cloud providers: committed. `ai.ai-settings.cloud-edit` (format, base URL,
+  three model fields, masked key; Ctrl+A save, Alt+D delete key, Esc cancel), the key moved
+  straight to the vault and never read back. `CloudAssistant` over the vault and a transport:
+  Messages API (x-api-key, sonnet for bills, haiku for plain words) or an OpenAI-compatible base
+  URL plus /chat/completions. Tests use a recording transport; no network. Cloud OCR stays refused
+  (an image cannot be redacted; per-document consent is not built). The app does not yet attach
+  the cloud assistant (PARITY-GAPS).
+- Round E: committed. `Api::ask_books` (gate, provider query, the query checked against the
+  question, resolved to an engine report, run by `Api::report`, every ask logged) and the Ask
+  your books screen with the assistant (`ai.ask.idle`, `.result`, `.unsupported`, `.failed`; mock
+  first, tests first and seen failing). The report names are listed in the cloud prompt
+  (`ledgerly_assist::REPORT_NAMES`). A figure the cloud writes in prose never reaches the answer
+  (tested with a Messages transport answering prose around the JSON). NOT BUILT: save as report,
+  low confidence, Esc mid-question.
+- Honesty notes (E): the API tests were seen failing at compile only; the app tests were seen
+  failing 6 of 7 (the AI-off one passed on the old path). One app expectation was my own wrong
+  derivation (Cash where the condensed trial balance shows Current Assets) and was corrected before
+  green. 24 `lit` phrases of the new screen had no catalogue entry and only the full gate
+  (`i18n_lit_phrases`) caught it; their 24 Hindi entries are unsourced. Open: a store failure inside
+  `Api::report` after the provider answered returns the error without a log entry; no test can
+  make the report engine fail that way yet, so it is not fixed.
+- Round F (part): the day book Origin of a voucher posted by accepting a draft is the reader's AI
+  badge ("Plain-words draft, accepted"; it showed "Typed" before, the test saw it), and the
+  assistant's bank match suggestions run end to end behind the gate (`Api::bank_ai_suggestions`,
+  `Api::accept_bank_ai_match`, `Api::bank_matches`; `AiProvider::match_bank_line` with a refusing
+  default; the bank screen's worker shows, accepts and rejects them). NOT BUILT (PARITY-GAPS): the
+  `bank.ai-suggestions` tab and card, a voucher or a ledger from a bank line, the cloud bank prompt.
+- OCR models (owner: ocrs): committed. `ocr_models` (fixed files and URLs, Not installed while
+  missing or unloadable, a checksum-checked download that refuses while no checksum is recorded),
+  `cargo deny check` passes with ocrs. NOT BUILT: the ocrs reading adapter (ocrs has no
+  confidence), the download button and model state on a screen; `gst.recon-explain` (needs a new
+  typed proposal). Tests written first, seen failing at compile, the checksum check by mutation;
+  no real model file was loaded, so real ocrs inference is unrun.
+- Honesty notes (F): the API and app bank tests were written first and seen failing (API at compile,
+  app 3 of 4; the AI-off one passed on the old path); the Origin unit test was seen failing at
+  compile only. One API test fixture was corrected (an alteration must keep the voucher number).
 - Honesty notes (C): the app tests' sentence helper was changed to wait for the ready hint
   instead of "Read as:" (the test typed before the gate read Ready); the screen tests were written
   before the screen and seen failing, the accept transition checked by mutation.
