@@ -16,7 +16,7 @@
 use ledgerly_core::{Date, DrCr, EventSeq, OffsetDateTime, Outcome, Paise, VoucherId};
 use ledgerly_store::{AuditRecord, Event};
 
-use crate::day_book_meta::{Entry, EntryOrigin, entry};
+use crate::day_book_meta::{Entry, EntryOrigin, accepted_drafts, entry};
 use crate::error::ApiError;
 use crate::events::read_all;
 use crate::facade::Api;
@@ -163,7 +163,10 @@ fn audit_of(records: &[AuditRecord], id: VoucherId) -> Option<VoucherAudit> {
             | Event::AiActivityRecorded(_) => {}
         }
     }
-    let (record, who_how) = posted?;
+    let (record, mut who_how) = posted?;
+    if let Some(feature) = accepted_drafts(records).get(&id) {
+        who_how.origin = EntryOrigin::AcceptedDraft(*feature);
+    }
     Some(VoucherAudit {
         entered_by: who_how.by,
         origin: who_how.origin,

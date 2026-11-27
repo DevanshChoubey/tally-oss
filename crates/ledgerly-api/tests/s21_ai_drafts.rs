@@ -21,8 +21,8 @@ use std::path::PathBuf;
 
 use ledgerly_api::{
     Accepted, AiActivityKind, AiFeature, Api, ApiError, Command, CommandResult, DraftCheck,
-    DraftEdits, DraftFigure, DraftLine, NewAiDraft, Proposal, ReviewSource, SourceRef, Transcribed,
-    VoucherDraft,
+    DraftEdits, DraftFigure, DraftLine, EntryOrigin, NewAiDraft, Proposal, ReviewSource, SourceRef,
+    Transcribed, VoucherDraft,
 };
 use ledgerly_core::{
     Clock, CompanyId, Date, DrCr, GroupId, LedgerId, Outcome, Paise, SignedAmount, StateCode,
@@ -32,6 +32,7 @@ use ledgerly_model::{
     Address, BaseVoucherKind, Company, EntityKind, Features, Ledger, NegativeStockPolicy,
     ReservedGroup, Voucher,
 };
+use ledgerly_reports::{Cell, DrillKey, ReportKind};
 use time::macros::{date, datetime};
 
 const CASH: LedgerId = LedgerId(1);
@@ -301,6 +302,52 @@ fn accept_posts_the_voucher_and_records_the_accept_in_one_commit() {
         api.accept_ai_draft(id, &edits),
         Err(ApiError::UnknownAiDraft { .. })
     ));
+}
+
+/// Provenance: the mock's day book (`design/mock-v2/index.html`, the Origin cell draws
+/// `v.ai + ", accepted"`, and the plain-words payment PY/0315 has `ai:'Plain-words draft'`). The
+/// draft is accepted by the user, so the posting's actor is the user; the accept event is what
+/// says the voucher came from the assistant.
+#[test]
+fn an_accepted_draft_shows_its_reader_as_the_day_book_origin() {
+    let mut api = books("s21-drafts-origin.ledgerly", Vec::new());
+    let id = api.record_ai_draft(rent_draft()).unwrap();
+    let edits = DraftEdits {
+        date: Some(TODAY),
+        place_of_supply: None,
+        line_ledgers: Vec::new(),
+    };
+    let Outcome::Value(Accepted::Posted(voucher)) = api.accept_ai_draft(id, &edits).unwrap() else {
+        panic!("accept should post");
+    };
+    let Outcome::Value(books) = api.books().unwrap() else {
+        panic!()
+    };
+    let params = ledgerly_api::default_report_params(ReportKind::DayBook, &books).unwrap();
+    let Outcome::Value(report) = api.report(&params).unwrap() else {
+        panic!("the day book runs")
+    };
+    let origin = report
+        .columns
+        .iter()
+        .position(|c| c.label == "Origin")
+        .unwrap();
+    let row = report
+        .rows
+        .iter()
+        .find(|r| r.key == Some(DrillKey::Voucher(voucher.id)))
+        .unwrap();
+    assert_eq!(
+        row.cells[origin],
+        Cell::Text("Plain-words draft, accepted".to_owned())
+    );
+    let Outcome::Value(detail) = api.voucher_detail(voucher.id).unwrap() else {
+        panic!()
+    };
+    assert_eq!(
+        detail.audit.unwrap().origin,
+        EntryOrigin::AcceptedDraft(AiFeature::PlainWords)
+    );
 }
 
 #[test]

@@ -92,8 +92,16 @@ Classes:
 
 ## Day book (`day-book.*`)
 
-- **NOT BUILT** Origin shows Typed, AI draft, accepted or Imported only: no attachment, bank-rule or
-  draft kind is stored ("Image attached", "Bank rule" in the mock).
+- **FIX (s21 round F)** a voucher posted by accepting an assistant draft showed "Typed" (the posting's
+  actor is the person who accepted). The accept event now names the voucher and its feature, so the
+  Origin cell is the mock's AI badge with the reader's words: "Plain-words draft, accepted", "Bill
+  photo draft, accepted" (index.html day book, `v.ai + ', accepted'`); the voucher view says it came
+  from an AI draft.
+- **NOT BUILT** no attachment or bank rule is stored on a voucher ("Image attached", "Bank rule" in
+  the mock). The Godavari capture fixture posts every voucher by hand, so `day-book.month` shows no
+  AI badge where the mock has two (PY/0315, PB/0141); the badge is tested in
+  `s21_ai_drafts::an_accepted_draft_shows_its_reader_as_the_day_book_origin` and the
+  `day_book::origin_badge` unit test.
 - **NOT BUILT** Ctrl+I Origin: the original proposal is not opened from the day book.
 - **DELIBERATE** a non-regular status is a badge in the Origin cell; the mock has no Status column.
 - **DELIBERATE** the month view keeps the cursor on the voucher it was on (`replace_report`).
