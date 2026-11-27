@@ -603,3 +603,47 @@ fn the_capture_harness_parks_the_pointer_before_each_frame() {
         raw.events
     );
 }
+
+#[test]
+fn the_setup_screen_makes_a_company_with_the_predefined_cash_ledger() {
+    use ledgerly_api::{AiTier, GstFiling};
+    use ledgerly_app::screens::setup::form::{build_company, create_company_with_filing};
+    use ledgerly_core::{Clock, OffsetDateTime};
+    // provenance: derived. TallyPrime help, "Ledgers in TallyPrime"
+    // (https://help.tallysolutions.com/ledgers-in-tallyprime/, read 2026-11-27): "TallyPrime
+    // provides predefined ledgers such as Cash and Profit & Loss A/c". A company made by the setup
+    // screen holds Cash, reserved, from the start (S22).
+    let path =
+        std::path::PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("s22-cash-wizard.ledgerly");
+    let _gone = std::fs::remove_file(&path);
+    let form = ledgerly_app::screens::setup::form::CompanyForm {
+        name: "Fictional Traders".to_owned(),
+        kind: ledgerly_model::EntityKind::Partnership,
+        city: "Pune".to_owned(),
+        gstin: String::new(),
+        state: ledgerly_core::StateCode::new(27).unwrap(),
+        fy_start: time::macros::date!(2026 - 04 - 01),
+        books_begin: time::macros::date!(2026 - 04 - 01),
+    };
+    let company = build_company(&form, ledgerly_model::Features::default()).unwrap();
+    let clock = Clock::Fixed(OffsetDateTime::UNIX_EPOCH);
+    let (api, _note) =
+        create_company_with_filing(&path, &company, clock, AiTier::Off, GstFiling::Quarterly)
+            .unwrap();
+    let ledgerly_core::Outcome::Value(books) = api.books().unwrap() else {
+        panic!("books unsupported");
+    };
+    let names: Vec<(String, Option<ledgerly_model::ReservedLedger>)> = books
+        .masters
+        .ledgers
+        .values()
+        .map(|l| (l.name.clone(), l.reserved))
+        .collect();
+    assert_eq!(
+        names,
+        vec![(
+            "Cash".to_owned(),
+            Some(ledgerly_model::ReservedLedger::Cash)
+        )]
+    );
+}

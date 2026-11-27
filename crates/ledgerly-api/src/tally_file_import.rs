@@ -11,14 +11,20 @@
 //! Import", <https://help.tallysolutions.com/getting-started-with-importing-data-into-tallyprime/>).
 //!
 //! Groups are imported before ledgers, parents first, so a file may list a ledger before its
-//! group. Vouchers are posted in file order. A voucher whose `GUID` is already in the books is
-//! posted again, as the import FAQ describes when overwriting vouchers with the same GUID is
-//! turned off (<https://help.tallysolutions.com/import-data-faq/>); overwriting is not offered.
+//! group. Vouchers are posted in file order. A voucher whose `GUID` is already in the books
+//! follows "Overwrite voucher when a voucher with same GUID exists"
+//! (<https://help.tallysolutions.com/import-data-faq/>, read 2026-11-27; [`VoucherBehaviour`]):
+//! - Yes: "the existing voucher gets overwritten" (the latest one with that GUID, through the
+//!   engine's alter, so the lock and every check apply; an automatic number is kept);
+//! - No, the default: "a duplicate voucher gets created. The subsequent import of the same voucher
+//!   will overwrite the previously duplicated/created voucher". So with one voucher of that GUID in
+//!   the books it is posted again, and with two or more the latest is overwritten.
 
 use std::fmt;
 use std::path::{Path, PathBuf};
 
 use ledgerly_core::{Outcome, VoucherId};
+use ledgerly_model::Voucher;
 use ledgerly_store::Actor;
 use ledgerly_tally_bridge::file_import::{
     Exception, ImportMaster, ImportMasterKind, MasterBehaviour, MasterStep, master_label,
@@ -34,7 +40,27 @@ pub enum XmlImport {
     /// Masters (groups, ledgers), treating a master that exists as the behaviour says.
     Masters(MasterBehaviour),
     /// Transactions (vouchers); their masters must be in the company already.
-    Transactions,
+    Transactions(VoucherBehaviour),
+}
+
+impl XmlImport {
+    /// Transactions with the default configuration: overwrite off.
+    #[must_use]
+    pub const fn default_transactions() -> Self {
+        Self::Transactions(VoucherBehaviour {
+            overwrite_same_guid: false,
+        })
+    }
+}
+
+/// The import configuration for transactions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct VoucherBehaviour {
+    /// "Overwrite voucher when a voucher with same GUID exists"
+    /// (<https://help.tallysolutions.com/import-data-faq/>, read 2026-11-27). Yes: the voucher in
+    /// the books with the file voucher's GUID is overwritten. No (the default): it is posted again
+    /// as a duplicate, and a later import of it overwrites that duplicate.
+    pub overwrite_same_guid: bool,
 }
 
 /// One object that was not imported, and why.
@@ -55,7 +81,7 @@ pub struct FileImportSummary {
     pub path: PathBuf,
     /// Objects created.
     pub created: usize,
-    /// Existing masters altered (Modify with New Data).
+    /// Existing masters altered (Modify with New Data), or vouchers overwritten (same GUID).
     pub altered: usize,
     /// Existing ledgers whose opening balance was added to (Combine Opening Balance).
     pub combined: usize,
@@ -161,11 +187,11 @@ impl Api {
                     self.import_masters(&c.items, behaviour, &mut summary)
                 })
             }
-            XmlImport::Transactions => {
+            XmlImport::Transactions(behaviour) => {
                 let contents = read_vouchers(&bytes).map_err(failed);
                 contents.and_then(|c| {
                     summary.warnings.extend(c.warnings);
-                    self.import_vouchers(&c.items, &mut summary)
+                    self.import_vouchers(&c.items, behaviour, &mut summary)
                 })
             }
         };
@@ -283,6 +309,7 @@ impl Api {
     fn import_vouchers(
         &mut self,
         vouchers: &[ledgerly_tally_bridge::file_import::TVoucher],
+        behaviour: VoucherBehaviour,
         summary: &mut FileImportSummary,
     ) -> Result<(), ApiError> {
         for v in vouchers {
@@ -294,28 +321,57 @@ impl Api {
                     continue;
                 }
             };
-            let next = books
-                .vouchers
-                .keys()
-                .next_back()
-                .map_or(Some(1), |id| id.0.checked_add(1));
-            let Some(next) = next else {
-                summary.exception(object, "too many vouchers to number".to_owned());
-                continue;
+            let same_guid: Vec<&Voucher> = match v.guid.as_deref() {
+                Some(guid) => books
+                    .vouchers
+                    .values()
+                    .filter(|b| b.tally.as_ref().is_some_and(|t| t.guid == guid))
+                    .collect(),
+                None => Vec::new(),
             };
-            let (voucher, dropped) = match voucher_step(v, &books, VoucherId(next)) {
+            let target = match (behaviour.overwrite_same_guid, same_guid.as_slice()) {
+                (_, []) | (false, [_]) => None,
+                (true, [.., last]) | (false, [_, .., last]) => Some(*last),
+            };
+            if target.is_none() && !same_guid.is_empty() {
+                summary.warnings.push(format!(
+                    "{object}: a voucher with the same GUID is in the books; with overwrite off \
+                     it is posted again as a duplicate"
+                ));
+            }
+            let id = if let Some(existing) = target {
+                existing.id
+            } else {
+                let next = books
+                    .vouchers
+                    .keys()
+                    .next_back()
+                    .map_or(Some(1), |id| id.0.checked_add(1));
+                let Some(next) = next else {
+                    summary.exception(object, "too many vouchers to number".to_owned());
+                    continue;
+                };
+                VoucherId(next)
+            };
+            let (mut voucher, dropped) = match voucher_step(v, &books, id) {
                 Ok(step) => step,
                 Err(e) => {
                     summary.bridge_exception(e);
                     continue;
                 }
             };
-            if self.run(
-                Command::PostVoucher(voucher),
-                object.clone(),
-                Applied::Created,
-                summary,
-            )? {
+            let (command, applied) = match target {
+                Some(existing) => {
+                    // An automatic number is the books' own; the overwrite keeps it.
+                    if voucher.number.is_none() {
+                        voucher.number.clone_from(&existing.number);
+                        voucher.series.clone_from(&existing.series);
+                    }
+                    (Command::AlterVoucher(voucher), Applied::Altered)
+                }
+                None => (Command::PostVoucher(voucher), Applied::Created),
+            };
+            if self.run(command, object.clone(), applied, summary)? {
                 summary
                     .warnings
                     .extend(dropped.into_iter().map(|d| format!("{object}: {d}")));

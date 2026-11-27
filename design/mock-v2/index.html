@@ -404,6 +404,8 @@ mark{background:var(--accent-soft);color:var(--accent-ink);border-radius:2px;pad
  {"id":"hi.import.file-missing-choice","kind":"validation-error","hash":"screen=import&state=file-missing-choice&lang=hi","title":"Import from a file, no choice for existing masters, Hindi","description":"The missing choice said in Hindi."},
  {"id":"hi.import.file-imported","kind":"happy","hash":"screen=import&state=file-imported&lang=hi","title":"Import from a file, summary and exceptions, Hindi","description":"The summary and the exceptions list in Hindi; names and the engine's reasons stay as written."},
  {"id":"hi.import.file-error","kind":"error","hash":"screen=import&state=file-error&lang=hi","title":"Import from a file, not an XML file, Hindi","description":"The unreadable file in Hindi; the engine's reason stays as written."},
+ {"id":"hi.import.file-transactions","kind":"happy","hash":"screen=import&state=file-transactions&lang=hi","title":"Import from a file, transactions chosen, Hindi","description":"The GUID choice in Hindi."},
+ {"id":"hi.import.file-overwritten","kind":"happy","hash":"screen=import&state=file-overwritten&lang=hi","title":"Import from a file, imported again with overwrite, Hindi","description":"The summary line in Hindi; the file path stays as written."},
  {"id":"hi.payment.account-list","kind":"happy","hash":"screen=payment&state=account-list&lang=hi","title":"Payment, account list open, Hindi","description":"The payment's cash and bank account list in Hindi."},
  {"id":"hi.setup.welcome","kind":"happy","hash":"screen=setup&state=welcome&lang=hi","title":"First run, welcome, Hindi","description":"The welcome screen in Hindi."},
  {"id":"home.loading","kind":"loading","hash":"screen=home&state=loading","title":"Home, company opening","description":"Skeleton rows while the company file opens and projections load; no figure is shown until the engine returns it."},
@@ -535,6 +537,8 @@ mark{background:var(--accent-soft);color:var(--accent-ink);border-radius:2px;pad
 {"id":"import.file-missing-choice","kind":"validation-error","hash":"screen=import&state=file-missing-choice","title":"Import from a file, no choice for existing masters","description":"Masters chosen but no choice for a master already in the company: the reason is said in words and nothing is imported."},
 {"id":"import.file-imported","kind":"happy","hash":"screen=import&state=file-imported","title":"Import from a file, summary and exceptions","description":"The file was read: 2 created, 1 not imported, with every object not imported listed beside its reason."},
 {"id":"import.file-error","kind":"error","hash":"screen=import&state=file-error","title":"Import from a file, not an XML file","description":"The file is not an XML document: the error names the file and the cause, and nothing is imported."},
+{"id":"import.file-transactions","kind":"happy","hash":"screen=import&state=file-transactions","title":"Import from a file, transactions chosen","description":"Transactions chosen: the choice for a voucher whose GUID is already in the company, Do not overwrite picked as the default, and the file path filled; Enter imports the file."},
+{"id":"import.file-overwritten","kind":"happy","hash":"screen=import&state=file-overwritten","title":"Import from a file, imported again with overwrite","description":"The same vouchers file imported a second time with Overwrite chosen: the voucher in the company is altered, not doubled."},
 {"id":"import.failed","kind":"error","hash":"screen=import&state=failed","title":"Import, failed with a reason","description":"The other app could not be read; the error names the company, the host and port, and the cause. Nothing is written."},
 {"id":"setup.new-tab","kind":"happy","hash":"screen=setup&state=welcome&tabs=2","title":"Cold start, new tab","description":"Ctrl+T with no company open opens a second Company setup tab; the tab strip shows both and New tab and Close tab."},
 {"id":"setup.rail","kind":"happy","hash":"screen=setup&state=welcome&rail=1","title":"Cold start, sidebar collapsed to the rail","description":"Ctrl+\\ folds the sidebar to its 60 px rail: icons only, labels hidden."},
@@ -2120,7 +2124,7 @@ SCREENS.masters={title:'Masters',default:'ledgers',
 
 /* ---------- keyboard map ---------- */
 const KEYMAP=[
- ['Go anywhere',[['Ctrl+K','Ctrl+K','Command palette: jump, search, type an entry'],['Alt+G','Ctrl+K','Go to (palette)'],['Ctrl+G','Ctrl+K','Switch to, replacing this screen'],['Esc','Esc','Back one level, never loses a saved voucher'],['?','?','This map'],['F3','Ctrl+Shift+O','Switch company'],['Ctrl+\\','Ctrl+\\','Collapse the side bar']]],
+ ['Go anywhere',[['Ctrl+K','Ctrl+K','Command palette: jump, search, type an entry'],['Alt+G','Ctrl+K','Go to (palette)'],['Ctrl+G','Ctrl+K','Switch to, replacing this screen'],['Esc','Esc','Back one level, never loses a saved voucher'],['?','?','This map'],['F3','Ctrl+Shift+O','Switch company'],['Alt+O','Alt+O','Import masters or vouchers from a file'],['Ctrl+\\','Ctrl+\\','Collapse the side bar']]],
  ['Vouchers',[['F8','Ctrl+Shift+S','Sales'],['F9','Ctrl+Shift+P','Purchase'],['F5','Ctrl+Shift+Y','Payment'],['F6','Ctrl+Shift+R','Receipt'],['F4','Ctrl+Shift+C','Contra'],['F7','Ctrl+Shift+J','Journal'],...(AI_IN_RELEASE?[['Ctrl+Alt+O','Ctrl+Alt+O','Read a bill photo or PDF']]:[])]],
  ['Inside a voucher',[['Enter','Enter','Next field (Tab works too)'],['Shift+Enter','Shift+Tab','Previous field'],['Ctrl+A','Ctrl+S','Save'],['Alt+C','Alt+C','Create a master from the field'],['Ctrl+Enter','Ctrl+Enter','Alter the master in the field'],['Ctrl+D','Ctrl+D','Delete line'],['Alt+R','Alt+R','Recall last narration'],['F2','F2','Voucher date'],['Ctrl+H','Ctrl+H','Change mode']]],
  ['Reports',[['Enter','Enter','Drill in'],['Esc','Esc','Back up'],['Alt+F1','Alt+F1','Detailed or condensed'],['Alt+F2','Alt+F2','Period'],['Ctrl+E','Ctrl+E','Export'],['Ctrl+J','Ctrl+J','Exceptions only'],['Ctrl+P','Ctrl+P','Print']]],
@@ -2763,23 +2767,36 @@ function impNote(kind,text){const cls={bad:'bad',ok:'ok',info:''}[kind];const ic
    crates/ledgerly-app/tests/s22_import_file.rs (Meena Fabrics, Hamali Charges, Lost Ledger), imported into the sample. */
 const IMP_FILE_PATH='/home/ananya/Documents/ledgers-from-old-app.xml';
 function impChoice(label,sel,dis){return `<button role="radio" aria-checked="${sel}" ${dis?'disabled':''} style="display:block;width:100%;text-align:left;height:36px;padding:0 12px;margin-bottom:4px;font:inherit;font-size:var(--t-body);cursor:pointer;border-radius:var(--r-s);${sel?'background:var(--accent-soft);border:calc(var(--bw) + 1px) solid var(--accent);color:var(--accent-ink);font-weight:600':'background:var(--surface);border:var(--bw) solid var(--border);color:var(--text)'}">${esc(label)}</button>`}
+/* the app's own en/hi text for an import.file.* key (gen-hi.py copies them into hi.js), so the summary and
+   error lines read in Hindi as the app's do (S22). An unknown key shows itself, so a gap is seen. */
+function impT(key,vars){const e=((window.HI||{}).keys||{})[key];let s=e?(parseHash().lang==='hi'?e[1]:e[0]):'['+key+']';
+  for(const [k,v] of Object.entries(vars||{}))s=s.split('{'+k+'}').join(String(v));return s}
+/* S22 transactions: the "Overwrite voucher when a voucher with same GUID exists" import configuration, default No
+   (help.tallysolutions.com/import-data-faq/, read 2026-11-27). The overwritten state is the app's text for the
+   PAYMENT fixture of s22_import_file.rs (Hamali Charges paid in cash, GUID g-app-pay-1) imported a second time
+   with overwrite Yes: the voucher in the company is altered, not doubled. */
 function impFileCard(fs,noCo){
   const masters = fs==='masters'||fs==='imported'||fs==='missing-choice'||fs==='error';
+  const vouchers = fs==='transactions'||fs==='overwritten';
   const beh = fs==='missing-choice'?'':(masters?'ignore':'');
-  const path = fs?IMP_FILE_PATH.replace('ledgers-from-old-app.xml',fs==='error'?'notes.xml':'ledgers-from-old-app.xml'):'';
+  const file = fs==='error'?'notes.xml':vouchers?'vouchers-from-old-app.xml':'ledgers-from-old-app.xml';
+  const path = fs?IMP_FILE_PATH.replace('ledgers-from-old-app.xml',file):'';
   const dis = noCo;
   const behs=[['combine',"Combine opening balance: add the file's opening balance to the existing one"],['ignore','Ignore duplicates: keep the existing master as it is'],['modify',"Modify with new data: replace the existing master's details with the file's"]];
+  const sum=(what,c,a,cb,ig,er)=>impT('import.file.summary',{what:impT(what),created:c,altered:a,combined:cb,ignored:ig,errors:er});
   let res='';
-  if(fs==='missing-choice') res=impNote('bad','Error: choose what to do with a master that is already in the company');
-  if(fs==='error') res=impNote('bad',`Error: cannot import ${path}: malformed XML at byte 0: text outside the root element`);
-  if(fs==='imported') res=`<div class="note warn" role="status" style="margin-top:12px">${ic('alert')}<div style="white-space:pre-line">${esc('Masters: 2 created, 0 altered, 0 combined, 0 ignored, 1 not imported.\n'+path)}</div></div>
-    <div style="margin-top:12px"><b>Not imported (1)</b></div>
+  if(fs==='missing-choice') res=impNote('bad',impT('import.file.error',{text:impT('import.file.err_behaviour')}));
+  if(fs==='error') res=impNote('bad',impT('import.file.error',{text:`cannot import ${path}: malformed XML at byte 0: text outside the root element`}));
+  if(fs==='imported') res=`<div class="note warn" role="status" style="margin-top:12px">${ic('alert')}<div style="white-space:pre-line">${esc(sum('import.file.what_masters',2,0,0,0,1)+'\n'+path)}</div></div>
+    <div style="margin-top:12px"><b>${esc(impT('import.file.exceptions',{count:1}))}</b></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:4px"><div>ledger 'Lost Ledger'</div><div class="t2">its parent group 'No Such Group' is not in the company or the file</div></div>`;
+  if(fs==='overwritten') res=impNote('ok',sum('import.file.what_transactions',0,1,0,0,0)+'\n'+path);
   return `<div class="card pad" style="margin-top:12px" id="imp-file"><h2>Import from an XML file</h2><p class="meta">Masters or vouchers from an XML file in your previous accounting app's import format, into the company that is open. Each object is checked as if typed in; anything that cannot go in is listed with the reason.</p>
     ${noCo?`<div class="note warn" role="status" style="margin-top:8px">${ic('alert')}<div>Importing from a file needs an open company. Create or open one, then press Alt+O.</div></div>`:''}
     <div class="fld" style="margin-top:10px"><label>What to import</label></div>
-    <div role="radiogroup" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">${impChoice('Masters (groups and ledgers)',masters,dis)}${impChoice('Transactions (vouchers)',false,dis)}</div>
+    <div role="radiogroup" style="display:grid;grid-template-columns:1fr 1fr;gap:12px">${impChoice('Masters (groups and ledgers)',masters,dis)}${impChoice('Transactions (vouchers)',vouchers,dis)}</div>
     ${masters?`<div class="fld" style="margin-top:8px"><label>When a master is already in the company</label></div><div role="radiogroup">${behs.map(([k,l])=>impChoice(l,beh===k,dis)).join('')}</div>`:''}
+    ${vouchers?`<div class="fld" style="margin-top:8px"><label>When a voucher with the same GUID is in the company</label></div><div role="radiogroup">${impChoice('Do not overwrite: import it as a new voucher (a later import overwrites that copy)',fs!=='overwritten',dis)}${impChoice("Overwrite the voucher in the company with the file's",fs==='overwritten',dis)}</div>`:''}
     <div class="fld" style="margin-top:8px"><label>XML file</label><div style="display:flex;gap:8px"><input style="flex:1" value="${esc(path)}" placeholder="path of the XML file" ${dis?'disabled':''}><button class="btn" ${dis?'disabled':''}>${ic('file')}Choose file ${kb('Ctrl+O')}</button></div></div>
     <div class="actions" style="margin-top:10px"><button class="btn primary" ${dis?'disabled':''}>${ic('upload')}Import the file</button></div>${res}</div>`;
 }
@@ -2822,8 +2839,8 @@ SCREENS.import={title:'Import from another app',default:'default',
  },
  key(k){return false},
  back(){return hashFor('setup','welcome')},
- keys(st){return st==='running'?[['','Importing'],['Esc','Back']]:[['','Import from another app'],['Enter','Import the company'],['Ctrl+O','Choose file'],['Esc','Back']]},
- mount(st){if(st==='file-masters'||st==='file-imported'||st==='file-missing-choice'||st==='file-error'){const h=$('#imp-file');h&&h.scrollIntoView({block:'start'})}}
+ keys(st){return st==='running'?[['','Importing'],['Esc','Back']]:[['','Import from another app'],['Enter',st.startsWith('file-')?'Import the file':'Import the company'],['Ctrl+O','Choose file'],['Esc','Back']]},
+ mount(st){if(st.startsWith('file-')){const h=$('#imp-file');h&&h.scrollIntoView({block:'start'})}}
 };
 
 /* the tab strip (shell/chrome.rs): the open tabs, the active one underlined, New tab and Close tab at the right.

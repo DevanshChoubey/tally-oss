@@ -187,7 +187,10 @@ pub fn create_company(
             )
         })?;
     }
-    let mut api = Api::create(path, company, clock).map_err(|e| e.to_string())?;
+    let mut api = match Api::create_company(path, company, clock).map_err(|e| e.to_string())? {
+        Outcome::Value(api) => api,
+        Outcome::Unsupported(refused) => return Err(refused.reason),
+    };
     let note = match api.set_ai_tier(ai) {
         Ok(Outcome::Value(())) => None,
         Ok(Outcome::Unsupported(refused)) => Some(crate::i18n::tf(

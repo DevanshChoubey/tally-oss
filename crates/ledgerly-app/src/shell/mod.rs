@@ -451,7 +451,8 @@ impl Shell {
             | Action::ToggleDetail
             | Action::Print
             | Action::Export
-            | Action::Email) => match sidebar::command_route(other) {
+            | Action::Email
+            | Action::ImportFile) => match sidebar::command_route(other) {
                 CommandRoute::Screen => self.open_in_tab(&choice.target, choice.mode),
                 CommandRoute::Shell | CommandRoute::Hidden => {
                     self.notice = Some(format!(
@@ -886,7 +887,8 @@ impl Shell {
         cmds
     }
 
-    /// Alt+O opens the import screen at the import from a file ("Alt+O (Import)",
+    /// The import-file key (Alt+O in both presets, [`Action::ImportFile`]) opens the import screen
+    /// at the import from a file ("Alt+O (Import)",
     /// <https://help.tallysolutions.com/import-data-from-xml-or-json/>, read 2026-11-27). Runs
     /// after the screen. Alt+O is Import on every screen: the purchase's bill photo is Ctrl+Alt+O
     /// (index.html:2182), which this does not match. On the
@@ -899,7 +901,7 @@ impl Shell {
             .tabs
             .active_stack()
             .is_some_and(|stack| stack.top_title(&self.tr) == self.tr.t("import.title"));
-        let pressed = ui.input_mut(|i| i.consume_key(Modifiers::ALT, Key::O));
+        let pressed = ui.input_mut(|i| self.keymap.consume_action(i, Action::ImportFile));
         (pressed && !on_import).then(|| {
             ChromeCmd::OpenOnTop(PaletteTarget::Report(navigate::IMPORT_FILE_KEY.to_owned()))
         })
@@ -1065,7 +1067,8 @@ fn asked_name(target: &PaletteTarget) -> &str {
             | Action::ToggleDetail
             | Action::Print
             | Action::Export
-            | Action::Email) => other.label(),
+            | Action::Email
+            | Action::ImportFile) => other.label(),
         },
         PaletteTarget::Report(key) => {
             if key == navigate::BANK_RECON_KEY || key.starts_with("bank:") {

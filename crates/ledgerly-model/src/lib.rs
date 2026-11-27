@@ -17,6 +17,7 @@ mod voucher_type;
 pub mod features;
 pub mod seed_godowns;
 pub mod seed_groups;
+pub mod seed_ledgers;
 pub mod seed_voucher_types;
 pub mod validate;
 

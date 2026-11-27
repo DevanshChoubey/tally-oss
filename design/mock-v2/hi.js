@@ -363,6 +363,9 @@ window.HI={
 "enter the path of the XML file, or choose it": "XML फ़ाइल का पथ लिखें, या उसे चुनें",
 "When a master is already in the company": "जब कोई मास्टर कंपनी में पहले से हो",
 "XML file": "XML फ़ाइल",
+"When a voucher with the same GUID is in the company": "जब उसी GUID वाला वाउचर कंपनी में पहले से हो",
+"Do not overwrite: import it as a new voucher (a later import overwrites that copy)": "न बदलें: इसे नए वाउचर के रूप में आयात करें (अगला आयात उस प्रति को बदल देता है)",
+"Overwrite the voucher in the company with the file's": "कंपनी के वाउचर को फ़ाइल के वाउचर से बदलें",
 "Import from an XML file": "XML फ़ाइल से आयात",
 "Ignore duplicates: keep the existing master as it is": "दोहराव छोड़ें: मौजूदा मास्टर जैसा है वैसा रखें",
 "Masters (groups and ledgers)": "मास्टर (समूह और लेजर)",
@@ -565,6 +568,7 @@ window.HI={
 "Hide vouchers": "वाउचर छिपाएँ",
 "Hold Alt or Ctrl for more ·": "और के लिए Alt या Ctrl दबाए रखें ·",
 "Host": "होस्ट",
+"Import masters or vouchers from a file": "फ़ाइल से मास्टर या वाउचर आयात करें",
 "Import in one step": "एक चरण में आयात",
 "Imported. Comparing with the source app's own reports...": "आयात हो गया। स्रोत ऐप की अपनी रिपोर्टों से तुलना हो रही है...",
 "Insert voucher": "वाउचर जोड़ें",
@@ -1101,5 +1105,135 @@ window.HI={
 "Friday": "शुक्रवार",
 "Saturday": "शनिवार",
 "Sunday": "रविवार"
+},
+"keys": {
+"import.file.choose": [
+"Choose file",
+"फ़ाइल चुनें"
+],
+"import.file.combine": [
+"Combine opening balance: add the file's opening balance to the existing one",
+"प्रारंभिक शेष जोड़ें: फ़ाइल का प्रारंभिक शेष मौजूदा शेष में जोड़ें"
+],
+"import.file.dialog_title": [
+"Choose the XML file to import",
+"आयात के लिए XML फ़ाइल चुनें"
+],
+"import.file.err_behaviour": [
+"choose what to do with a master that is already in the company",
+"चुनें कि कंपनी में पहले से मौजूद मास्टर का क्या करें"
+],
+"import.file.err_kind": [
+"choose Masters or Transactions",
+"मास्टर या लेन-देन चुनें"
+],
+"import.file.err_lost": [
+"the background worker stopped before the import finished",
+"आयात पूरा होने से पहले पृष्ठभूमि का काम रुक गया"
+],
+"import.file.err_no_company": [
+"no company is open: create or open a company, then import into it",
+"कोई कंपनी खुली नहीं है: कंपनी बनाएँ या खोलें, फिर उसमें आयात करें"
+],
+"import.file.err_path": [
+"enter the path of the XML file, or choose it",
+"XML फ़ाइल का पथ लिखें, या उसे चुनें"
+],
+"import.file.error": [
+"Error: {text}",
+"त्रुटि: {text}"
+],
+"import.file.exceptions": [
+"Not imported ({count})",
+"आयात नहीं हुए ({count})"
+],
+"import.file.existing": [
+"When a master is already in the company",
+"जब कोई मास्टर कंपनी में पहले से हो"
+],
+"import.file.filter": [
+"XML file",
+"XML फ़ाइल"
+],
+"import.file.guid": [
+"When a voucher with the same GUID is in the company",
+"जब उसी GUID वाला वाउचर कंपनी में पहले से हो"
+],
+"import.file.guid_no": [
+"Do not overwrite: import it as a new voucher (a later import overwrites that copy)",
+"न बदलें: इसे नए वाउचर के रूप में आयात करें (अगला आयात उस प्रति को बदल देता है)"
+],
+"import.file.guid_yes": [
+"Overwrite the voucher in the company with the file's",
+"कंपनी के वाउचर को फ़ाइल के वाउचर से बदलें"
+],
+"import.file.heading": [
+"Import from an XML file",
+"XML फ़ाइल से आयात"
+],
+"import.file.ignore": [
+"Ignore duplicates: keep the existing master as it is",
+"दोहराव छोड़ें: मौजूदा मास्टर जैसा है वैसा रखें"
+],
+"import.file.ignored": [
+"Left as they were ({count})",
+"जैसे थे वैसे रखे ({count})"
+],
+"import.file.masters": [
+"Masters (groups and ledgers)",
+"मास्टर (समूह और लेजर)"
+],
+"import.file.meta": [
+"Masters or vouchers from an XML file in your previous accounting app's import format, into the company that is open. Each object is checked as if typed in; anything that cannot go in is listed with the reason.",
+"पिछले लेखा ऐप के आयात प्रारूप की XML फ़ाइल से मास्टर या वाउचर, खुली कंपनी में। हर वस्तु की जाँच वैसे ही होती है जैसे हाथ से लिखने पर; जो नहीं जा सकती, वह कारण के साथ सूची में दिखती है।"
+],
+"import.file.modify": [
+"Modify with new data: replace the existing master's details with the file's",
+"नए डेटा से बदलें: मौजूदा मास्टर का विवरण फ़ाइल के विवरण से बदलें"
+],
+"import.file.no_company": [
+"Importing from a file needs an open company. Create or open one, then press Alt+O.",
+"फ़ाइल से आयात के लिए कंपनी खुली होनी चाहिए। कंपनी बनाएँ या खोलें, फिर Alt+O दबाएँ।"
+],
+"import.file.path": [
+"XML file",
+"XML फ़ाइल"
+],
+"import.file.path_hint": [
+"path of the XML file",
+"XML फ़ाइल का पथ"
+],
+"import.file.run": [
+"Import the file",
+"फ़ाइल आयात करें"
+],
+"import.file.running": [
+"Importing the file...",
+"फ़ाइल आयात हो रही है..."
+],
+"import.file.summary": [
+"{what}: {created} created, {altered} altered, {combined} combined, {ignored} ignored, {errors} not imported.",
+"{what}: {created} बने, {altered} बदले, {combined} जोड़े, {ignored} छोड़े, {errors} आयात नहीं हुए।"
+],
+"import.file.transactions": [
+"Transactions (vouchers)",
+"लेन-देन (वाउचर)"
+],
+"import.file.warnings": [
+"Read but not imported ({count})",
+"पढ़े गए पर आयात नहीं हुए ({count})"
+],
+"import.file.what": [
+"What to import",
+"क्या आयात करें"
+],
+"import.file.what_masters": [
+"Masters",
+"मास्टर"
+],
+"import.file.what_transactions": [
+"Transactions",
+"लेन-देन"
+]
 }
 };

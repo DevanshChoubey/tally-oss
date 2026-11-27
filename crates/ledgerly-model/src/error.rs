@@ -13,7 +13,8 @@ pub enum VoucherError {
         cr: Paise,
     },
     /// Bill allocations on a line do not add up to the line.
-    #[error("bill allocations on line {line} total {allocated:?}, the line is {expected:?}")]
+    /// The message names the line as people count, from 1.
+    #[error("bill allocations on line {} total {allocated:?}, the line is {expected:?}", line.saturating_add(1))]
     BillAllocationMismatch {
         /// Line index (0-based).
         line: usize,
@@ -51,7 +52,8 @@ pub enum VoucherError {
     #[error("voucher has no lines")]
     Empty,
     /// A line amount is negative.
-    #[error("line {line} has a negative amount")]
+    /// The message names the line as people count, from 1.
+    #[error("line {} has a negative amount", line.saturating_add(1))]
     NegativeAmount {
         /// Line index (0-based).
         line: usize,

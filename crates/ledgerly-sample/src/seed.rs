@@ -151,6 +151,11 @@ pub(crate) struct LedgerSeed {
     /// The ledger an invoice's round-off posts to (the engine's invoice-rounding role).
     #[serde(default)]
     pub(crate) invoice_rounding: bool,
+    /// The company's predefined Cash ledger (the engine's reserved Cash role; TallyPrime help,
+    /// "Ledgers in TallyPrime", <https://help.tallysolutions.com/ledgers-in-tallyprime/>, read
+    /// 2026-11-27).
+    #[serde(default)]
+    pub(crate) predefined_cash: bool,
 }
 
 /// A stock item master.

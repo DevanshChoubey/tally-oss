@@ -10,6 +10,8 @@
 //!
 //! The import only goes into a company that holds exactly what [`Api::create`] seeds: the reserved
 //! groups, the default voucher types and Main Location, and nothing else, with no period locked.
+//! A company made by [`Api::create_company`] also holds its untouched predefined Cash ledger;
+//! the export's own Cash takes its place (see `in_place_of_predefined`).
 //! Any other company is refused with `Outcome::Unsupported` before Tally is contacted. Merging into existing books
 //! is not offered: an import into a company with data would need an id base and a merge rule that
 //! the spec does not give.
@@ -22,9 +24,12 @@ use std::path::{Path, PathBuf};
 use ledgerly_core::{CancelToken, Date, Outcome, Period, Unsupported};
 use ledgerly_model::seed_godowns::default_godowns;
 use ledgerly_model::seed_groups::reserved_groups;
+use ledgerly_model::seed_ledgers::predefined_ledgers;
 use ledgerly_model::seed_voucher_types::default_voucher_types;
-use ledgerly_model::{Books, Godown, Group, VoucherType};
-use ledgerly_store::Actor;
+use ledgerly_model::{
+    Books, Godown, Group, Ledger, MasterSnapshot, ReservedGroup, ReservedLedger, VoucherType,
+};
+use ledgerly_store::{Actor, Event};
 use ledgerly_tally_bridge::TallyTransport;
 use ledgerly_tally_bridge::import::{ImportCounts, ImportedTally, import_company, import_range};
 use ledgerly_tally_bridge::transport::HttpTransport;
@@ -133,6 +138,10 @@ impl Api {
             Outcome::Value(imported) => imported,
             Outcome::Unsupported(refusal) => return Ok(Outcome::Unsupported(refusal)),
         };
+        let mut imported = imported;
+        if self.holds_predefined_ledgers()? {
+            imported.events = in_place_of_predefined(imported.events);
+        }
         let actor = import_actor(self.actor(), today);
         self.commit_as(&imported.events, &actor)?;
         Ok(Outcome::Value(summary(company, period, imported)))
@@ -157,6 +166,14 @@ impl Api {
         Ok(Outcome::Value(books.company.books_begin))
     }
 
+    /// Whether the company holds the predefined ledgers [`Api::create_company`] makes.
+    fn holds_predefined_ledgers(&mut self) -> Result<bool, ApiError> {
+        Ok(match self.loaded_books()? {
+            Outcome::Value(books) => !books.masters.ledgers.is_empty(),
+            Outcome::Unsupported(_) => false,
+        })
+    }
+
     /// The folder for the raw Tally responses: `<company file>.tally-capture`, beside the file.
     fn capture_dir(&self) -> PathBuf {
         let path = self.store().path();
@@ -168,8 +185,40 @@ impl Api {
     }
 }
 
-/// True when `books` holds only what [`Api::create`] seeds: the reserved groups, the default
-/// voucher types, Main Location, and no other master, posting or voucher.
+/// The import's events for a company that holds the predefined ledgers: the other program's
+/// export carries its own predefined Cash (TallyPrime help, "Ledgers in TallyPrime",
+/// <https://help.tallysolutions.com/ledgers-in-tallyprime/>, read 2026-11-27), numbered with the
+/// rest of its ledgers from 1. So the untouched predefined ledgers are removed first, and the
+/// export's `Cash` under Cash-in-Hand takes the reserved Cash role: the company ends with one Cash,
+/// and every ledger id is the mapping's.
+fn in_place_of_predefined(events: Vec<Event>) -> Vec<Event> {
+    let cash_in_hand = reserved_groups()
+        .into_iter()
+        .find(|g| g.reserved == Some(ReservedGroup::CashInHand))
+        .map(|g| g.id);
+    let mut out: Vec<Event> = predefined_ledgers()
+        .into_iter()
+        .map(|l| Event::MasterDeleted(MasterSnapshot::Ledger(l)))
+        .collect();
+    let mut cash_taken = false;
+    for mut event in events {
+        if let Event::MasterCreated(MasterSnapshot::Ledger(ledger)) = &mut event
+            && !cash_taken
+            && ledger.name == "Cash"
+            && Some(ledger.group) == cash_in_hand
+            && ledger.reserved.is_none()
+        {
+            cash_taken = true;
+            ledger.reserved = Some(ReservedLedger::Cash);
+        }
+        out.push(event);
+    }
+    out
+}
+
+/// True when `books` holds only what [`Api::create`] or [`Api::create_company`] seeds: the
+/// reserved groups, the default voucher types, Main Location, no ledger or only the untouched
+/// predefined ones, and no other master, posting or voucher.
 fn is_seed_only(books: &Books) -> bool {
     let masters = &books.masters;
     let groups: Vec<Group> = masters.groups.values().cloned().collect();
@@ -178,7 +227,8 @@ fn is_seed_only(books: &Books) -> bool {
     groups == reserved_groups()
         && voucher_types == default_voucher_types()
         && godowns == default_godowns()
-        && masters.ledgers.is_empty()
+        && (masters.ledgers.is_empty()
+            || masters.ledgers.values().cloned().collect::<Vec<Ledger>>() == predefined_ledgers())
         && masters.units.is_empty()
         && masters.stock_groups.is_empty()
         && masters.stock_items.is_empty()

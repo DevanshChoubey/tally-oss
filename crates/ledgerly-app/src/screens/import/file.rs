@@ -13,7 +13,7 @@
 use std::path::PathBuf;
 
 use egui::{RichText, Ui};
-use ledgerly_api::{FileImportSummary, MasterBehaviour, XmlImport};
+use ledgerly_api::{FileImportSummary, MasterBehaviour, VoucherBehaviour, XmlImport};
 use ledgerly_core::{Outcome, Unsupported};
 
 use crate::screens::wire::{Done, Latest, unsupported_text};
@@ -55,9 +55,16 @@ pub(super) struct FileImport {
     pub(super) kind: Option<FileKind>,
     pub(super) path: String,
     pub(super) behaviour: Option<MasterBehaviour>,
+    /// "Overwrite voucher when a voucher with same GUID exists": No unless the user picks Yes
+    /// (`VoucherBehaviour`'s default).
+    pub(super) vouchers: VoucherBehaviour,
     pub(super) state: FileImportState,
-    /// Whether the path field had the keyboard last frame, so Enter imports the file.
-    pub(super) path_focused: bool,
+    /// Whether the file form is where the user is working, so Enter imports the file: the screen
+    /// was opened with Alt+O, the path has the keyboard, or a choice or Choose file was the last
+    /// thing used. Working in the one-step form clears it (`ImportScreen::import_keys`).
+    pub(super) active: bool,
+    /// Put the keyboard in the path field on the next frame (the screen was opened with Alt+O).
+    pub(super) focus_path: bool,
     /// Frames left in which to scroll the panel into view (the screen was opened with Alt+O).
     /// More than one, since the first frame lays out a scroll area that does not know its
     /// content's height yet.
@@ -82,7 +89,7 @@ impl FileImport {
             return;
         }
         let what = match (kind, self.behaviour) {
-            (FileKind::Transactions, _) => XmlImport::Transactions,
+            (FileKind::Transactions, _) => XmlImport::Transactions(self.vouchers),
             (FileKind::Masters, Some(behaviour)) => XmlImport::Masters(behaviour),
             (FileKind::Masters, None) => {
                 self.state = FileImportState::Failed(crate::i18n::t("import.file.err_behaviour"));
@@ -140,7 +147,7 @@ impl FileImport {
 pub fn summary_line(summary: &FileImportSummary) -> String {
     let what = match summary.what {
         XmlImport::Masters(_) => crate::i18n::t("import.file.what_masters"),
-        XmlImport::Transactions => crate::i18n::t("import.file.what_transactions"),
+        XmlImport::Transactions(_) => crate::i18n::t("import.file.what_transactions"),
     };
     crate::i18n::tf(
         "import.file.summary",
@@ -163,7 +170,9 @@ pub fn state_lines(state: &FileImportState) -> Vec<String> {
         FileImportState::Idle => Vec::new(),
         FileImportState::Running => vec![crate::i18n::t("import.file.running")],
         FileImportState::Refused(u) => vec![unsupported_text(u)],
-        FileImportState::Failed(text) => vec![format!("Error: {text}")],
+        FileImportState::Failed(text) => {
+            vec![crate::i18n::tf("import.file.error", &[("text", text)])]
+        }
         FileImportState::Imported(summary) => {
             let mut lines = vec![summary_line(summary)];
             lines.extend(
@@ -262,6 +271,7 @@ fn draw_choices(
                 .clicked()
                 {
                     file.kind = Some(FileKind::Masters);
+                    file.active = true;
                 }
                 if choice_row(
                     transactions,
@@ -271,6 +281,7 @@ fn draw_choices(
                 .clicked()
                 {
                     file.kind = Some(FileKind::Transactions);
+                    file.active = true;
                 }
             }
         });
@@ -285,6 +296,26 @@ fn draw_choices(
                 if choice_row(ui, &crate::i18n::t(key), file.behaviour == Some(behaviour)).clicked()
                 {
                     file.behaviour = Some(behaviour);
+                    file.active = true;
+                }
+                ui.add_space(4.0);
+            }
+        }
+        if file.kind == Some(FileKind::Transactions) {
+            ui.add_space(8.0);
+            ui.label(
+                RichText::new(crate::i18n::t("import.file.guid"))
+                    .size(TEXT_META)
+                    .color(t.text_2),
+            );
+            for (on, key) in [
+                (false, "import.file.guid_no"),
+                (true, "import.file.guid_yes"),
+            ] {
+                let picked = file.vouchers.overwrite_same_guid == on;
+                if choice_row(ui, &crate::i18n::t(key), picked).clicked() {
+                    file.vouchers.overwrite_same_guid = on;
+                    file.active = true;
                 }
                 ui.add_space(4.0);
             }
@@ -330,7 +361,12 @@ fn draw_path(ui: &mut Ui, file: &mut FileImport) -> FilePress {
                         .hint_text(crate::i18n::t("import.file.path_hint"))
                         .desired_width(ui.available_width()),
                 );
-                file.path_focused = field.has_focus();
+                if std::mem::take(&mut file.focus_path) {
+                    field.request_focus();
+                }
+                if field.has_focus() {
+                    file.active = true;
+                }
             },
         );
         ui.add_space(10.0);
@@ -376,7 +412,11 @@ fn draw_result(ui: &mut Ui, state: &FileImportState, show: bool) {
         }
         FileImportState::Failed(text) => {
             ui.add_space(10.0);
-            reveal(note(ui, NoteKind::Bad, &format!("Error: {text}")));
+            reveal(note(
+                ui,
+                NoteKind::Bad,
+                &crate::i18n::tf("import.file.error", &[("text", text)]),
+            ));
             return;
         }
         FileImportState::Imported(summary) => summary,

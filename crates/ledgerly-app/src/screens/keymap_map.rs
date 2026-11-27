@@ -41,6 +41,7 @@ const MOCK_GROUPS: [(&str, &[(Action, &str)]); 4] = [
             (Action::Back, "Back one level, never loses a saved voucher"),
             (Action::Help, "This map"),
             (Action::SwitchCompany, "Switch company"),
+            (Action::ImportFile, "Import masters or vouchers from a file"),
         ],
     ),
     (

@@ -254,6 +254,7 @@ key = "cash"
 name = "Cash"
 group = "CashInHand"
 opening_dr = "48215.50"
+predefined_cash = true
 
 [[ledger]]
 key = "saptagiri"

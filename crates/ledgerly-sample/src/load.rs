@@ -344,9 +344,17 @@ fn ledger(l: &LedgerSeed, id: LedgerId) -> Result<Ledger, SampleError> {
             rate_percent: None,
         }),
         gst,
-        reserved: l
-            .invoice_rounding
-            .then_some(ReservedLedger::InvoiceRounding),
+        reserved: match (l.invoice_rounding, l.predefined_cash) {
+            (false, false) => None,
+            (true, false) => Some(ReservedLedger::InvoiceRounding),
+            (false, true) => Some(ReservedLedger::Cash),
+            (true, true) => {
+                return Err(value_error(
+                    field,
+                    "a ledger holds one reserved role: invoice_rounding or predefined_cash",
+                ));
+            }
+        },
         tally: None,
     })
 }

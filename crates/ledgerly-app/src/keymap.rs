@@ -118,6 +118,9 @@ pub enum Action {
     Export,
     /// Email the current screen.
     Email,
+    /// Open the import of masters or vouchers from a file ("Alt+O (Import)",
+    /// <https://help.tallysolutions.com/import-data-from-xml-or-json/>, read 2026-11-27).
+    ImportFile,
 }
 
 impl Action {
@@ -156,6 +159,7 @@ impl Action {
         Action::Print,
         Action::Export,
         Action::Email,
+        Action::ImportFile,
     ];
 
     /// The stable id used as the key in the keymap file.
@@ -195,6 +199,7 @@ impl Action {
             Action::Print => "print",
             Action::Export => "export",
             Action::Email => "email",
+            Action::ImportFile => "import-file",
         }
     }
 
@@ -241,6 +246,7 @@ impl Action {
             Action::Print => "Print",
             Action::Export => "Export",
             Action::Email => "Email",
+            Action::ImportFile => "Import masters or vouchers from a file",
         }
     }
 }

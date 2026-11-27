@@ -209,7 +209,8 @@ fn check_line_bills(index: usize, line: &LedgerLine, ledger: &Ledger) -> Result<
             return Ok(());
         }
         return Err(VoucherError::Invalid {
-            field: format!("line {index}"),
+            // People count lines from 1.
+            field: format!("line {}", index.saturating_add(1)),
             reason: "bill allocations are only allowed on bill-wise ledgers; remove them or \
                      turn on bill-wise tracking for the ledger"
                 .to_string(),

@@ -268,6 +268,20 @@ mod tests {
     }
 
     #[test]
+    fn bills_on_the_second_line_without_bill_wise_are_named_line_2() {
+        // provenance: derived (S22): people count a voucher's lines from 1, so the message for
+        // the line at index 1 names line 2.
+        let mut v = good_sales();
+        v.ledger_lines[1].bills = vec![bill(
+            BillRefKind::New,
+            "INV-1",
+            SignedAmount::cr(p(100_000)),
+        )];
+        let e = validate_voucher(&v, &masters(), &company()).unwrap_err();
+        assert!(e.to_string().starts_with("line 2: "), "{e}");
+    }
+
+    #[test]
     fn bills_on_a_ledger_without_bill_wise_are_rejected() {
         // provenance: derived, invariant 2 speaks of bill-wise lines; allocations on a ledger
         // that is not bill-wise have nothing to settle against, so they are an error rather than

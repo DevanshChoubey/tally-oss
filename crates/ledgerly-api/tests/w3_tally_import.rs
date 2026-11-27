@@ -424,3 +424,52 @@ fn the_summary_names_the_company_and_lists_warnings() {
     );
     assert!(summary.to_string().contains("Test Traders"));
 }
+
+#[test]
+fn a_new_company_with_its_predefined_cash_takes_the_import() {
+    // provenance: derived. A company made as the setup screen makes it has the predefined Cash
+    // ledger (TallyPrime help, "Ledgers in TallyPrime", read 2026-11-27) and nothing else, so it
+    // is still a new company to import into. The other program's export carries its own Cash
+    // under Cash-in-Hand, which takes the predefined one's place: one Cash, the same hand trial
+    // balance as `import_into_an_empty_company_matches_the_hand_trial_balance`.
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("wizard.ledgerly");
+    let mut api = new_company(&path, &company(), clock());
+    let tally = FakeTally::standard();
+    committed(api.import_tally_with(&tally, "Test Traders", &CancelToken::new()));
+    let books = match api.books().unwrap() {
+        Outcome::Value(b) => b,
+        Outcome::Unsupported(u) => panic!("{u:?}"),
+    };
+    let cash: Vec<_> = books
+        .masters
+        .ledgers
+        .values()
+        .filter(|l| l.name == "Cash")
+        .collect();
+    assert_eq!(cash.len(), 1, "{cash:?}");
+    assert_eq!(cash[0].reserved, Some(ledgerly_model::ReservedLedger::Cash));
+    let tb = trial_balance(&api);
+    assert_eq!(
+        row_cells(&tb, "Cash"),
+        Some(vec![
+            ReportCell::Empty,
+            ReportCell::Amount(SignedAmount::cr(Paise::new(50_000)))
+        ])
+    );
+    assert_eq!(
+        tb.totals,
+        vec![
+            ReportCell::Amount(SignedAmount::dr(Paise::new(100_000))),
+            ReportCell::Amount(SignedAmount::cr(Paise::new(100_000)))
+        ]
+    );
+}
+
+/// A company made as the setup screen makes it.
+fn new_company(path: &std::path::Path, company: &Company, clock: Clock) -> Api {
+    match Api::create_company(path, company, clock).unwrap() {
+        Outcome::Value(api) => api,
+        Outcome::Unsupported(u) => panic!("{u:?}"),
+    }
+}

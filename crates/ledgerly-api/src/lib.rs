@@ -109,7 +109,7 @@ pub use nudges::{DuplicatePayment, Gstr1Due, HomeNudges, PaymentRef, gstr1_next_
 pub use report::ExportFormat;
 pub use return_against::{InvoicedAgainst, InvoicedLine};
 pub use search::{MatchedOn, SearchHit};
-pub use tally_file_import::{FileImportSummary, ImportException, XmlImport};
+pub use tally_file_import::{FileImportSummary, ImportException, VoucherBehaviour, XmlImport};
 pub use tally_import::ImportSummary;
 pub use voucher_audit::{ChangeKind, VoucherAudit, VoucherChange, VoucherDetail};
 pub use voucher_gst::{EligibleItc, InvoiceGst, PartyBill, RateRow};
