@@ -7,8 +7,9 @@
 //! mock's AI-off state offers (index.html:1169-1170): the report list. Each button opens the real
 //! report or screen, whose figures the engine computes. The screen itself shows no figure.
 //!
-//! The mock's other states (`ask.result`, `ask.loading`, `ask.low-confidence`,
-//! `ask.unsupported`) need a compiled query and are listed in `design/PARITY-GAPS.md`.
+//! With the assistant in the build and a provider the gate reads Ready, the screen delegates to
+//! `ask_ai`, which asks the books through `Api::ask_books` (mock states `ai.ask.*`). Until the gate
+//! reads Ready, or when it refuses, the report list stays.
 
 use crate::i18n::Tr;
 use egui::{RichText, Ui};
@@ -139,12 +140,17 @@ pub struct AskScreen {
     last: Option<Gate>,
     /// Why the last button did not open its screen.
     notice: Option<String>,
+    /// The assistant half, used when the gate reads Ready.
+    ai: crate::screens::ask_ai::AiAsk,
 }
 
 impl AskScreen {
     /// Whether the tier has been read (or cannot be: no company, or the read failed).
     #[must_use]
     pub fn loaded(&self) -> bool {
+        if crate::release::ai_enabled() && !self.ai.loaded() {
+            return false;
+        }
         match &self.last {
             None | Some(Gate::Reading) => false,
             Some(
@@ -206,10 +212,19 @@ impl Screen for AskScreen {
     }
 
     fn keys(&self, tr: &Tr) -> Vec<KeyHint> {
+        if crate::release::ai_enabled() && self.ai.ready() {
+            return self.ai.keys();
+        }
         key_hints_in(tr)
     }
 
     fn ui(&mut self, ui: &mut Ui, ctx: &mut AppCtx) -> ScreenAction {
+        if crate::release::ai_enabled() {
+            self.ai.poll_gate(ctx);
+            if self.ai.ready() {
+                return self.ai.ui(ui, ctx);
+            }
+        }
         let tr = ctx.tr.clone();
         let gate = self.gate.gate(ui, ctx);
         self.last = Some(gate.clone());

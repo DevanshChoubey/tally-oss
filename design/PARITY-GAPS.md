@@ -414,8 +414,29 @@ Classes:
 - **NOT BUILT** `ai.quick-entry.loading`: Esc does not cancel the read; the key bar lists the idle
   keys. The "Try" sentences of the `ai=on` mock are the two the reader drafts (the Mehta Agro one
   needs a bill reference, which the assistant never proposes; the mock was changed first). Hindi words for the new lines are unsourced.
-- **NOT BUILT** `ask.result`, `ask.loading`, `ask.low-confidence`, `ask.unsupported`,
-  `gst.recon-explain`: no model runs; a screen would show a look with nothing behind it.
+- **FIX** (round E) `ai.ask.idle`, `.result`, `.unsupported` and `.failed` are built on Ask your
+  books with the assistant (mock states added first; `s21-e-sheet-1/2`). `Api::ask_books` runs the
+  question through the gate, checks the provider's `ReportQuery` against the question (dates and
+  ledger names it states), resolves it to an engine report (a ledger's vouchers need exactly one
+  ledger; a ledger named for a whole-books report is refused, never dropped) and runs it with
+  `Api::report`. The card draws the engine's `Report` only: the chips are its title and dates,
+  every figure a cell. Ask and the palette share one default-period rule
+  (`ledgerly_api::default_report_params`). Enter opens the full report; Alt+D dismisses.
+- **DELIBERATE** `ai.ask.result`: the mock's earlier result (receivables overdue more than 30
+  days, sorted by days overdue) needs a filter and a sort a `ReportQuery` does not carry; the
+  `ai=on` result is Bills receivable as the engine opens it, and a report wider than four columns
+  shows its last column and says how many more the full report has.
+- **NOT BUILT** `ai.ask.result` Ctrl+A "Save as report" (shown blocked with the reason), a drill
+  from a row of the card, and an Alt+D that logs the reading as wrong (Alt+D only dismisses; no
+  AI event kind records it). `ai.ask.loading` is not captured (it lasts one frame with the test
+  provider) and Esc does not cancel a question in flight.
+- **NOT BUILT** `ask.low-confidence`: a `ReportQuery` has no confidence and no second reading.
+- **NOT BUILT** the lead words "Unsupported." and "Not read." are not bold in the app's note, and
+  the provider chips in the card head are plain text, as on the plain-words card.
+- **DELIBERATE** an ask the engine cannot run is logged as `ReadFailed` with a reason starting
+  "Unsupported" rather than a new AI event kind, so the stored event format is unchanged.
+- **NOT BUILT** `gst.recon-explain`: no model runs; a screen would show a look with nothing
+  behind it.
 - **FIX** (round D) `ai.purchase-bill.choose`, `.reading`, `.ledger-lines`, `.rejected` and
   `.error` are built on the bill photo screen with the assistant (mock states added first;
   `s21-d-sheet-1/2`). The photo is drawn with a box and label on each value the reader took; the

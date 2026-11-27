@@ -139,6 +139,20 @@ untracked), look at each, update `PARITY-GAPS.md`.
   URL plus /chat/completions. Tests use a recording transport; no network. Cloud OCR stays refused
   (an image cannot be redacted; per-document consent is not built). The app does not yet attach
   the cloud assistant (PARITY-GAPS).
+- Round E: committed. `Api::ask_books` (gate, provider query, the query checked against the
+  question, resolved to an engine report, run by `Api::report`, every ask logged) and the Ask
+  your books screen with the assistant (`ai.ask.idle`, `.result`, `.unsupported`, `.failed`; mock
+  first, tests first and seen failing). The report names are listed in the cloud prompt
+  (`ledgerly_assist::REPORT_NAMES`). A figure the cloud writes in prose never reaches the answer
+  (tested with a Messages transport answering prose around the JSON). NOT BUILT: save as report,
+  low confidence, Esc mid-question.
+- Honesty notes (E): the API tests were seen failing at compile only; the app tests were seen
+  failing 6 of 7 (the AI-off one passed on the old path). One app expectation was my own wrong
+  derivation (Cash where the condensed trial balance shows Current Assets) and was corrected before
+  green. 24 `lit` phrases of the new screen had no catalogue entry and only the full gate
+  (`i18n_lit_phrases`) caught it; their 24 Hindi entries are unsourced. Open: a store failure inside
+  `Api::report` after the provider answered returns the error without a log entry; no test can
+  make the report engine fail that way yet, so it is not fixed.
 - Honesty notes (C): the app tests' sentence helper was changed to wait for the ready hint
   instead of "Read as:" (the test typed before the gate read Ready); the screen tests were written
   before the screen and seen failing, the accept transition checked by mutation.

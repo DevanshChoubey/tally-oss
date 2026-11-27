@@ -59,6 +59,7 @@ Formats: an amount of money is an integer number of paise (Rs 100 is 10000). A q
 {"VoucherDraft": {"kind": kind, "date": T(date) or null, "party_name": T(string) or null, "party": null, "invoice_number": T(string) or null, "supplier_gstin": T(string) or null, "lines": [{"ledger_name": T(string), "ledger": null, "side": side, "amount": T(paise)}], "items": [{"name": T(string), "qty": T(quantity) or null, "rate": T(rate) or null, "amount": T(paise) or null}], "document_total": T(paise) or null, "document_tax": T(paise) or null, "create_ledgers": [], "narration": string}}
 {"MatchSuggestion": {"statement_row": integer, "vouchers": [], "ledger_name": string or null, "reason": string, "confidence_permille": c}}
 {"ReportQuery": {"report": string, "from": date or null, "to": date or null, "ledger_names": [string]}}
+In a ReportQuery the report is one of "trial_balance", "balance_sheet", "profit_and_loss", "day_book", "receivables", "payables", "ledger_vouchers", "stock_summary", or "unsupported" when none of them answers the question (a forecast, for example). Give a ledger name only for "ledger_vouchers", exactly one, as the question writes it.
 {"MappingSuggestion": {"columns": [["source column", "target field"]], "confidence_permille": c}}"#;
 
 /// The cloud provider's wire format.
@@ -816,7 +817,10 @@ fn check_and_remap_sources(
 /// A report query has no source ranges, so its dates and ledger names are checked against the
 /// question the person typed: the model cannot move a period or name a ledger the question does
 /// not state (a changed period is a wrong report with no error otherwise).
-fn check_report_query(query: &ReportQuery, typed: &str) -> Result<(), AssistError> {
+///
+/// # Errors
+/// [`AssistError::Output`] when a date or a name is not in `typed`.
+pub fn check_report_query(query: &ReportQuery, typed: &str) -> Result<(), AssistError> {
     let dates_stated = [query.from, query.to]
         .iter()
         .flatten()
@@ -1181,5 +1185,15 @@ mod tests {
             v,
             json!({"ReportQuery": {"from": [2026, 90], "to": [2026, 100]}})
         );
+    }
+
+    #[test]
+    fn the_prompt_names_every_report_the_engine_runs_and_the_unsupported_answer() {
+        // Each name is one `ledgerly_api::ask_books` maps to a report; the model must be told
+        // them, or it guesses names no report has.
+        for name in crate::REPORT_NAMES {
+            assert!(SYSTEM_PROMPT.contains(&format!("\"{name}\"")), "{name}");
+        }
+        assert!(SYSTEM_PROMPT.contains(&format!("\"{}\"", crate::UNSUPPORTED_REPORT)));
     }
 }

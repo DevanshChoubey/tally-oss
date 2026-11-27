@@ -301,7 +301,7 @@ fn confidence_of(proposal: &Proposal) -> u16 {
 }
 
 /// Lower-case hex of `bytes`.
-fn hex(bytes: &[u8]) -> String {
+pub(crate) fn hex(bytes: &[u8]) -> String {
     use std::fmt::Write as _;
     bytes.iter().fold(String::new(), |mut out, b| {
         let _ = write!(out, "{b:02x}");

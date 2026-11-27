@@ -9,6 +9,7 @@ mod ai_drafts;
 mod ai_features;
 mod ai_settings;
 mod as_voucher;
+mod ask_books;
 mod balance;
 mod bank;
 mod brs_statement;
@@ -49,6 +50,7 @@ pub use ai_settings::{
     DEFAULT_BILL_MODEL, DEFAULT_WORDS_MODEL, KEY_SERVICE, KeyState, LOCAL_MODEL_FILE_KEY,
     cloud_model_for, cloud_request_url,
 };
+pub use ask_books::{AskAnswer, default_report_params, default_report_period};
 pub use balance::BalanceChange;
 pub use bank::{BalanceRefusal, balance_refusal};
 pub use command::{Command, CommandResult, CreatedId};

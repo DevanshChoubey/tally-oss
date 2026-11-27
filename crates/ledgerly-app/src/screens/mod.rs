@@ -3,6 +3,7 @@
 pub mod ai_gate;
 pub mod ai_settings;
 pub mod ask;
+mod ask_ai;
 pub mod assist;
 pub mod audit;
 pub mod bank;

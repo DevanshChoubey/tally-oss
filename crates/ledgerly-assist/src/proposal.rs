@@ -134,6 +134,22 @@ pub struct MatchSuggestion {
     pub confidence_permille: u16,
 }
 
+/// The report names a [`ReportQuery`] may give, each one a report the engine runs. The cloud
+/// prompt lists them, and `ledgerly_api::Api::ask_books` maps each to its report.
+pub const REPORT_NAMES: [&str; 8] = [
+    "trial_balance",
+    "balance_sheet",
+    "profit_and_loss",
+    "day_book",
+    "receivables",
+    "payables",
+    "ledger_vouchers",
+    "stock_summary",
+];
+
+/// The report name a provider gives when no report answers the question (a forecast, say).
+pub const UNSUPPORTED_REPORT: &str = "unsupported";
+
 /// A report the user asked for in words. The engine runs it; the answer shows this query.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ReportQuery {

@@ -669,6 +669,22 @@ const RAMESH_WORDS: &str = "Ramesh ko 5000 cash diya";
 /// A sentence the reader refuses: the recorded answer calls it a contra voucher, and plain words
 /// draft payments and receipts only (`nl_entry`), the mock's `quick-entry.read-failed`.
 const CONTRA_WORDS: &str = "moved 10k from cash to Saptagiri";
+/// The questions of the mock's `ai.ask.*` states (index.html `askAiRender`).
+const OWED_QUESTION: &str = "who owes us money?";
+/// A forecast: no report answers it (`ai.ask.unsupported`).
+const FORECAST_QUESTION: &str = "what will my profit be next quarter?";
+/// A question whose recorded query names a date it does not say (`ai.ask.failed`).
+const LAST_WEEK_QUESTION: &str = "day book for last week";
+
+/// A recorded report query with no ledger and, at most, a from date.
+fn ask_query(report: &str, from: Option<ledgerly_core::Date>) -> ledgerly_api::ReportQuery {
+    ledgerly_api::ReportQuery {
+        report: report.to_owned(),
+        from,
+        to: None,
+        ledger_names: Vec::new(),
+    }
+}
 
 /// [`godavari_assistant_file`] with the tier set to this computer and the fixed-answers provider
 /// given the model answers for the two sentences above. The answers are written here as a model
@@ -691,6 +707,13 @@ fn godavari_words_file(dir: &Path) -> Api {
             .with_text(
                 RAMESH_WORDS,
                 "{\"kind\":\"payment\",\"amount_text\":\"5000\",\"date_text\":null,\"party_name\":\"Ramesh\",\"account_name\":\"cash\",\"narration\":\"Ramesh\",\"confidence_permille\":800}",
+            )
+            .with_question(OWED_QUESTION, ask_query("receivables", None))
+            .with_question(FORECAST_QUESTION, ask_query("unsupported", None))
+            // A date the question does not say: the check refuses it (mock `ai.ask.failed`).
+            .with_question(
+                LAST_WEEK_QUESTION,
+                ask_query("day_book", Some(date!(2026 - 11 - 14))),
             ),
     ));
     api
@@ -2174,6 +2197,44 @@ fn light_shots() -> Vec<Shot> {
             .press(&[(Key::A, Modifiers::CTRL)])
             .wait(30)
             .expect_bar("Plain-words entry", "Plain-words entry")
+            .on(Fixture::GodavariWords)
+            .ai_on(),
+        // Later release: Ask your books (mock `ask.*` with `ai=on`).
+        shot("ai.ask.idle", &[palette])
+            .query("Ask your books")
+            .then(&[(Key::Enter, NONE)])
+            .wait(30)
+            .expect_bar("Ask your books", "Ask your books")
+            .on(Fixture::GodavariWords)
+            .ai_on(),
+        shot("ai.ask.result", &[palette])
+            .query("Ask your books")
+            .then(&[(Key::Enter, NONE)])
+            .wait(30)
+            .type_text(OWED_QUESTION)
+            .press(&[(Key::Enter, NONE)])
+            .wait(30)
+            .expect_bar("Ask your books", "Ask your books")
+            .on(Fixture::GodavariWords)
+            .ai_on(),
+        shot("ai.ask.unsupported", &[palette])
+            .query("Ask your books")
+            .then(&[(Key::Enter, NONE)])
+            .wait(30)
+            .type_text(FORECAST_QUESTION)
+            .press(&[(Key::Enter, NONE)])
+            .wait(30)
+            .expect_bar("Ask your books", "Ask your books")
+            .on(Fixture::GodavariWords)
+            .ai_on(),
+        shot("ai.ask.failed", &[palette])
+            .query("Ask your books")
+            .then(&[(Key::Enter, NONE)])
+            .wait(30)
+            .type_text(LAST_WEEK_QUESTION)
+            .press(&[(Key::Enter, NONE)])
+            .wait(30)
+            .expect_bar("Ask your books", "Ask your books")
             .on(Fixture::GodavariWords)
             .ai_on(),
         shot("ai.quick-entry.read-failed", &[palette])

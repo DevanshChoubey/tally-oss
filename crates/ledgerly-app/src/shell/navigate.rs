@@ -55,11 +55,11 @@
 //! `ledgerly-gst` accepts one calendar month or one calendar quarter (`check_period`), so a monthly
 //! period is a valid input to the engine.
 
-use ledgerly_api::{AuditReportKind, ColumnSpec, Detail, ReportFilter, ReportKind, ReportParams};
+use ledgerly_api::{AuditReportKind, ReportKind, ReportParams};
 use ledgerly_core::{
     Date, FinancialYear, GroupId, LedgerId, Outcome, Period, PeriodError, VoucherId,
 };
-use ledgerly_model::{BaseVoucherKind, Books, Scenario};
+use ledgerly_model::{BaseVoucherKind, Books};
 use thiserror::Error;
 
 use crate::keymap::{Action, Keymap};
@@ -798,69 +798,22 @@ pub fn screen_for_key(key: &str, ctx: &AppCtx) -> Option<Result<Box<dyn Screen>,
 
 // ---- parameters and screens ------------------------------------------------------------------
 
-/// Whether a report opens at the detailed level: a group summary or a ledger's vouchers, as the
-/// drills of `ledgerly-reports` do. Every other report opens condensed.
-fn opens_detailed(kind: &ReportKind) -> bool {
-    match kind {
-        ReportKind::GroupSummary(_)
-        | ReportKind::GroupLedgers(_)
-        | ReportKind::LedgerVouchers(_) => true,
-        ReportKind::TrialBalance
-        | ReportKind::BalanceSheet
-        | ReportKind::ProfitAndLoss
-        | ReportKind::DayBook
-        | ReportKind::Register(_)
-        | ReportKind::Outstanding { .. }
-        | ReportKind::StockSummary
-        | ReportKind::Audit(_) => false,
-    }
-}
-
-/// The period a report opens with: the financial year from its start to the last voucher dated in
-/// it, or the whole year when there is none.
+/// The period a report opens with: [`ledgerly_api::default_report_period`], the one rule Ask your
+/// books also opens with.
 ///
 /// # Errors
 /// [`NavError::Period`] when the company's financial year is not a valid period.
 pub fn default_period(books: &Books) -> Result<Period, NavError> {
-    let year = FinancialYear {
-        start: books.company.fy_start,
-    }
-    .period()?;
-    let last = books
-        .vouchers
-        .values()
-        .map(|voucher| voucher.date)
-        .filter(|date| year.contains(*date))
-        .max();
-    Ok(Period::new(year.from(), last.unwrap_or_else(|| year.to()))?)
+    Ok(ledgerly_api::default_report_period(books)?)
 }
 
-/// The parameters a report of `kind` opens with in `books` (see the module header).
+/// The parameters a report of `kind` opens with in `books`:
+/// [`ledgerly_api::default_report_params`].
 ///
 /// # Errors
 /// [`NavError::Period`] when the company's financial year is not a valid period.
 pub fn default_params(kind: ReportKind, books: &Books) -> Result<ReportParams, NavError> {
-    let year_to_date = default_period(books)?;
-    let period = if kind == ReportKind::DayBook {
-        Period::new(year_to_date.to(), year_to_date.to())?
-    } else {
-        year_to_date
-    };
-    let detail = if opens_detailed(&kind) {
-        Detail::Detailed
-    } else {
-        Detail::Condensed
-    };
-    Ok(ReportParams {
-        kind,
-        period,
-        as_of: period.to(),
-        scenario: Scenario::Actual,
-        detail,
-        columns: ColumnSpec::Single,
-        filter: ReportFilter::default(),
-        exceptions_only: false,
-    })
+    Ok(ledgerly_api::default_report_params(kind, books)?)
 }
 
 /// A worker-mode report screen for `kind`: it asks the API worker for the report on its first

@@ -11,7 +11,7 @@ mod seam;
 pub mod validate;
 
 pub use proposal::{
-    DraftItem, DraftLine, MappingSuggestion, MatchSuggestion, Proposal, ReportQuery, SourceRef,
-    Transcribed, VoucherDraft,
+    DraftItem, DraftLine, MappingSuggestion, MatchSuggestion, Proposal, REPORT_NAMES, ReportQuery,
+    SourceRef, Transcribed, UNSUPPORTED_REPORT, VoucherDraft,
 };
 pub use seam::{AssistError, ProposalInput, Proposer};

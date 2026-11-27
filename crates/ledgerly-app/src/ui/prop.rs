@@ -93,6 +93,8 @@ pub struct Prop<'a> {
     /// Whether this card takes the proposal keys this frame. Off by default, so only the card
     /// the user is working on reacts to Ctrl+A. Turn it on only when no text field has focus.
     handles_keys: bool,
+    /// The words on the Accept, Edit and Reject buttons. The keys stay the same.
+    labels: [&'a str; 3],
 }
 
 impl<'a> Prop<'a> {
@@ -105,7 +107,21 @@ impl<'a> Prop<'a> {
             accept_enabled: true,
             accept_reason: None,
             handles_keys: false,
+            labels: [
+                PropAction::Accept.label(),
+                PropAction::Edit.label(),
+                PropAction::Reject.label(),
+            ],
         }
+    }
+
+    /// Sets the words on the Accept, Edit and Reject buttons, for a proposal whose actions the
+    /// generic words do not name (Ask your books: Save as report, Open the full report, Dismiss).
+    /// The keys stay Ctrl+A, Enter and Alt+D.
+    #[must_use]
+    pub fn labels(mut self, accept: &'a str, edit: &'a str, reject: &'a str) -> Self {
+        self.labels = [accept, edit, reject];
+        self
     }
 
     /// Sets the state of the proposal.
@@ -222,7 +238,7 @@ fn footer(ui: &mut Ui, prop: &Prop<'_>, t: &Tokens) -> Option<PropAction> {
                     _ => prop.why,
                 };
                 ui.label(RichText::new(text).size(TEXT_META).color(t.text_2));
-                clicked = footer_buttons(ui, open, accept_on);
+                clicked = footer_buttons(ui, open, accept_on, prop.labels);
             });
         });
     clicked
@@ -233,14 +249,19 @@ fn footer(ui: &mut Ui, prop: &Prop<'_>, t: &Tokens) -> Option<PropAction> {
 /// buttons onto the next line, as the mock's footer wraps, instead of widening the card. Accept is
 /// enabled only when the card is open, so disabling the row is monotonic: the whole row when it is
 /// not open, then Accept when it is blocked.
-fn footer_buttons(ui: &mut Ui, open: bool, accept_on: bool) -> Option<PropAction> {
+fn footer_buttons(
+    ui: &mut Ui,
+    open: bool,
+    accept_on: bool,
+    [accept, edit, reject]: [&str; 3],
+) -> Option<PropAction> {
     let mut clicked = None;
     if !open {
         ui.disable();
     }
     if button(
         ui,
-        PropAction::Edit.label(),
+        edit,
         Some(PropAction::Edit.shortcut()),
         ButtonKind::Secondary,
     )
@@ -250,7 +271,7 @@ fn footer_buttons(ui: &mut Ui, open: bool, accept_on: bool) -> Option<PropAction
     }
     if button(
         ui,
-        PropAction::Reject.label(),
+        reject,
         Some(PropAction::Reject.shortcut()),
         ButtonKind::Danger,
     )
@@ -263,7 +284,7 @@ fn footer_buttons(ui: &mut Ui, open: bool, accept_on: bool) -> Option<PropAction
     }
     if button(
         ui,
-        PropAction::Accept.label(),
+        accept,
         Some(PropAction::Accept.shortcut()),
         ButtonKind::Primary,
     )

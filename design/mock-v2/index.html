@@ -383,6 +383,11 @@ mark{background:var(--accent-soft);color:var(--accent-ink);border-radius:2px;pad
  {"id":"ai.quick-entry.accepted","kind":"happy","hash":"screen=quick-entry&state=accepted&ai=on","title":"Plain-words entry, accepted (later release)","description":"Ctrl+A posted the draft through the engine; the card says Accepted and names the voucher number the engine gave."},
  {"id":"ai.quick-entry.read-failed","kind":"error","hash":"screen=quick-entry&state=read-failed&ai=on","title":"Plain-words entry, not read (later release)","description":"The reader refused the answer (a contra voucher; plain words draft payments and receipts only). Nothing is stored as a draft; the failure is in the AI activity log."},
  {"id":"ai.quick-entry.not-installed","kind":"empty","hash":"screen=quick-entry&state=not-installed&ai=on","title":"Plain-words entry, no local model (later release)","description":"On this computer with no model the build can run: the box is disabled, the reason is named, and the voucher forms are offered."},
+ {"id":"ai.ask.idle","kind":"empty","hash":"screen=ask&state=idle&ai=on","title":"Ask your books, ready (later release)","description":"A model can run: the box has focus and nothing is sent or run until Enter."},
+ {"id":"ai.ask.loading","kind":"loading","hash":"screen=ask&state=loading&ai=on","title":"Ask your books, building the query (later release)","description":"The question is with the assistant; nothing is shown until the engine has run the query."},
+ {"id":"ai.ask.result","kind":"happy","hash":"screen=ask&state=result&ai=on","title":"Ask your books, answered (later release)","description":"The question became a ReportQuery the engine ran: the chips name the report and its date from the engine's own parameters, and the table is the engine's report. Enter opens the full report; Alt+D dismisses; saving it as a report is not built."},
+ {"id":"ai.ask.unsupported","kind":"error","hash":"screen=ask&state=unsupported&ai=on","title":"Ask your books, unsupported (later release)","description":"A forecast: the query names no report the engine runs, so the answer is Unsupported, logged, with three reports offered."},
+ {"id":"ai.ask.failed","kind":"error","hash":"screen=ask&state=failed&ai=on","title":"Ask your books, not read (later release)","description":"The query named a date the question does not say, so nothing ran; the reason is the check's own words, and the failure is in the AI activity log."},
  {"id":"ai.purchase-bill.choose","kind":"empty","hash":"screen=purchase-bill&state=choose&ai=on","title":"Bill photo, choose a file (later release)","description":"Ctrl+Alt+O: the path of a bill photo (PNG or JPEG) or PDF is typed; Enter reads it on this computer. Nothing is read or kept until then."},
  {"id":"ai.purchase-bill.reading","kind":"loading","hash":"screen=purchase-bill&state=reading&ai=on","title":"Bill photo, reading (later release)","description":"A bill photo is being read on this computer; the image never leaves the machine."},
  {"id":"ai.purchase-bill.ledger-lines","kind":"validation-error","hash":"screen=purchase-bill&state=ledger-lines&ai=on","title":"Bill photo, choose the purchase ledger (later release)","description":"What the bill reader reads today: the printed supplier, bill number, date, taxable value, tax and total, drafted as ledger lines with a box on the image for each. The taxable value names no purchase ledger, so the person chooses one; the engine checks the draft after every choice and its verdict is the check line. Item rows are not read yet."},
@@ -1309,8 +1314,43 @@ SCREENS.palette = {title:'Command palette',default:null,hi:0,
 
 /* ---------- ask your books ---------- */
 function overdueRows(){return openBills().filter(b=>LED[b.led].group==='debtors'&&b.overdue>30).sort((a,b)=>b.overdue-a.overdue)}
+/* S21 round E: Ask with the assistant (ai=on). A ReportQuery carries a report name, the dates the
+   question states and one ledger for a ledger's vouchers; the engine runs it. No filter, sort or
+   second reading, so the legacy result/low-confidence states above stay as the later design. */
+const ASK_AI_STATES=['idle','loading','result','unsupported','failed'];
+const askAiOn=st=>parseHash().ai==='on'&&ASK_AI_STATES.includes(st);
+function askAiState(v){return /will|next|forecast/i.test(v)?'unsupported':/last week/i.test(v)?'failed':'result'}
+function askAiRender(st,p){
+  const q=p.q??({idle:'',loading:'who owes us money?',result:'who owes us money?',unsupported:'what will my profit be next quarter?',failed:'day book for last week'}[st]);
+  const head=phead([['Home',hashFor('home')],['Ask your books']],'Ask your books','The answer is always a report the engine runs. The assistant writes the query, never the figures.');
+  const box=`<div class="qe" style="margin-bottom:14px">${ic('spark')}<input id="askq" value="${esc(q)}" placeholder="Ask about your books, for example: who owes us money?" aria-label="Question" ${st==='loading'?'disabled':''}>${kb('Enter')}</div>`;
+  const how=`<div class="card pad"><h2>How this works</h2><ol class="t2" style="padding-left:18px;margin:0;display:grid;gap:6px"><li>Your model turns your words into a <b>ReportQuery</b>: a report, the dates you said, and the ledger you named.</li><li>The engine checks it and runs it, like any report.</li><li>The words here hold no figure. Every figure is in the engine's table.</li><li>Every question goes into the AI activity log.</li></ol>
+    <div class="hr"></div><h3>Try</h3><div class="stack" style="gap:6px;margin-top:6px">${['who owes us money?','what will my profit be next quarter?'].map(t=>`<button class="btn ghost" data-go="${hashFor('ask',askAiState(t),{q:t})}">${esc(t)}</button>`).join('')}</div></div>`;
+  const logged=what=>`<p class="meta" style="margin-top:10px">Logged in the AI activity log: the question, the model, and the outcome ${what}. Nothing else was stored.</p>`;
+  let left;
+  if(st==='idle')left=`<div class="card pad"><p class="t2">Type a question and press ${kb('Enter')}. Nothing is sent or run until then.</p></div>`;
+  else if(st==='loading')left=`<div class="card pad"><div class="row t2">${ic('spark')}Turning your question into a query…</div>${skelRows(5,[60,90,80,70,40])}</div>`;
+  else if(st==='unsupported')left=`<div class="card pad"><div class="note bad">${ic('alert')}<span><b>Unsupported.</b> No report in Ledgerly answers this question, and the assistant does not estimate figures. These reports show what the books hold.</span></div>
+    <div class="launch" style="margin-top:12px"><button data-go="${hashFor('balance-sheet')}">${ic('scale')}<span>Profit and loss</span></button><button data-go="${hashFor('balance-sheet')}">${ic('scale')}<span>Balance sheet</span></button><button data-go="${hashFor('balance-sheet','group',{g:'debtors'})}">${ic('clock')}<span>Bills receivable</span></button></div>${logged('Unsupported')}</div>`;
+  else if(st==='failed')left=`<div class="card pad"><div class="note bad">${ic('alert')}<span><b>Not read.</b> Model output rejected: the report query states a date or a ledger name that the question does not say. Nothing ran.</span></div>${logged('Not read')}</div>`;
+  else{
+    const by={};for(const b of openBills().filter(b=>LED[b.led].group==='debtors'))by[b.led]=(by[b.led]||0)+b.open;
+    const rows=Object.entries(by).filter(([,v])=>v!==0).sort((a,b)=>LED[a[0]].name.localeCompare(LED[b[0]].name)); const tot=rows.reduce((s,[,v])=>s+v,0);
+    left=proposal({kind:'Report query',src:[srcChip('chat','Your question'),srcChip('cpu','Local model')],acceptLabel:'Save as report',editLabel:'Open the full report',rejectLabel:'Dismiss',blocked:'Saving a question as a report is not built yet',
+    body:`<div class="row" style="flex-wrap:wrap;gap:6px;margin-bottom:10px"><span class="meta">I ran:</span><span class="bind q">Bills receivable</span><span class="bind q">as at ${fmtDate(VOUCHERS.map(v=>v.date).sort((x,y)=>x.split('-').reverse().join().localeCompare(y.split('-').reverse().join())).pop())}</span></div>
+     <p style="margin-bottom:10px">The table is the engine's result for this query. The assistant wrote no figure.</p>
+     <table class="t" id="askt"><thead><tr><th>Particulars</th><th class="num">Net outstanding</th></tr></thead><tbody>
+     ${rows.map(([l,v])=>`<tr><td>${esc(LED[l].name)}</td><td class="num">${inr(v)} Dr</td></tr>`).join('')}
+     <tr class="total"><td>Total</td><td class="num">${inr(tot)} Dr</td></tr></tbody></table>
+     <p class="meta" style="margin-top:8px">10 more columns are in the full report.</p>`,
+    checks:[['ok','Every figure above came from the report engine.'],['ok','The words above hold no figure of their own.']],
+    why:'Saving a question as a report is not built yet'});
+  }
+  return head+box+`<div class="grid g-main"><div>${left}</div>${how}</div>`;
+}
 SCREENS.ask = {title:'Ask your books',default:'result',
  render(st,p){
+  if(askAiOn(st))return askAiRender(st,p);
   const q=p.q||({result:'who owes us for more than 30 days?','low-confidence':'who are my top customers?',unsupported:'what will my profit be next quarter?',loading:'which suppliers did we pay by cheque this month?','offline-ai':'who owes us for more than 30 days?'}[st]);
   const head=phead([['Home',hashFor('home')],['Ask your books']],'Ask your books','The answer is always a report the engine runs. The assistant writes the query, never the figures.');
   const box=`<div class="qe" style="margin-bottom:14px">${ic('spark')}<input id="askq" value="${esc(q)}" aria-label="Question" ${st==='offline-ai'?'disabled':''}>${kb('Enter')}</div>`;
@@ -1337,14 +1377,16 @@ SCREENS.ask = {title:'Ask your books',default:'result',
     <div class="card pad"><h2>How this works</h2><ol class="t2" style="padding-left:18px;margin:0;display:grid;gap:6px"><li>The local model turns your words into a <b>ReportQuery</b>.</li><li>The engine checks it and runs it, like any report.</li><li>Prose is a template. A filter removes any digit that is not a bound engine value or query parameter.</li><li>Save it and it becomes a normal report in the palette.</li></ol>
     <div class="hr"></div><h3>Try</h3><div class="stack" style="gap:6px;margin-top:6px"><button class="btn ghost" data-go="${hashFor('ask','low-confidence')}">who are my top customers?</button><button class="btn ghost" data-go="${hashFor('ask','unsupported')}">what will my profit be next quarter?</button></div></div></div>`;
  },
- mount(st){const a=$('#askq');if(a)a.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();e.stopPropagation();const v=a.value;go(hashFor('ask',/top/i.test(v)?'low-confidence':/next|forecast|will/i.test(v)?'unsupported':'result',{q:v}))}})},
+ mount(st){const a=$('#askq');if(askAiOn(st)&&a&&st==='idle')a.focus();if(a)a.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();e.stopPropagation();const v=a.value;if(askAiOn(st)){if(v.trim())go(hashFor('ask',askAiState(v),{q:v}));return}go(hashFor('ask',/top/i.test(v)?'low-confidence':/next|forecast|will/i.test(v)?'unsupported':'result',{q:v}))}})},
  cmd(c){if(c==='pick1'||c==='pick2'){go(hashFor('ask','result'));toast('Reading chosen. In the full app the sales-by-party report runs here.')}},
- key(k,e,st){if(st==='low-confidence'&&!isTyping()&&(k==='1'||k==='2')){command('pick'+k);return true}
+ key(k,e,st){if(askAiOn(st)){if(st!=='result'||isTyping())return false;if(k==='Enter'){go(hashFor('balance-sheet','group',{g:'debtors'}),'drill-down');return true}if(k==='Alt+D'){toast('Answer dismissed. Nothing was stored.');go(hashFor('ask','idle',{q:''}));return true}return false}
+  if(st==='low-confidence'&&!isTyping()&&(k==='1'||k==='2')){command('pick'+k);return true}
   if(st!=='result'||isTyping())return false; if(k==='ArrowDown'||k==='J'){listMove('#askt',1);return true}if(k==='ArrowUp'||k==='K'){listMove('#askt',-1);return true}
   if(k==='Enter'){const r=selRow('#askt');if(r){go(r.dataset.href,'drill-down');return true}} if(k==='Ctrl+A'){toast('Saved as report "Customers overdue more than 30 days". Find it in the palette.');return true}
   if(k==='Alt+D'){toast('Thanks. The reading is logged as wrong; nothing else changes.');go(hashFor('home'),'screen-pop');return true} return false},
  back(){return hashFor('home')},
- keys(st){return st==='result'?[['','Ask your books'],['↑ ↓','Rows'],['Enter','Drill to ledger'],['Ctrl+A','Save as report'],['Alt+D','Wrong reading'],['Esc','Back']]:st==='low-confidence'?[['','Pick a reading'],['1','By sales'],['2','By amount owed'],['Esc','Back']]:[['','Ask your books'],['Enter','Ask'],['Esc','Back']]}
+ keys(st){if(askAiOn(st))return st==='result'?[['','Ask your books'],['Enter','Open the full report'],['Alt+D','Dismiss'],['Esc','Back']]:st==='loading'?[['','Ask your books'],['Esc','Back']]:[['','Ask your books'],['Enter','Ask'],['Esc','Back']];
+  return st==='result'?[['','Ask your books'],['↑ ↓','Rows'],['Enter','Drill to ledger'],['Ctrl+A','Save as report'],['Alt+D','Wrong reading'],['Esc','Back']]:st==='low-confidence'?[['','Pick a reading'],['1','By sales'],['2','By amount owed'],['Esc','Back']]:[['','Ask your books'],['Enter','Ask'],['Esc','Back']]}
 };
 
 /* ---------- review queue ---------- */
