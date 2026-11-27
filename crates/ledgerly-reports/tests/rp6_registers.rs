@@ -51,7 +51,7 @@ fn ledger(id: u64, name: &str) -> Ledger {
         id: LedgerId(id),
         name: name.to_string(),
         aliases: vec![],
-        group: ledgerly_core::GroupId(1),
+        group: Some(ledgerly_core::GroupId(1)),
         opening: SignedAmount::dr(Paise::ZERO),
         bill_wise: None,
         cost_centres_applicable: false,

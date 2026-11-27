@@ -41,6 +41,7 @@ use ledgerly_assist::provider::AiProvider;
 use ledgerly_core::{Clock, Date, Outcome, Unsupported, UserId, VoucherId};
 use ledgerly_model::seed_godowns::default_godowns;
 use ledgerly_model::seed_groups::reserved_groups;
+use ledgerly_model::seed_ledgers::predefined_ledgers;
 use ledgerly_model::seed_voucher_types::default_voucher_types;
 use ledgerly_model::{Books, Company, MasterSnapshot};
 use ledgerly_reports::{Report, ReportParams};
@@ -127,6 +128,32 @@ impl Api {
         };
         api.reload()?;
         Ok(api)
+    }
+
+    /// Creates a new company as the setup screen does: [`Api::create`], then the predefined
+    /// ledgers (`ledgerly_model::seed_ledgers`: Cash under Cash-in-Hand), each created through the
+    /// engine. TallyPrime help, "Ledgers in TallyPrime"
+    /// (<https://help.tallysolutions.com/ledgers-in-tallyprime/>, read 2026-11-27), provides Cash
+    /// in every company.
+    ///
+    /// `Outcome::Unsupported` when the engine cannot compute a predefined ledger's creation; the
+    /// file is then left with the seed alone.
+    ///
+    /// # Errors
+    /// As [`Api::create`]; [`ApiError::Engine`] or [`ApiError::Store`] when a predefined ledger
+    /// cannot be created (the file is then left with the seed alone).
+    pub fn create_company(
+        path: &Path,
+        company: &Company,
+        clock: Clock,
+    ) -> Result<Outcome<Self>, ApiError> {
+        let mut api = Self::create(path, company, clock)?;
+        for ledger in predefined_ledgers() {
+            if let Outcome::Unsupported(refusal) = api.execute(Command::CreateLedger(ledger))? {
+                return Ok(Outcome::Unsupported(refusal));
+            }
+        }
+        Ok(Outcome::Value(api))
     }
 
     /// Opens the company file at `path`.

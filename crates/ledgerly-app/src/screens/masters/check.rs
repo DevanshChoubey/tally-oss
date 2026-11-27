@@ -209,7 +209,7 @@ fn group_blockers(masters: &Masters, id: GroupId) -> Result<(), MasterError> {
     if masters.groups.values().any(|c| c.parent == Some(id)) {
         return Err(in_use(&g.name, "sub-groups"));
     }
-    if masters.ledgers.values().any(|l| l.group == id) {
+    if masters.ledgers.values().any(|l| l.group == Some(id)) {
         return Err(in_use(&g.name, "ledgers"));
     }
     Ok(())

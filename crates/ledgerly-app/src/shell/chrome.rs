@@ -43,6 +43,9 @@ pub(super) enum ChromeCmd {
     NeedCompany(String),
     /// Go to the setup wizard at the root of the active tab.
     ToSetup,
+    /// A key that would open the top screen again: the top screen goes to that part of itself
+    /// ([`crate::Screen::reopen`]).
+    Reopen(crate::keymap::Action),
 }
 
 /// Labels for the tab strip: a title that two tabs share gets its place number after it for the

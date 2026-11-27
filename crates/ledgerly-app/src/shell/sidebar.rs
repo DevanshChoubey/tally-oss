@@ -90,7 +90,10 @@ pub fn command_route(action: Action) -> CommandRoute {
         | Action::ToggleDetail
         | Action::Print
         | Action::Export
-        | Action::Email => CommandRoute::Hidden,
+        | Action::Email
+        // The palette's "Import masters or vouchers from a file" row is a screen target
+        // (`navigate::IMPORT_FILE_KEY`), so the action itself is not listed twice.
+        | Action::ImportFile => CommandRoute::Hidden,
     }
 }
 
@@ -193,7 +196,8 @@ fn command_screen(action: Action, ctx: &AppCtx) -> Result<Box<dyn Screen>, NavEr
         | Action::ToggleDetail
         | Action::Print
         | Action::Export
-        | Action::Email => Err(NavError::NotNavigation),
+        | Action::Email
+        | Action::ImportFile => Err(NavError::NotNavigation),
     }
 }
 

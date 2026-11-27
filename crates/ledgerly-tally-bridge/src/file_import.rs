@@ -26,6 +26,26 @@
 //! A master's `OPENINGBALANCE` is negative for a debit and positive for a credit (the same
 //! derived convention as [`crate::import`]).
 //!
+//! # Bill-wise details
+//!
+//! The sample file creates the party ledger "Customer ABC" under Sundry Debtors with only `NAME`
+//! and `PARENT`, and its sales voucher carries `BILLALLOCATIONS` on that ledger, which the page
+//! says are mandatory "only for party ledger". So a ledger the file creates under Sundry Debtors
+//! or Sundry Creditors, or a group under them, with no `ISBILLWISEON`, keeps balances
+//! bill-by-bill; an explicit `ISBILLWISEON` wins, and other ledgers are not bill-wise unless the
+//! file says so. (Created by hand, a ledger is bill-wise only when the user sets "Maintain
+//! balances bill-by-bill" to Yes, <https://help.tallysolutions.com/set-up-party-ledger/>, read
+//! 2026-11-27; that is the masters screen's default, not this module's.)
+//!
+//! On a voucher line:
+//! - bills on a ledger that is not bill-wise are left out and said: the Bill Allocations
+//!   collection "won't be available" for such a ledger (TDL reference appendix,
+//!   <https://help.tallysolutions.com/developer-reference/tally-definition-language/appendix/>,
+//!   read 2026-11-27);
+//! - a line on a bill-wise ledger with no bills is one On Account allocation of the whole line,
+//!   and said: On Account records "an amount without linking it to a specific invoice or bill"
+//!   (<https://help.tallysolutions.com/receivables-payables-tracking-methods/>, read 2026-11-27).
+//!
 //! The FAQ says a voucher type with automatic numbering numbers the imported vouchers itself; the
 //! number from the file is then kept in the voucher's `extra` under `VOUCHERNUMBER`.
 
@@ -36,8 +56,8 @@ use ledgerly_core::{
     VoucherId, round_rupees_to_paise,
 };
 use ledgerly_model::{
-    BillAllocation, BillWiseConfig, Books, Group, Ledger, LedgerLine, Masters, NumberingMethod,
-    Voucher, VoucherMode, VoucherStatus,
+    BillAllocation, BillRefKind, BillWiseConfig, Books, Group, Ledger, LedgerLine, Masters,
+    NumberingMethod, ReservedGroup, Voucher, VoucherMode, VoucherStatus,
 };
 pub use ledgerly_tally_xml::masters::{ImportMaster, ImportMasterKind};
 use ledgerly_tally_xml::masters::{RawElement, decode_xml_bytes, parse_import_masters_bytes};
@@ -99,13 +119,22 @@ pub struct MasterPlan {
     pub dropped: Vec<String>,
 }
 
-/// What a file holds, with the reader's warnings as `offset N: message`.
+/// A non-fatal problem the reader met, at a byte offset of the file.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FileWarning {
+    /// Byte offset in the file.
+    pub offset: usize,
+    /// What the reader met.
+    pub message: String,
+}
+
+/// What a file holds, with the reader's warnings.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FileContents<T> {
     /// The objects, in document order.
     pub items: Vec<T>,
     /// Non-fatal problems the reader met.
-    pub warnings: Vec<String>,
+    pub warnings: Vec<FileWarning>,
 }
 
 /// Reads the masters of an import file.
@@ -119,7 +148,10 @@ pub fn read_masters(bytes: &[u8]) -> Result<FileContents<ImportMaster>, String> 
         warnings: parsed
             .warnings
             .iter()
-            .map(|w| format!("offset {}: {}", w.offset, w.message))
+            .map(|w| FileWarning {
+                offset: w.offset,
+                message: w.message.clone(),
+            })
             .collect(),
     })
 }
@@ -136,7 +168,10 @@ pub fn read_vouchers(bytes: &[u8]) -> Result<FileContents<TVoucher>, String> {
         items,
         warnings: warnings
             .iter()
-            .map(|w| format!("offset {}: {}", w.offset, w.message))
+            .map(|w| FileWarning {
+                offset: w.offset,
+                message: w.message.clone(),
+            })
             .collect(),
     })
 }
@@ -377,15 +412,16 @@ fn ledger_step(
     let existing = masters.ledgers.values().find(|l| l.name == m.name);
     let Some(existing) = existing else {
         let group = parent_id(m, masters, object)?;
+        let bill_wise = bill_wise.unwrap_or_else(|| under_parties(masters, group));
         return Ok(MasterPlan {
             step: MasterStep::CreateLedger(Ledger {
                 ineligible_itc: None,
                 id: LedgerId(0),
                 name: m.name.clone(),
                 aliases: Vec::new(),
-                group,
+                group: Some(group),
                 opening: file_opening.unwrap_or_else(|| SignedAmount::dr(Paise::ZERO)),
-                bill_wise: bill_wise.unwrap_or(false).then_some(BillWiseConfig {
+                bill_wise: bill_wise.then_some(BillWiseConfig {
                     default_credit_days: None,
                 }),
                 cost_centres_applicable: cost_centres.unwrap_or(false),
@@ -411,6 +447,27 @@ fn ledger_step(
             cost_centres,
         },
     )
+}
+
+/// Whether `group` is Sundry Debtors or Sundry Creditors, or a group under one of them: a party
+/// group, whose new ledgers keep balances bill-by-bill when the file does not say (see the module
+/// docs).
+fn under_parties(masters: &Masters, group: GroupId) -> bool {
+    let mut at = Some(group);
+    // Each step goes one level up; more steps than groups would be a cycle.
+    for _ in 0..=masters.groups.len() {
+        let Some(g) = at.and_then(|id| masters.groups.get(&id)) else {
+            return false;
+        };
+        if matches!(
+            g.reserved,
+            Some(ReservedGroup::SundryDebtors | ReservedGroup::SundryCreditors)
+        ) {
+            return true;
+        }
+        at = g.parent;
+    }
+    false
 }
 
 /// What the file says about a ledger.
@@ -473,7 +530,7 @@ fn existing_ledger_step(
         MasterBehaviour::ModifyWithNewData => {
             let mut after = existing.clone();
             if normalize_parent(m.parent.as_deref()).is_some() {
-                after.group = parent_id(m, masters, object)?;
+                after.group = Some(parent_id(m, masters, object)?);
             }
             if let Some(o) = file_opening {
                 after.opening = o;
@@ -609,14 +666,45 @@ fn lines(
                 node.name, entry.ledger_name
             ));
         }
+        let ledger = known_ledger(masters, label, &entry.ledger_name)?;
+        let amount = SignedAmount {
+            amount: entry.amount,
+            side: entry.side,
+        };
+        let bill_wise = masters
+            .ledgers
+            .get(&ledger)
+            .is_some_and(|l| l.bill_wise.is_some());
+        let bills = match (bill_wise, entry.bill_allocations.is_empty()) {
+            (true, false) => bills(label, entry)?,
+            (true, true) => {
+                dropped.push(format!(
+                    "the line for '{}' has no bill allocations; its amount is recorded On Account",
+                    entry.ledger_name
+                ));
+                vec![BillAllocation {
+                    kind: BillRefKind::OnAccount,
+                    name: String::new(),
+                    due_date: None,
+                    credit_days: None,
+                    amount,
+                }]
+            }
+            (false, true) => Vec::new(),
+            (false, false) => {
+                dropped.push(format!(
+                    "the bill allocations on the line for '{}' are not imported: the ledger does \
+                     not keep balances bill-by-bill",
+                    entry.ledger_name
+                ));
+                Vec::new()
+            }
+        };
         out.push(LedgerLine {
             ineligible_itc: None,
-            ledger: known_ledger(masters, label, &entry.ledger_name)?,
-            amount: SignedAmount {
-                amount: entry.amount,
-                side: entry.side,
-            },
-            bills: bills(label, entry)?,
+            ledger,
+            amount,
+            bills,
             cost: Vec::new(),
             bank: None,
         });

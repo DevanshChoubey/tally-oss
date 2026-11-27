@@ -12,8 +12,20 @@ window.HI={
 "ask about your books": "अपनी बही के बारे में पूछें",
 "read a bill photo": "बिल की फ़ोटो पढ़ें",
 "enter a voucher in plain words": "सादे शब्दों में वाउचर दर्ज करें",
+"each document, always": "हर दस्तावेज़, हमेशा",
+"Ask before sending": "भेजने से पहले पूछें",
+"Endpoint": "एंडपॉइंट",
+"Chat completions": "Chat completions",
+"Format": "फ़ॉर्मेट",
+"Messages": "Messages",
 "Never written to the company file. It belongs in the OS keychain.": "कंपनी की फ़ाइल में कभी नहीं लिखी जाती। यह OS keychain में रहनी चाहिए।",
 "Key": "कुंजी",
+"No key in the system keychain for this company": "इस कंपनी के लिए सिस्टम कीचेन में कोई कुंजी नहीं",
+"Not set": "सेट नहीं",
+"Set": "सेट",
+"Stored in the system keychain": "सिस्टम कीचेन में रखी है",
+"Model": "मॉडल",
+"Not described yet": "अभी बताया नहीं गया",
 "Set by your provider's terms. Check them.": "आपके प्रदाता की शर्तों से तय होता है। उन्हें जाँच लें।",
 "Region and retention": "क्षेत्र और अवधि",
 "Removed before sending": "भेजने से पहले हटाया गया",
@@ -29,16 +41,16 @@ window.HI={
 "Same; never your figures": "वही; आपके आँकड़े कभी नहीं",
 "Bank line suggestions": "बैंक लाइन के सुझाव",
 "Narration, date, amount": "विवरण, तारीख, राशि",
-"Same": "वही",
+"Same, redacted": "वही, व्यक्तिगत डेटा हटाकर",
 "Bill photo to draft purchase": "बिल की फ़ोटो से खरीद का मसौदा",
 "The image": "फ़ोटो",
-"Image, cropped and redacted": "फ़ोटो, काटी गई और व्यक्तिगत डेटा हटाई गई",
+"Nothing: an image cannot be redacted, so bills are read on this computer only": "कुछ नहीं: फ़ोटो से व्यक्तिगत डेटा हटाया नहीं जा सकता, इसलिए बिल केवल इसी कंप्यूटर पर पढ़े जाते हैं",
 "2B mismatch explanations": "2B अंतर की व्याख्या",
 "The two records and the attached image": "दोनों रिकॉर्ड और संलग्न फ़ोटो",
-"Same, redacted": "वही, व्यक्तिगत डेटा हटाकर",
+"The two records, redacted; never the image": "दोनों रिकॉर्ड, व्यक्तिगत डेटा हटाकर; फ़ोटो कभी नहीं",
 "Plain words to draft voucher": "सादे शब्दों से वाउचर का मसौदा",
 "Your sentence and ledger names": "आपका वाक्य और खातों के नाम",
-"Same, no balances": "वही, शेष राशियों के बिना",
+"Same, redacted, no balances": "वही, व्यक्तिगत डेटा हटाकर, शेष राशियों के बिना",
 "Feature": "सुविधा",
 "Not built yet": "अभी बना नहीं है",
 "Nothing: off": "कुछ नहीं: बंद",
@@ -48,11 +60,13 @@ window.HI={
 "Cloud": "क्लाउड",
 "Export log": "लॉग निर्यात करें",
 "On this computer": "इस कंप्यूटर पर",
+"Model file": "मॉडल फ़ाइल",
 "Off": "बंद",
 "AI arrives in a later version. This company stays Off.": "AI बाद के संस्करण में आएगा। यह कंपनी बंद रहेगी।",
+"None chosen. Ctrl+O chooses one; nothing is downloaded.": "कोई नहीं चुनी गई। Ctrl+O से चुनें; कुछ भी डाउनलोड नहीं होता।",
 "Not installed. This build has no local model.": "इंस्टॉल नहीं है। इस संस्करण में स्थानीय मॉडल नहीं है।",
 "Language": "भाषा",
-"Nothing is sent: no AI feature is built yet.": "कुछ भी नहीं भेजा जाता: अभी कोई AI सुविधा नहीं बनी है।",
+"Nothing is sent: this tier opens no connection.": "कुछ भी नहीं भेजा जाता: यह स्तर कोई कनेक्शन नहीं खोलता।",
 "Network": "नेटवर्क",
 "Not installed. This build has no local bill reader.": "इंस्टॉल नहीं है। इस संस्करण में स्थानीय बिल रीडर नहीं है।",
 "Reader": "रीडर",
@@ -60,15 +74,29 @@ window.HI={
 "Accepted": "स्वीकार किया",
 "Your decision": "आपका निर्णय",
 "No AI activity has been recorded for this company yet.": "इस कंपनी के लिए अभी कोई AI गतिविधि दर्ज नहीं हुई है।",
+"Bank matching": "बैंक मिलान",
+"Bill reader": "बिल रीडर",
+"2B assistant": "2B सहायक",
+"Plain words": "सरल शब्द",
+"Input": "इनपुट",
 "Input hash": "इनपुट हैश",
 "Kept with the company file. Ctrl+E exports it.": "कंपनी की फ़ाइल के साथ रखा है। Ctrl+E से निर्यात होता है।",
 "Kept with the company file.": "कंपनी की फ़ाइल के साथ रखा है।",
-"Model": "मॉडल",
+"Nothing to decide": "निर्णय की ज़रूरत नहीं",
 "Not accepted": "स्वीकार नहीं किया",
+"Answer": "उत्तर",
+"Sending allowed": "भेजने की अनुमति दी",
+"Sending refused": "भेजने से मना किया",
+"Column mapping": "कॉलम मैपिंग",
+"Match suggestion": "मिलान सुझाव",
+"Report query, run by the engine": "रिपोर्ट क्वेरी, इंजन चलाता है",
 "Output": "आउटपुट",
 "Reading the log...": "लॉग पढ़ा जा रहा है...",
+"Rejected": "अस्वीकार",
 "AI activity log": "AI गतिविधि लॉग",
+"Waiting in review": "समीक्षा में प्रतीक्षा",
 "When": "कब",
+"Choose a local model file": "स्थानीय मॉडल फ़ाइल चुनें",
 "Show a figure it worked out. Amounts come from the books, the document, your words or the engine.": "ऐसा आँकड़ा दिखाना जो उसने खुद निकाला हो। रकम बही, दस्तावेज़, आपके शब्दों या इंजन से आती है।",
 "Post, alter, delete or file anything without your accept.": "आपकी स्वीकृति के बिना कुछ भी पोस्ट, बदलना, मिटाना या फ़ाइल करना।",
 "Create a ledger, item or party on its own.": "अपने आप कोई खाता, आइटम या पार्टी बनाना।",
@@ -353,9 +381,13 @@ window.HI={
 "Home": "होम",
 "Totals stay hidden until there is data. Ledgerly never shows a zero it did not compute.": "डेटा आने तक कुल योग छिपे रहते हैं। Ledgerly कभी वह शून्य नहीं दिखाता जिसकी गणना नहीं हुई।",
 "Waiting for your review": "आपकी समीक्षा की प्रतीक्षा है",
+"Take a backup of the company data before importing": "आयात से पहले कंपनी के डेटा का बैकअप लें",
+"No: import without a backup": "नहीं: बिना बैकअप के आयात करें",
+"Yes: back up the company first, into the Backups folder beside the company file": "हाँ: पहले कंपनी का बैकअप लें, कंपनी फ़ाइल के पास के Backups फ़ोल्डर में",
 "Choose file": "फ़ाइल चुनें",
 "Combine opening balance: add the file's opening balance to the existing one": "प्रारंभिक शेष जोड़ें: फ़ाइल का प्रारंभिक शेष मौजूदा शेष में जोड़ें",
 "Choose the XML file to import": "आयात के लिए XML फ़ाइल चुनें",
+"choose whether to take a backup of the company data first": "चुनें कि पहले कंपनी के डेटा का बैकअप लेना है या नहीं",
 "choose what to do with a master that is already in the company": "चुनें कि कंपनी में पहले से मौजूद मास्टर का क्या करें",
 "choose Masters or Transactions": "मास्टर या लेन-देन चुनें",
 "the background worker stopped before the import finished": "आयात पूरा होने से पहले पृष्ठभूमि का काम रुक गया",
@@ -363,6 +395,9 @@ window.HI={
 "enter the path of the XML file, or choose it": "XML फ़ाइल का पथ लिखें, या उसे चुनें",
 "When a master is already in the company": "जब कोई मास्टर कंपनी में पहले से हो",
 "XML file": "XML फ़ाइल",
+"When a voucher with the same GUID is in the company": "जब उसी GUID वाला वाउचर कंपनी में पहले से हो",
+"Do not overwrite: import it as a new voucher (a later import overwrites that copy)": "न बदलें: इसे नए वाउचर के रूप में आयात करें (अगला आयात उस प्रति को बदल देता है)",
+"Overwrite the voucher in the company with the file's": "कंपनी के वाउचर को फ़ाइल के वाउचर से बदलें",
 "Import from an XML file": "XML फ़ाइल से आयात",
 "Ignore duplicates: keep the existing master as it is": "दोहराव छोड़ें: मौजूदा मास्टर जैसा है वैसा रखें",
 "Masters (groups and ledgers)": "मास्टर (समूह और लेजर)",
@@ -370,6 +405,7 @@ window.HI={
 "Modify with new data: replace the existing master's details with the file's": "नए डेटा से बदलें: मौजूदा मास्टर का विवरण फ़ाइल के विवरण से बदलें",
 "Importing from a file needs an open company. Create or open one, then press Alt+O.": "फ़ाइल से आयात के लिए कंपनी खुली होनी चाहिए। कंपनी बनाएँ या खोलें, फिर Alt+O दबाएँ।",
 "path of the XML file": "XML फ़ाइल का पथ",
+"To import the same file again without doubling its vouchers, choose Overwrite. With Do not overwrite, every voucher in the file is posted again.": "उसी फ़ाइल को दोबारा आयात करते समय वाउचर दोहरे न हों, इसके लिए बदलें चुनें। न बदलें चुनने पर फ़ाइल का हर वाउचर फिर से दर्ज होता है।",
 "Import the file": "फ़ाइल आयात करें",
 "Importing the file...": "फ़ाइल आयात हो रही है...",
 "Transactions (vouchers)": "लेन-देन (वाउचर)",
@@ -450,6 +486,7 @@ window.HI={
 "0-30 days": "0-30 दिन",
 "31-60 days": "31-60 दिन",
 "61-90 days": "61-90 दिन",
+"Accept and post": "स्वीकार करें और पोस्ट करें",
 "Accounting invoice · ledgers under Particulars; tax is recomputed by the GST engine on every keystroke": "लेखा चालान · विवरण के अंतर्गत खाते; हर कुंजी-दबाव पर GST इंजन कर दोबारा निकालता है",
 "Accounting mode": "लेखा मोड",
 "Against purchase bill": "खरीद बिल के विरुद्ध",
@@ -459,6 +496,7 @@ window.HI={
 "Alt+Left / Right": "Alt+बायाँ / दायाँ",
 "Alter master": "मास्टर बदलें",
 "Alter the master in the field": "इस फ़ील्ड का मास्टर बदलें",
+"Amount copied from your words, not computed": "राशि आपके शब्दों से ली गई, गणना नहीं की गई",
 "An AI badge means a person accepted an AI draft; the voucher itself is ordinary and the engine computed its figures.": "AI का चिह्न बताता है कि किसी व्यक्ति ने AI का मसौदा स्वीकार किया; वाउचर स्वयं सामान्य है और आँकड़े इंजन ने निकाले हैं।",
 "answer is a report the engine runs": "उत्तर वह रिपोर्ट है जो इंजन चलाता है",
 "As voucher": "वाउचर के रूप में",
@@ -489,6 +527,7 @@ window.HI={
 "Choices": "विकल्प",
 "Choose": "चुनें",
 "Choose a company": "कंपनी चुनें",
+"Choose a model file in AI and privacy; nothing is downloaded.": "AI और गोपनीयता में मॉडल फ़ाइल चुनें; कुछ भी डाउनलोड नहीं होता।",
 "Choose a report and press Run.": "रिपोर्ट चुनें और Run दबाएँ।",
 "Choose company": "कंपनी चुनें",
 "Classic accountant keys": "क्लासिक लेखाकार कुंजियाँ",
@@ -513,6 +552,7 @@ window.HI={
 "Create master here": "यहाँ मास्टर बनाएँ",
 "Credit note": "क्रेडिट नोट",
 "Credit note, CGST Act s.34(1): reduces the tax on an invoice already issued": "क्रेडिट नोट, CGST अधिनियम धारा 34(1): जारी हो चुके चालान पर कर घटाता है",
+"Date:": "तारीख:",
 "Day": "दिन",
 "dd-mm-yyyy": "dd-mm-yyyy",
 "debit and credit lines, no cash or bank account set once · the entry must balance before it saves": "नामे और जमा पंक्तियाँ, नकद या बैंक खाता एक बार तय नहीं · सहेजने से पहले प्रविष्टि का संतुलित होना ज़रूरी है",
@@ -527,6 +567,9 @@ window.HI={
 "Discount": "छूट",
 "Dr and Cr ledger lines": "Dr और Cr खाता पंक्तियाँ",
 "Dr / Cr": "Dr / Cr",
+"Dr equals Cr (engine).": "नामे बराबर जमा (इंजन)।",
+"Draft": "मसौदा",
+"Drafting on this computer…": "इसी कंप्यूटर पर मसौदा बन रहा है…",
 "drafts a voucher for you to review": "आपकी जाँच के लिए वाउचर का मसौदा बनाता है",
 "Due today": "आज देय",
 "Duplicate voucher": "वाउचर की प्रतिलिपि बनाएँ",
@@ -534,6 +577,7 @@ window.HI={
 "e.g. > export": "जैसे > export",
 "e-Invoice": "ई-चालान",
 "Each line is checked when you leave it. Save waits until every line is complete.": "हर पंक्ति छोड़ते समय जाँची जाती है। हर पंक्ति पूरी होने तक सहेजना रुका रहता है।",
+"Edit in the voucher form": "वाउचर फ़ॉर्म में बदलें",
 "Edit log": "संपादन लॉग",
 "Edits after lock": "लॉक के बाद के संपादन",
 "Email": "ईमेल",
@@ -565,6 +609,7 @@ window.HI={
 "Hide vouchers": "वाउचर छिपाएँ",
 "Hold Alt or Ctrl for more ·": "और के लिए Alt या Ctrl दबाए रखें ·",
 "Host": "होस्ट",
+"Import masters or vouchers from a file": "फ़ाइल से मास्टर या वाउचर आयात करें",
 "Import in one step": "एक चरण में आयात",
 "Imported. Comparing with the source app's own reports...": "आयात हो गया। स्रोत ऐप की अपनी रिपोर्टों से तुलना हो रही है...",
 "Insert voucher": "वाउचर जोड़ें",
@@ -609,12 +654,17 @@ window.HI={
 "No company is open, so the report cannot be printed.": "कोई कंपनी खुली नहीं है, इसलिए रिपोर्ट प्रिंट नहीं हो सकती।",
 "No company is open, so the report cannot run.": "कोई कंपनी खुली नहीं है, इसलिए रिपोर्ट नहीं चल सकती।",
 "No company is open yet. An import fills an empty company file, so create a company first (Company setup), then come back here.": "अभी कोई कंपनी खुली नहीं है। आयात खाली कंपनी फ़ाइल को भरता है, इसलिए पहले कंपनी बनाएँ (कंपनी सेटअप), फिर यहाँ लौटें।",
+"No ledger named": "इस नाम का कोई खाता नहीं:",
+"No local model can run.": "कोई स्थानीय मॉडल नहीं चल सकता।",
+"No local model can run in this build": "इस संस्करण में कोई स्थानीय मॉडल नहीं चल सकता",
+"No party or ledger named": "इस नाम की कोई पार्टी या खाता नहीं:",
 "none": "कोई नहीं",
 "Not applicable: B2C": "लागू नहीं: B2C",
 "Not available yet: the step-by-step import and its reconciliation report are not connected to the app. Use the one-step import above.": "अभी उपलब्ध नहीं: चरण-दर-चरण आयात और उसकी मिलान रिपोर्ट ऐप से जुड़ी नहीं है। ऊपर का एक-चरण आयात इस्तेमाल करें।",
 "Not ready": "तैयार नहीं",
 "Not yet due": "अभी देय नहीं",
 "Note total": "नोट का कुल",
+"Nothing was posted. The rejection is in the AI activity log.": "कुछ पोस्ट नहीं हुआ। अस्वीकृति AI गतिविधि लॉग में दर्ज है।",
 "Number, party, amount or date": "क्रमांक, पार्टी, राशि या तारीख",
 "Open command palette": "कमांड पैलेट खोलें",
 "Open file": "फ़ाइल खोलें",
@@ -624,6 +674,7 @@ window.HI={
 "Open PDF": "PDF खोलें",
 "Open stock items": "स्टॉक मद खोलें",
 "Open voucher": "वाउचर खोलें",
+"Opening a draft in the voucher form is not built yet; accept it, or reject it and type it with F5.": "मसौदे को वाउचर फ़ॉर्म में खोलना अभी नहीं बना है; उसे स्वीकार करें, या अस्वीकार करके F5 से लिखें।",
 "Opening stock": "आरंभिक स्टॉक",
 "Opens the ledger form with this name": "इसी नाम के साथ खाता फ़ॉर्म खुलता है",
 "Origin": "स्रोत",
@@ -647,8 +698,12 @@ window.HI={
 "Pick": "चुनें",
 "Pick ledgers that already exist. It never creates one without you.": "पहले से मौजूद खाते ही चुनता है। आपके बिना कभी नया खाता नहीं बनाता।",
 "plain debit and credit vouchers are entered on the accounting voucher screen": "सादे नामे और जमा वाउचर लेखा वाउचर स्क्रीन पर दर्ज होते हैं",
+"Plain-words draft": "सादे शब्दों का मसौदा",
+"Plain-words entry is switched off in AI and privacy.": "सादे शब्दों में प्रविष्टि AI और गोपनीयता में बंद है।",
 "Port": "पोर्ट",
+"posted.": "पोस्ट हुआ।",
 "Preparing the PDF.": "PDF तैयार हो रही है।",
+"Press Enter to draft. The draft waits for you; nothing is posted until you accept.": "मसौदे के लिए Enter दबाएँ। मसौदा आपकी प्रतीक्षा करता है; आपके स्वीकार करने तक कुछ पोस्ट नहीं होता।",
 "Print": "प्रिंट",
 "Print preview": "प्रिंट पूर्वावलोकन",
 "Profit and loss": "लाभ और हानि",
@@ -660,6 +715,7 @@ window.HI={
 "Purchase from bill photo": "बिल की फ़ोटो से खरीद",
 "Quantity": "मात्रा",
 "Read a bill": "बिल पढ़ें",
+"Read as: ": "ऐसे पढ़ा: ",
 "Read exported file": "निर्यात की गई फ़ाइल पढ़ें",
 "Read-only. Esc goes back up": "केवल पढ़ने के लिए। Esc से ऊपर लौटें",
 "Reading the audit log...": "ऑडिट लॉग पढ़ा जा रहा है...",
@@ -688,13 +744,20 @@ window.HI={
 "stock-only and order vouchers have no invoice and no tax; not built yet": "केवल-स्टॉक और ऑर्डर वाउचर में बीजक और कर नहीं होता; अभी बना नहीं है",
 "Stock summary": "स्टॉक सारांश",
 "Suggest a date from a matching bank line.": "मेल खाती बैंक पंक्ति से तारीख सुझाता है।",
+"suggested": "सुझाया गया",
 "Supplier bill no.": "आपूर्तिकर्ता का बिल क्र.",
 "Switch company": "कंपनी बदलें",
 "Switch debit or credit": "डेबिट या क्रेडिट बदलें",
 "Switch to (replace this screen)": "इस स्क्रीन की जगह दूसरी पर जाएँ (बदलें)",
 "Switch to, replacing this screen": "इस स्क्रीन की जगह दूसरी पर जाएँ",
+"Test provider": "परीक्षण प्रदाता",
 "text in any column": "किसी भी स्तंभ में पाठ",
+"The assistant could not read it:": "सहायक इसे पढ़ नहीं सका:",
+"the assistant did not draft a voucher": "सहायक ने वाउचर का मसौदा नहीं बनाया",
+"The assistant does not invent ledgers. Pick one, or create it in Masters.": "सहायक खाते नहीं गढ़ता। एक चुनें, या उसे मास्टर्स में बनाएँ।",
+"The cloud provider is not set up:": "क्लाउड प्रदाता सेट नहीं है:",
 "The companies the other app lists. Pick the one to bring in.": "दूसरे ऐप में दिखने वाली कंपनियाँ। जिसे लाना है उसे चुनें।",
+"The company file stopped responding; reopen it.": "कंपनी फ़ाइल ने जवाब देना बंद कर दिया; उसे फिर से खोलें।",
 "The drilled report could not be set up.": "ड्रिल की गई रिपोर्ट तैयार नहीं हो सकी।",
 "the engine stopped before the export finished; nothing was written": "निर्यात पूरा होने से पहले इंजन रुक गया; कुछ भी नहीं लिखा गया",
 "The matcher found no competing suggestion for this line": "मिलान करने वाले को इस पंक्ति के लिए कोई प्रतिस्पर्धी सुझाव नहीं मिला",
@@ -709,11 +772,13 @@ window.HI={
 "This report has no worker to run a drill with.": "इस रिपोर्ट के पास ड्रिल चलाने के लिए कोई वर्कर नहीं है।",
 "This report was not run by the engine, so it cannot be printed.": "यह रिपोर्ट इंजन ने नहीं चलाई, इसलिए इसे प्रिंट नहीं किया जा सकता।",
 "This report was not run by the engine, so it cannot be exported.": "यह रिपोर्ट इंजन ने नहीं चलाई, इसलिए इसे निर्यात नहीं किया जा सकता।",
+", today, as for any new voucher; no date was typed.": ", आज, जैसे किसी भी नए वाउचर में; कोई तारीख नहीं लिखी गई।",
 "Toggle detailed view": "विस्तृत दृश्य चालू/बंद करें",
 "Total": "कुल",
 "Total closing stock": "कुल अंतिम स्टॉक",
 "Trading account": "व्यापार खाता",
 "Trial balance": "तलपट",
+"Type an entry, as you would say it": "प्रविष्टि वैसे लिखें जैसे आप बोलते हैं",
 "Type it myself": "खुद लिखूँगा",
 "Type it the way you would say it. You get a draft voucher; the engine balances it; you accept.": "जैसे बोलते हैं वैसे लिखें। आपको वाउचर का मसौदा मिलेगा; इंजन उसे संतुलित करेगा; आप स्वीकार करेंगे।",
 "Typed": "हाथ से लिखा",
@@ -727,6 +792,7 @@ window.HI={
 "What the assistant may do here": "सहायक यहाँ क्या कर सकता है",
 "Writing to the books. This cannot be interrupted.": "बही में लिखा जा रहा है। इसे रोका नहीं जा सकता।",
 "Years to pull": "खींचने के वर्ष",
+"Your cloud provider": "आपका क्लाउड प्रदाता",
 "your words": "आपके शब्द",
 "Open bills": "खुले बिल",
 "No due date": "देय तिथि नहीं",
@@ -863,6 +929,12 @@ window.HI={
 "Confidence": "भरोसा",
 "Proposal": "प्रस्ताव",
 "Source": "स्रोत",
+"Accepting: the engine checks the draft and posts it, or says why it cannot.": "स्वीकार हो रहा है: इंजन मसौदे को जाँचकर दर्ज करता है, या बताता है कि क्यों नहीं।",
+"A draft opens for editing on its own screen (plain words or bill photo), which is not built yet. Accept it (Y) or reject it (N) here.": "मसौदा अपनी स्क्रीन (साधारण शब्द या बिल की फ़ोटो) पर संपादन के लिए खुलता है, जो अभी बनी नहीं है। यहाँ स्वीकार (Y) या अस्वीकार (N) करें।",
+"Rejected. Nothing was posted; the AI activity log records the rejection.": "अस्वीकृत। कुछ भी दर्ज नहीं हुआ; AI गतिविधि लॉग में अस्वीकृति दर्ज है।",
+"Your question": "आपका सवाल",
+"GSTR-2B": "GSTR-2B",
+"Your words": "आपके शब्द",
 "Nothing to accept: this is a warning, not a draft. Open it (Enter) to compare the two payments in the day book and cancel the second one, or press N if both are right.": "स्वीकार करने को कुछ नहीं: यह चेतावनी है, मसौदा नहीं। दैनिक बही में दोनों भुगतानों की तुलना करने और दूसरा रद्द करने के लिए इसे खोलें (Enter), या दोनों सही हों तो N दबाएँ।",
 "Bank matches appear here when a statement is imported. These sources are not connected, so nothing is shown for them:": "विवरण आयात होने पर बैंक मिलान यहाँ दिखेंगे। ये स्रोत जुड़े नहीं हैं, इसलिए इनके लिए कुछ नहीं दिखता:",
 "New bill photos, bank suggestions and 2B explanations will appear here. Ledgerly never acts on them without you.": "नए बिल फ़ोटो, बैंक सुझाव और 2B स्पष्टीकरण यहाँ दिखेंगे। Ledgerly आपकी अनुमति के बिना उन पर कभी कुछ नहीं करता।",
@@ -876,8 +948,13 @@ window.HI={
 "How decisions work": "निर्णय कैसे काम करते हैं",
 "Open to edit": "संपादन के लिए खोलें",
 "Bank match": "बैंक मिलान",
+"Draft contra": "कॉन्ट्रा का मसौदा",
+"Draft journal": "जर्नल का मसौदा",
 "Draft payment": "भुगतान का मसौदा",
+"Draft purchase": "खरीद का मसौदा",
 "Draft receipt": "प्राप्ति का मसौदा",
+"Draft sale": "बिक्री का मसौदा",
+"Draft voucher": "वाउचर का मसौदा",
 "Loading the queue from the engine.": "इंजन से सूची लोड हो रही है।",
 "No company is open, so there is no queue to show.": "कोई कंपनी नहीं खुली है, इसलिए दिखाने के लिए कोई सूची नहीं है।",
 "No company is open, so nothing can be accepted.": "कोई कंपनी खुली नहीं है, इसलिए कुछ भी स्वीकार नहीं किया जा सकता।",
@@ -1101,5 +1178,159 @@ window.HI={
 "Friday": "शुक्रवार",
 "Saturday": "शनिवार",
 "Sunday": "रविवार"
+},
+"keys": {
+"import.file.backup": [
+"Take a backup of the company data before importing",
+"आयात से पहले कंपनी के डेटा का बैकअप लें"
+],
+"import.file.backup_no": [
+"No: import without a backup",
+"नहीं: बिना बैकअप के आयात करें"
+],
+"import.file.backup_taken": [
+"Backup taken first: {path}",
+"पहले बैकअप लिया गया: {path}"
+],
+"import.file.backup_yes": [
+"Yes: back up the company first, into the Backups folder beside the company file",
+"हाँ: पहले कंपनी का बैकअप लें, कंपनी फ़ाइल के पास के Backups फ़ोल्डर में"
+],
+"import.file.choose": [
+"Choose file",
+"फ़ाइल चुनें"
+],
+"import.file.combine": [
+"Combine opening balance: add the file's opening balance to the existing one",
+"प्रारंभिक शेष जोड़ें: फ़ाइल का प्रारंभिक शेष मौजूदा शेष में जोड़ें"
+],
+"import.file.dialog_title": [
+"Choose the XML file to import",
+"आयात के लिए XML फ़ाइल चुनें"
+],
+"import.file.err_backup": [
+"choose whether to take a backup of the company data first",
+"चुनें कि पहले कंपनी के डेटा का बैकअप लेना है या नहीं"
+],
+"import.file.err_behaviour": [
+"choose what to do with a master that is already in the company",
+"चुनें कि कंपनी में पहले से मौजूद मास्टर का क्या करें"
+],
+"import.file.err_kind": [
+"choose Masters or Transactions",
+"मास्टर या लेन-देन चुनें"
+],
+"import.file.err_lost": [
+"the background worker stopped before the import finished",
+"आयात पूरा होने से पहले पृष्ठभूमि का काम रुक गया"
+],
+"import.file.err_no_company": [
+"no company is open: create or open a company, then import into it",
+"कोई कंपनी खुली नहीं है: कंपनी बनाएँ या खोलें, फिर उसमें आयात करें"
+],
+"import.file.err_path": [
+"enter the path of the XML file, or choose it",
+"XML फ़ाइल का पथ लिखें, या उसे चुनें"
+],
+"import.file.error": [
+"Error: {text}",
+"त्रुटि: {text}"
+],
+"import.file.exceptions": [
+"Not imported ({count})",
+"आयात नहीं हुए ({count})"
+],
+"import.file.existing": [
+"When a master is already in the company",
+"जब कोई मास्टर कंपनी में पहले से हो"
+],
+"import.file.filter": [
+"XML file",
+"XML फ़ाइल"
+],
+"import.file.guid": [
+"When a voucher with the same GUID is in the company",
+"जब उसी GUID वाला वाउचर कंपनी में पहले से हो"
+],
+"import.file.guid_no": [
+"Do not overwrite: import it as a new voucher (a later import overwrites that copy)",
+"न बदलें: इसे नए वाउचर के रूप में आयात करें (अगला आयात उस प्रति को बदल देता है)"
+],
+"import.file.guid_yes": [
+"Overwrite the voucher in the company with the file's",
+"कंपनी के वाउचर को फ़ाइल के वाउचर से बदलें"
+],
+"import.file.heading": [
+"Import from an XML file",
+"XML फ़ाइल से आयात"
+],
+"import.file.ignore": [
+"Ignore duplicates: keep the existing master as it is",
+"दोहराव छोड़ें: मौजूदा मास्टर जैसा है वैसा रखें"
+],
+"import.file.ignored": [
+"Left as they were ({count})",
+"जैसे थे वैसे रखे ({count})"
+],
+"import.file.masters": [
+"Masters (groups and ledgers)",
+"मास्टर (समूह और लेजर)"
+],
+"import.file.meta": [
+"Masters or vouchers from an XML file in your previous accounting app's import format, into the company that is open. Each object is checked as if typed in; anything that cannot go in is listed with the reason.",
+"पिछले लेखा ऐप के आयात प्रारूप की XML फ़ाइल से मास्टर या वाउचर, खुली कंपनी में। हर वस्तु की जाँच वैसे ही होती है जैसे हाथ से लिखने पर; जो नहीं जा सकती, वह कारण के साथ सूची में दिखती है।"
+],
+"import.file.modify": [
+"Modify with new data: replace the existing master's details with the file's",
+"नए डेटा से बदलें: मौजूदा मास्टर का विवरण फ़ाइल के विवरण से बदलें"
+],
+"import.file.no_company": [
+"Importing from a file needs an open company. Create or open one, then press Alt+O.",
+"फ़ाइल से आयात के लिए कंपनी खुली होनी चाहिए। कंपनी बनाएँ या खोलें, फिर Alt+O दबाएँ।"
+],
+"import.file.path": [
+"XML file",
+"XML फ़ाइल"
+],
+"import.file.path_hint": [
+"path of the XML file",
+"XML फ़ाइल का पथ"
+],
+"import.file.reimport": [
+"To import the same file again without doubling its vouchers, choose Overwrite. With Do not overwrite, every voucher in the file is posted again.",
+"उसी फ़ाइल को दोबारा आयात करते समय वाउचर दोहरे न हों, इसके लिए बदलें चुनें। न बदलें चुनने पर फ़ाइल का हर वाउचर फिर से दर्ज होता है।"
+],
+"import.file.run": [
+"Import the file",
+"फ़ाइल आयात करें"
+],
+"import.file.running": [
+"Importing the file...",
+"फ़ाइल आयात हो रही है..."
+],
+"import.file.summary": [
+"{what}: {created} created, {altered} altered, {combined} combined, {ignored} ignored, {errors} not imported.",
+"{what}: {created} बने, {altered} बदले, {combined} जोड़े, {ignored} छोड़े, {errors} आयात नहीं हुए।"
+],
+"import.file.transactions": [
+"Transactions (vouchers)",
+"लेन-देन (वाउचर)"
+],
+"import.file.warnings": [
+"Read but not imported ({count})",
+"पढ़े गए पर आयात नहीं हुए ({count})"
+],
+"import.file.what": [
+"What to import",
+"क्या आयात करें"
+],
+"import.file.what_masters": [
+"Masters",
+"मास्टर"
+],
+"import.file.what_transactions": [
+"Transactions",
+"लेन-देन"
+]
 }
 };

@@ -55,7 +55,7 @@ mod tests {
             id,
             name: format!("L{}", id.0),
             aliases: vec![],
-            group: GroupId(1),
+            group: Some(GroupId(1)),
             opening: SignedAmount::dr(Paise::ZERO),
             bill_wise: bill_wise.then_some(BillWiseConfig {
                 default_credit_days: None,
@@ -265,6 +265,20 @@ mod tests {
                 allocated: Paise::ZERO
             })
         );
+    }
+
+    #[test]
+    fn bills_on_the_second_line_without_bill_wise_are_named_line_2() {
+        // provenance: derived (S22): people count a voucher's lines from 1, so the message for
+        // the line at index 1 names line 2.
+        let mut v = good_sales();
+        v.ledger_lines[1].bills = vec![bill(
+            BillRefKind::New,
+            "INV-1",
+            SignedAmount::cr(p(100_000)),
+        )];
+        let e = validate_voucher(&v, &masters(), &company()).unwrap_err();
+        assert!(e.to_string().starts_with("line 2: "), "{e}");
     }
 
     #[test]

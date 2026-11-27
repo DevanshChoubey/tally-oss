@@ -15,8 +15,9 @@ use ledgerly_core::{
 };
 use ledgerly_model::{
     Address, BankDetails, BillWiseConfig, Books, CostCategory, CostCentre, Features, Godown, Group,
-    GstClassification, Ledger, MasterSnapshot, Nature, PartyDetails, RegistrationType, StockGroup,
-    StockItem, TaxDetails, TaxLedgerKind, Taxability, Unit, UnitKind, ValuationMethod,
+    GstClassification, Ledger, MasterSnapshot, Nature, PartyDetails, RegistrationType,
+    ReservedLedger, StockGroup, StockItem, TaxDetails, TaxLedgerKind, Taxability, Unit, UnitKind,
+    ValuationMethod,
 };
 
 use super::check::{check_unique, clean_labels, clean_name, creates_cycle, invalid};
@@ -627,7 +628,7 @@ fn ledger_draft(l: &Ledger) -> LedgerDraft {
     LedgerDraft {
         name: l.name.clone(),
         aliases: l.aliases.join(", "),
-        group: Some(l.group),
+        group: l.group,
         opening: if l.opening.amount.is_zero() {
             String::new()
         } else {
@@ -698,10 +699,19 @@ fn build_ledger(
     )?;
     let labels = clean_labels(&d.name, &d.aliases)?;
     check_unique(masters, MasterKind::Ledger, editing, &labels)?;
-    let group = d.group.ok_or_else(|| invalid("Under", "choose a group"))?;
-    if !masters.groups.contains_key(&group) {
-        return Err(invalid("Under", "the group does not exist"));
-    }
+    // TallyPrime's predefined Profit & Loss A/c sits under Primary
+    // (<https://help.tallysolutions.com/tally-prime/accounting/ledgers-and-groups-in-tallyprime/>,
+    // read 2026-11-27); every other ledger is under a group.
+    let under_primary = orig
+        .is_some_and(|o| o.group.is_none() && o.reserved == Some(ReservedLedger::ProfitAndLoss));
+    let group = match d.group {
+        None if under_primary => None,
+        None => return Err(invalid("Under", "choose a group")),
+        Some(g) if !masters.groups.contains_key(&g) => {
+            return Err(invalid("Under", "the group does not exist"));
+        }
+        Some(g) => Some(g),
+    };
     if let Some(o) = orig.filter(|o| o.reserved.is_some() && o.group != group) {
         return Err(MasterError::Reserved {
             name: o.name.clone(),

@@ -89,7 +89,7 @@ fn ledger(id: LedgerId, name: &str, under: ReservedGroup) -> Ledger {
         id,
         name: name.to_owned(),
         aliases: Vec::new(),
-        group: group(under),
+        group: Some(group(under)),
         opening: SignedAmount::dr(Paise::ZERO),
         bill_wise: None,
         cost_centres_applicable: false,
@@ -1161,6 +1161,9 @@ enum ScriptedFile {
     LedgersFromOldApp,
     /// A text file that is not XML (the mock's `import.file-error`).
     NotXml,
+    /// The fictional payment of `tests/s22_import_file.rs` (Hamali Charges paid in cash, GUID
+    /// `g-app-pay-1`), for the mock's `import.file-transactions` and `import.file-overwritten`.
+    VouchersFromOldApp,
 }
 
 impl ScriptedFile {
@@ -1203,6 +1206,11 @@ impl ScriptedFile {
                 std::fs::write(&path, "this is not xml").unwrap();
                 path
             }
+            ScriptedFile::VouchersFromOldApp => {
+                let path = dir.join("vouchers-from-old-app.xml");
+                std::fs::write(&path, VOUCHERS_FROM_OLD_APP).unwrap();
+                path
+            }
         }
     }
 }
@@ -1214,6 +1222,15 @@ const LEDGERS_FROM_OLD_APP: &str = r#"<ENVELOPE><HEADER><TALLYREQUEST>Import Dat
 <TALLYMESSAGE><LEDGER NAME="Hamali Charges" ACTION="Create"><NAME>Hamali Charges</NAME><PARENT>Indirect Expenses</PARENT></LEDGER></TALLYMESSAGE>
 <TALLYMESSAGE><LEDGER NAME="Lost Ledger" ACTION="Create"><NAME>Lost Ledger</NAME><PARENT>No Such Group</PARENT></LEDGER></TALLYMESSAGE>
 </REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>"#;
+
+/// The vouchers file of [`ScriptedFile::VouchersFromOldApp`], as `PAYMENT` in
+/// `tests/s22_import_file.rs`; dated 25 Nov 2026, after the sample's lock.
+const VOUCHERS_FROM_OLD_APP: &str = r#"<ENVELOPE><HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER><BODY><IMPORTDATA>
+<REQUESTDESC><REPORTNAME>Vouchers</REPORTNAME></REQUESTDESC><REQUESTDATA>
+<TALLYMESSAGE><VOUCHER VCHTYPE="Payment" ACTION="Create"><DATE>20261125</DATE><GUID>g-app-pay-1</GUID><VOUCHERTYPENAME>Payment</VOUCHERTYPENAME>
+<ALLLEDGERENTRIES.LIST><LEDGERNAME>Hamali Charges</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-100.00</AMOUNT></ALLLEDGERENTRIES.LIST>
+<ALLLEDGERENTRIES.LIST><LEDGERNAME>Cash</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>100.00</AMOUNT></ALLLEDGERENTRIES.LIST>
+</VOUCHER></TALLYMESSAGE></REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>"#;
 
 /// What the screen a flow reached must be. The harness waits for it to settle, then panics with
 /// what was shown instead.
@@ -1689,10 +1706,162 @@ fn hindi_shots(english: &[Shot]) -> Vec<Shot> {
         .collect()
 }
 
+/// The words a file-import flow clicks and checks, in one language (the app's `import.file.*`
+/// strings of `en.toml` or `hi.toml`), so the English and Hindi shots run the same flow.
+struct FileImportWords {
+    /// The state id prefix: `""` or `"hi."`.
+    prefix: &'static str,
+    /// The shell's language code.
+    lang: &'static str,
+    /// The import screen's key bar name (`import.title` in this language; the harness reads
+    /// the screen's title in English).
+    key_bar: &'static str,
+    masters: &'static str,
+    transactions: &'static str,
+    ignore: &'static str,
+    guid_yes: &'static str,
+    backup_yes: &'static str,
+    backup_no: &'static str,
+    run: &'static str,
+    missing_choice: &'static str,
+    imported: &'static str,
+    overwritten: &'static str,
+}
+
+const FILE_IMPORT_EN: FileImportWords = FileImportWords {
+    prefix: "",
+    lang: "en",
+    key_bar: "Import from another app",
+    masters: "Masters (groups and ledgers)",
+    transactions: "Transactions (vouchers)",
+    ignore: "Ignore duplicates: keep the existing master as it is",
+    guid_yes: "Overwrite the voucher in the company with the file's",
+    backup_yes: "Yes: back up the company first, into the Backups folder beside the company file",
+    backup_no: "No: import without a backup",
+    run: "Import the file",
+    missing_choice: "Error: choose what to do with a master that is already in the company",
+    imported: "Masters: 2 created, 0 altered, 0 combined, 0 ignored, 1 not imported.",
+    overwritten: "Transactions: 0 created, 1 altered, 0 combined, 0 ignored, 0 not imported.",
+};
+
+const FILE_IMPORT_HI: FileImportWords = FileImportWords {
+    prefix: "hi.",
+    lang: "hi",
+    key_bar: "दूसरे ऐप से आयात",
+    masters: "मास्टर (समूह और लेजर)",
+    transactions: "लेन-देन (वाउचर)",
+    ignore: "दोहराव छोड़ें: मौजूदा मास्टर जैसा है वैसा रखें",
+    guid_yes: "कंपनी के वाउचर को फ़ाइल के वाउचर से बदलें",
+    backup_yes: "हाँ: पहले कंपनी का बैकअप लें, कंपनी फ़ाइल के पास के Backups फ़ोल्डर में",
+    backup_no: "नहीं: बिना बैकअप के आयात करें",
+    run: "फ़ाइल आयात करें",
+    missing_choice: "त्रुटि: चुनें कि कंपनी में पहले से मौजूद मास्टर का क्या करें",
+    imported: "मास्टर: 2 बने, 0 बदले, 0 जोड़े, 0 छोड़े, 1 आयात नहीं हुए।",
+    overwritten: "लेन-देन: 0 बने, 1 बदले, 0 जोड़े, 0 छोड़े, 0 आयात नहीं हुए।",
+};
+
+/// S22: Alt+O on the sample company opens the import screen at the import from a file; the
+/// mock's `import.file-*` states and their Hindi copies.
+fn file_import_shots(w: &FileImportWords) -> Vec<Shot> {
+    let id = |state: &str| -> &'static str {
+        Box::leak(format!("{}import.file-{state}", w.prefix).into_boxed_str())
+    };
+    let check =
+        |s: Shot, text: &'static str| s.expect_in("Import from another app", w.key_bar, text);
+    let alt_o = [(Key::O, Modifiers::ALT)];
+    vec![
+        shot(id("masters"), &alt_o)
+            .lang(w.lang)
+            .click_named(w.masters)
+            .click_named(w.ignore)
+            .click_named(w.backup_no)
+            .script_file(ScriptedFile::LedgersFromOldApp)
+            .press(&[(Key::O, Modifiers::COMMAND)]),
+        check(
+            shot(id("missing-choice"), &alt_o)
+                .lang(w.lang)
+                .click_named(w.masters)
+                .script_file(ScriptedFile::LedgersFromOldApp)
+                .press(&[(Key::O, Modifiers::COMMAND)])
+                .click_named(w.run)
+                .wait(20),
+            w.missing_choice,
+        ),
+        check(
+            shot(id("imported"), &alt_o)
+                .lang(w.lang)
+                .click_named(w.masters)
+                .click_named(w.ignore)
+                .click_named(w.backup_no)
+                .script_file(ScriptedFile::LedgersFromOldApp)
+                .press(&[(Key::O, Modifiers::COMMAND)])
+                .click_named(w.run)
+                .wait(60),
+            w.imported,
+        ),
+        shot(id("error"), &alt_o)
+            .lang(w.lang)
+            .click_named(w.masters)
+            .click_named(w.ignore)
+            .click_named(w.backup_no)
+            .script_file(ScriptedFile::NotXml)
+            .press(&[(Key::O, Modifiers::COMMAND)])
+            .click_named(w.run)
+            .wait(60),
+        // Transactions chosen; the GUID choice stays on its default, Do not overwrite.
+        shot(id("transactions"), &alt_o)
+            .lang(w.lang)
+            .click_named(w.transactions)
+            .click_named(w.backup_no)
+            .script_file(ScriptedFile::VouchersFromOldApp)
+            .press(&[(Key::O, Modifiers::COMMAND)]),
+        // The masters first (Hamali Charges is not in the sample), then the payment twice with
+        // overwrite on: the second import alters the voucher the first one posted.
+        check(
+            shot(id("overwritten"), &alt_o)
+                .lang(w.lang)
+                .click_named(w.masters)
+                .click_named(w.ignore)
+                .click_named(w.backup_no)
+                .script_file(ScriptedFile::LedgersFromOldApp)
+                .press(&[(Key::O, Modifiers::COMMAND)])
+                .click_named(w.run)
+                .wait(60)
+                // Alt+O on the import screen goes back to the top of the file form.
+                .press(&alt_o)
+                .wait(5)
+                .click_named(w.transactions)
+                .click_named(w.guid_yes)
+                .script_file(ScriptedFile::VouchersFromOldApp)
+                .press(&[(Key::O, Modifiers::COMMAND)])
+                .click_named(w.run)
+                .wait(60)
+                .click_named(w.run)
+                .wait(60),
+            w.overwritten,
+        ),
+        // Yes to the backup: the company is copied into Backups beside it before the import.
+        check(
+            shot(id("backed-up"), &alt_o)
+                .lang(w.lang)
+                .click_named(w.masters)
+                .click_named(w.ignore)
+                .click_named(w.backup_yes)
+                .script_file(ScriptedFile::LedgersFromOldApp)
+                .press(&[(Key::O, Modifiers::COMMAND)])
+                .click_named(w.run)
+                .wait(60),
+            w.imported,
+        ),
+    ]
+}
+
 fn shots() -> Vec<Shot> {
     let mut light = light_shots();
     light.extend(s13_shots());
     light.extend(hindi_shots(&light));
+    light.extend(file_import_shots(&FILE_IMPORT_EN));
+    light.extend(file_import_shots(&FILE_IMPORT_HI));
     let mock = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../design/mock-v2/captures/states");
     let mut all = light.clone();
     for theme in [Theme::Dark, Theme::Hc] {
@@ -2698,46 +2867,6 @@ fn s13_shots() -> Vec<Shot> {
             .wait(60)
             .expect_in("Import from another app", "Import from another app", "Error: could not import \"Godavari Drip & Pump Works\" from the other app at localhost:9000: The other program is not running or not accepting connections on port 9000"),
         // S22: Alt+O on the sample company opens the import screen at the import from a file.
-        shot("import.file-masters", &[(Key::O, Modifiers::ALT)])
-            .click_named("Masters (groups and ledgers)")
-            .click_named("Ignore duplicates: keep the existing master as it is")
-            .script_file(ScriptedFile::LedgersFromOldApp)
-            .press(&[(Key::O, Modifiers::COMMAND)])
-            .expect_in(
-                "Import from another app",
-                "Import from another app",
-                "Import in one step",
-            ),
-        shot("import.file-missing-choice", &[(Key::O, Modifiers::ALT)])
-            .click_named("Masters (groups and ledgers)")
-            .script_file(ScriptedFile::LedgersFromOldApp)
-            .press(&[(Key::O, Modifiers::COMMAND)])
-            .click_named("Import the file")
-            .wait(20)
-            .expect_in(
-                "Import from another app",
-                "Import from another app",
-                "Error: choose what to do with a master that is already in the company",
-            ),
-        shot("import.file-imported", &[(Key::O, Modifiers::ALT)])
-            .click_named("Masters (groups and ledgers)")
-            .click_named("Ignore duplicates: keep the existing master as it is")
-            .script_file(ScriptedFile::LedgersFromOldApp)
-            .press(&[(Key::O, Modifiers::COMMAND)])
-            .click_named("Import the file")
-            .wait(60)
-            .expect_in(
-                "Import from another app",
-                "Import from another app",
-                "Masters: 2 created, 0 altered, 0 combined, 0 ignored, 1 not imported.",
-            ),
-        shot("import.file-error", &[(Key::O, Modifiers::ALT)])
-            .click_named("Masters (groups and ledgers)")
-            .click_named("Ignore duplicates: keep the existing master as it is")
-            .script_file(ScriptedFile::NotXml)
-            .press(&[(Key::O, Modifiers::COMMAND)])
-            .click_named("Import the file")
-            .wait(60),
         // Right from Create is the Import card (never Down, which reaches Open).
         shot(
             "import.no-company",

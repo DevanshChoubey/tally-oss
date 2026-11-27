@@ -43,7 +43,7 @@ fn ledger(id: LedgerId, name: &str) -> Ledger {
         id,
         name: name.to_owned(),
         aliases: Vec::new(),
-        group: GROUP,
+        group: Some(GROUP),
         opening: SignedAmount::dr(Paise::ZERO),
         bill_wise: None,
         cost_centres_applicable: false,
@@ -82,7 +82,7 @@ fn reserve(
     );
     for ledger in ledgers {
         if let Some(l) = masters.ledgers.get_mut(ledger) {
-            l.group = id;
+            l.group = Some(id);
         }
     }
 }

@@ -212,7 +212,16 @@ fn resolve_due(date: Date, a: &BillAllocation) -> Result<Option<Date>, EngineErr
     }
 }
 
+/// `ledger 'Name'`, as the user knows the ledger; its id only when the books do not hold it.
+fn ledger_label(books: &Books, ledger: LedgerId) -> String {
+    books.masters.ledgers.get(&ledger).map_or_else(
+        || format!("ledger {}", ledger.0),
+        |l| format!("ledger '{}'", l.name),
+    )
+}
+
 fn open_bill(
+    books: &Books,
     map: &mut BTreeMap<BillKey, BillState>,
     ledger: LedgerId,
     date: Date,
@@ -225,7 +234,7 @@ fn open_bill(
     if a.kind == BillRefKind::New {
         if st.has_new {
             return Err(EngineError::Duplicate {
-                what: format!("bill '{}' on ledger {}", a.name, ledger.0),
+                what: format!("bill '{}' on {}", a.name, ledger_label(books, ledger)),
             });
         }
         st.has_new = true;
@@ -256,7 +265,7 @@ fn missing_bill(ctx: &Ctx<'_>, ledger: LedgerId, name: &str) -> EngineError {
         .into()
     } else {
         EngineError::NotFound {
-            what: format!("bill '{name}' on ledger {}", ledger.0),
+            what: format!("bill '{name}' on {}", ledger_label(ctx.books, ledger)),
         }
     }
 }
@@ -315,8 +324,10 @@ fn apply_origins(
     {
         for a in &line.bills {
             match a.kind {
-                BillRefKind::New => open_bill(map, line.ledger, v.date, a, RANK_NEW)?,
-                BillRefKind::Advance => open_bill(map, line.ledger, v.date, a, RANK_ADVANCE)?,
+                BillRefKind::New => open_bill(ctx.books, map, line.ledger, v.date, a, RANK_NEW)?,
+                BillRefKind::Advance => {
+                    open_bill(ctx.books, map, line.ledger, v.date, a, RANK_ADVANCE)?;
+                }
                 BillRefKind::Against | BillRefKind::OnAccount => {}
             }
         }

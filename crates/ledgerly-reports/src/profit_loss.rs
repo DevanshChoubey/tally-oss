@@ -88,6 +88,8 @@ enum Bucket {
 
 /// A ledger that belongs to the P&L, with its group chain (own group first, primary last).
 struct Classified {
+    /// The ledger's own group.
+    group: GroupId,
     chain: Vec<GroupId>,
     bucket: Bucket,
 }
@@ -306,8 +308,14 @@ fn bucket_for(nature: Nature, trading: bool) -> Option<Bucket> {
 
 /// Decides, for one ledger, whether it is part of the P&L and where.
 fn classify(books: &Books, ledger: &Ledger) -> Result<Outcome<Option<Classified>>, ReportError> {
-    let chain = group_chain(books, ledger.group)?;
-    let primary_id = chain.last().copied().unwrap_or(ledger.group);
+    // Primary (no group) holds only the Profit & Loss A/c, which is not an income or expense
+    // ledger: it is "shown in the balance sheet under liabilities"
+    // (<https://help.tallysolutions.com/ledgers-and-groups-in-tallyprime/>, read 2026-11-27).
+    let Some(group) = ledger.group else {
+        return Ok(Outcome::Value(None));
+    };
+    let chain = group_chain(books, group)?;
+    let primary_id = chain.last().copied().unwrap_or(group);
     let primary = group_of(books, primary_id)?;
     let Some(nature) = primary.nature else {
         return Ok(Outcome::unsupported(
@@ -339,7 +347,11 @@ fn classify(books: &Books, ledger: &Ledger) -> Result<Outcome<Option<Classified>
             ),
         ));
     }
-    Ok(Outcome::Value(Some(Classified { chain, bucket })))
+    Ok(Outcome::Value(Some(Classified {
+        group,
+        chain,
+        bucket,
+    })))
 }
 
 fn classify_ledgers(books: &Books, tree: &mut Tree) -> Result<Outcome<()>, ReportError> {
@@ -350,7 +362,7 @@ fn classify_ledgers(books: &Books, tree: &mut Tree) -> Result<Outcome<()>, Repor
         tree.ledger_net.insert(ledger.id, Paise::ZERO);
         tree.ledger_bucket.insert(ledger.id, c.bucket);
         tree.ledgers_in
-            .entry(ledger.group)
+            .entry(c.group)
             .or_default()
             .insert(ledger.id);
         let mut child: Option<GroupId> = None;

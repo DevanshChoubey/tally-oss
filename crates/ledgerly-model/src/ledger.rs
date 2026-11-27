@@ -12,8 +12,11 @@ pub struct Ledger {
     pub name: String,
     /// Alternative names for search.
     pub aliases: Vec<String>,
-    /// Parent group.
-    pub group: GroupId,
+    /// Parent group. `None` is Primary, the root of the group tree: only the predefined Profit &
+    /// Loss A/c sits there ("grouped under the Primary group",
+    /// <https://help.tallysolutions.com/ledgers-and-groups-in-tallyprime/>, read 2026-11-27). An
+    /// old company file stores a plain group id here, which decodes as `Some`.
+    pub group: Option<GroupId>,
     /// Opening balance at books-begin.
     pub opening: SignedAmount,
     /// Bill-wise tracking, when enabled for this ledger.

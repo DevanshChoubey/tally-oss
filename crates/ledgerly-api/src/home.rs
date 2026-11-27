@@ -258,8 +258,8 @@ fn cash_and_bank(
 }
 
 /// `true` when `start` or one of its ancestors is the reserved group `reserved`.
-fn under(books: &Books, start: GroupId, reserved: ReservedGroup) -> Result<bool, String> {
-    let mut next = Some(start);
+fn under(books: &Books, start: Option<GroupId>, reserved: ReservedGroup) -> Result<bool, String> {
+    let mut next = start;
     for _ in 0..MAX_GROUP_DEPTH {
         let Some(id) = next else {
             return Ok(false);

@@ -68,3 +68,7 @@ toggle-detail = ["Alt+F1"]
 print = ["Ctrl+P"]
 export = ["Ctrl+E"]
 email = ["Ctrl+M"]
+
+# Import. Alt+O (Import): https://help.tallysolutions.com/import-data-from-xml-or-json/, read
+# 2026-11-27. Alt+O is Import on every screen; the purchase's bill photo is Ctrl+Alt+O.
+import-file = ["Alt+O"]

@@ -325,7 +325,7 @@ fn a_company_with_a_ledger_is_refused_before_tally_is_contacted() {
         id: ledgerly_core::LedgerId(1),
         name: "Cash".to_owned(),
         aliases: Vec::new(),
-        group,
+        group: Some(group),
         opening: SignedAmount::dr(Paise::ZERO),
         bill_wise: None,
         cost_centres_applicable: false,
@@ -423,4 +423,159 @@ fn the_summary_names_the_company_and_lists_warnings() {
         summary.warnings
     );
     assert!(summary.to_string().contains("Test Traders"));
+}
+
+#[test]
+fn a_new_company_with_its_predefined_cash_takes_the_import() {
+    // provenance: derived. A company made as the setup screen makes it has the predefined Cash
+    // ledger (TallyPrime help, "Ledgers in TallyPrime", read 2026-11-27) and nothing else, so it
+    // is still a new company to import into. The other program's export carries its own Cash
+    // under Cash-in-Hand, which takes the predefined one's place: one Cash, the same hand trial
+    // balance as `import_into_an_empty_company_matches_the_hand_trial_balance`.
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("wizard.ledgerly");
+    let mut api = new_company(&path, &company(), clock());
+    let tally = FakeTally::standard();
+    committed(api.import_tally_with(&tally, "Test Traders", &CancelToken::new()));
+    let books = match api.books().unwrap() {
+        Outcome::Value(b) => b,
+        Outcome::Unsupported(u) => panic!("{u:?}"),
+    };
+    let cash: Vec<_> = books
+        .masters
+        .ledgers
+        .values()
+        .filter(|l| l.name == "Cash")
+        .collect();
+    assert_eq!(cash.len(), 1, "{cash:?}");
+    assert_eq!(cash[0].reserved, Some(ledgerly_model::ReservedLedger::Cash));
+    let tb = trial_balance(&api);
+    assert_eq!(
+        row_cells(&tb, "Cash"),
+        Some(vec![
+            ReportCell::Empty,
+            ReportCell::Amount(SignedAmount::cr(Paise::new(50_000)))
+        ])
+    );
+    assert_eq!(
+        tb.totals,
+        vec![
+            ReportCell::Amount(SignedAmount::dr(Paise::new(100_000))),
+            ReportCell::Amount(SignedAmount::cr(Paise::new(100_000)))
+        ]
+    );
+}
+
+#[test]
+fn a_new_company_keeps_its_profit_and_loss_ledger_through_the_import() {
+    // provenance: derived. Profit & Loss A/c is a predefined ledger that "cannot be deleted"
+    // (https://help.tallysolutions.com/ledgers-and-groups-in-tallyprime/, read 2026-11-27), so a
+    // company made as the setup screen makes it still has exactly one after a whole-company
+    // import, under Primary, with an id no imported ledger uses. The hand trial balance is the
+    // same: the ledger has no balance, so it is not listed.
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("wizard.ledgerly");
+    let mut api = new_company(&path, &company(), clock());
+    let tally = FakeTally::standard();
+    committed(api.import_tally_with(&tally, "Test Traders", &CancelToken::new()));
+    let books = match api.books().unwrap() {
+        Outcome::Value(b) => b,
+        Outcome::Unsupported(u) => panic!("{u:?}"),
+    };
+    let pl: Vec<_> = books
+        .masters
+        .ledgers
+        .values()
+        .filter(|l| l.reserved == Some(ledgerly_model::ReservedLedger::ProfitAndLoss))
+        .collect();
+    assert_eq!(pl.len(), 1, "{:?}", books.masters.ledgers);
+    assert_eq!(pl[0].name, "Profit & Loss A/c");
+    assert_eq!(pl[0].group, None);
+    assert_eq!(
+        books.masters.ledgers.len(),
+        4,
+        "Cash, Rent, Capital and Profit & Loss A/c"
+    );
+    let tb = trial_balance(&api);
+    assert_eq!(row_cells(&tb, "Profit & Loss A/c"), None);
+    assert_eq!(
+        tb.totals,
+        vec![
+            ReportCell::Amount(SignedAmount::dr(Paise::new(100_000))),
+            ReportCell::Amount(SignedAmount::cr(Paise::new(100_000)))
+        ]
+    );
+}
+
+#[test]
+fn an_export_with_its_profit_and_loss_ledger_and_a_journal_to_it_keeps_one() {
+    // provenance: derived. The other program's predefined Profit & Loss A/c sits under Primary and
+    // takes adjustment journals
+    // (https://help.tallysolutions.com/tally-prime/accounting/ledgers-and-groups-in-tallyprime/,
+    // read 2026-11-27). The export's own takes the place of the new company's, so there is one.
+    // Hand trial balance: the standard one (Dr 100,000, Cr 100,000 paise) plus v-3, 1 August 2026,
+    // Dr Profit & Loss A/c 200.00, Cr Capital 200.00: Profit & Loss A/c Dr 20,000 paise, Capital
+    // Cr 70,000, totals Dr 120,000 and Cr 120,000.
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("wizard.ledgerly");
+    let mut api = new_company(&path, &company(), clock());
+    let mut tally = FakeTally::standard();
+    for (id, xml) in &mut tally.masters {
+        if *id == "LedgerlyLedgers" {
+            xml.push_str(
+                "<LEDGER NAME=\"Profit &amp; Loss A/c\"><GUID>l-pl</GUID><ALTERID>3</ALTERID>\
+                 <NAME>Profit &amp; Loss A/c</NAME><PARENT>&#4; Primary</PARENT>\
+                 <OPENINGBALANCE>0</OPENINGBALANCE></LEDGER>",
+            );
+        }
+    }
+    tally.vouchers.push((
+        "20260801",
+        journal(
+            "v-3",
+            "20260801",
+            "J-3",
+            &[
+                ("Profit &amp; Loss A/c", "Yes", "-200.00"),
+                ("Capital", "No", "200.00"),
+            ],
+        ),
+    ));
+    committed(api.import_tally_with(&tally, "Test Traders", &CancelToken::new()));
+    let books = match api.books().unwrap() {
+        Outcome::Value(b) => b,
+        Outcome::Unsupported(u) => panic!("{u:?}"),
+    };
+    let pl: Vec<_> = books
+        .masters
+        .ledgers
+        .values()
+        .filter(|l| l.reserved == Some(ledgerly_model::ReservedLedger::ProfitAndLoss))
+        .collect();
+    assert_eq!(pl.len(), 1, "{:?}", books.masters.ledgers);
+    assert_eq!(pl[0].group, None);
+    assert_eq!(pl[0].tally.as_ref().map(|t| t.guid.as_str()), Some("l-pl"));
+    let tb = trial_balance(&api);
+    assert_eq!(
+        row_cells(&tb, "Profit & Loss A/c"),
+        Some(vec![
+            ReportCell::Amount(SignedAmount::dr(Paise::new(20_000))),
+            ReportCell::Empty
+        ])
+    );
+    assert_eq!(
+        tb.totals,
+        vec![
+            ReportCell::Amount(SignedAmount::dr(Paise::new(120_000))),
+            ReportCell::Amount(SignedAmount::cr(Paise::new(120_000)))
+        ]
+    );
+}
+
+/// A company made as the setup screen makes it.
+fn new_company(path: &std::path::Path, company: &Company, clock: Clock) -> Api {
+    match Api::create_company(path, company, clock).unwrap() {
+        Outcome::Value(api) => api,
+        Outcome::Unsupported(u) => panic!("{u:?}"),
+    }
 }

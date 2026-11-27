@@ -533,7 +533,7 @@ pub fn group_summary(
         .masters
         .ledgers
         .values()
-        .filter(|l| subtree.contains(&l.group))
+        .filter(|l| l.group.is_some_and(|g| subtree.contains(&g)))
         .collect();
     if members.iter().any(|l| is_profit_and_loss(l)) {
         return Ok(unsupported_profit_and_loss(GROUP_NAME));
@@ -606,7 +606,10 @@ fn build_group_report(
         let sub = descendants(books, child.id);
         let mut child_net = Paise::ZERO;
         let mut any = false;
-        for l in members.iter().filter(|l| sub.contains(&l.group)) {
+        for l in members
+            .iter()
+            .filter(|l| l.group.is_some_and(|g| sub.contains(&g)))
+        {
             let b = balance_of(l.id);
             child_net = child_net.checked_add(b)?;
             any = any || !b.is_zero();
@@ -622,7 +625,7 @@ fn build_group_report(
             shown.push((row, child_net));
         }
     }
-    for l in members.iter().filter(|l| l.group == group) {
+    for l in members.iter().filter(|l| l.group == Some(group)) {
         let b = balance_of(l.id);
         net = net.checked_add(b)?;
         if !b.is_zero() {
@@ -782,7 +785,10 @@ fn group_rows(
     {
         let sub = descendants(books, child.id);
         let mut sum = Movement::default();
-        for l in members.iter().filter(|l| sub.contains(&l.group)) {
+        for l in members
+            .iter()
+            .filter(|l| l.group.is_some_and(|g| sub.contains(&g)))
+        {
             sum.add(lines.get(&l.id).copied().unwrap_or_default())?;
         }
         total.add(sum)?;
@@ -800,7 +806,7 @@ fn group_rows(
             });
         }
     }
-    for l in members.iter().filter(|l| l.group == group) {
+    for l in members.iter().filter(|l| l.group == Some(group)) {
         let m = lines.get(&l.id).copied().unwrap_or_default();
         total.add(m)?;
         let gstin = l
@@ -861,7 +867,7 @@ pub fn group_ledgers(
         .masters
         .ledgers
         .values()
-        .filter(|l| subtree.contains(&l.group))
+        .filter(|l| l.group.is_some_and(|g| subtree.contains(&g)))
         .collect();
     if members.iter().any(|l| is_profit_and_loss(l)) {
         return Ok(unsupported_profit_and_loss(GROUP_NAME));

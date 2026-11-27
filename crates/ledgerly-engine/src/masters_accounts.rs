@@ -25,7 +25,7 @@
 //! (no case folding: no source says whether names are case-insensitive).
 
 use ledgerly_core::{GroupId, LedgerId, Outcome};
-use ledgerly_model::{Books, Group, Ledger, MasterSnapshot, Voucher};
+use ledgerly_model::{Books, Group, Ledger, MasterSnapshot, ReservedLedger, Voucher};
 use ledgerly_store::Event;
 
 use crate::EngineError;
@@ -194,7 +194,7 @@ pub fn delete_group(id: GroupId, books: &Books) -> Result<Outcome<Vec<Event>>, E
             by: format!("sub-group '{}'", child.name),
         });
     }
-    if let Some(ledger) = books.masters.ledgers.values().find(|l| l.group == id) {
+    if let Some(ledger) = books.masters.ledgers.values().find(|l| l.group == Some(id)) {
         return Err(EngineError::InUseByMaster {
             what: format!("group '{}'", group.name),
             by: format!("ledger '{}'", ledger.name),
@@ -211,10 +211,23 @@ fn check_ledger_shape(l: &Ledger, books: &Books) -> Result<(), EngineError> {
     if name.is_empty() {
         return Err(invalid("ledger name", "the name is empty; type a name"));
     }
-    if !books.masters.groups.contains_key(&l.group) {
-        return Err(EngineError::NotFound {
-            what: format!("group {} of ledger '{name}'", l.group.0),
-        });
+    match l.group {
+        // Primary holds only the predefined Profit & Loss A/c ("grouped under the Primary
+        // group", <https://help.tallysolutions.com/ledgers-and-groups-in-tallyprime/>, read
+        // 2026-11-27); every other ledger is created under a group.
+        None if l.reserved == Some(ReservedLedger::ProfitAndLoss) => {}
+        None => {
+            return Err(invalid(
+                "ledger group",
+                "only the predefined Profit & Loss A/c sits under Primary; choose the group this ledger belongs under",
+            ));
+        }
+        Some(group) if !books.masters.groups.contains_key(&group) => {
+            return Err(EngineError::NotFound {
+                what: format!("group {} of ledger '{name}'", group.0),
+            });
+        }
+        Some(_) => {}
     }
     if l.opening.amount.is_negative() {
         return Err(invalid(

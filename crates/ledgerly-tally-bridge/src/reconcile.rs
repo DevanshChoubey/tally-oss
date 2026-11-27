@@ -693,8 +693,8 @@ fn only_in_ours(books: &Books, ours: &OurTb, resolved: &[Resolved<'_>]) -> Vec<R
 }
 
 /// `true` when `group` or one of its ancestors is among the matched groups.
-fn under_matched_group(books: &Books, group: GroupId, matched: &BTreeSet<GroupId>) -> bool {
-    let mut current = Some(group);
+fn under_matched_group(books: &Books, group: Option<GroupId>, matched: &BTreeSet<GroupId>) -> bool {
+    let mut current = group;
     for _ in 0..MAX_GROUP_DEPTH {
         let Some(id) = current else {
             return false;

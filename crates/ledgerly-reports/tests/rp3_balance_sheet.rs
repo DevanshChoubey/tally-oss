@@ -95,7 +95,7 @@ fn ledger(id: u64, name: &str, group: u64) -> Ledger {
         id: LedgerId(id),
         name: name.into(),
         aliases: vec![],
-        group: GroupId(group),
+        group: Some(GroupId(group)),
         opening: SignedAmount::dr(Paise::ZERO),
         bill_wise: None,
         cost_centres_applicable: false,
@@ -1134,4 +1134,76 @@ fn empty_stock_in_hand_ledger_is_harmless() {
         .insert(LedgerId(29), ledger(29, "Opening Stock", 12));
     let out = balance_sheet(&books, &params(Detail::Condensed), &no_stock()).unwrap();
     assert!(!out.is_unsupported());
+}
+
+const PROFIT_AND_LOSS: u64 = 30;
+
+/// `b` with the predefined Profit & Loss A/c under Primary (no group), with `opening`.
+fn with_profit_and_loss(mut b: Books, opening: SignedAmount) -> Books {
+    let mut pl = ledger(PROFIT_AND_LOSS, "Profit & Loss A/c", 1);
+    pl.group = None;
+    pl.reserved = Some(ledgerly_model::ReservedLedger::ProfitAndLoss);
+    pl.opening = opening;
+    b.masters.ledgers.insert(pl.id, pl);
+    b
+}
+
+#[test]
+fn a_profit_and_loss_ledger_with_nothing_on_it_changes_nothing() {
+    // provenance: derived — the row is the profit plus the ledger's balance, and the balance is 0.
+    for detail in [Detail::Detailed, Detail::Condensed] {
+        let without = run(
+            &books_with(hand_postings()),
+            &params(detail),
+            &stock(rs(50_000)),
+        );
+        let with = run(
+            &with_profit_and_loss(books_with(hand_postings()), SignedAmount::dr(Paise::ZERO)),
+            &params(detail),
+            &stock(rs(50_000)),
+        );
+        assert_eq!(with, without);
+    }
+}
+
+#[test]
+fn prior_year_profit_on_the_profit_and_loss_ledger_adds_to_the_row() {
+    // provenance: derived. "The profit or loss from the previous year is carried forward as the
+    // opening balance of the ledger" and "It is shown in the balance sheet under liabilities"
+    // (https://help.tallysolutions.com/ledgers-and-groups-in-tallyprime/, read 2026-11-27).
+    // Hand set plus openings Profit & Loss A/c Cr 40,000 and Cash Dr 40,000 (last year's profit
+    // kept as cash): the openings balance, so there is no difference row.
+    // Row: this period's profit 130,000 (see `profit_and_loss_ledger_carries_current_year_profit`)
+    // + 40,000 brought forward = 170,000 Cr.
+    // Liabilities: Capital 500,000 + Supplier One 200,000 + 170,000 = 870,000.
+    // Assets: Cash 380,000 + 40,000 + Furniture 100,000 + Customer One 300,000 + stock 50,000
+    // = 870,000.
+    let b = with_profit_and_loss(
+        books_with_openings(hand_postings(), &[(CASH, SignedAmount::dr(rs(40_000)))]),
+        SignedAmount::cr(rs(40_000)),
+    );
+    let r = run(&b, &params(Detail::Condensed), &stock(rs(50_000)));
+    assert_eq!(
+        row(&r, "Profit and Loss A/c").cells,
+        vec![cr(rs(170_000)), Cell::Empty]
+    );
+    assert!(r.rows.iter().all(|x| x.kind != RowKind::Difference));
+    assert_eq!(r.totals, vec![cr(rs(870_000)), dr(rs(870_000))]);
+}
+
+#[test]
+fn an_adjustment_journal_to_the_profit_and_loss_ledger_moves_the_row() {
+    // provenance: derived. "You can use this account to pass adjustment entries through journal
+    // vouchers" (same page). A journal Dr Profit & Loss A/c 10,000, Cr Proprietor Capital 10,000
+    // (profit moved to capital): row 130,000 - 10,000 = 120,000 Cr; Capital 510,000 Cr.
+    // Liabilities: 510,000 + 200,000 + 120,000 = 830,000; assets unchanged at 830,000.
+    let mut postings = hand_postings();
+    postings.extend(pair(6, june(), PROFIT_AND_LOSS, CAPITAL, rs(10_000)));
+    let b = with_profit_and_loss(books_with(postings), SignedAmount::dr(Paise::ZERO));
+    let r = run(&b, &params(Detail::Condensed), &stock(rs(50_000)));
+    assert_eq!(
+        row(&r, "Profit and Loss A/c").cells,
+        vec![cr(rs(120_000)), Cell::Empty]
+    );
+    assert_eq!(r.totals, vec![cr(rs(830_000)), dr(rs(830_000))]);
 }

@@ -153,7 +153,7 @@ fn master(
         id,
         name: name.to_owned(),
         aliases: Vec::new(),
-        group,
+        group: Some(group),
         opening,
         bill_wise: None,
         cost_centres_applicable: false,

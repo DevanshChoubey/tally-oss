@@ -55,7 +55,7 @@ fn ledger(id: LedgerId, name: &str, aliases: &[&str]) -> Ledger {
         id,
         name: name.to_owned(),
         aliases: aliases.iter().map(|a| (*a).to_owned()).collect(),
-        group: GROUP,
+        group: Some(GROUP),
         opening: SignedAmount::dr(Paise::ZERO),
         bill_wise: None,
         cost_centres_applicable: false,

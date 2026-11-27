@@ -73,7 +73,7 @@ fn ledger(name: &str, group: GroupId) -> Ledger {
         id: LedgerId(0),
         name: name.to_owned(),
         aliases: Vec::new(),
-        group,
+        group: Some(group),
         opening: SignedAmount::dr(Paise::ZERO),
         bill_wise: None,
         cost_centres_applicable: false,
@@ -363,7 +363,7 @@ fn with_the_worker_the_ledger_is_created_and_lands_in_the_party() {
         .find(|l| l.name == "Ramesh Kirana")
         .expect("the ledger was created");
     assert_eq!(party, Some(made.id));
-    assert_eq!(made.group, reserved(ReservedGroup::SundryDebtors));
+    assert_eq!(made.group, Some(reserved(ReservedGroup::SundryDebtors)));
 }
 
 #[test]

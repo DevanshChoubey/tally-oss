@@ -11,14 +11,20 @@
 //! Import", <https://help.tallysolutions.com/getting-started-with-importing-data-into-tallyprime/>).
 //!
 //! Groups are imported before ledgers, parents first, so a file may list a ledger before its
-//! group. Vouchers are posted in file order. A voucher whose `GUID` is already in the books is
-//! posted again, as the import FAQ describes when overwriting vouchers with the same GUID is
-//! turned off (<https://help.tallysolutions.com/import-data-faq/>); overwriting is not offered.
+//! group. Vouchers are posted in file order. A voucher whose `GUID` is already in the books
+//! follows "Overwrite voucher when a voucher with same GUID exists"
+//! (<https://help.tallysolutions.com/import-data-faq/>, read 2026-11-27; [`VoucherBehaviour`]):
+//! - Yes: "the existing voucher gets overwritten" (the latest one with that GUID, through the
+//!   engine's alter, so the lock and every check apply; an automatic number is kept);
+//! - No, the default: "a duplicate voucher gets created. The subsequent import of the same voucher
+//!   will overwrite the previously duplicated/created voucher". So with one voucher of that GUID in
+//!   the books it is posted again, and with two or more the latest is overwritten.
 
 use std::fmt;
 use std::path::{Path, PathBuf};
 
 use ledgerly_core::{Outcome, VoucherId};
+use ledgerly_model::Voucher;
 use ledgerly_store::Actor;
 use ledgerly_tally_bridge::file_import::{
     Exception, ImportMaster, ImportMasterKind, MasterBehaviour, MasterStep, master_label,
@@ -34,8 +40,31 @@ pub enum XmlImport {
     /// Masters (groups, ledgers), treating a master that exists as the behaviour says.
     Masters(MasterBehaviour),
     /// Transactions (vouchers); their masters must be in the company already.
-    Transactions,
+    Transactions(VoucherBehaviour),
 }
+
+impl XmlImport {
+    /// Transactions with the default configuration: overwrite off.
+    #[must_use]
+    pub const fn default_transactions() -> Self {
+        Self::Transactions(VoucherBehaviour {
+            overwrite_same_guid: false,
+        })
+    }
+}
+
+/// The import configuration for transactions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct VoucherBehaviour {
+    /// "Overwrite voucher when a voucher with same GUID exists"
+    /// (<https://help.tallysolutions.com/import-data-faq/>, read 2026-11-27). Yes: the voucher in
+    /// the books with the file voucher's GUID is overwritten. No (the default): it is posted again
+    /// as a duplicate, and a later import of it overwrites that duplicate.
+    pub overwrite_same_guid: bool,
+}
+
+/// The folder, beside the company file, that a backup taken before an import goes into.
+pub const BACKUP_FOLDER: &str = "Backups";
 
 /// One object that was not imported, and why.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -44,6 +73,32 @@ pub struct ImportException {
     pub object: String,
     /// Why it was not imported.
     pub reason: String,
+}
+
+/// A note on one object of the file: an object left as it was, or a field read but not imported.
+/// The object and the note are kept apart so a screen can show them in two columns.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ImportNote {
+    /// The object or place, such as `ledger 'Kumar Textiles'`,
+    /// `Sales voucher SO-12 dated 2026-10-05` or `offset 120`.
+    pub object: String,
+    /// What happened to it.
+    pub note: String,
+}
+
+impl ImportNote {
+    fn new(object: impl Into<String>, note: impl Into<String>) -> Self {
+        Self {
+            object: object.into(),
+            note: note.into(),
+        }
+    }
+}
+
+impl fmt::Display for ImportNote {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}: {}", self.object, self.note)
+    }
 }
 
 /// What a file import did, for the user to read. Every exception is listed.
@@ -55,7 +110,7 @@ pub struct FileImportSummary {
     pub path: PathBuf,
     /// Objects created.
     pub created: usize,
-    /// Existing masters altered (Modify with New Data).
+    /// Existing masters altered (Modify with New Data), or vouchers overwritten (same GUID).
     pub altered: usize,
     /// Existing ledgers whose opening balance was added to (Combine Opening Balance).
     pub combined: usize,
@@ -65,10 +120,14 @@ pub struct FileImportSummary {
     pub errors: usize,
     /// Every object not imported, in the order met.
     pub exceptions: Vec<ImportException>,
-    /// Every object ignored, as `object: reason`.
-    pub ignored_notes: Vec<String>,
-    /// Fields that were read but not imported, and the reader's warnings, as `place: message`.
-    pub warnings: Vec<String>,
+    /// Every object ignored, with why.
+    pub ignored_notes: Vec<ImportNote>,
+    /// Fields that were read but not imported, and the reader's warnings, each with its object
+    /// or place in the file.
+    pub warnings: Vec<ImportNote>,
+    /// The backup of the company taken before the import, when one was asked for
+    /// ([`Api::back_up_and_import_tally_xml_file`]).
+    pub backup: Option<PathBuf>,
 }
 
 impl fmt::Display for FileImportSummary {
@@ -106,6 +165,7 @@ impl FileImportSummary {
             exceptions: Vec::new(),
             ignored_notes: Vec::new(),
             warnings: Vec::new(),
+            backup: None,
         }
     }
 
@@ -128,6 +188,34 @@ enum Applied {
 }
 
 impl Api {
+    /// Takes a backup of the company, then imports the file as
+    /// [`Api::import_tally_xml_file`] does. The import screen asks whether to take one first:
+    /// "Select Yes to take a backup of the company data before importing"
+    /// (<https://help.tallysolutions.com/import-data-from-xml-or-json/>, read 2026-11-27). The
+    /// backup goes into the `Backups` folder beside the company file ([`BACKUP_FOLDER`]; the
+    /// help names no folder) and its path is in [`FileImportSummary::backup`].
+    ///
+    /// # Errors
+    /// [`ApiError::Store`] when the backup cannot be written or does not verify: nothing is
+    /// imported. Then as [`Api::import_tally_xml_file`].
+    pub fn back_up_and_import_tally_xml_file(
+        &mut self,
+        what: XmlImport,
+        path: &Path,
+    ) -> Result<Outcome<FileImportSummary>, ApiError> {
+        let folder = self
+            .store()
+            .path()
+            .parent()
+            .unwrap_or_else(|| Path::new("."))
+            .join(BACKUP_FOLDER);
+        let backup = self.backup_to(&folder)?;
+        Ok(self.import_tally_xml_file(what, path)?.map(|mut summary| {
+            summary.backup = Some(backup);
+            summary
+        }))
+    }
+
     /// Imports the masters or transactions in the XML file at `path` into the open company. See
     /// the module docs for the rules.
     ///
@@ -157,15 +245,23 @@ impl Api {
             XmlImport::Masters(behaviour) => {
                 let contents = read_masters(&bytes).map_err(failed);
                 contents.and_then(|c| {
-                    summary.warnings.extend(c.warnings);
+                    summary.warnings.extend(
+                        c.warnings
+                            .into_iter()
+                            .map(|w| ImportNote::new(format!("offset {}", w.offset), w.message)),
+                    );
                     self.import_masters(&c.items, behaviour, &mut summary)
                 })
             }
-            XmlImport::Transactions => {
+            XmlImport::Transactions(behaviour) => {
                 let contents = read_vouchers(&bytes).map_err(failed);
                 contents.and_then(|c| {
-                    summary.warnings.extend(c.warnings);
-                    self.import_vouchers(&c.items, &mut summary)
+                    summary.warnings.extend(
+                        c.warnings
+                            .into_iter()
+                            .map(|w| ImportNote::new(format!("offset {}", w.offset), w.message)),
+                    );
+                    self.import_vouchers(&c.items, behaviour, &mut summary)
                 })
             }
         };
@@ -257,7 +353,7 @@ impl Api {
         let (command, applied) = match plan.step {
             MasterStep::Ignore(why) => {
                 summary.ignored = summary.ignored.saturating_add(1);
-                summary.ignored_notes.push(format!("{object}: {why}"));
+                summary.ignored_notes.push(ImportNote::new(object, why));
                 return Ok(());
             }
             MasterStep::CreateGroup(g) => (Command::CreateGroup(g), Applied::Created),
@@ -273,9 +369,11 @@ impl Api {
             ),
         };
         if self.run(command, object.clone(), applied, summary)? {
-            summary
-                .warnings
-                .extend(plan.dropped.into_iter().map(|d| format!("{object}: {d}")));
+            summary.warnings.extend(
+                plan.dropped
+                    .into_iter()
+                    .map(|d| ImportNote::new(object.clone(), d)),
+            );
         }
         Ok(())
     }
@@ -283,6 +381,7 @@ impl Api {
     fn import_vouchers(
         &mut self,
         vouchers: &[ledgerly_tally_bridge::file_import::TVoucher],
+        behaviour: VoucherBehaviour,
         summary: &mut FileImportSummary,
     ) -> Result<(), ApiError> {
         for v in vouchers {
@@ -294,31 +393,63 @@ impl Api {
                     continue;
                 }
             };
-            let next = books
-                .vouchers
-                .keys()
-                .next_back()
-                .map_or(Some(1), |id| id.0.checked_add(1));
-            let Some(next) = next else {
-                summary.exception(object, "too many vouchers to number".to_owned());
-                continue;
+            let same_guid: Vec<&Voucher> = match v.guid.as_deref() {
+                Some(guid) => books
+                    .vouchers
+                    .values()
+                    .filter(|b| b.tally.as_ref().is_some_and(|t| t.guid == guid))
+                    .collect(),
+                None => Vec::new(),
             };
-            let (voucher, dropped) = match voucher_step(v, &books, VoucherId(next)) {
+            let target = match (behaviour.overwrite_same_guid, same_guid.as_slice()) {
+                (_, []) | (false, [_]) => None,
+                (true, [.., last]) | (false, [_, .., last]) => Some(*last),
+            };
+            if target.is_none() && !same_guid.is_empty() {
+                summary.warnings.push(ImportNote::new(
+                    object.clone(),
+                    "a voucher with the same GUID is in the books; with overwrite off it is \
+                     posted again as a duplicate",
+                ));
+            }
+            let id = if let Some(existing) = target {
+                existing.id
+            } else {
+                let next = books
+                    .vouchers
+                    .keys()
+                    .next_back()
+                    .map_or(Some(1), |id| id.0.checked_add(1));
+                let Some(next) = next else {
+                    summary.exception(object, "too many vouchers to number".to_owned());
+                    continue;
+                };
+                VoucherId(next)
+            };
+            let (mut voucher, dropped) = match voucher_step(v, &books, id) {
                 Ok(step) => step,
                 Err(e) => {
                     summary.bridge_exception(e);
                     continue;
                 }
             };
-            if self.run(
-                Command::PostVoucher(voucher),
-                object.clone(),
-                Applied::Created,
-                summary,
-            )? {
-                summary
-                    .warnings
-                    .extend(dropped.into_iter().map(|d| format!("{object}: {d}")));
+            let (command, applied) = match target {
+                Some(existing) => {
+                    // An automatic number is the books' own; the overwrite keeps it.
+                    if voucher.number.is_none() {
+                        voucher.number.clone_from(&existing.number);
+                        voucher.series.clone_from(&existing.series);
+                    }
+                    (Command::AlterVoucher(voucher), Applied::Altered)
+                }
+                None => (Command::PostVoucher(voucher), Applied::Created),
+            };
+            if self.run(command, object.clone(), applied, summary)? {
+                summary.warnings.extend(
+                    dropped
+                        .into_iter()
+                        .map(|d| ImportNote::new(object.clone(), d)),
+                );
             }
         }
         Ok(())

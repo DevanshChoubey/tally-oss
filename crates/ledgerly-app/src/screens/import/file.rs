@@ -13,7 +13,7 @@
 use std::path::PathBuf;
 
 use egui::{RichText, Ui};
-use ledgerly_api::{FileImportSummary, MasterBehaviour, XmlImport};
+use ledgerly_api::{FileImportSummary, ImportNote, MasterBehaviour, VoucherBehaviour, XmlImport};
 use ledgerly_core::{Outcome, Unsupported};
 
 use crate::screens::wire::{Done, Latest, unsupported_text};
@@ -55,9 +55,19 @@ pub(super) struct FileImport {
     pub(super) kind: Option<FileKind>,
     pub(super) path: String,
     pub(super) behaviour: Option<MasterBehaviour>,
+    /// "Overwrite voucher when a voucher with same GUID exists": No unless the user picks Yes
+    /// (`VoucherBehaviour`'s default).
+    pub(super) vouchers: VoucherBehaviour,
+    /// "Take a backup of the company data before importing": Yes, No, or not answered yet. The
+    /// help states no default, so the import waits for an answer.
+    pub(super) backup: Option<bool>,
     pub(super) state: FileImportState,
-    /// Whether the path field had the keyboard last frame, so Enter imports the file.
-    pub(super) path_focused: bool,
+    /// Whether the file form is where the user is working, so Enter imports the file: the screen
+    /// was opened with Alt+O, the path has the keyboard, or a choice or Choose file was the last
+    /// thing used. Working in the one-step form clears it (`ImportScreen::import_keys`).
+    pub(super) active: bool,
+    /// Put the keyboard in the path field on the next frame (the screen was opened with Alt+O).
+    pub(super) focus_path: bool,
     /// Frames left in which to scroll the panel into view (the screen was opened with Alt+O).
     /// More than one, since the first frame lays out a scroll area that does not know its
     /// content's height yet.
@@ -82,12 +92,16 @@ impl FileImport {
             return;
         }
         let what = match (kind, self.behaviour) {
-            (FileKind::Transactions, _) => XmlImport::Transactions,
+            (FileKind::Transactions, _) => XmlImport::Transactions(self.vouchers),
             (FileKind::Masters, Some(behaviour)) => XmlImport::Masters(behaviour),
             (FileKind::Masters, None) => {
                 self.state = FileImportState::Failed(crate::i18n::t("import.file.err_behaviour"));
                 return;
             }
+        };
+        let Some(back_up) = self.backup else {
+            self.state = FileImportState::Failed(crate::i18n::t("import.file.err_backup"));
+            return;
         };
         let Some(handle) = worker else {
             self.state = FileImportState::Failed(crate::i18n::t("import.file.err_no_company"));
@@ -96,8 +110,12 @@ impl FileImport {
         self.state = FileImportState::Running;
         let path = PathBuf::from(path);
         self.latest.start(handle, move |api| {
-            api.import_tally_xml_file(what, &path)
-                .map_err(|e| e.to_string())
+            let done = if back_up {
+                api.back_up_and_import_tally_xml_file(what, &path)
+            } else {
+                api.import_tally_xml_file(what, &path)
+            };
+            done.map_err(|e| e.to_string())
         });
     }
 
@@ -140,7 +158,7 @@ impl FileImport {
 pub fn summary_line(summary: &FileImportSummary) -> String {
     let what = match summary.what {
         XmlImport::Masters(_) => crate::i18n::t("import.file.what_masters"),
-        XmlImport::Transactions => crate::i18n::t("import.file.what_transactions"),
+        XmlImport::Transactions(_) => crate::i18n::t("import.file.what_transactions"),
     };
     crate::i18n::tf(
         "import.file.summary",
@@ -163,20 +181,33 @@ pub fn state_lines(state: &FileImportState) -> Vec<String> {
         FileImportState::Idle => Vec::new(),
         FileImportState::Running => vec![crate::i18n::t("import.file.running")],
         FileImportState::Refused(u) => vec![unsupported_text(u)],
-        FileImportState::Failed(text) => vec![format!("Error: {text}")],
+        FileImportState::Failed(text) => {
+            vec![crate::i18n::tf("import.file.error", &[("text", text)])]
+        }
         FileImportState::Imported(summary) => {
             let mut lines = vec![summary_line(summary)];
+            lines.extend(backup_line(summary));
             lines.extend(
                 summary
                     .exceptions
                     .iter()
                     .map(|e| format!("{}: {}", e.object, e.reason)),
             );
-            lines.extend(summary.ignored_notes.iter().cloned());
-            lines.extend(summary.warnings.iter().cloned());
+            lines.extend(summary.ignored_notes.iter().map(ToString::to_string));
+            lines.extend(summary.warnings.iter().map(ToString::to_string));
             lines
         }
     }
+}
+
+/// "Backup taken first: <path>", when a backup was taken before the import.
+fn backup_line(summary: &FileImportSummary) -> Option<String> {
+    summary.backup.as_ref().map(|path| {
+        crate::i18n::tf(
+            "import.file.backup_taken",
+            &[("path", &path.display().to_string())],
+        )
+    })
 }
 
 /// The behaviours, in the order of the import FAQ.
@@ -262,6 +293,7 @@ fn draw_choices(
                 .clicked()
                 {
                     file.kind = Some(FileKind::Masters);
+                    file.active = true;
                 }
                 if choice_row(
                     transactions,
@@ -271,6 +303,7 @@ fn draw_choices(
                 .clicked()
                 {
                     file.kind = Some(FileKind::Transactions);
+                    file.active = true;
                 }
             }
         });
@@ -285,10 +318,79 @@ fn draw_choices(
                 if choice_row(ui, &crate::i18n::t(key), file.behaviour == Some(behaviour)).clicked()
                 {
                     file.behaviour = Some(behaviour);
+                    file.active = true;
                 }
                 ui.add_space(4.0);
             }
         }
+        if file.kind == Some(FileKind::Transactions) {
+            draw_guid_choice(ui, file, choice_row);
+        }
+        if file.kind.is_some() {
+            draw_backup_choice(ui, file, choice_row);
+        }
+    }
+}
+
+/// For transactions, whether a voucher with the same GUID is overwritten, and the re-import note.
+fn draw_guid_choice(
+    ui: &mut Ui,
+    file: &mut FileImport,
+    choice_row: fn(&mut Ui, &str, bool) -> egui::Response,
+) {
+    let t = tokens(ui);
+    ui.add_space(8.0);
+    ui.label(
+        RichText::new(crate::i18n::t("import.file.guid"))
+            .size(TEXT_META)
+            .color(t.text_2),
+    );
+    for (on, key) in [
+        (false, "import.file.guid_no"),
+        (true, "import.file.guid_yes"),
+    ] {
+        let picked = file.vouchers.overwrite_same_guid == on;
+        if choice_row(ui, &crate::i18n::t(key), picked).clicked() {
+            file.vouchers.overwrite_same_guid = on;
+            file.active = true;
+        }
+        ui.add_space(4.0);
+    }
+    // "Ensure to import this xml file only once. If import is done again and again,
+    // transactions will get duplicated" (https://help.tallysolutions.com/import-data-faq/,
+    // read 2026-11-27), and with overwrite on "the existing voucher gets overwritten".
+    para(
+        ui,
+        &crate::i18n::t("import.file.reimport"),
+        TEXT_META,
+        t.text_2,
+    );
+}
+
+/// Whether to take a backup of the company data before importing ("Select Yes to take a backup
+/// of the company data before importing", help.tallysolutions.com/import-data-from-xml-or-json,
+/// read 2026-11-27). No default: the page states none.
+fn draw_backup_choice(
+    ui: &mut Ui,
+    file: &mut FileImport,
+    choice_row: fn(&mut Ui, &str, bool) -> egui::Response,
+) {
+    let t = tokens(ui);
+    ui.add_space(8.0);
+    ui.label(
+        RichText::new(crate::i18n::t("import.file.backup"))
+            .size(TEXT_META)
+            .color(t.text_2),
+    );
+    for (yes, key) in [
+        (true, "import.file.backup_yes"),
+        (false, "import.file.backup_no"),
+    ] {
+        if choice_row(ui, &crate::i18n::t(key), file.backup == Some(yes)).clicked() {
+            file.backup = Some(yes);
+            file.active = true;
+        }
+        ui.add_space(4.0);
     }
 }
 
@@ -330,7 +432,12 @@ fn draw_path(ui: &mut Ui, file: &mut FileImport) -> FilePress {
                         .hint_text(crate::i18n::t("import.file.path_hint"))
                         .desired_width(ui.available_width()),
                 );
-                file.path_focused = field.has_focus();
+                if std::mem::take(&mut file.focus_path) {
+                    field.request_focus();
+                }
+                if field.has_focus() {
+                    file.active = true;
+                }
             },
         );
         ui.add_space(10.0);
@@ -376,7 +483,11 @@ fn draw_result(ui: &mut Ui, state: &FileImportState, show: bool) {
         }
         FileImportState::Failed(text) => {
             ui.add_space(10.0);
-            reveal(note(ui, NoteKind::Bad, &format!("Error: {text}")));
+            reveal(note(
+                ui,
+                NoteKind::Bad,
+                &crate::i18n::tf("import.file.error", &[("text", text)]),
+            ));
             return;
         }
         FileImportState::Imported(summary) => summary,
@@ -390,21 +501,17 @@ fn draw_result(ui: &mut Ui, state: &FileImportState, show: bool) {
     reveal(note(
         ui,
         kind_of,
-        &format!("{}\n{}", summary_line(summary), summary.path.display()),
+        &[
+            Some(summary_line(summary)),
+            backup_line(summary),
+            Some(summary.path.display().to_string()),
+        ]
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>()
+        .join("\n"),
     ));
-    let sections: [(&str, Vec<(String, String)>); 3] = [
-        (
-            "import.file.exceptions",
-            summary
-                .exceptions
-                .iter()
-                .map(|e| (e.object.clone(), e.reason.clone()))
-                .collect(),
-        ),
-        ("import.file.ignored", split(&summary.ignored_notes)),
-        ("import.file.warnings", split(&summary.warnings)),
-    ];
-    for (key, rows) in sections {
+    for (key, rows) in note_sections(summary) {
         if rows.is_empty() {
             continue;
         }
@@ -427,14 +534,29 @@ fn draw_result(ui: &mut Ui, state: &FileImportState, show: bool) {
     }
 }
 
-/// `object: reason` notes as pairs; the object is everything before the first `": "`, so a name
-/// holding a colon keeps it.
-fn split(notes: &[String]) -> Vec<(String, String)> {
+/// The summary's notes as the screen draws them: each section's title key with its rows, one
+/// row an object in the left column and what happened to it in the right.
+pub(super) fn note_sections(
+    summary: &FileImportSummary,
+) -> [(&'static str, Vec<(String, String)>); 3] {
+    [
+        (
+            "import.file.exceptions",
+            summary
+                .exceptions
+                .iter()
+                .map(|e| (e.object.clone(), e.reason.clone()))
+                .collect(),
+        ),
+        ("import.file.ignored", pairs(&summary.ignored_notes)),
+        ("import.file.warnings", pairs(&summary.warnings)),
+    ]
+}
+
+/// Notes as (object, note) pairs, kept apart as the API gives them.
+fn pairs(notes: &[ImportNote]) -> Vec<(String, String)> {
     notes
         .iter()
-        .map(|n| match n.split_once("': ") {
-            Some((object, reason)) => (format!("{object}'"), reason.to_owned()),
-            None => (n.clone(), String::new()),
-        })
+        .map(|n| (n.object.clone(), n.note.clone()))
         .collect()
 }

@@ -81,7 +81,7 @@ fn ledger(
         id,
         name: name.to_owned(),
         aliases: Vec::new(),
-        group: group(kind),
+        group: Some(group(kind)),
         opening,
         bill_wise: bills.then_some(BillWiseConfig {
             default_credit_days: None,

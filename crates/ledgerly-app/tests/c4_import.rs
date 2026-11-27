@@ -109,7 +109,7 @@ fn a_company_that_holds_data_is_refused_with_the_reason_shown() {
         id: LedgerId(1),
         name: "Cash".to_owned(),
         aliases: Vec::new(),
-        group: cash_group(),
+        group: Some(cash_group()),
         opening: SignedAmount::dr(Paise::ZERO),
         bill_wise: None,
         cost_centres_applicable: false,

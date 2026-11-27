@@ -53,8 +53,12 @@ fn fixture(name: &str, body: &str) -> PathBuf {
     path
 }
 
+/// The import screen with "take a backup first" answered No, so a test that is not about the
+/// backup only makes the choices it is about.
 fn screen() -> ImportScreen {
-    ImportScreen::new(date!(2026 - 11 - 27)).unwrap()
+    let mut screen = ImportScreen::new(date!(2026 - 11 - 27)).unwrap();
+    screen.set_file_backup(Some(false));
+    screen
 }
 
 fn finished(screen: &mut ImportScreen) {
@@ -345,5 +349,460 @@ fn the_path_row_sits_under_its_label_with_no_gap() {
     assert!(
         run.top() - hint.bottom() <= 52.0,
         "Import button {run:?} is far under the field {hint:?}"
+    );
+}
+
+#[test]
+fn enter_says_import_the_file_while_the_file_path_has_focus() {
+    // derived: with the file path focused Enter runs the import from the file
+    // (`ImportScreen::import_keys`), so the key bar says so; elsewhere Enter is the one-step
+    // import and keeps the mock's "Import the company" (index.html:2455). Opened as the palette
+    // opens it (not Alt+O), nothing has the keyboard until the path is clicked.
+    use ledgerly_app::Screen;
+    let mut screen = ImportScreen::new(date!(2026 - 11 - 27)).unwrap();
+    let ctx = egui::Context::default();
+    // The form takes the keyboard only with a company open.
+    let mut app = ledgerly_app::AppCtx {
+        api: Some(ApiWorker::spawn(sample("s22-enter-hint.ledgerly")).unwrap()),
+        ..ledgerly_app::AppCtx::default()
+    };
+    let tr = ledgerly_app::i18n::Tr::default();
+    let enter = |screen: &ImportScreen| {
+        screen
+            .keys(&tr)
+            .into_iter()
+            .find(|h| h.keys == "Enter")
+            .map(|h| h.label)
+    };
+    let mut run = |events: Vec<Event>, i: u32, screen: &mut ImportScreen| {
+        let raw = RawInput {
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1366.0, 768.0))),
+            time: Some(f64::from(i) * 0.1),
+            events,
+            ..RawInput::default()
+        };
+        let mut out = ctx.run_ui(raw, |ui| {
+            let _action = screen.ui(ui, &mut app);
+        });
+        out.textures_delta.clear();
+        texts(&out.shapes)
+    };
+    let mut shown = Vec::new();
+    for i in 0..10 {
+        shown = run(Vec::new(), i, &mut screen);
+    }
+    assert_eq!(enter(&screen).as_deref(), Some("Import the company"));
+    let hint = shown
+        .iter()
+        .find(|(t, _)| t == "path of the XML file")
+        .map(|(_, r)| *r)
+        .unwrap();
+    let at = hint.center();
+    let click = |pressed| Event::PointerButton {
+        pos: at,
+        button: egui::PointerButton::Primary,
+        pressed,
+        modifiers: Modifiers::NONE,
+    };
+    run(vec![Event::PointerMoved(at)], 10, &mut screen);
+    run(vec![click(true)], 11, &mut screen);
+    run(vec![click(false)], 12, &mut screen);
+    run(Vec::new(), 13, &mut screen);
+    assert_eq!(enter(&screen).as_deref(), Some("Import the file"));
+}
+
+#[test]
+fn enter_stays_on_the_file_after_a_choice_is_clicked_and_goes_back_with_the_one_step_form() {
+    // derived: a click on a choice of the file form takes the keyboard out of the path field, but
+    // the user is still filling in the file form, so Enter must not start the one-step company
+    // import (`ImportScreen::import_keys`); clicking a field of the one-step form hands Enter
+    // back to it. The key bar says which import Enter runs.
+    use ledgerly_app::Screen;
+    let mut screen = ImportScreen::new(date!(2026 - 11 - 27)).unwrap();
+    let ctx = egui::Context::default();
+    let mut app = ledgerly_app::AppCtx {
+        api: Some(ApiWorker::spawn(sample("s22-enter-choice.ledgerly")).unwrap()),
+        ..ledgerly_app::AppCtx::default()
+    };
+    let tr = ledgerly_app::i18n::Tr::default();
+    let enter = |screen: &ImportScreen| {
+        screen
+            .keys(&tr)
+            .into_iter()
+            .find(|h| h.keys == "Enter")
+            .map(|h| h.label)
+    };
+    let mut frame = 0_u32;
+    let mut run = |events: Vec<Event>, screen: &mut ImportScreen| {
+        frame += 1;
+        let raw = RawInput {
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1366.0, 768.0))),
+            time: Some(f64::from(frame) * 0.1),
+            events,
+            ..RawInput::default()
+        };
+        let mut out = ctx.run_ui(raw, |ui| {
+            let _action = screen.ui(ui, &mut app);
+        });
+        out.textures_delta.clear();
+        texts(&out.shapes)
+    };
+    let mut click_on = |text: &str, screen: &mut ImportScreen| {
+        let mut shown = Vec::new();
+        for _ in 0..5 {
+            shown = run(Vec::new(), screen);
+        }
+        let at = shown
+            .iter()
+            .find(|(t, _)| t == text)
+            .map_or_else(|| panic!("{text:?} is not on screen"), |(_, r)| r.center());
+        let button = |pressed| Event::PointerButton {
+            pos: at,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: Modifiers::NONE,
+        };
+        run(vec![Event::PointerMoved(at)], screen);
+        run(vec![button(true)], screen);
+        run(vec![button(false)], screen);
+        run(Vec::new(), screen);
+    };
+    click_on("Transactions (vouchers)", &mut screen);
+    assert_eq!(enter(&screen).as_deref(), Some("Import the file"));
+    click_on("its exact name", &mut screen);
+    assert_eq!(enter(&screen).as_deref(), Some("Import the company"));
+}
+
+#[test]
+fn alt_o_is_the_import_file_action_in_both_presets_and_on_the_keyboard_map() {
+    // derived: "Alt+O (Import)" (https://help.tallysolutions.com/import-data-from-xml-or-json/,
+    // read 2026-11-27) in both presets; the keyboard map shows it under "Go anywhere", as the mock's
+    // KEYMAP table (design/mock-v2/index.html) does.
+    use ledgerly_app::keymap::{Action, Chord, classic, standard};
+    use ledgerly_app::screens::keymap_map::layout;
+    let alt_o = Chord::key(Key::O).with_alt();
+    assert_eq!(classic().action_for(alt_o), Some(Action::ImportFile));
+    assert_eq!(standard().action_for(alt_o), Some(Action::ImportFile));
+    let go = layout()
+        .into_iter()
+        .find(|g| g.title == "Go anywhere")
+        .unwrap();
+    assert!(
+        go.rows.iter().any(|r| r.action == Action::ImportFile
+            && r.label == "Import masters or vouchers from a file"),
+        "{go:?}"
+    );
+}
+
+#[test]
+fn alt_o_puts_the_keyboard_in_the_file_path_so_enter_imports_the_file() {
+    // derived: Alt+O (Import) asks for the file ("Alt+O (Import) > Masters", then the file path:
+    // https://help.tallysolutions.com/import-data-from-xml-or-json/, read 2026-11-27), so the
+    // screen opened by Alt+O has the keyboard in the path and the key bar says Enter imports it.
+    use ledgerly_app::Screen;
+    let mut screen = ImportScreen::for_file(date!(2026 - 11 - 27)).unwrap();
+    let ctx = egui::Context::default();
+    let mut app = ledgerly_app::AppCtx {
+        api: Some(ApiWorker::spawn(sample("s22-alt-o-focus.ledgerly")).unwrap()),
+        ..ledgerly_app::AppCtx::default()
+    };
+    for i in 0..10 {
+        let raw = RawInput {
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1366.0, 768.0))),
+            time: Some(f64::from(i) * 0.1),
+            ..RawInput::default()
+        };
+        let mut out = ctx.run_ui(raw, |ui| {
+            let _action = screen.ui(ui, &mut app);
+        });
+        out.textures_delta.clear();
+    }
+    let tr = ledgerly_app::i18n::Tr::default();
+    let enter = screen
+        .keys(&tr)
+        .into_iter()
+        .find(|h| h.keys == "Enter")
+        .map(|h| h.label);
+    assert_eq!(enter.as_deref(), Some("Import the file"));
+}
+
+const PAYMENT: &str = r#"<ENVELOPE><HEADER><TALLYREQUEST>Import Data</TALLYREQUEST></HEADER><BODY><IMPORTDATA>
+<REQUESTDESC><REPORTNAME>Vouchers</REPORTNAME></REQUESTDESC><REQUESTDATA>
+<TALLYMESSAGE><VOUCHER VCHTYPE="Payment" ACTION="Create"><DATE>20261125</DATE><GUID>g-app-pay-1</GUID><VOUCHERTYPENAME>Payment</VOUCHERTYPENAME>
+<ALLLEDGERENTRIES.LIST><LEDGERNAME>Hamali Charges</LEDGERNAME><ISDEEMEDPOSITIVE>Yes</ISDEEMEDPOSITIVE><AMOUNT>-100.00</AMOUNT></ALLLEDGERENTRIES.LIST>
+<ALLLEDGERENTRIES.LIST><LEDGERNAME>Cash</LEDGERNAME><ISDEEMEDPOSITIVE>No</ISDEEMEDPOSITIVE><AMOUNT>100.00</AMOUNT></ALLLEDGERENTRIES.LIST>
+</VOUCHER></TALLYMESSAGE></REQUESTDATA></IMPORTDATA></BODY></ENVELOPE>"#;
+
+#[test]
+fn a_transactions_file_imported_twice_with_overwrite_on_is_overwritten_not_doubled() {
+    // derived: "Overwrite voucher when a voucher with same GUID exists" set to Yes: "the existing
+    // voucher gets overwritten" (https://help.tallysolutions.com/import-data-faq/, read
+    // 2026-11-27). The payment is dated 25 Nov 2026, after the sample's lock (31 Oct 2026).
+    let worker = ApiWorker::spawn(sample("s22-file-guid.ledgerly")).unwrap();
+    let masters = fixture("s22-file-guid-masters.xml", MASTERS);
+    let payment = fixture("s22-file-guid-payment.xml", PAYMENT);
+    let mut screen = screen();
+    screen.set_file_form(
+        Some(FileKind::Masters),
+        &masters.display().to_string(),
+        Some(MasterBehaviour::IgnoreDuplicates),
+    );
+    screen.start_file_import(Some(&worker));
+    finished(&mut screen);
+    let mut counts = Vec::new();
+    for _ in 0..2 {
+        screen.set_file_form(
+            Some(FileKind::Transactions),
+            &payment.display().to_string(),
+            None,
+        );
+        screen.set_file_overwrite(true);
+        screen.start_file_import(Some(&worker));
+        finished(&mut screen);
+        let FileImportState::Imported(summary) = screen.file_state() else {
+            panic!("imported, got {:?}", screen.file_state());
+        };
+        counts.push([summary.created, summary.altered, summary.errors]);
+    }
+    assert_eq!(counts, vec![[1, 0, 0], [0, 1, 0]]);
+}
+
+#[test]
+fn the_drawn_error_note_is_in_hindi_under_hindi() {
+    // derived: "import.file.error" is "त्रुटि: {text}" in hi.toml (unsourced, s22); the note under
+    // the form must use it, not a fixed English "Error: ". The missing choice is the app's own
+    // reason, so it is in Hindi too.
+    use ledgerly_app::Screen;
+    let hi = ledgerly_app::i18n::Catalog::builtin().unwrap().tr("hi");
+    let worker = ApiWorker::spawn(sample("s22-hi-error.ledgerly")).unwrap();
+    let masters = fixture("s22-hi-error.xml", MASTERS);
+    let mut screen = screen();
+    screen.set_file_form(
+        Some(FileKind::Masters),
+        &masters.display().to_string(),
+        None,
+    );
+    // The shell sets the language at the start of every frame, so a press of Import the file
+    // runs under it.
+    ledgerly_app::i18n::set_current(&hi);
+    screen.start_file_import(Some(&worker));
+    let ctx = egui::Context::default();
+    let mut app = ledgerly_app::AppCtx {
+        api: Some(worker),
+        ..ledgerly_app::AppCtx::default()
+    };
+    let mut shown = Vec::new();
+    for i in 0..5 {
+        ledgerly_app::i18n::set_current(&hi);
+        let raw = RawInput {
+            screen_rect: Some(Rect::from_min_size(Pos2::ZERO, vec2(1366.0, 768.0))),
+            time: Some(f64::from(i) * 0.1),
+            ..RawInput::default()
+        };
+        let mut out = ctx.run_ui(raw, |ui| {
+            let _action = screen.ui(ui, &mut app);
+        });
+        out.textures_delta.clear();
+        shown = texts(&out.shapes);
+    }
+    ledgerly_app::i18n::set_current(&ledgerly_app::i18n::Tr::default());
+    let want = "त्रुटि: चुनें कि कंपनी में पहले से मौजूद मास्टर का क्या करें";
+    assert!(
+        shown.iter().any(|(t, _)| t.contains(want)),
+        "{:?}",
+        shown.iter().map(|(t, _)| t).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn a_voucher_note_puts_the_voucher_and_the_reason_in_their_own_columns() {
+    // derived: the summary's "Read but not imported" and ignored sections are two columns, the
+    // object and what happened to it (the mock's `impFileCard` result table). A voucher's object
+    // is "<type> voucher <number> dated <date>" (`voucher_label`), which has no quoted name, so
+    // the reason must not be left in the object column. The second import with overwrite off
+    // warns that the GUID is in the books ("a duplicate voucher gets created":
+    // https://help.tallysolutions.com/import-data-faq/, read 2026-11-27).
+    let worker = ApiWorker::spawn(sample("s22-file-columns.ledgerly")).unwrap();
+    let masters = fixture("s22-file-columns-masters.xml", MASTERS);
+    let payment = fixture("s22-file-columns-payment.xml", PAYMENT);
+    let mut screen = screen();
+    screen.set_file_form(
+        Some(FileKind::Masters),
+        &masters.display().to_string(),
+        Some(MasterBehaviour::IgnoreDuplicates),
+    );
+    screen.start_file_import(Some(&worker));
+    finished(&mut screen);
+    for _ in 0..2 {
+        screen.set_file_form(
+            Some(FileKind::Transactions),
+            &payment.display().to_string(),
+            None,
+        );
+        screen.start_file_import(Some(&worker));
+        finished(&mut screen);
+    }
+    let sections = screen.file_note_rows();
+    let warnings = sections
+        .iter()
+        .find(|(key, _)| *key == "import.file.warnings")
+        .map(|(_, rows)| rows.clone())
+        .unwrap();
+    assert_eq!(
+        warnings,
+        vec![(
+            "Payment voucher (no number) dated 2026-11-25".to_owned(),
+            "a voucher with the same GUID is in the books; with overwrite off it is posted again \
+             as a duplicate"
+                .to_owned()
+        )]
+    );
+}
+
+#[test]
+fn alt_o_on_the_import_screen_goes_back_to_the_file_form() {
+    // derived: Alt+O (Import) asks for the file ("Alt+O (Import) > Masters", then the file path:
+    // https://help.tallysolutions.com/import-data-from-xml-or-json/, read 2026-11-27). Pressed on
+    // the import screen it must do the same as from any other screen, not nothing: the file form
+    // comes back into view with the keyboard in the path, so the key bar's Enter imports the file.
+    let ctx = egui::Context::default();
+    let mut shell = Shell::new(Box::new(GatewayScreen::new()));
+    shell.app_ctx_mut().api = Some(ApiWorker::spawn(sample("s22-alt-o-again.ledgerly")).unwrap());
+    submit::note_changed();
+    let start = Instant::now();
+    while shell.app_ctx_mut().books.is_none() {
+        frame(&ctx, &mut shell, Vec::new());
+        assert!(start.elapsed() < Duration::from_secs(10), "books arrive");
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    shell
+        .tabs_mut()
+        .active_stack_mut()
+        .unwrap()
+        .push(Box::new(screen()));
+    for _ in 0..3 {
+        frame(&ctx, &mut shell, Vec::new());
+    }
+    let tr = ledgerly_app::i18n::Tr::default();
+    let enter = |shell: &mut Shell| {
+        shell
+            .tabs_mut()
+            .active_stack_mut()
+            .unwrap()
+            .top_mut()
+            .unwrap()
+            .keys(&tr)
+            .into_iter()
+            .find(|h| h.keys == "Enter")
+            .map(|h| h.label)
+    };
+    assert_eq!(enter(&mut shell).as_deref(), Some("Import the company"));
+    let alt_o = Event::Key {
+        key: Key::O,
+        physical_key: None,
+        pressed: true,
+        repeat: false,
+        modifiers: Modifiers::ALT,
+    };
+    frame(&ctx, &mut shell, vec![alt_o]);
+    for _ in 0..3 {
+        frame(&ctx, &mut shell, Vec::new());
+    }
+    assert_eq!(
+        shell.tabs().active_stack().unwrap().depth(),
+        2,
+        "no second import screen"
+    );
+    assert_eq!(enter(&mut shell).as_deref(), Some("Import the file"));
+}
+
+#[test]
+fn ctrl_alt_o_is_not_import_on_any_screen() {
+    // derived: bill reading moved to Ctrl+Alt+O so that Alt+O is Import on every screen (s21;
+    // help.tallysolutions.com/keyboard-shortcuts-tally-prime/, read 2026-11-27, lists Alt+O as
+    // Import and no Ctrl+Alt+O). A screen that does not take Ctrl+Alt+O must not see it fire
+    // Import, so the keymap matches the modifiers exactly.
+    use ledgerly_app::keymap::{Chord, classic, standard};
+    let ctrl_alt_o = Chord::key(Key::O).with_alt().with_ctrl();
+    assert_eq!(classic().action_for(ctrl_alt_o), None);
+    assert_eq!(standard().action_for(ctrl_alt_o), None);
+    let ctx = egui::Context::default();
+    let mut shell = Shell::new(Box::new(GatewayScreen::new()));
+    shell.app_ctx_mut().api = Some(ApiWorker::spawn(sample("s22-ctrl-alt-o.ledgerly")).unwrap());
+    submit::note_changed();
+    let start = Instant::now();
+    while shell.app_ctx_mut().books.is_none() {
+        frame(&ctx, &mut shell, Vec::new());
+        assert!(start.elapsed() < Duration::from_secs(10), "books arrive");
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    let before = shell.top_key_bar_name();
+    let key = Event::Key {
+        key: Key::O,
+        physical_key: None,
+        pressed: true,
+        repeat: false,
+        modifiers: Modifiers::ALT | Modifiers::COMMAND,
+    };
+    frame(&ctx, &mut shell, vec![key]);
+    frame(&ctx, &mut shell, Vec::new());
+    assert_eq!(shell.top_key_bar_name(), before);
+    assert_ne!(shell.top_key_bar_name(), "Import from another app");
+}
+
+#[test]
+fn the_form_asks_whether_to_back_up_first_and_runs_nothing_until_answered() {
+    // derived: "Select Yes to take a backup of the company data before importing"
+    // (https://help.tallysolutions.com/import-data-from-xml-or-json/, read 2026-11-27): the
+    // import asks, and no answer is made for the user (the help states no default).
+    let worker = ApiWorker::spawn(sample("s22-file-backup-ask.ledgerly")).unwrap();
+    let path = fixture("s22-file-backup-ask.xml", MASTERS);
+    let mut screen = ImportScreen::new(date!(2026 - 11 - 27)).unwrap();
+    screen.set_file_form(
+        Some(FileKind::Masters),
+        &path.display().to_string(),
+        Some(MasterBehaviour::IgnoreDuplicates),
+    );
+    screen.start_file_import(Some(&worker));
+    assert_eq!(
+        failed(&screen),
+        "choose whether to take a backup of the company data first"
+    );
+}
+
+#[test]
+fn yes_takes_a_backup_before_the_import_and_says_where() {
+    // derived: as above; with Yes the backup is written before anything is imported, into the
+    // Backups folder beside the company file (`ledgerly_api::BACKUP_FOLDER`; the help names no
+    // folder), and the result says where it is.
+    let company = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("s22-file-backup-yes");
+    let _removed = std::fs::remove_dir_all(&company);
+    std::fs::create_dir_all(&company).unwrap();
+    let api = ledgerly_sample::create(
+        &company.join("sample.ledgerly"),
+        Clock::Fixed(OffsetDateTime::UNIX_EPOCH),
+    )
+    .unwrap();
+    let worker = ApiWorker::spawn(api).unwrap();
+    let path = fixture("s22-file-backup-yes.xml", MASTERS);
+    let mut screen = ImportScreen::new(date!(2026 - 11 - 27)).unwrap();
+    screen.set_file_form(
+        Some(FileKind::Masters),
+        &path.display().to_string(),
+        Some(MasterBehaviour::IgnoreDuplicates),
+    );
+    screen.set_file_backup(Some(true));
+    screen.start_file_import(Some(&worker));
+    finished(&mut screen);
+    let FileImportState::Imported(summary) = screen.file_state() else {
+        panic!("imported, got {:?}", screen.file_state());
+    };
+    let backup = summary.backup.clone().unwrap();
+    assert_eq!(backup.parent(), Some(company.join("Backups").as_path()));
+    assert!(backup.is_file());
+    let lines = screen.file_lines();
+    assert_eq!(
+        lines[1],
+        format!("Backup taken first: {}", backup.display())
     );
 }

@@ -252,6 +252,27 @@
    "description": "The unreadable file in Hindi; the engine's reason stays as written."
   },
   {
+   "id": "hi.import.file-transactions",
+   "kind": "happy",
+   "hash": "screen=import&state=file-transactions&lang=hi",
+   "title": "Import from a file, transactions chosen, Hindi",
+   "description": "The GUID choice in Hindi."
+  },
+  {
+   "id": "hi.import.file-overwritten",
+   "kind": "happy",
+   "hash": "screen=import&state=file-overwritten&lang=hi",
+   "title": "Import from a file, imported again with overwrite, Hindi",
+   "description": "The summary line in Hindi; the file path stays as written."
+  },
+  {
+   "id": "hi.import.file-backed-up",
+   "kind": "happy",
+   "hash": "screen=import&state=file-backed-up&lang=hi",
+   "title": "Import from a file, backed up first, Hindi",
+   "description": "The backup line in Hindi; the paths stay as written."
+  },
+  {
    "id": "hi.payment.account-list",
    "kind": "happy",
    "hash": "screen=payment&state=account-list&lang=hi",
@@ -1167,6 +1188,27 @@
    "hash": "screen=import&state=file-error",
    "title": "Import from a file, not an XML file",
    "description": "The file is not an XML document: the error names the file and the cause, and nothing is imported."
+  },
+  {
+   "id": "import.file-transactions",
+   "kind": "happy",
+   "hash": "screen=import&state=file-transactions",
+   "title": "Import from a file, transactions chosen",
+   "description": "Transactions chosen: the choice for a voucher whose GUID is already in the company, Do not overwrite picked as the default, and the file path filled; Enter imports the file."
+  },
+  {
+   "id": "import.file-overwritten",
+   "kind": "happy",
+   "hash": "screen=import&state=file-overwritten",
+   "title": "Import from a file, imported again with overwrite",
+   "description": "The same vouchers file imported a second time with Overwrite chosen: the voucher in the company is altered, not doubled."
+  },
+  {
+   "id": "import.file-backed-up",
+   "kind": "happy",
+   "hash": "screen=import&state=file-backed-up",
+   "title": "Import from a file, backed up first",
+   "description": "Yes chosen for the backup before importing: the company is copied into the Backups folder beside the company file first, and the summary says where the copy is."
   },
   {
    "id": "import.failed",

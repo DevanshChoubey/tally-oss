@@ -638,6 +638,12 @@ fn more_in_use(d: &LedgerDraft, altering: bool) -> bool {
 )]
 fn draw_ledger(ui: &mut Ui, masters: &Masters, d: &mut LedgerDraft, balance: Option<&str>) {
     let altering = balance.is_some();
+    // Only the predefined Profit & Loss A/c is altered with no group: it sits under Primary.
+    let ledger_none_label = if altering && d.group.is_none() {
+        "masters.field.primary"
+    } else {
+        "masters.field.choose"
+    };
     text_row(
         ui,
         2,
@@ -665,7 +671,7 @@ fn draw_ledger(ui: &mut Ui, masters: &Masters, d: &mut LedgerDraft, balance: Opt
         "l-group",
         &crate::i18n::t("masters.field.under"),
         &mut d.group,
-        &crate::i18n::t("masters.field.choose"),
+        &crate::i18n::t(ledger_none_label),
         &groups,
     );
     if !altering {

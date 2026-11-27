@@ -501,3 +501,23 @@ fn the_profit_and_loss_computes_and_shows_the_opening_stock_in_the_trading_secti
         169_656_970
     );
 }
+
+#[test]
+fn the_sample_cash_ledger_is_the_predefined_reserved_cash() {
+    // provenance: derived. TallyPrime help, "Ledgers in TallyPrime"
+    // (https://help.tallysolutions.com/ledgers-in-tallyprime/, read 2026-11-27): every company has
+    // the predefined Cash ledger, which cannot be deleted. The sample's "Cash" under Cash-in-Hand
+    // is that ledger, so it carries the reserved Cash role, and it is the only one that does (S22).
+    let (_dir, api) = sample();
+    let Outcome::Value(books) = api.books().unwrap() else {
+        panic!("books unsupported");
+    };
+    let reserved: Vec<&str> = books
+        .masters
+        .ledgers
+        .values()
+        .filter(|l| l.reserved == Some(ledgerly_model::ReservedLedger::Cash))
+        .map(|l| l.name.as_str())
+        .collect();
+    assert_eq!(reserved, vec!["Cash"]);
+}

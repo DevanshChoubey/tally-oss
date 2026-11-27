@@ -1,3 +1,4 @@
+use ledgerly_core::format::format_inr;
 use ledgerly_core::{Date, MoneyError, Paise};
 use ledgerly_model::{ReservedGroup, ReservedLedger, VoucherError};
 use thiserror::Error;
@@ -59,7 +60,11 @@ pub enum EngineError {
     )]
     SalesSeriesNoDelete,
     /// A settlement exceeds the open amount of a bill.
-    #[error("bill '{bill}' has {open:?} open; {settling:?} would over-settle it")]
+    #[error(
+        "bill '{bill}' has {} open; {} would over-settle it",
+        format_inr(*.open),
+        format_inr(*.settling)
+    )]
     OverSettled {
         /// Bill name.
         bill: String,

@@ -49,7 +49,7 @@ fn ledger(id: u64, name: &str, kind: ReservedGroup) -> Ledger {
         id: LedgerId(id),
         name: name.to_owned(),
         aliases: Vec::new(),
-        group: group(kind),
+        group: Some(group(kind)),
         // Only Cash opens with a balance: an opening balance on an income or expense ledger makes
         // the profit and loss Unsupported (the engine's rule), which is not what these tests ask.
         opening: if kind == ReservedGroup::CashInHand {

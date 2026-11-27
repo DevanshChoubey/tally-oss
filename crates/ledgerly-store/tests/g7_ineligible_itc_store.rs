@@ -21,7 +21,7 @@ fn ledger(ineligible: Option<bool>) -> Ledger {
         id: LedgerId(7),
         name: "Motor car expense".to_owned(),
         aliases: vec![],
-        group: GroupId(1),
+        group: Some(GroupId(1)),
         opening: SignedAmount::dr(Paise::ZERO),
         bill_wise: None,
         cost_centres_applicable: false,

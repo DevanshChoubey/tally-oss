@@ -132,7 +132,7 @@ fn ledger(
         id,
         name: format!("Ledger {}", id.0),
         aliases: vec![],
-        group: GroupId(1),
+        group: Some(GroupId(1)),
         opening: SignedAmount::dr(Paise::ZERO),
         bill_wise: None,
         cost_centres_applicable: false,

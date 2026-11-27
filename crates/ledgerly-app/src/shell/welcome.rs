@@ -11,7 +11,7 @@ use std::sync::Mutex;
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 
 use ledgerly_api::{Api, KeyVault, KeyringStore};
-use ledgerly_core::{Clock, CompanyId, StateCode};
+use ledgerly_core::{Clock, CompanyId, Outcome, StateCode};
 use ledgerly_model::{Address, Company, EntityKind, Features, NegativeStockPolicy};
 use time::{Date, Month};
 
@@ -180,7 +180,11 @@ impl WelcomeScreen {
         }
         let path = PathBuf::from(self.new_path.trim());
         let clock = self.clock;
-        self.spawn_job(move || Api::create(&path, &company, clock).map_err(|e| e.to_string()));
+        self.spawn_job(move || match Api::create_company(&path, &company, clock) {
+            Ok(Outcome::Value(api)) => Ok(api),
+            Ok(Outcome::Unsupported(refused)) => Err(refused.reason),
+            Err(e) => Err(e.to_string()),
+        });
     }
 
     /// Runs `job` on a new thread and remembers where its answer will arrive.

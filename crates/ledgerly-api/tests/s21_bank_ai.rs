@@ -104,7 +104,7 @@ fn master(id: LedgerId, name: &str, group: GroupId, bank: Option<BankDetails>) -
         id,
         name: name.to_owned(),
         aliases: Vec::new(),
-        group,
+        group: Some(group),
         opening: SignedAmount::dr(if bank.is_some() {
             Paise::new(100_000)
         } else {

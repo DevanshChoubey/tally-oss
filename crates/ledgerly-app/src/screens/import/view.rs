@@ -94,14 +94,22 @@ impl ImportScreen {
         })
     }
 
-    /// The screen as Alt+O opens it: the same screen, scrolled to the import from a file.
+    /// The screen as Alt+O opens it: the same screen, scrolled to the import from a file, with the
+    /// keyboard in the file path.
     ///
     /// # Errors
     /// As [`ImportScreen::new`].
     pub fn for_file(today: Date) -> Result<Self, PeriodError> {
         let mut screen = Self::new(today)?;
-        screen.file.reveal = 3;
+        screen.go_to_file_form();
         Ok(screen)
+    }
+
+    /// Scrolls to the import from a file and puts the keyboard in its path, as Alt+O does.
+    fn go_to_file_form(&mut self) {
+        self.file.reveal = 3;
+        self.file.focus_path = true;
+        self.file.active = true;
     }
 
     /// Sets the form of the import from a file: what the file holds, its path, and what to do
@@ -115,6 +123,18 @@ impl ImportScreen {
         self.file.kind = kind;
         path.clone_into(&mut self.file.path);
         self.file.behaviour = behaviour;
+    }
+
+    /// Answers "Take a backup of the company data before importing" for the import from a file
+    /// (`None`: not answered, and the import waits for an answer).
+    pub fn set_file_backup(&mut self, backup: Option<bool>) {
+        self.file.backup = backup;
+    }
+
+    /// Sets "Overwrite voucher when a voucher with same GUID exists" for a transactions file
+    /// (No unless set).
+    pub fn set_file_overwrite(&mut self, overwrite_same_guid: bool) {
+        self.file.vouchers.overwrite_same_guid = overwrite_same_guid;
     }
 
     /// Starts the import from a file on `worker`. A missing choice, or no worker, is a `Failed`
@@ -134,6 +154,21 @@ impl ImportScreen {
     #[must_use]
     pub fn file_lines(&self) -> Vec<String> {
         state_lines(&self.file.state)
+    }
+
+    /// The notes of a finished import from a file as the screen draws them: each section's
+    /// title key (`import.file.exceptions`, `import.file.ignored`, `import.file.warnings`) with
+    /// its rows, a row being the object (left column) and what happened to it (right column).
+    /// Empty before an import has finished.
+    #[must_use]
+    pub fn file_note_rows(&self) -> Vec<(&'static str, Vec<(String, String)>)> {
+        match &self.file.state {
+            FileImportState::Imported(summary) => super::file::note_sections(summary).to_vec(),
+            FileImportState::Idle
+            | FileImportState::Running
+            | FileImportState::Refused(_)
+            | FileImportState::Failed(_) => Vec::new(),
+        }
     }
 
     /// The state machine, for the host to read.
@@ -240,8 +275,8 @@ impl ImportScreen {
 }
 
 impl ImportScreen {
-    /// Enter imports (the file when its path field has the keyboard, else the one-step import)
-    /// and Ctrl+O chooses the file.
+    /// Enter imports (the file while the file form is where the user works, else the one-step
+    /// import) and Ctrl+O chooses the file.
     fn import_keys(&mut self, ui: &Ui, ctx: &AppCtx) {
         let can_import = self.wizard.step() == Step::Detect
             && self.direct.state != DirectState::Running
@@ -255,12 +290,13 @@ impl ImportScreen {
                 ctx.api.is_some() && i.consume_key(Modifiers::COMMAND, Key::O),
             )
         });
-        if enter && self.file.path_focused {
+        if enter && self.file.active {
             self.file.start(ctx.api.as_ref());
         } else if enter {
             self.direct.start(ctx.api.as_ref());
         }
         if open {
+            self.file.active = true;
             self.file.choose_file();
         }
     }
@@ -312,7 +348,12 @@ impl ImportScreen {
             }
             ui.add_space(14.0);
         }
-        if draw_direct(ui, &mut self.direct, !no_company) {
+        let direct = draw_direct(ui, &mut self.direct, !no_company);
+        if direct.used {
+            // The user is in the one-step form now: Enter is its import again.
+            self.file.active = false;
+        }
+        if direct.pressed {
             self.direct.start(ctx.api.as_ref());
         }
         ui.add_space(12.0);
@@ -322,7 +363,10 @@ impl ImportScreen {
         match press {
             FilePress::None => {}
             FilePress::Import => self.file.start(ctx.api.as_ref()),
-            FilePress::Choose => self.file.choose_file(),
+            FilePress::Choose => {
+                self.file.active = true;
+                self.file.choose_file();
+            }
         }
         ui.add_space(12.0);
         draw_detect(ui, &self.wizard, &mut self.export_path, clicks);
@@ -342,6 +386,15 @@ impl Screen for ImportScreen {
         tr.t("import.title")
     }
 
+    fn reopen(&mut self, action: crate::keymap::Action) -> bool {
+        if action == crate::keymap::Action::ImportFile {
+            self.go_to_file_form();
+            true
+        } else {
+            false
+        }
+    }
+
     fn key_bar_name(&self, tr: &Tr) -> String {
         if self.direct.state == DirectState::Running || self.file.state == FileImportState::Running
         {
@@ -356,8 +409,14 @@ impl Screen for ImportScreen {
         {
             return vec![KeyHint::new("Esc", tr.t("chrome.back"))];
         }
+        // Enter imports the file while the file form is where the user works (`import_keys`).
+        let enter = if self.file.active {
+            tr.t("import.file.run")
+        } else {
+            tr.t("import.key_import")
+        };
         vec![
-            KeyHint::new("Enter", tr.t("import.key_import")),
+            KeyHint::new("Enter", enter),
             KeyHint::new("Ctrl+O", tr.t("import.file.choose")),
             KeyHint::new("Esc", tr.t("chrome.back")),
         ]
@@ -501,8 +560,9 @@ fn panel<R>(ui: &mut Ui, add: impl FnOnce(&mut Ui) -> R) -> R {
         .inner
 }
 
-/// A field: the label above, then the text box the full width of the column.
-fn labelled_field(ui: &mut Ui, label: &str, text: &mut String, hint: &str, enabled: bool) {
+/// A field: the label above, then the text box the full width of the column. Returns whether
+/// the field has the keyboard.
+fn labelled_field(ui: &mut Ui, label: &str, text: &mut String, hint: &str, enabled: bool) -> bool {
     let t = tokens(ui);
     ui.add_space(4.0);
     ui.label(RichText::new(label).size(TEXT_META).color(t.text_2));
@@ -513,8 +573,18 @@ fn labelled_field(ui: &mut Ui, label: &str, text: &mut String, hint: &str, enabl
             egui::TextEdit::singleline(text)
                 .hint_text(hint)
                 .desired_width(ui.available_width()),
-        );
-    });
+        )
+        .has_focus()
+    })
+    .inner
+}
+
+/// What the user did in the one-step form this frame.
+struct DirectUse {
+    /// Pressed Import the company.
+    pressed: bool,
+    /// Worked in the form: one of its fields has the keyboard, or the button was pressed.
+    used: bool,
 }
 
 /// A secondary or primary kit button that may be disabled. Returns `true` when clicked.
@@ -604,9 +674,10 @@ fn draw_detect(
     });
 }
 
-/// The one-call import form. Returns `true` when the user pressed the button.
-fn draw_direct(ui: &mut Ui, direct: &mut DirectImport, can_run: bool) -> bool {
+/// The one-call import form.
+fn draw_direct(ui: &mut Ui, direct: &mut DirectImport, can_run: bool) -> DirectUse {
     let mut pressed = false;
+    let mut focused = false;
     panel(ui, |ui| {
         heading(ui, &crate::i18n::lit("Import in one step"));
         meta(
@@ -619,21 +690,21 @@ fn draw_direct(ui: &mut Ui, direct: &mut DirectImport, can_run: bool) -> bool {
         // and the second pass would no longer see a key (Esc) the first pass consumed.
         ui.columns(3, |cols| {
             if let [host, port, company] = cols {
-                labelled_field(
+                focused |= labelled_field(
                     host,
                     &crate::i18n::lit("Host"),
                     &mut direct.host,
                     "",
                     can_run,
                 );
-                labelled_field(
+                focused |= labelled_field(
                     port,
                     &crate::i18n::lit("Port"),
                     &mut direct.port,
                     "",
                     can_run,
                 );
-                labelled_field(
+                focused |= labelled_field(
                     company,
                     &crate::i18n::lit("Company in the other app"),
                     &mut direct.company,
@@ -666,7 +737,10 @@ fn draw_direct(ui: &mut Ui, direct: &mut DirectImport, can_run: bool) -> bool {
             note(ui, kind_of, &text);
         }
     });
-    pressed
+    DirectUse {
+        pressed,
+        used: pressed || focused,
+    }
 }
 
 /// One company of the list: a row that shows the accent when chosen.

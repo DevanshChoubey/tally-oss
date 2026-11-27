@@ -257,7 +257,7 @@ fn ledger(id: LedgerId, name: String, group: GroupId, reserved: Option<ReservedL
         id,
         name,
         aliases: Vec::new(),
-        group,
+        group: Some(group),
         opening: SignedAmount::dr(Paise::ZERO),
         bill_wise: None,
         cost_centres_applicable: false,

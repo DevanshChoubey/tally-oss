@@ -635,28 +635,90 @@ Credit (`ledgerly_reports::print_text` places the engine's figures only).
   duplicates choice (Combine Opening Balance, Ignore Duplicates, Modify with New Data) and a summary of
   created, altered, combined, ignored and not imported, every exception listed
   (help.tallysolutions.com/import-data-from-xml-or-json and /import-data-faq, read 2026-11-27).
-- **NOT BUILT** a transactions file is always posted as new vouchers: the GUID choice of the import
-  FAQ (overwrite a voucher with the same GUID) is not offered, so importing the same file twice posts
-  its vouchers twice.
-- **NOT BUILT** no backup prompt before an import (the FAQ advises a backup first); voucher types named
-  in a file are not created, a voucher of an unknown type is an exception.
-- **NOT BUILT** a party ledger imported with no ISBILLWISEON is bill-wise off (our default); the
-  default of the other product for Sundry Debtors/Creditors is not documented in the pages read, so a
-  sales voucher with bill allocations against such a ledger is listed as an exception, not guessed.
-- **NOT BUILT** a new company has no Cash ledger, so a transactions file that names 'Cash' (with a
-  masters file that does not define it) is listed as "the company has no ledger 'Cash'; import the
-  masters first". Whether the other product predefines a Cash ledger was not checked in its docs in
-  s22; nothing is created for the user until it is.
-- **NOT BUILT** Alt+O is fixed in the shell, not in the keymap or the keyboard-map screen.
+- Fixed in s22: the "Overwrite voucher when a voucher with same GUID exists" choice is offered for a
+  transactions file, default No (the import FAQ, help.tallysolutions.com/import-data-faq/, read
+  2026-11-27, describes both settings but states no default; No is the coordinator's brief). With No a voucher whose GUID is in the company is posted again as a new voucher, with
+  a warning, and a later import overwrites the newest copy; with Yes it alters the voucher in place.
+  So importing the same file twice is safe only with Yes: with No, the default here, the second
+  import duplicates the vouchers that the engine accepts again.
+- **DELIBERATE** with overwrite No, a second import of a sales voucher whose New Ref bill name is
+  already on the party is refused by the engine ("bill ... already exists") and listed as an
+  exception; the other product's behaviour for that case is not in the pages read.
+- Fixed in s22: the file form asks "Take a backup of the company data before importing", Yes or
+  No, for both masters and transactions, as the import help page's steps do ("Select Yes to take a
+  backup of the company data before importing", help.tallysolutions.com/import-data-from-xml-or-json,
+  read 2026-11-27). The page states no default, so the form has none: Import refuses until one is
+  chosen. With Yes the company is backed up first and the summary names the backup; if the backup
+  fails nothing is imported.
+- **DELIBERATE** the backup goes to a `Backups` folder beside the company file, with the app's
+  ordinary backup name; the help page does not say where the other product puts it. The name is to
+  the second, so two backups of one company in the same second fail (and so the import does not run).
+- Re-importing the same file: choose Overwrite = Yes. The import FAQ says of a file imported again
+  and again that "transactions will get duplicated" (help.tallysolutions.com/import-data-faq/, read
+  2026-11-27); here, with Overwrite = No every voucher in the file is posted again. The file form
+  says this under the GUID choice.
+- **NOT BUILT** voucher types named in a file are not created, a voucher of an unknown type is an
+  exception.
+- Fixed in s22: a ledger created by an import under Sundry Debtors or Sundry Creditors (or a group
+  under them) with no ISBILLWISEON keeps balances bill-by-bill, as one created by hand under those
+  groups (help.tallysolutions.com/set-up-party-ledger/ and /sample-xml/, read 2026-11-27); an explicit
+  ISBILLWISEON wins. Bill allocations on a ledger that is not bill-wise are not imported, with a note
+  (the TDL appendix lists BILLALLOCATIONS only for bill-wise ledgers; derived). A bill-wise party line
+  with no allocations goes On Account, with a note (receivables-payables-tracking-methods; derived).
+- Fixed in s22: a new company starts with the predefined Cash ledger under Cash-in-Hand, reserved
+  so it cannot be deleted (help.tallysolutions.com/ledgers-in-tallyprime/, read 2026-11-27). A
+  whole-company import into a new company takes the export's own Cash in its place. Company files
+  made before s22 have no Cash and are not migrated.
+- Fixed in s22: a new company also starts with the predefined Profit & Loss A/c, under Primary
+  (`Ledger::group` is `None`; no other ledger may sit there), reserved so it cannot be deleted but
+  can be renamed (help.tallysolutions.com/tally-prime/accounting/ledgers-and-groups-in-tallyprime/,
+  read 2026-11-27: "grouped under the Primary group", "cannot be deleted but it can be altered",
+  takes adjustment journals, carries the previous year's profit or loss as its opening balance,
+  shown in the balance sheet under liabilities). The balance sheet adds its closing balance to the
+  computed Profit and Loss A/c row; the trial balance lists it as its own line after the primary
+  groups when it is not zero; the profit and loss statement leaves it out. The masters list, the
+  ledger view, the voucher form's group column and the palette show its group as "Primary".
+  A file import matches it by name: "Ignore duplicates" keeps it, "Combine opening balances" adds
+  the file's opening (last year's profit) to it, "Modify with new data" takes the file's opening,
+  and a voucher that posts to "Profit & Loss A/c" posts to it. A whole-company import keeps the
+  export's own Profit & Loss A/c (under Primary, reserved) in place of the new company's, so a
+  journal to it imports; an export without one keeps the new company's. Company files made before
+  s22 have no Profit & Loss A/c and are not migrated.
+- **NOT BUILT** a Profit & Loss A/c renamed in the other program: a file import matches the ledger by
+  name, so a file's ledger under Primary with another name is an exception (it has no parent group
+  here), and so is each voucher that posts to it; a whole-company import refuses such a ledger
+  (LedgerWithoutGroup). Neither guesses which ledger was meant.
+- **DELIBERATE** the trial balance shows Profit & Loss A/c as a top-level ledger line after the
+  primary groups, not inside one, since it is under no group; where the other program places it in
+  its own trial balance was not observed.
+- Fixed in s22: Alt+O is the keymap's "Import masters or vouchers from a file" in both presets and
+  is on the keyboard-map screen under Go anywhere. Bill reading on the purchase form is Ctrl+Alt+O
+  (s21, below), so no screen binds Alt+O to anything else.
+- Fixed in s22: Enter imports the file, and the key bar says "Enter: Import the file", while the file
+  form is where the user works (opened with Alt+O, the path has the keyboard, or a choice or Choose
+  file was used last); a field of the one-step form takes Enter back.
+- Fixed in s22: the file import's summary and "Error:" lines are in Hindi in the mock (from the
+  app's `import.file.*` strings, which `gen-hi.py` now copies into `hi.js`) and in the app; the
+  Hindi file states are captured in both. The engine's own reasons stay in English. The Hindi text is
+  unsourced (`hi.toml`).
+- Fixed in s22: engine messages count lines from 1 ("line 2" is the second line); the line fields
+  of the errors stay 0-based.
+- Fixed in s22: the bill messages name the ledger ("bill 'INV-1' on ledger 'Debtor A' already
+  exists"), and the unbalanced, bill-allocation and over-settle messages print amounts in the app's
+  money format (10,000.00), not debug form. The reserved-ledger and reserved-group messages and
+  "unknown ledger" still print an internal name or id.
+- Fixed in s22: the "Read but not imported" and warning lists of a file import show the object and
+  the note in their own columns for every row; a note whose text held ": " was split in the wrong
+  place before.
+- Fixed in s22: the Hindi mock keeps keycaps as written ("Enter", not translated), as the app does.
+- Fixed in s22: Alt+O while the import screen is open goes back to the file form (scrolls to it and
+  gives the path the keyboard) instead of opening a second import screen.
 - **FIX** (s21) bill reading moved from Alt+O to Ctrl+Alt+O in mock and app, so Alt+O is Import on
   every screen, the purchase form included. Checked against
   help.tallysolutions.com/keyboard-shortcuts-tally-prime/ (read 2026-11-27, page updated
   2026-09-24): every Alt+letter is bound on some screen there (Alt+O is the Import menu), and the
   documented Ctrl+Alt letters are B, F, I, N, R, T, U and W, so Ctrl+Alt+O clashes with none.
   Ctrl+Alt+O is also fixed in the purchase form, not in the keymap.
-- **FIX** the mock's Hindi file states keep the English summary and error lines (`gen-hi.py` skips
-  strings with placeholders, and the "Error: " lines are built in the mock); the app's Hindi text is
-  in `hi.toml` (unsourced). The app's Hindi import file states are not captured.
 - **NOT BUILT** Telugu names draw in Noto Sans Telugu, but egui does not shape Indic conjuncts, so a
   name such as a ledger in Telugu can show unjoined letters.
 

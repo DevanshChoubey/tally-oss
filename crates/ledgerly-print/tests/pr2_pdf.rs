@@ -126,7 +126,7 @@ fn party_ledger(registration: RegistrationType, gstin: Option<&str>, name: &str)
         id: LedgerId(PARTY),
         name: name.to_owned(),
         aliases: vec![],
-        group: GroupId(4),
+        group: Some(GroupId(4)),
         opening: SignedAmount::dr(Paise::ZERO),
         bill_wise: None,
         cost_centres_applicable: false,

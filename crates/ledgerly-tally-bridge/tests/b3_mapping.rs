@@ -136,7 +136,7 @@ fn ledger_under_reserved_group_maps_to_the_reserved_group_by_name() {
     // derived: two events, the reserved group altered (never created again), then the ledger.
     assert_eq!(events.len(), 2);
     let expected = seed(ReservedGroup::SundryDebtors);
-    assert_eq!(as_ledger(&events[1]).group, expected.id);
+    assert_eq!(as_ledger(&events[1]).group, Some(expected.id));
     let Event::MasterAltered { before, after } = &events[0] else {
         panic!("first event is not an alteration: {:?}", events[0]);
     };
@@ -162,7 +162,7 @@ fn ledger_under_reserved_group_missing_from_export_still_resolves() {
     assert_eq!(events.len(), 1);
     assert_eq!(
         as_ledger(&events[0]).group,
-        seed(ReservedGroup::SundryDebtors).id
+        Some(seed(ReservedGroup::SundryDebtors).id)
     );
 }
 
@@ -182,7 +182,7 @@ fn renamed_reserved_group_is_found_by_reserved_name() {
     ));
     let events = map_to_events(&m, &[]).unwrap();
     let expected = seed(ReservedGroup::SundryDebtors);
-    assert_eq!(as_ledger(&events[1]).group, expected.id);
+    assert_eq!(as_ledger(&events[1]).group, Some(expected.id));
     let Event::MasterAltered { after, .. } = &events[0] else {
         panic!("not an alteration");
     };
@@ -320,7 +320,7 @@ fn custom_groups_are_created_parents_first_whatever_the_file_order() {
     );
     assert_eq!(local.parent, Some(seed(ReservedGroup::SundryDebtors).id));
     assert_eq!(retail.parent, Some(GroupId(29)));
-    assert_eq!(as_ledger(&events[2]).group, GroupId(30));
+    assert_eq!(as_ledger(&events[2]).group, Some(GroupId(30)));
 }
 
 #[test]
@@ -439,10 +439,69 @@ fn ledger_without_group_is_an_error_except_the_reserved_profit_and_loss() {
             ledger: "Stray".to_owned()
         }
     );
+    // provenance: derived. TallyPrime's predefined Profit & Loss A/c is "grouped under the Primary
+    // group" and takes adjustment journals
+    // (https://help.tallysolutions.com/tally-prime/accounting/ledgers-and-groups-in-tallyprime/,
+    // read 2026-11-27), so it is mapped as the books' own: no group, the reserved role, and an id
+    // a voucher line can name.
     let pl = masters(&ledger_xml("Profit & Loss A/c", "g-2", "", ""));
     let mapped = map_with_warnings(&pl, &[]).unwrap();
-    assert_eq!(mapped.events, [] as [ledgerly_store::Event; 0]);
-    assert_eq!(mapped.warnings.len(), 1);
+    assert_eq!(mapped.events.len(), 1);
+    let l = as_ledger(&mapped.events[0]);
+    assert_eq!(
+        (l.id, l.name.as_str(), l.group, l.reserved),
+        (
+            LedgerId(1),
+            "Profit & Loss A/c",
+            None,
+            Some(ledgerly_model::ReservedLedger::ProfitAndLoss)
+        )
+    );
+    assert_eq!(mapped.warnings, []);
+}
+
+#[test]
+fn a_voucher_that_posts_to_profit_and_loss_names_its_ledger() {
+    // provenance: derived (as above): an adjustment entry to Profit & Loss A/c posts to that
+    // ledger; 500.00 Dr Profit & Loss A/c, 500.00 Cr Sharma Hardware.
+    let m = masters(&format!(
+        "{BASE_MASTERS}{}",
+        ledger_xml("Profit &amp; Loss A/c", "g-pl", "&#4; Primary", "")
+    ));
+    let xml = plain_voucher(
+        "guid-pl",
+        "",
+        &format!(
+            "{}{}",
+            line("Profit &amp; Loss A/c", "Yes", "-500.00", ""),
+            line("Sharma Hardware", "No", "500.00", "")
+        ),
+    );
+    let events = map_to_events(&m, &vouchers(&xml)).unwrap();
+    let pl = events
+        .iter()
+        .filter_map(|e| match e {
+            Event::MasterCreated(MasterSnapshot::Ledger(l)) => Some(l),
+            _ => None,
+        })
+        .find(|l| l.name == "Profit & Loss A/c")
+        .unwrap();
+    assert_eq!(pl.group, None);
+    let v = events
+        .iter()
+        .find_map(|e| match e {
+            Event::VoucherPosted(v) => Some(v),
+            _ => None,
+        })
+        .unwrap();
+    assert_eq!(
+        (
+            v.ledger_lines[0].ledger,
+            v.ledger_lines[0].amount.side,
+            v.ledger_lines[0].amount.amount
+        ),
+        (pl.id, DrCr::Dr, Paise::new(50_000))
+    );
 }
 
 #[test]
