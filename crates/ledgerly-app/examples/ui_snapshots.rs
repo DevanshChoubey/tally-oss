@@ -2030,6 +2030,37 @@ fn light_shots() -> Vec<Shot> {
         shot("ai-settings.off", &[palette])
             .query("AI and privacy")
             .then(&[(Key::Enter, NONE), (Key::Num1, NONE)]),
+        // Backups and updates (round s23), reached from the palette. Alt+B backs up into
+        // Backups beside the capture file; Enter opens the restore pane for the newest backup;
+        // 2 is the Updates tab, off as it is by default.
+        shot("backup.default", &[palette])
+            .query("Backups and updates")
+            .then(&[(Key::Enter, NONE)])
+            .wait(60)
+            .expect("Backups and updates", None),
+        shot("backup.backed-up", &[palette])
+            .query("Backups and updates")
+            .then(&[(Key::Enter, NONE)])
+            .wait(60)
+            .press(&[(Key::B, Modifiers::ALT)])
+            .wait(120)
+            .expect("Backups and updates", None),
+        shot("backup.restore", &[palette])
+            .query("Backups and updates")
+            .then(&[(Key::Enter, NONE)])
+            .wait(60)
+            .press(&[(Key::B, Modifiers::ALT)])
+            .wait(120)
+            .press(&[(Key::Enter, NONE)])
+            .wait(10)
+            .expect("Backups and updates", None),
+        shot("backup.updates-off", &[palette])
+            .query("Backups and updates")
+            .then(&[(Key::Enter, NONE)])
+            .wait(30)
+            .press(&[(Key::Num2, NONE)])
+            .wait(10)
+            .expect("Backups and updates", None),
         // The tabs are 1 GSTR-1, 2 GSTR-3B, 3 reconciliation (`screens/gst.rs`). The capture
         // company has no 2B data, so the reconciliation tab is the mock's empty state.
         shot("gst.gstr3b", &[(Key::G, NONE), (Key::Num2, NONE)])
