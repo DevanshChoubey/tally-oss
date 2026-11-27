@@ -1032,7 +1032,10 @@ function renderKeys(list){
   $('#keys').innerHTML=(alt?`<span class="mod">Holding ${alt}</span>`:'')+set.map(([k,l],i)=>i===0&&!alt&&k===''?`<span class="ctx">${esc(l)}</span>`:`<span>${kb(k)} ${esc(l)}</span>`).join('')+
    `<span class="right">${alt?'':'Hold Alt or Ctrl for more · '}${kb('Ctrl+K')} anything · ${kb('?')} all keys</span>`;
 }
-const ALT_KEYS=[['Alt+C','Create master here'],['Alt+D','Delete / reject draft'],['Alt+X','Cancel voucher'],['Alt+2','Duplicate'],['Alt+I','Insert voucher'],['Alt+R','Last narration'],['Alt+F1','Detailed / condensed']].concat(AI_IN_RELEASE?[['Alt+O','Read a bill']]:[]);
+/* S21: bill reading is Ctrl+Alt+O, not Alt+O (Alt+O is Import, as in TallyPrime). Ctrl+Alt+O is not on
+   help.tallysolutions.com/keyboard-shortcuts-tally-prime/ (read 2026-11-27, page updated 2026-09-24); every
+   Alt+<letter> is bound somewhere on that page, and its Ctrl+Alt keys are B F I N R T U W only. */
+const ALT_KEYS=[['Alt+C','Create master here'],['Alt+D','Delete / reject draft'],['Alt+X','Cancel voucher'],['Alt+2','Duplicate'],['Alt+I','Insert voucher'],['Alt+R','Last narration'],['Alt+F1','Detailed / condensed']].concat(AI_IN_RELEASE?[['Ctrl+Alt+O','Read a bill']]:[]);
 const CTRL_KEYS=[['Ctrl+A','Accept / save'],['Ctrl+K','Palette'],['Ctrl+G','Switch to (replace)'],['Ctrl+I','More details / source'],['Ctrl+Enter','Alter master'],['Ctrl+F','Filter'],['Ctrl+P','Print'],['Ctrl+E','Export'],['Ctrl+Z','Undo field']];
 
 /* ---------- toast ---------- */
@@ -1133,7 +1136,7 @@ document.addEventListener('keydown',e=>{
   else if(def.key&&def.key(k,e,st,p)===true){e.preventDefault();return}
   const G={
    'Ctrl+K':()=>command('palette'),'Alt+G':()=>command('palette'),'Ctrl+G':()=>command('palette'),
-   'F8':()=>go(hashFor('sales-invoice'),'screen-push'),'F9':()=>go(hashFor('purchase-bill'),'screen-push'),'Alt+O':()=>go(hashFor('import'),'screen-push'),...(AI_IN_RELEASE?{'Alt+O':()=>go(hashFor('purchase-bill','reading'),'screen-push')}:{}),
+   'F8':()=>go(hashFor('sales-invoice'),'screen-push'),'F9':()=>go(hashFor('purchase-bill'),'screen-push'),'Alt+O':()=>go(hashFor('import'),'screen-push'),...(AI_IN_RELEASE?{'Ctrl+Alt+O':()=>go(hashFor('purchase-bill','reading'),'screen-push')}:{}),
    'F5':()=>go(hashFor('payment'),'screen-push'),'F6':()=>go(hashFor('receipt'),'screen-push'),
    'F4':()=>toast('Contra (F4) is not drawn in this mock; it uses the payment layout.'),'F7':()=>toast('Journal (F7) is not drawn in this mock.'),
    'F2':()=>command('date'),'F3':()=>command('company'),'F12':()=>toast('F12 opens options for this screen.'),'F11':()=>toast('F11 opens company features.'),
@@ -1339,7 +1342,7 @@ SCREENS.ask = {title:'Ask your books',default:'result',
 SCREENS.review = {title:'Review queue',default:'default',
  render(st){
   const head=phead([['Home',hashFor('home')],['Review queue']],'Review queue','Every open AI proposal and rule check in one place. Decide here or in context; it is the same proposal.');
-  if(st==='empty')return head+`<div class="card"><div class="empty">${ic('inbox')}<h2>Nothing to review</h2><p>${AI_IN_RELEASE?'New bill photos, bank suggestions and 2B explanations':'Bank matches and rule checks'} will appear here. Ledgerly never acts on them without you.</p>${AI_IN_RELEASE?`<button class="btn" data-go="${hashFor('purchase-bill','reading')}">${ic('camera')}Read a bill ${kb('Alt+O')}</button>`:''}</div></div>`;
+  if(st==='empty')return head+`<div class="card"><div class="empty">${ic('inbox')}<h2>Nothing to review</h2><p>${AI_IN_RELEASE?'New bill photos, bank suggestions and 2B explanations':'Bank matches and rule checks'} will appear here. Ledgerly never acts on them without you.</p>${AI_IN_RELEASE?`<button class="btn" data-go="${hashFor('purchase-bill','reading')}">${ic('camera')}Read a bill ${kb('Ctrl+Alt+O')}</button>`:''}</div></div>`;
   const items=REVIEW_ITEMS();
   return head+`<div class="grid g-main"><div class="card"><table class="t" id="rq"><thead><tr><th></th><th>Proposal</th><th>Source</th><th>Confidence</th><th class="num">Amount</th></tr></thead><tbody>
    ${items.map((q,i)=>`<tr data-row="${q.id}" data-href="${q.go}" class="${i===0?'sel':''}"><td style="width:28px">${ic(q.icon)}</td><td><b>${esc(q.kind)}</b><div class="t2">${esc(q.what)}</div></td><td class="meta">${esc(q.src)}<br>${q.age} ago</td><td>${conf(q.conf)}</td><td class="num">${q.amt==null?'<span class="muted">none</span>':inr(q.amt)}</td></tr>`).join('')}</tbody></table></div>
@@ -1607,8 +1610,8 @@ function billDraft(st){
   return {lines,inv,ok,printedTotal,printedTax,printedTaxable}; }
 SCREENS['purchase-bill']={title:'Purchase from bill photo',default:'proposal',
  render(st){
-  const head=phead([['Home',hashFor('home')],['Purchase'],['From bill photo']],'Purchase from a bill photo',`F9 purchase · ${kb('Alt+O')} read another bill · the image is kept with the voucher`,
-   `<button class="btn" data-go="${hashFor('purchase-bill','reading')}">${ic('camera')}Read another ${kb('Alt+O')}</button>`);
+  const head=phead([['Home',hashFor('home')],['Purchase'],['From bill photo']],'Purchase from a bill photo',`F9 purchase · ${kb('Ctrl+Alt+O')} read another bill · the image is kept with the voucher`,
+   `<button class="btn" data-go="${hashFor('purchase-bill','reading')}">${ic('camera')}Read another ${kb('Ctrl+Alt+O')}</button>`);
   const d=billDraft(st);
   const left = st==='error'?`<div class="billwrap" style="align-items:center"><div class="empty">${ic('file')}<h2>RP-5521.pdf</h2><p>212 KB · PDF · password-protected</p></div></div>`
    : `<div class="billwrap" id="billwrap">${billImage(st)}${st==='reading'?'':''}</div>`;
@@ -1640,7 +1643,7 @@ SCREENS['purchase-bill']={title:'Purchase from bill photo',default:'proposal',
   return false},
  cmd(c){if(c==='cloud')go(hashFor('purchase-bill','proposal'),'ai-proposal-arrive');if(c==='nocloud')go(hashFor('purchase-bill','low-confidence'))},
  back(st){return st==='accepted'?hashFor('home'):hashFor('review')},
- keys(st){return ['reading'].includes(st)?[['','Reading bill'],['Esc','Cancel']]:st==='accepted'?[['','Posted'],['Alt+O','Read another'],['Esc','Back']]:[['','Draft purchase'],['Enter','Next field'],['Ctrl+I','Show source'],['Ctrl+A','Accept and post'],['Alt+D','Reject draft'],['Esc','Back, keep in queue']]}
+ keys(st){return ['reading'].includes(st)?[['','Reading bill'],['Esc','Cancel']]:st==='accepted'?[['','Posted'],['Ctrl+Alt+O','Read another'],['Esc','Back']]:[['','Draft purchase'],['Enter','Next field'],['Ctrl+I','Show source'],['Ctrl+A','Accept and post'],['Alt+D','Reject draft'],['Esc','Back, keep in queue']]}
 };
 document.addEventListener('click',e=>{const b=e.target.closest('.prop [data-act]');if(!b||b.disabled)return;const a=b.dataset.act;
   const map={accept:'Ctrl+A',reject:'Alt+D',edit:'Enter'};const p=parseHash();const def=SCREENS[p.screen];
@@ -2050,7 +2053,7 @@ SCREENS.masters={title:'Masters',default:'ledgers',
 /* ---------- keyboard map ---------- */
 const KEYMAP=[
  ['Go anywhere',[['Ctrl+K','Ctrl+K','Command palette: jump, search, type an entry'],['Alt+G','Ctrl+K','Go to (palette)'],['Ctrl+G','Ctrl+K','Switch to, replacing this screen'],['Esc','Esc','Back one level, never loses a saved voucher'],['?','?','This map'],['F3','Ctrl+Shift+O','Switch company'],['Ctrl+\\','Ctrl+\\','Collapse the side bar']]],
- ['Vouchers',[['F8','Ctrl+Shift+S','Sales'],['F9','Ctrl+Shift+P','Purchase'],['F5','Ctrl+Shift+Y','Payment'],['F6','Ctrl+Shift+R','Receipt'],['F4','Ctrl+Shift+C','Contra'],['F7','Ctrl+Shift+J','Journal'],...(AI_IN_RELEASE?[['Alt+O','Alt+O','Read a bill photo or PDF']]:[])]],
+ ['Vouchers',[['F8','Ctrl+Shift+S','Sales'],['F9','Ctrl+Shift+P','Purchase'],['F5','Ctrl+Shift+Y','Payment'],['F6','Ctrl+Shift+R','Receipt'],['F4','Ctrl+Shift+C','Contra'],['F7','Ctrl+Shift+J','Journal'],...(AI_IN_RELEASE?[['Ctrl+Alt+O','Ctrl+Alt+O','Read a bill photo or PDF']]:[])]],
  ['Inside a voucher',[['Enter','Enter','Next field (Tab works too)'],['Shift+Enter','Shift+Tab','Previous field'],['Ctrl+A','Ctrl+S','Save'],['Alt+C','Alt+C','Create a master from the field'],['Ctrl+Enter','Ctrl+Enter','Alter the master in the field'],['Ctrl+D','Ctrl+D','Delete line'],['Alt+R','Alt+R','Recall last narration'],['F2','F2','Voucher date'],['Ctrl+H','Ctrl+H','Change mode']]],
  ['Reports',[['Enter','Enter','Drill in'],['Esc','Esc','Back up'],['Alt+F1','Alt+F1','Detailed or condensed'],['Alt+F2','Alt+F2','Period'],['Ctrl+E','Ctrl+E','Export'],['Ctrl+J','Ctrl+J','Exceptions only'],['Ctrl+P','Ctrl+P','Print']]],
  ['AI proposals, everywhere',[['Ctrl+A','Ctrl+S','Accept (engine checks first)'],['Enter','Enter','Edit'],['Alt+D','Alt+D','Reject'],['Ctrl+I','Ctrl+I','Show the source']]],
@@ -2176,7 +2179,7 @@ SCREENS.purchase = {title:'Purchase',default:'default',
     return `<tr class="${i===0?'active':''}"><td class="n">${i+1}</td><td>${it?esc(it.name):`<input value="${esc(text||'')}" style="color:var(--bad)" aria-label="Item">`}</td><td class="t2">${it?it.hsn:''}</td>
      <td class="num">${qty?qty:`<span style="color:var(--bad)">blank</span>`}</td><td class="num">${inr(rate)}</td><td class="num">${it?it.gst+'%':''}</td><td class="num">${amt?inr(amt):''}</td></tr>`}).join('');
   return `${phead([['Home',hashFor('home')],['Purchase']],`Purchase <span class="t2" style="font-weight:500">PB/0145</span>`,'Typed by hand · no bill reader · tax is recomputed by the GST engine on every keystroke',
-    `${AI_IN_RELEASE?`<button class="btn" data-cmd="more">Bill photo ${kb('Alt+O')}</button>`:''}<button class="btn primary" data-cmd="save" ${bad?'disabled':''}>${ic('save')}Save ${kb('Ctrl+A')}</button>`)}
+    `${AI_IN_RELEASE?`<button class="btn" data-cmd="more">Bill photo ${kb('Ctrl+Alt+O')}</button>`:''}<button class="btn primary" data-cmd="save" ${bad?'disabled':''}>${ic('save')}Save ${kb('Ctrl+A')}</button>`)}
   ${vsheetOpen(`<div class="fld span2"><label>Supplier</label><div class="ro">Nilgiri Steel Traders <span class="t2">· 29ZZZZZ0002Z1ZK ${badge('Check OK','b-ok','check')}</span></div></div>
     <div class="fld"><label>Supplier bill no.</label><div class="ro" data-first="1">NST/1150</div></div>
     <div class="fld"><label>Bill date</label><div class="ro">21 Nov 2026</div></div>
@@ -2198,7 +2201,7 @@ SCREENS.purchase = {title:'Purchase',default:'default',
  key(k){if(k==='Ctrl+A'||k==='Ctrl+S'){toast('Purchase PB/0145 saved (mock).',true);return true}return false},
  cmd(c){if(c==='save')toast('Saved (mock).',true)},
  back(){return hashFor('home')},
- keys(st){return [['','Purchase'],['Enter','Next field'],['Alt+C','Create master'],...(AI_IN_RELEASE?[['Alt+O','Read a bill']]:[]),['Ctrl+A','Save'],['Esc','Back']]}
+ keys(st){return [['','Purchase'],['Enter','Next field'],['Alt+C','Create master'],...(AI_IN_RELEASE?[['Ctrl+Alt+O','Read a bill']]:[]),['Ctrl+A','Save'],['Esc','Back']]}
 };
 
 /* credit note against SI/0412 (Shree Ganesh Traders, Maharashtra) and debit note against Rupa Polymers' bill RP/5398 (the sample's

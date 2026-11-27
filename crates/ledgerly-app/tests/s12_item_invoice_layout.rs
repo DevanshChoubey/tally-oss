@@ -6,7 +6,7 @@
 //! Provenance: the mock's source. Purchase head, row one: Supplier across two columns, Supplier
 //! bill no., Bill date; row two: Purchase ledger, Place of supply (index.html:1992-1998). Its
 //! table is # Item HSN Qty Rate GST Amount, with no Unit (index.html:1999). Its buttons are
-//! "Bill photo Alt+O" and Save (index.html:1990). Its foot has a bare "Narration" caption and the
+//! "Bill photo Ctrl+Alt+O" and Save (index.html:2182). Its foot has a bare "Narration" caption and the
 //! tax box (index.html:2003-2011). The notes' head is Party across two columns and Date, then
 //! the "Against sales invoice" / "Against purchase bill" reference (index.html:2029-2033), with
 //! Save as the only button (index.html:2027) and the total labelled "Note total".
@@ -305,12 +305,12 @@ fn a_purchase_offers_bill_photo_and_save_not_the_sales_buttons() {
     // `release::AI_IN_THIS_RELEASE` is false. This test exercises the AI UI itself, so it turns the
     // switch on for this test's thread only; the 1.0.0 screens are pinned in `s19b_ai_not_in_release.rs`.
     ledgerly_app::release::set_ai_enabled(true);
-    // provenance: index.html:1990 (`Bill photo Alt+O`, Save) against :1308 (sales invoice: the
+    // provenance: index.html:2182 (`Bill photo Ctrl+Alt+O`, Save) against :1308 (sales invoice: the
     // mode button, More details, Save).
     let b = books();
     let mut p = open(&b, T_PURCHASE);
     let shown = draw(&mut p, &b);
-    for want in ["Bill photo", "Alt+O", "Save"] {
+    for want in ["Bill photo", "Ctrl+Alt+O", "Save"] {
         assert!(shown.iter().any(|t| t == want), "{want}: {shown:?}");
     }
     for not in ["Item invoice", "More details", "Item mode"] {
@@ -476,25 +476,34 @@ fn a_sale_still_starts_on_the_party_and_goes_party_place_ledger() {
 }
 
 #[test]
-fn alt_o_on_a_purchase_opens_the_bill_screen_and_does_nothing_on_a_sale() {
+fn ctrl_alt_o_on_a_purchase_opens_the_bill_screen_and_alt_o_is_left_to_import() {
     // Provenance: owner decision of 2026-11-26. Release 1.0.0 ships without the AI assistant, so
     // `release::AI_IN_THIS_RELEASE` is false. This test exercises the AI UI itself, so it turns the
     // switch on for this test's thread only; the 1.0.0 screens are pinned in `s19b_ai_not_in_release.rs`.
-    // provenance: index.html:1990 and :2013, "Bill photo Alt+O" / "Read a bill", on the purchase
-    // only.
+    // provenance: index.html:2182 and :2204, "Bill photo Ctrl+Alt+O" / "Read a bill", on the
+    // purchase only; index.html:1139, Alt+O is Import ("Alt+O (Import)",
+    // help.tallysolutions.com/import-data-from-xml-or-json/), so the purchase form leaves it to the
+    // shell. Ctrl+Alt+O is not on help.tallysolutions.com/keyboard-shortcuts-tally-prime/ (read
+    // 2026-11-27).
     use egui::{Event, Key, Modifiers};
     ledgerly_app::release::set_ai_enabled(true);
     let b = books();
-    let press = || RawInput {
+    let press = |modifiers: Modifiers| RawInput {
         screen_rect: Some(Rect::from_min_size(Pos2::ZERO, Vec2::new(1280.0, 800.0))),
         events: vec![Event::Key {
             key: Key::O,
             physical_key: Some(Key::O),
             pressed: true,
             repeat: false,
-            modifiers: Modifiers::ALT,
+            modifiers,
         }],
         ..RawInput::default()
+    };
+    let ctrl_alt = Modifiers {
+        alt: true,
+        ctrl: true,
+        command: true,
+        ..Modifiers::NONE
     };
     let mut app = AppCtx {
         tr: ledgerly_app::i18n::Tr::default(),
@@ -503,14 +512,18 @@ fn alt_o_on_a_purchase_opens_the_bill_screen_and_does_nothing_on_a_sale() {
         lock_date: None,
         ai_tier: None,
     };
-    for (t, pushes) in [(T_PURCHASE, true), (T_SALES, false)] {
+    for (t, held, pushes) in [
+        (T_PURCHASE, ctrl_alt, true),
+        (T_SALES, ctrl_alt, false),
+        (T_PURCHASE, Modifiers::ALT, false),
+    ] {
         let mut s = open(&b, t);
         let ctx = egui::Context::default();
         let mut pushed = false;
-        let out = ctx.run_ui(press(), |ui| {
+        let out = ctx.run_ui(press(held), |ui| {
             pushed = matches!(s.ui(ui, &mut app), ledgerly_app::ScreenAction::Push(_));
         });
         out.drop_without_applying_deltas();
-        assert_eq!(pushed, pushes);
+        assert_eq!(pushed, pushes, "{t:?} {held:?}");
     }
 }

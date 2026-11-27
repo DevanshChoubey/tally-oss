@@ -888,7 +888,8 @@ impl Shell {
 
     /// Alt+O opens the import screen at the import from a file ("Alt+O (Import)",
     /// <https://help.tallysolutions.com/import-data-from-xml-or-json/>, read 2026-11-27). Runs
-    /// after the screen, so a screen that owns Alt+O (the purchase's bill photo) keeps it. On the
+    /// after the screen. Alt+O is Import on every screen: the purchase's bill photo is Ctrl+Alt+O
+    /// (index.html:2182), which this does not match. On the
     /// import screen itself it does nothing: the screen is already there.
     fn import_key_cmd(&self, ui: &egui::Ui) -> Option<ChromeCmd> {
         if self.palette.is_open() {

@@ -325,7 +325,7 @@ Classes:
   from the queue; the bill photo screen is round D.
 - **NOT BUILT** `ai.review.default`: the title bar's AI chip reads "AI: not set up" (the fixture
   company stores no tier); the mock's reads "AI on this computer" (AI settings round).
-- **NOT BUILT** Home rows do not open their proposal; the empty state's "Read a bill" (Alt+O).
+- **NOT BUILT** Home rows do not open their proposal; the empty state's "Read a bill" (Ctrl+Alt+O).
 - **DELIBERATE** no optional-voucher list (help page "Display Optional Vouchers",
   help.tallysolutions.com/docs/te9rel66/Reports/MIS_Reports/Display_Optional_Vouchers.htm).
 - **DELIBERATE** the mock's `ai-settings.local` and `ai-settings.cloud` states are removed for 1.0.0;
@@ -387,7 +387,7 @@ Classes:
 - **DELIBERATE** Ask's box holds a hint and is disabled and the key bar lists only the name, because
   nothing would answer a typed question.
 - **NOT BUILT** `purchase-bill.offline-ai` has no form or image beside it and its head lacks "Read
-  another" (Alt+O); the key bar is named "Bill photo".
+  another" (Ctrl+Alt+O); the key bar is named "Bill photo".
 
 ## Setup (`setup.*`)
 
@@ -398,7 +398,7 @@ Classes:
   and the line "AI arrives in a later version. This company stays Off.", as the mock does with
   `AI_IN_RELEASE=false`. Nothing but Off is stored by the wizard. One switch, `release::AI_IN_THIS_RELEASE`,
   brings the AI screens back; the sidebar's Plain-words entry, the palette routes and the purchase
-  form's Bill photo button and Alt+O are hidden until then.
+  form's Bill photo button and Ctrl+Alt+O are hidden until then.
 - **DELIBERATE** the import card on Start opens the Import screen with no company open; that screen
   says to create or open one first and offers Back to setup, as the mock's `import.no-company` does,
   so nothing can finish wrongly.
@@ -520,8 +520,13 @@ Credit (`ledgerly_reports::print_text` places the engine's figures only).
   masters file that does not define it) is listed as "the company has no ledger 'Cash'; import the
   masters first". Whether the other product predefines a Cash ledger was not checked in its docs in
   s22; nothing is created for the user until it is.
-- **NOT BUILT** Alt+O is fixed in the shell, not in the keymap or the keyboard-map screen; the
-  purchase form's own Alt+O (bill photo, AI release only) wins on that form.
+- **NOT BUILT** Alt+O is fixed in the shell, not in the keymap or the keyboard-map screen.
+- **FIX** (s21) bill reading moved from Alt+O to Ctrl+Alt+O in mock and app, so Alt+O is Import on
+  every screen, the purchase form included. Checked against
+  help.tallysolutions.com/keyboard-shortcuts-tally-prime/ (read 2026-11-27, page updated
+  2026-09-24): every Alt+letter is bound on some screen there (Alt+O is the Import menu), and the
+  documented Ctrl+Alt letters are B, F, I, N, R, T, U and W, so Ctrl+Alt+O clashes with none.
+  Ctrl+Alt+O is also fixed in the purchase form, not in the keymap.
 - **FIX** the mock's Hindi file states keep the English summary and error lines (`gen-hi.py` skips
   strings with placeholders, and the "Error: " lines are built in the mock); the app's Hindi text is
   in `hi.toml` (unsourced). The app's Hindi import file states are not captured.

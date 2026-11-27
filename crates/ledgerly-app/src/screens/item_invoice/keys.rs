@@ -26,10 +26,12 @@ fn consume_exact(input: &mut InputState, key: Key, modifiers: Modifiers) -> bool
     input.events.len() != before
 }
 
-/// Consumes Alt+O, the purchase's "Bill photo" key (index.html:1990).
-pub(super) fn consume_alt_o(ui: &Ui) -> bool {
+/// Consumes Ctrl+Alt+O, the purchase's "Bill photo" key (index.html:2182). Alt+O is Import, as
+/// in TallyPrime, and is left to the shell; Ctrl+Alt+O is not on
+/// help.tallysolutions.com/keyboard-shortcuts-tally-prime/ (read 2026-11-27).
+pub(super) fn consume_ctrl_alt_o(ui: &Ui) -> bool {
     ui.ctx()
-        .input_mut(|i| consume_exact(i, Key::O, Modifiers::ALT))
+        .input_mut(|i| consume_exact(i, Key::O, Modifiers::COMMAND | Modifiers::ALT))
 }
 
 /// The questions the screen is asking, which change what Y, N and Enter do.
