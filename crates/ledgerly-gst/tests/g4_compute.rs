@@ -1126,3 +1126,216 @@ fn purchase_without_a_party_or_party_details_is_unsupported() {
     };
     assert_unsupported(&not_a_party, &m, &company_in(KARNATAKA));
 }
+
+// ---- S23 round 2: zero-rated (SEZ, export) and UIN recipients ----
+//
+// Sources, read 2026-11-28:
+// * IGST Act s.16, as substituted by the Finance Act 2021 (Act 13 of 2021, s.123):
+//   <https://www.advocatekhoj.com/library/bareacts/integratedgst2017/16.php>. s.16(1)(a) export,
+//   s.16(1)(b) supply to an SEZ developer or unit; s.16(3) supply "without payment of
+//   integrated tax, under bond or Letter of Undertaking"; s.16(4) notified classes that may
+//   supply "on payment of integrated tax".
+// * IGST Act s.7(5)(a) (supplier in India, place of supply outside India) and s.7(5)(b) (to or by
+//   an SEZ developer or unit) are inter-State supplies:
+//   <https://cbic-gst.gov.in/hindi/IGST-bill-e.html>.
+// * CGST Act s.2(94) (a UIN holder is not a registered person) and s.25(9) (a UIN is granted
+//   "including refund of taxes on the notified supplies ... received by them"):
+//   <https://cbic-gst.gov.in/hindi/CGST-bill-e.html>.
+
+const OVERSEAS_PARTY: LedgerId = LedgerId(14);
+const UIN_PARTY: LedgerId = LedgerId(15);
+const IGST_LEDGER: LedgerId = LedgerId(16);
+
+fn zero_rated_masters() -> Masters {
+    let mut m = masters(BaseVoucherKind::Sales, eighteen_from_gst2());
+    m.ledgers.insert(
+        OVERSEAS_PARTY,
+        ledger(OVERSEAS_PARTY, Some(RegistrationType::Overseas), None, None),
+    );
+    let mut uin = ledger(UIN_PARTY, Some(RegistrationType::Uin), None, None);
+    if let Some(p) = uin.party.as_mut() {
+        p.state = Some(state(KARNATAKA));
+    }
+    m.ledgers.insert(UIN_PARTY, uin);
+    m.ledgers.insert(
+        IGST_LEDGER,
+        ledger(
+            IGST_LEDGER,
+            None,
+            Some(TaxDetails {
+                kind: TaxLedgerKind::Igst,
+                rate_percent: None,
+            }),
+            None,
+        ),
+    );
+    if let Some(item) = m.stock_items.get_mut(&ITEM) {
+        item.hsn = Some(ledgerly_core::Hsn::parse("8471").unwrap());
+    }
+    m
+}
+
+fn to_party(party: LedgerId, place: Option<u8>, option: Option<&str>) -> Voucher {
+    let mut v = Voucher {
+        party: Some(party),
+        ..item_voucher(place, &[1_000_000])
+    };
+    if let Some(o) = option {
+        v.extra.insert(
+            ledgerly_gst::classify::SUPPLY_OPTION_KEY.to_owned(),
+            o.to_owned(),
+        );
+    }
+    v
+}
+
+#[test]
+fn a_supply_to_an_sez_unit_with_payment_is_igst_even_inside_the_state() {
+    // provenance: derived — IGST Act s.7(5)(b): a supply to an SEZ unit is inter-State, so IGST
+    // whatever the place of supply; s.16(4)(i): supplied "on payment of integrated tax".
+    // 10,000.00 x 18% = 1,800.00 IGST = 180,000 paise. Invoice 11,800.00, round-off 0.
+    let m = zero_rated_masters();
+    let b = value(
+        &to_party(SEZ_PARTY, Some(KARNATAKA), Some("with_payment")),
+        &m,
+        &company_in(KARNATAKA),
+    );
+    assert_eq!(b.heads, TaxHeads::Igst);
+    assert_eq!(b.totals.igst, Paise::new(180_000));
+    assert_eq!(b.totals.cgst, Paise::ZERO);
+    assert_eq!(b.totals.sgst, Paise::ZERO);
+    assert_eq!(b.total_before_round_off, Paise::new(1_180_000));
+    assert_eq!(b.round_off, Paise::ZERO);
+}
+
+#[test]
+fn a_supply_to_an_sez_unit_under_lut_charges_no_tax() {
+    // provenance: derived — IGST Act s.16(3): a zero-rated supply under bond or LUT is made
+    // "without payment of integrated tax". The line keeps its 18% rate (the rate the supply would
+    // bear) and every head is 0. Invoice = taxable value 10,000.00 = 1,000,000 paise.
+    let m = zero_rated_masters();
+    let b = value(
+        &to_party(SEZ_PARTY, Some(KARNATAKA), Some("under_lut")),
+        &m,
+        &company_in(KARNATAKA),
+    );
+    assert_eq!(b.heads, TaxHeads::Igst);
+    assert_eq!(b.totals.igst, Paise::ZERO);
+    assert_eq!(b.totals.cgst, Paise::ZERO);
+    assert_eq!(b.totals.sgst, Paise::ZERO);
+    assert_eq!(b.taxable_total, Paise::new(1_000_000));
+    assert_eq!(b.total_before_round_off, Paise::new(1_000_000));
+    let line = b.lines.first().unwrap();
+    assert_eq!(line.rate_percent, Decimal::new(18, 0));
+    assert_eq!(line.igst, Decimal::ZERO);
+}
+
+#[test]
+fn an_export_of_goods_with_payment_is_igst_and_needs_no_state_as_place_of_supply() {
+    // provenance: derived — IGST Act s.7(5)(a): supplier in India, place of supply outside India,
+    // is inter-State, so IGST; no Indian State is the place of supply, so none is asked for.
+    // 10,000.00 x 18% = 1,800.00 = 180,000 paise.
+    let m = zero_rated_masters();
+    let b = value(
+        &to_party(OVERSEAS_PARTY, None, Some("with_payment")),
+        &m,
+        &company_in(KARNATAKA),
+    );
+    assert_eq!(b.heads, TaxHeads::Igst);
+    assert_eq!(b.totals.igst, Paise::new(180_000));
+    assert_eq!(b.total_before_round_off, Paise::new(1_180_000));
+}
+
+#[test]
+fn an_export_of_goods_under_lut_charges_no_tax() {
+    // provenance: derived — IGST Act s.16(3): without payment of integrated tax. Invoice = 10,000.00.
+    let m = zero_rated_masters();
+    let b = value(
+        &to_party(OVERSEAS_PARTY, None, Some("under_lut")),
+        &m,
+        &company_in(KARNATAKA),
+    );
+    assert_eq!(b.heads, TaxHeads::Igst);
+    assert_eq!(b.totals.igst, Paise::ZERO);
+    assert_eq!(b.total_before_round_off, Paise::new(1_000_000));
+}
+
+#[test]
+fn a_zero_rated_supply_without_the_payment_choice_is_unsupported() {
+    // provenance: derived — s.16(3)/(4) leave the choice between bond/LUT and payment of IGST to
+    // the supplier; the voucher does not say which, so neither 0 nor 18% is right (rule A1).
+    let m = zero_rated_masters();
+    let company = company_in(KARNATAKA);
+    assert_unsupported(&to_party(SEZ_PARTY, Some(KARNATAKA), None), &m, &company);
+    assert_unsupported(&to_party(OVERSEAS_PARTY, None, None), &m, &company);
+    // a deemed export is a supply to a regular registered recipient (CGST Act s.147)
+    assert_unsupported(
+        &to_party(SEZ_PARTY, Some(KARNATAKA), Some("deemed_export")),
+        &m,
+        &company,
+    );
+}
+
+#[test]
+fn an_export_of_a_service_or_of_an_item_without_hsn_is_unsupported() {
+    // provenance: derived — export of services turns on IGST Act s.13 and the s.2(6) conditions,
+    // which are not modelled; an item without an HSN or SAC cannot be told to be goods.
+    let mut m = zero_rated_masters();
+    let company = company_in(KARNATAKA);
+    if let Some(item) = m.stock_items.get_mut(&ITEM) {
+        item.hsn = Some(ledgerly_core::Hsn::parse("9983").unwrap());
+    }
+    assert_unsupported(
+        &to_party(OVERSEAS_PARTY, None, Some("with_payment")),
+        &m,
+        &company,
+    );
+    if let Some(item) = m.stock_items.get_mut(&ITEM) {
+        item.hsn = None;
+    }
+    assert_unsupported(
+        &to_party(OVERSEAS_PARTY, None, Some("under_lut")),
+        &m,
+        &company,
+    );
+}
+
+#[test]
+fn a_supply_under_lut_that_posts_igst_is_unsupported() {
+    // provenance: derived — s.16(3): no integrated tax is paid under LUT, so a voucher that posts
+    // an IGST amount contradicts its own option; neither figure is chosen.
+    let m = zero_rated_masters();
+    let mut v = to_party(SEZ_PARTY, Some(KARNATAKA), Some("under_lut"));
+    v.ledger_lines.push(LedgerLine {
+        ineligible_itc: None,
+        ledger: IGST_LEDGER,
+        amount: SignedAmount::cr(Paise::new(180_000)),
+        bills: vec![],
+        cost: vec![],
+        bank: None,
+    });
+    assert_unsupported(&v, &m, &company_in(KARNATAKA));
+}
+
+#[test]
+fn a_supply_to_a_uin_holder_bears_tax_by_its_place_of_supply() {
+    // provenance: derived — CGST Act s.25(9): a UIN holder claims "refund of taxes on the
+    // notified supplies" it receives, so the supplier charges tax as usual; s.7/s.8 decide the
+    // heads by comparing the supplier's State with the place of supply.
+    // Same State: CGST 900.00 + SGST 900.00 (90,000 paise each); other State: IGST 1,800.00.
+    let m = zero_rated_masters();
+    let company = company_in(KARNATAKA);
+    let intra = value(&to_party(UIN_PARTY, Some(KARNATAKA), None), &m, &company);
+    assert_eq!(intra.heads, TaxHeads::CgstSgst);
+    assert_eq!(intra.totals.cgst, Paise::new(90_000));
+    assert_eq!(intra.totals.sgst, Paise::new(90_000));
+    let inter = value(&to_party(UIN_PARTY, Some(MAHARASHTRA), None), &m, &company);
+    assert_eq!(inter.heads, TaxHeads::Igst);
+    assert_eq!(inter.totals.igst, Paise::new(180_000));
+    // the s.16(3) choice belongs to zero-rated supplies only
+    assert_unsupported(
+        &to_party(UIN_PARTY, Some(KARNATAKA), Some("with_payment")),
+        &m,
+        &company,
+    );
+}

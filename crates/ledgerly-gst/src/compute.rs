@@ -22,6 +22,24 @@
 //! ledger's state, or the state code of its GSTIN when no state is set. A party whose state and
 //! GSTIN disagree, or which has neither, is `Unsupported`, never guessed.
 //!
+//! # Zero-rated and UIN recipients
+//!
+//! A sale to an SEZ developer or unit (IGST Act s.16(1)(b)) or to a recipient outside India
+//! (s.16(1)(a), goods only) is inter-State whatever the place of supply (s.7(5)(a) and (b)), so
+//! its head is IGST and no Indian State is asked for as the place of supply. Each line takes its
+//! kind from [`crate::classify::classify_line`]: on payment of IGST (s.16(4)) the line bears IGST
+//! at its rate; under bond or LUT (s.16(3), "without payment of integrated tax") it keeps its
+//! rate and bears no tax. The choice is read from [`crate::classify::SUPPLY_OPTION_KEY`] and never
+//! defaulted. Whether the supplier belongs to a class notified under s.16(4) is its own
+//! declaration and is not checked. Sources read 2026-11-28: s.16 as substituted by the Finance
+//! Act 2021 (<https://www.advocatekhoj.com/library/bareacts/integratedgst2017/16.php>) and s.7
+//! (<https://cbic-gst.gov.in/hindi/IGST-bill-e.html>).
+//!
+//! A UIN holder is not a registered person (CGST Act s.2(94)) but is granted the UIN for the
+//! refund of taxes on the notified supplies it receives (s.25(9),
+//! <https://cbic-gst.gov.in/hindi/CGST-bill-e.html>, read 2026-11-28), so the supplier charges
+//! tax and the heads follow the place of supply as for any domestic recipient.
+//!
 //! # Rounding policy (spec 6.3)
 //!
 //! * Line tax is kept **unrounded** (exact decimal rupees) on every [`LineTax`].
@@ -39,8 +57,9 @@
 //! Purchases and debit notes from a supplier that is not a regular taxpayer (composition
 //! suppliers charge no tax, unregistered suppliers raise reverse-charge questions, SEZ and
 //! overseas suppliers are imports) or whose state is unknown or ambiguous, reverse charge, cancelled vouchers, plain Dr/Cr vouchers, composition suppliers, registrations
-//! in several states, SEZ/overseas/UIN recipients (zero-rated supplies belong to place-of-supply
-//! card G3), a missing place of supply, a payment dated before the invoice (time of supply,
+//! in several states, a zero-rated supply without the payment or LUT choice, an exported service
+//! or an exported item without an HSN, the payment or LUT choice on a domestic supply, a missing
+//! place of supply on a domestic supply, a payment dated before the invoice (time of supply,
 //! card G12), vouchers posting to a cess ledger (no verified cess rate exists yet), taxable lines
 //! whose rate matches no verified pack slab, and any rate whose pack entry is `pending`.
 //!
@@ -56,6 +75,7 @@ use ledgerly_model::{
 };
 
 use crate::GstError;
+use crate::classify::{SUPPLY_OPTION_KEY, SupplyKind, classify_line};
 use crate::pack::{PackEntry, RuleSet};
 
 /// Pack entry ids that hold a rate slab (`igst_percent`, `cgst_percent`, `sgst_percent` params).
@@ -249,9 +269,19 @@ pub fn compute_voucher_tax(
     }
     let heads = supported!(supply_heads(v, masters, company, supplier, tos)?);
     let bases = supported!(collect_bases(v, masters, tos)?);
+    let zero_rated = match supplier {
+        Supplier::Company => supported!(recipient_rule(v, masters)?) == RecipientRule::ZeroRated,
+        Supplier::Party => false,
+    };
+    let positions = line_positions(v, masters, &bases);
     let mut lines = Vec::with_capacity(bases.len());
-    for base in &bases {
-        lines.push(supported!(price_line(base, heads, rules)?));
+    for (base, position) in bases.iter().zip(positions) {
+        let mut line = supported!(price_line(base, heads, rules)?);
+        if zero_rated && !supported!(zero_rated_pays_tax(v, position, masters, rules)?) {
+            // IGST Act s.16(3): under bond or LUT, "without payment of integrated tax".
+            line.igst = Decimal::ZERO;
+        }
+        lines.push(line);
     }
     let breakup = assemble(lines, heads, rules.version().to_owned())?;
     Ok(Outcome::Value(breakup))
@@ -369,29 +399,50 @@ fn company_supplier_state(company: &Company, tos: Date) -> Outcome<StateCode> {
     Outcome::Value(first.state)
 }
 
-/// `Unsupported` when the party (the recipient of a sales or credit-note voucher) is a kind of
-/// recipient that this module does not tax.
-fn party_supported(v: &Voucher, masters: &Masters) -> Result<Outcome<()>, GstError> {
+/// How the recipient of a sales or credit-note voucher is taxed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RecipientRule {
+    /// A domestic recipient, a UIN holder included: the heads follow the place of supply.
+    Domestic,
+    /// An SEZ developer or unit, or a recipient outside India: zero-rated, always IGST.
+    ZeroRated,
+}
+
+/// The rule for the party (the recipient of a sales or credit-note voucher). A voucher without a
+/// party, or whose party ledger has no party details, is a domestic supply (a cash sale).
+///
+/// A UIN holder is not a registered person (CGST Act s.2(94)) but the supplier charges tax on
+/// what it supplies to one: the UIN is granted for the "refund of taxes on the notified supplies"
+/// it receives (s.25(9)). Its supplies are domestic.
+fn recipient_rule(v: &Voucher, masters: &Masters) -> Result<Outcome<RecipientRule>, GstError> {
     let Some(party_id) = v.party else {
-        return Ok(Outcome::Value(()));
+        return Ok(Outcome::Value(RecipientRule::Domestic));
     };
     let party = masters
         .ledgers
         .get(&party_id)
         .ok_or_else(|| not_found(format!("party ledger {}", party_id.0)))?;
     let Some(details) = &party.party else {
-        return Ok(Outcome::Value(()));
+        return Ok(Outcome::Value(RecipientRule::Domestic));
     };
-    match details.registration {
+    let rule = match details.registration {
         RegistrationType::Regular
         | RegistrationType::Composition
         | RegistrationType::Unregistered
-        | RegistrationType::Consumer => Ok(Outcome::Value(())),
-        RegistrationType::Sez | RegistrationType::Overseas | RegistrationType::Uin => unsupported(
-            format!("GST on a supply to a {:?} party", details.registration),
-            "zero-rated, SEZ and UIN supplies are not computed by voucher tax",
-        ),
+        | RegistrationType::Consumer
+        | RegistrationType::Uin => RecipientRule::Domestic,
+        RegistrationType::Sez | RegistrationType::Overseas => RecipientRule::ZeroRated,
+    };
+    if rule == RecipientRule::Domestic
+        && let Some(option) = v.extra.get(SUPPLY_OPTION_KEY)
+        && matches!(option.trim(), "with_payment" | "under_lut")
+    {
+        return unsupported(
+            "payment or LUT option on a domestic supply",
+            "the IGST Act s.16(3) choice applies only to exports and supplies to an SEZ; remove it",
+        );
     }
+    Ok(Outcome::Value(rule))
 }
 
 /// The state of the party that supplies on a purchase or debit note: its ledger's state, or its
@@ -463,7 +514,15 @@ fn supply_heads(
     tos: Date,
 ) -> Result<Outcome<TaxHeads>, GstError> {
     let supplier = match supplier {
-        Supplier::Company => supported!(company_supplier_state(company, tos)),
+        Supplier::Company => {
+            let state = supported!(company_supplier_state(company, tos));
+            match supported!(recipient_rule(v, masters)?) {
+                // IGST Act s.7(5)(a) and (b): inter-State whatever the place of supply, which for
+                // an export is outside India and so is not asked for.
+                RecipientRule::ZeroRated => return Ok(Outcome::Value(TaxHeads::Igst)),
+                RecipientRule::Domestic => state,
+            }
+        }
         Supplier::Party => supported!(party_supplier_state(v, masters)?),
     };
     let Some(place) = v.place_of_supply else {
@@ -472,7 +531,6 @@ fn supply_heads(
             "the voucher has no place of supply; set it before computing tax",
         );
     };
-    supported!(party_supported(v, masters)?);
     if place.get() == 99 {
         return unsupported(
             "GST with the centre jurisdiction as place of supply",
@@ -638,6 +696,57 @@ fn item_history(item: &StockItem, tos: Date) -> Result<Outcome<&GstHistory>, Gst
                 "item `{}` has several GST detail entries effective from the same date; keep one",
                 item.name
             ),
+        )),
+    }
+}
+
+/// The position of each base in the voucher's lines, as [`classify_line`] counts them: the
+/// inventory line for an item invoice, the ledger line for an accounting invoice.
+fn line_positions(v: &Voucher, masters: &Masters, bases: &[Base]) -> Vec<usize> {
+    let mut classified = v
+        .ledger_lines
+        .iter()
+        .enumerate()
+        .filter(|(_, l)| {
+            masters
+                .ledgers
+                .get(&l.ledger)
+                .is_some_and(|m| m.gst.is_some())
+        })
+        .map(|(i, _)| i);
+    bases
+        .iter()
+        .map(|b| match b.source {
+            LineSource::Inventory { index } => index,
+            LineSource::Ledger { .. } => classified.next().unwrap_or(usize::MAX),
+        })
+        .collect()
+}
+
+/// Whether a zero-rated line is supplied on payment of IGST (`true`) or under bond or LUT
+/// (`false`), from the line's classification. The classification refuses what voucher tax cannot
+/// price: no stated choice, a service or an item of unknown nature exported, an exempt or
+/// nil-rated line, and LUT on a voucher that posts IGST.
+fn zero_rated_pays_tax(
+    v: &Voucher,
+    position: usize,
+    masters: &Masters,
+    rules: &RuleSet,
+) -> Result<Outcome<bool>, GstError> {
+    let kind = supported!(classify_line(v, position, masters, rules)?);
+    match kind {
+        SupplyKind::ExportWithPayment | SupplyKind::SezWithPayment => Ok(Outcome::Value(true)),
+        // a non-GST line bears no tax either way
+        SupplyKind::ExportUnderLut | SupplyKind::SezUnderLut | SupplyKind::NonGst => {
+            Ok(Outcome::Value(false))
+        }
+        SupplyKind::Taxable
+        | SupplyKind::Exempt
+        | SupplyKind::NilRated
+        | SupplyKind::DeemedExport
+        | SupplyKind::Advance => Err(invalid(
+            "voucher lines",
+            format!("a line to an SEZ or overseas recipient was classified {kind:?}"),
         )),
     }
 }
