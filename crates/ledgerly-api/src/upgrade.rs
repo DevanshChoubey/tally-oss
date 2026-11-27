@@ -63,6 +63,35 @@ impl Api {
         Ok((api, report))
     }
 
+    /// Adds the predefined ledgers (Cash and Profit & Loss A/c) that a company being built does
+    /// not hold yet, with the same engine plan as the upgrade on open, but with no backup and no
+    /// version change: it is for a builder of a new file (the sample company) whose masters come
+    /// from elsewhere, so that the file needs no upgrade when it is opened.
+    ///
+    /// `Outcome::Unsupported` when the books or the engine's plan are unsupported; nothing is then
+    /// written.
+    ///
+    /// # Errors
+    /// [`ApiError::Engine`] when the plan cannot be made; [`ApiError::Store`] when it cannot be
+    /// committed.
+    pub fn add_predefined_ledgers(&mut self) -> Result<Outcome<Vec<PredefinedStep>>, ApiError> {
+        let plan = match self.cached_books()? {
+            Outcome::Value(books) => predefined_ledgers_upgrade(books)?,
+            Outcome::Unsupported(u) => return Ok(Outcome::Unsupported(u)),
+        };
+        let plan = match plan {
+            Outcome::Value(plan) => plan,
+            Outcome::Unsupported(u) => return Ok(Outcome::Unsupported(u)),
+        };
+        if !plan.events.is_empty() {
+            self.commit_with_reason(
+                &plan.events,
+                "the predefined ledgers of a new company".to_owned(),
+            )?;
+        }
+        Ok(Outcome::Value(plan.steps))
+    }
+
     /// Upgrades the open company file when it was made by an older build: takes a verified
     /// backup, then commits the upgrade's events as one audited change. Returns `None` when
     /// nothing needed upgrading; running it again after an upgrade returns `None`.

@@ -590,3 +590,76 @@ fn a_check_that_cannot_reach_the_server_says_so() {
     let text = settle_check(&mut screen, &mut app);
     assert!(text.contains("Could not check for updates."), "{text}");
 }
+
+#[test]
+fn the_sample_company_opens_with_no_upgrade_note_and_no_backup() {
+    // Derived: the sample is made by this build, so it already holds both predefined ledgers
+    // ("Ledgers in TallyPrime": Cash and Profit & Loss A/c are in every company); opening it must
+    // neither upgrade it nor back it up.
+    let folder = dir("open-sample");
+    let path = folder.join("sample.ledgerly");
+    drop(ledgerly_sample::create(&path, Clock::Fixed(OffsetDateTime::UNIX_EPOCH)).unwrap());
+    let (_api, note) = ledgerly_app::open_company::open_company(&path).unwrap();
+    assert_eq!(note, None);
+    assert_eq!(files_in(&folder.join("Backups")), Vec::<PathBuf>::new());
+}
+
+#[test]
+fn a_file_whose_upgrade_left_a_ledger_not_done_is_not_backed_up_again_on_the_next_open() {
+    // A ledger named Profit & Loss A/c under Indirect Expenses is not the predefined one, so the
+    // upgrade leaves it alone (NotDone). The next open has nothing to write and takes no backup.
+    let folder = dir("open-not-done");
+    let path = folder.join("old-traders.ledgerly");
+    std::fs::copy(FIXTURE, &path).unwrap();
+    let mut api = Api::open(&path).unwrap();
+    let Outcome::Value(books) = api.books().unwrap() else {
+        panic!("books")
+    };
+    let group = books
+        .masters
+        .groups
+        .values()
+        .find(|g| g.name == "Indirect Expenses")
+        .unwrap()
+        .id;
+    let id = books.masters.ledgers.keys().max().unwrap().0 + 1;
+    let pl = ledgerly_model::Ledger {
+        ineligible_itc: None,
+        id: ledgerly_core::LedgerId(id),
+        name: "Profit & Loss A/c".to_owned(),
+        aliases: Vec::new(),
+        group: Some(group),
+        opening: ledgerly_core::SignedAmount::dr(ledgerly_core::Paise::new(0)),
+        bill_wise: None,
+        cost_centres_applicable: false,
+        party: None,
+        bank: None,
+        tax: None,
+        gst: None,
+        reserved: None,
+        tally: None,
+    };
+    assert!(matches!(
+        api.execute(ledgerly_api::Command::CreateLedger(pl))
+            .unwrap(),
+        Outcome::Value(_)
+    ));
+    drop(api);
+    let (api, note) = ledgerly_app::open_company::open_company(&path).unwrap();
+    let up = note.and_then(|n| n.upgrade).expect("first open upgrades");
+    assert!(
+        up.ledgers.iter().any(|s| matches!(
+            s,
+            PredefinedStep::NotDone {
+                role: ReservedLedger::ProfitAndLoss,
+                ..
+            }
+        )),
+        "{:?}",
+        up.ledgers
+    );
+    drop(api);
+    let (_api, again) = ledgerly_app::open_company::open_company(&path).unwrap();
+    assert_eq!(again, None);
+    assert_eq!(files_in(&folder.join("Backups")).len(), 1);
+}
