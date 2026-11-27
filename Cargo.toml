@@ -58,6 +58,8 @@ anyhow = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 keyring = "4"
+ocrs = { version = "0.14", default-features = false, features = ["onnx"] }
+rten = { version = "0.28", default-features = false, features = ["onnx_format"] }
 tempfile = "3"
 clap = { version = "4.6", features = ["derive"] }
 # UI (ledgerly-app only, rule C1)

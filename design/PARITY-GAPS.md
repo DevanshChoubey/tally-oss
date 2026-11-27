@@ -463,8 +463,25 @@ Classes:
   the provider chips in the card head are plain text, as on the plain-words card.
 - **DELIBERATE** an ask the engine cannot run is logged as `ReadFailed` with a reason starting
   "Unsupported" rather than a new AI event kind, so the stored event format is unchanged.
-- **NOT BUILT** `gst.recon-explain`: no model runs; a screen would show a look with nothing
-  behind it.
+- **NOT BUILT** `gst.recon-explain`: the mock's card is an explanation in words around figures
+  bound to the engine, plus a draft fix. None of the four typed proposals (`VoucherDraft`,
+  `MatchSuggestion`, `ReportQuery`, `MappingSuggestion`) carries an explanation, and an
+  explanation the provider writes is prose, which may state a number the engine did not compute.
+  Building it needs a new typed proposal (the cause chosen from a fixed list the engine checks,
+  with every figure the engine's), which is a change to the frozen proposal set for the
+  coordinator to decide. The review queue keeps no 2B row for it.
+- **DELIBERATE** (owner, 2026-11-27) OCR is `ocrs` (MIT OR Apache-2.0; `default-features = false`
+  with `onnx`, and `rten` with `onnx_format`; `cargo deny check` passes). `ledgerly_assist::ocr_models`
+  names the two model files and their fixed URLs (from the ocrs 0.14.0 crate's
+  `examples/download-models.sh`), says Not installed while they are missing or do not load, and
+  downloads only on request, keeping a file only when its SHA-256 matches. Nothing was downloaded.
+- **NOT BUILT** the OCR model download refuses: no checksum is recorded, and computing one would
+  mean downloading the files. Owner question: the SHA-256 of `text-detection.onnx` and
+  `text-recognition.onnx`.
+- **NOT BUILT** reading a bill with ocrs: ocrs gives each line its characters and boxes but no
+  confidence, and the bill reader blanks values by the OCR line's confidence. A made-up confidence
+  would be a silent default. Owner question: what stands in for it (for example every ocrs value
+  marked for review). No screen shows the OCR model state or a download button yet (no mock state).
 - **FIX** (round D) `ai.purchase-bill.choose`, `.reading`, `.ledger-lines`, `.rejected` and
   `.error` are built on the bill photo screen with the assistant (mock states added first;
   `s21-d-sheet-1/2`). The photo is drawn with a box and label on each value the reader took; the

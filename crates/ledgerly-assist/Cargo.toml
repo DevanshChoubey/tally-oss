@@ -19,6 +19,9 @@ serde.workspace = true
 serde_json.workspace = true
 ureq.workspace = true
 keyring.workspace = true
+ocrs.workspace = true
+rten.workspace = true
+sha2.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 

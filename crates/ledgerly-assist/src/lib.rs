@@ -4,6 +4,7 @@
 pub mod cloud;
 pub mod nl_entry;
 pub mod ocr;
+pub mod ocr_models;
 mod proposal;
 pub mod provider;
 pub mod redact;

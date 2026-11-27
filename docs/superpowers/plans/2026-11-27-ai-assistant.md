@@ -159,6 +159,12 @@ untracked), look at each, update `PARITY-GAPS.md`.
   `Api::accept_bank_ai_match`, `Api::bank_matches`; `AiProvider::match_bank_line` with a refusing
   default; the bank screen's worker shows, accepts and rejects them). NOT BUILT (PARITY-GAPS): the
   `bank.ai-suggestions` tab and card, a voucher or a ledger from a bank line, the cloud bank prompt.
+- OCR models (owner: ocrs): committed. `ocr_models` (fixed files and URLs, Not installed while
+  missing or unloadable, a checksum-checked download that refuses while no checksum is recorded),
+  `cargo deny check` passes with ocrs. NOT BUILT: the ocrs reading adapter (ocrs has no
+  confidence), the download button and model state on a screen; `gst.recon-explain` (needs a new
+  typed proposal). Tests written first, seen failing at compile, the checksum check by mutation;
+  no real model file was loaded, so real ocrs inference is unrun.
 - Honesty notes (F): the API and app bank tests were written first and seen failing (API at compile,
   app 3 of 4; the AI-off one passed on the old path); the Origin unit test was seen failing at
   compile only. One API test fixture was corrected (an alteration must keep the voucher number).
