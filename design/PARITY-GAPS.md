@@ -478,10 +478,18 @@ Classes:
 - **FIX** (owner allowed one fetch, 2026-11-27) the OCR model checksums are recorded: the SHA-256
   of the two files the coordinator fetched from the fixed URLs (2,499,479 and 9,713,177 bytes). A
   download keeps a file only when its hash is that one, and stops at the first that differs.
-- **NOT BUILT** reading a bill with ocrs: ocrs gives each line its characters and boxes but no
-  confidence, and the bill reader blanks values by the OCR line's confidence. A made-up confidence
-  would be a silent default. Owner question: what stands in for it (for example every ocrs value
-  marked for review). No screen shows the OCR model state or a download button yet (no mock state).
+- **DELIBERATE** (coordinator, 2026-11-27) ocrs gives no confidence, so every value it reads
+  carries the lowest confidence, "needs review" (`ledgerly_assist::review::NEEDS_REVIEW_PERMILLE`,
+  0). No figure is invented. Such a value is kept only when the person confirms it
+  (`DraftEdits::confirmed`, logged in the accept's human edits as `confirmed`); while any read field
+  is unconfirmed the engine check blocks on it, so a printed total is never silently left out of
+  the comparison. `OcrModels::read_png` reads a PNG with the loaded models (boxes from the
+  characters, empty lines left out). Checked once by hand with the owner-fetched models on
+  2026-11-27: a bill drawn in the reader's `Label value` layout came back line for line and the
+  reader drafted the drawn values (fixture `ledgerly-assist/tests/fixtures/ocrs/bill-left.*`).
+- **NOT BUILT** a bill whose amounts are printed right-aligned, apart from their labels: ocrs
+  returns the labels and the amounts as separate lines (fixture `bill-right.*`, observed), and the
+  reader reads `Label value` on one line only, so it reads no amount from such a bill.
 - **FIX** (round D) `ai.purchase-bill.choose`, `.reading`, `.ledger-lines`, `.rejected` and
   `.error` are built on the bill photo screen with the assistant (mock states added first;
   `s21-d-sheet-1/2`). The photo is drawn with a box and label on each value the reader took; the

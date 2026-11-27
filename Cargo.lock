@@ -2257,6 +2257,7 @@ dependencies = [
 name = "ledgerly-assist"
 version = "1.0.0"
 dependencies = [
+ "image",
  "insta",
  "keyring",
  "ledgerly-core",

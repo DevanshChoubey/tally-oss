@@ -90,6 +90,10 @@ pub struct DraftEdits {
     /// taxable value names no purchase ledger, so the person chooses it; a choice for a line the
     /// reader matched replaces the reader's ledger (it is a human edit and is logged as one).
     pub line_ledgers: Vec<(usize, LedgerId)>,
+    /// The read fields the person confirmed against the document. A value that needs review
+    /// (read by ocrs, which gives no confidence) is kept only once confirmed; while any such
+    /// field is unconfirmed the draft is blocked on it. Logged as a human edit.
+    pub confirmed: Vec<ledgerly_assist::review::DraftField>,
 }
 
 /// One row of the AI activity log.
@@ -251,6 +255,14 @@ impl Api {
                 confidence_permille: 1000,
             });
         }
+        for &field in &edits.confirmed {
+            if !ledgerly_assist::review::confirm(&mut draft, field) {
+                return Ok(Outcome::unsupported(
+                    "a confirmed draft field",
+                    format!("the draft has no {}", field.name()),
+                ));
+            }
+        }
         let books = match self.cached_books()? {
             Outcome::Value(books) => books,
             Outcome::Unsupported(u) => return Ok(Outcome::Unsupported(u)),
@@ -270,6 +282,12 @@ impl Api {
                     confidence_permille: 1000,
                 };
             }
+        }
+        if let Some(field) = ledgerly_assist::review::needs_review(&draft).first() {
+            return Ok(Outcome::Value(DraftCheck::Blocked {
+                field: field.name(),
+                reason: "this value was read by the OCR reader and needs review: check it against the bill and confirm it".to_owned(),
+            }));
         }
         let pack = load_pack(BUNDLED_RATE_PACK)?;
         let rules_date = draft
@@ -481,7 +499,11 @@ pub(crate) fn draft_activity(draft: &AiDraft) -> AiActivity {
 
 /// The person's edits as JSON, or `None` when they changed nothing.
 fn edits_json(edits: &DraftEdits) -> Option<String> {
-    if edits.date.is_none() && edits.place_of_supply.is_none() && edits.line_ledgers.is_empty() {
+    if edits.date.is_none()
+        && edits.place_of_supply.is_none()
+        && edits.line_ledgers.is_empty()
+        && edits.confirmed.is_empty()
+    {
         return None;
     }
     let mut map = serde_json::Map::new();
@@ -504,6 +526,14 @@ fn edits_json(edits: &DraftEdits) -> Option<String> {
             .map(|&(index, ledger)| serde_json::json!({ "line": index, "ledger": ledger.0 }))
             .collect();
         map.insert("line_ledgers".to_owned(), serde_json::Value::Array(chosen));
+    }
+    if !edits.confirmed.is_empty() {
+        let names = edits
+            .confirmed
+            .iter()
+            .map(|f| serde_json::Value::String(f.name()))
+            .collect();
+        map.insert("confirmed".to_owned(), serde_json::Value::Array(names));
     }
     Some(serde_json::Value::Object(map).to_string())
 }

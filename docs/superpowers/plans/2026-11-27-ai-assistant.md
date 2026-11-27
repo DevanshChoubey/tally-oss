@@ -170,6 +170,13 @@ untracked), look at each, update `PARITY-GAPS.md`.
   while no checksum is recorded" was replaced (the decision changed the behaviour) by one that
   checks the refusal for a file with no checksum through `download_model`, plus a mismatch test
   over the fixed files; the two new tests were seen failing before the checksums were added.
+- ocrs reading and needs review: committed. `OcrModels::read_png` (lines boxed by their
+  characters, every value at the needs-review confidence) and `ledgerly_assist::review`
+  (`needs_review`, `confirm`); `DraftEdits::confirmed` with the engine check blocking on any read
+  field still unconfirmed. Real ocrs inference was run once by hand with the owner-fetched models
+  (release build, about 1 s a bill): the `Label value` bill read line for line, a right-aligned bill
+  split labels from amounts. The models folder was deleted after; the recorded outputs are test
+  fixtures. Tests first, seen failing at compile.
 - Honesty notes (F): the API and app bank tests were written first and seen failing (API at compile,
   app 3 of 4; the AI-off one passed on the old path); the Origin unit test was seen failing at
   compile only. One API test fixture was corrected (an alteration must keep the voucher number).

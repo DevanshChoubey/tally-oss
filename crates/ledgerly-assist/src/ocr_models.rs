@@ -11,10 +11,10 @@
 //! [`ocr_models_status`] says whether the files in a folder load. Missing or unloadable files are
 //! [`ProviderStatus::NotInstalled`], with the reason in words the screen shows.
 //!
-//! Reading a bill with the loaded models is **not built**: `ocrs` gives each recognised line its
-//! characters and boxes but no confidence, and the bill reader blanks values by the OCR line's
-//! confidence ([`crate::ocr::OcrLine::confidence_permille`]). Putting a made-up confidence there
-//! would be a silent default, so the adapter waits for a decision on what stands in for it.
+//! [`OcrModels::read_png`] reads a PNG bill with the loaded models into an [`OcrOutput`], one
+//! [`OcrLine`] per line `ocrs` recognised, boxed by its characters. `ocrs` gives no confidence, so
+//! every line carries [`OCRS_CONFIDENCE_PERMILLE`], the lowest ("needs review", owner decision
+//! 2026-11-27): the validator keeps none of these values until the person confirms each one.
 
 use std::fmt;
 use std::io::Write as _;
@@ -23,7 +23,11 @@ use std::time::Duration;
 
 use sha2::{Digest, Sha256};
 
+use ledgerly_core::CancelToken;
+use ocrs::TextItem as _;
+
 use crate::AssistError;
+use crate::ocr::{OcrLine, OcrOutput};
 use crate::provider::ProviderStatus;
 
 /// One model file: its name in the models folder, where it is downloaded from, and the SHA-256
@@ -134,10 +138,78 @@ impl OcrModels {
         Ok(OcrModels { engine })
     }
 
-    /// The `ocrs` engine over the loaded models.
-    pub fn engine(&self) -> &ocrs::OcrEngine {
-        &self.engine
+    /// Reads a PNG image into its text lines, each with the box of its characters and
+    /// [`OCRS_CONFIDENCE_PERMILLE`]. Lines with no characters are left out. Boxes are clamped to
+    /// the image (a character box can reach past its edge by a pixel).
+    ///
+    /// # Errors
+    /// [`AssistError::Unsupported`] when the bytes are not a PNG, [`AssistError::Output`] when
+    /// `ocrs` fails, [`AssistError::Cancelled`] when cancelled between steps.
+    pub fn read_png(
+        &self,
+        png: &[u8],
+        sha256: &str,
+        cancel: &CancelToken,
+    ) -> Result<OcrOutput, AssistError> {
+        let image = image::load_from_memory_with_format(png, image::ImageFormat::Png)
+            .map_err(|e| {
+                AssistError::Unsupported(ledgerly_core::Unsupported {
+                    what: "reading this image".to_owned(),
+                    reason: format!("it is not a PNG the reader can open: {e}"),
+                })
+            })?
+            .into_rgb8();
+        let (width, height) = image.dimensions();
+        let failed = |e: &dyn fmt::Display| AssistError::Output {
+            reason: format!("the OCR engine failed: {e}"),
+        };
+        let source = ocrs::ImageSource::from_bytes(image.as_raw(), (width, height))
+            .map_err(|e| failed(&e))?;
+        let input = self.engine.prepare_input(source).map_err(|e| failed(&e))?;
+        let words = self.engine.detect_words(&input).map_err(|e| failed(&e))?;
+        if cancel.is_cancelled() {
+            return Err(AssistError::Cancelled);
+        }
+        let line_rects = self.engine.find_text_lines(&input, &words);
+        let recognised = self
+            .engine
+            .recognize_text(&input, &line_rects)
+            .map_err(|e| failed(&e))?;
+        if cancel.is_cancelled() {
+            return Err(AssistError::Cancelled);
+        }
+        let lines = recognised
+            .iter()
+            .flatten()
+            .filter_map(|line| ocr_line(line, width, height))
+            .collect();
+        Ok(OcrOutput {
+            doc_hash: sha256.to_owned(),
+            lines,
+        })
     }
+}
+
+/// The confidence every value read by `ocrs` carries: the lowest, "needs review". `ocrs` reports
+/// none, and a made-up one would be a silent default.
+pub const OCRS_CONFIDENCE_PERMILLE: u16 = crate::review::NEEDS_REVIEW_PERMILLE;
+
+/// One recognised line as an [`OcrLine`] on page 1, or `None` when it has no characters.
+fn ocr_line(line: &ocrs::TextLine, width: u32, height: u32) -> Option<OcrLine> {
+    let chars = line.chars();
+    let clamp = |v: i32, max: u32| u32::try_from(v.max(0)).map_or(max, |v| v.min(max));
+    let left = chars.iter().map(|c| c.rect.left()).min()?;
+    let top = chars.iter().map(|c| c.rect.top()).min()?;
+    let right = chars.iter().map(|c| c.rect.right()).max()?;
+    let bottom = chars.iter().map(|c| c.rect.bottom()).max()?;
+    let (x, y) = (clamp(left, width), clamp(top, height));
+    let (r, b) = (clamp(right, width), clamp(bottom, height));
+    Some(OcrLine {
+        page: 1,
+        text: line.to_string(),
+        bbox: [x, y, r.saturating_sub(x), b.saturating_sub(y)],
+        confidence_permille: OCRS_CONFIDENCE_PERMILLE,
+    })
 }
 
 fn load_one(dir: &Path, name: &str) -> Result<rten::Model, OcrModelsError> {

@@ -8,6 +8,7 @@ pub mod ocr_models;
 mod proposal;
 pub mod provider;
 pub mod redact;
+pub mod review;
 mod seam;
 pub mod validate;
 
