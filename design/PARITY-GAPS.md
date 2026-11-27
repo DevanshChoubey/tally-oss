@@ -178,7 +178,9 @@ notifications were read on CBIC's tax information portal on 2026-11-27.
   yet: the engine works them out (`Gstr3bWorking::outward_nil_exempt_value`,
   `outward_non_gst_value`, `inward_reverse_charge`, `itc_reverse_charge`) and
   `ledgerly export gstr3b` prints them, but the mock state has no rows for them, so the screen waits
-  for a mock round (mock first).
+  for a mock round (mock first). Round s23 drew the rows into the mock, but headless Chrome exits with SIGTRAP in
+  that round's shell, so `capture.mjs` could not refresh the captures and the mock change was not
+  kept.
 - **NOT BUILT** table 3.1(b) (zero-rated: exports, GSTR-1 6A, and SEZ supplies, 6B): voucher tax
   (`compute`) refuses overseas and SEZ recipients, so a period with one stays `Unsupported`. It
   needs the IGST Act s.16 and place-of-supply rules for exports of services, not yet read.
