@@ -150,6 +150,34 @@ Classes:
 - **DELIBERATE** the capture company's GSTIN and figures differ from the mock's Godavari Drip; the
   sample's GST ledgers are one per head and its GSTINs use the fake PAN pattern `ZZZZZ####Z`.
 
+## GST engine coverage (s23)
+
+Sources for this section are cited in `crates/ledgerly-gst/packs/rcm.toml` and the module docs;
+notifications were read on CBIC's tax information portal on 2026-11-27.
+
+- **NOT BUILT** reverse charge before 18 July 2022: the class index of `packs/rcm.toml` starts the day
+  05/2022-CT(R) came into force (GTA forward-charge option, sl.5AA). Earlier purchases are
+  Unsupported; the earlier text of sl.1 ("who has not paid central tax at the rate of 6%") and s.9(4)
+  (Notifications 8/2017, 38/2017, 10/2018, 12/2018, 22/2018-CT(R)) were not read.
+- **NOT BUILT** reverse-charge classes whose supply the books cannot identify: 13/2017-CT(R) sl.5 and
+  5A (government services, any SAC), 5B and 5C (TDR, FSI and long-term lease to a promoter), 6
+  (director's services: no SAC), 7 (insurance agent: SAC 997161 also covers brokers), 8 (recovery
+  agent: no SAC read), 9 and 9A (copyright: the 99733 codes do not split music, art and literary
+  works), 10 (RBI Overseeing Committee), 11 (DSAs), 12 (business facilitator), 13 (business
+  correspondent agent) and 16 (securities lending); IGST sl.1 (import of services: the engine refuses
+  an overseas supplier); s.9(4) for promoters (Notification 7/2019-CT(R), not read); the goods of
+  Notification 4/2017-CT(R) (not read). A voucher marked reverse charge for one of these is
+  Unsupported ("the pack says it is not"), never charged.
+- **DELIBERATE** for a class whose conditions the books cannot check (an advocate, an arbitral
+  tribunal, a supplier that is not a body corporate, a passenger vehicle with fuel), the user's
+  reverse-charge mark declares them, as the product's "Applicable for Reverse Charge" does
+  (help.tallysolutions.com/tally-prime/gst-reverse-charge-transactions/india-gst-inward-supply-rcm-tally/,
+  read 2026-11-27). Unmarked, a registered supplier's invoice that charges tax is taken as the
+  supplier's forward charge; unmarked with no tax charged is Unsupported.
+- **NOT BUILT** a recipient that is an LLP for a class naming a body corporate (sl.15), or a trust,
+  society or HUF for a class naming a body corporate or firm: whether either is a "body corporate"
+  under Companies Act s.2(11) is not settled from the sources read, so it is Unsupported.
+
 ## Masters (`masters.*`)
 
 - **DELIBERATE** the create ledger form has one row more than the mock's compact one: a "More
