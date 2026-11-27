@@ -96,6 +96,14 @@ untracked), look at each, update `PARITY-GAPS.md`.
 
 - Round A: committed (draft store, provider seam, review queue drafts, `ai.review.default` mock
   state with the `ai=on` hash switch and its capture). Open: the bill-wise New Ref (round D).
+- Round B: committed (key vault seam with `KeyringStore` in the real window and `MemoryVault` in
+  tests and captures, cloud gating on vault + provider + saved key, local model file setting and
+  Ctrl+O, per-feature switches, assistant log rows, mock states `ai.ai-settings.local` and
+  `.cloud`). Open: a form to describe the provider and type the key (owner: which providers);
+  no local runtime (owner: runtime and model download).
+- Honesty notes (B): the Ctrl+O and vault hand-over tests were written after the code and checked
+  by mutation; `w4_ai_settings` had its local-panel key list updated to the mock's new Ctrl+O entry
+  (the mock changed in this round; the assertion is as strict as before).
 - Honesty notes: round A's API tests (`s21_ai_drafts`) were written after the code and checked by
   mutation (ignoring decisions fails two); the app row test (`s21_review_drafts`) and the provider
   tests were checked failing by mutation too. Two 1.0.0 test files (`tally-bridge/tests/w3_import.rs`,

@@ -329,8 +329,23 @@ Classes:
   help.tallysolutions.com/docs/te9rel66/Reports/MIS_Reports/Display_Optional_Vouchers.htm).
 - **DELIBERATE** the mock's `ai-settings.local` and `ai-settings.cloud` states are removed for 1.0.0;
   the screen is `ai-settings.off` only, with the two cards disabled. Their layout returns with the AI.
-- **NOT BUILT** the cloud panel, the local model rows, per-feature switches and AI event rows:
-  no keychain store, model runner or feature switch exists.
+- **NOT BUILT** (1.0.x) the cloud panel, the local model rows, per-feature switches and AI event
+  rows are later-release only. With AI on (round s21 B, `ai.ai-settings.local`, `.cloud`,
+  `s21-b-sheet-1.png`): the Model file row (Ctrl+O chooses a file; only its path and size are
+  read), the provider rows from the company's audited settings with the key state read from the
+  key vault (the OS keychain in the real window), clickable per-feature switches stored as
+  settings, and the log's When/Feature/Input/Output/Your decision rows from `AiActivityRecorded`.
+- **NOT BUILT** `ai.ai-settings.local`: the log holds the fixture's one draft where the mock shows
+  five rows (one per feature); the others appear as rounds C-F record them. The Output column says
+  "Draft purchase" without the mock's line count, and the Input column shows "(hash 9f3c…)" where
+  the mock says "(image hash 9f3c…e1)".
+- **NOT BUILT** `ai.ai-settings.*`: no form to describe the provider or type the key yet (the
+  capture fixture stores them through the API); the reader and language rows stay "Not installed"
+  because no local runtime is linked (owner decision: runtime and model).
+- **NOT BUILT** `ai.ai-settings.cloud`: the Removed before sending card keeps the 1.0 app's wording
+  ("Bank account numbers and IFSC codes", "PAN, GSTIN and Aadhaar numbers"), which names what the
+  redaction module removes; the mock's shorter rows omit IFSC and GSTIN. The mock's table switches
+  have no width (a mock CSS gap: `.switch` is an inline span), so its On columns look empty.
 - **DELIBERATE** no tier is chosen by default; the log headers are the company file's columns; the
   "Current" badge is a border only; the report list shows for every tier.
 - **NOT BUILT** `ask.result`, `ask.loading`, `ask.low-confidence`, `ask.unsupported`, `quick-entry.*`

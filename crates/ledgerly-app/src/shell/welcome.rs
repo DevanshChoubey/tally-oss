@@ -7,9 +7,10 @@
 
 use crate::i18n::Tr;
 use std::path::PathBuf;
+use std::sync::Mutex;
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 
-use ledgerly_api::Api;
+use ledgerly_api::{Api, KeyVault, KeyringStore};
 use ledgerly_core::{Clock, CompanyId, StateCode};
 use ledgerly_model::{Address, Company, EntityKind, Features, NegativeStockPolicy};
 use time::{Date, Month};
@@ -42,12 +43,48 @@ where
         .map_err(|e| format!("Could not start the file work: {e}"))
 }
 
+/// Makes the key vault each opened company gets while the release carries AI.
+pub type KeyVaultMaker = fn() -> Box<dyn KeyVault>;
+
+/// The vault maker [`hand_over`] uses: none until the real window (the OS keychain) or the
+/// capture tool (an in-memory vault) registers one, so tests never reach the OS keychain.
+static KEY_VAULT_MAKER: Mutex<Option<KeyVaultMaker>> = Mutex::new(None);
+
+/// Registers the vault every company opened from now on gets, while the release carries AI.
+pub fn use_key_vault(maker: KeyVaultMaker) {
+    if let Ok(mut slot) = KEY_VAULT_MAKER.lock() {
+        *slot = Some(maker);
+    }
+}
+
+/// The OS keychain, as the real window registers it.
+fn system_keychain() -> Box<dyn KeyVault> {
+    Box::new(KeyringStore)
+}
+
+/// Registers the OS keychain as the key vault. Only the real window calls this.
+pub fn use_system_keychain() {
+    use_key_vault(system_keychain);
+}
+
+/// The registered vault maker, if any.
+fn key_vault_maker() -> Option<KeyVaultMaker> {
+    KEY_VAULT_MAKER.lock().ok().and_then(|slot| *slot)
+}
+
 /// Puts `api` on a new worker in `ctx`, as the open company. The previous worker stops on a
 /// separate thread, because dropping a worker waits for its queued jobs.
 ///
 /// # Errors
 /// A message when the worker thread could not start; `ctx` is then unchanged.
-pub(crate) fn hand_over(ctx: &mut AppCtx, api: Api) -> Result<(), String> {
+pub(crate) fn hand_over(ctx: &mut AppCtx, mut api: Api) -> Result<(), String> {
+    if crate::release::ai_enabled()
+        && let Some(make) = key_vault_maker()
+    {
+        // Attaching reads nothing: the vault is first asked about a key when the AI settings
+        // are read, so opening a company touches neither the keychain nor the network.
+        api.attach_key_vault(make());
+    }
     let worker = ApiWorker::spawn(api).map_err(|e| format!("Could not start the worker: {e}"))?;
     // The books on screen belong to the previous company; the shell fetches the new ones from
     // the new worker.
@@ -310,5 +347,84 @@ impl Screen for WelcomeScreen {
             ui.label(notice.as_str());
         }
         ScreenAction::Stay
+    }
+}
+
+#[cfg(test)]
+mod key_vault_tests {
+    //! Round s21 B: the vault a company gets when it is opened. Provenance (derived): the key and
+    //! the account name are written here; the account is `company-<id>-<name>`, as
+    //! `ledgerly_api::Api::ai_settings` documents it.
+    #![allow(clippy::unwrap_used, clippy::panic, reason = "test code: rule B2")]
+
+    use std::time::Duration;
+
+    use ledgerly_api::{KEY_SERVICE, KeyState, KeyVault, MemoryVault};
+    use ledgerly_core::{Clock, CompanyId, StateCode};
+    use ledgerly_model::{Address, Company, EntityKind, Features, NegativeStockPolicy};
+    use time::OffsetDateTime;
+    use time::macros::date;
+
+    use super::{hand_over, use_key_vault};
+    use crate::AppCtx;
+    use crate::worker::Poll;
+
+    fn vault_with_key() -> Box<dyn KeyVault> {
+        Box::new(MemoryVault::with_key(
+            KEY_SERVICE,
+            "company-1-Fictional Traders",
+            "fictional-key-s21",
+        ))
+    }
+
+    fn key_state_after_open(name: &str) -> KeyState {
+        // Lib tests have no CARGO_TARGET_TMPDIR; the temp dir is set to the build disk.
+        let path = std::env::temp_dir().join(name);
+        let _removed = std::fs::remove_file(&path);
+        let company = Company {
+            ineligible_itc_default: None,
+            id: CompanyId(1),
+            name: "Fictional Traders".to_owned(),
+            mailing_name: None,
+            address: Address::default(),
+            state: StateCode::new(29).unwrap(),
+            pan: None,
+            registrations: Vec::new(),
+            fy_start: date!(2026 - 04 - 01),
+            books_begin: date!(2026 - 04 - 01),
+            entity_kind: EntityKind::Company,
+            features: Features::default(),
+            negative_stock: NegativeStockPolicy::Block,
+        };
+        let api =
+            ledgerly_api::Api::create(&path, &company, Clock::Fixed(OffsetDateTime::UNIX_EPOCH))
+                .unwrap();
+        let mut ctx = AppCtx::default();
+        hand_over(&mut ctx, api).unwrap();
+        let mut ticket = ctx
+            .api
+            .as_ref()
+            .unwrap()
+            .run(|api| api.ai_settings().map(|s| s.key));
+        for _ in 0..2000 {
+            match ticket.poll() {
+                Poll::Ready(state) => return state.unwrap(),
+                Poll::Pending => std::thread::sleep(Duration::from_millis(2)),
+                Poll::Taken | Poll::Lost => panic!("the worker stopped"),
+            }
+        }
+        panic!("the worker never answered");
+    }
+
+    #[test]
+    fn an_opened_company_gets_the_registered_vault_only_with_ai_on() {
+        use_key_vault(vault_with_key);
+        crate::release::set_ai_enabled(false);
+        assert_eq!(
+            key_state_after_open("s21-vault-off.ledgerly"),
+            KeyState::NoVault
+        );
+        crate::release::set_ai_enabled(true);
+        assert_eq!(key_state_after_open("s21-vault-on.ledgerly"), KeyState::Set);
     }
 }

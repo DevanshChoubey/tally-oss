@@ -75,6 +75,9 @@ pub struct Api {
     /// The assistant's provider, when one is attached ([`Api::attach_assistant`]). Opening a
     /// company attaches none, so it touches no network.
     assistant: Option<Box<dyn AiProvider>>,
+    /// Where the cloud key is kept, when a vault is attached ([`Api::attach_key_vault`]). The
+    /// company file never holds the key.
+    pub(crate) key_vault: Option<Box<dyn ledgerly_assist::cloud::KeyVault>>,
 }
 
 /// The state of the books cache.
@@ -120,6 +123,7 @@ impl Api {
             lock: None,
             bank: Statements::default(),
             assistant: None,
+            key_vault: None,
         };
         api.reload()?;
         Ok(api)
@@ -139,6 +143,7 @@ impl Api {
             lock: None,
             bank: Statements::default(),
             assistant: None,
+            key_vault: None,
         };
         api.reload()?;
         Ok(api)

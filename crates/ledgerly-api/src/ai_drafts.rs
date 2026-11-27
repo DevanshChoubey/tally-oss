@@ -479,3 +479,137 @@ fn edits_json(edits: &DraftEdits) -> Option<String> {
     }
     Some(serde_json::Value::Object(map).to_string())
 }
+
+/// What an assistant event produced, as the AI activity log's Output column names it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AiOutput {
+    /// A draft voucher of this kind.
+    DraftVoucher(ledgerly_model::BaseVoucherKind),
+    /// A bank-match suggestion.
+    MatchSuggestion,
+    /// A report query (the engine runs it).
+    ReportQuery,
+    /// A column-mapping suggestion.
+    MappingSuggestion,
+    /// An answer, as stored JSON.
+    Answered,
+    /// Nothing was read; the reason.
+    ReadFailed(String),
+    /// A cloud consent, granted or not.
+    CloudConsent(bool),
+}
+
+/// What the person decided about an assistant event, as the log's last column says it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AiDecision {
+    /// A draft still open in the review queue.
+    Waiting,
+    /// Accepted; the engine posted this voucher (its number, or its id when it has none).
+    Accepted(Option<String>),
+    /// Rejected, with the reason given.
+    Rejected(Option<String>),
+    /// Nothing to decide (an answer, a failed read, a consent).
+    NoDecision,
+}
+
+/// One row of the AI activity log: an assistant event and what became of it. Accept and reject
+/// events are folded into the row of the draft they decide.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AiLogRow {
+    /// When the event was recorded.
+    pub at: OffsetDateTime,
+    /// The feature that produced it.
+    pub feature: AiFeature,
+    /// The provider's name and model version.
+    pub provider: String,
+    /// The input's name (a file name or the typed words).
+    pub input_label: String,
+    /// SHA-256 of the input, hex.
+    pub input_hash: String,
+    /// What it produced.
+    pub output: AiOutput,
+    /// What the person decided.
+    pub decision: AiDecision,
+}
+
+impl Api {
+    /// The AI activity log as rows, oldest first: one per draft, answer, failed read or consent,
+    /// each with the decision taken on it.
+    ///
+    /// # Errors
+    /// - [`ApiError::Store`] when the audit log cannot be read.
+    /// - [`ApiError::AiDraftUnreadable`] when a stored proposal is not one this build can read.
+    pub fn ai_log_rows(&self) -> Result<Vec<AiLogRow>, ApiError> {
+        let entries = self.ai_activity()?;
+        let books = match self.books()? {
+            Outcome::Value(b) => Some(b),
+            Outcome::Unsupported(_) => None,
+        };
+        let mut rows = Vec::new();
+        for entry in &entries {
+            let output = match &entry.activity.kind {
+                AiActivityKind::DraftStored { proposal_json, .. } => {
+                    match parse_proposal(entry.seq, proposal_json)? {
+                        Proposal::VoucherDraft(d) => AiOutput::DraftVoucher(d.kind),
+                        Proposal::MatchSuggestion(_) => AiOutput::MatchSuggestion,
+                        Proposal::ReportQuery(_) => AiOutput::ReportQuery,
+                        Proposal::MappingSuggestion(_) => AiOutput::MappingSuggestion,
+                    }
+                }
+                AiActivityKind::Answered { .. } => AiOutput::Answered,
+                AiActivityKind::ReadFailed { reason } => AiOutput::ReadFailed(reason.clone()),
+                AiActivityKind::CloudConsent { granted } => AiOutput::CloudConsent(*granted),
+                AiActivityKind::DraftAccepted { .. } | AiActivityKind::DraftRejected { .. } => {
+                    continue;
+                }
+            };
+            let decision = match &output {
+                AiOutput::DraftVoucher(_)
+                | AiOutput::MatchSuggestion
+                | AiOutput::ReportQuery
+                | AiOutput::MappingSuggestion => entries
+                    .iter()
+                    .find_map(|e| match &e.activity.kind {
+                        AiActivityKind::DraftAccepted { draft, voucher, .. }
+                            if *draft == entry.seq =>
+                        {
+                            let number = voucher.map(|id| {
+                                books
+                                    .as_ref()
+                                    .and_then(|b| b.vouchers.get(&id))
+                                    .and_then(|v| v.number.clone())
+                                    .unwrap_or_else(|| id.0.to_string())
+                            });
+                            Some(AiDecision::Accepted(number))
+                        }
+                        AiActivityKind::DraftRejected { draft, reason } if *draft == entry.seq => {
+                            Some(AiDecision::Rejected(reason.clone()))
+                        }
+                        AiActivityKind::DraftAccepted { .. }
+                        | AiActivityKind::DraftRejected { .. }
+                        | AiActivityKind::DraftStored { .. }
+                        | AiActivityKind::Answered { .. }
+                        | AiActivityKind::ReadFailed { .. }
+                        | AiActivityKind::CloudConsent { .. } => None,
+                    })
+                    .unwrap_or(AiDecision::Waiting),
+                AiOutput::Answered | AiOutput::ReadFailed(_) | AiOutput::CloudConsent(_) => {
+                    AiDecision::NoDecision
+                }
+            };
+            rows.push(AiLogRow {
+                at: entry.at,
+                feature: entry.activity.feature,
+                provider: format!(
+                    "{} {}",
+                    entry.activity.provider, entry.activity.model_version
+                ),
+                input_label: entry.activity.input_label.clone(),
+                input_hash: entry.activity.input_hash.clone(),
+                output,
+                decision,
+            });
+        }
+        Ok(rows)
+    }
+}

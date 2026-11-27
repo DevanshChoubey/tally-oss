@@ -143,6 +143,12 @@ pub enum ApiError {
         /// The draft id asked for (the sequence number of its stored event).
         id: u64,
     },
+    /// The company could not be read to name the keychain account of its cloud key.
+    #[error("the company cannot be read to name its cloud key: {reason}")]
+    AiKeyAccount {
+        /// The engine's reason the books cannot be read.
+        reason: String,
+    },
     /// A stored assistant proposal could not be written or read back as JSON.
     #[error("assistant draft {id} cannot be read by this build: {reason}")]
     AiDraftUnreadable {

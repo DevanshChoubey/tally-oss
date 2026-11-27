@@ -51,6 +51,7 @@ mod stack;
 pub mod submit;
 pub mod topbar;
 mod welcome;
+pub use welcome::{KeyVaultMaker, use_key_vault, use_system_keychain};
 
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -1018,6 +1019,8 @@ pub fn run() -> eframe::Result<()> {
         Box::new(|_cc| {
             // The real window is the one place a native file dialog may open.
             crate::screens::setup::enable_system_dialogs();
+            // And the one place the OS keychain is the key vault (used only with AI on).
+            welcome::use_system_keychain();
             Ok(Box::new(Shell::cold_start_with_recent(
                 crate::recent::default_dir(),
             )))
