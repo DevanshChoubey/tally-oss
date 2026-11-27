@@ -77,7 +77,7 @@ pub struct Api {
     assistant: Option<Box<dyn AiProvider>>,
     /// Where the cloud key is kept, when a vault is attached ([`Api::attach_key_vault`]). The
     /// company file never holds the key.
-    pub(crate) key_vault: Option<Box<dyn ledgerly_assist::cloud::KeyVault>>,
+    pub(crate) key_vault: Option<std::sync::Arc<dyn ledgerly_assist::cloud::KeyVault>>,
 }
 
 /// The state of the books cache.

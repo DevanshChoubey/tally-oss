@@ -42,6 +42,13 @@
    "description": "Cloud with your own key: the provider as the user described it, the key in the system keychain, redaction, and a confirmation before each document."
   },
   {
+   "id": "ai.ai-settings.cloud-edit",
+   "kind": "happy",
+   "hash": "screen=ai-settings&state=cloud-edit&ai=on",
+   "title": "AI and privacy, change provider or key (later release)",
+   "description": "Ctrl+Enter on the cloud panel: endpoint, request format and model as fields, the key in a masked field that is never filled back. Ctrl+A saves the key to the system keychain only; Alt+D deletes it; saving opens no connection."
+  },
+  {
    "id": "ai.quick-entry.proposal",
    "kind": "happy",
    "hash": "screen=quick-entry&state=proposal&ai=on",

@@ -35,6 +35,7 @@ use crate::screens::wire::{Done, Latest, unsupported_text};
 use crate::shell::submit;
 use crate::theme::{TEXT_BODY, TEXT_H2, TEXT_META};
 use crate::ui::badge::{BadgeKind, badge};
+use crate::ui::button::{ButtonKind, button};
 use crate::ui::card::{card, card_flush};
 use crate::ui::icon::Icon;
 use crate::ui::mock_table::{self, Cell, Width, panel_title};
@@ -271,11 +272,15 @@ pub fn key_hints(log_has_rows: bool) -> Vec<KeyHint> {
 enum Reply {
     /// The stored tier and the log, read together, with the AI settings and the assistant's log
     /// rows when the release carries AI.
-    Loaded(Result<Loaded, String>),
+    Loaded(Result<Box<Loaded>, String>),
     /// The answer to choosing a local model file.
     ModelFileChosen(Result<Outcome<()>, String>),
     /// The answer to switching a feature on or off.
     FeatureSwitched(Result<Outcome<()>, String>),
+    /// The answer to saving the provider and the key from the form.
+    ProviderSaved(Result<Outcome<()>, String>),
+    /// The answer to deleting the key from the form.
+    KeyDeleted(Result<Outcome<()>, String>),
     /// The answer to choosing `tier`: stored, or refused with the engine's reason.
     Chosen {
         /// The tier that was chosen.
@@ -330,6 +335,36 @@ pub struct AiSettingsScreen {
     notice_is_cloud_refusal: bool,
     /// The one call in flight.
     latest: Latest<Reply>,
+    /// The provider/key form, while it is open (mock `ai.ai-settings.cloud-edit`).
+    form: Option<ProviderForm>,
+}
+
+/// The provider/key form's fields as typed. The key field starts empty and is never filled from
+/// the vault; an empty key on save keeps the saved one.
+#[derive(Default)]
+struct ProviderForm {
+    /// The request format, one of [`ledgerly_api::CLOUD_FORMATS`].
+    format: String,
+    /// The endpoint (Messages) or base URL (chat) as typed.
+    endpoint: String,
+    /// The model for bill reading, plain words and other features, as typed.
+    models: [String; 3],
+    /// The key as typed, until a save moves it to the worker.
+    key: String,
+    /// Why the last save was refused.
+    error: Option<String>,
+}
+
+impl std::fmt::Debug for ProviderForm {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // The key is never printed, not even in a debug dump.
+        f.debug_struct("ProviderForm")
+            .field("format", &self.format)
+            .field("endpoint", &self.endpoint)
+            .field("models", &self.models)
+            .field("error", &self.error)
+            .finish_non_exhaustive()
+    }
 }
 
 impl AiSettingsScreen {
@@ -394,6 +429,140 @@ impl AiSettingsScreen {
         self.notice_is_cloud_refusal = false;
     }
 
+    /// Whether a call to the company is in flight.
+    #[must_use]
+    pub fn busy(&self) -> bool {
+        self.latest.is_pending()
+    }
+
+    /// Whether the provider/key form is open.
+    #[must_use]
+    pub fn editing_provider(&self) -> bool {
+        self.form.is_some()
+    }
+
+    /// Fills the provider/key form as if typed; does nothing when the form is closed.
+    /// `models` are the models for bill reading, plain words and other features.
+    pub fn fill_provider_form(
+        &mut self,
+        format: &str,
+        endpoint: &str,
+        models: [&str; 3],
+        key: &str,
+    ) {
+        if let Some(form) = self.form.as_mut() {
+            format.clone_into(&mut form.format);
+            endpoint.clone_into(&mut form.endpoint);
+            form.models = models.map(str::to_owned);
+            key.clone_into(&mut form.key);
+        }
+    }
+
+    /// Opens the provider/key form from the stored provider, with the key field empty: the key
+    /// is never read back from the vault.
+    fn open_form(&mut self) {
+        let cloud = self
+            .settings
+            .as_ref()
+            .map_or_else(ledgerly_api::CloudSettings::default, |s| s.cloud.clone());
+        self.form = Some(ProviderForm {
+            format: cloud
+                .format
+                .unwrap_or_else(|| ledgerly_api::CLOUD_FORMATS[0].to_owned()),
+            endpoint: cloud.endpoint.unwrap_or_default(),
+            models: [cloud.bill_model, cloud.words_model, cloud.model]
+                .map(Option::unwrap_or_default),
+            key: String::new(),
+            error: None,
+        });
+    }
+
+    /// Starts storing the provider and, when one was typed, saving the key in the vault. The
+    /// typed key is moved out of the form, so it is held only until the vault has it.
+    fn start_save(&mut self, worker: &ApiWorker) {
+        let Some(form) = self.form.as_mut() else {
+            return;
+        };
+        let given = |text: &str| {
+            let text = text.trim();
+            (!text.is_empty()).then(|| text.to_owned())
+        };
+        let cloud = ledgerly_api::CloudSettings {
+            endpoint: given(&form.endpoint),
+            format: given(&form.format),
+            model: given(&form.models[2]),
+            bill_model: given(&form.models[0]),
+            words_model: given(&form.models[1]),
+        };
+        let key = std::mem::take(&mut form.key);
+        form.error = None;
+        self.latest.start(worker, move |api: &mut Api| {
+            Reply::ProviderSaved(save_provider(api, &cloud, &key).map_err(|e| e.to_string()))
+        });
+    }
+
+    /// Takes the answer to a save or a delete: done closes the form with `done_line`; a refusal
+    /// stays in the form. The settings are read again either way.
+    fn form_answer(&mut self, result: Result<Outcome<()>, String>, done_line: &str) {
+        let refused = match result {
+            Ok(Outcome::Value(())) => {
+                self.form = None;
+                self.show_notice(done_line);
+                None
+            }
+            Ok(Outcome::Unsupported(u)) => Some(unsupported_text(&u)),
+            Err(reason) => Some(reason),
+        };
+        if let (Some(line), Some(form)) = (refused, self.form.as_mut()) {
+            form.error = Some(line);
+        }
+        self.loaded = false;
+    }
+
+    /// Acts on what the form's or the panel's buttons asked for.
+    fn form_asked(&mut self, asked: FormAsk, worker: Option<&ApiWorker>) {
+        let worker = worker.filter(|_| !self.latest.is_pending());
+        match (asked, worker) {
+            (FormAsk::Open, _) => self.open_form(),
+            (FormAsk::Cancel, _) => self.form = None,
+            (FormAsk::Save, Some(worker)) => self.start_save(worker),
+            (FormAsk::Delete, Some(worker)) => self.start_delete_key(worker),
+            (FormAsk::Nothing, _) | (FormAsk::Save | FormAsk::Delete, None) => {}
+        }
+    }
+
+    /// Starts deleting the saved key from the vault.
+    fn start_delete_key(&mut self, worker: &ApiWorker) {
+        self.latest.start(worker, |api: &mut Api| {
+            Reply::KeyDeleted(api.delete_cloud_key().map_err(|e| e.to_string()))
+        });
+    }
+
+    /// The form's keys: Ctrl+A saves, Alt+D deletes the key, Esc closes the form. Read before
+    /// the form's fields are drawn, so a focused field does not take them.
+    fn read_form_keys(&mut self, ui: &Ui, worker: Option<&ApiWorker>) {
+        let (save, delete, close) = ui.input_mut(|i| {
+            (
+                i.consume_key(Modifiers::COMMAND, Key::A),
+                i.consume_key(Modifiers::ALT, Key::D),
+                i.consume_key(Modifiers::NONE, Key::Escape),
+            )
+        });
+        if close {
+            self.form = None;
+            return;
+        }
+        let Some(worker) = worker else { return };
+        if self.latest.is_pending() {
+            return;
+        }
+        if save {
+            self.start_save(worker);
+        } else if delete {
+            self.start_delete_key(worker);
+        }
+    }
+
     /// The features switched off, once the AI settings are read (only with AI in the release).
     #[must_use]
     pub fn features_off(&self) -> Option<&[AiFeature]> {
@@ -424,7 +593,11 @@ impl AiSettingsScreen {
     fn start_load(&mut self, worker: &ApiWorker) {
         let with_ai = crate::release::ai_enabled();
         self.latest.start(worker, move |api: &mut Api| {
-            Reply::Loaded(read_all_settings(api, with_ai).map_err(|e| e.to_string()))
+            Reply::Loaded(
+                read_all_settings(api, with_ai)
+                    .map(Box::new)
+                    .map_err(|e| e.to_string()),
+            )
         });
     }
 
@@ -467,6 +640,17 @@ impl AiSettingsScreen {
     /// The keys this screen answers: 1, 2 and 3 choose a tier; Ctrl+E exports the log when it
     /// has rows.
     fn read_keys(&mut self, ui: &Ui, ctx: &AppCtx) {
+        if self.form.is_some() {
+            self.read_form_keys(ui, ctx.api.as_ref());
+            return;
+        }
+        if crate::release::ai_enabled()
+            && self.can_edit_provider()
+            && ui.input_mut(|i| i.consume_key(Modifiers::COMMAND, Key::Enter))
+        {
+            self.open_form();
+            return;
+        }
         let (one, two, three, export, model_file) = ui.input_mut(|i| {
             (
                 i.consume_key(Modifiers::NONE, Key::Num1),
@@ -501,6 +685,15 @@ impl AiSettingsScreen {
         {
             self.choose_model_file(worker, path);
         }
+    }
+
+    /// Whether the cloud panel shows the provider with a vault behind it, so the form can save.
+    fn can_edit_provider(&self) -> bool {
+        self.panel() == Panel::Cloud
+            && self
+                .settings
+                .as_ref()
+                .is_some_and(|s| s.key != KeyState::NoVault)
     }
 
     fn pick(&mut self, worker: Option<&ApiWorker>, tier: AiTier) {
@@ -571,6 +764,12 @@ impl AiSettingsScreen {
                 }
                 self.loaded = false;
             }
+            Reply::ProviderSaved(result) => {
+                self.form_answer(result, &tr.t("ai.settings.form.saved"));
+            }
+            Reply::KeyDeleted(result) => {
+                self.form_answer(result, &tr.t("ai.settings.form.deleted"));
+            }
             Reply::ModelFileChosen(result) => {
                 match result {
                     Ok(Outcome::Value(())) => self.notice = None,
@@ -600,8 +799,36 @@ impl Screen for AiSettingsScreen {
         tr.t("ai.settings.title")
     }
 
+    fn key_bar_name(&self, tr: &Tr) -> String {
+        if self.form.is_some() {
+            tr.t("ai.settings.form.keys")
+        } else {
+            tr.t("ai.settings.title")
+        }
+    }
+
     fn keys(&self, tr: &Tr) -> Vec<KeyHint> {
+        if self.form.is_some() {
+            // The form's own bar (mock `ai.ai-settings.cloud-edit`); the tier keys are off while
+            // a field may be typed in.
+            return vec![
+                KeyHint::new("", tr.t("ai.settings.form.keys")),
+                KeyHint::new("Ctrl+A", tr.t("ai.settings.form.save")),
+                KeyHint::new("Alt+D", tr.t("ai.settings.form.delete")),
+                KeyHint::new("Esc", tr.t("ai.settings.form.cancel")),
+            ];
+        }
         let mut hints = key_hints_in(self.log_has_rows(), tr);
+        if crate::release::ai_enabled() && self.can_edit_provider() {
+            let at = hints
+                .iter()
+                .position(|h| h.keys == "Ctrl+E")
+                .unwrap_or(hints.len());
+            hints.insert(
+                at,
+                KeyHint::new("Ctrl+Enter", tr.t("ai.settings.key.change")),
+            );
+        }
         if crate::release::ai_enabled() && self.panel() == Panel::Local {
             // The mock lists Ctrl+O after the tiers and before the export (index.html:2106).
             let at = hints
@@ -662,13 +889,20 @@ impl Screen for AiSettingsScreen {
         }
         gap(ui, 14.0);
 
-        draw_panel(
+        let mut asked = FormAsk::Nothing;
+        if let Some(form) = self.form.as_mut() {
+            asked = draw_provider_form(ui, form, &tr);
+            gap(ui, 14.0);
+        } else if draw_panel(
             ui,
             panel,
             self.settings.as_ref(),
             self.cloud_reason.as_deref(),
             &tr,
-        );
+        ) {
+            asked = FormAsk::Open;
+        }
+        self.form_asked(asked, ctx.api.as_ref());
 
         let switched = draw_main_row(
             ui,
@@ -735,13 +969,15 @@ fn read_all_settings(api: &Api, with_ai: bool) -> Result<Loaded, ledgerly_api::A
 pub use crate::ui::probe::{read_probe, record_probe};
 
 /// The panel under the option cards: what the chosen tier means, or the note for no tier.
+/// Returns whether "Change provider or key" was clicked.
 fn draw_panel(
     ui: &mut Ui,
     panel: Panel,
     settings: Option<&AiSettings>,
     cloud_reason: Option<&str>,
     tr: &Tr,
-) {
+) -> bool {
+    let mut change = false;
     match panel {
         Panel::Unset => {
             note(ui, NoteKind::Info, &unset_note_in(tr));
@@ -758,13 +994,14 @@ fn draw_panel(
         Panel::Cloud => {
             match settings {
                 Some(settings) if settings.key != KeyState::NoVault => {
-                    draw_cloud_provider(ui, settings, tr);
+                    change = draw_cloud_provider(ui, settings, tr);
                 }
                 Some(_) | None => draw_cloud(ui, cloud_reason, tr),
             }
             gap(ui, 14.0);
         }
     }
+    change
 }
 
 /// The tier a panel shows, as the option card it checks.
@@ -913,31 +1150,15 @@ fn key_words(key: &KeyState, tr: &Tr) -> (String, Option<(BadgeKind, String)>) {
 /// The cloud panel once a key vault is attached (index.html:2098): the provider as the user
 /// described it and whether the key is saved, beside the Removed before sending card. The key
 /// itself is never read here, only whether it is there.
-fn draw_cloud_provider(ui: &mut Ui, settings: &AiSettings, tr: &Tr) {
-    let not_described = tr.t("ai.settings.cloud.not_described");
-    let cloud = &settings.cloud;
-    let endpoint = cloud
-        .endpoint
-        .clone()
-        .unwrap_or_else(|| not_described.clone());
-    let format = cloud
-        .format
-        .as_deref()
-        .map_or_else(|| not_described.clone(), |f| format_text(f, tr));
-    let model = cloud.model.clone().unwrap_or_else(|| not_described.clone());
+/// Returns whether "Change provider or key" was clicked.
+fn draw_cloud_provider(ui: &mut Ui, settings: &AiSettings, tr: &Tr) -> bool {
+    let mut change = false;
+    let plain = provider_rows(&settings.cloud, tr);
     let (key_text, key_badge) = key_words(&settings.key, tr);
-    let labels = [
-        "endpoint_label",
-        "format_label",
-        "model_label",
-        "key_label",
-        "ask_label",
-        "region_label",
-    ]
-    .map(|k| tr.t(&format!("ai.settings.cloud.{k}")));
+    let labels =
+        ["key_label", "ask_label", "region_label"].map(|k| tr.t(&format!("ai.settings.cloud.{k}")));
     let ask = tr.t("ai.settings.cloud.ask");
     let region = tr.t("ai.settings.cloud.region");
-    let removed_lines = removed_in(tr);
     ui.scope(|ui| {
         ui.spacing_mut().item_spacing.x = GRID_GAP;
         ui.columns(2, |cols| {
@@ -959,34 +1180,232 @@ fn draw_cloud_provider(ui: &mut Ui, settings: &AiSettings, tr: &Tr) {
                         ui.label(RichText::new(&ask).size(TEXT_BODY));
                     });
                 });
-                let rows = vec![
-                    vec![mock_table::muted(&labels[0]), mock_table::text(&endpoint)],
-                    vec![mock_table::muted(&labels[1]), mock_table::text(&format)],
-                    vec![mock_table::muted(&labels[2]), mock_table::text(&model)],
-                    vec![mock_table::muted(&labels[3]), key_cell],
-                    vec![mock_table::muted(&labels[4]), ask_cell],
-                    vec![mock_table::muted(&labels[5]), mock_table::muted(&region)],
-                ];
+                let mut rows: Vec<Vec<Cell<'_>>> = plain
+                    .iter()
+                    .map(|(label, value)| vec![mock_table::muted(label), mock_table::text(value)])
+                    .collect();
+                rows.push(vec![mock_table::muted(&labels[0]), key_cell]);
+                rows.push(vec![mock_table::muted(&labels[1]), ask_cell]);
+                rows.push(vec![
+                    mock_table::muted(&labels[2]),
+                    mock_table::muted(&region),
+                ]);
                 mock_table::table(
                     ui,
                     &[Width::Fixed(PROVIDER_LABEL_COLUMN), Width::Rest],
                     None,
                     rows,
                 );
+                ui.add_space(10.0);
+                change = button(
+                    ui,
+                    &tr.t("ai.settings.form.title"),
+                    Some("Ctrl+Enter"),
+                    ButtonKind::Secondary,
+                )
+                .clicked();
             });
             record_probe(left, "ai-settings.provider", provider.response.rect);
-            let removed = card(right, |ui| {
-                ui.set_min_width(ui.available_width());
-                panel_title(ui, Some(Icon::Shield), &tr.t("ai.settings.cloud.removed"));
-                let rows = removed_lines
-                    .iter()
-                    .map(|line| vec![mock_table::text(line), mock_table::switch_cell(true, line)])
-                    .collect();
-                mock_table::table(ui, &[Width::Rest, Width::Fixed(ON_COLUMN)], None, rows);
-            });
-            record_probe(right, "ai-settings.removed", removed.response.rect);
+            let removed = removed_card(right, tr);
+            record_probe(right, "ai-settings.removed", removed);
         });
     });
+    change
+}
+
+/// The provider's rows as the API resolves them: the format, where requests go, and the model
+/// each feature is sent to (the owner's defaults with the Messages format when none is named).
+fn provider_rows(cloud: &ledgerly_api::CloudSettings, tr: &Tr) -> Vec<(String, String)> {
+    let not_described = tr.t("ai.settings.cloud.not_described");
+    let or_not = |v: Option<String>| v.unwrap_or_else(|| not_described.clone());
+    vec![
+        (
+            tr.t("ai.settings.cloud.format_label"),
+            or_not(cloud.format.as_deref().map(|f| format_text(f, tr))),
+        ),
+        (
+            tr.t("ai.settings.cloud.url_label"),
+            or_not(ledgerly_api::cloud_request_url(cloud)),
+        ),
+        (
+            tr.t("ai.settings.cloud.bill_model_label"),
+            or_not(ledgerly_api::cloud_model_for(cloud, AiFeature::BillReading)),
+        ),
+        (
+            tr.t("ai.settings.cloud.words_model_label"),
+            or_not(ledgerly_api::cloud_model_for(cloud, AiFeature::PlainWords)),
+        ),
+        (
+            tr.t("ai.settings.cloud.other_model_label"),
+            or_not(ledgerly_api::cloud_model_for(cloud, AiFeature::Ask)),
+        ),
+    ]
+}
+
+/// The Removed before sending card; returns its rectangle.
+fn removed_card(ui: &mut Ui, tr: &Tr) -> egui::Rect {
+    let removed_lines = removed_in(tr);
+    card(ui, |ui| {
+        ui.set_min_width(ui.available_width());
+        panel_title(ui, Some(Icon::Shield), &tr.t("ai.settings.cloud.removed"));
+        let rows = removed_lines
+            .iter()
+            .map(|line| vec![mock_table::text(line), mock_table::switch_cell(true, line)])
+            .collect();
+        mock_table::table(ui, &[Width::Rest, Width::Fixed(ON_COLUMN)], None, rows);
+    })
+    .response
+    .rect
+}
+
+/// What the provider form's buttons asked for this frame.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum FormAsk {
+    /// Nothing was clicked.
+    Nothing,
+    /// "Change provider or key" on the provider card.
+    Open,
+    /// Save (Ctrl+A).
+    Save,
+    /// Delete key (Alt+D).
+    Delete,
+    /// Cancel (Esc).
+    Cancel,
+}
+
+/// The provider/key form (mock `ai.ai-settings.cloud-edit`): endpoint, request format, model
+/// and a masked key field, beside the Removed before sending card.
+fn draw_provider_form(ui: &mut Ui, form: &mut ProviderForm, tr: &Tr) -> FormAsk {
+    let mut asked = FormAsk::Nothing;
+    ui.scope(|ui| {
+        ui.spacing_mut().item_spacing.x = GRID_GAP;
+        ui.columns(2, |cols| {
+            let [left, right] = cols else { return };
+            let drawn = card(left, |ui| {
+                ui.set_min_width(ui.available_width());
+                panel_title(ui, Some(Icon::Cloud), &tr.t("ai.settings.form.title"));
+                form_fields(ui, form, tr);
+                if let Some(error) = &form.error {
+                    ui.add_space(6.0);
+                    note(ui, NoteKind::Bad, error);
+                }
+                ui.add_space(10.0);
+                asked = form_buttons(ui, tr);
+            });
+            record_probe(left, "ai-settings.form", drawn.response.rect);
+            let _removed = removed_card(right, tr);
+        });
+    });
+    asked
+}
+
+/// The form's fields: the request format, the endpoint or base URL, a model per feature and
+/// the masked key.
+fn form_fields(ui: &mut Ui, form: &mut ProviderForm, tr: &Tr) {
+    let t = tokens(ui);
+    let width = ui.available_width();
+    let label = |ui: &mut Ui, text: &str| {
+        ui.label(RichText::new(text).size(TEXT_META).color(t.text_2));
+    };
+    let meta = |ui: &mut Ui, text: &str| {
+        ui.add(egui::Label::new(para_text(text, TEXT_META, t.text_2)).wrap());
+    };
+    label(ui, &tr.t("ai.settings.form.format_label"));
+    egui::ComboBox::from_id_salt("ai-provider-format")
+        .selected_text(format_text(&form.format, tr))
+        .width(width)
+        .show_ui(ui, |ui| {
+            for format in ledgerly_api::CLOUD_FORMATS {
+                let on = form.format == format;
+                if ui.selectable_label(on, format_text(format, tr)).clicked() {
+                    format.clone_into(&mut form.format);
+                }
+            }
+        });
+    ui.add_space(6.0);
+    let messages = form.format == ledgerly_api::CLOUD_FORMATS[1];
+    let endpoint_label = if messages {
+        tr.t("ai.settings.cloud.endpoint_label")
+    } else {
+        tr.t("ai.settings.form.base_url_label")
+    };
+    label(ui, &endpoint_label);
+    ui.add(egui::TextEdit::singleline(&mut form.endpoint).desired_width(width));
+    meta(ui, &tr.t("ai.settings.form.url_note"));
+    ui.add_space(6.0);
+    let model_labels = ["bill_model_label", "words_model_label", "other_model_label"];
+    for (n, (field, key)) in form.models.iter_mut().zip(model_labels).enumerate() {
+        label(ui, &tr.t(&format!("ai.settings.form.{key}")));
+        let hint = if n < 2 {
+            tr.t("ai.settings.form.model_hint")
+        } else {
+            String::new()
+        };
+        ui.add(
+            egui::TextEdit::singleline(field)
+                .hint_text(hint)
+                .desired_width(width),
+        );
+    }
+    meta(ui, &tr.t("ai.settings.form.defaults_note"));
+    ui.add_space(6.0);
+    label(ui, &tr.t("ai.settings.cloud.key_label"));
+    ui.add(
+        egui::TextEdit::singleline(&mut form.key)
+            .password(true)
+            .hint_text(tr.t("ai.settings.form.key_hint"))
+            .desired_width(width),
+    );
+    ui.add_space(6.0);
+    meta(ui, &tr.t("ai.settings.form.key_note"));
+}
+
+/// Save, Delete key and Cancel; returns the one clicked.
+fn form_buttons(ui: &mut Ui, tr: &Tr) -> FormAsk {
+    let mut asked = FormAsk::Nothing;
+    ui.horizontal_wrapped(|ui| {
+        for (word, key, kind, ask) in [
+            (
+                "ai.settings.form.save",
+                "Ctrl+A",
+                ButtonKind::Primary,
+                FormAsk::Save,
+            ),
+            (
+                "ai.settings.form.delete",
+                "Alt+D",
+                ButtonKind::Danger,
+                FormAsk::Delete,
+            ),
+            (
+                "ai.settings.form.cancel",
+                "Esc",
+                ButtonKind::Secondary,
+                FormAsk::Cancel,
+            ),
+        ] {
+            if button(ui, &tr.t(word), Some(key), kind).clicked() {
+                asked = ask;
+            }
+        }
+    });
+    asked
+}
+
+/// Stores the provider, then saves the key when one was typed (an empty key keeps the saved
+/// one). A refused provider stops before the key is touched.
+fn save_provider(
+    api: &mut Api,
+    cloud: &ledgerly_api::CloudSettings,
+    key: &str,
+) -> Result<Outcome<()>, ledgerly_api::ApiError> {
+    if let Outcome::Unsupported(u) = api.set_cloud_settings(cloud)? {
+        return Ok(Outcome::Unsupported(u));
+    }
+    if key.trim().is_empty() {
+        return Ok(Outcome::Value(()));
+    }
+    api.save_cloud_key(key)
 }
 
 /// The cloud panel (index.html:1912): the Provider card and the Removed before sending card, side

@@ -649,9 +649,11 @@ fn godavari_assistant_file(dir: &Path) -> Api {
     // a fictional endpoint on the reserved `.invalid` domain, never called. The key is in the
     // capture tool's in-memory vault (`capture_vault`), never in the file.
     api.set_cloud_settings(&ledgerly_api::CloudSettings {
-        endpoint: Some("https://llm.example.invalid/v1/chat/completions".to_owned()),
+        endpoint: Some("https://llm.example.invalid/v1".to_owned()),
         format: Some("chat-completions".to_owned()),
         model: Some("model-x".to_owned()),
+        bill_model: None,
+        words_model: None,
     })
     .unwrap();
     // The fixture is handed to the shell directly, not through the welcome screen's hand-over,
@@ -2096,6 +2098,18 @@ fn light_shots() -> Vec<Shot> {
             .query("AI and privacy")
             .then(&[(Key::Enter, NONE), (Key::Num3, NONE)])
             .expect("AI and privacy", None)
+            .on(Fixture::GodavariAssistant)
+            .ai_on(),
+        // Later release: Ctrl+Enter on the cloud panel opens the provider/key form, the key
+        // field empty (mock `ai.ai-settings.cloud-edit`). The vault is the capture tool's
+        // in-memory one; no key is typed and nothing is saved.
+        shot("ai.ai-settings.cloud-edit", &[palette])
+            .query("AI and privacy")
+            .then(&[(Key::Enter, NONE), (Key::Num3, NONE)])
+            .wait(20)
+            .press(&[(Key::Enter, Modifiers::COMMAND)])
+            .wait(20)
+            .expect_bar("AI and privacy", "Provider and key")
             .on(Fixture::GodavariAssistant)
             .ai_on(),
         // Later release: plain-words entry (mock `quick-entry.*` with `ai=on`). The sentence is

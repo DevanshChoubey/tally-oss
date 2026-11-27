@@ -85,12 +85,15 @@ Each round: test first and seen failing, provenance on expected values, all five
 states in light, dark and hc, build mock|app sheets (`design/app-captures/s21-<round>-sheet-N.png`,
 untracked), look at each, update `PARITY-GAPS.md`.
 
-## Owner decisions (not made here)
+## Owner decisions (2026-11-27, relayed by the coordinator)
 
-- A local inference runtime (a llama.cpp binding) and an OCR engine (Tesseract or PaddleOCR
-  binding): each is a new dependency and a model download. The seams and the Not installed state
-  are built; no runtime is linked.
-- The real cloud provider(s) and their default endpoints.
+- Local model: none for now. Local stays Not installed; no runtime, no model download.
+- OCR: ocrs (pure Rust, MIT/Apache-2.0). Its model files (about 10 MB) are downloaded only when
+  the user asks, from a fixed URL, with a checksum check; never during development.
+- Cloud: the Anthropic Messages API with the user's own key (defaults `claude-sonnet-5-5` for bill
+  reading, `claude-haiku-5-5` for plain words) and an OpenAI-compatible chat endpoint (base URL plus
+  key). No other provider. Keys in the keychain; no network in tests. The AI-in-release switch
+  stays false.
 
 ## Status (kept current each round)
 
@@ -129,6 +132,13 @@ untracked), look at each, update `PARITY-GAPS.md`.
   boxes on the photo, rejected, error), PNG only. Mock states first; tests first, seen failing.
   NOT BUILT (PARITY-GAPS): item rows, accepted capture, place of supply, duplicate, cloud consent,
   JPEG/PDF, image store, Esc mid-read. Rounds E and F, and the key form, not started.
+- Key form and owner cloud providers: committed. `ai.ai-settings.cloud-edit` (format, base URL,
+  three model fields, masked key; Ctrl+A save, Alt+D delete key, Esc cancel), the key moved
+  straight to the vault and never read back. `CloudAssistant` over the vault and a transport:
+  Messages API (x-api-key, sonnet for bills, haiku for plain words) or an OpenAI-compatible base
+  URL plus /chat/completions. Tests use a recording transport; no network. Cloud OCR stays refused
+  (an image cannot be redacted; per-document consent is not built). The app does not yet attach
+  the cloud assistant (PARITY-GAPS).
 - Honesty notes (C): the app tests' sentence helper was changed to wait for the ready hint
   instead of "Read as:" (the test typed before the gate read Ready); the screen tests were written
   before the screen and seen failing, the accept transition checked by mutation.

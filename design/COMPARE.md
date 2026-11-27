@@ -1,6 +1,6 @@
 # App against mock
 
-456 app captures are paired with a mock capture of the same theme and state id. SSIM is 1 for identical images; lower is a bigger difference, and the list runs worst first.
+459 app captures are paired with a mock capture of the same theme and state id. SSIM is 1 for identical images; lower is a bigger difference, and the list runs worst first.
 
 | Theme | State | SSIM |
 | --- | --- | --- |
@@ -19,7 +19,6 @@
 | hc | sales-invoice.as-voucher | 0.5172 |
 | hc | profit-and-loss.detailed | 0.5196 |
 | hc | home.nudge-open | 0.5217 |
-| hc | ai.ai-settings.cloud | 0.5260 |
 | hc | home.gst-unsupported | 0.5345 |
 | hc | import.port-error | 0.5380 |
 | hc | import.validation-error | 0.5391 |
@@ -46,6 +45,7 @@
 | hc | profit-and-loss.print-preview | 0.5660 |
 | hc | gst.gstr3b | 0.5677 |
 | hc | masters.ledgers | 0.5690 |
+| hc | ai.ai-settings.cloud | 0.5766 |
 | hc | sales-invoice.item-list | 0.5780 |
 | hc | home.ai-off | 0.5795 |
 | hc | home.default | 0.5795 |
@@ -81,6 +81,7 @@
 | light | ai.purchase-bill.ledger-lines | 0.5998 |
 | hc | masters.items | 0.6005 |
 | light | import.file-imported | 0.6009 |
+| hc | ai.ai-settings.cloud-edit | 0.6014 |
 | light | ai.review.default | 0.6018 |
 | hc | balance-sheet.default | 0.6022 |
 | hc | profit-and-loss.print-busy | 0.6023 |
@@ -103,7 +104,7 @@
 | hc | sales-invoice.default | 0.6120 |
 | hc | hi.gst.gstr1 | 0.6132 |
 | hc | hi.balance-sheet.default | 0.6138 |
-| light | ai.ai-settings.local | 0.6158 |
+| light | ai.ai-settings.local | 0.6160 |
 | dark | home.nudge-open | 0.6170 |
 | dark | hi.bank.default | 0.6170 |
 | light | profit-and-loss.detailed | 0.6172 |
@@ -121,7 +122,6 @@
 | hc | hi.sales-invoice.default | 0.6232 |
 | light | gst.gstr3b | 0.6246 |
 | light | sales-invoice.gst-inter-state | 0.6249 |
-| light | ai.ai-settings.cloud | 0.6252 |
 | hc | day-book.print-preview | 0.6252 |
 | dark | sales-invoice.einvoice-not-ready | 0.6254 |
 | hc | hi.home.default | 0.6257 |
@@ -135,9 +135,8 @@
 | light | home.gst-unsupported | 0.6292 |
 | dark | sales-invoice.item-list | 0.6293 |
 | light | ai.quick-entry.proposal | 0.6301 |
-| dark | ai.ai-settings.local | 0.6311 |
+| dark | ai.ai-settings.local | 0.6314 |
 | hc | credit-note.validation-error | 0.6314 |
-| dark | ai.ai-settings.cloud | 0.6315 |
 | light | sales-invoice.mode-list | 0.6339 |
 | hc | hi.sales-invoice.print-preview | 0.6339 |
 | light | hi.sales-invoice.default | 0.6340 |
@@ -147,6 +146,7 @@
 | hc | debit-note.validation-error | 0.6348 |
 | light | profit-and-loss.provisional | 0.6363 |
 | dark | sales-invoice.mode-list | 0.6363 |
+| light | ai.ai-settings.cloud | 0.6370 |
 | dark | hi.masters.ledgers | 0.6383 |
 | light | hi.bank.default | 0.6391 |
 | hc | sales-invoice.b2c | 0.6392 |
@@ -154,6 +154,7 @@
 | dark | balance-sheet.provisional | 0.6401 |
 | dark | sales-invoice.default | 0.6405 |
 | dark | bank.brs-exported | 0.6406 |
+| dark | ai.ai-settings.cloud | 0.6412 |
 | hc | purchase.default | 0.6414 |
 | dark | import.default | 0.6416 |
 | dark | profit-and-loss.detailed | 0.6417 |
@@ -180,6 +181,7 @@
 | dark | profit-and-loss.print-failed | 0.6511 |
 | dark | keys.standard | 0.6511 |
 | light | import.port-error | 0.6514 |
+| dark | ai.ai-settings.cloud-edit | 0.6516 |
 | dark | stock-summary.provisional | 0.6521 |
 | light | stock-summary.provisional | 0.6521 |
 | hc | sales-invoice.saved | 0.6525 |
@@ -194,6 +196,7 @@
 | hc | profit-and-loss.default | 0.6566 |
 | hc | journal.print-preview | 0.6567 |
 | light | sales-invoice.print-preview | 0.6577 |
+| light | ai.ai-settings.cloud-edit | 0.6579 |
 | hc | balance-sheet.voucher | 0.6583 |
 | light | home.ai-off | 0.6584 |
 | light | home.default | 0.6584 |
@@ -641,18 +644,6 @@ SSIM 0.5217
 </tr>
 </table>
 
-## hc / ai.ai-settings.cloud
-
-SSIM 0.5260
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/hc/ai.ai-settings.cloud.webp" width="480" alt="mock hc ai.ai-settings.cloud"></td>
-<td><img src="app-captures/hc/ai.ai-settings.cloud.webp" width="480" alt="app hc ai.ai-settings.cloud"></td>
-</tr>
-</table>
-
 ## hc / home.gst-unsupported
 
 SSIM 0.5345
@@ -962,6 +953,18 @@ SSIM 0.5690
 <tr>
 <td><img src="mock-v2/captures/states/hc/masters.ledgers.webp" width="480" alt="mock hc masters.ledgers"></td>
 <td><img src="app-captures/hc/masters.ledgers.webp" width="480" alt="app hc masters.ledgers"></td>
+</tr>
+</table>
+
+## hc / ai.ai-settings.cloud
+
+SSIM 0.5766
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/hc/ai.ai-settings.cloud.webp" width="480" alt="mock hc ai.ai-settings.cloud"></td>
+<td><img src="app-captures/hc/ai.ai-settings.cloud.webp" width="480" alt="app hc ai.ai-settings.cloud"></td>
 </tr>
 </table>
 
@@ -1385,6 +1388,18 @@ SSIM 0.6009
 </tr>
 </table>
 
+## hc / ai.ai-settings.cloud-edit
+
+SSIM 0.6014
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/hc/ai.ai-settings.cloud-edit.webp" width="480" alt="mock hc ai.ai-settings.cloud-edit"></td>
+<td><img src="app-captures/hc/ai.ai-settings.cloud-edit.webp" width="480" alt="app hc ai.ai-settings.cloud-edit"></td>
+</tr>
+</table>
+
 ## light / ai.review.default
 
 SSIM 0.6018
@@ -1651,7 +1666,7 @@ SSIM 0.6138
 
 ## light / ai.ai-settings.local
 
-SSIM 0.6158
+SSIM 0.6160
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -1865,18 +1880,6 @@ SSIM 0.6249
 </tr>
 </table>
 
-## light / ai.ai-settings.cloud
-
-SSIM 0.6252
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/light/ai.ai-settings.cloud.webp" width="480" alt="mock light ai.ai-settings.cloud"></td>
-<td><img src="app-captures/light/ai.ai-settings.cloud.webp" width="480" alt="app light ai.ai-settings.cloud"></td>
-</tr>
-</table>
-
 ## hc / day-book.print-preview
 
 SSIM 0.6252
@@ -2035,7 +2038,7 @@ SSIM 0.6301
 
 ## dark / ai.ai-settings.local
 
-SSIM 0.6311
+SSIM 0.6314
 
 <table>
 <tr><th>Mock</th><th>App</th></tr>
@@ -2054,18 +2057,6 @@ SSIM 0.6314
 <tr>
 <td><img src="mock-v2/captures/states/hc/credit-note.validation-error.webp" width="480" alt="mock hc credit-note.validation-error"></td>
 <td><img src="app-captures/hc/credit-note.validation-error.webp" width="480" alt="app hc credit-note.validation-error"></td>
-</tr>
-</table>
-
-## dark / ai.ai-settings.cloud
-
-SSIM 0.6315
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/dark/ai.ai-settings.cloud.webp" width="480" alt="mock dark ai.ai-settings.cloud"></td>
-<td><img src="app-captures/dark/ai.ai-settings.cloud.webp" width="480" alt="app dark ai.ai-settings.cloud"></td>
 </tr>
 </table>
 
@@ -2177,6 +2168,18 @@ SSIM 0.6363
 </tr>
 </table>
 
+## light / ai.ai-settings.cloud
+
+SSIM 0.6370
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/ai.ai-settings.cloud.webp" width="480" alt="mock light ai.ai-settings.cloud"></td>
+<td><img src="app-captures/light/ai.ai-settings.cloud.webp" width="480" alt="app light ai.ai-settings.cloud"></td>
+</tr>
+</table>
+
 ## dark / hi.masters.ledgers
 
 SSIM 0.6383
@@ -2258,6 +2261,18 @@ SSIM 0.6406
 <tr>
 <td><img src="mock-v2/captures/states/dark/bank.brs-exported.webp" width="480" alt="mock dark bank.brs-exported"></td>
 <td><img src="app-captures/dark/bank.brs-exported.webp" width="480" alt="app dark bank.brs-exported"></td>
+</tr>
+</table>
+
+## dark / ai.ai-settings.cloud
+
+SSIM 0.6412
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/dark/ai.ai-settings.cloud.webp" width="480" alt="mock dark ai.ai-settings.cloud"></td>
+<td><img src="app-captures/dark/ai.ai-settings.cloud.webp" width="480" alt="app dark ai.ai-settings.cloud"></td>
 </tr>
 </table>
 
@@ -2573,6 +2588,18 @@ SSIM 0.6514
 </tr>
 </table>
 
+## dark / ai.ai-settings.cloud-edit
+
+SSIM 0.6516
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/dark/ai.ai-settings.cloud-edit.webp" width="480" alt="mock dark ai.ai-settings.cloud-edit"></td>
+<td><img src="app-captures/dark/ai.ai-settings.cloud-edit.webp" width="480" alt="app dark ai.ai-settings.cloud-edit"></td>
+</tr>
+</table>
+
 ## dark / stock-summary.provisional
 
 SSIM 0.6521
@@ -2738,6 +2765,18 @@ SSIM 0.6577
 <tr>
 <td><img src="mock-v2/captures/states/light/sales-invoice.print-preview.webp" width="480" alt="mock light sales-invoice.print-preview"></td>
 <td><img src="app-captures/light/sales-invoice.print-preview.webp" width="480" alt="app light sales-invoice.print-preview"></td>
+</tr>
+</table>
+
+## light / ai.ai-settings.cloud-edit
+
+SSIM 0.6579
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/ai.ai-settings.cloud-edit.webp" width="480" alt="mock light ai.ai-settings.cloud-edit"></td>
+<td><img src="app-captures/light/ai.ai-settings.cloud-edit.webp" width="480" alt="app light ai.ai-settings.cloud-edit"></td>
 </tr>
 </table>
 

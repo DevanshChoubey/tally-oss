@@ -507,7 +507,9 @@ fn check_cancel(cancel: &CancelToken) -> Result<(), AssistError> {
     }
 }
 
-fn is_https(endpoint: &str) -> bool {
+/// Whether `endpoint` starts with `https://` (any case): the only scheme the client sends to.
+#[must_use]
+pub fn is_https(endpoint: &str) -> bool {
     endpoint
         .get(..8)
         .is_some_and(|p| p.eq_ignore_ascii_case("https://"))

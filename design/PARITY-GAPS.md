@@ -340,9 +340,32 @@ Classes:
   five rows (one per feature); the others appear as rounds C-F record them. The Output column says
   "Draft purchase" without the mock's line count, and the Input column shows "(hash 9f3c…)" where
   the mock says "(image hash 9f3c…e1)".
-- **NOT BUILT** `ai.ai-settings.*`: no form to describe the provider or type the key yet (the
-  capture fixture stores them through the API); the reader and language rows stay "Not installed"
-  because no local runtime is linked (owner decision: runtime and model).
+- **FIX** (s21, `s21-k-sheet-1.png`) `ai.ai-settings.cloud-edit`: Ctrl+Enter on the cloud panel
+  opens the provider/key form (mock state added first): request format, endpoint or base URL, a
+  model per feature, and a masked key field that is never filled back from the vault. Ctrl+A saves
+  (the provider as audited settings, the key to the vault only), Alt+D deletes the key, Esc closes
+  the form. Keys as TallyPrime documents them (Ctrl+Enter "To alter a master", Ctrl+A "To accept
+  or save a screen", Alt+D delete, Esc back; help.tallysolutions.com/keyboard-shortcuts-tally-prime/,
+  read 2026-11-27). The API refuses a non-https endpoint, a format other than the two it speaks
+  and an empty key; tests and captures use `MemoryVault` only, and nothing opens a connection.
+- **DELIBERATE** (owner, 2026-11-27) the cloud provider is the Anthropic Messages API with the
+  user's own key or an OpenAI-compatible chat endpoint given as a base URL plus key; no other.
+  With Messages and no model named, bill reading uses `claude-sonnet-5-5` and plain words
+  `claude-haiku-5-5`; the cloud panel shows the model each feature is sent to. The cloud panel's
+  rows are now Format, Requests go to, Bill reading, Plain words, Other features (mock changed
+  first); the fixture's chat endpoint is a base URL.
+- **DELIBERATE** (owner, 2026-11-27) no local model for now: the reader and language rows stay
+  "Not installed"; no runtime is linked and nothing is downloaded. Cloud is the only real provider.
+- **NOT BUILT** the cloud assistant (`Api::cloud_assistant`) reads no bill image: an image cannot be
+  redacted, and the per-document confirmation (`purchase-bill.cloud-consent`) is not built, so the
+  `claude-sonnet-5-5` default is stored and shown but not yet used. Open question for the owner:
+  should a cloud bill read send the image after a per-document confirmation, or the local OCR text
+  (ocrs) redacted?
+- **NOT BUILT** the app does not yet attach the cloud assistant when a company with the Cloud tier
+  opens (the AI-in-release switch stays false); tests build it through the API with a recording
+  transport.
+- **NOT BUILT** the form's text fields are egui's single-line edits, shorter than the mock's
+  `.fld input` boxes.
 - **NOT BUILT** `ai.ai-settings.cloud`: the Removed before sending card keeps the 1.0 app's wording
   ("Bank account numbers and IFSC codes", "PAN, GSTIN and Aadhaar numbers"), which names what the
   redaction module removes; the mock's shorter rows omit IFSC and GSTIN. The mock's table switches
