@@ -10,6 +10,7 @@ mod ai_features;
 mod ai_settings;
 mod as_voucher;
 mod ask_books;
+mod backup;
 mod balance;
 mod bank;
 mod bank_ai;
@@ -36,6 +37,7 @@ mod review;
 mod search;
 mod tally_file_import;
 mod tally_import;
+mod upgrade;
 mod voucher_audit;
 mod voucher_gst;
 
@@ -52,6 +54,10 @@ pub use ai_settings::{
     cloud_model_for, cloud_request_url,
 };
 pub use ask_books::{AskAnswer, default_report_params, default_report_period};
+pub use backup::{
+    BACKUP_FOLDER_KEY, BACKUP_FREQUENCY_KEY, BACKUP_KEEP_KEY, BackupFrequency, BackupSettings,
+    BackupTaken, DEFAULT_KEEP, MAX_KEEP, Restored, restore_backup,
+};
 pub use balance::BalanceChange;
 pub use bank::{BalanceRefusal, balance_refusal};
 pub use bank_ai::{AiBankMatch, BankAiAnswer};
@@ -96,6 +102,7 @@ pub use home::{
     CUSTOMER_LATE_DAYS, CashAndBank, HomeFigures, LateBills, MonthSales, SUPPLIER_LATE_DAYS,
 };
 pub use ledgerly_engine::bills::OpenBill;
+pub use ledgerly_engine::upgrade::PredefinedStep;
 pub use ledgerly_gst::compute::GstBreakup;
 pub use ledgerly_gst::setoff::SetOff;
 pub use ledgerly_model::{
@@ -108,7 +115,7 @@ pub use ledgerly_reports::{
     AuditReportKind, Cell, ColumnHeader, ColumnSpec, Detail, DrillKey, Report, ReportFilter,
     ReportKind, ReportParams, ReportRow, RowKind,
 };
-pub use ledgerly_store::backup::{RebuildOutcome, RebuildReport};
+pub use ledgerly_store::backup::{BackupFile, BackupKind, RebuildOutcome, RebuildReport};
 pub use ledgerly_store::verify::{ChainProblem, VerifyReport};
 pub use ledgerly_tally_bridge::file_import::MasterBehaviour;
 pub use maintenance::{VoucherCheck, verify_file};
@@ -120,6 +127,7 @@ pub use tally_file_import::{
     BACKUP_FOLDER, FileImportSummary, ImportException, ImportNote, VoucherBehaviour, XmlImport,
 };
 pub use tally_import::ImportSummary;
+pub use upgrade::{APP_VERSION_KEY, UpgradeReport};
 pub use voucher_audit::{ChangeKind, VoucherAudit, VoucherChange, VoucherDetail};
 pub use voucher_gst::{EligibleItc, InvoiceGst, PartyBill, RateRow};
 

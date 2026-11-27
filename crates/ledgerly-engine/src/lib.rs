@@ -9,6 +9,7 @@ pub mod masters_stock;
 pub mod masters_voucher_type;
 pub mod numbering;
 pub mod scenario;
+pub mod upgrade;
 pub mod vouchers;
 
 pub use error::EngineError;

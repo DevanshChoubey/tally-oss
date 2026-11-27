@@ -426,7 +426,7 @@ impl Api {
     }
 
     /// The last stored value of setting `key`, or `None` when it was never set.
-    fn setting(&self, key: &str) -> Result<Option<String>, ApiError> {
+    pub(crate) fn setting(&self, key: &str) -> Result<Option<String>, ApiError> {
         let records = read_all(self.store())?;
         Ok(records.iter().rev().find_map(|record| match &record.event {
             Event::SettingChanged { key: k, after, .. } if k == key => Some(after.clone()),
@@ -451,7 +451,7 @@ impl Api {
     }
 
     /// Stores `value` under setting `key` as an audited change; the same value writes nothing.
-    fn change_setting(&mut self, key: &str, value: &str) -> Result<(), ApiError> {
+    pub(crate) fn change_setting(&mut self, key: &str, value: &str) -> Result<(), ApiError> {
         let before = self.setting(key)?.unwrap_or_default();
         if before == value {
             return Ok(());

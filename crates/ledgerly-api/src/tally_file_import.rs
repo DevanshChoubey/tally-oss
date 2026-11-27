@@ -63,7 +63,7 @@ pub struct VoucherBehaviour {
     pub overwrite_same_guid: bool,
 }
 
-/// The folder, beside the company file, that a backup taken before an import goes into.
+/// The folder, beside the company file, that backups go into when no backup folder is stored.
 pub const BACKUP_FOLDER: &str = "Backups";
 
 /// One object that was not imported, and why.
@@ -192,8 +192,10 @@ impl Api {
     /// [`Api::import_tally_xml_file`] does. The import screen asks whether to take one first:
     /// "Select Yes to take a backup of the company data before importing"
     /// (<https://help.tallysolutions.com/import-data-from-xml-or-json/>, read 2026-11-27). The
-    /// backup goes into the `Backups` folder beside the company file ([`BACKUP_FOLDER`]; the
-    /// help names no folder) and its path is in [`FileImportSummary::backup`].
+    /// backup goes into the company's backup folder ([`Api::backup_folder`]: the one stored on
+    /// the backup screen, else the `Backups` folder beside the company file, [`BACKUP_FOLDER`];
+    /// the help names no folder), never collides with another backup's name, and its path is in
+    /// [`FileImportSummary::backup`].
     ///
     /// # Errors
     /// [`ApiError::Store`] when the backup cannot be written or does not verify: nothing is
@@ -203,13 +205,7 @@ impl Api {
         what: XmlImport,
         path: &Path,
     ) -> Result<Outcome<FileImportSummary>, ApiError> {
-        let folder = self
-            .store()
-            .path()
-            .parent()
-            .unwrap_or_else(|| Path::new("."))
-            .join(BACKUP_FOLDER);
-        let backup = self.backup_to(&folder)?;
+        let backup = self.back_up_now()?;
         Ok(self.import_tally_xml_file(what, path)?.map(|mut summary| {
             summary.backup = Some(backup);
             summary

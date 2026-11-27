@@ -445,6 +445,26 @@ impl Api {
         Ok(Some(receipt))
     }
 
+    /// [`Api::commit_as`] with the current actor and `reason` written in the audit record (the
+    /// upgrade of an old company file says why it changed the books).
+    ///
+    /// # Errors
+    /// As [`Api::commit_as`].
+    pub(crate) fn commit_with_reason(
+        &mut self,
+        events: &[Event],
+        reason: String,
+    ) -> Result<Option<ledgerly_store::CommitReceipt>, ApiError> {
+        if events.is_empty() {
+            return Ok(None);
+        }
+        let mut meta = audit_meta(&self.actor, self.clock);
+        meta.reason = Some(reason);
+        let receipt = self.store.commit(events, &meta)?;
+        self.reload()?;
+        Ok(Some(receipt))
+    }
+
     /// The actor changes are attributed to.
     pub(crate) fn actor(&self) -> &Actor {
         &self.actor
