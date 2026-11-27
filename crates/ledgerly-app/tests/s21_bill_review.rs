@@ -213,6 +213,38 @@ impl Harness {
         text
     }
 
+    /// One frame with `events`; returns the labels of the widgets that gained keyboard focus.
+    fn focus_frame(&mut self, events: Vec<Event>) -> Vec<String> {
+        let out = self.ctx.run_ui(
+            RawInput {
+                events,
+                screen_rect: Some(egui::Rect::from_min_size(
+                    egui::Pos2::ZERO,
+                    egui::vec2(1280.0, 1000.0),
+                )),
+                ..RawInput::default()
+            },
+            |ui| {
+                let _stay = self.screen.ui(ui, &mut self.app);
+            },
+        );
+        let gained = out
+            .platform_output
+            .events
+            .iter()
+            .filter_map(|e| match e {
+                egui::output::OutputEvent::FocusGained(info) => info.label.clone(),
+                egui::output::OutputEvent::Clicked(_)
+                | egui::output::OutputEvent::DoubleClicked(_)
+                | egui::output::OutputEvent::TripleClicked(_)
+                | egui::output::OutputEvent::TextSelectionChanged(_)
+                | egui::output::OutputEvent::ValueChanged(_) => None,
+            })
+            .collect();
+        out.drop_without_applying_deltas();
+        gained
+    }
+
     fn settle_on(&mut self, wanted: &str) -> String {
         let mut text = self.frame(Vec::new());
         for _ in 0..2000 {
@@ -337,4 +369,38 @@ fn a_read_gstin_and_printed_tax_are_shown_with_a_confirm_each() {
         "{text}"
     );
     assert_eq!(text.matches("\u{2713} Confirm").count(), 9, "{text}");
+}
+
+/// The mock's note under the lines (`billNeedsReview`), and its keyboard path: Tab reaches a
+/// Confirm button and Space confirms the value.
+#[test]
+fn tab_reaches_a_confirm_button_and_space_confirms_the_value() {
+    let (path, bytes) = bill_png("s21-review-keys.png");
+    let provider = FixedAnswers::new().with_document(recorded(&bytes));
+    let mut h = Harness::new(api("s21-pb-review-keys.ledgerly", Some(provider)));
+    h.read_file(&path);
+    let text = h.settle_on("7 values read from the bill need review");
+    assert!(
+        text.contains("The OCR reader gives no confidence, so nothing it read is kept until you confirm it against the photo. Tab to a Confirm button; Space confirms."),
+        "{text}"
+    );
+    let tab = Event::Key {
+        key: Key::Tab,
+        physical_key: None,
+        pressed: true,
+        repeat: false,
+        modifiers: Modifiers::NONE,
+    };
+    let mut reached = false;
+    for _ in 0..40 {
+        let gained = h.focus_frame(vec![tab.clone()]);
+        if gained.iter().any(|l| l.contains("Confirm")) {
+            reached = true;
+            break;
+        }
+    }
+    assert!(reached, "Tab never reached a Confirm button");
+    h.key(Key::Space, Modifiers::NONE);
+    let text = h.settle_on("6 values read from the bill need review");
+    assert!(text.contains("you confirmed"), "{text}");
 }

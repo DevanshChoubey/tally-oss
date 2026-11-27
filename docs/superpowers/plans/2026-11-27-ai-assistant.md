@@ -183,6 +183,11 @@ untracked), look at each, update `PARITY-GAPS.md`.
   tests use `confirm_field` rather than Tab and Space; the first app test's count was changed from 8
   to 7 when the unmatched line's ledger was taken out of the count to match the mock (the select
   covers it); the GSTIN and tax test was written first and seen failing.
+  Follow-up: the engine check no longer asks to confirm the ledger of a line that names none (it
+  blocks on the missing ledger instead, the same block as before the needs-review change), and the
+  card shows the mock's OCR note with its keyboard path, tested by Tab to a Confirm and Space. Both
+  tests were seen failing first. The source chip still names the attached provider ("Test
+  provider" in the capture) where the mock says "OCR on this computer".
 - Honesty notes (F): the API and app bank tests were written first and seen failing (API at compile,
   app 3 of 4; the AI-off one passed on the old path); the Origin unit test was seen failing at
   compile only. One API test fixture was corrected (an alteration must keep the voucher number).

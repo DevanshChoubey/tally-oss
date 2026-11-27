@@ -1657,3 +1657,4 @@ name = "हिन्दी"
 "lit.confirm_each_value_read_from_the_bill" = "बिल से पढ़े गए हर मान की पुष्टि करें।"  # unsourced
 "lit.supplier_gstin" = "आपूर्तिकर्ता GSTIN"  # unsourced
 "lit.printed_tax" = "छपा हुआ कर"  # unsourced
+"lit.the_ocr_reader_gives_no_confidence_so_nothing_it_read_is_kept_until_you_confirm_it_against_the_photo_tab_to_a_confirm_button_space_confirms" = "OCR रीडर कोई भरोसा-स्तर नहीं देता, इसलिए उसका पढ़ा कुछ भी तब तक नहीं रखा जाता जब तक आप फ़ोटो से मिलाकर पुष्टि न करें। Tab से पुष्टि बटन पर जाएँ; Space पुष्टि करता है।"  # unsourced

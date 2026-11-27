@@ -1203,7 +1203,11 @@ fn bill_body(ui: &mut Ui, photo: &Photo, view: &BillView, open: bool) -> Option<
         if let [left, right] = cols {
             left.add(
                 egui::Label::new(para_text(
-                    &lit("Item rows are not read yet. Tax ledgers come from your masters; nothing is created."),
+                    &if view.review.is_empty() {
+                        lit("Item rows are not read yet. Tax ledgers come from your masters; nothing is created.")
+                    } else {
+                        lit("The OCR reader gives no confidence, so nothing it read is kept until you confirm it against the photo. Tab to a Confirm button; Space confirms.")
+                    },
                     TEXT_META,
                     t.text_2,
                 ))

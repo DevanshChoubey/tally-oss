@@ -36,10 +36,10 @@
 | hc | bank.default | 0.5402 |
 | hc | bank.offline-ai | 0.5402 |
 | hc | ai.ai-settings.local | 0.5419 |
+| hc | ai.purchase-bill.needs-review | 0.5423 |
 | hc | import.imported | 0.5424 |
 | hc | stock-summary.provisional | 0.5436 |
 | dark | import.file-transactions | 0.5438 |
-| hc | ai.purchase-bill.needs-review | 0.5453 |
 | hc | sales-invoice.einvoice-not-ready | 0.5462 |
 | dark | import.file-masters | 0.5478 |
 | hc | import.no-company | 0.5494 |
@@ -87,12 +87,13 @@
 | hc | sales-invoice.period-locked | 0.5876 |
 | hc | sales-invoice.validation-error | 0.5887 |
 | hc | keys.standard | 0.5894 |
+| light | ai.purchase-bill.needs-review | 0.5895 |
 | light | import.file-missing-choice | 0.5897 |
 | hc | balance-sheet.provisional | 0.5904 |
-| light | ai.purchase-bill.needs-review | 0.5925 |
 | light | hi.import.file-backed-up | 0.5925 |
 | hc | ai.ask.result | 0.5926 |
 | hc | sales-invoice.mode-list | 0.5939 |
+| dark | ai.purchase-bill.needs-review | 0.5940 |
 | light | review.default | 0.5943 |
 | dark | review.default | 0.5952 |
 | light | sales-invoice.save-confirm | 0.5953 |
@@ -102,7 +103,6 @@
 | dark | audit.default | 0.5965 |
 | hc | gst.gstr1-correction | 0.5968 |
 | hc | gst.gstr1 | 0.5969 |
-| dark | ai.purchase-bill.needs-review | 0.5970 |
 | hc | ai.quick-entry.unknown-ledger | 0.5975 |
 | dark | bank.default | 0.5992 |
 | dark | bank.offline-ai | 0.5992 |
@@ -893,6 +893,18 @@ SSIM 0.5419
 </tr>
 </table>
 
+## hc / ai.purchase-bill.needs-review
+
+SSIM 0.5423
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/hc/ai.purchase-bill.needs-review.webp" width="480" alt="mock hc ai.purchase-bill.needs-review"></td>
+<td><img src="app-captures/hc/ai.purchase-bill.needs-review.webp" width="480" alt="app hc ai.purchase-bill.needs-review"></td>
+</tr>
+</table>
+
 ## hc / import.imported
 
 SSIM 0.5424
@@ -926,18 +938,6 @@ SSIM 0.5438
 <tr>
 <td><img src="mock-v2/captures/states/dark/import.file-transactions.webp" width="480" alt="mock dark import.file-transactions"></td>
 <td><img src="app-captures/dark/import.file-transactions.webp" width="480" alt="app dark import.file-transactions"></td>
-</tr>
-</table>
-
-## hc / ai.purchase-bill.needs-review
-
-SSIM 0.5453
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/hc/ai.purchase-bill.needs-review.webp" width="480" alt="mock hc ai.purchase-bill.needs-review"></td>
-<td><img src="app-captures/hc/ai.purchase-bill.needs-review.webp" width="480" alt="app hc ai.purchase-bill.needs-review"></td>
 </tr>
 </table>
 
@@ -1505,6 +1505,18 @@ SSIM 0.5894
 </tr>
 </table>
 
+## light / ai.purchase-bill.needs-review
+
+SSIM 0.5895
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/light/ai.purchase-bill.needs-review.webp" width="480" alt="mock light ai.purchase-bill.needs-review"></td>
+<td><img src="app-captures/light/ai.purchase-bill.needs-review.webp" width="480" alt="app light ai.purchase-bill.needs-review"></td>
+</tr>
+</table>
+
 ## light / import.file-missing-choice
 
 SSIM 0.5897
@@ -1526,18 +1538,6 @@ SSIM 0.5904
 <tr>
 <td><img src="mock-v2/captures/states/hc/balance-sheet.provisional.webp" width="480" alt="mock hc balance-sheet.provisional"></td>
 <td><img src="app-captures/hc/balance-sheet.provisional.webp" width="480" alt="app hc balance-sheet.provisional"></td>
-</tr>
-</table>
-
-## light / ai.purchase-bill.needs-review
-
-SSIM 0.5925
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/light/ai.purchase-bill.needs-review.webp" width="480" alt="mock light ai.purchase-bill.needs-review"></td>
-<td><img src="app-captures/light/ai.purchase-bill.needs-review.webp" width="480" alt="app light ai.purchase-bill.needs-review"></td>
 </tr>
 </table>
 
@@ -1574,6 +1574,18 @@ SSIM 0.5939
 <tr>
 <td><img src="mock-v2/captures/states/hc/sales-invoice.mode-list.webp" width="480" alt="mock hc sales-invoice.mode-list"></td>
 <td><img src="app-captures/hc/sales-invoice.mode-list.webp" width="480" alt="app hc sales-invoice.mode-list"></td>
+</tr>
+</table>
+
+## dark / ai.purchase-bill.needs-review
+
+SSIM 0.5940
+
+<table>
+<tr><th>Mock</th><th>App</th></tr>
+<tr>
+<td><img src="mock-v2/captures/states/dark/ai.purchase-bill.needs-review.webp" width="480" alt="mock dark ai.purchase-bill.needs-review"></td>
+<td><img src="app-captures/dark/ai.purchase-bill.needs-review.webp" width="480" alt="app dark ai.purchase-bill.needs-review"></td>
 </tr>
 </table>
 
@@ -1682,18 +1694,6 @@ SSIM 0.5969
 <tr>
 <td><img src="mock-v2/captures/states/hc/gst.gstr1.webp" width="480" alt="mock hc gst.gstr1"></td>
 <td><img src="app-captures/hc/gst.gstr1.webp" width="480" alt="app hc gst.gstr1"></td>
-</tr>
-</table>
-
-## dark / ai.purchase-bill.needs-review
-
-SSIM 0.5970
-
-<table>
-<tr><th>Mock</th><th>App</th></tr>
-<tr>
-<td><img src="mock-v2/captures/states/dark/ai.purchase-bill.needs-review.webp" width="480" alt="mock dark ai.purchase-bill.needs-review"></td>
-<td><img src="app-captures/dark/ai.purchase-bill.needs-review.webp" width="480" alt="app dark ai.purchase-bill.needs-review"></td>
 </tr>
 </table>
 

@@ -283,7 +283,8 @@ impl Api {
                 };
             }
         }
-        if let Some(field) = ledgerly_assist::review::needs_review(&draft).first() {
+        let waiting = first_to_confirm(&draft);
+        if let Some(field) = waiting {
             return Ok(Outcome::Value(DraftCheck::Blocked {
                 field: field.name(),
                 reason: "this value was read by the OCR reader and needs review: check it against the bill and confirm it".to_owned(),
@@ -780,4 +781,25 @@ fn decision_words(decision: &AiDecision) -> String {
         AiDecision::Rejected(None) => "Rejected".to_owned(),
         AiDecision::NoDecision => "Nothing to decide".to_owned(),
     }
+}
+
+/// The first read value of `draft` still waiting for the person's confirmation. A line that names
+/// no ledger has nothing to confirm, only a ledger to choose: the validator's missing-ledger block
+/// asks for that choice.
+fn first_to_confirm(
+    draft: &ledgerly_assist::VoucherDraft,
+) -> Option<ledgerly_assist::review::DraftField> {
+    use ledgerly_assist::review::DraftField;
+    ledgerly_assist::review::needs_review(draft)
+        .into_iter()
+        .find(|f| match *f {
+            DraftField::LineLedger(n) => draft.lines.get(n).is_some_and(|l| l.ledger.is_some()),
+            DraftField::Date
+            | DraftField::PartyName
+            | DraftField::InvoiceNumber
+            | DraftField::SupplierGstin
+            | DraftField::LineAmount(_)
+            | DraftField::DocumentTotal
+            | DraftField::DocumentTax => true,
+        })
 }

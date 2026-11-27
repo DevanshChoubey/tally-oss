@@ -261,3 +261,28 @@ fn confirming_a_field_the_draft_does_not_have_is_unsupported_not_ignored() {
     let out = api.check_ai_draft(id, &edits).unwrap();
     assert!(matches!(out, Outcome::Unsupported(_)), "{out:?}");
 }
+
+#[test]
+fn every_value_confirmed_but_no_ledger_chosen_asks_for_the_ledger_not_a_confirmation() {
+    // The taxable line names no ledger: there is nothing on it to confirm, only a ledger to
+    // choose. With every read value confirmed and no choice made, the block is the validator's
+    // missing-ledger one (as in `s21_bill_photo` before the choice), not "needs review".
+    let mut api = books("s21-ocrs-review-no-ledger.ledgerly");
+    let (id, fields) = read(&mut api);
+    let edits = DraftEdits {
+        confirmed: fields
+            .into_iter()
+            .filter(|f| *f != DraftField::LineLedger(0))
+            .collect(),
+        ..DraftEdits::default()
+    };
+    match api.check_ai_draft(id, &edits).unwrap() {
+        Outcome::Value(DraftCheck::Blocked { field, reason }) => {
+            assert_eq!(field, "lines[0].ledger");
+            assert!(!reason.contains("needs review"), "{reason}");
+        }
+        other @ (Outcome::Value(_) | Outcome::Unsupported(_)) => {
+            panic!("expected a block, got {other:?}")
+        }
+    }
+}
