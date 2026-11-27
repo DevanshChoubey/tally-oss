@@ -224,6 +224,7 @@ table.t td.ind1{padding-left:26px} table.t td.ind2{padding-left:42px}
 .prov.eng{background:var(--ok-soft);color:var(--ok)}
 .prov.books{background:var(--accent-soft);color:var(--accent-ink)}
 .prov.rule{background:var(--sunken);color:var(--text-2)}
+.prov.review{background:var(--warn-soft);color:var(--warn)}
 .aifield{background:var(--ai-soft)!important;border-color:var(--ai)!important;border-style:dashed!important}
 .aifield.blank{background:var(--surface)!important;border-color:var(--bad)!important;border-style:solid!important}
 .bind{display:inline-flex;align-items:center;padding:0 5px;border-radius:3px;background:var(--ok-soft);color:var(--ok);font-weight:600;white-space:nowrap}
@@ -391,6 +392,7 @@ mark{background:var(--accent-soft);color:var(--accent-ink);border-radius:2px;pad
  {"id":"ai.purchase-bill.choose","kind":"empty","hash":"screen=purchase-bill&state=choose&ai=on","title":"Bill photo, choose a file (later release)","description":"Ctrl+Alt+O: the path of a bill photo (PNG or JPEG) or PDF is typed; Enter reads it on this computer. Nothing is read or kept until then."},
  {"id":"ai.purchase-bill.reading","kind":"loading","hash":"screen=purchase-bill&state=reading&ai=on","title":"Bill photo, reading (later release)","description":"A bill photo is being read on this computer; the image never leaves the machine."},
  {"id":"ai.purchase-bill.ledger-lines","kind":"validation-error","hash":"screen=purchase-bill&state=ledger-lines&ai=on","title":"Bill photo, choose the purchase ledger (later release)","description":"What the bill reader reads today: the printed supplier, bill number, date, taxable value, tax and total, drafted as ledger lines with a box on the image for each. The taxable value names no purchase ledger, so the person chooses one; the engine checks the draft after every choice and its verdict is the check line. Item rows are not read yet."},
+ {"id":"ai.purchase-bill.needs-review","kind":"low-confidence","hash":"screen=purchase-bill&state=needs-review&ai=on","title":"Bill photo, values to confirm (later release)","description":"Read on this computer by the OCR reader, which gives no confidence: every value it read needs review. Each value shows Needs review and a Confirm button until the person checks it against the photo (the open taxable line's ledger is confirmed by choosing it); the draft cannot be accepted while any is unconfirmed. Confirmations are logged as human edits."},
  {"id":"ai.purchase-bill.rejected","kind":"empty","hash":"screen=purchase-bill&state=rejected&ai=on","title":"Bill photo, draft rejected (later release)","description":"Alt+D: the draft is rejected and nothing is posted; the rejection is in the AI activity log. Another bill can be read, or the bill typed."},
  {"id":"ai.purchase-bill.error","kind":"error","hash":"screen=purchase-bill&state=error&ai=on","title":"Bill photo, unreadable file (later release)","description":"The file is a PDF, which this build does not read (PNG photos only); the error says what failed and what to do."},
  {"id":"hi.home.default","kind":"happy","hash":"screen=home&state=default&lang=hi","title":"Home, Hindi","description":"The default Home with every word the app translates shown in Hindi; figures, dates and digit grouping unchanged."},
@@ -982,7 +984,7 @@ const ICONS = {
 const ic = (n,c) => `<svg class="ico ${c||''}" viewBox="0 0 24 24" aria-hidden="true"><path d="${ICONS[n]||''}"/></svg>`;
 const kb = k => `<kbd>${esc(k)}</kbd>`;
 const badge = (t,cls,i) => `<span class="badge ${cls||'b-n'}">${i?ic(i):''}${esc(t)}</span>`;
-const prov = (kind,label) => `<span class="prov ${kind}" title="${esc({doc:'Read from the document',ai:'Proposed by AI',you:'Typed by you',eng:'Computed by the engine',books:'From posted books',rule:'Deterministic rule'}[kind]||'')}">${esc(label)}</span>`;
+const prov = (kind,label) => `<span class="prov ${kind}" title="${esc({doc:'Read from the document',ai:'Proposed by AI',you:'Typed by you',eng:'Computed by the engine',books:'From posted books',rule:'Deterministic rule',review:'Read by the OCR reader, which gives no confidence: check it against the bill'}[kind]||'')}">${esc(label)}</span>`;
 const CONF = {3:'High',2:'Medium',1:'Low'};
 const conf = l => l==='rule' ? `<span class="conf" data-l="rule">${ic('check')}Rule, deterministic</span>` : `<span class="conf" data-l="${l}" title="Model confidence band. Threshold for auto-fill: Medium."><i><b></b><b></b><b></b></i>${CONF[l]} confidence</span>`;
 const srcChip = (i,t) => `<span class="src-chip">${ic(i)}${esc(t)}</span>`;
@@ -1683,6 +1685,7 @@ SCREENS['purchase-bill']={title:'Purchase from bill photo',default:'proposal',
   else if(st==='reading')right=`<div class="card pad"><div class="row t2" style="margin-bottom:8px">${ic('cpu')}<b>Reading on this computer</b> · step 2 of 3: matching items to your masters</div>${skelRows(9,[40,70,55,90,85,60,75,50,30])}<p class="meta" style="margin-top:10px">${kb('Esc')} cancels. The image never leaves this computer in the local tier.</p><button class="btn" style="margin-top:10px" data-go="${hashFor('purchase-bill','proposal')}" data-tx="ai-proposal-arrive">Show the result (mock)</button></div>`;
   else if(st==='error')right=`<div class="note bad" role="alert">${ic('alert')}<div><b>Could not read RP-5521.pdf: a PDF is not read in this build; save the page as a PNG, or type the bill.</b><div>Nothing was stored except the file name in the AI log, when the assistant ran.</div><div class="actions" style="margin-top:8px"><button class="btn" data-go="${hashFor('purchase-bill','reading')}">${ic('upload')}Choose another file</button><button class="btn" data-go="${hashFor('purchase-bill','offline-ai')}">Type the bill instead</button></div></div></div>`;
   else if(st==='ledger-lines')right=billLedgerLines();
+  else if(st==='needs-review')right=billNeedsReview();
   else if(st==='rejected')right=`<div class="note" role="status">${ic('x')}<div><b>Draft rejected. Nothing was posted.</b><div>The rejection is in the AI activity log.</div><div class="actions" style="margin-top:8px"><button class="btn primary" data-go="${hashFor('purchase-bill','choose')}">${ic('camera')}Read another ${kb('Ctrl+Alt+O')}</button><button class="btn" data-go="${hashFor('purchase')}">Type the bill instead ${kb('F9')}</button></div></div></div>`;
   else if(st==='offline-ai')right=`<div class="note" style="margin-bottom:12px">${ic('off')}<span><b>Bill reading is off for this company.</b> Type the bill below; the image stays attached to the voucher. <button class="btn ghost" data-go="${hashFor('ai-settings','off')}">AI and privacy</button></span></div>${manualPurchase()}`;
   else right=billProposal(st,d);
@@ -1706,6 +1709,7 @@ SCREENS['purchase-bill']={title:'Purchase from bill photo',default:'proposal',
    if(k==='Alt+D'){go(hashFor('review'),'screen-pop');toast('Draft rejected. Nothing was posted. Reason asked: optional.',true);return true}
    if(k==='Ctrl+I'){const a=document.activeElement;if(a&&a.dataset.f){hiBox(a.dataset.f);toast('Source: bill image, box highlighted. Confidence shown beside the field.')}return true}}
   if(st==='ledger-lines'){if(k==='Alt+D'){go(hashFor('purchase-bill','rejected'));return true}if(k==='Ctrl+A'){toast('Accept is blocked: choose the purchase ledger first.');return true}}
+  if(st==='needs-review'){if(k==='Alt+D'){go(hashFor('purchase-bill','rejected'));return true}if(k==='Ctrl+A'){toast('Accept is blocked: confirm each value read from the bill.');return true}}
   if(st==='reading'&&k==='Escape'){go(hashFor('home'),'screen-pop');toast('Reading cancelled. Nothing was kept.');return true}
   return false},
  cmd(c){if(c==='cloud')go(hashFor('purchase-bill','proposal'),'ai-proposal-arrive');if(c==='nocloud')go(hashFor('purchase-bill','low-confidence'))},
@@ -1763,14 +1767,29 @@ function billLedgerLines(){
   const row=(side,ledger,amt,src)=>`<tr><td>${side}</td><td>${ledger}</td><td class="num">${amt} ${prov(src,src==='doc'?'from bill':'engine')}</td></tr>`;
   const body=`<div class="grid g2" style="gap:10px 14px">
     <div class="fld"><label>Supplier ${prov('ai','AI match')}</label><div class="ro">Rupa Polymers</div></div><div class="fld"><label>Supplier bill no. ${prov('doc','from bill')}</label><div class="ro">RP/5521</div></div>
-    <div class="fld"><label>Bill date ${prov('doc','from bill')}</label><div class="ro">17 Nov 2026</div></div><div class="fld"><label>File</label><div class="ro">IMG_2041.png</div></div></div>
+    <div class="fld"><label>Bill date ${prov('doc','from bill')}</label><div class="ro">17 Nov 2026</div></div><div class="fld"><label>File</label><div class="ro">IMG_2041.png</div></div>
+    <div class="fld"><label>Supplier GSTIN</label><div class="ro" style="color:var(--text-3)">Not read</div></div></div>
    <table class="lines" style="margin-top:12px"><thead><tr><th>Dr / Cr</th><th>Ledger</th><th class="num">Amount</th></tr></thead><tbody>
    ${row('Dr',`<select data-f="taxable" aria-label="Ledger for Taxable Value"><option>Choose a ledger</option><option>Purchases</option></select><div class="meta">Read "Taxable Value": the bill names no purchase ledger</div>`,'68,000.00','doc')}
    ${row('Dr','IGST','12,240.00','doc')}${row('Cr','Rupa Polymers','80,240.00','doc')}</tbody></table>
    <div class="grid g2" style="margin-top:12px;align-items:start"><div class="meta">Item rows are not read yet. Tax ledgers come from your masters; nothing is created.</div>
-    <div class="taxbox"><div class="taxrow" data-f="total"><span class="lab">Printed total ${prov('doc','from bill')}</span><span class="num">80,240.00</span></div><div class="taxrow"><span class="lab">Engine total</span><span class="t2">Shown when the engine makes the voucher</span></div></div></div>`;
+    <div class="taxbox"><div class="taxrow" data-f="total"><span class="lab">Printed total ${prov('doc','from bill')}</span><span class="num">80,240.00</span></div><div class="taxrow"><span class="lab">Printed tax</span><span class="meta">Not read</span></div><div class="taxrow"><span class="lab">Engine total</span><span class="t2">Shown when the engine makes the voucher</span></div></div></div>`;
   const checks=[['bad',"No ledger matches 'Taxable Value'; choose an existing ledger or create one."],['ok','17 Nov 2026 is after the lock date.']];
   return proposal({kind:'Draft purchase voucher',by:'the bill reader',src:[srcChip('camera','IMG_2041.png, page 1'),srcChip('cpu','Local model')],conf:3,body,checks,blocked:'Choose the purchase ledger.',why:'Fix the red items first.',editKey:'Enter',status:'open',after:''}); }
+function billNeedsReview(){
+  const tag=f=>`${prov('review','needs review')} <button class="btn ghost" style="padding:0 6px;min-height:20px;font-size:11px" data-f="${f}" aria-label="Confirm this value">${ic('check')}Confirm</button>`;
+  const row=(side,ledger,amt,f)=>`<tr><td>${side}</td><td>${ledger}</td><td class="num">${amt} ${tag(f)}</td></tr>`;
+  const body=`<div class="grid g2" style="gap:10px 14px">
+    <div class="fld"><label>Supplier ${tag('sup')}</label><div class="ro">Rupa Polymers</div></div><div class="fld"><label>Supplier bill no. ${tag('no')}</label><div class="ro">RP/5521</div></div>
+    <div class="fld"><label>Bill date ${tag('date')}</label><div class="ro">17 Nov 2026</div></div><div class="fld"><label>File</label><div class="ro">IMG_2041.png</div></div>
+    <div class="fld"><label>Supplier GSTIN</label><div class="ro" style="color:var(--text-3)">Not read</div></div></div>
+   <table class="lines" style="margin-top:12px"><thead><tr><th>Dr / Cr</th><th>Ledger</th><th class="num">Amount</th></tr></thead><tbody>
+   ${row('Dr',`<select data-f="taxable" aria-label="Ledger for Taxable Value"><option>Choose a ledger</option><option>Purchases</option></select><div class="meta">Read "Taxable Value": the bill names no purchase ledger</div>`,'68,000.00','taxable')}
+   ${row('Dr','IGST '+tag('tax'),'12,240.00','tax')}${row('Cr','Rupa Polymers '+tag('sup'),'80,240.00','total')}</tbody></table>
+   <div class="grid g2" style="margin-top:12px;align-items:start"><div class="meta">The OCR reader gives no confidence, so nothing it read is kept until you confirm it against the photo. Tab to a Confirm button; Space confirms.</div>
+    <div class="taxbox"><div class="taxrow" data-f="total"><span class="lab">Printed total ${tag('total')}</span><span class="num">80,240.00</span></div><div class="taxrow"><span class="lab">Printed tax</span><span class="meta">Not read</span></div><div class="taxrow"><span class="lab">Engine total</span><span class="t2">Shown when the engine makes the voucher</span></div></div></div>`;
+  const checks=[['bad','9 values read from the bill need review: confirm each against the photo.'],['ok','17 Nov 2026 is after the lock date.']];
+  return proposal({kind:'Draft purchase voucher',by:'the bill reader',src:[srcChip('camera','IMG_2041.png, page 1'),srcChip('cpu','OCR on this computer')],conf:1,body,checks,blocked:'Confirm each value read from the bill.',why:'Fix the red items first.',editKey:'Enter',status:'open',after:''}); }
 function manualPurchase(){return `<div class="card vsheet"><div class="vhead"><div class="fld span2"><label>Supplier</label><input placeholder="Type a supplier name or GSTIN"></div><div class="fld"><label>Supplier bill no.</label><input></div><div class="fld"><label>Bill date</label><input></div></div>
   <table class="lines"><thead><tr><th class="n">#</th><th>Item</th><th class="num">Qty</th><th class="num">Rate</th><th class="num">Amount</th></tr></thead><tbody><tr class="active"><td class="n">1</td><td><input placeholder="Item"></td><td><input class="num"></td><td><input class="num"></td><td></td></tr></tbody></table>
   <div class="vfoot"><div class="meta">Tax and totals appear as you type, computed by the engine.</div><div class="taxbox"><div class="taxrow"><span class="lab">Invoice total</span><span class="t2">No lines yet</span></div></div></div></div>`}

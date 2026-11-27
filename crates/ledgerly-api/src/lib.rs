@@ -65,6 +65,7 @@ pub use ledgerly_assist::provider::{
     AiProvider, CloudModel, FIXED_ANSWERS_NAME, FixedAnswers, LocalModel, LocalModelFile,
     ProviderInfo, ProviderPlace, ProviderStatus,
 };
+pub use ledgerly_assist::review::{DraftField, NEEDS_REVIEW_PERMILLE, needs_review};
 pub use ledgerly_assist::validate::DraftCheck;
 pub use ledgerly_assist::{
     DraftItem, DraftLine, MappingSuggestion, MatchSuggestion, Proposal, ReportQuery, SourceRef,

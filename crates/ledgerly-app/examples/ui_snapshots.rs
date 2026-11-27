@@ -431,6 +431,10 @@ enum Fixture {
     /// provider holding the text lines of the fixture bill photo `examples/fixtures/rupa-bill.png`
     /// ([`godavari_bill_file`]): the mock's `purchase-bill.*` states.
     GodavariBill,
+    /// [`Fixture::GodavariBill`] with every line at the confidence of the `ocrs` reader, which
+    /// gives none: each value needs review ([`godavari_bill_ocrs_file`]), the mock's
+    /// `ai.purchase-bill.needs-review`.
+    GodavariBillOcrs,
     /// Fictional Traders ([`company_file`]): the shots whose key paths or typed names need its
     /// data, or that show a state the sample does not have.
     Main,
@@ -462,6 +466,7 @@ impl Fixture {
             Fixture::GodavariWords => Some(godavari_words_file(dir)),
             Fixture::GodavariNoModel => Some(godavari_no_model_file(dir)),
             Fixture::GodavariBill => Some(godavari_bill_file(dir)),
+            Fixture::GodavariBillOcrs => Some(godavari_bill_ocrs_file(dir)),
             Fixture::Main => Some(company_file(dir)),
             Fixture::New => Some(new_company_file(dir)),
             Fixture::Blank => Some(blank_company_file(dir)),
@@ -490,6 +495,7 @@ impl Fixture {
                     | Fixture::GodavariWords
                     | Fixture::GodavariNoModel
                     | Fixture::GodavariBill
+                    | Fixture::GodavariBillOcrs
                     | Fixture::Main
                     | Fixture::New
                     | Fixture::Blank
@@ -734,6 +740,17 @@ const BILL_PDF: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/examples/fixtures/R
 /// with its box in image pixels, measured when the image was drawn. The real bill reader drafts
 /// them; no figure is written here.
 fn godavari_bill_file(dir: &Path) -> Api {
+    godavari_bill_file_read_at(dir, 930)
+}
+
+/// [`godavari_bill_file`] as the `ocrs` reader returns the lines: `ocrs` gives no confidence, so
+/// every line carries `NEEDS_REVIEW_PERMILLE` (coordinator decision 2026-11-27).
+fn godavari_bill_ocrs_file(dir: &Path) -> Api {
+    godavari_bill_file_read_at(dir, ledgerly_api::NEEDS_REVIEW_PERMILLE)
+}
+
+/// The bill fixture with every text line at `confidence_permille`.
+fn godavari_bill_file_read_at(dir: &Path, confidence_permille: u16) -> Api {
     use sha2::{Digest, Sha256};
     use std::fmt::Write as _;
     let bytes = std::fs::read(BILL_PNG).unwrap();
@@ -789,7 +806,7 @@ fn godavari_bill_file(dir: &Path) -> Api {
                 page: 1,
                 text: text.to_owned(),
                 bbox,
-                confidence_permille: 930,
+                confidence_permille,
             })
             .collect(),
     };
@@ -2445,6 +2462,16 @@ fn light_shots() -> Vec<Shot> {
             .wait(40)
             .expect_bar("Purchase from bill photo", "Draft purchase")
             .on(Fixture::GodavariBill)
+            .ai_on(),
+        shot("ai.purchase-bill.needs-review", &[palette])
+            .query("Purchase from bill photo")
+            .then(&[(Key::Enter, NONE)])
+            .wait(30)
+            .type_text(BILL_PNG)
+            .press(&[(Key::Enter, NONE)])
+            .wait(40)
+            .expect_bar("Purchase from bill photo", "Draft purchase")
+            .on(Fixture::GodavariBillOcrs)
             .ai_on(),
         shot("ai.purchase-bill.rejected", &[palette])
             .query("Purchase from bill photo")

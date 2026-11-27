@@ -177,6 +177,12 @@ untracked), look at each, update `PARITY-GAPS.md`.
   (release build, about 1 s a bill): the `Label value` bill read line for line, a right-aligned bill
   split labels from amounts. The models folder was deleted after; the recorded outputs are test
   fixtures. Tests first, seen failing at compile.
+- Needs-review screen (G): committed. `ai.purchase-bill.needs-review` on the bill photo screen:
+  needs-review and you-confirmed tags, Confirm buttons, the waiting count, and the supplier GSTIN
+  and printed tax rows (shown as "Not read" when absent, mock updated first). Honesty notes: the app
+  tests use `confirm_field` rather than Tab and Space; the first app test's count was changed from 8
+  to 7 when the unmatched line's ledger was taken out of the count to match the mock (the select
+  covers it); the GSTIN and tax test was written first and seen failing.
 - Honesty notes (F): the API and app bank tests were written first and seen failing (API at compile,
   app 3 of 4; the AI-off one passed on the old path); the Origin unit test was seen failing at
   compile only. One API test fixture was corrected (an alteration must keep the voucher number).

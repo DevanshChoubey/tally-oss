@@ -487,6 +487,14 @@ Classes:
   characters, empty lines left out). Checked once by hand with the owner-fetched models on
   2026-11-27: a bill drawn in the reader's `Label value` layout came back line for line and the
   reader drafted the drawn values (fixture `ledgerly-assist/tests/fixtures/ocrs/bill-left.*`).
+- **FIX** (round G) `ai.purchase-bill.needs-review` is built (mock state first; capture fixture
+  `GodavariBillOcrs`, the bill fixture at the needs-review confidence; `s21-review-sheet-1/2`).
+  Each value read by ocrs is tagged "needs review" with a Confirm button until confirmed, then
+  "you confirmed"; the check counts the values still waiting and Accept stays blocked on them. A
+  line that names no ledger is chosen in its select and is not counted as a value to confirm (as in
+  the mock). The card now always shows the supplier GSTIN and the printed tax, as read or "Not
+  read" (mock `ledger-lines` and `needs-review` updated): before, a read GSTIN or tax that needed
+  review had no Confirm anywhere on screen, so the draft could never be accepted.
 - **NOT BUILT** a bill whose amounts are printed right-aligned, apart from their labels: ocrs
   returns the labels and the amounts as separate lines (fixture `bill-right.*`, observed), and the
   reader reads `Label value` on one line only, so it reads no amount from such a bill.

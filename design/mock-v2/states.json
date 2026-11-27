@@ -161,6 +161,13 @@
    "description": "What the bill reader reads today: the printed supplier, bill number, date, taxable value, tax and total, drafted as ledger lines with a box on the image for each. The taxable value names no purchase ledger, so the person chooses one; the engine checks the draft after every choice and its verdict is the check line. Item rows are not read yet."
   },
   {
+   "id": "ai.purchase-bill.needs-review",
+   "kind": "low-confidence",
+   "hash": "screen=purchase-bill&state=needs-review&ai=on",
+   "title": "Bill photo, values to confirm (later release)",
+   "description": "Read on this computer by the OCR reader, which gives no confidence: every value it read needs review. Each value shows Needs review and a Confirm button until the person checks it against the photo (the open taxable line's ledger is confirmed by choosing it); the draft cannot be accepted while any is unconfirmed. Confirmations are logged as human edits."
+  },
+  {
    "id": "ai.purchase-bill.rejected",
    "kind": "empty",
    "hash": "screen=purchase-bill&state=rejected&ai=on",
