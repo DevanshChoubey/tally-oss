@@ -317,6 +317,12 @@ fn gstr3b_text(w: &ledgerly_api::Gstr3bWorking) -> String {
     };
     line("3.1(a)", "taxable value", w.outward_taxable_value);
     heads(&mut line, "3.1(a)", w.outward_tax);
+    line(
+        "3.1(c)",
+        "nil rated and exempted value",
+        w.outward_nil_exempt_value,
+    );
+    line("3.1(e)", "non-GST value", w.outward_non_gst_value);
     let mut skipped = Vec::new();
     match &w.inward_reverse_charge {
         Outcome::Value(d) => {

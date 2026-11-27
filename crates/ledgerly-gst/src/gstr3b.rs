@@ -14,7 +14,13 @@
 //! portal:
 //!
 //! * **3.1(a)**, outward taxable supplies (other than zero rated, nil rated and exempted): the sum
-//!   of the taxable value of every line that G6 classifies as `Taxable`, and the tax on it from G4.
+//!   of the taxable value of every line that G6 classifies as `Taxable` or `DeemedExport`, and the
+//!   tax on it from G4. Deemed exports are here because the GST portal's GSTR-3B help fills
+//!   3.1(a) from GSTR-1 tables 4A and 6C (tutorial.gst.gov.in/userguide/returns/GSTR3B.htm, read
+//!   2026-11-28).
+//! * **3.1(c)**, nil rated and exempted outward supplies, and **3.1(e)**, non-GST outward
+//!   supplies: the value of the lines G6 classifies `NilRated` or `Exempt`, and `NonGst` (the same
+//!   help page: GSTR-1 table 8 columns 2 and 3, and column 4).
 //! * **4(A)(5)**, all other ITC: the tax on every purchase line that G7 finds `Eligible`. Tax on
 //!   `Blocked` and `Ineligible` lines is never added; it is shown separately in
 //!   [`Gstr3bWorking::itc_not_claimable`].
@@ -86,8 +92,8 @@
 //!   the Act text yet, so it is `pending`.
 //! * Outward supplies under reverse charge, receipt vouchers that carry an advance (tax on
 //!   advances needs the time-of-supply rules of card G12), and outward lines that G6 classifies as
-//!   exports, SEZ supplies, deemed exports or advances (tables 3.1(b) and others are not worked
-//!   out here).
+//!   exports, SEZ supplies or advances (table 3.1(b) needs zero-rated voucher tax, which G4 does
+//!   not compute).
 //! * Anything G4, G6 or G7 returns `Unsupported` for, including a purchase whose "ineligible for
 //!   input credit" settings conflict (see [`crate::itc`]). The reason names the voucher.
 //!
@@ -172,6 +178,12 @@ pub struct Gstr3bWorking {
     pub itc_vouchers: Vec<VoucherId>,
     /// Tax on purchase lines that is blocked (s.17(5)) or otherwise ineligible. Not in 4(A)(5).
     pub itc_not_claimable: Gstr3bTaxAmounts,
+    /// Table 3.1(c): value of nil-rated and exempted outward supplies.
+    pub outward_nil_exempt_value: Paise,
+    /// Table 3.1(e): value of non-GST outward supplies.
+    pub outward_non_gst_value: Paise,
+    /// The vouchers that contribute to 3.1(c) or 3.1(e), in voucher id order.
+    pub other_outward_vouchers: Vec<VoucherId>,
     /// Purchases under reverse charge in the period (by time of supply), and those whose
     /// reverse-charge position could not be decided: in neither 3.1(a) nor 4(A)(5).
     pub reverse_charge_purchases: Vec<VoucherId>,
@@ -324,6 +336,9 @@ struct Totals {
     outward_taxable_value: Paise,
     outward_tax: Gstr3bTaxAmounts,
     outward_vouchers: Vec<VoucherId>,
+    outward_nil_exempt_value: Paise,
+    outward_non_gst_value: Paise,
+    other_outward_vouchers: Vec<VoucherId>,
     itc_all_other: Gstr3bTaxAmounts,
     itc_vouchers: Vec<VoucherId>,
     itc_not_claimable: Gstr3bTaxAmounts,
@@ -379,6 +394,9 @@ pub fn build_gstr3b(
         itc_all_other: totals.itc_all_other,
         itc_vouchers: totals.itc_vouchers,
         itc_not_claimable: totals.itc_not_claimable,
+        outward_nil_exempt_value: totals.outward_nil_exempt_value,
+        outward_non_gst_value: totals.outward_non_gst_value,
+        other_outward_vouchers: totals.other_outward_vouchers,
         reverse_charge_purchases: totals.reverse_charge_purchases,
         inward_reverse_charge: match &totals.rc_unsupported {
             Some(u) => Outcome::Unsupported(u.clone()),
@@ -632,10 +650,12 @@ fn add_sales(scope: &Scope<'_>, v: &Voucher, totals: &mut Totals) -> Result<Outc
     let masters = &scope.books.masters;
     let mut taxable = Paise::ZERO;
     let mut heads = HeadSums::default();
+    let mut nil_exempt = Paise::ZERO;
+    let mut non_gst = Paise::ZERO;
     for (position, line_tax) in priced.positions.iter().zip(&priced.breakup.lines) {
         let kind = supported!(classify_line(v, *position, masters, &priced.rules)?);
         let expected = match kind {
-            SupplyKind::Taxable => Taxability::Taxable,
+            SupplyKind::Taxable | SupplyKind::DeemedExport => Taxability::Taxable,
             SupplyKind::Exempt => Taxability::Exempt,
             SupplyKind::NilRated => Taxability::NilRated,
             SupplyKind::NonGst => Taxability::NonGst,
@@ -643,7 +663,6 @@ fn add_sales(scope: &Scope<'_>, v: &Voucher, totals: &mut Totals) -> Result<Outc
             | SupplyKind::ExportUnderLut
             | SupplyKind::SezWithPayment
             | SupplyKind::SezUnderLut
-            | SupplyKind::DeemedExport
             | SupplyKind::Advance => {
                 return unsupported(
                     format!("a {kind:?} line in GSTR-3B"),
@@ -663,10 +682,22 @@ fn add_sales(scope: &Scope<'_>, v: &Voucher, totals: &mut Totals) -> Result<Outc
                 ),
             ));
         }
-        if kind == SupplyKind::Taxable {
-            taxable = taxable.checked_add(line_tax.taxable)?;
-            heads.add_line(line_tax)?;
+        match expected {
+            Taxability::Taxable => {
+                taxable = taxable.checked_add(line_tax.taxable)?;
+                heads.add_line(line_tax)?;
+            }
+            Taxability::Exempt | Taxability::NilRated => {
+                nil_exempt = nil_exempt.checked_add(line_tax.taxable)?;
+            }
+            Taxability::NonGst => non_gst = non_gst.checked_add(line_tax.taxable)?,
         }
+    }
+    if !nil_exempt.is_zero() || !non_gst.is_zero() {
+        totals.outward_nil_exempt_value =
+            totals.outward_nil_exempt_value.checked_add(nil_exempt)?;
+        totals.outward_non_gst_value = totals.outward_non_gst_value.checked_add(non_gst)?;
+        totals.other_outward_vouchers.push(v.id);
     }
     if !taxable.is_zero() {
         totals.outward_taxable_value = totals.outward_taxable_value.checked_add(taxable)?;

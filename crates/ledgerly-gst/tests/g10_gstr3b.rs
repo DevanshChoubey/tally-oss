@@ -56,6 +56,8 @@ const PURCHASE18: LedgerId = LedgerId(22);
 const CAR: LedgerId = LedgerId(23);
 const PURCHASE_ITEM: LedgerId = LedgerId(24);
 const SEZ_CUSTOMER: LedgerId = LedgerId(14);
+const SALES_NIL: LedgerId = LedgerId(25);
+const SALES_NON_GST: LedgerId = LedgerId(26);
 
 fn state(code: u8) -> StateCode {
     StateCode::new(code).unwrap()
@@ -184,25 +186,26 @@ fn voucher_type(id: VoucherTypeId, name: &str, base: BaseVoucherKind) -> Voucher
     }
 }
 
+fn group_one() -> Group {
+    Group {
+        id: GroupId(1),
+        name: "Group 1".to_owned(),
+        aliases: vec![],
+        parent: None,
+        reserved: None,
+        nature: None,
+        affects_gross_profit: false,
+        ineligible_itc: None,
+        tally: None,
+    }
+}
+
 fn masters() -> Masters {
     let mut m = Masters::default();
     // Every ledger here sits under GroupId(1). Round 3: ITC eligibility walks a ledger's group
     // chain for the ineligible-for-input-credit setting, so the group must exist (it was
     // referenced but missing before). Nothing is set on it, so no expected value changes.
-    m.groups.insert(
-        GroupId(1),
-        Group {
-            id: GroupId(1),
-            name: "Group 1".to_owned(),
-            aliases: vec![],
-            parent: None,
-            reserved: None,
-            nature: None,
-            affects_gross_profit: false,
-            ineligible_itc: None,
-            tally: None,
-        },
-    );
+    m.groups.insert(GroupId(1), group_one());
     for (id, name, base) in [
         (SALES_TYPE, "Sales", BaseVoucherKind::Sales),
         (PURCHASE_TYPE, "Purchase", BaseVoucherKind::Purchase),
@@ -258,6 +261,8 @@ fn masters() -> Masters {
     let goods = [
         (SALES18, None, Taxability::Taxable, Some(18)),
         (SALES_EXEMPT, None, Taxability::Exempt, None),
+        (SALES_NIL, None, Taxability::NilRated, None),
+        (SALES_NON_GST, None, Taxability::NonGst, None),
         (PURCHASE18, Some("482010"), Taxability::Taxable, Some(18)),
         (CAR, Some("870321"), Taxability::Taxable, Some(18)),
         (PURCHASE_ITEM, None, Taxability::Taxable, Some(18)),
@@ -853,4 +858,62 @@ fn a_motor_car_marked_eligible_on_its_ledger_is_claimed() {
     let w = value(&books, None);
     assert_eq!(w.itc_all_other, amounts(0, 900_000, 900_000));
     assert_eq!(w.itc_vouchers, vec![VoucherId(12)]);
+}
+
+// ---------------------------------------------------------------- round s23: 3.1(c), 3.1(e), deemed exports
+//
+// provenance (all three tests): derived — the GST portal's GSTR-3B help page
+// (https://tutorial.gst.gov.in/userguide/returns/GSTR3B.htm, read 2026-11-28) fills 3.1(a) from
+// GSTR-1 tables 4A and 6C ("Deemed exports"), 3.1(c) with "Nil rated and exempted supplies
+// (columns 2 and 3)" of GSTR-1 table 8, and 3.1(e) with "Non-GST outward supplies (column 4)".
+
+#[test]
+fn table_3_1_c_is_the_value_of_nil_rated_and_exempt_lines() {
+    // provenance: derived — January books: S2 has an exempt line of 1,000.00 = 100,000 paise and
+    // no other voucher in the period has a nil-rated, exempt or non-GST line.
+    let w = value(&january_books(), None);
+    assert_eq!(w.outward_nil_exempt_value, Paise::new(100_000));
+    assert_eq!(w.outward_non_gst_value, Paise::ZERO);
+    assert_eq!(w.other_outward_vouchers, vec![VoucherId(2)]);
+    // 3.1(a) is unchanged by the exempt line (see the 3.1(a) tests above).
+    assert_eq!(w.outward_taxable_value, Paise::new(1_350_050));
+}
+
+#[test]
+fn nil_rated_goes_to_3_1_c_and_non_gst_to_3_1_e() {
+    // provenance: derived — one January sale with nil-rated 500.00, exempt 100.00 and non-GST
+    // 700.00 lines: 3.1(c) = 50,000 + 10,000 = 60,000 paise; 3.1(e) = 70,000 paise; nothing
+    // in 3.1(a) and no tax.
+    let s = ledger_sale(
+        30,
+        date!(2026 - 01 - 20),
+        KARNATAKA,
+        &[
+            (SALES_NIL, 50_000),
+            (SALES_EXEMPT, 10_000),
+            (SALES_NON_GST, 70_000),
+        ],
+    );
+    let w = value(&books_with(vec![s]), None);
+    assert_eq!(w.outward_nil_exempt_value, Paise::new(60_000));
+    assert_eq!(w.outward_non_gst_value, Paise::new(70_000));
+    assert_eq!(w.other_outward_vouchers, vec![VoucherId(30)]);
+    assert_eq!(w.outward_taxable_value, Paise::ZERO);
+    assert_eq!(w.outward_tax, amounts(0, 0, 0));
+}
+
+#[test]
+fn a_deemed_export_is_in_3_1_a() {
+    // provenance: derived — the help page puts GSTR-1 6C (deemed exports) in 3.1(a). A deemed
+    // export of 1,000.00 at 18% to the regular customer in Karnataka: 1,000.00 x 9% = 90.00 CGST
+    // and 90.00 SGST (CGST Act s.9; the recipient's refund route does not change the tax).
+    let mut s = ledger_sale(31, date!(2026 - 01 - 20), KARNATAKA, &[(SALES18, 100_000)]);
+    s.extra.insert(
+        ledgerly_gst::classify::SUPPLY_OPTION_KEY.to_owned(),
+        "deemed_export".to_owned(),
+    );
+    let w = value(&books_with(vec![s]), None);
+    assert_eq!(w.outward_taxable_value, Paise::new(100_000));
+    assert_eq!(w.outward_tax, amounts(0, 9_000, 9_000));
+    assert_eq!(w.outward_vouchers, vec![VoucherId(31)]);
 }

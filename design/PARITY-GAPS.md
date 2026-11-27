@@ -174,10 +174,19 @@ notifications were read on CBIC's tax information portal on 2026-11-27.
   (help.tallysolutions.com/tally-prime/gst-reverse-charge-transactions/india-gst-inward-supply-rcm-tally/,
   read 2026-11-27). Unmarked, a registered supplier's invoice that charges tax is taken as the
   supplier's forward charge; unmarked with no tax charged is Unsupported.
-- **NOT BUILT** the `gst.gstr3b` screen does not draw tables 3.1(d) and 4(A)(3) yet: the engine
-  works them out (`Gstr3bWorking::inward_reverse_charge`, `itc_reverse_charge`) and
+- **NOT BUILT** the `gst.gstr3b` screen does not draw tables 3.1(c), 3.1(d), 3.1(e) and 4(A)(3)
+  yet: the engine works them out (`Gstr3bWorking::outward_nil_exempt_value`,
+  `outward_non_gst_value`, `inward_reverse_charge`, `itc_reverse_charge`) and
   `ledgerly export gstr3b` prints them, but the mock state has no rows for them, so the screen waits
   for a mock round (mock first).
+- **NOT BUILT** table 3.1(b) (zero-rated: exports, GSTR-1 6A, and SEZ supplies, 6B): voucher tax
+  (`compute`) refuses overseas and SEZ recipients, so a period with one stays `Unsupported`. It
+  needs the IGST Act s.16 and place-of-supply rules for exports of services, not yet read.
+- **NOT BUILT** GSTR-3B tables 3.1.1 (e-commerce operators, s.9(5)), 3.2, 4(B), 4(C), 4(D), 5 and
+  5.1, and a GSTR-3B JSON file: the books hold no e-commerce operator, no 2B-based 4(B)/4(D) split
+  and no interest working, and no GSTN offline-tool schema for GSTR-3B was read (the GST portal's
+  downloads are behind its firewall to automated clients, and CBIC's copy of FORM GSTR-3B would
+  not download, 2026-11-28). The export is the tab-separated text of `ledgerly export gstr3b`.
 - **NOT BUILT** table 6.1 (payment of tax) for a period with reverse-charge purchases: their tax
   is paid in cash (s.49(4) with s.2(82)) and their credit may be in the 2B file as reverse-charge
   documents, whose IMS handling was not read; the payment stays `Unsupported` for such a period.

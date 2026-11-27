@@ -18,6 +18,8 @@ fn the_sample_novembers_working_is_written_with_every_table() {
     // 20,370.00; CGST = SGST = 11,707.65 + 241.00 + 3,375.00 = 15,323.65. 3.1(d) and 4(A)(3) are
     // nil: November's purchases PB/0141 and PB/0144 are from regular suppliers whose invoices
     // charge tax (mode "taxed" in assets/godavari.toml), and none is marked reverse charge.
+    // 3.1(c) and 3.1(e) are nil: every GST classification in assets/godavari.toml is taxable
+    // (two ledgers `taxability = "Taxable"`, items with a `gst_rate` only).
     let dir = tempfile::tempdir().unwrap();
     let path = dir.path().join("sample.ledgerly");
     drop(ledgerly_sample::create(&path, Clock::Fixed(OffsetDateTime::UNIX_EPOCH)).unwrap());
@@ -49,6 +51,8 @@ fn the_sample_novembers_working_is_written_with_every_table() {
         "3.1(d)\ttaxable value\t0.00",
         "3.1(d)\tcentral tax\t0.00",
         "4(A)(3)\tintegrated tax\t0.00",
+        "3.1(c)\tnil rated and exempted value\t0.00",
+        "3.1(e)\tnon-GST value\t0.00",
     ] {
         assert!(
             text.lines().any(|l| l == expected),
