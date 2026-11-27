@@ -29,6 +29,15 @@ pub enum ApiError {
     /// cancel). Nothing was committed.
     #[error(transparent)]
     Import(#[from] ledgerly_tally_bridge::import::ImportError),
+    /// An XML file to import could not be read, or is not an XML document of masters or
+    /// vouchers. Nothing was imported.
+    #[error("cannot import {}: {reason}", path.display())]
+    FileImport {
+        /// The file.
+        path: std::path::PathBuf,
+        /// Why it could not be read.
+        reason: String,
+    },
     /// A GST computation failed: a rule pack is malformed, a master is missing or arithmetic
     /// overflowed.
     #[error(transparent)]

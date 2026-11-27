@@ -777,7 +777,7 @@ impl State {
     }
 }
 
-fn bill_kind(label: &str, bill: &TBillAllocation) -> Result<BillRefKind, MapError> {
+pub(crate) fn bill_kind(label: &str, bill: &TBillAllocation) -> Result<BillRefKind, MapError> {
     match bill.bill_type.as_deref() {
         Some("New Ref") => Ok(BillRefKind::New),
         Some("Agst Ref") => Ok(BillRefKind::Against),
@@ -815,7 +815,7 @@ fn stuck_group_error(stuck: &[&MasterRecord]) -> MapError {
 
 /// The parent name without control characters (Tally writes the root as a control character
 /// followed by `Primary`), or `None` for a primary object.
-fn normalize_parent(raw: Option<&str>) -> Option<String> {
+pub(crate) fn normalize_parent(raw: Option<&str>) -> Option<String> {
     let cleaned: String = raw?.chars().filter(|c| !c.is_control()).collect();
     let trimmed = cleaned.trim();
     if trimmed.is_empty() || trimmed == "Primary" {
@@ -826,7 +826,7 @@ fn normalize_parent(raw: Option<&str>) -> Option<String> {
 }
 
 /// Text of the first child element called `tag`, trimmed; `None` when absent or empty.
-fn extra_text<'a>(extra: &'a [RawElement], tag: &str) -> Option<&'a str> {
+pub(crate) fn extra_text<'a>(extra: &'a [RawElement], tag: &str) -> Option<&'a str> {
     extra
         .iter()
         .find(|e| e.name == tag)
@@ -843,7 +843,7 @@ fn bad_value(object: &str, tag: &str, value: &str, reason: &str) -> MapError {
     }
 }
 
-fn parse_yes_no(object: &str, tag: &str, text: &str) -> Result<bool, MapError> {
+pub(crate) fn parse_yes_no(object: &str, tag: &str, text: &str) -> Result<bool, MapError> {
     match text.trim() {
         "Yes" => Ok(true),
         "No" => Ok(false),
@@ -852,7 +852,11 @@ fn parse_yes_no(object: &str, tag: &str, text: &str) -> Result<bool, MapError> {
 }
 
 /// A Yes/No child of a master; `None` when the child is absent.
-fn element_flag(object: &str, extra: &[RawElement], tag: &str) -> Result<Option<bool>, MapError> {
+pub(crate) fn element_flag(
+    object: &str,
+    extra: &[RawElement],
+    tag: &str,
+) -> Result<Option<bool>, MapError> {
     match extra.iter().find(|e| e.name == tag) {
         Some(e) => parse_yes_no(object, tag, &e.text).map(Some),
         None => Ok(None),
@@ -860,7 +864,11 @@ fn element_flag(object: &str, extra: &[RawElement], tag: &str) -> Result<Option<
 }
 
 /// A Yes/No child of a voucher; `None` when the child is absent.
-fn node_flag(object: &str, extra: &[RawNode], tag: &str) -> Result<Option<bool>, MapError> {
+pub(crate) fn node_flag(
+    object: &str,
+    extra: &[RawNode],
+    tag: &str,
+) -> Result<Option<bool>, MapError> {
     match extra.iter().find(|n| n.name == tag) {
         Some(n) => parse_yes_no(object, tag, &n.text).map(Some),
         None => Ok(None),
@@ -935,7 +943,7 @@ fn base_kind(name: &str) -> Option<BaseVoucherKind> {
     })
 }
 
-fn voucher_label(v: &TVoucher) -> String {
+pub(crate) fn voucher_label(v: &TVoucher) -> String {
     format!(
         "{} voucher {} dated {}",
         v.voucher_type,
@@ -970,7 +978,7 @@ fn status_of(label: &str, extra: &[RawNode]) -> Result<VoucherStatus, MapError> 
 
 /// Every unmodelled element and attribute of the voucher, keyed by tag (attributes as `@NAME`).
 /// A repeated key gets `#2`, `#3`, ... so nothing is overwritten.
-fn voucher_extra(v: &TVoucher) -> BTreeMap<String, String> {
+pub(crate) fn voucher_extra(v: &TVoucher) -> BTreeMap<String, String> {
     let mut out = BTreeMap::new();
     for (key, value) in &v.attrs {
         insert_unique(&mut out, &format!("@{key}"), value.clone());
@@ -981,7 +989,7 @@ fn voucher_extra(v: &TVoucher) -> BTreeMap<String, String> {
     out
 }
 
-fn insert_unique(map: &mut BTreeMap<String, String>, key: &str, value: String) {
+pub(crate) fn insert_unique(map: &mut BTreeMap<String, String>, key: &str, value: String) {
     if !map.contains_key(key) {
         map.insert(key.to_owned(), value);
         return;
