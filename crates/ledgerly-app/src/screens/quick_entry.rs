@@ -66,12 +66,17 @@ pub struct QuickEntryScreen {
     last: Option<Gate>,
     /// Why the last button or key did not open its screen.
     notice: Option<String>,
+    /// The screen with the assistant, used when this build has it.
+    ai: crate::screens::quick_entry_ai::AiEntry,
 }
 
 impl QuickEntryScreen {
     /// Whether the tier has been read (or cannot be: no company, or the read failed).
     #[must_use]
     pub fn loaded(&self) -> bool {
+        if crate::release::ai_enabled() {
+            return self.ai.loaded();
+        }
         match &self.last {
             None | Some(Gate::Reading) => false,
             Some(
@@ -99,7 +104,7 @@ impl QuickEntryScreen {
 }
 
 /// The share of the row the left card takes (`.g-main`, index.html:138: 1.55fr against 1fr).
-const LEFT_SHARE: f32 = 0.6;
+pub(crate) const LEFT_SHARE: f32 = 0.6;
 
 /// What the left card asked for.
 enum Ask {
@@ -166,7 +171,7 @@ fn draw_left(ui: &mut Ui, gate: &Gate, notice: Option<&str>, tr: &Tr) -> Ask {
 
 /// The right card: what the assistant may do here (index.html:1545). The mock's "Try" sentences
 /// are left out, since nothing would draft them.
-fn draw_rules(ui: &mut Ui) {
+pub(crate) fn draw_rules(ui: &mut Ui) {
     let t = tokens(ui);
     card(ui, |ui| {
         ui.set_width(ui.available_width());
@@ -194,11 +199,24 @@ impl Screen for QuickEntryScreen {
         Some(crate::i18n::lit(SUBTITLE))
     }
 
+    fn key_bar_name(&self, tr: &Tr) -> String {
+        if crate::release::ai_enabled() {
+            return self.ai.key_bar_name();
+        }
+        self.page_title(tr)
+    }
+
     fn keys(&self, _tr: &Tr) -> Vec<KeyHint> {
+        if crate::release::ai_enabled() {
+            return self.ai.keys();
+        }
         key_hints()
     }
 
     fn ui(&mut self, ui: &mut Ui, ctx: &mut AppCtx) -> ScreenAction {
+        if crate::release::ai_enabled() {
+            return self.ai.ui(ui, ctx);
+        }
         let gate = self.gate.gate(ui, ctx);
         self.last = Some(gate.clone());
         let (f5, f6) = ui.input_mut(|i| {

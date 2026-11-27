@@ -420,6 +420,13 @@ enum Fixture {
     /// provider, never a real model, and one bill-photo draft stored as the bill reader would
     /// store it ([`godavari_assistant_file`]). Shown only on shots taken with [`Shot::ai_on`].
     GodavariAssistant,
+    /// [`Fixture::GodavariAssistant`] with the tier set to this computer and the fixed-answers
+    /// provider holding the two plain-words recordings of the mock's `quick-entry` states
+    /// ([`godavari_words_file`]).
+    GodavariWords,
+    /// The sample company with the tier set to this computer and no provider attached, as in a
+    /// build with no local model runtime: the mock's `quick-entry.not-installed`.
+    GodavariNoModel,
     /// Fictional Traders ([`company_file`]): the shots whose key paths or typed names need its
     /// data, or that show a state the sample does not have.
     Main,
@@ -448,6 +455,8 @@ impl Fixture {
             Fixture::GodavariBuyerNoPin => Some(godavari_buyer_no_pin_file(dir)),
             Fixture::GodavariShortStock => Some(godavari_short_stock_file(dir)),
             Fixture::GodavariAssistant => Some(godavari_assistant_file(dir)),
+            Fixture::GodavariWords => Some(godavari_words_file(dir)),
+            Fixture::GodavariNoModel => Some(godavari_no_model_file(dir)),
             Fixture::Main => Some(company_file(dir)),
             Fixture::New => Some(new_company_file(dir)),
             Fixture::Blank => Some(blank_company_file(dir)),
@@ -473,6 +482,8 @@ impl Fixture {
                     | Fixture::GodavariBuyerNoPin
                     | Fixture::GodavariShortStock
                     | Fixture::GodavariAssistant
+                    | Fixture::GodavariWords
+                    | Fixture::GodavariNoModel
                     | Fixture::Main
                     | Fixture::New
                     | Fixture::Blank
@@ -640,6 +651,41 @@ fn godavari_assistant_file(dir: &Path) -> Api {
     // The fixture is handed to the shell directly, not through the welcome screen's hand-over,
     // so it gets the vault here, as the hand-over would give it the OS keychain.
     api.attach_key_vault(capture_vault());
+    api
+}
+
+/// The sentence of the mock's `quick-entry.proposal` (index.html `QE.proposal`).
+const RENT_WORDS: &str = "paid rent 25k to Sharma Properties from Saptagiri";
+/// The sentence of the mock's `quick-entry.unknown-ledger` (index.html `QE['unknown-ledger']`).
+const RAMESH_WORDS: &str = "Ramesh ko 5000 cash diya";
+
+/// [`godavari_assistant_file`] with the tier set to this computer and the fixed-answers provider
+/// given the model answers for the two sentences above. The answers are written here as a model
+/// would answer the plain-words prompt; the real reader (`nl_entry`) parses them, resolves the
+/// names against the sample's ledgers and copies the typed amounts, and the engine balances the
+/// draft. No figure is written here.
+fn godavari_words_file(dir: &Path) -> Api {
+    let mut api = godavari_assistant_file(dir);
+    api.set_ai_tier(ledgerly_api::AiTier::Local).unwrap();
+    api.attach_assistant(Box::new(
+        ledgerly_api::FixedAnswers::new()
+            .with_text(
+                RENT_WORDS,
+                "{\"kind\":\"payment\",\"amount_text\":\"25k\",\"date_text\":null,\"party_name\":\"rent\",\"account_name\":\"Saptagiri\",\"narration\":\"rent Sharma Properties\",\"confidence_permille\":900}",
+            )
+            .with_text(
+                RAMESH_WORDS,
+                "{\"kind\":\"payment\",\"amount_text\":\"5000\",\"date_text\":null,\"party_name\":\"Ramesh\",\"account_name\":\"cash\",\"narration\":\"Ramesh\",\"confidence_permille\":800}",
+            ),
+    ));
+    api
+}
+
+/// The sample company with the tier set to this computer and no provider: nothing can read a
+/// sentence, as in this build, which links no local model runtime.
+fn godavari_no_model_file(dir: &Path) -> Api {
+    let mut api = godavari_company_file(dir);
+    api.set_ai_tier(ledgerly_api::AiTier::Local).unwrap();
     api
 }
 
@@ -1956,6 +2002,58 @@ fn light_shots() -> Vec<Shot> {
             .then(&[(Key::Enter, NONE), (Key::Num3, NONE)])
             .expect("AI and privacy", None)
             .on(Fixture::GodavariAssistant)
+            .ai_on(),
+        // Later release: plain-words entry (mock `quick-entry.*` with `ai=on`). The sentence is
+        // typed into the box, which has focus once the gate reads Ready, and Enter drafts it.
+        shot("ai.quick-entry.proposal", &[palette])
+            .query("Plain-words entry")
+            .then(&[(Key::Enter, NONE)])
+            .wait(30)
+            .type_text(RENT_WORDS)
+            .press(&[(Key::Enter, NONE)])
+            .wait(30)
+            .expect_bar("Plain-words entry", "Plain-words draft")
+            .on(Fixture::GodavariWords)
+            .ai_on(),
+        shot("ai.quick-entry.unknown-ledger", &[palette])
+            .query("Plain-words entry")
+            .then(&[(Key::Enter, NONE)])
+            .wait(30)
+            .type_text(RAMESH_WORDS)
+            .press(&[(Key::Enter, NONE)])
+            .wait(30)
+            .expect_bar("Plain-words entry", "Plain-words draft")
+            .on(Fixture::GodavariWords)
+            .ai_on(),
+        shot("ai.quick-entry.loading", &[palette])
+            .query("Plain-words entry")
+            .then(&[(Key::Enter, NONE)])
+            .wait(30)
+            .type_text(RENT_WORDS)
+            .hold_worker()
+            .press(&[(Key::Enter, NONE)])
+            .wait(10)
+            .expect_bar("Plain-words entry", "Plain-words entry")
+            .on(Fixture::GodavariWords)
+            .ai_on(),
+        shot("ai.quick-entry.rejected", &[palette])
+            .query("Plain-words entry")
+            .then(&[(Key::Enter, NONE)])
+            .wait(30)
+            .type_text(RENT_WORDS)
+            .press(&[(Key::Enter, NONE)])
+            .wait(30)
+            .press(&[(Key::D, Modifiers::ALT)])
+            .wait(30)
+            .expect_bar("Plain-words entry", "Rejected")
+            .on(Fixture::GodavariWords)
+            .ai_on(),
+        shot("ai.quick-entry.not-installed", &[palette])
+            .query("Plain-words entry")
+            .then(&[(Key::Enter, NONE)])
+            .wait(30)
+            .expect_bar("Plain-words entry", "Plain-words entry")
+            .on(Fixture::GodavariNoModel)
             .ai_on(),
         // The item list open on the first line, filtered by what is typed (index.html: type-ahead
         // over item masters).

@@ -450,8 +450,15 @@ impl AiSettingsScreen {
 
     /// Starts exporting the log to `path`.
     fn export(&mut self, worker: &ApiWorker, path: PathBuf) {
+        // The assistant's rows when there are any (the later release), else the older log.
+        let activity = !self.rows.is_empty();
         self.latest.start(worker, move |api: &mut Api| {
-            let result = api.export_ai_log(&path).map_err(|e| e.to_string());
+            let result = if activity {
+                api.export_ai_activity(&path)
+            } else {
+                api.export_ai_log(&path)
+            }
+            .map_err(|e| e.to_string());
             Reply::Exported { path, result }
         });
     }

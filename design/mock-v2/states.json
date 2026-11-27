@@ -42,6 +42,41 @@
    "description": "Cloud with your own key: the provider as the user described it, the key in the system keychain, redaction, and a confirmation before each document."
   },
   {
+   "id": "ai.quick-entry.proposal",
+   "kind": "happy",
+   "hash": "screen=quick-entry&state=proposal&ai=on",
+   "title": "Plain-words entry, draft payment (later release)",
+   "description": "The sentence read through the assistant: Rent and the Saptagiri account resolved from the words, 25k copied from them, the date offered as today, the engine's balance check."
+  },
+  {
+   "id": "ai.quick-entry.unknown-ledger",
+   "kind": "validation-error",
+   "hash": "screen=quick-entry&state=unknown-ledger&ai=on",
+   "title": "Plain-words entry, unknown name (later release)",
+   "description": "No ledger named Ramesh: the engine blocks the draft and the assistant invents none."
+  },
+  {
+   "id": "ai.quick-entry.loading",
+   "kind": "loading",
+   "hash": "screen=quick-entry&state=loading&ai=on",
+   "title": "Plain-words entry, drafting (later release)",
+   "description": "The sentence is with the assistant; nothing is shown until the engine has checked its draft."
+  },
+  {
+   "id": "ai.quick-entry.rejected",
+   "kind": "happy",
+   "hash": "screen=quick-entry&state=rejected&ai=on",
+   "title": "Plain-words entry, rejected (later release)",
+   "description": "Rejected: nothing was posted, and the rejection is in the AI activity log."
+  },
+  {
+   "id": "ai.quick-entry.not-installed",
+   "kind": "empty",
+   "hash": "screen=quick-entry&state=not-installed&ai=on",
+   "title": "Plain-words entry, no local model (later release)",
+   "description": "On this computer with no model the build can run: the box is disabled, the reason is named, and the voucher forms are offered."
+  },
+  {
    "id": "hi.home.default",
    "kind": "happy",
    "hash": "screen=home&state=default&lang=hi",

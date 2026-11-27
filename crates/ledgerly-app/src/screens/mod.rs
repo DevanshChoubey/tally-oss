@@ -17,6 +17,7 @@ pub mod print_job;
 pub mod print_preview;
 pub mod purchase_bill;
 pub mod quick_entry;
+mod quick_entry_ai;
 pub mod report_view;
 pub mod review;
 pub mod setup;

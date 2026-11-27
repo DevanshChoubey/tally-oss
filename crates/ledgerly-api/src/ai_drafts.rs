@@ -613,3 +613,113 @@ impl Api {
         Ok(rows)
     }
 }
+
+impl Api {
+    /// Writes the assistant's activity log to `path` as CSV: a header, then one line per
+    /// [`AiLogRow`] with the time, feature, provider, input, full input hash, output and decision.
+    /// Nothing is written when there is no row.
+    ///
+    /// # Errors
+    /// - As [`Api::ai_log_rows`].
+    /// - [`ApiError::AiLogWrite`] when the file cannot be written.
+    pub fn export_ai_activity(&self, path: &std::path::Path) -> Result<Outcome<()>, ApiError> {
+        use std::io::Write as _;
+        let rows = self.ai_log_rows()?;
+        if rows.is_empty() {
+            return Ok(Outcome::unsupported(
+                "AI activity log export",
+                "no assistant event has been recorded for this company yet",
+            ));
+        }
+        let write_err = |source| ApiError::AiLogWrite {
+            path: path.to_path_buf(),
+            source,
+        };
+        let when = time::macros::format_description!("[year]-[month]-[day] [hour]:[minute]");
+        let mut out = String::from("When,Feature,Provider,Input,Input hash,Output,Your decision\n");
+        for row in &rows {
+            let at = row
+                .at
+                .format(&when)
+                .map_err(|e| write_err(std::io::Error::other(e)))?;
+            let cells = [
+                at,
+                feature_words(row.feature).to_owned(),
+                row.provider.clone(),
+                row.input_label.clone(),
+                row.input_hash.clone(),
+                output_words(&row.output),
+                decision_words(&row.decision),
+            ];
+            let line: Vec<String> = cells.iter().map(|c| crate::ai::csv_field(c)).collect();
+            out.push_str(&line.join(","));
+            out.push('\n');
+        }
+        std::fs::File::create(path)
+            .and_then(|mut file| file.write_all(out.as_bytes()))
+            .map_err(write_err)?;
+        Ok(Outcome::Value(()))
+    }
+}
+
+/// The export's word for a feature (the AI settings log's words).
+fn feature_words(feature: AiFeature) -> &'static str {
+    match feature {
+        AiFeature::BillReading => "Bill reader",
+        AiFeature::PlainWords => "Plain words",
+        AiFeature::BankSuggestion => "Bank matching",
+        AiFeature::Ask => "Ask your books",
+        AiFeature::Gstr2bExplanation => "2B assistant",
+    }
+}
+
+/// The export's words for what an event produced.
+fn output_words(output: &AiOutput) -> String {
+    match output {
+        AiOutput::DraftVoucher(kind) => format!("Draft {}", kind_word(*kind)),
+        AiOutput::MatchSuggestion => "Match suggestion".to_owned(),
+        AiOutput::ReportQuery => "Report query, run by the engine".to_owned(),
+        AiOutput::MappingSuggestion => "Column mapping".to_owned(),
+        AiOutput::Answered => "Answer".to_owned(),
+        AiOutput::ReadFailed(reason) => format!("Not read: {reason}"),
+        AiOutput::CloudConsent(true) => "Sending allowed".to_owned(),
+        AiOutput::CloudConsent(false) => "Sending refused".to_owned(),
+    }
+}
+
+/// The voucher kind in lower-case words, for the export.
+fn kind_word(kind: ledgerly_model::BaseVoucherKind) -> &'static str {
+    use ledgerly_model::BaseVoucherKind as K;
+    match kind {
+        K::Purchase => "purchase",
+        K::Payment => "payment",
+        K::Receipt => "receipt",
+        K::Sales => "sales",
+        K::Contra => "contra",
+        K::Journal => "journal",
+        K::CreditNote => "credit note",
+        K::DebitNote => "debit note",
+        K::Memorandum => "memorandum",
+        K::ReversingJournal => "reversing journal",
+        K::ReceiptNote => "receipt note",
+        K::DeliveryNote => "delivery note",
+        K::RejectionIn => "rejection in",
+        K::RejectionOut => "rejection out",
+        K::StockJournal => "stock journal",
+        K::PhysicalStock => "physical stock",
+        K::SalesOrder => "sales order",
+        K::PurchaseOrder => "purchase order",
+    }
+}
+
+/// The export's words for a decision.
+fn decision_words(decision: &AiDecision) -> String {
+    match decision {
+        AiDecision::Waiting => "Waiting in review".to_owned(),
+        AiDecision::Accepted(Some(number)) => format!("Accepted as {number}"),
+        AiDecision::Accepted(None) => "Accepted".to_owned(),
+        AiDecision::Rejected(Some(reason)) => format!("Rejected: {reason}"),
+        AiDecision::Rejected(None) => "Rejected".to_owned(),
+        AiDecision::NoDecision => "Nothing to decide".to_owned(),
+    }
+}

@@ -6,6 +6,7 @@
 
 mod ai;
 mod ai_drafts;
+mod ai_features;
 mod ai_settings;
 mod as_voucher;
 mod balance;
@@ -42,6 +43,7 @@ pub use ai_drafts::{
     AiOutput, DraftEdits, NewAiDraft,
 };
 // The assistant's typed proposals, for the app (which reaches the assistant only through here).
+pub use ai_features::{AiGate, WordsRead};
 pub use ai_settings::{AiSettings, CloudSettings, KEY_SERVICE, KeyState, LOCAL_MODEL_FILE_KEY};
 pub use balance::BalanceChange;
 pub use bank::{BalanceRefusal, balance_refusal};

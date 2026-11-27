@@ -1,0 +1,207 @@
+//! The assistant's features through one gate (round s21, plan round C; spec 6.8).
+//!
+//! [`Api::ai_gate`] decides whether a feature may run now: the company's tier, the feature's
+//! switch, and the provider's own status. The provider is the one attached for the session
+//! ([`Api::attach_assistant`]), or else the local model at the chosen file, which this build
+//! cannot run. Every feature screen asks the gate first and shows its refusal as a typed state.
+//!
+//! A read that runs is always logged: a draft as `DraftStored` (it then waits in the review
+//! queue), a failure as `ReadFailed`. A refused read runs nothing and logs nothing.
+
+use ledgerly_assist::nl_entry::MasterLedger;
+use ledgerly_assist::provider::{AiProvider, ProviderInfo, ProviderStatus};
+use ledgerly_assist::{AssistError, Proposal};
+use ledgerly_core::{CancelToken, EventSeq, Outcome};
+use ledgerly_model::{AiActivity, AiActivityKind, AiFeature};
+use sha2::{Digest, Sha256};
+
+use crate::ai::AiTier;
+use crate::ai_drafts::NewAiDraft;
+use crate::error::ApiError;
+use crate::facade::Api;
+
+/// The prompt template version the plain-words reader records.
+const WORDS_TEMPLATE: &str = ledgerly_assist::nl_entry::PROMPT_TEMPLATE_VERSION;
+
+/// Whether a feature may run now, and if not, why.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AiGate {
+    /// It may run, with this provider.
+    Ready(ProviderInfo),
+    /// No AI tier is chosen for the company.
+    NotChosen,
+    /// AI is off for the company.
+    Off,
+    /// The feature is switched off in AI and privacy.
+    FeatureOff,
+    /// No model or runtime is installed; the text says what is missing.
+    NotInstalled(String),
+    /// The provider is not set up; the text says what is missing.
+    NotConfigured(String),
+}
+
+/// What reading a sentence gave.
+#[derive(Debug, Clone, PartialEq)]
+pub enum WordsRead {
+    /// A draft, stored and waiting for the person's decision.
+    Drafted {
+        /// The stored draft's id.
+        id: EventSeq,
+        /// The draft as read.
+        proposal: Proposal,
+    },
+    /// The gate refused; nothing ran and nothing was logged.
+    Refused(AiGate),
+    /// The provider ran and could not read the sentence; logged as a failed read.
+    Failed(String),
+}
+
+impl Api {
+    /// Whether `feature` may run now (see the module documentation).
+    ///
+    /// # Errors
+    /// [`ApiError::Store`] when the audit log cannot be read.
+    pub fn ai_gate(&self, feature: AiFeature) -> Result<AiGate, ApiError> {
+        let tier = match self.ai_tier()? {
+            None => return Ok(AiGate::NotChosen),
+            Some(AiTier::Off) => return Ok(AiGate::Off),
+            Some(tier @ (AiTier::Local | AiTier::Cloud)) => tier,
+        };
+        if !self.ai_feature_on(feature)? {
+            return Ok(AiGate::FeatureOff);
+        }
+        let status = match (self.assistant(), tier) {
+            (Some(provider), AiTier::Local | AiTier::Cloud) => {
+                return Ok(status_gate(provider.status(), provider.info()));
+            }
+            (None, AiTier::Local) => self.local_model()?.status(),
+            (None, AiTier::Cloud) => ProviderStatus::NotConfigured {
+                reason: "this build has no connection to a cloud provider; nothing is sent"
+                    .to_owned(),
+            },
+            (_, AiTier::Off) => return Ok(AiGate::Off),
+        };
+        Ok(match status {
+            ProviderStatus::Ready => AiGate::NotInstalled(
+                "this build links no model runtime, so nothing can answer".to_owned(),
+            ),
+            ProviderStatus::NotInstalled { reason } => AiGate::NotInstalled(reason),
+            ProviderStatus::NotConfigured { reason } => AiGate::NotConfigured(reason),
+        })
+    }
+
+    /// Reads `text` (plain words) into a draft voucher through the gate. A draft is stored and
+    /// waits for the person; a failure is logged; a refusal runs and logs nothing.
+    ///
+    /// # Errors
+    /// - [`ApiError::Store`] when the audit log cannot be read or the log entry cannot be
+    ///   committed.
+    /// - [`ApiError::AiKeyAccount`] when the company cannot be read for its ledgers.
+    pub fn read_words(&mut self, text: &str, cancel: &CancelToken) -> Result<WordsRead, ApiError> {
+        let info = match self.ai_gate(AiFeature::PlainWords)? {
+            AiGate::Ready(info) => info,
+            refused @ (AiGate::NotChosen
+            | AiGate::Off
+            | AiGate::FeatureOff
+            | AiGate::NotInstalled(_)
+            | AiGate::NotConfigured(_)) => return Ok(WordsRead::Refused(refused)),
+        };
+        let ledgers = self.master_ledgers()?;
+        let read = match self.assistant() {
+            Some(provider) => provider.read_text(text, &ledgers, cancel),
+            None => Err(AssistError::Output {
+                reason: "no provider is attached".to_owned(),
+            }),
+        };
+        let input_hash = hex(&Sha256::digest(text.as_bytes()));
+        match read {
+            Ok(proposal) => {
+                let confidence_permille = confidence_of(&proposal);
+                let id = self.record_ai_draft(NewAiDraft {
+                    feature: AiFeature::PlainWords,
+                    provider: info.name,
+                    model_version: info.version,
+                    prompt_template_version: WORDS_TEMPLATE.to_owned(),
+                    input_label: text.to_owned(),
+                    input_hash,
+                    proposal: proposal.clone(),
+                    confidence_permille,
+                })?;
+                Ok(WordsRead::Drafted { id, proposal })
+            }
+            Err(e) => {
+                let reason = e.to_string();
+                self.record_ai_activity(AiActivity {
+                    feature: AiFeature::PlainWords,
+                    provider: info.name,
+                    model_version: info.version,
+                    prompt_template_version: WORDS_TEMPLATE.to_owned(),
+                    input_label: text.to_owned(),
+                    input_hash,
+                    kind: AiActivityKind::ReadFailed {
+                        reason: reason.clone(),
+                    },
+                })?;
+                Ok(WordsRead::Failed(reason))
+            }
+        }
+    }
+
+    /// The company's ledgers as the readers resolve names against them.
+    fn master_ledgers(&self) -> Result<Vec<MasterLedger>, ApiError> {
+        let books = match self.books()? {
+            Outcome::Value(books) => books,
+            Outcome::Unsupported(u) => return Err(ApiError::AiKeyAccount { reason: u.reason }),
+        };
+        Ok(books
+            .masters
+            .ledgers
+            .values()
+            .map(|l| MasterLedger {
+                id: l.id,
+                name: l.name.clone(),
+                aliases: l.aliases.clone(),
+            })
+            .collect())
+    }
+}
+
+/// The gate for an attached provider's status.
+fn status_gate(status: ProviderStatus, info: ProviderInfo) -> AiGate {
+    match status {
+        ProviderStatus::Ready => AiGate::Ready(info),
+        ProviderStatus::NotInstalled { reason } => AiGate::NotInstalled(reason),
+        ProviderStatus::NotConfigured { reason } => AiGate::NotConfigured(reason),
+    }
+}
+
+/// A draft's overall confidence: the lowest of the confidences the reader gave its fields.
+fn confidence_of(proposal: &Proposal) -> u16 {
+    match proposal {
+        Proposal::VoucherDraft(d) => d
+            .lines
+            .iter()
+            .flat_map(|l| {
+                [
+                    l.amount.confidence_permille,
+                    l.ledger_name.confidence_permille,
+                ]
+            })
+            .chain(d.document_total.iter().map(|t| t.confidence_permille))
+            .chain(d.date.iter().map(|t| t.confidence_permille))
+            .min()
+            .unwrap_or(0),
+        Proposal::MatchSuggestion(_)
+        | Proposal::ReportQuery(_)
+        | Proposal::MappingSuggestion(_) => 0,
+    }
+}
+
+/// Lower-case hex of `bytes`.
+fn hex(bytes: &[u8]) -> String {
+    use std::fmt::Write as _;
+    bytes.iter().fold(String::new(), |mut out, b| {
+        let _ = write!(out, "{b:02x}");
+        out
+    })
+}
