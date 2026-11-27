@@ -150,9 +150,10 @@ untracked), look at each, update `PARITY-GAPS.md`.
   failing 6 of 7 (the AI-off one passed on the old path). One app expectation was my own wrong
   derivation (Cash where the condensed trial balance shows Current Assets) and was corrected before
   green. 24 `lit` phrases of the new screen had no catalogue entry and only the full gate
-  (`i18n_lit_phrases`) caught it; their 24 Hindi entries are unsourced. Open: a store failure inside
-  `Api::report` after the provider answered returns the error without a log entry; no test can
-  make the report engine fail that way yet, so it is not fixed.
+  (`i18n_lit_phrases`) caught it; their 24 Hindi entries are unsourced. Closed in round G: an error
+  from `Api::report` after the provider answered is logged as `NotRun` before it is returned
+  (tested with a balance sheet dated before the books begin, which the report engine refuses with
+  an error; a store failure itself cannot be made in a test, since the gate reads the log first).
 - Round F (part): the day book Origin of a voucher posted by accepting a draft is the reader's AI
   badge ("Plain-words draft, accepted"; it showed "Typed" before, the test saw it), and the
   assistant's bank match suggestions run end to end behind the gate (`Api::bank_ai_suggestions`,

@@ -7,8 +7,10 @@
 //! provider wrote: the screen draws the query from the report's own parameters.
 //!
 //! Every ask that runs is logged. An answer is `Answered` with the query as JSON; a query no
-//! report can carry, or one the engine cannot run, is `ReadFailed` with a reason that starts
-//! "Unsupported"; a provider failure is `ReadFailed`. A refused gate runs and logs nothing.
+//! report can carry is `NotRun` with the reason; a report engine error is `NotRun` too, logged
+//! before the error is returned; a provider failure is `ReadFailed`. A refused gate runs and logs
+//! nothing. (Before round s21's `NotRun`, a query that could not run was logged as `ReadFailed`
+//! with a reason starting "Unsupported"; such entries still read.)
 
 use ledgerly_assist::cloud::check_report_query;
 use ledgerly_assist::{AssistError, REPORT_NAMES, ReportQuery, UNSUPPORTED_REPORT};
@@ -157,9 +159,18 @@ impl Api {
             }
         };
         let run = match resolve(&query, &books) {
-            Ok(params) => match self.report(&params)? {
-                Outcome::Value(report) => Ok(report),
-                Outcome::Unsupported(u) => Err(format!("{}: {}", u.what, u.reason)),
+            Ok(params) => match self.report(&params) {
+                Ok(Outcome::Value(report)) => Ok(report),
+                Ok(Outcome::Unsupported(u)) => Err(format!("{}: {}", u.what, u.reason)),
+                Err(e) => {
+                    // The engine failed on a query the provider answered: the ask is logged as not
+                    // run before the error goes back. A log that cannot be written leaves the
+                    // engine's error the one returned.
+                    let _logged = self.record_ai_activity(log(AiActivityKind::NotRun {
+                        reason: e.to_string(),
+                    }));
+                    return Err(e);
+                }
             },
             Err(why) => Err(why),
         };
@@ -174,8 +185,8 @@ impl Api {
                 Ok(AskAnswer::Ran(Box::new(report)))
             }
             Err(why) => {
-                self.record_ai_activity(log(AiActivityKind::ReadFailed {
-                    reason: format!("Unsupported: {why}"),
+                self.record_ai_activity(log(AiActivityKind::NotRun {
+                    reason: why.clone(),
                 }))?;
                 Ok(AskAnswer::Unsupported(why))
             }

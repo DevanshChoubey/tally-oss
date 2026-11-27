@@ -355,7 +355,8 @@ impl Api {
                 | AiActivityKind::DraftAccepted { .. }
                 | AiActivityKind::DraftRejected { .. }
                 | AiActivityKind::Answered { .. }
-                | AiActivityKind::CloudConsent { .. } => {}
+                | AiActivityKind::CloudConsent { .. }
+                | AiActivityKind::NotRun { .. } => {}
             }
         }
         Ok(failed)
@@ -387,7 +388,8 @@ impl Api {
                 | AiActivityKind::DraftRejected { .. }
                 | AiActivityKind::Answered { .. }
                 | AiActivityKind::ReadFailed { .. }
-                | AiActivityKind::CloudConsent { .. } => None,
+                | AiActivityKind::CloudConsent { .. }
+                | AiActivityKind::NotRun { .. } => None,
             })
             .collect())
     }

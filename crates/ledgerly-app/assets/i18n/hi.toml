@@ -860,6 +860,7 @@ name = "हिन्दी"
 "ai.settings.log.out.mapping" = "कॉलम मैपिंग"  # unsourced
 "ai.settings.log.out.answered" = "उत्तर"  # unsourced
 "ai.settings.log.out.read_failed" = "पढ़ा नहीं गया: {reason}"  # unsourced
+"ai.settings.log.out.not_run" = "चलाया नहीं गया: {reason}"  # unsourced
 "ai.settings.log.out.consent_given" = "भेजने की अनुमति दी"  # unsourced
 "ai.settings.log.out.consent_refused" = "भेजने से मना किया"  # unsourced
 "ai.settings.log.waiting" = "समीक्षा में प्रतीक्षा"  # unsourced

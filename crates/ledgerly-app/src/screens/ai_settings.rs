@@ -1818,6 +1818,7 @@ fn output_text(output: &AiOutput, tr: &Tr) -> String {
         AiOutput::ReadFailed(reason) => {
             tr.tf("ai.settings.log.out.read_failed", &[("reason", reason)])
         }
+        AiOutput::NotRun(reason) => tr.tf("ai.settings.log.out.not_run", &[("reason", reason)]),
         AiOutput::CloudConsent(true) => tr.t("ai.settings.log.out.consent_given"),
         AiOutput::CloudConsent(false) => tr.t("ai.settings.log.out.consent_refused"),
     }

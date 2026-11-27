@@ -294,7 +294,8 @@ fn accept_posts_the_voucher_and_records_the_accept_in_one_commit() {
         | AiActivityKind::DraftRejected { .. }
         | AiActivityKind::Answered { .. }
         | AiActivityKind::ReadFailed { .. }
-        | AiActivityKind::CloudConsent { .. }) => panic!("expected the accept, got {other:?}"),
+        | AiActivityKind::CloudConsent { .. }
+        | AiActivityKind::NotRun { .. }) => panic!("expected the accept, got {other:?}"),
     }
     assert_eq!(
         api.ai_origin(voucher.id).unwrap().map(|a| a.feature),

@@ -463,8 +463,12 @@ Classes:
 - **NOT BUILT** `ask.low-confidence`: a `ReportQuery` has no confidence and no second reading.
 - **NOT BUILT** the lead words "Unsupported." and "Not read." are not bold in the app's note, and
   the provider chips in the card head are plain text, as on the plain-words card.
-- **DELIBERATE** an ask the engine cannot run is logged as `ReadFailed` with a reason starting
-  "Unsupported" rather than a new AI event kind, so the stored event format is unchanged.
+- **FIX** (round G, coordinator 2026-11-27) an ask the engine cannot run is logged as its own AI
+  event kind, `NotRun` (log text "Not run: ..."), and a report engine error after the provider
+  answered is logged as `NotRun` before the error is returned (it went back unlogged before).
+  Entries written before keep their bytes and record hash and still read as `ReadFailed`
+  (`ledgerly-store/tests/s21_ai_event_compat.rs`, constants observed on the pre-change tree). A
+  file with a `NotRun` entry does not open in a build from before this change.
 - **NOT BUILT** `gst.recon-explain`: the mock's card is an explanation in words around figures
   bound to the engine, plus a draft fix. None of the four typed proposals (`VoucherDraft`,
   `MatchSuggestion`, `ReportQuery`, `MappingSuggestion`) carries an explanation, and an

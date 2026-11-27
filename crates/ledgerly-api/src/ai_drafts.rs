@@ -417,7 +417,8 @@ impl Api {
                 | AiActivityKind::DraftRejected { .. }
                 | AiActivityKind::Answered { .. }
                 | AiActivityKind::ReadFailed { .. }
-                | AiActivityKind::CloudConsent { .. } => None,
+                | AiActivityKind::CloudConsent { .. }
+                | AiActivityKind::NotRun { .. } => None,
             }))
     }
 }
@@ -471,7 +472,8 @@ fn decided_draft(kind: &AiActivityKind) -> Option<EventSeq> {
         AiActivityKind::DraftStored { .. }
         | AiActivityKind::Answered { .. }
         | AiActivityKind::ReadFailed { .. }
-        | AiActivityKind::CloudConsent { .. } => None,
+        | AiActivityKind::CloudConsent { .. }
+        | AiActivityKind::NotRun { .. } => None,
     }
 }
 
@@ -554,6 +556,8 @@ pub enum AiOutput {
     Answered,
     /// Nothing was read; the reason.
     ReadFailed(String),
+    /// The provider answered but the engine could not run it; the reason.
+    NotRun(String),
     /// A cloud consent, granted or not.
     CloudConsent(bool),
 }
@@ -618,6 +622,7 @@ impl Api {
                 AiActivityKind::Answered { .. } => AiOutput::Answered,
                 AiActivityKind::ReadFailed { reason } => AiOutput::ReadFailed(reason.clone()),
                 AiActivityKind::CloudConsent { granted } => AiOutput::CloudConsent(*granted),
+                AiActivityKind::NotRun { reason } => AiOutput::NotRun(reason.clone()),
                 AiActivityKind::DraftAccepted { .. } | AiActivityKind::DraftRejected { .. } => {
                     continue;
                 }
@@ -649,12 +654,14 @@ impl Api {
                         | AiActivityKind::DraftStored { .. }
                         | AiActivityKind::Answered { .. }
                         | AiActivityKind::ReadFailed { .. }
-                        | AiActivityKind::CloudConsent { .. } => None,
+                        | AiActivityKind::CloudConsent { .. }
+                        | AiActivityKind::NotRun { .. } => None,
                     })
                     .unwrap_or(AiDecision::Waiting),
-                AiOutput::Answered | AiOutput::ReadFailed(_) | AiOutput::CloudConsent(_) => {
-                    AiDecision::NoDecision
-                }
+                AiOutput::Answered
+                | AiOutput::ReadFailed(_)
+                | AiOutput::NotRun(_)
+                | AiOutput::CloudConsent(_) => AiDecision::NoDecision,
             };
             rows.push(AiLogRow {
                 at: entry.at,
@@ -741,6 +748,7 @@ fn output_words(output: &AiOutput) -> String {
         AiOutput::MappingSuggestion => "Column mapping".to_owned(),
         AiOutput::Answered => "Answer".to_owned(),
         AiOutput::ReadFailed(reason) => format!("Not read: {reason}"),
+        AiOutput::NotRun(reason) => format!("Not run: {reason}"),
         AiOutput::CloudConsent(true) => "Sending allowed".to_owned(),
         AiOutput::CloudConsent(false) => "Sending refused".to_owned(),
     }
