@@ -888,9 +888,9 @@ name = "हिन्दी"
 
 # Confidence band (ui/conf.rs `word`). `conf.high`, `conf.medium` and `conf.low` repeat the
 # bank screen's `bank.confidence.*` words, which are unsourced too.
-"conf.high" = "ऊँचा"  # unsourced
-"conf.medium" = "मध्यम"  # unsourced
-"conf.low" = "कम"  # unsourced
+"conf.high" = "ऊँचा भरोसा"  # unsourced
+"conf.medium" = "मध्यम भरोसा"  # unsourced
+"conf.low" = "कम भरोसा"  # unsourced
 "conf.rule" = "नियम पर आधारित, निश्चित"  # unsourced
 
 # Dates (ui/format.rs). Full Gregorian month names, since a short Hindi form is not fixed.
@@ -1537,3 +1537,12 @@ name = "हिन्दी"
 "lit.dr_equals_cr_engine" = "नामे बराबर जमा (इंजन)।"  # unsourced
 "lit.the_assistant_did_not_draft_a_voucher" = "सहायक ने वाउचर का मसौदा नहीं बनाया"  # unsourced
 "lit.opening_a_draft_in_the_voucher_form_is_not_built_y" = "मसौदे को वाउचर फ़ॉर्म में खोलना अभी नहीं बना है; उसे स्वीकार करें, या अस्वीकार करके F5 से लिखें।"  # unsourced
+"lit.try" = "आज़माएँ"  # unsourced
+"lit.now" = "अभी"  # unsourced
+"lit.after" = "बाद में"  # unsourced
+"lit.balance_not_shown" = "शेष नहीं दिखाया गया"  # unsourced
+"lit.is_after_the_lock_date" = "लॉक तारीख के बाद है।"  # unsourced
+"lit.is_on_or_before_the_lock_date" = "लॉक तारीख पर या उससे पहले है,"  # unsourced
+"lit.the_engine_refuses_it" = "; इंजन इसे अस्वीकार करता है।"  # unsourced
+"lit.paid_rent_25k_to_sharma_properties_from_saptagiri" = "सप्तगिरि से शर्मा प्रॉपर्टीज़ को 25k किराया दिया"  # unsourced
+"lit.ramesh_ko_5000_cash_diya" = "रमेश को 5000 कैश दिया"  # unsourced

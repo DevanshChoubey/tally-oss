@@ -263,3 +263,48 @@ fn an_unknown_name_blocks_the_draft_and_no_ledger_is_invented() {
     let text = h.frame(Vec::new());
     assert!(!text.contains("posted"), "{text}");
 }
+
+#[test]
+fn the_draft_shows_the_account_balance_now_and_after_from_the_engine() {
+    // provenance: index.html:1745 ("Saptagiri now" and "After (engine)"). derived: Cash opens at
+    // Rs 10,00,000.00 Dr (100,000,000 paise, `ledger` above); the payment of Rs 25,000.00 leaves
+    // Rs 9,75,000.00 Dr. Both figures come from the trial balance (`Api::balance_change`).
+    let provider = FixedAnswers::new().with_text(RENT, RENT_JSON);
+    let mut h = Harness::new(api("s21-qe-balance.ledgerly", Some(provider)));
+    h.type_sentence(RENT);
+    let text = h.settle_on("Draft payment");
+    assert!(text.contains("Cash now"), "{text}");
+    assert!(text.contains("10,00,000.00"), "{text}");
+    assert!(text.contains("After"), "{text}");
+    assert!(text.contains("9,75,000.00"), "{text}");
+}
+
+#[test]
+fn the_draft_says_its_date_is_after_the_lock_date() {
+    // provenance: index.html:1749 ("21 Nov 2026 is after the lock date."). derived: the books are
+    // locked to 31 Oct 2026 here and the date offered is 21 Nov 2026.
+    let provider = FixedAnswers::new().with_text(RENT, RENT_JSON);
+    let mut books = api("s21-qe-lock.ledgerly", Some(provider));
+    committed(books.execute(Command::LockPeriod(date!(2026 - 10 - 31))));
+    let mut h = Harness::new(books);
+    h.type_sentence(RENT);
+    let text = h.settle_on("Draft payment");
+    assert!(
+        text.contains("21 Nov 2026 is after the lock date."),
+        "{text}"
+    );
+}
+
+#[test]
+fn try_offers_sentences_the_reader_can_draft() {
+    // provenance: index.html:1750 with ai=on: "paid rent 25k to Sharma Properties from Saptagiri"
+    // and "Ramesh ko 5000 cash diya" under "Try".
+    let mut h = Harness::new(api("s21-qe-try.ledgerly", Some(FixedAnswers::new())));
+    let text = h.settle_on("Type an entry, as you would say it");
+    assert!(text.contains("Try"), "{text}");
+    assert!(
+        text.contains("paid rent 25k to Sharma Properties from Saptagiri"),
+        "{text}"
+    );
+    assert!(text.contains("Ramesh ko 5000 cash diya"), "{text}");
+}

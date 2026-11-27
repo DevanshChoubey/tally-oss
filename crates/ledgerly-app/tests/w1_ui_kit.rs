@@ -99,6 +99,10 @@ fn confidence_bars_and_words_follow_the_mock() {
     assert_eq!(conf::lit_bars(Confidence::Low), 1);
     assert_eq!(conf::lit_bars(Confidence::Rule), 0);
     assert_eq!(conf::word(Confidence::Rule), "Rule, deterministic");
+    // provenance: index.html:962, `${CONF[l]} confidence` after the bars (CONF at :961).
+    assert_eq!(conf::word(Confidence::High), "High confidence");
+    assert_eq!(conf::word(Confidence::Medium), "Medium confidence");
+    assert_eq!(conf::word(Confidence::Low), "Low confidence");
 }
 
 #[test]

@@ -117,6 +117,12 @@ untracked), look at each, update `PARITY-GAPS.md`.
   photo screen and its mock states with `ai=on` (reading, proposal, low confidence, mismatch,
   duplicate, cloud consent, error, accepted), the bill-wise New Ref that leaves Rupa Polymers at
   "none", and the cloud-consent wording (cloud.rs refuses documents). Rounds E and F not started.
+- After the merge into integration (1c765b0): `master_ledgers` returns `ApiError::AiBooksBlocked`
+  for blocked books (test first, in-crate, seen failing); plain-words gaps closed: the account's
+  balance now/after from `Api::balance_change`, the lock-date check line, the narration field, the
+  "Try" sentences (mock changed first to ones the reader drafts), "High confidence" after the bars.
+  Tests first, seen failing. Recorded: Test-provider chip, unknown-ledger balance, PY/0315 duplicate
+  line and the "Why Rent" line (PARITY-GAPS).
 - Honesty notes (C): the app tests' sentence helper was changed to wait for the ready hint
   instead of "Read as:" (the test typed before the gate read Ready); the screen tests were written
   before the screen and seen failing, the accept transition checked by mutation.

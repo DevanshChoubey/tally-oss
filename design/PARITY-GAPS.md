@@ -358,17 +358,29 @@ Classes:
   activity log. With no provider (this build) the box is off and "No local model can run." offers F5/F6.
 - **NOT BUILT** `ai.quick-entry.hinglish`: the reader drafts no account from "NEFT", no bill reference
   ("SI/0401 ke against") and no date from a bank line, so the state is not captured.
-- **NOT BUILT** `ai.quick-entry.proposal`: no Saptagiri now/After taxbox (no API call gives a ledger's
-  balance after a draft; no figure is computed in the screen); no PY/0315 duplicate warning, no
-  lock-date check line and no "Why Rent and not Sharma Properties?" line (the reader explains
-  nothing); the narration is text, not an editable field; "Sharma Properties" is not marked in
-  "Read as:" (the reader reports source ranges for the amount and ledger names only); the source chip
-  says "Test provider" (the captures run the fixed-answers provider, never a model) where the mock
-  says "Local model"; the Prop footer keeps the kit's Edit, Reject, Accept order.
+- **FIX** (s21 follow-up, `s21-qe-sheet-1.png`) `ai.quick-entry.proposal`: the account's balance box
+  ("<ledger> now" and "After (engine)", both from the trial balance through `Api::balance_change`;
+  the capture's Saptagiri figures, 7,27,524.50 and 7,02,524.50, are the engine's and equal the
+  mock's), the narration in a field, the lock-date check line ("21 Nov 2026 is after the lock
+  date."), the "Try" sentences (a click reads one) and "High confidence" after the bars (mock `conf`,
+  index.html:962; the review queue's band reads the same way now).
+- **DELIBERATE** `ai.quick-entry.proposal`: the source chip says "Test provider" where the mock says
+  "Local model": the captures run the fixed-answers provider, never a model, and the chip names the
+  provider that answered. The balance box names the whole ledger ("Saptagiri Commercial Bank A/c
+  now"); the mock's "Saptagiri" is a short form no master stores. The narration field is read-only:
+  edits go through Enter (the voucher form), so the draft and what was accepted stay one thing.
+- **NOT BUILT** `ai.quick-entry.proposal`: no PY/0315 duplicate warning (no engine check finds an
+  earlier voucher for the same rent; the assistant may not assert one) and no "Why Rent and not
+  Sharma Properties?" line (the reader explains nothing); "Sharma Properties" is not marked in
+  "Read as:" (the reader reports source ranges for the amount and ledger names only); the Prop
+  footer keeps the kit's Edit, Reject, Accept order (Accept last keeps the disabled state of a
+  blocked draft from greying the other two in a wrapping row).
 - **NOT BUILT** `ai.quick-entry.unknown-ledger`: the Dr ledger is red text, not a picker; no Alt+C to
   create it; the check line is the engine's ("create these ledgers first: Ramesh") where the mock
   says "Dr ledger is missing, so the voucher cannot balance yet."; no "Cash balance after paying"
-  line; the confidence reads Medium (the recorded answer's 800 per mille) where the mock shows Low;
+  line (DELIBERATE: the engine computes a balance only for a voucher it can check, and a draft with
+  a missing ledger is none); the narration and the lock line show here as on the proposal, where the
+  mock leaves them out; the confidence reads Medium (the recorded answer's 800 per mille) where the mock shows Low;
   the Cr amount is tagged "your words" since the engine made no voucher to balance.
 - **NOT BUILT** `ai.quick-entry.rejected`: no reason buttons (Wrong ledger, amount, account); the
   rejection is stored without a reason. Accept stays on the screen with "Payment <number> posted."
@@ -377,7 +389,8 @@ Classes:
   "Payment PY/0319 posted." (the mock was changed to match in round C); `.idle` and `.read-failed`
   were added to the mock in round C, the failure text being the reader's own words.
 - **NOT BUILT** `ai.quick-entry.loading`: Esc does not cancel the read; the key bar lists the idle
-  keys. The "Try" sentences are left out. Hindi words for the new lines are unsourced.
+  keys. The "Try" sentences of the `ai=on` mock are the two the reader drafts (the Mehta Agro one
+  needs a bill reference, which the assistant never proposes; the mock was changed first). Hindi words for the new lines are unsourced.
 - **NOT BUILT** `ask.result`, `ask.loading`, `ask.low-confidence`, `ask.unsupported`,
   `purchase-bill.reading`, `.proposal`,
   `.low-confidence`, `.mismatch`, `.duplicate`, `.cloud-consent`, `.error`, `.accepted` and

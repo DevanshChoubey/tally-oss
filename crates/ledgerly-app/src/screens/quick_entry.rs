@@ -171,6 +171,11 @@ fn draw_left(ui: &mut Ui, gate: &Gate, notice: Option<&str>, tr: &Tr) -> Ask {
 /// The right card: what the assistant may do here (index.html:1545). The mock's "Try" sentences
 /// are left out, since nothing would draft them.
 pub(crate) fn draw_rules(ui: &mut Ui) {
+    draw_rules_with(ui, |_| {});
+}
+
+/// [`draw_rules`] with `more` drawn under the rules in the same card (the assistant's "Try").
+pub(crate) fn draw_rules_with(ui: &mut Ui, more: impl FnOnce(&mut Ui)) {
     let t = tokens(ui);
     card(ui, |ui| {
         ui.set_width(ui.available_width());
@@ -186,6 +191,7 @@ pub(crate) fn draw_rules(ui: &mut Ui) {
                 ui.label(para_text(&crate::i18n::lit(line), TEXT_BODY, t.text_2));
             });
         }
+        more(ui);
     });
 }
 
