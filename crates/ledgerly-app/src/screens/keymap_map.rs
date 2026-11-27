@@ -4,7 +4,7 @@
 //! The keys in use are [`keymap::DEFAULT_PRESET`]. The shell owns its keymap and has no hook to
 //! replace it, so this screen cannot switch the keys. Its tabs choose which preset the map shows,
 //! for reference only, and the screen always says which preset is in use. Keys the mock lists
-//! that no [`Action`] exists for (Alt+R, Ctrl+H, Ctrl+J, Alt+O and the list and proposal keys)
+//! that no [`Action`] exists for (Alt+R, Ctrl+H, Ctrl+J and the list and proposal keys)
 //! are not shown: nothing in the app can say what they do.
 
 use crate::i18n::Tr;
