@@ -189,6 +189,16 @@ untracked), look at each, update `PARITY-GAPS.md`.
   card shows the mock's OCR note with its keyboard path, tested by Tab to a Confirm and Space. Both
   tests were seen failing first. The source chip still names the attached provider ("Test
   provider" in the capture) where the mock says "OCR on this computer".
+- s19 flake: fixed (test only). Cause: `s19_cold_start_smoke` left its wait as soon as a
+  `.ledgerly` file existed, but `SqliteStore::create` makes the file before the job writes the
+  company into it, and the test then waited a fixed 200 frames of 5 ms before `Api::open`. On a slow
+  disk the job was still writing and the open failed with `NotACompanyFile`. Reproduced every time
+  by delaying each fsync 700 ms with strace fault injection (CPU and I/O load alone did not); the
+  old test failed there, the new one passes there (11 s) and normally (1 s). The wait now runs,
+  within the same 120 s deadline, until the shell has opened the company (its books name it and its
+  AI tier is read), and checks the shell's tier is Off; the file assertions are unchanged.
+  `s19b`'s keys test waited 200 x 2 ms without checking the screen loaded (under load it could pass
+  without testing anything); it now waits like its sibling and asserts the load.
 - Honesty notes (F): the API and app bank tests were written first and seen failing (API at compile,
   app 3 of 4; the AI-off one passed on the old path); the Origin unit test was seen failing at
   compile only. One API test fixture was corrected (an alteration must keep the voucher number).
